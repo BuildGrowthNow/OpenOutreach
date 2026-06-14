@@ -57,6 +57,11 @@ class Campaign(models.Model):
     action_fraction = models.FloatField(default=0.2)
     seed_public_ids = models.JSONField(default=list, blank=True)
     model_blob = models.BinaryField(null=True, blank=True)
+    
+    # Campaign configuration for auto-recovery
+    velocity = models.PositiveIntegerField(default=20)  # max actions per time period
+    cooldown_minutes = models.PositiveIntegerField(default=0)  # minutes between actions
+    is_paused = models.BooleanField(default=False)  # pause the campaign
 
     def __str__(self):
         return self.name

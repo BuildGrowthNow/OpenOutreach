@@ -1,8 +1,9 @@
 # openoutreach/linkedin/admin.py
 from django.contrib import admin
 
-from openoutreach.linkedin.models import ActionLog, LinkedInProfile, SearchKeyword
+from openoutreach.linkedin.models import LinkedInProfile, SearchKeyword
 from openoutreach.linkedin.models.ghost_mode import GhostCampaign, GhostSimulationLog, GhostTestScenario
+from openoutreach.linkedin.models.health import CampaignHealthMetric, HealthAlert, RecoveryAction
 
 
 @admin.register(LinkedInProfile)
@@ -55,3 +56,27 @@ class GhostTestScenarioAdmin(admin.ModelAdmin):
     list_filter = ("is_public",)
     raw_id_fields = ("created_by",)
     readonly_fields = ("created_at", "updated_at", "runs_count", "avg_success_rate")
+
+
+@admin.register(CampaignHealthMetric)
+class CampaignHealthMetricAdmin(admin.ModelAdmin):
+    list_display = ("campaign", "timestamp", "connections_sent", "connection_accept_rate", "detectability_score")
+    list_filter = ("campaign", "timestamp")
+    readonly_fields = ("created_at",)
+    date_hierarchy = "timestamp"
+
+
+@admin.register(HealthAlert)
+class HealthAlertAdmin(admin.ModelAdmin):
+    list_display = ("message", "campaign", "alert_type", "severity", "is_resolved", "created_at")
+    list_filter = ("alert_type", "severity", "is_resolved", "campaign")
+    readonly_fields = ("created_at", "updated_at", "resolved_at")
+    date_hierarchy = "created_at"
+
+
+@admin.register(RecoveryAction)
+class RecoveryActionAdmin(admin.ModelAdmin):
+    list_display = ("campaign", "action_type", "executed_at", "reason")
+    list_filter = ("action_type", "campaign")
+    readonly_fields = ("executed_at",)
+    date_hierarchy = "executed_at"

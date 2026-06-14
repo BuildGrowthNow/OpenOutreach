@@ -38,6 +38,32 @@ _HANDLERS = {
 
 HEARTBEAT_INTERVAL = 300  # 5 minutes
 HEARTBEAT_SLICE = 60      # wake every minute during long sleeps
+HEALTH_CHECK_INTERVAL = 3600  # Run health check every hour
+
+
+def _run_health_checks(session) -> None:
+    """Run health checks for all campaigns in the session."""
+    from openoutreach.linkedin.models.health import HealthAlert
+    from openoutreach.linkedin.services.health_monitor import CampaignHealthMonitor
+    
+    logger.debug("Running health checks for %d campaigns", len(session.campaigns))
+    
+    for campaign in session.campaigns:
+        try:
+            monitor = CampaignHealthMonitor(campaign)
+            alerts = monitor.run_health_check()
+            
+            for alert in alerts:
+                alert.save()
+                logger.warning("ALERT: campaign=%s type=%s severity=%s message=%s",
+                              campaign.name, alert.alert_type, alert.severity, alert.message)
+                
+                # Auto-remediate low/medium severity alerts
+                if alert.severity in [HealthAlert.SEVERITY_LOW, HealthAlert.SEVERITY_MEDIUM]:
+                    if monitor.auto_remediate(alert):
+                        logger.info("Auto-remediation applied for alert: %s", alert.message)
+        except Exception as e:
+            logger.error("Error running health check for campaign %s: %s", campaign.name, e)
 
 
 # ── Cloud promo ──────────────────────────────────────────────────────
@@ -316,7 +342,7 @@ def run_daemon(session):
             rhythm.reset()
             continue
 
-        task = Task.objects.claim_next()
+        task: Task | None = Task.objects.claim_next()  # type: ignore[union-attr]
         if task is None:
             # Nothing ready — reconcile the queue from CRM state. Any deal
             # stuck without a pending task (e.g. because a prior handler
@@ -324,7 +350,7 @@ def run_daemon(session):
             from openoutreach.core.scheduler import reconcile
             reconcile(session)
 
-            wait = Task.objects.seconds_to_next()
+            wait = Task.objects.seconds_to_next()  # type: ignore[union-attr]
             if wait is None:
                 logger.info("Queue empty after reconcile — sleeping 1h")
                 sleep_with_heartbeat(3600, heartbeat, "queue empty")
@@ -384,6 +410,16 @@ def run_daemon(session):
             continue
 
         task.mark_completed()
+        
+        # Health check: run every HEALTH_CHECK_INTERVAL seconds
+        if hasattr(session, '_last_health_check'):
+            if time.monotonic() - session._last_health_check >= HEALTH_CHECK_INTERVAL:
+                _run_health_checks(session)
+                session._last_health_check = time.monotonic()
+        else:
+            session._last_health_check = time.monotonic()
+            _run_health_checks(session)
+        
         # TODO(tmp): Cloud/CLI promo disabled — still advertises the retired
         # openoutreach CLI (GH issue). Re-enable with email-first messaging.
         # cloud_promo.maybe_log()

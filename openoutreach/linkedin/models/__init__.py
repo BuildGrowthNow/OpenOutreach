@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+from .health import CampaignHealthMetric, HealthAlert, RecoveryAction
+
 import logging
 from datetime import date
 
@@ -43,6 +45,13 @@ class LinkedInProfile(models.Model):
     legal_accepted = models.BooleanField(default=False)
     cookie_data = models.JSONField(null=True, blank=True)
     newsletter_processed = models.BooleanField(default=False)
+    campaign = models.ForeignKey(
+        "core.Campaign",
+        on_delete=models.CASCADE,
+        related_name="linkedin_profiles",
+        null=True,
+        blank=True,
+    )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
