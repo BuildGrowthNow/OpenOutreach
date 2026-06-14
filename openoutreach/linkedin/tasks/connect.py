@@ -18,6 +18,7 @@ from openoutreach.crm.models import DealState
 from openoutreach.linkedin.db.leads import disqualify_lead
 from openoutreach.linkedin.models import ActionLog
 from openoutreach.linkedin.services.ghost_mode import GhostModeInterceptor
+from openoutreach.linkedin.services.smart_rate_limits import smart_can_execute, smart_record_action, smart_get_remaining
  
 logger = logging.getLogger(__name__)
 from linkedin_cli.exceptions import ProfileInaccessibleError, ReachedConnectionLimit, SkipProfile
@@ -80,9 +81,11 @@ def handle_connect(task, session, qualifiers):
                     candidate.get("public_identifier", "Unknown"),
                 )
             return
- 
-    if not session.linkedin_profile.can_execute(ActionLog.ActionType.CONNECT):
-        logger.info("[%s] connect: daily limit reached — slot skipped", campaign)
+
+    # Smart rate limiting check
+    if not smart_can_execute(session.linkedin_profile, ActionLog.ActionType.CONNECT, campaign):
+        remaining = smart_get_remaining(session.linkedin_profile, ActionLog.ActionType.CONNECT, campaign)
+        logger.info("[%s] connect: smart rate limit reached (remaining: %d) — slot skipped", campaign, remaining)
         return
  
     candidate = strategy.find_candidate(session)
@@ -135,6 +138,9 @@ def handle_connect(task, session, qualifiers):
                 logger.debug("%s: connect attempt %d/%d — no button found", public_id, attempts, MAX_CONNECT_ATTEMPTS)
         else:
             set_profile_state(session, public_id, new_state.value)
+            # Record action with smart rate limiter
+            smart_record_action(session.linkedin_profile, ActionLog.ActionType.CONNECT, campaign)
+            # Also record in ActionLog for backward compatibility
             session.linkedin_profile.record_action(
                 ActionLog.ActionType.CONNECT, session.campaign,
             )

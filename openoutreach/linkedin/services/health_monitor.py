@@ -9,7 +9,7 @@ from typing import Optional
 from django.utils import timezone
 
 from openoutreach.core.models import Campaign
-from openoutreach.linkedin.models import ActionLog, LinkedInProfile
+from openoutreach.linkedin.models import ActionLog, LinkedInProfile, SmartRateLimitContext
 from openoutreach.crm.models import Deal, DealState
 from openoutreach.linkedin.models.health import CampaignHealthMetric, HealthAlert, RecoveryAction
 
@@ -191,7 +191,23 @@ class CampaignHealthMonitor:
         return alerts
     
     def _calculate_detectability(self, profile: LinkedInProfile) -> int:
-        """Calculate detectability score for a LinkedIn profile."""
+        """Calculate detectability score for a LinkedIn profile using SmartRateLimitContext."""
+        # Try to get the detectability score from SmartRateLimitContext first
+        try:
+            context = SmartRateLimitContext.objects.get(linkedin_profile=profile)
+            # Apply detectability multiplier to get the raw score
+            # This inverts the multiplier logic: score = raw_score * multiplier
+            # We'll use the raw score from context.detectability_score
+            raw_score = context.detectability_score
+            multiplier = context._detectability_multiplier()
+            if multiplier > 0:
+                # Invert to get raw score
+                raw_score = int(raw_score / multiplier)
+            return min(100, max(0, raw_score))
+        except SmartRateLimitContext.DoesNotExist:
+            pass  # Fall back to manual calculation if context doesn't exist
+        
+        # Fall back to manual calculation
         since = timezone.now() - timedelta(hours=24)
         
         # Get recent action logs

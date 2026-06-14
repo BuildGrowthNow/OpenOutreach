@@ -12,6 +12,7 @@ from termcolor import colored
 from openoutreach.crm.models import DealState
 from openoutreach.linkedin.models import ActionLog
 from openoutreach.linkedin.services.ghost_mode import GhostModeInterceptor
+from openoutreach.linkedin.services.smart_rate_limits import smart_can_execute, smart_record_action, smart_get_remaining
   
 logger = logging.getLogger(__name__)
  
@@ -99,8 +100,10 @@ def handle_follow_up(task, session, qualifiers):
                 )
             return
  
-    if not session.linkedin_profile.can_execute(ActionLog.ActionType.FOLLOW_UP):
-        logger.info("[%s] follow_up: daily limit reached — slot skipped", campaign)
+    # Smart rate limiting check
+    if not smart_can_execute(session.linkedin_profile, ActionLog.ActionType.FOLLOW_UP, campaign):
+        remaining = smart_get_remaining(session.linkedin_profile, ActionLog.ActionType.FOLLOW_UP, campaign)
+        logger.info("[%s] follow_up: smart rate limit reached (remaining: %d) — slot skipped", campaign, remaining)
         return
  
     deal = _next_followup_deal(campaign)
@@ -133,6 +136,9 @@ def handle_follow_up(task, session, qualifiers):
             set_profile_state(session, public_id, DealState.QUALIFIED.value)
             logger.warning("follow_up for %s: send failed — moving to QUALIFIED for re-connection", public_id)
             return
+        # Record action with smart rate limiter
+        smart_record_action(session.linkedin_profile, ActionLog.ActionType.FOLLOW_UP, campaign)
+        # Also record in ActionLog for backward compatibility
         session.linkedin_profile.record_action(
             ActionLog.ActionType.FOLLOW_UP, session.campaign,
         )
