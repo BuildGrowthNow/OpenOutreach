@@ -1,6 +1,8 @@
 # openoutreach/linkedin/admin.py
 from django.contrib import admin
+from django.db import models
 
+from openoutreach.crm.models import LeadPersona
 from openoutreach.linkedin.models import LinkedInProfile, SearchKeyword
 from openoutreach.linkedin.models.ghost_mode import GhostCampaign, GhostSimulationLog, GhostTestScenario
 from openoutreach.linkedin.models.health import CampaignHealthMetric, HealthAlert, RecoveryAction
@@ -141,3 +143,24 @@ class CampaignExecutionLogAdmin(admin.ModelAdmin):
     readonly_fields = ("result", "error", "timestamp")
     list_select_related = ("state_machine", "node", "transition")
     date_hierarchy = "timestamp"
+
+
+@admin.register(LeadPersona)
+class LeadPersonaAdmin(admin.ModelAdmin):
+    list_display = ("lead", "campaign", "confidence_score", "version", "generated_at", "is_high_confidence")
+    list_filter = ("campaign", "generated_at", "version")
+    search_fields = ("lead__public_identifier", "lead__linkedin_url")
+    readonly_fields = ("generated_at", "last_updated", "version")
+    raw_id_fields = ("lead", "campaign")
+    
+    fields = [
+        'lead', 'campaign', 'version', 'confidence_score',
+        'pain_points', 'goals', 'buy_signals', 'recommendations',
+        'messaging_preferences', 'generated_at', 'last_updated'
+    ]
+
+    @admin.display(description="High Confidence")
+    def is_high_confidence(self, obj):
+        return obj.is_high_confidence
+    is_high_confidence.boolean = True
+    is_high_confidence.short_description = "High Confidence"

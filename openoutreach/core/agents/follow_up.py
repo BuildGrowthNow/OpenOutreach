@@ -16,6 +16,7 @@ from pydantic_ai import Agent
 
 from openoutreach.core.conf import PROMPTS_DIR
 from openoutreach.core.llm import get_llm_model, run_agent_sync
+from openoutreach.linkedin.agents.persona import get_lead_persona
 
 logger = logging.getLogger(__name__)
 
@@ -109,6 +110,47 @@ def _format_facts(summary: dict | None) -> str:
     return "\n".join(f"- {f}" for f in facts)
 
 
+def _format_persona(persona) -> str:
+    """Render persona data for the agent prompt.
+
+    Args:
+        persona: LeadPersona instance or None
+
+    Returns:
+        Formatted string with pain points, goals, messaging preferences, and buy signals
+    """
+    if not persona:
+        return "(no persona generated yet)"
+
+    lines = ["### LEAD PERSONA", ""]
+
+    lines.append("**Pain Points:**")
+    for point in persona.pain_points[:3]:
+        lines.append(f"- {point}")
+    lines.append("")
+
+    lines.append("**Goals:**")
+    for goal in persona.goals[:3]:
+        lines.append(f"- {goal}")
+    lines.append("")
+
+    if persona.messaging_preferences:
+        lines.append("**Messaging Preferences:**")
+        for pref, value in persona.messaging_preferences.items():
+            lines.append(f"- {pref}: {value}")
+        lines.append("")
+
+    if persona.buy_signals:
+        lines.append("**Buy Signals:**")
+        for signal in persona.buy_signals[:3]:
+            lines.append(f"- {signal.get('description', 'Unknown')}")
+        lines.append("")
+
+    lines.append(f"**Persona Confidence:** {persona.confidence_score:.2f}")
+
+    return "\n".join(lines)
+
+
 def _log_chat_facts(public_id: str, deal) -> None:
     """Log the mem0 chat facts the agent is working with."""
     chat_facts = (deal.chat_summary or {}).get("facts", [])
@@ -142,6 +184,9 @@ def _render_system_prompt(session, deal, recent_messages: list) -> str:
     self_prof = session.self_profile
     self_name = f"{self_prof.get('first_name', '')} {self_prof.get('last_name', '')}".strip() or session.django_user.username
 
+    # Get persona context if available
+    persona = get_lead_persona(deal)
+
     now = timezone.now()
     return template.render(
         self_name=self_name,
@@ -151,6 +196,7 @@ def _render_system_prompt(session, deal, recent_messages: list) -> str:
         booking_link=campaign.booking_link or "",
         profile_summary=_format_facts(deal.profile_summary),
         chat_summary=_format_facts(deal.chat_summary),
+        persona=_format_persona(persona),
         recent_messages=_format_recent_messages(recent_messages, now),
         today=now.strftime("%Y-%m-%d"),
         days_since_last_outgoing=_days_since_last_outgoing(recent_messages, now),
