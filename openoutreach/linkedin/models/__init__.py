@@ -4,6 +4,13 @@
 from __future__ import annotations
 
 from .health import CampaignHealthMetric, HealthAlert, RecoveryAction
+from .state_machine import (
+    CampaignStateGraph,
+    StateNode,
+    StateTransition,
+    CampaignState,
+    CampaignExecutionLog,
+)
 
 import logging
 from datetime import date

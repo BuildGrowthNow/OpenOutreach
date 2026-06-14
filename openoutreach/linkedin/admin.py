@@ -4,6 +4,13 @@ from django.contrib import admin
 from openoutreach.linkedin.models import LinkedInProfile, SearchKeyword
 from openoutreach.linkedin.models.ghost_mode import GhostCampaign, GhostSimulationLog, GhostTestScenario
 from openoutreach.linkedin.models.health import CampaignHealthMetric, HealthAlert, RecoveryAction
+from openoutreach.linkedin.models.state_machine import (
+    CampaignStateGraph,
+    StateNode,
+    StateTransition,
+    CampaignState,
+    CampaignExecutionLog,
+)
 
 
 @admin.register(LinkedInProfile)
@@ -80,3 +87,57 @@ class RecoveryActionAdmin(admin.ModelAdmin):
     list_filter = ("action_type", "campaign")
     readonly_fields = ("executed_at",)
     date_hierarchy = "executed_at"
+
+
+@admin.register(CampaignStateGraph)
+class CampaignStateGraphAdmin(admin.ModelAdmin):
+    list_display = ("campaign", "name", "is_active", "is_valid", "created_at")
+    list_filter = ("is_active", "is_valid")
+    readonly_fields = ("graph_data", "validation_errors", "created_at", "updated_at")
+    list_select_related = ("campaign",)
+    
+    def save_model(self, request, obj, form, change):
+        # Validate the graph before saving
+        from openoutreach.linkedin.services.state_machine import StateMachineEngine
+        is_valid, errors = StateMachineEngine(obj).validate_graph()
+        obj.is_valid = is_valid
+        obj.validation_errors = errors
+        super().save_model(request, obj, form, change)
+
+
+@admin.register(StateNode)
+class StateNodeAdmin(admin.ModelAdmin):
+    list_display = ("name", "node_type", "state_graph", "is_active", "x", "y")
+    list_filter = ("node_type", "is_active", "state_graph")
+    raw_id_fields = ("state_graph",)
+    readonly_fields = ("created_at", "updated_at")
+    list_select_related = ("state_graph",)
+
+
+@admin.register(StateTransition)
+class StateTransitionAdmin(admin.ModelAdmin):
+    list_display = ("source_node", "target_node", "state_graph", "condition_type", "label", "is_active", "order")
+    list_filter = ("condition_type", "is_active", "state_graph")
+    raw_id_fields = ("source_node", "target_node", "state_graph")
+    readonly_fields = ("created_at", "updated_at")
+    list_select_related = ("source_node", "target_node", "state_graph")
+
+
+@admin.register(CampaignState)
+class CampaignStateAdmin(admin.ModelAdmin):
+    list_display = ("deal", "state_graph", "current_node", "status", "started_at", "completed_at")
+    list_filter = ("status", "state_graph")
+    raw_id_fields = ("deal", "state_graph", "current_node")
+    readonly_fields = ("previous_nodes", "error_message", "wait_until", "metadata", "started_at", "completed_at")
+    list_select_related = ("deal", "state_graph", "current_node")
+    date_hierarchy = "started_at"
+
+
+@admin.register(CampaignExecutionLog)
+class CampaignExecutionLogAdmin(admin.ModelAdmin):
+    list_display = ("state_machine", "node", "action", "timestamp")
+    list_filter = ("action", "state_machine", "node")
+    raw_id_fields = ("state_machine", "node", "transition")
+    readonly_fields = ("result", "error", "timestamp")
+    list_select_related = ("state_machine", "node", "transition")
+    date_hierarchy = "timestamp"

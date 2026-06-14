@@ -1,18 +1,18 @@
 # openoutreach/linkedin/tasks/follow_up.py
 """Follow-up task — runs the agentic follow-up for one eligible CONNECTED deal."""
 from __future__ import annotations
- 
+  
 import logging
 from datetime import timedelta
-from typing import TYPE_CHECKING
- 
+from typing import TYPE_CHECKING, Dict, Optional
+  
 from django.utils import timezone
 from termcolor import colored
- 
+  
 from openoutreach.crm.models import DealState
 from openoutreach.linkedin.models import ActionLog
 from openoutreach.linkedin.services.ghost_mode import GhostModeInterceptor
- 
+  
 logger = logging.getLogger(__name__)
  
 if TYPE_CHECKING:
@@ -154,7 +154,58 @@ def handle_follow_up(task, session, qualifiers):
         # Bump update_date so the eligibility query cycles to a different deal
         # next time; this deal returns to the front only after others are touched.
         deal.save()
- 
+    
+    # State Machine Integration - Execute state machine if campaign has one
+    _try_execute_state_machine(deal, session)
+
+
+def _try_execute_state_machine(deal: "Deal", session, last_message: Optional[Dict] = None) -> None:
+    """Try to execute the state machine for a deal if it has one configured."""
+    from openoutreach.linkedin.models.state_machine import CampaignState, CampaignStateGraph
+    from openoutreach.linkedin.services.state_machine import StateMachineEngine
+    
+    try:
+        # Check if campaign has an active state graph
+        state_graph = CampaignStateGraph.objects.filter(
+            campaign=deal.campaign,
+            is_active=True,
+        ).first()
+        
+        if not state_graph:
+            return
+        
+        # Get or create state machine instance for this deal
+        state_machine, created = CampaignState.objects.get_or_create(
+            deal=deal,
+            state_graph=state_graph,
+            defaults={
+                'current_node': state_graph.nodes.filter(node_type='start').first(),
+                'status': CampaignState.STATUS_ACTIVE,
+            }
+        )
+        
+        # Check if waiting (cooldown period)
+        if state_machine.wait_until and timezone.now() < state_machine.wait_until:
+            return  # Still waiting, skip this execution
+        
+        # Check if already completed or errored
+        if state_machine.status in (CampaignState.STATUS_COMPLETED, CampaignState.STATUS_ERROR):
+            return
+        
+        # Execute state machine step
+        engine = StateMachineEngine(state_graph)
+        success, message = engine.execute_step(state_machine, session)
+        
+        if not success:
+            logger.error(f"State machine execution failed for deal {deal.id}: {message}")
+            return
+        
+        logger.info(f"State machine step completed for deal {deal.id}: {message}")
+        
+    except Exception as e:
+        logger.exception(f"Error executing state machine for deal {deal.id}: {e}")
+
+
 # Re-imports needed for type hints (local import avoids circular imports)
 from openoutreach.core.db.deals import set_profile_state
 from openoutreach.core.db.summaries import materialize_profile_summary_if_missing
