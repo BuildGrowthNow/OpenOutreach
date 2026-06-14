@@ -1,4 +1,6 @@
-# openoutreach/linkedin/models.py
+# openoutreach/linkedin/models/__init__.py
+# Main models for the LinkedIn app
+
 from __future__ import annotations
 
 import logging

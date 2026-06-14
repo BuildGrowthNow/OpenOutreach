@@ -1,23 +1,30 @@
 # openoutreach/linkedin/tasks/follow_up.py
 """Follow-up task — runs the agentic follow-up for one eligible CONNECTED deal."""
 from __future__ import annotations
-
+ 
 import logging
 from datetime import timedelta
-
+from typing import TYPE_CHECKING
+ 
 from django.utils import timezone
 from termcolor import colored
-
+ 
 from openoutreach.crm.models import DealState
 from openoutreach.linkedin.models import ActionLog
-
+from openoutreach.linkedin.services.ghost_mode import GhostModeInterceptor
+ 
 logger = logging.getLogger(__name__)
-
+ 
+if TYPE_CHECKING:
+    from openoutreach.core.db.lead import Lead
+    from openoutreach.core.db.deal import Deal
+    from openoutreach.linkedin.browser.session import AccountSession
+ 
 # Required silence between nudges scales with unanswered count:
 # 1 unanswered → 3d, 2 → 6d, 3 → 9d. Skips the LLM call while open.
 MIN_DAYS_PER_UNANSWERED = 3
-
-
+ 
+ 
 def _build_send_profile(deal) -> dict:
     """Minimal profile dict for ``send_raw_message`` and its fallbacks."""
     lead = deal.lead
@@ -25,31 +32,31 @@ def _build_send_profile(deal) -> dict:
         "public_identifier": lead.public_identifier,
         "urn": lead.urn or "",
     }
-
-
+ 
+ 
 def _too_soon_to_nudge(deal) -> bool:
     """Wait ``unanswered_count * MIN_DAYS_PER_UNANSWERED`` days between nudges."""
     from openoutreach.chat.models import ChatMessage
-
+ 
     messages = ChatMessage.objects.filter(deal=deal)
-
+ 
     last = messages.order_by("-creation_date").first()
     if last is None or not last.is_outgoing:
         return False
-
+ 
     last_reply = messages.filter(is_outgoing=False).order_by("-creation_date").first()
     nudges = messages.filter(is_outgoing=True)
     if last_reply:
         nudges = nudges.filter(creation_date__gt=last_reply.creation_date)
-
+ 
     required = timedelta(days=nudges.count() * MIN_DAYS_PER_UNANSWERED)
     return timezone.now() - last.creation_date < required
-
-
+ 
+ 
 def _connected_deals(campaign):
     """Open, non-disqualified CONNECTED deals in *campaign*, oldest first."""
     from openoutreach.crm.models import Deal
-
+ 
     return (
         Deal.objects.filter(
             campaign=campaign,
@@ -60,28 +67,42 @@ def _connected_deals(campaign):
         .select_related("lead", "campaign")
         .order_by("update_date")
     )
-
-
+ 
+ 
 def _next_followup_deal(campaign):
     """Oldest CONNECTED deal in *campaign* not on a nudge cooldown."""
     for deal in _connected_deals(campaign):
         if not _too_soon_to_nudge(deal):
             return deal
     return None
-
-
+ 
+ 
 def handle_follow_up(task, session, qualifiers):
-    from linkedin_cli.actions.message import send_raw_message
-    from openoutreach.core.agents.follow_up import run_follow_up_agent
-    from openoutreach.core.db.deals import set_profile_state
-    from openoutreach.core.db.summaries import materialize_profile_summary_if_missing
-
     campaign = session.campaign
-
+ 
+    # Check if ghost mode is active for this campaign
+    ghost_campaign = campaign.ghost_campaigns.filter(is_active=True).first()
+    if ghost_campaign:
+        interceptor = GhostModeInterceptor(ghost_campaign)
+        if not interceptor.can_proceed("follow_up"):
+            deal = _next_followup_deal(campaign)
+            if deal:
+                interceptor.simulate_action(
+                    "follow_up",
+                    {"days_since_connect": 3, "name": deal.lead.public_identifier},
+                    {"campaign": campaign, "session": session},
+                )
+                logger.info(
+                    "[%s] Ghost mode: Would send follow-up to %s (simulated)",
+                    campaign,
+                    deal.lead.public_identifier,
+                )
+            return
+ 
     if not session.linkedin_profile.can_execute(ActionLog.ActionType.FOLLOW_UP):
         logger.info("[%s] follow_up: daily limit reached — slot skipped", campaign)
         return
-
+ 
     deal = _next_followup_deal(campaign)
     if deal is None:
         connected = _connected_deals(campaign).count()
@@ -93,18 +114,18 @@ def handle_follow_up(task, session, qualifiers):
         else:
             logger.info("[%s] follow_up: no connected leads yet — nobody to follow up", campaign)
         return
-
+ 
     public_id = deal.lead.public_identifier
     logger.info(
         "[%s] %s %s",
         campaign, colored("▶ follow_up", "green", attrs=["bold"]), public_id,
     )
-
+ 
     materialize_profile_summary_if_missing(deal, session)
     decision = run_follow_up_agent(session, deal)
-
+ 
     profile = _build_send_profile(deal)
-
+ 
     if decision.action == "send_message":
         logger.info("[%s] follow_up message for %s: %s", campaign, public_id, decision.message)
         sent = send_raw_message(session, profile, decision.message)
@@ -124,12 +145,18 @@ def handle_follow_up(task, session, qualifiers):
         except Exception:
             logger.exception("post-send sync failed for %s (best-effort)", public_id)
         deal.save()
-
+ 
     elif decision.action == "mark_completed":
         set_profile_state(session, public_id, DealState.COMPLETED.value, outcome=decision.outcome)
         logger.info("[%s] follow_up completed for %s: outcome=%s", campaign, public_id, decision.outcome)
-
+ 
     elif decision.action == "wait":
         # Bump update_date so the eligibility query cycles to a different deal
         # next time; this deal returns to the front only after others are touched.
         deal.save()
+ 
+# Re-imports needed for type hints (local import avoids circular imports)
+from openoutreach.core.db.deals import set_profile_state
+from openoutreach.core.db.summaries import materialize_profile_summary_if_missing
+from linkedin_cli.actions.message import send_raw_message
+from openoutreach.core.agents.follow_up import run_follow_up_agent
