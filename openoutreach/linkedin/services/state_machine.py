@@ -36,11 +36,11 @@ class StateMachineEngine:
     
     def get_transitions(self, node: StateNode) -> List[StateTransition]:
         """Get outgoing transitions for a node."""
-        return StateTransition.objects.filter(
+        return list(StateTransition.objects.filter(
             source_node=node,
             state_graph=self.state_graph,
             is_active=True,
-        ).order_by('order')
+        ).order_by('order'))
     
     def evaluate_condition(self, node: StateNode, deal: Deal, last_message: Optional[Dict] = None) -> bool:
         """Evaluate a condition on a node."""

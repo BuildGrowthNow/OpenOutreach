@@ -17,8 +17,8 @@ from openoutreach.linkedin.services.smart_rate_limits import smart_can_execute, 
 logger = logging.getLogger(__name__)
  
 if TYPE_CHECKING:
-    from openoutreach.core.db.lead import Lead
-    from openoutreach.core.db.deal import Deal
+    # Fix: The correct import paths are in crm.models, not core.db.lead/deal
+    from openoutreach.crm.models import Lead, Deal
     from openoutreach.linkedin.browser.session import AccountSession
  
 # Required silence between nudges scales with unanswered count:
@@ -120,8 +120,8 @@ def handle_follow_up(task, session, qualifiers):
  
     public_id = deal.lead.public_identifier
     logger.info(
-        "[%s] %s %s",
-        campaign, colored("▶ follow_up", "green", attrs=["bold"]), public_id,
+        "[%s] follow_up %s",
+        campaign, public_id,
     )
  
     materialize_profile_summary_if_missing(deal, session)

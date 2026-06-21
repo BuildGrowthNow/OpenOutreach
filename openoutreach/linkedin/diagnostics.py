@@ -2,6 +2,7 @@
 """Capture page state on automation failures for post-mortem debugging."""
 from __future__ import annotations
 
+from typing import Any
 import logging
 import traceback
 from contextlib import contextmanager
@@ -12,7 +13,7 @@ from openoutreach.core.conf import DIAGNOSTICS_DIR
 logger = logging.getLogger(__name__)
 
 
-def capture_failure(session, error: BaseException) -> None:
+def capture_failure(session: Any, error: BaseException) -> None:
     """Save page HTML, screenshot, and error details into a per-failure folder."""
     timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
     error_name = type(error).__name__
@@ -23,7 +24,7 @@ def capture_failure(session, error: BaseException) -> None:
     tb = traceback.format_exception(type(error), error, error.__traceback__)
     (folder / "error.txt").write_text("".join(tb))
 
-    page = getattr(session, "page", None)
+    page: Any | None = getattr(session, "page", None)
     if page is None or page.is_closed():
         logger.debug("No live page — skipping HTML/screenshot capture")
         (folder / "page.html").write_text("<!-- page was None or closed -->")
@@ -43,7 +44,7 @@ def capture_failure(session, error: BaseException) -> None:
 
 
 @contextmanager
-def failure_diagnostics(session):
+def failure_diagnostics(session: Any):
     """Context manager that captures diagnostics on unhandled exceptions."""
     try:
         yield

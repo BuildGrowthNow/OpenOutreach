@@ -11,8 +11,6 @@ import logging
 from dataclasses import dataclass
 from typing import Callable
  
-from termcolor import colored
- 
 from openoutreach.core.db.deals import increment_connect_attempts, set_profile_state
 from openoutreach.crm.models import DealState
 from openoutreach.linkedin.db.leads import disqualify_lead
@@ -108,8 +106,8 @@ def handle_connect(task, session, qualifiers):
     ).first()
     reason = deal.reason if deal else ""
     stats = strategy.qualifier.explain(candidate, session) if strategy.qualifier else ""
-    logger.info("[%s] %s", campaign, colored("▶ connect", "cyan", attrs=["bold"]))
-    logger.info("[%s] %s (%s) — %s", campaign, public_id, stats, reason or "")
+    logger.info("[%s] connect", campaign)
+    logger.info("[%s] %s (%s) - %s", campaign, public_id, stats, reason or "")
  
     try:
         # The library observes a UI state and returns it as a str; lift it into

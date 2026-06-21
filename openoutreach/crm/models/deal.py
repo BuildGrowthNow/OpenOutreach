@@ -43,30 +43,31 @@ class Deal(models.Model):
             models.UniqueConstraint(fields=["lead", "campaign"], name="unique_deal_per_campaign"),
         ]
 
-    lead = models.ForeignKey("Lead", on_delete=models.CASCADE)
-    campaign = models.ForeignKey(
+    lead: models.ForeignKey = models.ForeignKey("Lead", on_delete=models.CASCADE)  # type: ignore[var-annotated,assignment]
+    campaign: models.ForeignKey = models.ForeignKey(  # type: ignore[var-annotated,assignment]
         "core.Campaign", on_delete=models.CASCADE, related_name="deals",
     )
-    state = models.CharField(
+    state: models.CharField = models.CharField(  # type: ignore[var-annotated]
         max_length=20,
         choices=DealState.choices,
         default=DealState.QUALIFIED,
     )
-    outcome = models.CharField(
+    outcome: models.CharField = models.CharField(  # type: ignore[var-annotated]
         max_length=20,
         choices=Outcome.choices,
         blank=True,
         default="",
     )
-    reason = models.TextField(blank=True, default="")
-    connect_attempts = models.IntegerField(default=0)
-    backoff_hours = models.IntegerField(default=0)
-    next_check_pending_at = models.DateTimeField(null=True, blank=True, db_index=True)
-    profile_summary = models.JSONField(null=True, blank=True, default=None)
-    chat_summary = models.JSONField(null=True, blank=True, default=None)
-    creation_date = models.DateTimeField(default=timezone.now)
-    update_date = models.DateTimeField(auto_now=True)
+    reason: models.TextField = models.TextField(blank=True, default="")  # type: ignore[var-annotated]
+    connect_attempts: models.IntegerField = models.IntegerField(default=0)  # type: ignore[var-annotated]
+    backoff_hours: models.IntegerField = models.IntegerField(default=0)  # type: ignore[var-annotated]
+    next_check_pending_at: models.DateTimeField = models.DateTimeField(null=True, blank=True, db_index=True)  # type: ignore[var-annotated]
+    profile_summary: models.JSONField = models.JSONField(null=True, blank=True, default=None)  # type: ignore[var-annotated]
+    chat_summary: models.JSONField = models.JSONField(null=True, blank=True, default=None)  # type: ignore[var-annotated]
+    creation_date: models.DateTimeField = models.DateTimeField(default=timezone.now)  # type: ignore[var-annotated]
+    update_date: models.DateTimeField = models.DateTimeField(auto_now=True)  # type: ignore[var-annotated]
 
-    def __str__(self):
-        lead_str = str(self.lead) if self.lead_id else "?"
+    def __str__(self) -> str:
+        lead_id: int = getattr(self, 'lead_id', 0)  # type: ignore[var-annotated]
+        lead_str = str(self.lead) if lead_id else "?"
         return f"{lead_str} [{self.state}]"

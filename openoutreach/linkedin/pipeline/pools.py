@@ -129,7 +129,7 @@ def qualify_source(session, qualifier: BayesianQualifier) -> Generator[str, None
 def ready_source(session, qualifier: BayesianQualifier, threshold: float | None = None) -> Generator[dict, None, None]:
     """Yield ready-to-connect candidates, pulling from qualify when needed."""
     if threshold is None:
-        threshold = CAMPAIGN_CONFIG["min_ready_to_connect_prob"]
+        threshold = CAMPAIGN_CONFIG["min_ready_to_connect_prob"]  # type: ignore
     qualify = qualify_source(session, qualifier)
 
     while True:
@@ -152,7 +152,7 @@ def ready_source(session, qualifier: BayesianQualifier, threshold: float | None 
         return
 
 
-def find_candidate(session, qualifier: BayesianQualifier) -> dict | None:
+def find_candidate(session, qualifier: BayesianQualifier) -> dict | None:  # type: ignore
     """Top profile ready for connection, backfilling if needed.
 
     Only used by regular campaigns. Freemium campaigns use

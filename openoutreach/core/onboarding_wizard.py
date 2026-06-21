@@ -9,6 +9,8 @@ input, the sentinel ``_BACK``, or ``None`` (cancel).  The base class
 
 from __future__ import annotations
 
+from typing import Any, Callable, Dict, List
+
 import os
 from dataclasses import dataclass
 
@@ -164,7 +166,7 @@ class IntText(Question):
 class Autocomplete(Question):
     """Type-to-filter searchable select with lazily resolved choices."""
 
-    def __init__(self, key: str, message: str, *, resolver: callable, default: str = ""):
+    def __init__(self, key: str, message: str, *, resolver: Callable[[Dict[str, Any]], List[str]], default: str = ""):
         super().__init__(key=key, message=message, default=default)
         self.resolver = resolver
 

@@ -8,6 +8,7 @@ Django-free ``linkedin_cli.browser`` library and are called from here.
 """
 from __future__ import annotations
 
+from typing import Any
 import logging
 
 from termcolor import colored
@@ -21,14 +22,14 @@ logger = logging.getLogger(__name__)
 LINKEDIN_FEED_URL = "https://www.linkedin.com/feed/"
 
 
-def _save_cookies(session):
+def _save_cookies(session: Any) -> None:
     """Persist Playwright storage state (cookies) to the DB."""
     state = session.context.storage_state()
     session.linkedin_profile.cookie_data = state
     session.linkedin_profile.save(update_fields=["cookie_data"])
 
 
-def start_browser_session(session):
+def start_browser_session(session: Any) -> None:
     logger.debug("Configuring browser for %s", session)
 
     session.linkedin_profile.refresh_from_db(fields=["cookie_data"])

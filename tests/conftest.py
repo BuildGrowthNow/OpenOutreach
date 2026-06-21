@@ -43,6 +43,11 @@ def _mock_contact_capture(request):
 class FakeAccountSession:
     """Minimal stand-in for AccountSession — exposes django_user + campaign."""
 
+    class MockContext:
+        """Mock context object for linkedin_cli.api.client compatibility."""
+        def cookies(self):
+            return {}
+
     def __init__(self, django_user, linkedin_profile, campaign):
         self.django_user = django_user
         self.linkedin_profile = linkedin_profile
@@ -52,6 +57,8 @@ class FakeAccountSession:
             "last_name": "Ramirez",
             "urn": "urn:li:fsd_profile:TEST",
         }
+        self.page = None  # For compatibility with linkedin_cli.api.client
+        self.context = self.MockContext()  # For compatibility with linkedin_cli.api.client
 
     @property
     def campaigns(self):

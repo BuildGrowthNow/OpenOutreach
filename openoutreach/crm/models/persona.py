@@ -12,21 +12,21 @@ class LeadPersona(models.Model):
     Contains predicted pain points, goals, messaging preferences, and buy signals
     that are used by the follow-up agent to craft hyper-personalized outreach.
     """
-    lead = models.ForeignKey('Lead', on_delete=models.CASCADE, related_name='personas')
-    campaign = models.ForeignKey('core.Campaign', on_delete=models.CASCADE)
+    lead: models.ForeignKey = models.ForeignKey('Lead', on_delete=models.CASCADE, related_name='personas')  # type: ignore[var-annotated,assignment]
+    campaign: models.ForeignKey = models.ForeignKey('core.Campaign', on_delete=models.CASCADE)  # type: ignore[var-annotated,assignment]
     
     # Persona fields (stored as JSON for flexibility)
-    pain_points = models.JSONField(default=list)  # List of predicted pain points
-    goals = models.JSONField(default=list)  # List of professional goals
-    messaging_preferences = models.JSONField(default=dict)  # {tone, formality, topics, style}
-    buy_signals = models.JSONField(default=list)  # List of {signal_type, strength, source, description}
-    confidence_score = models.FloatField(default=0.5)  # LLM confidence in persona (0-1)
-    recommendations = models.JSONField(default=list)  # Specific outreach suggestions
+    pain_points: models.JSONField = models.JSONField(default=list)  # List of predicted pain points  # type: ignore[var-annotated]
+    goals: models.JSONField = models.JSONField(default=list)  # List of professional goals  # type: ignore[var-annotated]
+    messaging_preferences: models.JSONField = models.JSONField(default=dict)  # {tone, formality, topics, style}  # type: ignore[var-annotated]
+    buy_signals: models.JSONField = models.JSONField(default=list)  # List of {signal_type, strength, source, description}  # type: ignore[var-annotated]
+    confidence_score: models.FloatField = models.FloatField(default=0.5)  # LLM confidence in persona (0-1)  # type: ignore[var-annotated]
+    recommendations: models.JSONField = models.JSONField(default=list)  # Specific outreach suggestions  # type: ignore[var-annotated]
     
     # Metadata
-    generated_at = models.DateTimeField(auto_now_add=True)
-    last_updated = models.DateTimeField(auto_now=True)
-    version = models.PositiveIntegerField(default=1)
+    generated_at: models.DateTimeField = models.DateTimeField(auto_now_add=True)  # type: ignore[var-annotated]
+    last_updated: models.DateTimeField = models.DateTimeField(auto_now=True)  # type: ignore[var-annotated]
+    version: models.PositiveIntegerField = models.PositiveIntegerField(default=1)  # type: ignore[var-annotated]
     
     class Meta:
         unique_together = ('lead', 'campaign')
@@ -38,7 +38,7 @@ class LeadPersona(models.Model):
         verbose_name = "Lead Persona"
         verbose_name_plural = "Lead Personas"
     
-    def __str__(self):
+    def __str__(self) -> str:
         return f"Persona v{self.version} for {self.lead.public_identifier}"
     
     @property

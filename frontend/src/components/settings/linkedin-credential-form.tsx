@@ -1,0 +1,303 @@
+'use client'
+
+import { useState } from 'react'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { useForm } from 'react-hook-form'
+import { z } from 'zod'
+import { Button } from '@/components/ui/button'
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Card, CardContent } from '@/components/ui/card'
+import { Icons } from '@/lib/types/components'
+import { createLinkedInCredentials, updateLinkedInCredentials, type LinkedInCredentials } from '@/lib/api/dashboard'
+
+const credentialSchema = z.object({
+  email: z.string().email('Please enter a valid email address'),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
+  username: z.string().min(2, 'Username must be at least 2 characters').optional()
+})
+
+type CredentialFormValues = z.infer<typeof credentialSchema>
+
+interface CredentialFormProps {
+  initialData?: LinkedInCredentials
+  onSuccess?: () => void
+  onCancel?: () => void
+}
+
+export default function LinkedInCredentialForm({ initialData, onSuccess, onCancel }: CredentialFormProps) {
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
+
+  const form = useForm<CredentialFormValues>({
+    resolver: zodResolver(credentialSchema),
+    defaultValues: {
+      email: initialData?.public_email.replace(/\*\*\*/g, '') || '',
+      password: '',
+      username: initialData?.username || ''
+    }
+  })
+
+  const onSubmit = async (values: CredentialFormValues) => {
+    try {
+      setIsSubmitting(true)
+      setError(null)
+      setSuccess(false)
+
+      const formData = {
+        email: values.email,
+        password: values.password,
+        username: values.username || form.getValues('email').split('@')[0]
+      }
+
+      let response
+      if (initialData) {
+        // Update existing credential
+        response = await updateLinkedInCredentials(initialData.id, formData)
+      } else {
+        // Create new credential
+        response = await createLinkedInCredentials(formData)
+      }
+
+      if (response.data) {
+        setSuccess(true)
+        if (onSuccess) onSuccess()
+      } else {
+        setError(response.error || 'Failed to save credentials')
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      {error && (
+        <Alert variant="destructive">
+          <Icons.AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
+      {success && (
+        <Alert>
+          <Icons.CheckCircle className="h-4 w-4" />
+          <AlertDescription>
+            {initialData ? 'Credentials updated successfully!' : 'Credentials created successfully!'}
+          </AlertDescription>
+        </Alert>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2">
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+              <div className="space-y-4">
+                <FormField
+                  control={form.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>LinkedIn Email</FormLabel>
+                      <FormControl>
+                        <div className="flex">
+                          <div className="flex items-center justify-center px-3 border border-r-0 rounded-l-md bg-gray-50">
+                            <Icons.Mail className="h-4 w-4 text-gray-500" />
+                          </div>
+                          <Input
+                            placeholder="name@linkedin.com"
+                            type="email"
+                            {...field}
+                            className="rounded-l-none"
+                          />
+                        </div>
+                      </FormControl>
+                      <FormDescription>
+                        The email address for your LinkedIn account
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="password"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Password</FormLabel>
+                      <FormControl>
+                        <div className="flex">
+                          <div className="flex items-center justify-center px-3 border border-r-0 rounded-l-md bg-gray-50">
+                            <Icons.Lock className="h-4 w-4 text-gray-500" />
+                          </div>
+                          <Input
+                            placeholder="••••••••"
+                            type={showPassword ? 'text' : 'password'}
+                            {...field}
+                            className="rounded-l-none"
+                          />
+                        </div>
+                      </FormControl>
+                      <FormDescription>
+                        Your LinkedIn password (stored encrypted with AES-256)
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="username"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Display Username</FormLabel>
+                      <FormControl>
+                        <div className="flex">
+                          <div className="flex items-center justify-center px-3 border border-r-0 rounded-l-md bg-gray-50">
+                            <span className="text-gray-500">@</span>
+                          </div>
+                          <Input
+                            placeholder="linkedin-username"
+                            {...field}
+                            className="rounded-l-none"
+                          />
+                        </div>
+                      </FormControl>
+                      <FormDescription>
+                        Your LinkedIn username for display purposes
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="border-t pt-6">
+                <div className="flex justify-end space-x-4">
+                  {onCancel && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={onCancel}
+                      disabled={isSubmitting}
+                    >
+                      Cancel
+                    </Button>
+                  )}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => setShowPassword(!showPassword)}
+                    disabled={isSubmitting}
+                  >
+                    {showPassword ? (
+                      <>
+                        <Icons.EyeOff className="h-4 w-4 mr-2" />
+                        Hide Password
+                      </>
+                    ) : (
+                      <>
+                        <Icons.Eye className="h-4 w-4 mr-2" />
+                        Show Password
+                      </>
+                    )}
+                  </Button>
+                  <Button type="submit" disabled={isSubmitting}>
+                    {isSubmitting ? (
+                      <>
+                        <Icons.RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                        Saving...
+                      </>
+                    ) : initialData ? (
+                      <>
+                        <Icons.CheckCircle className="h-4 w-4 mr-2" />
+                        Update Credentials
+                      </>
+                    ) : (
+                      <>
+                        <Icons.Save className="h-4 w-4 mr-2" />
+                        Add Credentials
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </form>
+          </Form>
+        </div>
+
+        <div className="space-y-4">
+          <Card>
+            <CardContent className="pt-6">
+              <div className="space-y-4">
+                <h3 className="font-semibold flex items-center">
+                  <Icons.Lock className="h-4 w-4 text-blue-600 mr-2" />
+                  Security Information
+                </h3>
+                <div className="space-y-3 text-sm">
+                  <div className="flex items-start">
+                    <Icons.CheckCircle className="h-3 w-3 text-green-500 mt-0.5 mr-2 flex-shrink-0" />
+                    <span className="text-gray-600">
+                      Passwords are encrypted with AES-256 at rest
+                    </span>
+                  </div>
+                  <div className="flex items-start">
+                    <Icons.CheckCircle className="h-3 w-3 text-green-500 mt-0.5 mr-2 flex-shrink-0" />
+                    <span className="text-gray-600">
+                      Your credentials are never logged
+                    </span>
+                  </div>
+                  <div className="flex items-start">
+                    <Icons.CheckCircle className="h-3 w-3 text-green-500 mt-0.5 mr-2 flex-shrink-0" />
+                    <span className="text-gray-600">
+                      Email is masked in display (e.g., j***@domain.com)
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="pt-6">
+              <div className="space-y-3">
+                <h3 className="font-semibold flex items-center">
+                  <Icons.AlertCircle className="h-4 w-4 text-yellow-600 mr-2" />
+                  What to Know
+                </h3>
+                <ul className="text-sm space-y-2">
+                  <li className="flex items-start">
+                    <Icons.Info className="h-3 w-3 text-blue-500 mt-0.5 mr-2 flex-shrink-0" />
+                    <span className="text-gray-600">
+                      Use a dedicated LinkedIn account for outreach campaigns
+                    </span>
+                  </li>
+                  <li className="flex items-start">
+                    <Icons.Info className="h-3 w-3 text-blue-500 mt-0.5 mr-2 flex-shrink-0" />
+                    <span className="text-gray-600">
+                      Credentials are validated before first use
+                    </span>
+                  </li>
+                  <li className="flex items-start">
+                    <Icons.Info className="h-3 w-3 text-blue-500 mt-0.5 mr-2 flex-shrink-0" />
+                    <span className="text-gray-600">
+                      Rotate credentials regularly for security
+                    </span>
+                  </li>
+                </ul>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </div>
+  )
+}

@@ -1,14 +1,18 @@
 # openoutreach/linkedin/browser/registry.py
 from __future__ import annotations
 
+from typing import Any
+
 import logging
 
 logger = logging.getLogger(__name__)
 
-_sessions: dict[int, "AccountSession"] = {}
+# AccountSession type imported later to avoid circular dependency
+_AccountSession = None  # type: Any | None  # type: ignore[name-defined,assignment]
+_sessions: dict[int, "AccountSession"] = {}  # type: ignore[name-defined]
 
 
-def get_or_create_session(linkedin_profile) -> "AccountSession":
+def get_or_create_session(linkedin_profile: Any) -> "AccountSession":  # type: ignore[name-defined]
     from openoutreach.linkedin.browser.session import AccountSession
 
     pk = linkedin_profile.pk
@@ -25,7 +29,7 @@ def get_first_active_profile():
     return LinkedInProfile.objects.filter(active=True).select_related("user").first()
 
 
-def resolve_profile(username: str | None = None):
+def resolve_profile(username: str | None = None) -> Any | None:  # type: ignore[name-defined]
     """Resolve a LinkedInProfile from an optional username, falling back to first active."""
     if username:
         from openoutreach.linkedin.models import LinkedInProfile
@@ -59,7 +63,7 @@ def cli_parser(description: str):
     return parser
 
 
-def cli_session(args) -> "AccountSession":
+def cli_session(args: Any) -> "AccountSession":  # type: ignore[name-defined]
     """Resolve profile from parsed args, create session, set default campaign."""
     linkedin_profile = resolve_profile(args.handle)
     if not linkedin_profile:

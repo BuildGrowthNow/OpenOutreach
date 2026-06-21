@@ -265,7 +265,8 @@ def on_deal_state_entered(deal) -> None:
         return
 
     backoff = deal.backoff_hours or CAMPAIGN_CONFIG["check_pending_recheck_after_hours"]
-    deal.next_check_pending_at = timezone.now() + timedelta(hours=backoff)
+    # Type: backoff should be a number (int or float)
+    deal.next_check_pending_at = timezone.now() + timedelta(hours=float(backoff))  # type: ignore
     deal.save(update_fields=["next_check_pending_at"])
 
 
@@ -274,12 +275,32 @@ def on_deal_state_entered(deal) -> None:
 
 def _recover_stale_running_tasks() -> int:
     """Reset RUNNING tasks to PENDING. RUNNING rows can only linger if the
-    daemon crashed mid-task, so they are always stale at reconcile time."""
+    daemon crashed mid-task, so they are always stale at reconcile time.
+    
+    Also logs detailed information about recovered tasks for debugging.
+    """
+    running_tasks = list(Task.objects.filter(status=Task.Status.RUNNING))
+    if not running_tasks:
+        return 0
+        
     count = Task.objects.filter(status=Task.Status.RUNNING).update(
         status=Task.Status.PENDING,
     )
-    if count:
-        logger.info("Recovered %d stale running tasks", count)
+    
+    # Log details of recovered tasks for debugging
+    for task in running_tasks:
+        error_info = ""
+        if task.get_error_message():
+            error_info = f" (last error: {task.get_error_message()[:100]}...)"
+        logger.warning(
+            "Recovered stale task: %s campaign_id=%s scheduled_at=%s%s",
+            task.task_type,
+            task.payload.get("campaign_id", "unknown"),
+            task.scheduled_at,
+            error_info,
+        )
+    
+    logger.info("Recovered %d stale running tasks from previous daemon crash", count)
     return count
 
 

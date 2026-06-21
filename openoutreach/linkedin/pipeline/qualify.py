@@ -74,10 +74,12 @@ def run_qualification(session, qualifier: BayesianQualifier) -> str | None:
     public_id = candidate.public_identifier
     embedding = candidate.embedding_array
 
-    result = qualifier.predict(embedding)
+    # Use a different variable name to avoid type interference from previous assignment
+    predicted = qualifier.predict(embedding)
 
-    if result is not None:
-        pred_prob, entropy, std = result
+    if predicted is not None:
+        # Type: predicted is tuple[float, float, float] when not None
+        pred_prob, entropy, std = predicted  # type: ignore
         stats = format_prediction(pred_prob, entropy, std, qualifier.n_obs)
         sel = f", {selection_score[0]}={selection_score[1]:.4f}" if selection_score else ""
         logger.debug("%s (%s%s) — querying LLM", public_id, stats, sel)

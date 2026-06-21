@@ -367,8 +367,9 @@ def run_daemon(session):
 
         campaign = Campaign.objects.filter(pk=task.payload.get("campaign_id")).first()
         if not campaign:
-            logger.error("Campaign %s not found", task.payload.get("campaign_id"))
-            task.mark_failed()
+            error_msg = f"Campaign {task.payload.get('campaign_id')} not found - task cannot be executed"
+            logger.error("[%s] %s", task.task_type, error_msg)
+            task.mark_failed(error_message=error_msg)
             continue
 
         session.campaign = campaign
@@ -376,8 +377,9 @@ def run_daemon(session):
 
         handler = _HANDLERS.get(task.task_type)
         if handler is None:
-            logger.error("Unknown task type: %s", task.task_type)
-            task.mark_failed()
+            error_msg = f"Unknown task type: {task.task_type}"
+            logger.error("[%s] %s", task.task_type, error_msg)
+            task.mark_failed(error_message=error_msg)
             continue
 
         try:
@@ -398,18 +400,35 @@ def run_daemon(session):
             task.mark_failed()
             continue
         except ModelHTTPError as e:
-            task.mark_failed()
+            error_msg = f"LLM API error: {str(e)[:200]}"
+            task.mark_failed(error_message=error_msg)
             logger.error(
                 colored("Daemon stopped — LLM API error", "red", attrs=["bold"])
                 + "\n%s\nCheck llm_provider, ai_model, llm_api_key, and llm_api_base in Admin → Site Configuration.", e,
             )
             return
         except Exception:
-            task.mark_failed()
-            logger.exception("Task %s failed", task)
+            import traceback
+            error_msg = f"Task execution failed: {traceback.format_exc()[:500]}"
+            task.mark_failed(error_message=error_msg)
+            logger.error(
+                colored("[%s] Task FAILED", "red", attrs=["bold"])
+                + " (task_id=%s, campaign_id=%s)\n%s",
+                task.task_type,
+                task.pk,
+                task.payload.get("campaign_id", "unknown"),
+                error_msg,
+            )
             continue
 
         task.mark_completed()
+        logger.info(
+            colored("[%s] Task COMPLETED", "green", attrs=["bold"])
+            + " (task_id=%s, campaign_id=%s)",
+            task.task_type,
+            task.pk,
+            task.payload.get("campaign_id", "unknown"),
+        )
         
         # Health check: run every HEALTH_CHECK_INTERVAL seconds
         if hasattr(session, '_last_health_check'):

@@ -100,14 +100,18 @@ class TestHandleConnect:
         return {"public_identifier": "alice", "url": "https://www.linkedin.com/in/alice/", "profile": SAMPLE_PROFILE}
 
     @patch("openoutreach.linkedin.tasks.connect.strategy_for")
+    @patch("openoutreach.linkedin.tasks.connect.smart_can_execute")
+    @patch("openoutreach.linkedin.tasks.connect.smart_record_action")
     @patch("linkedin_cli.actions.search.visit_profile")
     @patch("linkedin_cli.actions.connect.send_connection_request")
     @patch("linkedin_cli.actions.status.get_connection_status")
-    def test_sends_connection_and_records(self, mock_status, mock_send, mock_visit, mock_strategy, fake_session):
+    def test_sends_connection_and_records(self, mock_status, mock_send, mock_visit, mock_smart_record, mock_can_execute, mock_strategy, fake_session):
         _make_qualified(fake_session)
         mock_strategy.return_value = _mock_strategy(self._candidate())
         mock_status.return_value = ProfileState.QUALIFIED
         mock_send.return_value = ProfileState.PENDING
+        mock_can_execute.return_value = True
+        mock_smart_record.return_value = None
 
         task = _make_task(Task.TaskType.CONNECT, {"campaign_id": fake_session.campaign.pk})
         handle_connect(task, fake_session, _build_context(fake_session))
@@ -116,15 +120,19 @@ class TestHandleConnect:
         assert ActionLog.objects.filter(action_type=ActionLog.ActionType.CONNECT).count() == 1
 
     @patch("openoutreach.linkedin.tasks.connect.strategy_for")
+    @patch("openoutreach.linkedin.tasks.connect.smart_can_execute")
+    @patch("openoutreach.linkedin.tasks.connect.smart_record_action")
     @patch("linkedin_cli.actions.search.visit_profile")
     @patch("linkedin_cli.actions.connect.send_connection_request")
     @patch("linkedin_cli.actions.status.get_connection_status")
-    def test_pending_stamps_next_check(self, mock_status, mock_send, mock_visit, mock_strategy, fake_session):
+    def test_pending_stamps_next_check(self, mock_status, mock_send, mock_visit, mock_smart_record, mock_can_execute, mock_strategy, fake_session):
         """Connect → PENDING: state hook should stamp next_check_pending_at, no follow-up Task."""
         _make_qualified(fake_session)
         mock_strategy.return_value = _mock_strategy(self._candidate())
         mock_status.return_value = ProfileState.QUALIFIED
         mock_send.return_value = ProfileState.PENDING
+        mock_can_execute.return_value = True
+        mock_smart_record.return_value = None
 
         task = _make_task(Task.TaskType.CONNECT, {"campaign_id": fake_session.campaign.pk})
         handle_connect(task, fake_session, _build_context(fake_session))
@@ -148,11 +156,13 @@ class TestHandleConnect:
         assert not Task.objects.filter(task_type=Task.TaskType.FOLLOW_UP).exists()
 
     @patch("openoutreach.linkedin.tasks.connect.strategy_for")
+    @patch("openoutreach.linkedin.tasks.connect.smart_can_execute")
     @patch("linkedin_cli.actions.status.get_connection_status")
-    def test_handles_rate_limit(self, mock_status, mock_strategy, fake_session):
+    def test_handles_rate_limit(self, mock_status, mock_can_execute, mock_strategy, fake_session):
         _make_qualified(fake_session)
         mock_strategy.return_value = _mock_strategy(self._candidate())
         mock_status.side_effect = ReachedConnectionLimit("weekly limit")
+        mock_can_execute.return_value = True
 
         task = _make_task(Task.TaskType.CONNECT, {"campaign_id": fake_session.campaign.pk})
         handle_connect(task, fake_session, _build_context(fake_session))
@@ -160,14 +170,16 @@ class TestHandleConnect:
         assert ActionLog.ActionType.CONNECT in fake_session.linkedin_profile._exhausted
 
     @patch("openoutreach.linkedin.tasks.connect.strategy_for")
+    @patch("openoutreach.linkedin.tasks.connect.smart_can_execute")
     @patch("linkedin_cli.actions.search.visit_profile")
     @patch("linkedin_cli.actions.connect.send_connection_request")
     @patch("linkedin_cli.actions.status.get_connection_status")
-    def test_handles_skip_profile(self, mock_status, mock_send, mock_visit, mock_strategy, fake_session):
+    def test_handles_skip_profile(self, mock_status, mock_send, mock_visit, mock_can_execute, mock_strategy, fake_session):
         _make_qualified(fake_session)
         mock_strategy.return_value = _mock_strategy(self._candidate())
         mock_status.return_value = ProfileState.QUALIFIED
         mock_send.side_effect = SkipProfile("bad profile")
+        mock_can_execute.return_value = True
 
         task = _make_task(Task.TaskType.CONNECT, {"campaign_id": fake_session.campaign.pk})
         handle_connect(task, fake_session, _build_context(fake_session))
@@ -175,9 +187,11 @@ class TestHandleConnect:
         _assert_deal_state(fake_session, "alice", ProfileState.FAILED)
 
     @patch("openoutreach.linkedin.tasks.connect.strategy_for")
-    def test_skips_when_no_candidate(self, mock_strategy, fake_session):
+    @patch("openoutreach.linkedin.tasks.connect.smart_can_execute")
+    def test_skips_when_no_candidate(self, mock_can_execute, mock_strategy, fake_session):
         """Lazy: handler marks the slot done; planner re-plans next window."""
         mock_strategy.return_value = _mock_strategy(None)
+        mock_can_execute.return_value = True
 
         task = _make_task(Task.TaskType.CONNECT, {"campaign_id": fake_session.campaign.pk})
         handle_connect(task, fake_session, _build_context(fake_session))
@@ -189,8 +203,14 @@ class TestHandleConnect:
         fake_session.linkedin_profile.connect_daily_limit = 0
         fake_session.linkedin_profile.save(update_fields=["connect_daily_limit"])
 
-        task = _make_task(Task.TaskType.CONNECT, {"campaign_id": fake_session.campaign.pk})
-        handle_connect(task, fake_session, _build_context(fake_session))
+        # Mock strategy_for to return a valid candidate so we can test rate limiting
+        # Also need to mock smart_can_execute to return False for rate-limited tests
+        with patch("openoutreach.linkedin.tasks.connect.strategy_for") as mock_strategy:
+            with patch("openoutreach.linkedin.tasks.connect.smart_can_execute") as mock_can_execute:
+                mock_strategy.return_value = _mock_strategy(self._candidate())
+                mock_can_execute.return_value = False  # Rate limited
+                task = _make_task(Task.TaskType.CONNECT, {"campaign_id": fake_session.campaign.pk})
+                handle_connect(task, fake_session, _build_context(fake_session))
 
         assert Task.objects.exclude(pk=task.pk).count() == 0
 
@@ -261,10 +281,11 @@ class TestHandleCheckPending:
 @pytest.mark.django_db
 class TestHandleFollowUp:
     @patch("openoutreach.linkedin.db.chat.sync_conversation")
-    @patch("openoutreach.core.db.summaries.materialize_profile_summary_if_missing")
-    @patch("linkedin_cli.actions.message.send_raw_message", return_value=True)
-    @patch("openoutreach.core.agents.follow_up.run_follow_up_agent")
-    def test_send_message_records_action(self, mock_agent, mock_send, mock_materialize, mock_sync, fake_session):
+    @patch("openoutreach.linkedin.tasks.follow_up.materialize_profile_summary_if_missing")
+    @patch("openoutreach.linkedin.tasks.follow_up.smart_record_action")
+    @patch("openoutreach.linkedin.tasks.follow_up.send_raw_message", return_value=True)
+    @patch("openoutreach.linkedin.tasks.follow_up.run_follow_up_agent")
+    def test_send_message_records_action(self, mock_agent, mock_send, mock_smart_record, mock_materialize, mock_sync, fake_session):
         mock_agent.return_value = FollowUpDecision(
             action="send_message", message="Hello Alice!", follow_up_hours=72,
         )
@@ -286,10 +307,11 @@ class TestHandleFollowUp:
         mock_sync.assert_called_once_with(fake_session, "alice")
         assert ActionLog.objects.filter(action_type=ActionLog.ActionType.FOLLOW_UP).count() == 1
 
-    @patch("openoutreach.core.db.summaries.materialize_profile_summary_if_missing")
-    @patch("linkedin_cli.actions.message.send_raw_message", return_value=False)
-    @patch("openoutreach.core.agents.follow_up.run_follow_up_agent")
-    def test_send_failure_resets_to_qualified(self, mock_agent, mock_send, mock_materialize, fake_session):
+    @patch("openoutreach.linkedin.tasks.follow_up.materialize_profile_summary_if_missing")
+    @patch("openoutreach.linkedin.tasks.follow_up.smart_record_action")
+    @patch("openoutreach.linkedin.tasks.follow_up.send_raw_message", return_value=False)
+    @patch("openoutreach.linkedin.tasks.follow_up.run_follow_up_agent")
+    def test_send_failure_resets_to_qualified(self, mock_agent, mock_send, mock_smart_record, mock_materialize, fake_session):
         mock_agent.return_value = FollowUpDecision(
             action="send_message", message="Hi!", follow_up_hours=24,
         )
@@ -302,9 +324,10 @@ class TestHandleFollowUp:
         deal = Deal.objects.get(lead__public_identifier="alice", campaign=fake_session.campaign)
         assert deal.state == ProfileState.QUALIFIED
 
-    @patch("openoutreach.core.db.summaries.materialize_profile_summary_if_missing")
-    @patch("openoutreach.core.agents.follow_up.run_follow_up_agent")
-    def test_mark_completed_sets_state(self, mock_agent, mock_materialize, fake_session):
+    @patch("openoutreach.linkedin.tasks.follow_up.materialize_profile_summary_if_missing")
+    @patch("openoutreach.linkedin.tasks.follow_up.smart_record_action")
+    @patch("openoutreach.linkedin.tasks.follow_up.run_follow_up_agent")
+    def test_mark_completed_sets_state(self, mock_agent, mock_smart_record, mock_materialize, fake_session):
         mock_agent.return_value = FollowUpDecision(
             action="mark_completed", outcome="unresponsive", follow_up_hours=0,
         )
@@ -318,9 +341,10 @@ class TestHandleFollowUp:
         assert deal.state == ProfileState.COMPLETED
         assert deal.outcome == "unresponsive"
 
-    @patch("openoutreach.core.db.summaries.materialize_profile_summary_if_missing")
-    @patch("openoutreach.core.agents.follow_up.run_follow_up_agent")
-    def test_wait_bumps_update_date(self, mock_agent, mock_materialize, fake_session):
+    @patch("openoutreach.linkedin.tasks.follow_up.materialize_profile_summary_if_missing")
+    @patch("openoutreach.linkedin.tasks.follow_up.smart_record_action")
+    @patch("openoutreach.linkedin.tasks.follow_up.run_follow_up_agent")
+    def test_wait_bumps_update_date(self, mock_agent, mock_smart_record, mock_materialize, fake_session):
         mock_agent.return_value = FollowUpDecision(action="wait", follow_up_hours=48)
         _make_connected(fake_session)
         deal_before = Deal.objects.get(lead__public_identifier="alice", campaign=fake_session.campaign)
@@ -332,17 +356,17 @@ class TestHandleFollowUp:
         deal_after = Deal.objects.get(lead__public_identifier="alice", campaign=fake_session.campaign)
         assert deal_after.update_date > original_update
 
-    @patch("openoutreach.core.agents.follow_up.run_follow_up_agent")
+    @patch("openoutreach.linkedin.tasks.follow_up.run_follow_up_agent")
     def test_skips_when_no_eligible_deal(self, mock_agent, fake_session):
         """No CONNECTED deals → handler marks slot done without calling the agent."""
         task = _make_task(Task.TaskType.FOLLOW_UP, {"campaign_id": fake_session.campaign.pk})
         handle_follow_up(task, fake_session, _build_context(fake_session))
         mock_agent.assert_not_called()
 
-    def test_skips_on_rate_limit(self, fake_session):
+    @patch("openoutreach.linkedin.tasks.follow_up.smart_can_execute")
+    def test_skips_on_rate_limit(self, mock_smart_can_execute, fake_session):
         _make_connected(fake_session)
-        fake_session.linkedin_profile.follow_up_daily_limit = 0
-        fake_session.linkedin_profile.save(update_fields=["follow_up_daily_limit"])
+        mock_smart_can_execute.return_value = False
 
         task = _make_task(Task.TaskType.FOLLOW_UP, {"campaign_id": fake_session.campaign.pk})
         handle_follow_up(task, fake_session, _build_context(fake_session))

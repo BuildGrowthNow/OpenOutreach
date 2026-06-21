@@ -1,0 +1,76 @@
+# Campaign serializers
+
+from rest_framework import serializers
+from openoutreach.core.models import Campaign
+from openoutreach.crm.models import Deal, Lead
+from openoutreach.linkedin.models import ActionLog
+
+
+class CampaignSerializer(serializers.ModelSerializer):
+    """Serializer for Campaign model."""
+    
+    users = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
+    user_count = serializers.SerializerMethodField()
+    deal_count = serializers.SerializerMethodField()
+    active_deals = serializers.SerializerMethodField()
+    completed_deals = serializers.SerializerMethodField()
+    failed_deals = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Campaign
+        fields = [
+            'id', 'name', 'description', 'product_docs', 'campaign_objective',
+            'booking_link', 'is_freemium', 'action_fraction', 'seed_public_ids',
+            'velocity', 'cooldown_minutes', 'is_paused', 'model_blob',
+            'users', 'user_count', 'deal_count', 'active_deals', 
+            'completed_deals', 'failed_deals', 'created_at', 'updated_at', 'status'
+        ]
+        read_only_fields = ['created_at', 'updated_at', 'status']
+    
+    def get_user_count(self, obj):
+        return obj.users.count()
+    
+    def get_deal_count(self, obj):
+        return obj.deals.count()
+    
+    def get_active_deals(self, obj):
+        return obj.deals.filter(state__in=['QUALIFIED', 'READY_TO_CONNECT', 'PENDING', 'CONNECTED']).count()
+    
+    def get_completed_deals(self, obj):
+        return obj.deals.filter(state='COMPLETED').count()
+    
+    def get_failed_deals(self, obj):
+        return obj.deals.filter(state='FAILED').count()
+
+
+class CampaignCreateSerializer(serializers.Serializer):
+    """Serializer for creating a campaign."""
+    
+    name = serializers.CharField(max_length=200, required=True)
+    description = serializers.CharField(required=False, allow_blank=True)
+    product_docs = serializers.CharField(required=False, allow_blank=True)
+    campaign_objective = serializers.CharField(required=False, allow_blank=True)
+    booking_link = serializers.URLField(required=False, allow_blank=True)
+    is_freemium = serializers.BooleanField(required=False, default=False)
+    action_fraction = serializers.FloatField(required=False, default=0.2, min_value=0, max_value=1)
+    velocity = serializers.IntegerField(required=False, default=20, min_value=1)
+    cooldown_minutes = serializers.IntegerField(required=False, default=0, min_value=0)
+    is_paused = serializers.BooleanField(required=False, default=False)
+    status = serializers.CharField(required=False, default='active')
+
+
+class CampaignUpdateSerializer(serializers.Serializer):
+    """Serializer for updating a campaign."""
+    
+    name = serializers.CharField(max_length=200, required=False)
+    description = serializers.CharField(required=False, allow_blank=True)
+    product_docs = serializers.CharField(required=False, allow_blank=True)
+    campaign_objective = serializers.CharField(required=False, allow_blank=True)
+    booking_link = serializers.URLField(required=False, allow_blank=True)
+    is_freemium = serializers.BooleanField(required=False)
+    action_fraction = serializers.FloatField(required=False, min_value=0, max_value=1)
+    velocity = serializers.IntegerField(required=False, min_value=1)
+    cooldown_minutes = serializers.IntegerField(required=False, min_value=0)
+    is_paused = serializers.BooleanField(required=False)
+    model_blob = serializers.JSONField(required=False)
+    status = serializers.CharField(required=False)

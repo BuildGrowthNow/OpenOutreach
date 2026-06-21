@@ -19,7 +19,7 @@ BANNER = r"""
 """
 
 
-def print_banner():
+def print_banner() -> None:
     """Print the OpenOutreach startup banner in bold cyan."""
     sys.stdout.write(colored(BANNER, "cyan", attrs=["bold"]))
     sys.stdout.write("\n")
@@ -64,7 +64,7 @@ SILENCED_LOGGERS = (
 )
 
 
-def configure_logging(level: int = logging.DEBUG):
+def configure_logging(level: int = logging.DEBUG) -> None:
     """Configure root logger with colored output and silence noisy libraries."""
     root = logging.getLogger()
     root.handlers.clear()

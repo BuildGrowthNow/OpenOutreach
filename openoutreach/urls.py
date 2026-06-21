@@ -2,10 +2,14 @@
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
-from django.urls import path
+from django.urls import path, include, URLPattern, URLResolver
+from typing import Union
 
-urlpatterns = [
+urlpatterns: list[Union[URLResolver, URLPattern]] = [
     path("admin/", admin.site.urls),
+    # API endpoints
+    path("api/", include("openoutreach.api.urls")),
 ]
 
-urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+# Use list.extend for type compatibility
+urlpatterns.extend(static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT))

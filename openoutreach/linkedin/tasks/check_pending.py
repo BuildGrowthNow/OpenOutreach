@@ -38,9 +38,11 @@ def _next_due_pending_deal(campaign):
 def _double_backoff(deal) -> float:
     from openoutreach.core.conf import CAMPAIGN_CONFIG
     current = deal.backoff_hours or CAMPAIGN_CONFIG["check_pending_recheck_after_hours"]
-    deal.backoff_hours = current * 2
+    # Fix type issues: current might be Any | object, ensure it's a number
+    backoff_value = float(current) if current is not None else 1.0  # type: ignore
+    deal.backoff_hours = backoff_value * 2
     deal.save(update_fields=["backoff_hours"])
-    return deal.backoff_hours
+    return float(deal.backoff_hours)  # type: ignore
 
 
 def handle_check_pending(task, session, qualifiers):

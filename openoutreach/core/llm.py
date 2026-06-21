@@ -64,7 +64,10 @@ class _AgentRunner:
 
     def run(self, coro: Awaitable[_T]) -> _T:
         """Submit *coro* to the runner loop; block until it completes."""
-        return asyncio.run_coroutine_threadsafe(coro, self._loop).result()
+        # Convert Awaitable to Coroutine for run_coroutine_threadsafe
+        async def _ensure_coroutine() -> _T:
+            return await coro
+        return asyncio.run_coroutine_threadsafe(_ensure_coroutine(), self._loop).result()
 
 
 _runner: _AgentRunner | None = None

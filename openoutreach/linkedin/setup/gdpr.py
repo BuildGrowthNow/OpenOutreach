@@ -9,6 +9,7 @@ newsletter; GDPR-protected accounts keep their existing config.
 """
 from __future__ import annotations
 
+from typing import Any
 import logging
 
 logger = logging.getLogger(__name__)
@@ -45,7 +46,7 @@ def is_gdpr_protected(country_code: str | None) -> bool:
     return country_code.lower() in GDPR_COUNTRY_CODES
 
 
-def apply_gdpr_newsletter_override(session, country_code: str | None):
+def apply_gdpr_newsletter_override(session: Any, country_code: str | None) -> None:
     """Auto-enable newsletter subscription for non-GDPR locations.
 
     If the country code is NOT GDPR-protected, sets

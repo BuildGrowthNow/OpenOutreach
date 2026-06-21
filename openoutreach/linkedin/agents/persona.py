@@ -17,7 +17,7 @@ from openoutreach.core.conf import PROMPTS_DIR
 from openoutreach.core.llm import get_llm_model, run_agent_sync
 
 if TYPE_CHECKING:
-    from openoutreach.crm.models import Deal
+    from openoutreach.crm.models import Deal, LeadPersona
 
 logger = logging.getLogger(__name__)
 
@@ -153,7 +153,7 @@ def save_persona(deal: "Deal", persona_output: LeadPersonaOutput) -> None:
     )
 
 
-def get_lead_persona(deal: "Deal") -> LeadPersona | None:
+def get_lead_persona(deal: "Deal") -> "LeadPersona | None":
     """Get the most recent persona for a deal.
     
     Args:
@@ -162,9 +162,9 @@ def get_lead_persona(deal: "Deal") -> LeadPersona | None:
     Returns:
         The LeadPersona instance with highest version, or None if not generated
     """
+    from openoutreach.crm.models import LeadPersona
+    
     try:
-        from openoutreach.crm.models import LeadPersona
-        
         return LeadPersona.objects.filter(
             lead=deal.lead,
             campaign=deal.campaign
