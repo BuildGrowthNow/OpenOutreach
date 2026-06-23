@@ -67,6 +67,16 @@ class Deal(models.Model):
     creation_date: models.DateTimeField = models.DateTimeField(default=timezone.now)  # type: ignore[var-annotated]
     update_date: models.DateTimeField = models.DateTimeField(auto_now=True)  # type: ignore[var-annotated]
 
+    # Email tracking - used for mailbox pacing (per-box daily limits)
+    mailbox: models.ForeignKey = models.ForeignKey(  # type: ignore[var-annotated,assignment]
+        "emails.Mailbox",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='deals',
+    )
+    email_sent_at: models.DateTimeField = models.DateTimeField(null=True, blank=True)  # type: ignore[var-annotated]
+
     def __str__(self) -> str:
         lead_id: int = getattr(self, 'lead_id', 0)  # type: ignore[var-annotated]
         lead_str = str(self.lead) if lead_id else "?"

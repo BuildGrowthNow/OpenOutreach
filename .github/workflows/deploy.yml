@@ -1,64 +1,56 @@
-name: Deploy
+name: Deploy to AWS EC2
 
 on:
   push:
-    branches: [main]
-    tags: ["v*"]
-
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: eracle/openoutreach
+    branches:
+      - master
 
 jobs:
-  test:
+  deploy:
     runs-on: ubuntu-latest
+    
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - name: Run tests
-        run: HOST_UID=$(id -u) HOST_GID=$(id -g) make docker-test
+      - name: Configure SSH and deploy
+        env:
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+          EC2_USER: ec2-user
+          EC2_HOST: 50.19.251.160
+        run: |
+          # Setup SSH
+          mkdir -p ~/.ssh
+          echo "$EC2_SSH_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H 50.19.251.160 >> ~/.ssh/known_hosts 2>/dev/null || true
+          ssh-keyscan -H ec2-50-19-251-160.compute-1.amazonaws.com >> ~/.ssh/known_hosts 2>/dev/null || true
 
-  build-and-push:
-    needs: test
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - uses: actions/checkout@v4
+          # Create deployment script
+          echo '#!/bin/bash' > deploy.sh
+          echo 'set -e' >> deploy.sh
+          echo 'APP_DIR="/home/ec2-user/openoutreach"' >> deploy.sh
+          echo 'BACKUP_DIR="$APP_DIR/backups/$(date +%Y%m%d_%H%M%S)"' >> deploy.sh
+          echo 'mkdir -p "$BACKUP_DIR"' >> deploy.sh
+          echo 'cd $APP_DIR' >> deploy.sh
+          echo 'docker compose -f docker-compose.yml down || true' >> deploy.sh
+          echo 'if [ -d "$APP_DIR/data" ]; then' >> deploy.sh
+          echo '  mkdir -p "$BACKUP_DIR/data"' >> deploy.sh
+          echo '  cp -r "$APP_DIR/data/"* "$BACKUP_DIR/data/" 2>/dev/null || true' >> deploy.sh
+          echo '  echo "Backup created at $BACKUP_DIR"' >> deploy.sh
+          echo 'fi' >> deploy.sh
+          echo 'git fetch --all' >> deploy.sh
+          echo 'git reset --hard origin/master' >> deploy.sh
+          echo 'docker compose -f docker-compose.yml build --no-cache' >> deploy.sh
+          echo 'docker compose -f docker-compose.yml up -d' >> deploy.sh
+          echo 'echo "Deployment completed successfully"' >> deploy.sh
 
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          # Copy and run deployment script
+          scp deploy.sh $EC2_USER@$EC2_HOST:/tmp/deploy.sh
+          ssh $EC2_USER@$EC2_HOST "chmod +x /tmp/deploy.sh && bash /tmp/deploy.sh"
 
-      - name: Extract metadata (tags, labels)
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=sha
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./compose/linkedin/Dockerfile
-          build-args: |
-            BUILD_ENV=production
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-
-      - name: Trigger DO snapshot rebuild
-        uses: peter-evans/repository-dispatch@v3
-        with:
-          token: ${{ secrets.GH_PAT }}
-          repository: eracle/hub.openoutreach.app
-          event-type: image-updated
+      - name: Cleanup SSH
+        if: always()
+        run: |
+          rm -f ~/.ssh/id_rsa
+          rm -f deploy.sh

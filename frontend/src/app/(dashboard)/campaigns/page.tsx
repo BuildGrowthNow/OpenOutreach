@@ -131,6 +131,36 @@ export default function CampaignsPage() {
     handleDeleteCampaign(campaign)
   }
 
+  const handleStartCampaign = async (campaign: Campaign) => {
+    try {
+      setError(null)
+      const response = await updateCampaign(campaign.id, { status: 'active' })
+      if (response.data) {
+        fetchCampaigns()
+      } else {
+        setError(response.error || response.message || 'Failed to start campaign')
+      }
+    } catch (err) {
+      setError('An error occurred while starting the campaign')
+      console.error('Error starting campaign:', err)
+    }
+  }
+
+  const handlePauseCampaign = async (campaign: Campaign) => {
+    try {
+      setError(null)
+      const response = await updateCampaign(campaign.id, { status: 'paused' })
+      if (response.data) {
+        fetchCampaigns()
+      } else {
+        setError(response.error || response.message || 'Failed to pause campaign')
+      }
+    } catch (err) {
+      setError('An error occurred while pausing the campaign')
+      console.error('Error pausing campaign:', err)
+    }
+  }
+
   const getStats = () => {
     const activeCount = campaigns.filter(c => c.status === 'active').length
     const pausedCount = campaigns.filter(c => c.status === 'paused').length
@@ -252,9 +282,11 @@ export default function CampaignsPage() {
               key={campaign.id}
               campaign={campaign}
               onClick={() => handleCampaignClick(campaign)}
-              onEdit={handleEditCampaign}
-              onDelete={handleDeleteClick}
-            />
+               onEdit={handleEditCampaign}
+               onDelete={handleDeleteClick}
+               onStart={handleStartCampaign}
+               onPause={handlePauseCampaign}
+             />
           ))}
         </div>
       )}

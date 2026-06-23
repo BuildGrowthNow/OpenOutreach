@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  openoutreach:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - BUILD_ENV=production
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
+    environment:
+      - ENABLE_VNC=true
+      - HOST_UID=1000
+      - HOST_GID=1000
+      - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY:-change-in-production}
+      - DJANGO_DEBUG=${DJANGO_DEBUG:-false}
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - NEXT_PUBLIC_APP_URL=http://localhost:3000
+    volumes:
+      - ./data:/app/data
+      - ./openoutreach/media:/app/openoutreach/media
+    ports:
+      - "3000:3000"
+      - "6080:6080"
+      - "5900:5900"

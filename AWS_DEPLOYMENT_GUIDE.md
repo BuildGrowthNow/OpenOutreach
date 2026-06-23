@@ -1,19 +1,100 @@
 # AWS Deployment Guide for OpenOutreach
 
-This guide walks you through deploying OpenOutreach on AWS EC2 for 24/7 operation, supporting multiple LinkedIn profiles (one per container).
+This guide walks you through deploying OpenOutreach on AWS EC2 for 24/7 operation using a **single Docker container** that includes everything:
+- **Next.js Frontend** - Web interface
+- **Django Backend** - Business logic and API
+- **LinkedIn Automation** - Playwright browser automation with VNC
+- **Nginx** - Serves the frontend on port 3000
 
 ---
 
 ## Table of Contents
-1. [AWS Cost Estimates](#aws-cost-estimates)
-2. [Step 1: Create EC2 Instance](#step-1-create-ec2-instance)
-3. [Step 2: Configure Security Group](#step-2-configure-security-group)
-4. [Step 3: Install Docker](#step-3-install-docker)
-5. [Step 4: Setup Docker Compose](#step-4-setup-docker-compose)
-6. [Step 5: Create Profile Configurations](#step-5-create-profile-configurations)
-7. [Step 6: Deploy with Docker Compose](#step-6-deploy-with-docker-compose)
-8. [Step 7: Configure LinkedIn Profiles](#step-7-configure-linkedin-profiles)
-9. [Step 8: Monitor and Maintain](#step-8-monitor-and-maintain)
+1. [Prerequisites](#prerequisites)
+2. [GitHub Repository Setup (Deploy Keys)](#github-repository-setup)
+3. [AWS Cost Estimates](#aws-cost-estimates)
+4. [Quick Start with GitHub Actions](#quick-start-with-github-actions)
+5. [Manual Deployment](#manual-deployment)
+6. [Access Your Application](#access-your-application)
+7. [Updating the Application](#updating-the-application)
+8. [Monitoring and Maintenance](#monitoring-and-maintenance)
+9. [Troubleshooting](#troubleshooting)
+
+---
+
+## Prerequisites
+
+Before you begin, ensure you have:
+- An AWS account with EC2 access
+- Git installed locally
+- A GitHub account for your OpenOutreach repository
+
+---
+
+## GitHub Repository Setup (Deploy Keys)
+
+To clone your repository on AWS EC2, you need to set up deploy keys. This allows your EC2 instance to fetch the code from GitHub without requiring SSH keys for each deployment.
+
+### Option A: Using Deploy Keys (Recommended for single server)
+
+#### Step 1: Generate a Deploy Key
+
+```bash
+# Generate a new SSH key pair for your EC2 server
+ssh-keygen -t ed25519 -C "openoutreach-ec2-deploy" -f ~/.ssh/openoutreach-ec2
+
+# Don't set a passphrase for automated deployments
+```
+
+#### Step 2: Add Public Key to GitHub
+
+1. Go to your GitHub repository: `https://github.com/YOUR_USERNAME/openoutreach/settings/keys`
+2. Click **"Deploy keys"** in the left sidebar
+3. Click **"Add deploy key"**
+4. Enter a title (e.g., "EC2 Deploy Key")
+5. Paste the contents of your public key:
+   ```bash
+   cat ~/.ssh/openoutreach-ec2.pub
+   ```
+6. Check **"Allow write access"** if you plan to deploy via CI/CD
+7. Click **"Add key"**
+
+#### Step 3: Copy Private Key to Your EC2 Instance
+
+```bash
+# Copy the private key to your EC2 instance
+scp -i "your-existing-key.pem" ~/.ssh/openoutreach-ec2 ubuntu@<EC2_PUBLIC_IP>:~/.ssh/id_rsa
+
+# Or manually on the EC2 instance:
+# ssh ubuntu@<EC2_PUBLIC_IP>
+# mkdir -p ~/.ssh && chmod 700 ~/.ssh
+# echo 'your-private-key-content' > ~/.ssh/id_rsa
+# chmod 600 ~/.ssh/id_rsa
+```
+
+#### Step 4: Add GitHub to Known Hosts
+
+```bash
+# On EC2 instance, add GitHub to known_hosts
+ssh-keyscan -H github.com >> ~/.ssh/known_hosts
+```
+
+### Option B: Using Personal Access Token (Alternative)
+
+If you prefer not to use SSH keys:
+
+```bash
+# Clone using HTTPS with Personal Access Token
+git clone https://YOUR_TOKEN@github.com/YOUR_USERNAME/openoutreach.git
+```
+
+### Verify Repository Access
+
+```bash
+# Test cloning the repository
+git clone git@github.com:YOUR_USERNAME/openoutreach.git ~/openoutreach
+cd ~/openoutreach
+git pull
+```
 
 ---
 
@@ -50,7 +131,7 @@ This guide walks you through deploying OpenOutreach on AWS EC2 for 24/7 operatio
 
 3. **Configure Instance**
    ```
-   Name: OpenOutreach-Profile1
+   Name: OpenOutreach
    Application and OS: Ubuntu (latest - 22.04 or 24.04)
    Instance type: t3.small (recommended for 1-2 profiles)
    Key pair: Create new or use existing
@@ -74,7 +155,7 @@ aws ec2 run-instances \
     --key-name openoutreach-key \
     --security-group-ids sg-xxxxxxxx \
     --region us-east-1 \
-    --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=OpenOutreach-Profile1}]'
+    --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=OpenOutreach}]'
 ```
 
 ---
@@ -84,10 +165,10 @@ aws ec2 run-instances \
 ### Purpose
 Security groups act as a firewall. For OpenOutreach, you need:
 - **SSH (port 22)** - For remote access
-- **VNC (port 5900)** - For browser automation access
-- **noVNC web (port 6080)** - For web-based VNC interface
-- **Django Admin (port 8000)** - For management
-- **LinkedIn (ports 443/80)** - Outbound for LinkedIn connections
+- **Frontend (port 3000)** - For Next.js frontend access
+- **noVNC (port 6080)** - For web-based VNC interface
+- **VNC (port 5900)** - For VNC protocol access
+- **LinkedIn (outbound 443/80)** - For LinkedIn connections
 
 ### Create Security Group
 
@@ -108,7 +189,7 @@ aws ec2 authorize-security-group-ingress \
 aws ec2 authorize-security-group-ingress \
     --group-id sg-xxxxxxxx \
     --protocol tcp \
-    --port 5900 \
+    --port 3000 \
     --cidr 0.0.0.0/0
 
 aws ec2 authorize-security-group-ingress \
@@ -120,7 +201,7 @@ aws ec2 authorize-security-group-ingress \
 aws ec2 authorize-security-group-ingress \
     --group-id sg-xxxxxxxx \
     --protocol tcp \
-    --port 8000 \
+    --port 5900 \
     --cidr 0.0.0.0/0
 ```
 
@@ -132,9 +213,9 @@ aws ec2 authorize-security-group-ingress \
    - Description: `Security group for OpenOutreach`
 3. **Add Inbound Rules:**
    - SSH (22) - Source: My IP or 0.0.0.0/0
-   - Custom TCP (5900) - Source: 0.0.0.0/0
-   - Custom TCP (6080) - Source: 0.0.0.0/0
-   - Custom TCP (8000) - Source: 0.0.0.0/0
+   - Custom TCP (3000) - Source: 0.0.0.0/0 (Frontend)
+   - Custom TCP (6080) - Source: 0.0.0.0/0 (noVNC)
+   - Custom TCP (5900) - Source: 0.0.0.0/0 (VNC)
 
 ---
 
@@ -164,10 +245,10 @@ sudo install -m 0755 -d /etc/apt/keyrings
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
 sudo chmod a+r /etc/apt/keyrings/docker.gpg
 
-# Add the repository
+# Add Docker repository using Ubuntu 22.04 (jammy) codename
 echo \
   "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
-  $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}") stable" | \
+  jammy stable" | \
   sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
 
 # Install Docker
@@ -182,6 +263,15 @@ docker-compose --version
 sudo usermod -aG docker ubuntu
 ```
 
+### Alternative: One-Liner Install
+
+```bash
+# Install Docker using official script with codename override
+curl -fsSL https://get.docker.com -o get-docker.sh
+sudo UBUNTU_CODENAME=jammy sh get-docker.sh
+sudo usermod -aG docker ubuntu
+```
+
 ### Reconnect after adding to docker group
 
 ```bash
@@ -192,242 +282,180 @@ ssh -i "openoutreach-key.pem" ubuntu@<EC2_PUBLIC_IP>
 
 ---
 
-## Step 4: Setup Docker Compose
+## Step 4: Clone and Setup OpenOutreach
 
-### Create Project Directory
+### Clone the Repository
 
 ```bash
-# Create project directory
-mkdir -p ~/openoutreach
-cd ~/openoutreach
+# Clone your OpenOutreach repository
+cd ~
+git clone https://github.com/YOUR_USERNAME/openoutreach.git openoutreach
+cd openoutreach
 
-# Create data directory for persistence
+# Or using SSH with deploy key:
+# git clone git@github.com:YOUR_USERNAME/openoutreach.git openoutreach
+```
+
+### Create Environment File
+
+```bash
+# Create environment file with your configuration
+cat > .env << 'EOF'
+DJANGO_SECRET_KEY=your-secret-key-here
+DJANGO_DEBUG=false
+# Add other environment variables as needed
+EOF
+```
+
+### Create Data Directory
+
+```bash
+# Create necessary directories
 mkdir -p data
-chmod 777 data
+mkdir -p openoutreach/media
+
+# Set permissions
+chmod 755 data
+chmod 755 openoutreach/media
 ```
 
-### Create docker-compose.yml
+### Build and Start the Application
 
 ```bash
-cat > docker-compose.yml << 'EOF'
-version: '3.8'
+# Build the Docker image (single container with frontend + backend)
+docker build -t openoutreach:latest .
 
-services:
-  # Profile 1: LinkedIn Account 1
-  profile1:
-    image: ghcr.io/eracle/openoutreach:latest
-    container_name: openoutreach-profile1
-    ports:
-      - "5901:5900"  # VNC port (mapped to 5901 to avoid conflict)
-      - "6081:6080"  # noVNC web port (mapped to 6081)
-    volumes:
-      - ./data/profile1:/app/data
-      - ./profile1.env:/app/.env
-    restart: unless-stopped
-    security_opt:
-      - seccomp:unconfined
-    cap_add:
-      - SYS_ADMIN
-    shm_size: 2gb
+# Or use docker-compose
+docker-compose build
 
-  # Profile 2: LinkedIn Account 2 (uncomment to add more)
-  # profile2:
-  #   image: ghcr.io/eracle/openoutreach:latest
-  #   container_name: openoutreach-profile2
-  #   ports:
-  #     - "5902:5900"
-  #     - "6082:6080"
-  #   volumes:
-  #     - ./data/profile2:/app/data
-  #     - ./profile2.env:/app/.env
-  #   restart: unless-stopped
-  #   security_opt:
-  #     - seccomp:unconfined
-  #   cap_add:
-  #     - SYS_ADMIN
-  #   shm_size: 2gb
+# Start all services
+docker-compose up -d
 
-  # Profile 3: LinkedIn Account 3 (uncomment to add more)
-  # profile3:
-  #   image: ghcr.io/eracle/openoutreach:latest
-  #   container_name: openoutreach-profile3
-  #   ports:
-  #     - "5903:5900"
-  #     - "6083:6080"
-  #   volumes:
-  #     - ./data/profile3:/app/data
-  #     - ./profile3.env:/app/.env
-  #   restart: unless-stopped
-  #   security_opt:
-  #     - seccomp:unconfined
-  #   cap_add:
-  #     - SYS_ADMIN
-  #   shm_size: 2gb
-EOF
+# Verify services are running
+docker-compose ps
 ```
 
 ---
 
-## Step 5: Create Profile Configurations
-
-### Create Environment Files
-
-```bash
-# Profile 1 configuration
-cat > profile1.env << 'EOF'
-# AWS Bedrock (Qwen model)
-LLM_API_KEY=sk-your-aws-bedrock-api-key-here
-LLM_API_BASE=https://bedrock-mantle.us-east-1.api.aws/v1
-AI_MODEL=qwen.qwen3-coder-next
-
-# OR use OpenAI
-# LLM_API_KEY=sk-your-openai-api-key-here
-# AI_MODEL=gpt-4o
-
-LINKEDIN_USERNAME=your-email@example.com
-LINKEDIN_PASSWORD=your-password-here
-EOF
-
-# Profile 2 configuration (if adding more)
-# cat > profile2.env << 'EOF'
-# LLM_API_KEY=sk-your-openai-api-key-here
-# AI_MODEL=gpt-4o
-# LINKEDIN_USERNAME=profile2-email@example.com
-# LINKEDIN_PASSWORD=your-password-here
-# EOF
-```
-
-### Verify File Structure
-
-```bash
-ls -la
-
-# Should show:
-# - docker-compose.yml
-# - profile1.env
-# - profile2.env (if created)
-# - data/ directory
-```
-
----
-
-## Step 6: Deploy with Docker Compose
-
-### Start All Services
-
-```bash
-# Pull and start all containers
-docker compose up -d
-
-# Check status
-docker compose ps
-
-# View logs
-docker compose logs -f profile1
-```
-
-### Stop Services
-
-```bash
-# Stop all containers
-docker compose down
-
-# Stop and remove volumes (data)
-docker compose down -v
-```
+## Step 5: Verify Deployment
 
 ### Check Container Status
 
 ```bash
 # View running containers
-docker ps
+docker-compose ps
 
-# View logs for specific profile
-docker logs openoutreach-profile1 -f
+# View logs
+docker-compose logs -f openoutreach
 
-# View resource usage
-docker stats
+# Check container health
+docker inspect --format='{{.State.Health.Status}}' openoutreach
+```
+
+### Test Frontend Access
+
+```bash
+# Get your EC2 public IP
+hostname -I
+
+# Test the frontend
+curl http://localhost:3000
 ```
 
 ---
 
-## Step 7: Configure LinkedIn Profiles
+## Step 6: Access Your Application
 
-### Access the web interface
+### Frontend (Web Interface)
 
 Open your browser and go to:
-
 ```
-http://<EC2_PUBLIC_IP>:6081/vnc.html
-```
-
-For Profile 2:
-```
-http://<EC2_PUBLIC_IP>:6082/vnc.html
+http://<EC2_PUBLIC_IP>:3000
 ```
 
-### Complete OnboardingWizard
+### VNC Browser (LinkedIn Automation)
 
-Each profile will go through the onboarding wizard:
-
-1. **Product Description** (LenGrowth):
+Open your browser and go to:
 ```
-LenGrowth is a growth operating system that helps teams turn ideas into actual progress.
-
-It gets the context of your business, shows you what really matters today, and gives you the path to growth with the best wins first.
-
-What we help with:
-- Figuring out what to do next for your growth
-- Turning good ideas into tasks people actually finish
-- Keeping work visible so it does not get lost in Slack or half-finished docs
-- Marketing ideas that work for your specific business
-- Distribution strategies that match what you are building
-
-How it works:
-- We learn your business context first
-- Then suggest the next move with clear reasoning
-- Help you track the work and keep it in one place
-- Give you reusable assets as you go
-
-Why it matters:
-A lot of growing teams run into the same problem: too many good ideas, not enough clean follow-through.
-
-They do not need more tools or more meetings. They need a cleaner way to turn their best ideas into work that actually moves the needle.
-
-That is the gap LenGrowth fills.
-
-Ideal for: Founders, Growth Managers, Marketing Directors, and agencies managing multiple clients who need a centralized system for strategy, execution, and tracking.
+http://<EC2_PUBLIC_IP>:6080/vnc.html
 ```
 
-2. **Campaign Objective**:
+### Complete Onboarding Wizard
+
+1. In the VNC browser, complete the onboarding wizard
+2. Enter your LinkedIn credentials
+3. Set up your campaigns
+4. Watch automation live in the browser
+
+---
+
+## Step 7: Updating the Application
+
+### Using Git (Recommended)
+
+```bash
+# SSH into your server
+ssh -i "openoutreach-key.pem" ubuntu@<EC2_PUBLIC_IP>
+
+# Navigate to project directory
+cd ~/openoutreach
+
+# Pull latest changes
+git pull
+
+# Rebuild and restart
+docker-compose build
+docker-compose up -d
 ```
-Campaign Goal: Secure qualified leads for LenGrowth
 
-Primary Objective:
-Turn ideas into actual progress by showing how LenGrowth helps teams bridge the gap between strategy and execution.
+### Using GitHub Actions (CI/CD)
 
-Target Audience:
-- Founders and Growth Operators at scaling startups
-- Marketing Leaders at mid-market companies
-- Agency Directors managing multiple clients
-- Business Development leaders seeking better processes
+See the [Quick Start with GitHub Actions](#quick-start-with-github-actions) section below.
 
-Success Criteria:
-1. High-quality connection requests (40%+ acceptance rate)
-2. Engaged follow-up conversations (20-30% response rate)
-3. Booked discovery calls (5-10% conversion)
-4. Long-term fit identification (qualifying bad leads quickly)
+---
 
-What We Will NOT Do:
-- Spam or aggressive selling
-- Contact inappropriate accounts (large enterprises, job seekers)
-- Make unrealistic claims or promises
-- Ignore follow-up frequency limits
+## Quick Start with GitHub Actions
+
+This project includes automated CI/CD via GitHub Actions. Every commit to `main` or `master` automatically deploys to your EC2 server.
+
+### Prerequisites
+
+1. **Deploy Key for EC2:**
+```bash
+# Generate a new key (or use existing)
+ssh-keygen -t ed25519 -f ~/.ssh/openoutreach-ec2 -C "openoutreach-deployment"
 ```
 
-3. **Booking Link**:
-```
-https://calendly.com/yourcompany/lengrowth-demo
+2. **Add SSH Private Key to GitHub Secrets:**
+   - Go to Your GitHub Repository → Settings → Secrets and variables → Actions
+   - Click "New repository secret"
+   - Name: `EC2_SSH_KEY`
+   - Value: Paste the contents of your private key (`~/.ssh/openoutreach-ec2`)
+
+3. **Add EC2 Connection Details:**
+   - Name: `EC2_HOST` (your EC2 public IP or DNS)
+   - Name: `EC2_USER` (usually `ubuntu`)
+
+4. **Add Environment Variables:**
+   - Name: `DJANGO_SECRET_KEY`
+   - Name: `DJANGO_DEBUG` (optional)
+
+### GitHub Actions Workflow
+
+The workflow is defined in `.github/workflows/deploy-aws.yml` and runs automatically on:
+- Pushes to `main` or `master` branch
+- Manual workflow dispatch
+
+### Manual Deployment Trigger
+
+To trigger a deployment manually:
+1. Go to your GitHub repository → Actions tab
+2. Select "Deploy to AWS EC2" workflow
+3. Click "Run workflow" → "Run workflow"
+
+Or via CLI:
+```bash
+git push origin main
 ```
 
 ---
@@ -437,11 +465,11 @@ https://calendly.com/yourcompany/lengrowth-demo
 ### Health Check Commands
 
 ```bash
-# Check all containers are running
-docker compose ps
+# Check container is running
+docker-compose ps
 
 # View logs for debugging
-docker compose logs profile1 --tail=100
+docker-compose logs -f openoutreach
 
 # Check docker stats
 docker stats
@@ -451,13 +479,16 @@ df -h
 
 # Check memory usage
 free -h
+
+# Check container health
+docker inspect --format='{{.State.Health.Status}}' openoutreach
 ```
 
 ### Backing Up Data
 
 ```bash
 # Stop containers
-docker compose down
+docker-compose down
 
 # Create backup
 tar -czvf openoutreach-backup-$(date +%Y%m%d).tar.gz data/
@@ -466,41 +497,154 @@ tar -czvf openoutreach-backup-$(date +%Y%m%d).tar.gz data/
 cp openoutreach-backup-*.tar.gz ~/backups/
 
 # Restart containers
-docker compose up -d
+docker-compose up -d
 ```
 
 ### Updating OpenOutreach
 
 ```bash
-# Pull latest image
-docker compose pull
+# Pull latest changes
+git pull
+
+# Rebuild image
+docker-compose build
 
 # Restart containers
-docker compose up -d
+docker-compose up -d
 ```
 
 ### Troubleshooting
 
 ```bash
 # Container not starting?
-docker logs openoutreach-profile1
+docker logs openoutreach
 
-# Check if port is in use
-sudo lsof -i :5901
+# Check if ports are in use
+sudo lsof -i :3000
+sudo lsof -i :6080
 
-# Restart a specific profile
-docker compose restart profile1
+# Restart container
+docker-compose restart
 
 # Rebuild if needed
-docker compose up -d --build
+docker-compose up -d --build
+
+# Remove all containers and volumes (careful!)
+docker-compose down -v
+docker-compose up -d --build
 ```
+
+---
+
+## Important Notes
+
+1. **Single Docker Architecture**: This project uses a single Dockerfile that builds and runs everything in one container:
+   - Frontend is built during Docker build time
+   - Nginx serves the frontend on port 3000
+   - Django serves the API on port 8000 (proxied by nginx)
+   - LinkedIn automation runs in the background with VNC
+
+2. **Security Considerations**:
+   - Never commit `.env` files with credentials to your repository
+   - Use HTTPS in production (consider CloudFront + ACM or Let's Encrypt)
+   - Restrict security group access to your IP when possible
+   - Keep your deploy keys secure
+
+3. **Data Persistence**: All data (LinkedIn sessions, campaigns, media) is stored in the Docker volume `./data`
+
+4. **Cost Management**:
+   - Use `docker-compose down` when not actively running
+   - Consider spot instances for cost savings
+   - Monitor with AWS Cost Explorer
+
+---
+
+## GitHub Actions CI/CD Deployment Details
+
+### Prerequisites
+
+1. **SSH Key for EC2:**
+```bash
+# Generate a new key (or use existing)
+ssh-keygen -t ed25519 -f ~/.ssh/openoutreach-ec2 -C "openoutreach-deployment"
+
+# Copy the public key to your EC2 instance
+ssh-copy-id -i ~/.ssh/openoutreach-ec2.pub ubuntu@<EC2_PUBLIC_IP>
+```
+
+2. **Add SSH Private Key to GitHub Secrets:**
+   - Go to Your GitHub Repository → Settings → Secrets and variables → Actions
+   - Click "New repository secret"
+   - Name: `EC2_SSH_KEY`
+   - Value: Paste the contents of your private key (`~/.ssh/openoutreach-ec2`)
+
+3. **Add EC2 Host Fingerprint (optional, for security):**
+```bash
+ssh-keyscan -H <EC2_PUBLIC_IP>
+# Add the output to your repository's known_hosts if needed
+```
+
+### GitHub Actions Workflow
+
+The workflow is defined in `.github/workflows/deploy-aws.yml` and runs automatically on:
+- Pushes to `main` or `master` branch
+- Manual workflow dispatch
+
+### Manual Deployment Trigger
+
+To trigger a deployment manually:
+```bash
+git push origin main
+```
+
+### Manual Deployment via SSH (Alternative)
+
+If you prefer not to use GitHub Actions:
+
+```bash
+# Clone the repository on EC2
+ssh -i "openoutreach-key.pem" ubuntu@<EC2_PUBLIC_IP>
+cd ~
+git clone https://github.com/YOUR_USERNAME/openoutreach.git openoutreach
+cd openoutreach
+
+# Create .env file
+cat > .env << 'EOF'
+DJANGO_SECRET_KEY=your-secret-key-here
+DJANGO_DEBUG=false
+EOF
+
+# Build and start
+docker-compose up -d --build
+```
+
+### Log Files Location
+
+After deployment, logs are stored on the EC2 instance:
+- **Docker logs:** `docker-compose logs openoutreach`
+- **Django data directory:** `/app/data/`
+- **Media files:** `/app/openoutreach/media/`
+
+### Security Considerations
+
+1. **HTTPS**: Currently, the setup uses HTTP. For production, consider:
+   - Adding a reverse_proxy (nginx) with SSL termination
+   - Using AWS ACM + CloudFront
+   - Installing a Let's Encrypt certificate
+
+2. **Environment Variables**: Never commit `.env` to your repository
+
+3. **Firewall**: Ensure your security group only allows necessary ports:
+   - Port 22 (SSH) - restrict to your IP
+   - Port 3000 (HTTP) - 0.0.0.0/0
+   - Port 6080 (noVNC) - consider restricting to your IP
 
 ---
 
 ## Cost-Saving Tips
 
 1. **Use t3/t4g instances** - Burstable performance means you pay less for baseline
-2. **Stop when not needed** - Use `docker compose down` when not running
+2. **Stop when not needed** - Use `docker-compose down` when not running
 3. **Use Reserved Instances** - Save up to 75% for 1-year commitment
 4. **Monitor data transfer** - Outbound data costs ~$0.09/GB
 
@@ -512,17 +656,29 @@ docker compose up -d --build
 # Connect to EC2
 ssh -i "openoutreach-key.pem" ubuntu@<EC2_PUBLIC_IP>
 
-# Start all profiles
-cd ~/openoutreach && docker compose up -d
+# Navigate to project
+cd ~/openoutreach
 
-# Stop all profiles
-cd ~/openoutreach && docker compose down
+# Start services
+docker-compose up -d
+
+# Stop services
+docker-compose down
 
 # View logs
-docker compose logs -f profile1
+docker-compose logs -f openoutreach
+
+# Rebuild and restart
+docker-compose up -d --build
 
 # Check status
-docker compose ps
+docker-compose ps
+
+# Create backup
+tar -czvf openoutreach-backup-$(date +%Y%m%d).tar.gz data/
+
+# Clone repository with deploy key
+git clone git@github.com:YOUR_USERNAME/openoutreach.git
 ```
 
 ---
@@ -531,12 +687,27 @@ docker compose ps
 
 | Scenario | Instance | Monthly Cost |
 |----------|----------|--------------|
-| **Minimal** | t3.micro + 1 profile | ~$10 |
-| **Single Profile** | t3.small + 1 profile | ~$20 |
-| **Two Profiles** | t3.small + 2 profiles | ~$25-30 |
-| **Three Profiles** | t3.medium + 3 profiles | ~$35-40 |
-| **Five Profiles** | t3.large + 5 profiles | ~$60-70 |
+| **Minimal** | t3.micro | ~$7-10 |
+| **Single Profile** | t3.small | ~$14-20 |
+| **Multiple Profiles** | t3.medium | ~$28-35 |
+| **Heavy Usage** | t3.large | ~$56-70 |
 
-**Data Storage**: ~$0.10-0.50/month (EBS volumes grow as you accumulate leads)
+**Data Storage**: ~$0.10-0.50/month (EBS volumes)
 
-**Total estimated range**: **$10-70/month** depending on campaign scale
+**Total estimated range**: **$7-70/month** depending on instance size
+
+---
+
+## Appendix: What's in the Single Dockerfile
+
+The unified Dockerfile (`Dockerfile`) in your project does the following:
+
+1. **Stage 1 - Frontend Build**: Uses Node.js to build your Next.js frontend
+2. **Stage 2 - Python Dependencies**: Installs all Python packages using uv
+3. **Stage 3 - Runtime**: Combines everything into a single container with:
+   - Next.js frontend (served via nginx on port 3000)
+   - Django backend (API on port 8000)
+   - LinkedIn automation (Playwright + Chromium)
+   - VNC server for browser access (ports 5900, 6080)
+
+No separate frontend Dockerfile or backend Dockerfile is needed - everything runs in one container.

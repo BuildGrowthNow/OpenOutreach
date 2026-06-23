@@ -2,16 +2,13 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 from django.contrib.auth.models import User
 from django.db import models
 from django.utils import timezone
 from django.urls import reverse
 
-if TYPE_CHECKING:
-    from .deal import Deal
-    from openoutreach.core.models import Campaign
+from openoutreach.core.models import Campaign
+from openoutreach.crm.models.deal import Deal
 
 
 class TrackedLink(models.Model):

@@ -8,11 +8,7 @@ import hmac
 import json
 import logging
 from datetime import datetime, timedelta
-from typing import Optional, Dict, Any, TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from openoutreach.core.models import Campaign
-    from openoutreach.linkedin.models import LinkedInProfile
+from typing import Optional, Dict, Any
 
 from django.conf import settings
 from django.db import models
@@ -24,6 +20,7 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 from openoutreach.core.models import Campaign
+from openoutreach.linkedin.models import LinkedInProfile
 
 logger = logging.getLogger(__name__)
 

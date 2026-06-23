@@ -78,4 +78,4 @@ class ChatMessage(models.Model):
         return f'{truncatechars(self.content, 70)}'
     
     def get_absolute_url(self) -> str:
-        return reverse(f'admin:chat_{self._meta.model_name}_change', args=[str(self.id)])
+        return reverse(f'admin:chat_{self._meta.model_name}_change', args=[str(self.id)])  # type: ignore[attr-defined]

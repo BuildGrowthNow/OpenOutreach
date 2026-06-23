@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Icons } from '@/lib/types/components'
-import { Campaign, DealState } from '@/lib/types/components'
+import { Campaign, DealState, CampaignStatus } from '@/lib/types/components'
 
 import { cn } from '@/lib/utils'
 import { formatDistanceToNow } from 'date-fns'
@@ -14,6 +14,8 @@ interface CampaignCardProps {
   onClick?: () => void
   onEdit?: (campaign: Campaign) => void
   onDelete?: (campaign: Campaign) => void
+  onStart?: (campaign: Campaign) => void
+  onPause?: (campaign: Campaign) => void
   className?: string
 }
 
@@ -38,6 +40,8 @@ const CampaignCard = ({
   onClick,
   onEdit,
   onDelete,
+  onStart,
+  onPause,
   className,
 }: CampaignCardProps) => {
   const stats = campaign.stats || {
@@ -58,6 +62,20 @@ const CampaignCard = ({
     e.stopPropagation()
     onDelete?.(campaign)
   }
+
+  const handleStartCampaign = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    onStart?.(campaign)
+  }
+
+  const handlePauseCampaign = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    onPause?.(campaign)
+  }
+
+  const isDraft = campaign.status === 'draft'
+  const isActive = campaign.status === 'active'
+  const isPaused = campaign.status === 'paused'
 
   return (
     <Card
@@ -122,21 +140,38 @@ const CampaignCard = ({
           </div>
         </div>
 
-        <div className="mt-4 pt-3 border-t flex items-center justify-between">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Icons.Clock className="h-3 w-3" />
-            Created {formatDistanceToNow(new Date(campaign.createdAt), { addSuffix: true })}
-          </div>
+         <div className="mt-4 pt-3 border-t flex items-center justify-between">
+           <div className="flex items-center gap-2 text-xs text-muted-foreground">
+             <Icons.Clock className="h-3 w-3" />
+             Created {formatDistanceToNow(new Date(campaign.createdAt), { addSuffix: true })}
+           </div>
 
-          <div className="flex gap-2">
-            <Button size="sm" variant="ghost" onClick={handleEdit}>
-              <Icons.Edit className="h-4 w-4" />
-            </Button>
-            <Button size="sm" variant="ghost" onClick={handleDelete}>
-              <Icons.Trash2 className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
+           <div className="flex gap-2">
+             {isDraft && (
+               <Button size="sm" variant="default" onClick={handleStartCampaign}>
+                 <Icons.Play className="h-4 w-4" />
+                 Start
+               </Button>
+             )}
+             {(isActive || isPaused) && (
+               <Button 
+                 size="sm" 
+                 variant={isActive ? 'outline' : 'default'} 
+                 onClick={handlePauseCampaign}
+                 className={isActive ? 'border-destructive text-destructive hover:bg-destructive/10' : ''}
+               >
+                 {isActive ? <Icons.Pause className="h-4 w-4" /> : <Icons.Play className="h-4 w-4" />}
+                 {isActive ? 'Pause' : 'Start'}
+               </Button>
+             )}
+             <Button size="sm" variant="ghost" onClick={handleEdit}>
+               <Icons.Edit className="h-4 w-4" />
+             </Button>
+             <Button size="sm" variant="ghost" onClick={handleDelete}>
+               <Icons.Trash2 className="h-4 w-4" />
+             </Button>
+           </div>
+         </div>
       </CardContent>
     </Card>
   )

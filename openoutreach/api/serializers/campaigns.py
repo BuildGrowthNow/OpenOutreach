@@ -15,12 +15,13 @@ class CampaignSerializer(serializers.ModelSerializer):
     active_deals = serializers.SerializerMethodField()
     completed_deals = serializers.SerializerMethodField()
     failed_deals = serializers.SerializerMethodField()
+    ghost_mode_enabled = serializers.BooleanField()
     
     class Meta:
         model = Campaign
         fields = [
             'id', 'name', 'description', 'product_docs', 'campaign_objective',
-            'booking_link', 'is_freemium', 'action_fraction', 'seed_public_ids',
+            'booking_link', 'is_freemium', 'ghost_mode_enabled', 'action_fraction', 'seed_public_ids',
             'velocity', 'cooldown_minutes', 'is_paused', 'model_blob',
             'users', 'user_count', 'deal_count', 'active_deals', 
             'completed_deals', 'failed_deals', 'created_at', 'updated_at', 'status'
@@ -52,6 +53,7 @@ class CampaignCreateSerializer(serializers.Serializer):
     campaign_objective = serializers.CharField(required=False, allow_blank=True)
     booking_link = serializers.URLField(required=False, allow_blank=True)
     is_freemium = serializers.BooleanField(required=False, default=False)
+    ghost_mode_enabled = serializers.BooleanField(required=False, default=False)
     action_fraction = serializers.FloatField(required=False, default=0.2, min_value=0, max_value=1)
     velocity = serializers.IntegerField(required=False, default=20, min_value=1)
     cooldown_minutes = serializers.IntegerField(required=False, default=0, min_value=0)
@@ -68,6 +70,7 @@ class CampaignUpdateSerializer(serializers.Serializer):
     campaign_objective = serializers.CharField(required=False, allow_blank=True)
     booking_link = serializers.URLField(required=False, allow_blank=True)
     is_freemium = serializers.BooleanField(required=False)
+    ghost_mode_enabled = serializers.BooleanField(required=False)
     action_fraction = serializers.FloatField(required=False, min_value=0, max_value=1)
     velocity = serializers.IntegerField(required=False, min_value=1)
     cooldown_minutes = serializers.IntegerField(required=False, min_value=0)

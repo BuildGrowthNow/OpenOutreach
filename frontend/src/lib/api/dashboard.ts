@@ -395,6 +395,18 @@ export async function getRateLimits(): Promise<ApiResponse<Settings['rate_limits
   return get('/api/settings/rate-limits')
 }
 
+export interface DailyUsageResponse {
+  daily_connections_sent: number
+  daily_messages_sent: number
+  daily_limit: number
+  last_reset: string
+  reset_frequency: string
+}
+
+export async function getDailyUsage(): Promise<ApiResponse<DailyUsageResponse>> {
+  return get('/api/settings/daily-usage')
+}
+
 // Health API
 export async function getHealthStatus(): Promise<ApiResponse<HealthStatus>> {
   return get('/api/health')

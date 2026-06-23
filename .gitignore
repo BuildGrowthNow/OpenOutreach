@@ -3,7 +3,6 @@ __pycache__/
 .venv/
 .pytest_cache/
 .vscode
-.dockerignore
 .env
 
 /linkedin_state.json
@@ -15,3 +14,6 @@ __pycache__/
 /media/
 .cache/
 tests/fixtures/pages/**/*.html
+
+# Note: Dockerfile and docker-compose.yml are NOT ignored
+# They are needed for deployment - push them to your repository

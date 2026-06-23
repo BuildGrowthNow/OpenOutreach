@@ -2,18 +2,20 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Button } from '@/components/ui/button'
 import { Icons } from '@/lib/types/components'
-import { getCampaign, getCampaignAnalytics, getCampaignLeads, updateCampaign, deleteCampaign } from '@/lib/api/dashboard'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { getCampaign, getCampaignAnalytics, getCampaignLeads, updateCampaign, deleteCampaign, getDailyUsage } from '@/lib/api/dashboard'
 import { Campaign, Lead } from '@/lib/types/components'
 import { CampaignForm } from '@/components/campaigns/campaign-form'
 import { CampaignStats as CampaignStatsComponent } from '@/components/campaigns/campaign-stats'
 import { CampaignList as CampaignListComponent } from '@/components/campaigns/campaign-list'
+import { DailyProgress } from '@/components/campaigns/daily-progress'
 import { cn } from '@/lib/utils'
 
 interface CampaignAnalyticsResponse {
@@ -44,6 +46,8 @@ export default function CampaignDetailsPage() {
   const [activeTab, setActiveTab] = useState('overview')
   const [editing, setEditing] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [showCompletionModal, setShowCompletionModal] = useState(false)
+  const [dailyUsage, setDailyUsage] = useState({ dailyConnectionsSent: 0, dailyLimit: 20 })
 
   const fetchCampaignData = useCallback(async () => {
     try {
@@ -69,6 +73,15 @@ export default function CampaignDetailsPage() {
       if (leadsResponse.data) {
         setLeads(leadsResponse.data.data || [])
       }
+
+      // Fetch daily usage
+      const dailyUsageResponse = await getDailyUsage()
+      if (dailyUsageResponse.data) {
+        setDailyUsage({
+          dailyConnectionsSent: dailyUsageResponse.data.daily_connections_sent || 0,
+          dailyLimit: dailyUsageResponse.data.daily_limit || 20,
+        })
+      }
     } catch (err) {
       setError('An error occurred while fetching campaign data')
       console.error('Error fetching campaign data:', err)
@@ -77,11 +90,25 @@ export default function CampaignDetailsPage() {
     }
   }, [campaignId])
 
+  const refetchDailyUsage = useCallback(async () => {
+    try {
+      const dailyUsageResponse = await getDailyUsage()
+      if (dailyUsageResponse.data) {
+        setDailyUsage({
+          dailyConnectionsSent: dailyUsageResponse.data.daily_connections_sent || 0,
+          dailyLimit: dailyUsageResponse.data.daily_limit || 20,
+        })
+      }
+    } catch (err) {
+      console.error('Error fetching daily usage:', err)
+    }
+  }, [])
   useEffect(() => {
     void (async () => {
       await fetchCampaignData()
     })()
   }, [fetchCampaignData])
+
 
   const handleUpdateCampaign = async (data: Partial<Campaign>) => {
     try {
@@ -128,8 +155,28 @@ export default function CampaignDetailsPage() {
         return 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
       case 'draft':
         return 'bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/20'
+      case 'completed':
+        return 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20'
       default:
         return 'bg-gray-500/10 text-gray-600 dark:text-gray-400 border-gray-500/20'
+    }
+  }
+
+  const handleMarkCompleted = async () => {
+    if (!campaign) return
+    try {
+      setError(null)
+      const response = await updateCampaign(campaign.id, { status: 'completed' })
+      if (response.data) {
+        setCampaign(response.data)
+        setShowCompletionModal(false)
+        fetchCampaignData()
+      } else {
+        setError(response.error || response.message || 'Failed to complete campaign')
+      }
+    } catch (err) {
+      setError('An error occurred while completing the campaign')
+      console.error('Error completing campaign:', err)
     }
   }
 
@@ -167,7 +214,7 @@ export default function CampaignDetailsPage() {
         <Alert variant="destructive">
           <AlertTitle>Campaign Not Found</AlertTitle>
           <AlertDescription>
-            The campaign you&apos;re looking for doesn&apos;t exist or you don&apos;t have permission to view it.
+            The campaign you're looking for doesn'et exist or you don'et have permission to view it.
           </AlertDescription>
         </Alert>
         <Button onClick={() => router.push('/campaigns')}>
@@ -177,6 +224,23 @@ export default function CampaignDetailsPage() {
       </div>
     )
   }
+
+  const stats = analytics?.stats || {
+    connections_sent: 0,
+    connections_accepted: 0,
+    messages_sent: 0,
+    messages_replied: 0,
+    conversions: 0,
+    connection_accept_rate: 0,
+    response_rate: 0,
+    conversion_rate: 0,
+    errors: 0,
+    rate_limit_warnings: 0,
+  }
+
+  const hasCompletedConnections = stats.connections_sent > 0
+  const daysSinceStart = campaign.createdAt ? Math.ceil((Date.now() - new Date(campaign.createdAt).getTime()) / (1000 * 60 * 60 * 24)) : 1
+  const avgDailyConnections = stats.connections_sent / Math.max(daysSinceStart, 1)
 
   return (
     <div className="space-y-6">
@@ -291,6 +355,20 @@ export default function CampaignDetailsPage() {
 
             {/* Right Column */}
             <div className="space-y-6">
+              {/* Daily Progress */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Daily Progress</CardTitle>
+                  <CardDescription>Today's velocity tracking</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <DailyProgress 
+                    dailyConnectionsSent={dailyUsage.dailyConnectionsSent} 
+                    dailyLimit={dailyUsage.dailyLimit}
+                  />
+                </CardContent>
+              </Card>
+
               {/* Campaign Details */}
               <Card>
                 <CardHeader>
@@ -350,6 +428,62 @@ export default function CampaignDetailsPage() {
                     <Icons.ListTodo className="mr-2 h-4 w-4" />
                     State Machine
                   </Button>
+                  {campaign.status !== 'completed' && (
+                    <Dialog open={showCompletionModal} onOpenChange={setShowCompletionModal}>
+                      <DialogTrigger asChild>
+                        <Button variant="default" className="w-full justify-start bg-emerald-600 hover:bg-emerald-700">
+                          <Icons.Check className="mr-2 h-4 w-4" />
+                          Mark as Completed
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Complete Campaign</DialogTitle>
+                          <DialogDescription>
+                            Are you sure you want to mark this campaign as completed? This action cannot be undone.
+                          </DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4 py-4">
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <div className="text-sm text-muted-foreground">Total Connections Sent</div>
+                              <div className="text-2xl font-bold">{stats.connections_sent}</div>
+                            </div>
+                            <div className="space-y-2">
+                              <div className="text-sm text-muted-foreground">Connection Accept Rate</div>
+                              <div className="text-2xl font-bold">{stats.connection_accept_rate.toFixed(1)}%</div>
+                            </div>
+                            <div className="space-y-2">
+                              <div className="text-sm text-muted-foreground">Messages Sent</div>
+                              <div className="text-2xl font-bold">{stats.messages_sent}</div>
+                            </div>
+                            <div className="space-y-2">
+                              <div className="text-sm text-muted-foreground">Conversions</div>
+                              <div className="text-2xl font-bold">{stats.conversions}</div>
+                            </div>
+                          </div>
+                          <div className="border-t pt-4">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-medium">Overall ROI Summary</span>
+                              <span className="font-bold">
+                                {stats.connection_accept_rate > 0 
+                                  ? `${stats.conversions} conversions from ${stats.connections_sent} connections`
+                                  : 'No connection data yet'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        <DialogFooter>
+                          <Button variant="outline" onClick={() => setShowCompletionModal(false)}>
+                            Cancel
+                          </Button>
+                          <Button variant="destructive" onClick={handleMarkCompleted}>
+                            Yes, Complete Campaign
+                          </Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+                  )}
                 </CardContent>
               </Card>
             </div>

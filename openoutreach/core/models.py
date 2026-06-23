@@ -40,6 +40,17 @@ class SiteConfig(models.Model):
     velocity: models.PositiveIntegerField = models.PositiveIntegerField(default=20)  # max actions per time period  # type: ignore[var-annotated]
     cooldown_minutes: models.PositiveIntegerField = models.PositiveIntegerField(default=0)  # minutes between actions  # type: ignore[var-annotated]
 
+    
+    # BetterContact email-finder key; blank disables enrichment (see emails/bettercontact.py).
+    bettercontact_api_key = models.CharField(max_length=500, blank=True, default="")
+
+    # Central contacts service (see openoutreach/contacts/). The token is earned
+    # on the first contribution and persisted here — never in the repo; blank
+    # means "not registered yet" (resolve misses until the first give-back mints
+    # it). The URL is blank by default (falls back to DEFAULT_CONTACTS_API_URL).
+    contacts_api_token = models.CharField(max_length=500, blank=True, default="")
+    contacts_api_url = models.CharField(max_length=500, blank=True, default="")
+    
     class Meta:
         verbose_name = "Site Configuration"
         verbose_name_plural = "Site Configuration"
@@ -70,6 +81,7 @@ class Campaign(models.Model):
     campaign_objective: models.TextField = models.TextField(blank=True)  # type: ignore[var-annotated]
     booking_link: models.URLField = models.URLField(max_length=500, blank=True)  # type: ignore[var-annotated]
     is_freemium: models.BooleanField = models.BooleanField(default=False)  # type: ignore[var-annotated]
+    ghost_mode_enabled: models.BooleanField = models.BooleanField(default=False)  # type: ignore[var-annotated]
     action_fraction: models.FloatField = models.FloatField(default=0.2)  # type: ignore[var-annotated]
     seed_public_ids: models.JSONField = models.JSONField(default=list, blank=True)  # type: ignore[var-annotated]
     model_blob: models.BinaryField = models.BinaryField(null=True, blank=True)  # type: ignore[var-annotated]

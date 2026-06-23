@@ -1,5 +1,5 @@
 #!/bin/bash
-# compose/start
+# compose/start - Start nginx, Next.js, VNC, and Django
 
 set -o errexit
 set -o pipefail
@@ -11,11 +11,18 @@ Xvfb :99 -screen 0 1920x1080x24 &
 sleep 1
 export DISPLAY=:99
 
+# Start nginx for frontend (Next.js) on port 3000
+nginx -g 'daemon off;' &
+NGINX_PID=$!
+
 # VNC remote access (only for open-source local use)
 if [ "${ENABLE_VNC:-false}" = "true" ]; then
     x11vnc -display :99 -forever -shared -nopw &
     websockify --web /opt/noVNC 6080 localhost:5900 &
 fi
+
+# Wait for nginx to be ready
+sleep 2
 
 # Run the daemon (migrate + onboard + task queue).
 # Forward any arguments, e.g. --onboard <file>.

@@ -36,6 +36,7 @@ const formSchema = z.object({
   campaignObjective: z.string().max(200, 'Objective is too long').optional(),
   bookingLink: z.string().url('Must be a valid URL').optional().or(z.literal('')),
   isFreemium: z.boolean(),
+  ghostModeEnabled: z.boolean(),
   velocity: z.number().min(1).max(100),
   cooldownMinutes: z.number().min(1).max(1440),
   status: z.enum(['draft', 'active', 'paused']),
@@ -69,6 +70,7 @@ export function CampaignForm({
       campaignObjective: undefined,
       bookingLink: undefined,
       isFreemium: false,
+      ghostModeEnabled: false,
       velocity: 10,
       cooldownMinutes: 60,
       status: 'draft',
@@ -84,6 +86,7 @@ export function CampaignForm({
         campaignObjective: campaign.campaignObjective || undefined,
         bookingLink: campaign.bookingLink || undefined,
         isFreemium: campaign.isFreemium,
+        ghostModeEnabled: campaign.ghostModeEnabled || false,
         velocity: campaign.velocity,
         cooldownMinutes: campaign.cooldownMinutes,
         status: campaign.status as 'draft' | 'active' | 'paused',
@@ -96,6 +99,7 @@ export function CampaignForm({
         campaignObjective: undefined,
         bookingLink: undefined,
         isFreemium: false,
+        ghostModeEnabled: false,
         velocity: 10,
         cooldownMinutes: 60,
         status: 'draft',
@@ -284,6 +288,27 @@ export function CampaignForm({
                         <FormLabel className="text-base">Freemium Model</FormLabel>
                         <FormDescription>
                           Offers free trial/product
+                        </FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="ghostModeEnabled"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                      <div className="space-y-0.5">
+                        <FormLabel className="text-base">Ghost Mode</FormLabel>
+                        <FormDescription>
+                          Enable ghost mode to test campaign without sending real LinkedIn actions
                         </FormDescription>
                       </div>
                       <FormControl>

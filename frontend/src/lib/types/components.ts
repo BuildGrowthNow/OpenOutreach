@@ -45,6 +45,7 @@ import {
   DollarSign,
   Circle,
   Play,
+  Pause,
   Network,
   Workflow,
   ArrowRight,
@@ -123,6 +124,7 @@ export const Icons = {
   DollarSign,
   Circle,
   Play,
+  Pause,
   Network,
   Workflow,
   ArrowRight,
@@ -228,6 +230,7 @@ export interface Campaign {
   campaignObjective?: string
   bookingLink?: string
   isFreemium: boolean
+  ghostModeEnabled: boolean
   velocity: number
   cooldownMinutes: number
   status: string

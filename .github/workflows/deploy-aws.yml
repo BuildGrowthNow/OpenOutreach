@@ -1,0 +1,49 @@
+name: Deploy to AWS EC2
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy to AWS EC2
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.EC2_SSH_KEY }}
+
+      - name: Add EC2 host key
+        run: |
+          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy via SSH
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+        run: |
+          # Set up environment file on server
+          SSH_ENV="DJANGO_SECRET_KEY=${{ secrets.DJANGO_SECRET_KEY }}"
+          if [ -n "${{ secrets.DJANGO_DEBUG }}" ]; then
+            SSH_ENV="$SSH_ENV DJANGO_DEBUG=${{ secrets.DJANGO_DEBUG }}"
+          fi
+          
+          # Create environment file
+          ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST "mkdir -p ~/openoutreach && echo '$SSH_ENV' > ~/openoutreach/.env"
+          
+          # Copy Dockerfile and docker-compose.yml
+          ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST "mkdir -p ~/openoutreach"
+          tar -c Dockerfile docker-compose.yml | ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST "cd ~/openoutreach && tar -x"
+          
+          # Deploy with docker-compose
+          ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST "cd ~/openoutreach && docker compose pull && docker compose up -d --build"
+          
+          echo "Deployment completed successfully!"
