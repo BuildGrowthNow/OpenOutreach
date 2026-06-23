@@ -214,6 +214,7 @@ class TestPlanConnectWindow:
             .order_by("scheduled_at")
             .first()
         )
+        assert earliest is not None
         assert earliest.scheduled_at >= before
         assert earliest.scheduled_at <= timezone.now()
 

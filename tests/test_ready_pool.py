@@ -86,7 +86,7 @@ class TestGetReadyCandidate:
         set_profile_state(fake_session, "alice", ProfileState.READY_TO_CONNECT.value)
 
         scorer = BayesianQualifier(seed=42)
-        scorer.rank_profiles = lambda profiles, **kw: profiles
+        scorer.rank_profiles = lambda profiles, session=None, **kw: profiles
 
         result = find_ready_candidate(fake_session, scorer)
         assert result is not None

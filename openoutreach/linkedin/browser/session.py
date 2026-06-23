@@ -5,6 +5,7 @@ import logging
 import random
 import time
 from functools import cached_property
+from typing import Any, Optional
 
 from openoutreach.core.conf import MIN_DELAY, MAX_DELAY
 
@@ -26,13 +27,13 @@ class AccountSession:
         self.django_user = linkedin_profile.user
 
         # Active campaign — set by the daemon before each lane execution
-        self.campaign = None
+        self.campaign: Optional[Any] = None
 
         # Playwright objects – created on first access or after crash
-        self.page = None
-        self.context = None
-        self.browser = None
-        self.playwright = None
+        self.page: Optional[Any] = None
+        self.context: Optional[Any] = None
+        self.browser: Optional[Any] = None
+        self.playwright: Optional[Any] = None
 
     @cached_property
     def campaigns(self):
@@ -69,6 +70,7 @@ class AccountSession:
 
     def wait(self, min_delay=MIN_DELAY, max_delay=MAX_DELAY):
         random_sleep(min_delay, max_delay)
+        assert self.page is not None, "Browser page is not initialized"
         self.page.wait_for_load_state("domcontentloaded")
 
     def reauthenticate(self):

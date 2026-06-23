@@ -32,6 +32,8 @@ def create_enriched_lead(session, url: str, profile: Dict[str, Any]) -> Optional
     # Use canonical public_identifier from Voyager response when available.
     canonical_pid = profile.get("public_identifier")
     public_id = canonical_pid or url_to_public_id(url)
+    if not public_id:
+        return None
     clean_url = public_id_to_url(public_id)
 
     urn = profile.get("urn") or None

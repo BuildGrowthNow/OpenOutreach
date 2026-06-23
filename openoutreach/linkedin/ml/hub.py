@@ -29,7 +29,10 @@ def download_kit(revision: str = "v2") -> Optional[Path]:
         import huggingface_hub
         from huggingface_hub import snapshot_download
 
-        huggingface_hub.utils.disable_progress_bars()
+        try:
+            huggingface_hub.disable_progress_bars()  # type: ignore[attr-defined]
+        except AttributeError:
+            pass  # Older huggingface_hub versions may not have this
         logging.getLogger("huggingface_hub").setLevel(logging.WARNING)
         logging.getLogger("filelock").setLevel(logging.WARNING)
 

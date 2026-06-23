@@ -14,7 +14,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.exceptions import SuspiciousOperation
 from django.http import HttpRequest
-from rest_framework.authentication import BaseAuthentication, TokenAuthentication
+from rest_framework.authentication import BaseAuthentication, TokenAuthentication, get_authorization_header
 from rest_framework.exceptions import AuthenticationFailed, NotAuthenticated
 import jwt
 from jwt import PyJWTError
@@ -204,7 +204,7 @@ class SupabaseSessionAuthentication(TokenAuthentication):
         """
         Authenticate the request using Supabase session token.
         """
-        auth = self.get_authorization_header(request).split()
+        auth = get_authorization_header(request).split()  # type: ignore[arg-type]
         
         if not auth or auth[0].lower() != self.keyword.lower().encode():
             return None

@@ -33,7 +33,7 @@ class IsAdminOrReadOnly(permissions.BasePermission):
         if request.method in permissions.SAFE_METHODS:
             return True
         # Write permissions are only allowed to admin users
-        return bool(request.user and request.user.is_staff)
+        return bool(request.user and getattr(request.user, 'is_staff', False))
 
 
 class IsOwnerOrAdmin(permissions.BasePermission):
@@ -50,7 +50,7 @@ class IsOwnerOrAdmin(permissions.BasePermission):
     
     def has_object_permission(self, request, view, obj):
         # Allow if user is admin
-        if request.user and request.user.is_staff:
+        if request.user and getattr(request.user, 'is_staff', False):
             return True
         # Allow if user is owner
         if hasattr(obj, 'user'):

@@ -172,8 +172,8 @@ class MongoDBConnection:
             return
         
         for key, options in indexes:
+            index_name = options.get('name', '_'.join(key))
             try:
-                index_name = options.get('name', '_'.join(key))
                 collection.create_index(list(key.items()), name=index_name, **{k: v for k, v in options.items() if k != 'name'})
                 logger.debug(f"Created index '{index_name}' on '{collection_name}'")
             except Exception as e:

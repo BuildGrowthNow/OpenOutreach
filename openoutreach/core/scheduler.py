@@ -290,8 +290,9 @@ def _recover_stale_running_tasks() -> int:
     # Log details of recovered tasks for debugging
     for task in running_tasks:
         error_info = ""
-        if task.get_error_message():
-            error_info = f" (last error: {task.get_error_message()[:100]}...)"
+        err_msg = task.get_error_message()
+        if err_msg:
+            error_info = f" (last error: {err_msg[:100]}...)"
         logger.warning(
             "Recovered stale task: %s campaign_id=%s scheduled_at=%s%s",
             task.task_type,

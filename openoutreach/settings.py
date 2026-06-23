@@ -7,6 +7,9 @@ import sys
 import logging
 from pathlib import Path
 from datetime import timedelta
+
+# Custom user model
+AUTH_USER_MODEL = 'core.CustomUser'
 from typing import Optional
 
 # Create logger
@@ -22,7 +25,7 @@ SUPABASE_SERVICE_KEY: Optional[str] = None
 
 # Load from environment variables
 try:
-    from .env import SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_KEY
+    from .env import SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_KEY  # type: ignore[import]
 except ImportError:
     # Fall back to os.environ for development
     SUPABASE_URL = os.environ.get("SUPABASE_URL")
@@ -252,6 +255,14 @@ if not DEBUG:
 
 # Type annotation for MongoDB_URI
 MongoDB_URI: str | None = None
+
+# Pre-initialize MongoDB settings with defaults (overridden by the import below)
+MONGODB_ENABLED: bool = False
+MONGODB_NAME: str = "openoutreach"
+MONGODB_HOST: str = "localhost"
+MONGODB_PORT: int = 27017
+MONGODB_ATLAS_URI: str | None = None
+DUAL_WRITE_ENABLED: bool = False
 
 try:
     from openoutreach.mongodb.settings import (

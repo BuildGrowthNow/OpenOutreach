@@ -277,6 +277,8 @@ class TestCreateDisqualifiedDeal:
         )
         deal1 = create_disqualified_deal(fake_session, "alice", reason="Bad fit")
         deal2 = create_disqualified_deal(fake_session, "alice", reason="Other")
+        assert deal1 is not None
+        assert deal2 is not None
         assert deal1.pk == deal2.pk
 
 

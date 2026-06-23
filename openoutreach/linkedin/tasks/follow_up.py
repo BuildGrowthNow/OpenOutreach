@@ -130,8 +130,9 @@ def handle_follow_up(task, session, qualifiers):
     profile = _build_send_profile(deal)
  
     if decision.action == "send_message":
-        logger.info("[%s] follow_up message for %s: %s", campaign, public_id, decision.message)
-        sent = send_raw_message(session, profile, decision.message)
+        message = decision.message or ""
+        logger.info("[%s] follow_up message for %s: %s", campaign, public_id, message)
+        sent = send_raw_message(session, profile, message)
         if not sent:
             set_profile_state(session, public_id, DealState.QUALIFIED.value)
             logger.warning("follow_up for %s: send failed — moving to QUALIFIED for re-connection", public_id)
@@ -153,8 +154,9 @@ def handle_follow_up(task, session, qualifiers):
         deal.save()
  
     elif decision.action == "mark_completed":
-        set_profile_state(session, public_id, DealState.COMPLETED.value, outcome=decision.outcome)
-        logger.info("[%s] follow_up completed for %s: outcome=%s", campaign, public_id, decision.outcome)
+        outcome = decision.outcome or ""
+        set_profile_state(session, public_id, DealState.COMPLETED.value, outcome=outcome)
+        logger.info("[%s] follow_up completed for %s: outcome=%s", campaign, public_id, outcome)
  
     elif decision.action == "wait":
         # Bump update_date so the eligibility query cycles to a different deal

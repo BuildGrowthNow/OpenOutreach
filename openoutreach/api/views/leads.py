@@ -7,6 +7,7 @@ from rest_framework.permissions import IsAuthenticated
 from django.http import Http404
 
 from openoutreach.crm.models import Lead, Deal
+from openoutreach.crm.models.deal import DealState
 
 
 def _extract_lead_name(lead: Lead) -> str | None:
@@ -165,11 +166,10 @@ class LeadListView(APIView):
         company, title, _ = _extract_lead_info(lead)
         
         # Create a default deal for this lead
-        from openoutreach.crm.models import Deal
         deal = Deal.objects.create(
             lead=lead,
             campaign=None,  # Will be assigned when lead is added to a campaign
-            state=Deal.State.QUALIFIED,
+            state=DealState.QUALIFIED,
             outcome='',
         )
         
@@ -301,12 +301,23 @@ class LeadProfileView(APIView):
         lead = self.get_object(pk)
         
         try:
-            from openoutreach.linkedin.db.leads import fetch_profile
-            from openoutreach.linkedin.browser.registry import SessionRegistry
+            # Import dependencies
+            from openoutreach.linkedin.browser.registry import resolve_profile
+            from openoutreach.linkedin.browser.session import AccountSession
             
-            registry = SessionRegistry()
-            session = registry.acquire_session()
+            # Get a LinkedInProfile to create an AccountSession
+            linkedin_profile = resolve_profile()
+            if not linkedin_profile:
+                return Response({
+                    'success': False,
+                    'profile': None,
+                    'error': 'No active LinkedIn profile found'
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             
+            # Create a session for this profile
+            session = AccountSession(linkedin_profile)
+            
+            # Get the profile using the session
             profile = lead.get_profile(session)
             
             if profile:
@@ -415,11 +426,13 @@ class LeadMessagesView(APIView):
             }, status=status.HTTP_400_BAD_REQUEST)
         
         # Get or create a deal for this lead
+        first_deal = lead.deals.first()
+        campaign = first_deal.campaign if first_deal else None
         deal, created = Deal.objects.get_or_create(
             lead=lead,
-            campaign=lead.deals.first().campaign if lead.deals.exists() else None,
+            campaign=campaign,
             defaults={
-                'state': Deal.State.QUALIFIED,
+                'state': DealState.QUALIFIED,
                 'outcome': '',
             }
         )
@@ -486,11 +499,10 @@ class LeadCreateView(APIView):
         company, title, _ = _extract_lead_info(lead)
         
         # Create a default deal for this lead
-        from openoutreach.crm.models import Deal
         deal = Deal.objects.create(
             lead=lead,
             campaign=None,  # Will be assigned when lead is added to a campaign
-            state=Deal.State.QUALIFIED,
+            state=DealState.QUALIFIED,
             outcome='',
         )
         
@@ -585,11 +597,13 @@ class LeadNotesView(APIView):
             }, status=status.HTTP_400_BAD_REQUEST)
         
         # Get or create a deal for this lead
+        first_deal = lead.deals.first()
+        campaign = first_deal.campaign if first_deal else None
         deal, created = Deal.objects.get_or_create(
             lead=lead,
-            campaign=lead.deals.first().campaign if lead.deals.exists() else None,
+            campaign=campaign,
             defaults={
-                'state': Deal.State.QUALIFIED,
+                'state': DealState.QUALIFIED,
                 'outcome': '',
             }
         )

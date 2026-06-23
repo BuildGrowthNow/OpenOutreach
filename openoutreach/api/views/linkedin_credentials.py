@@ -5,9 +5,10 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import ValidationError
-from django.utils import timezone
 
 from openoutreach.crm.models import LinkedInCredentials, LinkedInCredentialLog
+from openoutreach.linkedin.browser.session import AccountSession
+from openoutreach.linkedin.models import LinkedInProfile
 
 
 class LinkedInCredentialsView(APIView):
@@ -181,10 +182,6 @@ class LinkedInCredentialsView(APIView):
             'success': True,
             'message': 'Credential deactivated successfully',
         })
-
-
-from openoutreach.linkedin.browser.session import AccountSession
-from openoutreach.linkedin.models import LinkedInProfile
 
 
 class LinkedInCredentialsVerifyView(APIView):
@@ -375,7 +372,7 @@ class LinkedInCredentialsLogsView(APIView):
                 'error': 'Credential not found',
             }, status=status.HTTP_404_NOT_FOUND)
         
-        logs = cred.logs.all().order_by('-created_at')[:100]
+        logs = cred.logs.all().order_by('-created_at')[:100]  # type: ignore[attr-defined]
         
         return Response({
             'success': True,

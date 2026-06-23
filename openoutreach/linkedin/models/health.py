@@ -9,7 +9,9 @@ from datetime import timedelta
 
 class CampaignHealthMetric(models.Model):
     """Stores hourly metrics for campaign health monitoring."""
-    
+
+    id: int  # auto-generated primary key
+
     campaign = models.ForeignKey('core.Campaign', on_delete=models.CASCADE)
     
     timestamp = models.DateTimeField()
@@ -131,7 +133,9 @@ class CampaignHealthMetric(models.Model):
 
 class HealthAlert(models.Model):
     """Alert for campaign health issues."""
-    
+
+    id: int  # auto-generated primary key
+
     SEVERITY_LOW = 'low'
     SEVERITY_MEDIUM = 'medium'
     SEVERITY_HIGH = 'high'
@@ -196,7 +200,9 @@ class HealthAlert(models.Model):
 
 class RecoveryAction(models.Model):
     """Track recovery actions taken for campaigns."""
-    
+
+    id: int  # auto-generated primary key
+
     ACTION_REDUCE_VELOCITY = 'reduce_velocity'
     ACTION_ADD_COOLDOWN = 'add_cooldown'
     ACTION_SWITCH_MESSAGE = 'switch_message'

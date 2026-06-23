@@ -375,9 +375,6 @@ def state_machines_view(request, campaign_id: int) -> JsonResponse:
     except Campaign.DoesNotExist:
         return JsonResponse({"error": "Campaign not found"}, status=404)
     
-    state_machines = campaign.deals.first().state_machines.all() if campaign.deals.exists() else CampaignState.objects.none()
-    
-    # Get all state machines for all deals in campaign
     state_machines = CampaignState.objects.filter(
         deal__campaign=campaign
     ).order_by("-started_at")

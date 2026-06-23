@@ -139,10 +139,20 @@ class ActionLog(models.Model):
     )
     action_type = models.CharField(max_length=20, choices=ActionType.choices)
     created_at = models.DateTimeField(auto_now_add=True)
+    
+    # Status and error tracking (for action logs)
+    status: models.CharField = models.CharField(max_length=20, blank=True)  # type: ignore[var-annotated]
+    error_message: models.TextField = models.TextField(blank=True)  # type: ignore[var-annotated]
+    
+    # Type hints for Django's automatic fields
+    id: models.AutoField  # type: ignore[assignment]
+    linkedin_profile_id: int  # type: ignore[assignment]
+    campaign_id: int  # type: ignore[assignment]
 
     class Meta:
         indexes = [
             models.Index(fields=["linkedin_profile", "action_type", "created_at"]),
+            models.Index(fields=["status", "created_at"]),
         ]
 
     def __str__(self):

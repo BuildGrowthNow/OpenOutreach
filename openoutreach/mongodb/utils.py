@@ -256,7 +256,7 @@ class BackupManager:
                 "documents": documents  # For now, store in backup collection
             }
             
-            if self.backup_collection:
+            if self.backup_collection is not None:
                 result = self.backup_collection.insert_one(backup_record)
                 logger.info(f"Backup created for '{collection_name}': {result.inserted_id}")
                 return {"backup_id": str(result.inserted_id), "collection": collection_name}

@@ -61,7 +61,7 @@ class StateMachineEngine:
             return days_since >= days
         elif condition_type == 'message_count':
             count = node.config.get('min_count', 0)
-            return deal.chatmessage_set.count() >= count if hasattr(deal, 'chatmessage_set') else False
+            return deal.messages.count() >= count if hasattr(deal, 'messages') else False
         
         return True
     
@@ -292,7 +292,7 @@ class StateMachineEngine:
         for node in nodes:
             if node.node_type != StateNode.TYPE_END:
                 transitions = self.get_transitions(node)
-                if not transitions.exists():
+                if not transitions:
                     warnings.append({"type": "no_outgoing", "message": f"Node '{node.name}' has no outgoing transitions"})
         
         return len(errors) == 0, errors + warnings
@@ -385,10 +385,10 @@ def validate_state_graph(graph_id: int) -> Tuple[bool, List[Dict]]:
 
 def simulate_state_machine(campaign_id: int, deal_id: int, node_id: Optional[int] = None) -> Dict:
     """Simulate a state machine execution for a deal."""
+    from openoutreach.core.models import Campaign
+    from openoutreach.crm.models import Deal
+
     try:
-        from openoutreach.core.models import Campaign
-        from openoutreach.crm.models import Deal
-        
         campaign = Campaign.objects.get(pk=campaign_id)
         deal = Deal.objects.get(pk=deal_id, campaign=campaign)
         state_graph = campaign.state_graph

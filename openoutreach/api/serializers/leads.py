@@ -9,7 +9,7 @@ class LeadSerializer(serializers.ModelSerializer):
     
     deals = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
     
-    class Meta:
+    class Meta:  # type: ignore[misc]
         model = Lead
         fields = [
             'id', 'public_identifier', 'linkedin_url', 'urn', 'disqualified',
@@ -29,7 +29,7 @@ class LeadCreateSerializer(serializers.Serializer):
 class DealSerializer(serializers.ModelSerializer):
     """Serializer for Deal model."""
     
-    class Meta:
+    class Meta:  # type: ignore[misc]
         model = Deal
         fields = [
             'id', 'lead', 'campaign', 'state', 'outcome', 'reason',

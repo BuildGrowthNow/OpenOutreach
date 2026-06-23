@@ -159,8 +159,6 @@ class LeadPersonaAdmin(admin.ModelAdmin):
         'messaging_preferences', 'generated_at', 'last_updated'
     ]
 
-    @admin.display(description="High Confidence")
-    def is_high_confidence(self, obj):
-        return obj.is_high_confidence
-    is_high_confidence.boolean = True
-    is_high_confidence.short_description = "High Confidence"
+    @admin.display(description="High Confidence", boolean=True)
+    def is_high_confidence(self, obj) -> bool:
+        return bool(obj.is_high_confidence)

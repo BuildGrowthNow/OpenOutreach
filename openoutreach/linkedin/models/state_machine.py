@@ -12,6 +12,9 @@ from openoutreach.crm.models import Deal
 class CampaignStateGraph(models.Model):
     """Represents a campaign's workflow state machine."""
     
+    # Type hints for Django's automatic fields
+    id: models.AutoField  # type: ignore[assignment]
+    
     campaign = models.OneToOneField(Campaign, on_delete=models.CASCADE, related_name='state_graph')
     
     name = models.CharField(max_length=100)
@@ -28,6 +31,10 @@ class CampaignStateGraph(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
+    # Type hints for reverse relations (from other models)
+    nodes: models.Manager  # type: ignore[assignment]
+    transitions: models.Manager  # type: ignore[assignment]
+    
     class Meta:
         verbose_name_plural = "Campaign state graphs"
         ordering = ['-updated_at']
@@ -38,7 +45,9 @@ class CampaignStateGraph(models.Model):
 
 class StateNode(models.Model):
     """Represents a node in the state machine."""
-    
+
+    id: int  # auto-generated primary key
+
     TYPE_START = 'start'
     TYPE_WAIT = 'wait'
     TYPE_MESSAGE = 'message'
@@ -88,7 +97,9 @@ class StateNode(models.Model):
 
 class StateTransition(models.Model):
     """Represents a transition between nodes."""
-    
+
+    id: int  # auto-generated primary key
+
     source_node = models.ForeignKey(StateNode, on_delete=models.CASCADE, related_name='outgoing_transitions')
     target_node = models.ForeignKey(StateNode, on_delete=models.CASCADE, related_name='incoming_transitions')
     
@@ -121,7 +132,12 @@ class StateTransition(models.Model):
 
 class CampaignState(models.Model):
     """Tracks the current state of a campaign follow-up."""
-    
+
+    id: int  # auto-generated primary key
+
+    # Reverse relation
+    execution_logs: models.Manager  # type: ignore[assignment]
+
     STATUS_ACTIVE = 'active'
     STATUS_COMPLETED = 'completed'
     STATUS_DROPPED = 'dropped'
@@ -169,7 +185,9 @@ class CampaignState(models.Model):
 
 class CampaignExecutionLog(models.Model):
     """Logs each step of state machine execution."""
-    
+
+    id: int  # auto-generated primary key
+
     state_machine = models.ForeignKey(CampaignState, on_delete=models.CASCADE, related_name='execution_logs')
     
     node = models.ForeignKey(StateNode, on_delete=models.SET_NULL, null=True, blank=True)

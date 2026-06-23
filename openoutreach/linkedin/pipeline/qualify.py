@@ -73,6 +73,9 @@ def run_qualification(session, qualifier: BayesianQualifier) -> str | None:
     lead_id = candidate.pk
     public_id = candidate.public_identifier
     embedding = candidate.embedding_array
+    if embedding is None:
+        logger.warning("No embedding for lead %d (%s) — disqualifying", lead_id, public_id)
+        return None
 
     # Use a different variable name to avoid type interference from previous assignment
     predicted = qualifier.predict(embedding)

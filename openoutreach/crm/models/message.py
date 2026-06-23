@@ -1,8 +1,14 @@
 # Message model for CRM
 
+from typing import TYPE_CHECKING
+
 from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
+
+if TYPE_CHECKING:
+    from . import Deal
+
 
 
 class Message(models.Model):
@@ -17,6 +23,10 @@ class Message(models.Model):
         on_delete=models.CASCADE,
         related_name='crm_messages',
     )
+    
+    # Type hints for Django's automatic fields and foreign key fields
+    id: models.AutoField  # type: ignore[assignment]
+    deal_id: int  # type: ignore[assignment]
     
     content: models.TextField = models.TextField()  # type: ignore[var-annotated]
     is_outgoing: models.BooleanField = models.BooleanField(default=True)  # type: ignore[var-annotated]

@@ -33,7 +33,7 @@ class _FakeSession:
     ("about:blank", PageState.UNKNOWN),
 ])
 def test_classify_page_by_path(url, expected):
-    assert classify_page(_FakePage(url)) is expected
+    assert classify_page(_FakePage(url)) is expected  # pyright: ignore[reportArgumentType]
 
 
 def test_classify_ignores_redirect_query_param():
@@ -41,7 +41,7 @@ def test_classify_ignores_redirect_query_param():
     classify as LOGIN, not FEED — the query string is not part of the judgement."""
     url = ("https://www.linkedin.com/login/"
            "?session_redirect=https%3A%2F%2Fwww.linkedin.com%2Ffeed%2F")
-    assert classify_page(_FakePage(url)) is PageState.LOGIN
+    assert classify_page(_FakePage(url)) is PageState.LOGIN  # pyright: ignore[reportArgumentType]
 
 
 # ── @transition contract ───────────────────────────────────────────
@@ -73,8 +73,8 @@ def test_transition_returns_observed_state_and_exposes_contract():
 
     session = _FakeSession("https://www.linkedin.com/login/")
     assert act(session) is PageState.FEED
-    assert act.when is PageState.LOGIN
-    assert act.then == frozenset({PageState.FEED, PageState.CHECKPOINT})
+    assert getattr(act, "when") is PageState.LOGIN
+    assert getattr(act, "then") == frozenset({PageState.FEED, PageState.CHECKPOINT})
 
 
 # ── PageFlow driver ────────────────────────────────────────────────

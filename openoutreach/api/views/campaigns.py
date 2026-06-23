@@ -637,7 +637,7 @@ class CampaignStateMachineView(APIView):
         """Validate state machine for campaign."""
         campaign = self.get_object(pk)
         
-        from openoutreach.linkedin.models import CampaignStateGraph
+        from openoutreach.linkedin.models import CampaignStateGraph, StateNode, StateTransition
         
         try:
             state_graph = campaign.state_graph

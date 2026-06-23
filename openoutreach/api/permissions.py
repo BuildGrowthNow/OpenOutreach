@@ -34,7 +34,7 @@ class IsAdminOrReadOnly(permissions.BasePermission):
         if request.method in permissions.SAFE_METHODS:
             return True
         # Write permissions are only allowed to admin users
-        return bool(request.user and request.user.is_staff)
+        return bool(request.user and getattr(request.user, 'is_staff', False))
 
 
 class IsOwnerOrAdmin(permissions.BasePermission):
@@ -51,7 +51,7 @@ class IsOwnerOrAdmin(permissions.BasePermission):
     
     def has_object_permission(self, request, view, obj):
         # Allow if user is admin
-        if request.user and request.user.is_staff:
+        if request.user and getattr(request.user, 'is_staff', False):
             return True
         # Allow if user is owner
         if hasattr(obj, 'user'):
@@ -99,7 +99,7 @@ class AuditLoggingMixin:
     Mixin to add audit logging for authentication events.
     """
     
-    def log_auth_event(self, event_type: str, user=None, details: dict = None):
+    def log_auth_event(self, event_type: str, user=None, details: dict | None = None):
         """
         Log authentication events for audit trail.
         
@@ -113,12 +113,13 @@ class AuditLoggingMixin:
         
         logger = logging.getLogger('audit')
         
+        request = getattr(self, 'request', None)
         log_data = {
             'event_type': event_type,
             'timestamp': timezone.now().isoformat(),
             'user_id': user.id if user else None,
             'user_email': user.email if user and hasattr(user, 'email') else None,
-            'ip_address': self.request.META.get('REMOTE_ADDR') if hasattr(self, 'request') else None,
+            'ip_address': request.META.get('REMOTE_ADDR') if request else None,
             'details': details or {},
         }
         

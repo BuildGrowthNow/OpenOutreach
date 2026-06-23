@@ -89,7 +89,7 @@ class Question:
     def _clean(self, raw):
         return raw.strip() if isinstance(raw, str) else raw
 
-    def _empty_value(self, default):
+    def _empty_value(self, default) -> str | int | bool:
         """Value returned when Ctrl-D skips an optional question."""
         return ""
 
@@ -122,14 +122,14 @@ class Confirm(Question):
     cancels the wizard (returns ``None``).
     """
 
-    default: bool = True
+    default: str | int | bool = True
     required: bool = False
 
     def _prompt(self, default, **_):
         while True:
             result = questionary.confirm(
                 self.message,
-                default=default if isinstance(default, bool) else self.default,
+                default=default if isinstance(default, bool) else bool(self.default),
             ).ask()
             if result is None:
                 return None
@@ -137,14 +137,14 @@ class Confirm(Question):
                 return result
             questionary.print("  You must accept to continue.", style="fg:red")
 
-    def _empty_value(self, default):
+    def _empty_value(self, default) -> str | int | bool:
         return bool(default) if isinstance(default, bool) else self.default
 
 
 class IntText(Question):
     """Integer text input."""
 
-    default: int = 0
+    default: str | int | bool = 0
     required: bool = False
 
     def _prompt(self, default, **_):
@@ -156,7 +156,7 @@ class IntText(Question):
     def _clean(self, raw):
         return int(raw)
 
-    def _empty_value(self, default):
+    def _empty_value(self, default) -> str | int | bool:
         try:
             return int(default)
         except (TypeError, ValueError):

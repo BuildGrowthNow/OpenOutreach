@@ -1,6 +1,8 @@
-# tests/conftest.py
+import os
 from unittest.mock import patch
 from asgiref.sync import sync_to_async
+
+os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = "true"
 
 import numpy as np
 import pytest
@@ -10,14 +12,14 @@ from tests.factories import UserFactory
 
 
 @pytest.fixture(autouse=True)
-async def _ensure_crm_data(django_db_setup, django_db_blocker):
+def _ensure_crm_data(django_db_setup, django_db_blocker):
     """
     Ensure CRM bootstrap data exists before every test.
     Uses `db` fixture (not transactional_db) for compatibility.
     Since transaction=True tests rollback, we re-create data each time.
     """
-    async with django_db_blocker():
-        await sync_to_async(setup_crm)()
+    with django_db_blocker.unblock():
+        setup_crm()
 
 
 @pytest.fixture(autouse=True)

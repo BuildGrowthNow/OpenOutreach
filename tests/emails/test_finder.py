@@ -101,6 +101,7 @@ class TestFindEmail:
 
 # ── finder.resolve_email (SiteConfig gate) ────────────────────────────
 
+@pytest.mark.django_db
 class TestResolveEmail:
     def test_no_key_is_unavailable(self):
         from openoutreach.core.models import SiteConfig

@@ -16,6 +16,10 @@ else:
 class Note(models.Model):
     """Represents a note on a deal."""
     
+    # Type hints for Django's automatic fields
+    id: models.AutoField  # type: ignore[assignment]
+    deal_id: int  # type: ignore[assignment]
+    
     class Meta:
         verbose_name = _("Note")
         verbose_name_plural = _("Notes")

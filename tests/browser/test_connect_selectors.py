@@ -54,14 +54,17 @@ class TestConnectButton:
 
     def test_connect_text_in_top_card(self, connect_page):
         top_card = find_top_card(connect_page)
+        assert top_card is not None
         assert "Connect" in top_card.inner_text()
 
     def test_more_button_found(self, connect_page):
         top_card = find_top_card(connect_page)
+        assert top_card is not None
         assert top_card.locator(CONNECT_SELECTORS["more_button"]).count() > 0
 
     def test_invite_to_connect_selector(self, connect_page):
         top_card = find_top_card(connect_page)
+        assert top_card is not None
         assert top_card.locator(CONNECT_SELECTORS["invite_to_connect"]).count() > 0
 
 

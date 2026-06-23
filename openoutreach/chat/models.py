@@ -14,6 +14,8 @@ else:
 
 
 class ChatMessage(models.Model):
+    id: int  # auto-generated primary key
+
 
     class Meta:
         verbose_name = _("message")

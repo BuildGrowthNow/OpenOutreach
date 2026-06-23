@@ -47,6 +47,7 @@ class TestLeadEmbeddingFields:
         )
 
         lead = Lead.objects.get(pk=1)
+        assert lead.embedding_array is not None
         np.testing.assert_array_almost_equal(lead.embedding_array, emb)
 
     def test_embedding_array_setter(self, db):
@@ -58,6 +59,7 @@ class TestLeadEmbeddingFields:
         lead.save()
 
         lead = Lead.objects.get(pk=1)
+        assert lead.embedding_array is not None
         np.testing.assert_array_almost_equal(lead.embedding_array, emb)
 
     def test_embedding_array_none_when_no_embedding(self, db):

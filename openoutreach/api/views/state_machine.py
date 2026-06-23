@@ -43,7 +43,7 @@ class StateMachineSimulationView(APIView):
             }, status=status.HTTP_404_NOT_FOUND)
         
         try:
-            deal = Deal.objects.get(id=deal_id, campaign=campaign)
+           Deal.objects.get(id=deal_id, campaign=campaign)
         except Deal.DoesNotExist:
             return Response({
                 'success': False,
@@ -148,7 +148,7 @@ class CampaignStateMachineSimulationView(APIView):
             }, status=status.HTTP_400_BAD_REQUEST)
         
         try:
-            deal = Deal.objects.get(id=deal_id, campaign=campaign)
+            Deal.objects.get(id=deal_id, campaign=campaign)
         except Deal.DoesNotExist:
             return Response({
                 'success': False,

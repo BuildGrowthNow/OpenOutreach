@@ -114,6 +114,7 @@ class TestRecordAction:
 
         assert ActionLog.objects.count() == 1
         log = ActionLog.objects.first()
+        assert log is not None
         assert log.linkedin_profile == lp
         assert log.campaign == fake_session.campaign
         assert log.action_type == ActionLog.ActionType.CONNECT

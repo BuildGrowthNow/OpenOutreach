@@ -83,7 +83,7 @@ def _make_task(task_type, payload, **kwargs):
 def _build_context(fake_session):
     """Build qualifiers dict for task handlers."""
     qualifier = BayesianQualifier(seed=42)
-    qualifier.rank_profiles = lambda profiles, **kw: profiles
+    qualifier.rank_profiles = lambda profiles, session=None, **kw: profiles
     return {fake_session.campaign.pk: qualifier}
 
 

@@ -14,6 +14,8 @@ User = get_user_model()
 class GhostCampaign(models.Model):
     """A campaign running in ghost mode for safe testing."""
 
+    id: int  # auto-generated primary key
+
     class ModeType(models.TextChoices):
         SIMULATION = "simulation", "Simulation only"
         VALIDATION = "validation", "Validation with warnings"
@@ -74,6 +76,8 @@ class GhostCampaign(models.Model):
 class GhostSimulationLog(models.Model):
     """Logs a ghost mode simulation run."""
 
+    id: int  # auto-generated primary key
+
     class ActionType(models.TextChoices):
         SEARCH = "search", "Search for leads"
         QUALIFY = "qualify", "Qualify lead"
@@ -119,6 +123,8 @@ class GhostSimulationLog(models.Model):
 
 class GhostTestScenario(models.Model):
     """Reusable test scenarios for ghost mode."""
+
+    id: int  # auto-generated primary key
 
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True)

@@ -17,7 +17,7 @@ class CampaignSerializer(serializers.ModelSerializer):
     failed_deals = serializers.SerializerMethodField()
     ghost_mode_enabled = serializers.BooleanField()
     
-    class Meta:
+    class Meta:  # type: ignore[misc]
         model = Campaign
         fields = [
             'id', 'name', 'description', 'product_docs', 'campaign_objective',

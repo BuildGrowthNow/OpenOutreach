@@ -9,7 +9,7 @@ from __future__ import annotations
  
 import logging
 from dataclasses import dataclass
-from typing import Callable
+from typing import Any, Callable
  
 from openoutreach.core.db.deals import increment_connect_attempts, set_profile_state
 from openoutreach.crm.models import DealState
@@ -28,7 +28,7 @@ MAX_CONNECT_ATTEMPTS = 3
 class ConnectStrategy:
     find_candidate: Callable
     pre_connect: Callable | None
-    qualifier: object
+    qualifier: Any
  
  
 def strategy_for(campaign, qualifiers):

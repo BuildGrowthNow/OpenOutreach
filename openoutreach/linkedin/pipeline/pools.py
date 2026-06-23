@@ -129,7 +129,7 @@ def qualify_source(session, qualifier: BayesianQualifier) -> Generator[str, None
 def ready_source(session, qualifier: BayesianQualifier, threshold: float | None = None) -> Generator[dict, None, None]:
     """Yield ready-to-connect candidates, pulling from qualify when needed."""
     if threshold is None:
-        threshold = CAMPAIGN_CONFIG["min_ready_to_connect_prob"]  # type: ignore
+        threshold = float(CAMPAIGN_CONFIG["min_ready_to_connect_prob"])  # type: ignore[arg-type]
     qualify = qualify_source(session, qualifier)
 
     while True:

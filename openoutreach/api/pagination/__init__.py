@@ -15,6 +15,7 @@ class StandardPagination(PageNumberPagination):
     max_page_size = 100
     
     def get_paginated_response(self, data):
+        assert self.page is not None
         return Response(OrderedDict([
             ('count', self.page.paginator.count),
             ('next', self.get_next_link()),
@@ -32,6 +33,7 @@ class SmallPagination(PageNumberPagination):
     max_page_size = 20
     
     def get_paginated_response(self, data):
+        assert self.page is not None
         return Response(OrderedDict([
             ('count', self.page.paginator.count),
             ('next', self.get_next_link()),
@@ -49,6 +51,7 @@ class LargePagination(PageNumberPagination):
     max_page_size = 1000
     
     def get_paginated_response(self, data):
+        assert self.page is not None
         return Response(OrderedDict([
             ('count', self.page.paginator.count),
             ('next', self.get_next_link()),

@@ -34,6 +34,7 @@ class TestGetProfile:
 
         # Both calls scraped — no memoization at the Lead level.
         assert MockAPI.return_value.get_profile.call_count == 2
+        assert result is not None
         assert result["first_name"] == "Alice"
 
     def test_populates_urn_from_scrape(self, fake_session):
@@ -129,7 +130,7 @@ class TestGetEmbedding:
             result = lead.get_embedding(fake_session)
             mock.assert_not_called()
 
-        np.testing.assert_array_almost_equal(result, emb)
+        np.testing.assert_array_almost_equal(result, emb)  # type: ignore[arg-type]
 
     def test_enriches_and_embeds(self, fake_session, db):
         """Fetches profile and computes embedding when both are missing."""

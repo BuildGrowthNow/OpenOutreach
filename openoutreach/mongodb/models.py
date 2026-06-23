@@ -41,7 +41,7 @@ class BaseMongoModel(models.Model):
     created_at: models.DateTimeField = models.DateTimeField(default=timezone.now)
     updated_at: models.DateTimeField = models.DateTimeField(auto_now=True)
     
-    class Meta:
+    class Meta:  # type: ignore[misc]
         abstract = True
     
     def save(self, *args, **kwargs):
@@ -54,9 +54,9 @@ class BaseMongoModel(models.Model):
         # Call parent save
         super().save(*args, **kwargs)
     
-    def delete(self, *args, **kwargs):
+    def delete(self, *args, **kwargs):  # type: ignore[override]
         """Override delete to handle MongoDB-specific operations."""
-        super().delete(*args, **kwargs)
+        return super().delete(*args, **kwargs)
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert model instance to dictionary."""
@@ -86,7 +86,7 @@ class Lead(BaseMongoModel):
     Represents a lead in the CRM system with MongoDB-specific fields.
     """
     
-    class Meta:
+    class Meta:  # type: ignore[misc]
         verbose_name = "Lead"
         verbose_name_plural = "Leads"
         indexes = [
@@ -119,7 +119,7 @@ class Campaign(BaseMongoModel):
     Represents a marketing campaign with MongoDB-specific fields.
     """
     
-    class Meta:
+    class Meta:  # type: ignore[misc]
         verbose_name = "Campaign"
         verbose_name_plural = "Campaigns"
         indexes = [
@@ -171,7 +171,7 @@ class Deal(BaseMongoModel):
         UNRESPONSIVE = "unresponsive"
         UNKNOWN = "unknown"
     
-    class Meta:
+    class Meta:  # type: ignore[misc]
         verbose_name = "Deal"
         verbose_name_plural = "Deals"
         indexes = [
@@ -213,7 +213,7 @@ class Message(BaseMongoModel):
     Represents a CRM message linked to a deal.
     """
     
-    class Meta:
+    class Meta:  # type: ignore[misc]
         verbose_name = "Message"
         verbose_name_plural = "Messages"
         indexes = [
@@ -244,7 +244,7 @@ class Note(BaseMongoModel):
     Represents a note linked to a deal.
     """
     
-    class Meta:
+    class Meta:  # type: ignore[misc]
         verbose_name = "Note"
         verbose_name_plural = "Notes"
         indexes = [
@@ -268,7 +268,7 @@ class LeadPersona(BaseMongoModel):
     Stores LLM-generated detailed lead personas for hyper-personalization.
     """
     
-    class Meta:
+    class Meta:  # type: ignore[misc]
         verbose_name = "Lead Persona"
         verbose_name_plural = "Lead Personas"
         indexes = [
@@ -312,7 +312,7 @@ class TrackedLink(BaseMongoModel):
     For tracking marketing links with UTM parameters.
     """
     
-    class Meta:
+    class Meta:  # type: ignore[misc]
         verbose_name = "Tracked Link"
         verbose_name_plural = "Tracked Links"
         indexes = [
@@ -359,7 +359,7 @@ class LinkClick(BaseMongoModel):
     Stores individual click records for detailed analytics.
     """
     
-    class Meta:
+    class Meta:  # type: ignore[misc]
         verbose_name = "Link Click"
         verbose_name_plural = "Link Clicks"
         indexes = [
@@ -370,6 +370,7 @@ class LinkClick(BaseMongoModel):
         db_table = 'link_clicks'
     
     link_id: models.CharField = models.CharField(max_length=100, db_index=True)
+    clicked_at: models.DateTimeField = models.DateTimeField(default=timezone.now)
     ip_address: models.GenericIPAddressField | None = models.GenericIPAddressField(null=True, blank=True)
     user_agent: models.CharField = models.CharField(max_length=500, blank=True)
     referrer: models.CharField = models.CharField(max_length=500, blank=True)
@@ -411,7 +412,7 @@ class LinkDealConversion(BaseMongoModel):
     Links link clicks to actual deal conversions.
     """
     
-    class Meta:
+    class Meta:  # type: ignore[misc]
         verbose_name = "Link Conversion"
         verbose_name_plural = "Link Conversions"
         indexes = [
@@ -449,7 +450,7 @@ class LinkedInCredentials(BaseMongoModel):
         (STATUS_BACKUP, 'Backup credential'),
     ]
     
-    class Meta:
+    class Meta:  # type: ignore[misc]
         verbose_name = 'LinkedIn Credential'
         verbose_name_plural = 'LinkedIn Credentials'
         indexes = [
@@ -566,7 +567,7 @@ class LinkedInCredentialLog(BaseMongoModel):
         (ACTION_USAGE, 'Usage Recorded'),
     ]
     
-    class Meta:
+    class Meta:  # type: ignore[misc]
         verbose_name = 'LinkedIn Credential Log'
         verbose_name_plural = 'LinkedIn Credential Logs'
         indexes = [
@@ -599,7 +600,7 @@ class SiteConfig(BaseMongoModel):
         COHERE = "cohere"
         OPENAI_COMPATIBLE = "openai_compatible"
     
-    class Meta:
+    class Meta:  # type: ignore[misc]
         verbose_name = "Site Configuration"
         verbose_name_plural = "Site Configuration"
         db_table = 'site_config'
@@ -649,7 +650,7 @@ class Task(BaseMongoModel):
         COMPLETED = "completed"
         FAILED = "failed"
     
-    class Meta:
+    class Meta:  # type: ignore[misc]
         verbose_name = "Task"
         verbose_name_plural = "Tasks"
         indexes = [
@@ -726,7 +727,7 @@ def ensure_mongodb_indexes():
     
     for collection_name, collection_indexes in indexes:
         collection = mongodb_connection.get_collection(collection_name)
-        if collection:
+        if collection is not None:
             for idx in collection_indexes:
                 try:
                     collection.create_index(list(idx["fields"].items()), name=idx["name"])
@@ -746,7 +747,7 @@ def get_mongodb_lead(lead_id: str) -> Optional[Dict[str, Any]]:
         Lead document or None if not found
     """
     collection = get_mongodb_collection('leads')
-    if not collection:
+    if collection is None:
         return None
     
     try:
@@ -771,7 +772,7 @@ def get_mongodb_campaign(campaign_id: str) -> Optional[Dict[str, Any]]:
         Campaign document or None if not found
     """
     collection = get_mongodb_collection('campaigns')
-    if not collection:
+    if collection is None:
         return None
     
     try:

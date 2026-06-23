@@ -323,7 +323,7 @@ class LinkedInCredentials(models.Model):
         """
         from openoutreach.linkedin.browser.launch import start_browser_session
         from linkedin_cli.browser.login import dismiss_comply_gate, goto_page
-        from linkedin_cli.browser.nav import wait_for_element
+        from linkedin_cli.browser.nav import wait_for_element  # type: ignore[import-untyped]
         
         logger.info("Starting LinkedIn credential verification for %s", self.get_public_email())
         
@@ -628,12 +628,13 @@ class LinkedInCredentials(models.Model):
             return  # Don't send more than one alert per day
         
         subject = f"LinkedIn Security Alert: {alert_type}"
+        status_display = getattr(self, "get_status_display")()
         message = f"""
         Security alert for LinkedIn credentials #{self.pk}
         
         Alert Type: {alert_type}
         Public Email: {self.get_public_email()}
-        Status: {self.get_status_display()}  # type: ignore[attr-defined]
+        Status: {status_display}
         
         If this was not you, please contact support immediately.
         """

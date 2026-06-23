@@ -17,6 +17,14 @@ class TrackedLink(models.Model):
     Generates short, unique URLs for tracking clicks and conversions.
     """
     
+    # Type hints for Django's automatic fields
+    id: models.AutoField  # type: ignore[assignment]
+    campaign_id: int  # type: ignore[assignment]
+    
+    # Type hints for reverse relations
+    clicks: models.Manager['LinkClick']  # type: ignore[assignment]
+    deal_links: models.Manager['LinkDealConversion']  # type: ignore[assignment]
+    
     class Meta:
         verbose_name = "Tracked Link"
         verbose_name_plural = "Tracked Links"

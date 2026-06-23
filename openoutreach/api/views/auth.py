@@ -7,14 +7,17 @@ from rest_framework.throttling import UserRateThrottle, AnonRateThrottle
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
-from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
+from django.core.signing import BadSignature, SignatureExpired
 from django.utils import timezone
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
+import jwt
 
-User = get_user_model()
+# Import custom user model from core app
+from openoutreach.core.users import CustomUser
+User = CustomUser
 logger = logging.getLogger(__name__)
 
 
@@ -50,7 +53,7 @@ class CustomTokenObtainPairView(TokenObtainPairView):
             try:
                 token = RefreshToken(access_token)
                 user_id = token['user_id']
-                user = User.objects.get(id=user_id)
+                user = CustomUser.objects.get(id=user_id)
                 
                 # Add user data to response
                 response.data['user'] = {
@@ -209,7 +212,7 @@ class PasswordResetRequestView(APIView):
                 
                 # Store reset token (in production, use Redis or database)
                 user.password_reset_token = token
-                user.password_reset_expires = timezone.now() + timezone.timedelta(hours=24)
+                user.password_reset_expires = timezone.now() + timedelta(hours=24)
                 user.save()
                 
                 # In production, send email with reset link
@@ -273,10 +276,11 @@ class PasswordResetConfirmView(APIView):
                 'message': 'Password must be at least 8 characters',
             }, status=status.HTTP_400_BAD_REQUEST)
         
+        from django.core.signing import Signer, BadSignature, SignatureExpired
+        import base64
+
         try:
-            from django.core.signing import Signer, BadSignature, SignatureExpired
-            import base64
-            
+
             # Decode and verify token
             decoded_token = base64.urlsafe_b64decode(token.encode()).decode()
             signer = Signer()
@@ -286,7 +290,7 @@ class PasswordResetConfirmView(APIView):
             timestamp = datetime.fromisoformat(timestamp_str)
             
             # Check if token expired (24 hours)
-            expires_at = timezone.now() + timezone.timedelta(hours=24)
+            expires_at = timezone.now() + timedelta(hours=24)
             if timezone.now() > expires_at:
                 return Response({
                     'status': 'error',
@@ -316,15 +320,15 @@ class PasswordResetConfirmView(APIView):
                 'message': 'Password successfully reset',
             }, status=status.HTTP_200_OK)
             
-        except BadSignature:
-            return Response({
-                'status': 'error',
-                'message': 'Invalid token',
-            }, status=status.HTTP_400_BAD_REQUEST)
         except SignatureExpired:
             return Response({
                 'status': 'error',
                 'message': 'Token has expired',
+            }, status=status.HTTP_400_BAD_REQUEST)
+        except BadSignature:
+            return Response({
+                'status': 'error',
+                'message': 'Invalid token',
             }, status=status.HTTP_400_BAD_REQUEST)
         except User.DoesNotExist:
             return Response({
@@ -537,7 +541,6 @@ class SupabaseVerifyTokenView(APIView):
             }, status=status.HTTP_400_BAD_REQUEST)
         
         try:
-            import jwt
             from django.conf import settings
             
             # Decode the token without verification to get payload

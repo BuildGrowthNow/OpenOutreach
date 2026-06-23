@@ -184,6 +184,7 @@ class TestPoolHasTargets:
         assert result is not None
         # Verify the probs are indeed low
         probs = qualifier.predict_probs(embeddings)
+        assert probs is not None
         if np.all(probs <= 0.5):
             assert result is False
         else:
@@ -197,6 +198,7 @@ class TestPoolHasTargets:
         assert result is not None
         # pos_emb should give P > 0.5 even in exploit mode
         probs = qualifier.predict_probs(embeddings)
+        assert probs is not None
         if np.any(probs > 0.5):
             assert result is True
 

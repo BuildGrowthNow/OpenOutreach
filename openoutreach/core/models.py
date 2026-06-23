@@ -1,9 +1,14 @@
 # openoutreach/core/models.py
 from __future__ import annotations
+from typing import TYPE_CHECKING
 
 from django.contrib.auth.models import User
 from django.db import models
 from django.utils import timezone
+
+if TYPE_CHECKING:
+    from openoutreach.linkedin.models import CampaignStateGraph
+    from openoutreach.crm.models import Deal
 
 
 class SiteConfig(models.Model):
@@ -27,7 +32,7 @@ class SiteConfig(models.Model):
     ai_model: models.CharField = models.CharField(max_length=200, blank=True, default="")  # type: ignore[var-annotated]
     llm_api_base: models.CharField = models.CharField(max_length=500, blank=True, default="")  # type: ignore[var-annotated]
 
-    # BetterContact email-finder key; blank disables enrichment (see emails/finder.py).
+    # BetterContact email-finder key; blank disables enrichment (see emails/bettercontact.py).
     finder_api_key: models.CharField = models.CharField(max_length=500, blank=True, default="")  # type: ignore[var-annotated]
 
     # LinkedIn profile settings
@@ -43,7 +48,6 @@ class SiteConfig(models.Model):
     
     # BetterContact email-finder key; blank disables enrichment (see emails/bettercontact.py).
     bettercontact_api_key = models.CharField(max_length=500, blank=True, default="")
-
     # Central contacts service (see openoutreach/contacts/). The token is earned
     # on the first contribution and persisted here — never in the repo; blank
     # means "not registered yet" (resolve misses until the first give-back mints
@@ -69,6 +73,9 @@ class SiteConfig(models.Model):
 
 
 class Campaign(models.Model):
+    # Type hints for Django's automatic fields
+    id: models.AutoField  # type: ignore[assignment]
+    
     class Status(models.TextChoices):
         ACTIVE = "active"
         PAUSED = "paused"
@@ -96,6 +103,10 @@ class Campaign(models.Model):
         default=Status.ACTIVE,
     )
 
+    # Type hints for reverse relations (from other apps)
+    state_graph: "CampaignStateGraph"
+    deals: "models.Manager[Deal]"
+    
     def __str__(self) -> str:
         return self.name
 
@@ -135,7 +146,7 @@ class Task(models.Model):
     started_at: models.DateTimeField = models.DateTimeField(null=True, blank=True)  # type: ignore[var-annotated]
     completed_at: models.DateTimeField = models.DateTimeField(null=True, blank=True)  # type: ignore[var-annotated]
 
-    objects = TaskQuerySet.as_manager()  # type: ignore[assignment, misc, var-annotated]
+    objects: TaskQuerySet = TaskQuerySet.as_manager()  # type: ignore[assignment, misc, var-annotated]
 
     class Meta:
         indexes = [

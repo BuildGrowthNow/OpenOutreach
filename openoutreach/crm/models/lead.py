@@ -1,14 +1,24 @@
 import logging
+from typing import TYPE_CHECKING
 
 import numpy as np
 from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
+if TYPE_CHECKING:
+    from openoutreach.core.models import Campaign
+    from . import Deal
+
 logger = logging.getLogger(__name__)
 
 
 class Lead(models.Model):
+    # Type hints for Django's automatic fields
+    id: models.AutoField  # type: ignore[assignment]
+    
+    # Type hints for reverse relations
+    deals: models.Manager  # type: ignore[assignment]
     class Meta:
         verbose_name = _("Lead")
         verbose_name_plural = _("Leads")

@@ -1,6 +1,16 @@
+from __future__ import annotations
+# Deal model for CRM
+
+from typing import TYPE_CHECKING
+
 from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
+
+if TYPE_CHECKING:
+    from openoutreach.core.models import Campaign
+    from openoutreach.chat.models import ChatMessage
+    from . import Lead
 
 
 class DealState(models.TextChoices):
@@ -67,6 +77,13 @@ class Deal(models.Model):
     creation_date: models.DateTimeField = models.DateTimeField(default=timezone.now)  # type: ignore[var-annotated]
     update_date: models.DateTimeField = models.DateTimeField(auto_now=True)  # type: ignore[var-annotated]
 
+    # Type hints for Django's automatic fields and reverse relations
+    id: models.AutoField  # type: ignore[assignment]
+    lead_id: int  # type: ignore[assignment]
+    campaign_id: int  # type: ignore[assignment]
+    messages: models.Manager  # type: ignore[assignment]
+    state_machines: models.Manager  # type: ignore[assignment]
+    
     # Email tracking - used for mailbox pacing (per-box daily limits)
     mailbox: models.ForeignKey = models.ForeignKey(  # type: ignore[var-annotated,assignment]
         "emails.Mailbox",

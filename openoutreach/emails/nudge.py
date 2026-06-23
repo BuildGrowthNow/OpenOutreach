@@ -277,7 +277,7 @@ def _ask_for_paste() -> str | None:
         f"Paste your {brand('icemail')} App Passwords sheet",
         required=False,
     ).ask("")
-    return None if not answer or answer == _BACK else answer
+    return None if not answer or answer == _BACK else str(answer)
 
 
 def _print_report(report: ImportReport) -> None:
