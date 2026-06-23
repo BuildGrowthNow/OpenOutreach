@@ -37,11 +37,13 @@ jobs:
             SSH_ENV="$SSH_ENV DJANGO_DEBUG=${{ secrets.DJANGO_DEBUG }}"
           fi
           
+          # Create OpenOutreach directory with proper permissions
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o IdentitiesOnly=yes $EC2_USER@$EC2_HOST "mkdir -p ~/OpenOutreach && chmod 755 ~/OpenOutreach"
+          
           # Create environment file
-          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o IdentitiesOnly=yes $EC2_USER@$EC2_HOST "mkdir -p ~/OpenOutreach && echo '$SSH_ENV' > ~/OpenOutreach/.env"
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o IdentitiesOnly=yes $EC2_USER@$EC2_HOST "echo '$SSH_ENV' > ~/OpenOutreach/.env"
           
           # Copy Dockerfile and docker-compose.yml
-          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o IdentitiesOnly=yes $EC2_USER@$EC2_HOST "mkdir -p ~/OpenOutreach"
           tar -c Dockerfile docker-compose.yml | ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o IdentitiesOnly=yes $EC2_USER@$EC2_HOST "cd ~/OpenOutreach && tar -x"
           
           # Deploy with docker-compose
