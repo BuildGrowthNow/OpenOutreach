@@ -29,29 +29,20 @@ jobs:
         env:
           EC2_HOST: ${{ secrets.EC2_HOST }}
           EC2_USER: ${{ secrets.EC2_USER }}
+          DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+          DJANGO_DEBUG: ${{ secrets.DJANGO_DEBUG }}
           SSH_AUTH_SOCK: /dev/null
         run: |
-          # Create .env content
-          echo "DJANGO_SECRET_KEY=${{ secrets.DJANGO_SECRET_KEY }}" > /tmp/remote-env.txt
-          if [ -n "${{ secrets.DJANGO_DEBUG }}" ]; then
-            echo "DJANGO_DEBUG=${{ secrets.DJANGO_DEBUG }}" >> /tmp/remote-env.txt
-          fi
-          
-          # Deploy to server - create directory, copy files, set permissions
-          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o IdentitiesOnly=yes $EC2_USER@$EC2_HOST "mkdir -p ~/OpenOutreach"
-          scp -i ~/.ssh/id_rsa /tmp/remote-env.txt $EC2_USER@$EC2_HOST:~/OpenOutreach/.env
-          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o IdentitiesOnly=yes $EC2_USER@$EC2_HOST "chmod 644 ~/OpenOutreach/.env"
+          # Deploy to server - create directory
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o IdentitiesOnly=yes "${EC2_USER}@${EC2_HOST}" "mkdir -p ~/OpenOutreach"
           
           # Copy Dockerfile and docker-compose.yml  
-          tar -c Dockerfile docker-compose.yml | ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o IdentitiesOnly=yes $EC2_USER@$EC2_HOST "cd ~/OpenOutreach && tar -x && chmod 644 Dockerfile docker-compose.yml"
+          tar -c Dockerfile docker-compose.yml | ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o IdentitiesOnly=yes "${EC2_USER}@${EC2_HOST}" "cd ~/OpenOutreach && tar -x && chmod 644 Dockerfile docker-compose.yml"
           
           # Deploy with docker-compose
-          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o IdentitiesOnly=yes $EC2_USER@$EC2_HOST "cd ~/OpenOutreach && docker compose pull && docker compose up -d --build"
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o IdentitiesOnly=yes "${EC2_USER}@${EC2_HOST}" "cd ~/OpenOutreach && docker compose pull && docker compose up -d --build"
           
           echo "Deployment completed successfully!"
-          
-          # Cleanup local temp file
-          rm -f /tmp/remote-env.txt
 
       - name: Cleanup SSH
         if: always()
