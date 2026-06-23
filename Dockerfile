@@ -54,7 +54,6 @@ RUN apt-get update \
 RUN useradd -m -u 1000 ubuntu
 
 # Copy frontend build
-COPY --from=frontend-builder /frontend-build/out /app/frontend/out
 COPY --from=frontend-builder /frontend-build/.next /app/frontend/.next
 COPY --from=frontend-builder /frontend-build/node_modules /app/frontend/node_modules
 
