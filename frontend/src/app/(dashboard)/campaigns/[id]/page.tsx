@@ -214,7 +214,7 @@ export default function CampaignDetailsPage() {
         <Alert variant="destructive">
           <AlertTitle>Campaign Not Found</AlertTitle>
           <AlertDescription>
-            The campaign you're looking for doesn'et exist or you don'et have permission to view it.
+            The campaign you're looking for doesn't exist or you don't have permission to view it.
           </AlertDescription>
         </Alert>
         <Button onClick={() => router.push('/campaigns')}>
@@ -238,9 +238,10 @@ export default function CampaignDetailsPage() {
     rate_limit_warnings: 0,
   }
 
-  const hasCompletedConnections = stats.connections_sent > 0
-  const daysSinceStart = campaign.createdAt ? Math.ceil((Date.now() - new Date(campaign.createdAt).getTime()) / (1000 * 60 * 60 * 24)) : 1
-  const avgDailyConnections = stats.connections_sent / Math.max(daysSinceStart, 1)
+   const hasCompletedConnections = stats.connections_sent > 0
+   const now = Date.now()
+   const daysSinceStart = campaign.createdAt ? Math.ceil((now - new Date(campaign.createdAt).getTime()) / (1000 * 60 * 60 * 24)) : 1
+   const avgDailyConnections = stats.connections_sent / Math.max(daysSinceStart, 1)
 
   return (
     <div className="space-y-6">

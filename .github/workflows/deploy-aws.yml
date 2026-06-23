@@ -17,18 +17,19 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up SSH
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.EC2_SSH_KEY }}
-
-      - name: Add EC2 host key
+        env:
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
         run: |
+          mkdir -p ~/.ssh
+          echo "$EC2_SSH_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
 
       - name: Deploy via SSH
         env:
           EC2_HOST: ${{ secrets.EC2_HOST }}
           EC2_USER: ${{ secrets.EC2_USER }}
+          SSH_AUTH_SOCK: /dev/null
         run: |
           # Set up environment file on server
           SSH_ENV="DJANGO_SECRET_KEY=${{ secrets.DJANGO_SECRET_KEY }}"
@@ -37,13 +38,19 @@ jobs:
           fi
           
           # Create environment file
-          ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST "mkdir -p ~/OpenOutreach && echo '$SSH_ENV' > ~/OpenOutreach/.env"
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o IdentitiesOnly=yes $EC2_USER@$EC2_HOST "mkdir -p ~/OpenOutreach && echo '$SSH_ENV' > ~/OpenOutreach/.env"
           
           # Copy Dockerfile and docker-compose.yml
-          ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST "mkdir -p ~/OpenOutreach"
-          tar -c Dockerfile docker-compose.yml | ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST "cd ~/OpenOutreach && tar -x"
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o IdentitiesOnly=yes $EC2_USER@$EC2_HOST "mkdir -p ~/OpenOutreach"
+          tar -c Dockerfile docker-compose.yml | ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o IdentitiesOnly=yes $EC2_USER@$EC2_HOST "cd ~/OpenOutreach && tar -x"
           
           # Deploy with docker-compose
-          ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST "cd ~/OpenOutreach && docker compose pull && docker compose up -d --build"
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o IdentitiesOnly=yes $EC2_USER@$EC2_HOST "cd ~/OpenOutreach && docker compose pull && docker compose up -d --build"
           
           echo "Deployment completed successfully!"
+
+      - name: Cleanup SSH
+        if: always()
+        run: |
+          rm -f ~/.ssh/id_rsa
+          rm -f ~/.ssh/known_hosts

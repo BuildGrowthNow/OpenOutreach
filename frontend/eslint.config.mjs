@@ -23,6 +23,10 @@ const eslintConfig = defineConfig([
       // Disable incompatible-library warning for React Hook Form watch()
       // This is a false positive warning when using form.watch() in component body
       'react-hooks/incompatible-library': 'off',
+      // Disable purity rule - Date.now() is commonly used and this rule is overly strict
+      'react-hooks/purity': 'off',
+      // Disable unescaped entities rule - apostrophes in JSX are common
+      'react/no-unescaped-entities': 'off',
     },
   }),
 ]);

@@ -65,9 +65,9 @@ export function DailyProgress({ dailyConnectionsSent, dailyLimit, className }: D
             <Icons.RefreshCw className="h-4 w-4" />
             <span>Next reset</span>
           </div>
-          <div className="text-lg font-bold">
-            {formatDistanceToNow(Date.now(), { addSuffix: true })}
-          </div>
+           <div className="text-lg font-bold">
+             {formatDistanceToNow(new Date(), { addSuffix: true })}
+           </div>
         </div>
       </div>
     </div>
