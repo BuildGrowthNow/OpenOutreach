@@ -37,13 +37,13 @@ jobs:
           fi
           
           # Create environment file
-          ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST "mkdir -p ~/openoutreach && echo '$SSH_ENV' > ~/openoutreach/.env"
+          ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST "mkdir -p ~/OpenOutreach && echo '$SSH_ENV' > ~/OpenOutreach/.env"
           
           # Copy Dockerfile and docker-compose.yml
-          ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST "mkdir -p ~/openoutreach"
-          tar -c Dockerfile docker-compose.yml | ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST "cd ~/openoutreach && tar -x"
+          ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST "mkdir -p ~/OpenOutreach"
+          tar -c Dockerfile docker-compose.yml | ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST "cd ~/OpenOutreach && tar -x"
           
           # Deploy with docker-compose
-          ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST "cd ~/openoutreach && docker compose pull && docker compose up -d --build"
+          ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST "cd ~/OpenOutreach && docker compose pull && docker compose up -d --build"
           
           echo "Deployment completed successfully!"

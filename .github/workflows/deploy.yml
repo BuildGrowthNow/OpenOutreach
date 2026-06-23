@@ -29,7 +29,7 @@ jobs:
           # Create deployment script
           echo '#!/bin/bash' > deploy.sh
           echo 'set -e' >> deploy.sh
-          echo 'APP_DIR="/home/ec2-user/openoutreach"' >> deploy.sh
+          echo 'APP_DIR="/home/ubuntu/OpenOutreach"' >> deploy.sh
           echo 'BACKUP_DIR="$APP_DIR/backups/$(date +%Y%m%d_%H%M%S)"' >> deploy.sh
           echo 'mkdir -p "$BACKUP_DIR"' >> deploy.sh
           echo 'cd $APP_DIR' >> deploy.sh
