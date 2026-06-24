@@ -94,6 +94,53 @@ class SettingsView(APIView):
         })
 
 
+class DailyUsageView(APIView):
+    """
+    API view for getting daily usage statistics.
+    
+    GET /api/settings/daily-usage - Get daily usage statistics
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        """Get daily usage statistics."""
+        from openoutreach.linkedin.models import ActionLog
+        from django.utils import timezone
+        from datetime import date
+        
+        today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        
+        # Count daily connections sent (across all LinkedIn profiles)
+        daily_connections_sent = ActionLog.objects.filter(
+            action_type=ActionLog.ActionType.CONNECT,
+            created_at__gte=today_start,
+        ).count()
+        
+        # Count daily messages sent (follow-ups) across all LinkedIn profiles
+        daily_messages_sent = ActionLog.objects.filter(
+            action_type=ActionLog.ActionType.FOLLOW_UP,
+            created_at__gte=today_start,
+        ).count()
+        
+        # Get the daily connection limit from site config
+        config = SiteConfig.load()
+        daily_limit = config.daily_connection_limit
+        
+        # Determine last reset time (midnight of the current day)
+        last_reset = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+        
+        # Determine reset frequency
+        reset_frequency = "daily"
+        
+        return Response({
+            'daily_connections_sent': daily_connections_sent,
+            'daily_messages_sent': daily_messages_sent,
+            'daily_limit': daily_limit,
+            'last_reset': last_reset,
+            'reset_frequency': reset_frequency,
+        })
+
+
 class RateLimitsView(APIView):
     """
     API view for managing rate limits.

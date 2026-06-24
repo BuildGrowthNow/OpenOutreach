@@ -8,13 +8,15 @@ import {
   getCampaignLeads,
   getCampaignMessages,
   getCampaigns as getCampaignsAPI,
-  getLeads as getLeadsAPI
+  getLeads as getLeadsAPI,
+  getDailyUsage
 } from '@/lib/api/dashboard'
 import {
   Campaign,
   Lead,
   HealthStatus,
-  Pagination
+  Pagination,
+  DailyUsageResponse
 } from '@/lib/types/components'
 
 // RateLimits type is no longer exported from components.ts
@@ -37,6 +39,11 @@ export function useDashboard() {
   const [rateLimits, setRateLimits] = useState<Record<string, unknown> | null>(null)
   const [rateLimitsLoading, setRateLimitsLoading] = useState(true)
   const [rateLimitsError, setRateLimitsError] = useState<string | null>(null)
+
+  // Daily usage statistics
+  const [dailyUsage, setDailyUsage] = useState<DailyUsageResponse | null>(null)
+  const [dailyUsageLoading, setDailyUsageLoading] = useState(true)
+  const [dailyUsageError, setDailyUsageError] = useState<string | null>(null)
 
   const fetchCampaigns = useCallback(async (status?: string) => {
     setCampaignsLoading(true)
@@ -98,6 +105,21 @@ export function useDashboard() {
     }
   }, [])
 
+  const fetchDailyUsage = useCallback(async () => {
+    setDailyUsageLoading(true)
+    setDailyUsageError(null)
+    try {
+      const response = await getDailyUsage()
+      if (response.data) {
+        setDailyUsage(response.data)
+      }
+    } catch (error) {
+      setDailyUsageError(error instanceof Error ? error.message : 'Failed to fetch daily usage')
+    } finally {
+      setDailyUsageLoading(false)
+    }
+  }, [])
+
   return {
     campaigns,
     campaignsLoading,
@@ -114,7 +136,11 @@ export function useDashboard() {
     rateLimits,
     rateLimitsLoading,
     rateLimitsError,
-    fetchRateLimits
+    fetchRateLimits,
+    dailyUsage,
+    dailyUsageLoading,
+    dailyUsageError,
+    fetchDailyUsage
   }
 }
 

@@ -16,6 +16,8 @@ class CampaignSerializer(serializers.ModelSerializer):
     completed_deals = serializers.SerializerMethodField()
     failed_deals = serializers.SerializerMethodField()
     ghost_mode_enabled = serializers.BooleanField()
+    # Sync status with is_paused for frontend compatibility
+    is_paused = serializers.BooleanField(source='is_paused', read_only=False)
     
     class Meta:  # type: ignore[misc]
         model = Campaign
@@ -27,6 +29,33 @@ class CampaignSerializer(serializers.ModelSerializer):
             'completed_deals', 'failed_deals', 'created_at', 'updated_at', 'status'
         ]
         read_only_fields = ['created_at', 'updated_at', 'status']
+    
+    def validate_is_paused(self, value: bool) -> bool:
+        """Sync is_paused with status field for consistency."""
+        # When is_paused changes, update status accordingly
+        if 'is_paused' in self.initial_data and self.instance is not None:
+            # If is_paused becomes True, status should be 'paused'
+            if value and self.instance.status != 'paused':
+                self.instance.status = 'paused'
+                self.instance.save(update_fields=['status'])
+            # If is_paused becomes False, status should be 'active' (only if it was 'paused')
+            elif not value and self.instance.status == 'paused':
+                self.instance.status = 'active'
+                self.instance.save(update_fields=['status'])
+        return value
+    
+    def validate_status(self, value: str) -> str:
+        """Sync status with is_paused for consistency."""
+        if 'status' in self.initial_data and self.instance is not None:
+            # If status becomes 'paused', is_paused should be True
+            if value == 'paused' and not self.instance.is_paused:
+                self.instance.is_paused = True
+                self.instance.save(update_fields=['is_paused'])
+            # If status becomes 'active', is_paused should be False
+            elif value == 'active' and self.instance.is_paused:
+                self.instance.is_paused = False
+                self.instance.save(update_fields=['is_paused'])
+        return value
     
     def get_user_count(self, obj):
         return obj.users.count()

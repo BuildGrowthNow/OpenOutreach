@@ -8,9 +8,10 @@ import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Icons } from '@/lib/types/components'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
-import { getCampaign, getCampaignAnalytics, getCampaignLeads, updateCampaign, deleteCampaign, getDailyUsage } from '@/lib/api/dashboard'
+import { getCampaign, getCampaignAnalytics, getCampaignLeads, updateCampaign, deleteCampaign, getDailyUsage, uploadCampaignLeads } from '@/lib/api/dashboard'
 import { Campaign, Lead } from '@/lib/types/components'
 import { CampaignForm } from '@/components/campaigns/campaign-form'
 import { CampaignStats as CampaignStatsComponent } from '@/components/campaigns/campaign-stats'
@@ -49,9 +50,16 @@ export default function CampaignDetailsPage() {
   const [showCompletionModal, setShowCompletionModal] = useState(false)
   const [dailyUsage, setDailyUsage] = useState({ dailyConnectionsSent: 0, dailyLimit: 20 })
 
-  const fetchCampaignData = useCallback(async () => {
+  // Lead upload and play/pause states
+  const [showUploadModal, setShowUploadModal] = useState(false)
+  const [uploadFile, setUploadFile] = useState<File | null>(null)
+  const [uploadLoading, setUploadLoading] = useState(false)
+  const [uploadStatus, setUploadStatus] = useState<{ success: boolean; message: string } | null>(null)
+  const [actionLoading, setActionLoading] = useState(false)
+
+  const fetchCampaignData = useCallback(async (silent = false) => {
     try {
-      setLoading(true)
+      if (!silent) setLoading(true)
       setError(null)
 
       // Fetch campaign details
@@ -86,7 +94,7 @@ export default function CampaignDetailsPage() {
       setError('An error occurred while fetching campaign data')
       console.error('Error fetching campaign data:', err)
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }, [campaignId])
 
@@ -103,11 +111,21 @@ export default function CampaignDetailsPage() {
       console.error('Error fetching daily usage:', err)
     }
   }, [])
+
   useEffect(() => {
     void (async () => {
-      await fetchCampaignData()
+      await fetchCampaignData(false)
     })()
   }, [fetchCampaignData])
+
+  // Polling for real-time updates every 10 seconds
+  useEffect(() => {
+    if (!campaignId) return
+    const interval = setInterval(() => {
+      void fetchCampaignData(true)
+    }, 10000)
+    return () => clearInterval(interval)
+  }, [campaignId, fetchCampaignData])
 
 
   const handleUpdateCampaign = async (data: Partial<Campaign>) => {
@@ -179,6 +197,77 @@ export default function CampaignDetailsPage() {
       console.error('Error completing campaign:', err)
     }
   }
+
+  const handlePauseCampaign = async () => {
+    if (!campaign) return
+    try {
+      setActionLoading(true)
+      setError(null)
+      const response = await updateCampaign(campaign.id, { isPaused: true, status: 'paused' })
+      if (response.data) {
+        setCampaign(response.data)
+        fetchCampaignData(true)
+      } else {
+        setError(response.error || 'Failed to pause campaign')
+      }
+    } catch (err) {
+      setError('An error occurred while pausing the campaign')
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  const handleResumeCampaign = async () => {
+    if (!campaign) return
+    try {
+      setActionLoading(true)
+      setError(null)
+      const response = await updateCampaign(campaign.id, { isPaused: false, status: 'active' })
+      if (response.data) {
+        setCampaign(response.data)
+        fetchCampaignData(true)
+      } else {
+        setError(response.error || 'Failed to resume campaign')
+      }
+    } catch (err) {
+      setError('An error occurred while resuming the campaign')
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  const handleUploadCSV = async () => {
+    if (!uploadFile) return
+    try {
+      setUploadLoading(true)
+      setUploadStatus(null)
+      const response = await uploadCampaignLeads(campaignId, uploadFile)
+      if (response.data) {
+        setUploadStatus({
+          success: true,
+          message: `Successfully imported ${response.data.imported} leads! (Skipped/Existing: ${response.data.skipped})`
+        })
+        setUploadFile(null)
+        // Reset file input element if possible
+        const fileInput = document.getElementById('csv-file') as HTMLInputElement
+        if (fileInput) fileInput.value = ''
+        fetchCampaignData(true) // Refresh leads list in background
+      } else {
+        setUploadStatus({
+          success: false,
+          message: response.error || 'Failed to import connections'
+        })
+      }
+    } catch (err) {
+      setUploadStatus({
+        success: false,
+        message: err instanceof Error ? err.message : 'An error occurred during import'
+      })
+    } finally {
+      setUploadLoading(false)
+    }
+  }
+
 
   if (loading) {
     return (
@@ -257,6 +346,22 @@ export default function CampaignDetailsPage() {
           <p className="text-muted-foreground">{campaign.description || 'No description'}</p>
         </div>
         <div className="flex gap-2">
+          {campaign.status === 'active' ? (
+            <Button variant="outline" className="border-amber-500/20 text-amber-600 hover:bg-amber-500/10 dark:text-amber-400" onClick={handlePauseCampaign} disabled={actionLoading}>
+              <Icons.Pause className="mr-2 h-4 w-4" />
+              Pause
+            </Button>
+          ) : campaign.status === 'paused' ? (
+            <Button variant="outline" className="border-emerald-500/20 text-emerald-600 hover:bg-emerald-500/10 dark:text-emerald-400" onClick={handleResumeCampaign} disabled={actionLoading}>
+              <Icons.Play className="mr-2 h-4 w-4" />
+              Resume
+            </Button>
+          ) : campaign.status === 'draft' ? (
+            <Button variant="outline" className="border-emerald-500/20 text-emerald-600 hover:bg-emerald-500/10 dark:text-emerald-400" onClick={handleResumeCampaign} disabled={actionLoading}>
+              <Icons.Play className="mr-2 h-4 w-4" />
+              Start
+            </Button>
+          ) : null}
           <Button variant="outline" onClick={() => setEditing(true)}>
             <Icons.Edit className="mr-2 h-4 w-4" />
             Edit
@@ -494,9 +599,53 @@ export default function CampaignDetailsPage() {
         {/* Leads Tab */}
         <TabsContent value="leads" className="space-y-6">
           <Card>
-            <CardHeader>
-              <CardTitle>Campaign Leads</CardTitle>
-              <CardDescription>All leads associated with this campaign</CardDescription>
+            <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-2 sm:space-y-0">
+              <div>
+                <CardTitle>Campaign Leads</CardTitle>
+                <CardDescription>All leads associated with this campaign</CardDescription>
+              </div>
+              <Dialog open={showUploadModal} onOpenChange={setShowUploadModal}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <Icons.Download className="mr-2 h-4 w-4 rotate-180" />
+                    Import Connections (CSV)
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Import 1st-Degree Connections</DialogTitle>
+                    <DialogDescription>
+                      Upload a CSV file containing your 1st-degree LinkedIn connections.
+                      The CSV must have one LinkedIn profile URL or public identifier per line (or a header row starting with firstName/lastName).
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div className="flex flex-col gap-2">
+                      <label htmlFor="csv-file" className="text-sm font-medium">Select CSV File</label>
+                      <Input 
+                        id="csv-file"
+                        type="file" 
+                        accept=".csv"
+                        onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                      />
+                    </div>
+                    {uploadStatus && (
+                      <Alert variant={uploadStatus.success ? "default" : "destructive"}>
+                        <AlertTitle>{uploadStatus.success ? "Success" : "Error"}</AlertTitle>
+                        <AlertDescription>{uploadStatus.message}</AlertDescription>
+                      </Alert>
+                    )}
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => { setShowUploadModal(false); setUploadStatus(null); setUploadFile(null); }}>
+                      Cancel
+                    </Button>
+                    <Button onClick={handleUploadCSV} disabled={!uploadFile || uploadLoading}>
+                      {uploadLoading ? "Importing..." : "Import"}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             </CardHeader>
             <CardContent>
               {leads.length > 0 ? (

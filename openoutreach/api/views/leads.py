@@ -446,6 +446,21 @@ class LeadMessagesView(APIView):
             is_outgoing=is_outgoing,
         )
         
+        # If manual message is outgoing and there is an active campaign, queue the daemon task to send it via Playwright.
+        if is_outgoing and deal.campaign:
+            from openoutreach.core.models import Task
+            from django.utils import timezone
+            Task.objects.create(
+                task_type=Task.TaskType.SEND_MANUAL_MESSAGE,
+                status=Task.Status.PENDING,
+                scheduled_at=timezone.now(),
+                payload={
+                    'campaign_id': deal.campaign.id,
+                    'message_id': message.id,
+                }
+            )
+
+        
         return Response({
             'success': True,
             'message': {

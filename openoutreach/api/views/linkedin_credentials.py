@@ -50,6 +50,7 @@ class LinkedInCredentialsView(APIView):
                     'last_verified': cred.last_verified.isoformat() if cred.last_verified else None,
                     'last_used': cred.last_used.isoformat() if cred.last_used else None,
                     'health_status': cred.get_health_status(),
+                    'linkedin_profile_id': getattr(cred, 'linkedin_profile_id', None),
                 }
                 for cred in credentials
             ],
@@ -64,6 +65,7 @@ class LinkedInCredentialsView(APIView):
         email = data.get('email')
         password = data.get('password')
         username = data.get('username', '')
+        linkedin_profile_id = data.get('linkedin_profile_id')
         
         if not email or not password:
             raise ValidationError({
@@ -71,10 +73,27 @@ class LinkedInCredentialsView(APIView):
                 'password': 'Password is required',
             })
         
+        # Validate linkedin_profile_id if provided
+        linkedin_profile = None
+        if linkedin_profile_id:
+            try:
+                linkedin_profile = LinkedInProfile.objects.get(id=linkedin_profile_id)
+                # Verify the profile belongs to the current user or is accessible
+                if not request.user.has_perm('linkedin.change_linkedinprofile', linkedin_profile):
+                    if linkedin_profile.user != request.user:
+                        raise ValidationError({
+                            'linkedin_profile_id': 'You do not have access to this LinkedIn profile'
+                        })
+            except LinkedInProfile.DoesNotExist:
+                raise ValidationError({
+                    'linkedin_profile_id': 'LinkedIn profile not found'
+                })
+        
         try:
             # Create encrypted credentials
             cred = LinkedInCredentials(
                 username=username,
+                linkedin_profile=linkedin_profile,
             )
             cred.set_email(email)
             cred.set_password(password)
@@ -96,6 +115,7 @@ class LinkedInCredentialsView(APIView):
                     'username': cred.username,
                     'public_email': cred.get_public_email(),
                     'status': cred.status,
+                    'linkedin_profile_id': linkedin_profile_id,
                 },
             }, status=status.HTTP_201_CREATED)
             

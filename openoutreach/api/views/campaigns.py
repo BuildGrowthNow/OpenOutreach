@@ -111,7 +111,6 @@ class CampaignDetailView(APIView):
     def get(self, request, pk):
         """Get campaign details."""
         campaign = self.get_object(pk)
-        serializer = CampaignSerializer(campaign)
         
         # Get additional campaign data
         return Response({
@@ -224,12 +223,18 @@ class CampaignLeadsView(APIView):
         
         # Serialize leads
         leads_data = []
+        from openoutreach.api.views.leads import _extract_lead_name, _extract_lead_info
         for deal in leads:
+            name = _extract_lead_name(deal.lead)
+            company, title, _ = _extract_lead_info(deal.lead)
             leads_data.append({
                 'id': deal.id,
                 'lead_id': deal.lead.id,
                 'public_identifier': deal.lead.public_identifier,
                 'linkedin_url': deal.lead.linkedin_url,
+                'name': name,
+                'company': company,
+                'title': title,
                 'state': deal.state,
                 'outcome': deal.outcome,
                 'creation_date': deal.creation_date.isoformat() if deal.creation_date else None,
@@ -251,6 +256,117 @@ class CampaignLeadsView(APIView):
         })
 
 
+class CampaignLeadsUploadView(APIView):
+    """
+    API view for uploading leads via CSV/text file.
+    
+    POST /api/campaigns/{id}/leads/upload/ - Upload file
+    """
+    permission_classes = [IsAuthenticated]
+    from rest_framework.parsers import MultiPartParser
+    parser_classes = [MultiPartParser]
+    
+    def get_object(self, pk):
+        try:
+            return Campaign.objects.get(pk=pk)
+        except Campaign.DoesNotExist:
+            raise Http404
+            
+    def post(self, request, pk):
+        campaign = self.get_object(pk)
+        
+        if 'file' not in request.FILES:
+            return Response({'error': 'No file uploaded'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        file_obj = request.FILES['file']
+        
+        from openoutreach.crm.models import Deal, Lead
+        from openoutreach.crm.models.deal import DealState
+        from linkedin_cli.url_utils import url_to_public_id, public_id_to_url
+        import io
+        import csv
+        
+        try:
+            decoded_file = file_obj.read().decode('utf-8')
+            io_string = io.StringIO(decoded_file)
+            reader = csv.reader(io_string)
+        except Exception as e:
+            return Response({'error': f'Failed to parse file: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        connections = []
+        
+        # Parse CSV lines
+        first_row = next(reader, None)
+        if first_row:
+            # Check if first row is header
+            if 'firstName' in str(first_row) or 'LastName' in str(first_row) or 'first' in str(first_row).lower():
+                pass # skip header
+            else:
+                connections.append(first_row[0].strip())
+                
+        for row in reader:
+            if row and len(row) >= 1:
+                url = row[0].strip()
+                if url and not url.startswith('#'):
+                    connections.append(url)
+                    
+        imported_count = 0
+        skipped_count = 0
+        
+        for conn in connections:
+            try:
+                # Convert URL to public identifier
+                if 'linkedin.com' in conn:
+                    public_id = url_to_public_id(conn)
+                    url = conn
+                else:
+                    public_id = conn
+                    url = public_id_to_url(public_id)
+                    
+                if not public_id:
+                    skipped_count += 1
+                    continue
+                    
+                # Get or create Lead
+                lead, lead_created = Lead.objects.get_or_create(
+                    public_identifier=public_id,
+                    defaults={'linkedin_url': url}
+                )
+                
+                # Check if deal already exists for this campaign/lead
+                if Deal.objects.filter(lead=lead, campaign=campaign).exists():
+                    skipped_count += 1
+                    continue
+                    
+                # Create Deal in QUALIFIED state so it skips connect request and is immediately processed for follow_up
+                Deal.objects.create(
+                    lead=lead,
+                    campaign=campaign,
+                    state=DealState.QUALIFIED,
+                    reason="1st-degree connection imported via CSV",
+                )
+                
+                # Mark as seed public ID for freemium if needed
+                if not campaign.seed_public_ids:
+                    campaign.seed_public_ids = []
+                if public_id not in campaign.seed_public_ids:
+                    campaign.seed_public_ids.append(public_id)
+                    
+                imported_count += 1
+            except Exception:
+                skipped_count += 1
+                
+        if imported_count > 0:
+            campaign.save(update_fields=['seed_public_ids'])
+            
+        return Response({
+            'success': True,
+            'imported': imported_count,
+            'skipped': skipped_count
+        }, status=status.HTTP_200_OK)
+
+
+
 class CampaignMessagesView(APIView):
     """
     API view for retrieving messages associated with a campaign.
@@ -266,14 +382,20 @@ class CampaignMessagesView(APIView):
             raise Http404
     
     def get(self, request, pk):
-        """List campaign messages."""
+        """List campaign messages (ChatMessage entries for the campaign)."""
         campaign = self.get_object(pk)
         
-        from openoutreach.linkedin.models import ActionLog
+        from openoutreach.chat.models import ChatMessage
+        from openoutreach.crm.models import Deal
         
-        messages = ActionLog.objects.filter(campaign=campaign).select_related(
-            'linkedin_profile'
-        ).order_by('-created_at')
+        # Get all deals for this campaign
+        deals = Deal.objects.filter(campaign=campaign).select_related('lead')
+        deal_ids = list(deals.values_list('id', flat=True))
+        
+        # Get messages for these deals
+        messages = ChatMessage.objects.filter(deal_id__in=deal_ids).select_related(
+            'deal__lead', 'owner'
+        ).order_by('-creation_date')
         
         page = request.query_params.get('page')
         limit = request.query_params.get('limit')
@@ -293,14 +415,19 @@ class CampaignMessagesView(APIView):
         # Serialize messages
         messages_data = []
         for msg in messages:
+            # Determine sender: 'me' if owner is the current user, 'them' otherwise
+            sender = 'me' if msg.owner == request.user else 'them'
+            
             messages_data.append({
-                'id': msg.id,
-                'campaign_id': campaign.id,
-                'linkedin_profile': msg.linkedin_profile.public_identifier if msg.linkedin_profile else None,
-                'action_type': msg.action_type,
-                'status': msg.status,
-                'error_message': msg.error_message,
-                'created_at': msg.created_at.isoformat() if msg.created_at else None,
+                'id': str(msg.id),
+                'deal_id': str(msg.deal.id),
+                'deal_urn': msg.deal.lead.urn if msg.deal.lead.urn else str(msg.deal.id),
+                'content': msg.content,
+                'is_outgoing': msg.is_outgoing,
+                'sender': sender,
+                'creation_date': msg.creation_date.isoformat() if msg.creation_date else None,
+                'recipient_name': msg.deal.lead.public_identifier if msg.deal.lead else None,
+                'recipient_url': msg.deal.lead.linkedin_url if msg.deal.lead else None,
             })
         
         return Response({
@@ -528,6 +655,34 @@ class CampaignStateMachineView(APIView):
         
         try:
             state_graph = campaign.state_graph
+            
+            # Serialize nodes with proper structure
+            nodes = []
+            for node in state_graph.nodes.all():
+                nodes.append({
+                    'id': str(node.id),
+                    'name': node.name,
+                    'type': node.node_type,
+                    'config': node.config,
+                    'x': node.x,
+                    'y': node.y,
+                    'description': node.description,
+                    'is_active': node.is_active,
+                })
+            
+            # Serialize transitions with proper structure
+            transitions = []
+            for transition in state_graph.transitions.all():
+                transitions.append({
+                    'id': str(transition.id),
+                    'source_node': str(transition.source_node.id),
+                    'target_node': str(transition.target_node.id),
+                    'label': transition.label,
+                    'condition_type': transition.condition_type,
+                    'order': transition.order,
+                    'is_active': transition.is_active,
+                })
+            
             return Response({
                 'id': state_graph.id,
                 'campaign_id': campaign.id,
@@ -536,8 +691,8 @@ class CampaignStateMachineView(APIView):
                 'is_active': state_graph.is_active,
                 'is_valid': state_graph.is_valid,
                 'validation_errors': state_graph.validation_errors,
-                'nodes': list(state_graph.nodes.values()),
-                'transitions': list(state_graph.transitions.values()),
+                'nodes': nodes,
+                'transitions': transitions,
             })
         except CampaignStateGraph.DoesNotExist:
             return Response({
@@ -553,8 +708,17 @@ class CampaignStateMachineView(APIView):
             })
     
     def post(self, request, pk):
-        """Update or create state machine for campaign."""
+        """
+        Update or create state machine for campaign, or validate if URL ends with /validate/.
+        
+        POST /api/campaigns/{id}/state-machine - Update/create state machine
+        POST /api/campaigns/{id}/state-machine/validate - Validate state machine
+        """
         campaign = self.get_object(pk)
+        
+        # Check if this is a validate request based on URL path
+        if request.path.endswith('/validate/'):
+            return self.post_validate(request, pk)
         
         from openoutreach.linkedin.models import CampaignStateGraph, StateNode, StateTransition
         
@@ -621,6 +785,33 @@ class CampaignStateMachineView(APIView):
         state_graph.is_valid = True
         state_graph.save()
         
+        # Serialize nodes with proper structure
+        nodes = []
+        for node in state_graph.nodes.all():
+            nodes.append({
+                'id': str(node.id),
+                'name': node.name,
+                'type': node.node_type,
+                'config': node.config,
+                'x': node.x,
+                'y': node.y,
+                'description': node.description,
+                'is_active': node.is_active,
+            })
+        
+        # Serialize transitions with proper structure
+        transitions = []
+        for transition in state_graph.transitions.all():
+            transitions.append({
+                'id': str(transition.id),
+                'source_node': str(transition.source_node.id),
+                'target_node': str(transition.target_node.id),
+                'label': transition.label,
+                'condition_type': transition.condition_type,
+                'order': transition.order,
+                'is_active': transition.is_active,
+            })
+        
         return Response({
             'id': state_graph.id,
             'campaign_id': campaign.id,
@@ -629,15 +820,15 @@ class CampaignStateMachineView(APIView):
             'is_active': state_graph.is_active,
             'is_valid': state_graph.is_valid,
             'validation_errors': [],
-            'nodes': list(state_graph.nodes.values()),
-            'transitions': list(state_graph.transitions.values()),
+            'nodes': nodes,
+            'transitions': transitions,
         })
     
     def post_validate(self, request, pk):
         """Validate state machine for campaign."""
         campaign = self.get_object(pk)
         
-        from openoutreach.linkedin.models import CampaignStateGraph, StateNode, StateTransition
+        from openoutreach.linkedin.models import CampaignStateGraph, StateNode
         
         try:
             state_graph = campaign.state_graph

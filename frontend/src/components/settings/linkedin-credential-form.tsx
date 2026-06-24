@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
@@ -10,13 +10,15 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Card, CardContent } from '@/components/ui/card'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Icons } from '@/lib/types/components'
-import { createLinkedInCredentials, updateLinkedInCredentials, type LinkedInCredentials } from '@/lib/api/dashboard'
+import { createLinkedInCredentials, updateLinkedInCredentials, type LinkedInCredentials, type LinkedInProfile, getLinkedInProfiles, type CreateLinkedInCredentialsData } from '@/lib/api/dashboard'
 
 const credentialSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
   password: z.string().min(8, 'Password must be at least 8 characters'),
-  username: z.string().min(2, 'Username must be at least 2 characters').optional()
+  username: z.string().min(2, 'Username must be at least 2 characters').optional(),
+  linkedin_profile_id: z.string().optional()
 })
 
 type CredentialFormValues = z.infer<typeof credentialSchema>
@@ -32,27 +34,57 @@ export default function LinkedInCredentialForm({ initialData, onSuccess, onCance
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+  const [linkedinProfiles, setLinkedinProfiles] = useState<LinkedInProfile[]>([])
+  const [loadingProfiles, setLoadingProfiles] = useState(false)
 
-  const form = useForm<CredentialFormValues>({
-    resolver: zodResolver(credentialSchema),
-    defaultValues: {
-      email: initialData?.public_email.replace(/\*\*\*/g, '') || '',
-      password: '',
-      username: initialData?.username || ''
+  // Load LinkedIn profiles on mount (for create mode only)
+  useEffect(() => {
+    if (!initialData) {
+      loadProfiles()
     }
-  })
+  }, [initialData])
+
+   const loadProfiles = async () => {
+     try {
+       setLoadingProfiles(true)
+       const response = await getLinkedInProfiles()
+       if (response.data && response.data.profiles) {
+         setLinkedinProfiles(response.data.profiles)
+       }
+     } catch (err) {
+       console.error('Failed to load LinkedIn profiles:', err)
+     } finally {
+       setLoadingProfiles(false)
+     }
+   }
+
+   const form = useForm<CredentialFormValues>({
+     resolver: zodResolver(credentialSchema),
+     defaultValues: {
+       email: initialData?.public_email.replace(/\*\*\*/g, '') || '',
+       password: '',
+       username: initialData?.username || '',
+       linkedin_profile_id: ''
+     }
+   })
 
   const onSubmit = async (values: CredentialFormValues) => {
     try {
       setIsSubmitting(true)
       setError(null)
-      setSuccess(false)
+       setSuccess(false)
 
-      const formData = {
-        email: values.email,
-        password: values.password,
-        username: values.username || form.getValues('email').split('@')[0]
-      }
+        const profileId = form.getValues('linkedin_profile_id') || null
+
+        const formData: CreateLinkedInCredentialsData = {
+          email: values.email,
+          password: values.password,
+          username: values.username || form.getValues('email').split('@')[0]
+        }
+        
+        if (profileId) {
+          formData.linkedin_profile_id = parseInt(profileId, 10)
+        }
 
       let response
       if (initialData) {
@@ -178,6 +210,47 @@ export default function LinkedInCredentialForm({ initialData, onSuccess, onCance
                     </FormItem>
                   )}
                 />
+
+                {!initialData && (
+                  <FormField
+                    control={form.control}
+                     name="linkedin_profile_id"
+                     render={({ field }) => (
+                       <FormItem>
+                         <FormLabel>LinkedIn Profile</FormLabel>
+                         <FormControl>
+                           <Select
+                             onValueChange={(value) => field.onChange(value)}
+                             defaultValue={field.value}
+                           >
+                             <SelectTrigger className="ring-1 ring-gray-200">
+                               <SelectValue placeholder="Select a LinkedIn profile" />
+                             </SelectTrigger>
+                             <SelectContent>
+                               {loadingProfiles ? (
+                                 <SelectItem value="loading" disabled>Loading profiles...</SelectItem>
+                               ) : linkedinProfiles.length === 0 ? (
+                                 <SelectItem value="" disabled>
+                                   No LinkedIn profiles available. Please create one first.
+                                 </SelectItem>
+                               ) : (
+                                 linkedinProfiles.map((profile) => (
+                                   <SelectItem key={profile.id} value={profile.id.toString()}>
+                                     {profile.linkedin_username} - {profile.active ? 'Active' : 'Inactive'}
+                                   </SelectItem>
+                                 ))
+                               )}
+                            </SelectContent>
+                          </Select>
+                        </FormControl>
+                        <FormDescription>
+                          Choose the LinkedIn profile this credential belongs to
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
               </div>
 
               <div className="border-t pt-6">
@@ -292,6 +365,14 @@ export default function LinkedInCredentialForm({ initialData, onSuccess, onCance
                       Rotate credentials regularly for security
                     </span>
                   </li>
+                  {!initialData && linkedinProfiles.length === 0 && (
+                    <li className="flex items-start">
+                      <Icons.AlertTriangle className="h-3 w-3 text-orange-500 mt-0.5 mr-2 flex-shrink-0" />
+                      <span className="text-gray-600">
+                        You need to create a LinkedIn profile first to use credentials
+                      </span>
+                    </li>
+                  )}
                 </ul>
               </div>
             </CardContent>

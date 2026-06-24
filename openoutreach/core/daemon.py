@@ -27,6 +27,7 @@ from openoutreach.core.models import Task
 from openoutreach.linkedin.tasks.check_pending import handle_check_pending
 from openoutreach.linkedin.tasks.connect import handle_connect
 from openoutreach.linkedin.tasks.follow_up import handle_follow_up
+from openoutreach.linkedin.tasks.send_manual_message import handle_send_manual_message
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +35,7 @@ _HANDLERS = {
     Task.TaskType.CONNECT: handle_connect,
     Task.TaskType.CHECK_PENDING: handle_check_pending,
     Task.TaskType.FOLLOW_UP: handle_follow_up,
+    Task.TaskType.SEND_MANUAL_MESSAGE: handle_send_manual_message,
 }
 
 HEARTBEAT_INTERVAL = 300  # 5 minutes

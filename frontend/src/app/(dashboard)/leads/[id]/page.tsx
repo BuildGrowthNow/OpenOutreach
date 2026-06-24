@@ -144,11 +144,11 @@ const LeadDetailsPage = () => {
   }
 
   // Fetch messages for the lead
-  const fetchMessages = useCallback(async () => {
+  const fetchMessages = useCallback(async (silent = false) => {
     if (!leadId) return
     
     try {
-      setMessageLoading(true)
+      if (!silent) setMessageLoading(true)
       const response = await getMessages(undefined, leadId)
       if (response.data?.data) {
         setMessages(response.data.data)
@@ -156,16 +156,22 @@ const LeadDetailsPage = () => {
     } catch (err) {
       console.error('Failed to fetch messages:', err)
     } finally {
-      setMessageLoading(false)
+      if (!silent) setMessageLoading(false)
     }
   }, [leadId])
 
-  // Fetch messages when tab changes to messages or notes
+  // Fetch messages when tab changes to messages or notes, and poll
   useEffect(() => {
     if (activeTab !== 'messages' || !leadId) return
     void (async () => {
-      await fetchMessages()
+      await fetchMessages(false)
     })()
+
+    const interval = setInterval(() => {
+      void fetchMessages(true)
+    }, 10000)
+
+    return () => clearInterval(interval)
   }, [activeTab, leadId, fetchMessages])
 
   // Fetch notes on component mount

@@ -22,6 +22,7 @@ from .views.campaigns import (
     CampaignListView,
     CampaignDetailView,
     CampaignLeadsView,
+    CampaignLeadsUploadView,
     CampaignMessagesView,
     CampaignAnalyticsView,
     CampaignStateMachineView,
@@ -33,7 +34,7 @@ from .views.leads import (
     LeadMessagesView,
     LeadNotesView,
 )
-from .views.settings import SettingsView, RateLimitsView
+from .views.settings import SettingsView, RateLimitsView, DailyUsageView
 from .views.analytics import AnalyticsView
 from .views.links import LinksView, LinkDetailView
 from .views.state_machine import StateMachineSimulationView
@@ -45,6 +46,12 @@ from .views.linkedin_credentials import (
     LinkedInCredentialsHealthView,
     LinkedInCredentialsLogsView,
 )
+from .views.linkedin_setup import (
+    LinkedInCookieInstructionsView,
+    LinkedInSetupGuideView,
+    LinkedInSetupStatusView,
+)
+from .views.linkedin_profiles import LinkedInProfilesListView
 
 # API URL Patterns (no version prefix for frontend compatibility)
 urlpatterns = [
@@ -71,11 +78,13 @@ urlpatterns = [
     # Settings endpoints
     path('settings/', SettingsView.as_view(), name='settings'),
     path('settings/rate-limits/', RateLimitsView.as_view(), name='rate-limits'),
+    path('settings/daily-usage/', DailyUsageView.as_view(), name='daily-usage'),
     
     # Campaigns endpoints
     path('campaigns/', CampaignListView.as_view(), name='campaign-list'),
     path('campaigns/<int:pk>/', CampaignDetailView.as_view(), name='campaign-detail'),
     path('campaigns/<int:pk>/leads/', CampaignLeadsView.as_view(), name='campaign-leads'),
+    path('campaigns/<int:pk>/leads/upload/', CampaignLeadsUploadView.as_view(), name='campaign-leads-upload'),
     path('campaigns/<int:pk>/messages/', CampaignMessagesView.as_view(), name='campaign-messages'),
     path('campaigns/<int:pk>/analytics/', CampaignAnalyticsView.as_view(), name='campaign-analytics'),
     path('campaigns/<int:pk>/state-machine/', CampaignStateMachineView.as_view(), name='campaign-state-machine'),
@@ -104,11 +113,19 @@ urlpatterns = [
      # State machine endpoints (global simulation)
      path('state-machine/simulate/', StateMachineSimulationView.as_view(), name='state-machine-simulate'),
      
-     # LinkedIn credentials endpoints
-     path('linkedin-credentials/', LinkedInCredentialsView.as_view(), name='linkedin-credentials-list'),
-     path('linkedin-credentials/<int:pk>/', LinkedInCredentialsView.as_view(), name='linkedin-credentials-detail'),
-     path('linkedin-credentials/<int:pk>/verify/', LinkedInCredentialsVerifyView.as_view(), name='linkedin-credentials-verify'),
-     path('linkedin-credentials/<int:pk>/rotate/', LinkedInCredentialsRotationView.as_view(), name='linkedin-credentials-rotate'),
-     path('linkedin-credentials/<int:pk>/health/', LinkedInCredentialsHealthView.as_view(), name='linkedin-credentials-health'),
-     path('linkedin-credentials/<int:pk>/logs/', LinkedInCredentialsLogsView.as_view(), name='linkedin-credentials-logs'),
- ]
+      # LinkedIn credentials endpoints
+      path('linkedin-credentials/', LinkedInCredentialsView.as_view(), name='linkedin-credentials-list'),
+      path('linkedin-credentials/<int:pk>/', LinkedInCredentialsView.as_view(), name='linkedin-credentials-detail'),
+      path('linkedin-credentials/<int:pk>/verify/', LinkedInCredentialsVerifyView.as_view(), name='linkedin-credentials-verify'),
+      path('linkedin-credentials/<int:pk>/rotate/', LinkedInCredentialsRotationView.as_view(), name='linkedin-credentials-rotate'),
+      path('linkedin-credentials/<int:pk>/health/', LinkedInCredentialsHealthView.as_view(), name='linkedin-credentials-health'),
+      path('linkedin-credentials/<int:pk>/logs/', LinkedInCredentialsLogsView.as_view(), name='linkedin-credentials-logs'),
+      
+       # LinkedIn profiles endpoints
+       path('linkedin-profiles/', LinkedInProfilesListView.as_view(), name='linkedin-profiles-list'),
+       
+       # LinkedIn setup endpoints (OAuth/cookie guide)
+       path('linkedin-setup/cookie-instructions/', LinkedInCookieInstructionsView.as_view(), name='linkedin-setup-cookie-instructions'),
+       path('linkedin-setup/guide/', LinkedInSetupGuideView.as_view(), name='linkedin-setup-guide'),
+       path('linkedin-setup/status/', LinkedInSetupStatusView.as_view(), name='linkedin-setup-status'),
+   ]

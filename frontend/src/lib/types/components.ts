@@ -290,3 +290,12 @@ export interface LinkMetrics {
 
 // RateLimits interface retained for backward compatibility with legacy code
 // Use SystemSettings.rate_limits for the new canonical shape (daily_connection_limit, daily_follow_up_limit, etc.)
+
+// Daily Usage Response type for API
+export interface DailyUsageResponse {
+  daily_connections_sent: number
+  daily_messages_sent: number
+  daily_limit: number
+  last_reset: string
+  reset_frequency: string
+}

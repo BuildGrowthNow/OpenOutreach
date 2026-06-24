@@ -555,6 +555,7 @@ export interface LinkedInCredentials {
     days_until_expiry: number | null
     verification_failures: number
   }
+  linkedin_profile_id?: number | null
 }
 
 export interface LinkedInCredentialsHealth {
@@ -576,12 +577,34 @@ export interface LinkedInCredentialsHealth {
   }
 }
 
+export interface LinkedInCredentialLog {
+  id: number
+  action: string
+  details: Record<string, unknown>
+  ip_address: string | null
+  created_at: string
+}
+
+export interface LinkedInCredentialsLogsResponse {
+  success: boolean
+  credentials_id: number
+  logs: LinkedInCredentialLog[]
+  count: number
+}
+
 export async function getLinkedInCredentials(): Promise<ApiResponse<{ credentials: LinkedInCredentials[]; count: number }>> {
   return get('/api/linkedin-credentials')
 }
 
+export interface CreateLinkedInCredentialsData {
+  email: string
+  password: string
+  username?: string
+  linkedin_profile_id?: number | null
+}
+
 export async function createLinkedInCredentials(
-  data: { email: string; password: string; username?: string }
+  data: CreateLinkedInCredentialsData
 ): Promise<ApiResponse<{ success: boolean; id: number; message: string; credentials: LinkedInCredentials }>> {
   return post('/api/linkedin-credentials', data)
 }
@@ -613,5 +636,128 @@ export async function rotateLinkedInCredentials(id: number, data?: { email?: str
 
 export async function getLinkedInCredentialsHealth(id: number): Promise<ApiResponse<LinkedInCredentialsHealth>> {
   return get(`/api/linkedin-credentials/${id}/health`)
+}
+
+export async function getLinkedInCredentialsLogs(id: number): Promise<ApiResponse<LinkedInCredentialsLogsResponse>> {
+  return get(`/api/linkedin-credentials/${id}/logs`)
+}
+
+// LinkedIn Profiles API
+export interface LinkedInProfile {
+  id: number
+  linkedin_username: string
+  active: boolean
+  connect_daily_limit: number
+  follow_up_daily_limit: number
+}
+
+export async function getLinkedInProfiles(): Promise<ApiResponse<{ profiles: LinkedInProfile[]; count: number }>> {
+  return get('/api/linkedin-profiles')
+}
+
+// Upload campaign leads (CSV)
+export async function uploadCampaignLeads(
+  campaignId: string,
+  file: File
+): Promise<ApiResponse<{ imported: number; skipped: number }>> {
+  const formData = new FormData()
+  formData.append('file', file)
+  return post(`/api/campaigns/${campaignId}/leads/upload/`, formData)
+}
+
+// LinkedIn Setup API (OAuth/Cookie Guide)
+export interface LinkedInCookieInstructions {
+  success: boolean
+  instructions: {
+    title: string
+    steps: Array<{
+      step: number
+      title: string
+      description: string
+      note?: string
+    }>
+    alternative_method: {
+      title: string
+      description: string
+      steps: string[]
+    }
+    security_note: string
+    verification: {
+      title: string
+      description: string
+      success: string
+    }
+  }
+}
+
+export async function getLinkedInCookieInstructions(): Promise<ApiResponse<LinkedInCookieInstructions>> {
+  return get('/api/linkedin-setup/cookie-instructions')
+}
+
+export interface LinkedInSetupGuide {
+  success: boolean
+  guide: {
+    introduction: {
+      title: string
+      description: string
+    }
+    methods: Array<{
+      method: string
+      title: string
+      description: string
+      steps: string[]
+      pros: string[]
+      cons: string[]
+    }>
+    prerequisites: {
+      title: string
+      items: string[]
+    }
+    security: {
+      title: string
+      items: string[]
+    }
+    troubleshooting: {
+      title: string
+      items: Array<{
+        issue: string
+        solution: string
+      }>
+    }
+    next_steps: {
+      title: string
+      items: string[]
+    }
+  }
+}
+
+export async function getLinkedInSetupGuide(): Promise<ApiResponse<LinkedInSetupGuide>> {
+  return get('/api/linkedin-setup/guide')
+}
+
+export interface LinkedInSetupStatus {
+  success: boolean
+  status: {
+    linkedin_profile: {
+      exists: boolean
+      count: number
+      requires_attention: boolean
+    }
+    linkedin_credentials: {
+      exists: boolean
+      count: number
+      active_count: number
+      requires_attention: boolean
+    }
+    setup_complete: boolean
+    setup_progress: {
+      current: number
+      total: number
+    }
+  }
+}
+
+export async function getLinkedInSetupStatus(): Promise<ApiResponse<LinkedInSetupStatus>> {
+  return get('/api/linkedin-setup/status')
 }
 
