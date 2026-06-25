@@ -12,6 +12,7 @@ import ProfileForm from '@/components/settings/profile-form'
 import RateLimitForm from '@/components/settings/rate-limit-form'
 import LinkedInCredentialForm from '@/components/settings/linkedin-credential-form'
 import LinkedInCredentialCard from '@/components/settings/linkedin-credential-card'
+import { LinkedInSetupGuide } from '@/components/settings/linkedin-setup-guide'
 import { Settings as SettingsIcon } from 'lucide-react'
 import { 
   getLinkedInCredentials, 
@@ -28,7 +29,7 @@ export default function SettingsPage() {
   const [linkedinCredentials, setLinkedinCredentials] = useState<LinkedInCredentials[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'rate-limits' | 'profile' | 'linkedin-credentials' | 'system'>('rate-limits')
+  const [activeTab, setActiveTab] = useState<'rate-limits' | 'profile' | 'linkedin-credentials' | 'setup-guide' | 'system'>('rate-limits')
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [editingCredential, setEditingCredential] = useState<LinkedInCredentials | null>(null)
   const { toast } = useToast()
@@ -217,11 +218,15 @@ export default function SettingsPage() {
                <Icons.Link className="h-4 w-4 mr-2" />
               LinkedIn Credentials
             </TabsTrigger>
-            <TabsTrigger value="system">
-              <SettingsIcon className="h-4 w-4 mr-2" />
-              System Info
+            <TabsTrigger value="setup-guide">
+              <Icons.Info className="h-4 w-4 mr-2" />
+              Setup Guide
             </TabsTrigger>
-          </TabsList>
+             <TabsTrigger value="system">
+               <SettingsIcon className="h-4 w-4 mr-2" />
+               System Info
+             </TabsTrigger>
+           </TabsList>
 
         <TabsContent value="rate-limits" className="space-y-6">
           <Card>
@@ -351,6 +356,10 @@ export default function SettingsPage() {
                )}
              </CardContent>
            </Card>
+         </TabsContent>
+
+         <TabsContent value="setup-guide" className="space-y-6">
+           <LinkedInSetupGuide />
          </TabsContent>
 
         <TabsContent value="system" className="space-y-6">

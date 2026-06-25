@@ -21,6 +21,7 @@ class MessagesView(APIView):
         # Get query parameters
         campaign_id = request.query_params.get('campaign_id')
         deal_id = request.query_params.get('deal_id')
+        lead_id = request.query_params.get('lead_id')
         page = request.query_params.get('page')
         limit = request.query_params.get('limit')
         
@@ -37,6 +38,13 @@ class MessagesView(APIView):
         if deal_id:
             try:
                 messages = messages.filter(deal_id=int(deal_id))
+            except ValueError:
+                pass
+        
+        # Filter by lead_id if provided
+        if lead_id:
+            try:
+                messages = messages.filter(deal__lead_id=int(lead_id))
             except ValueError:
                 pass
         

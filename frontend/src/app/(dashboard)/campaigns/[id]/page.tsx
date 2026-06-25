@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Icons } from '@/lib/types/components'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
-import { getCampaign, getCampaignAnalytics, getCampaignLeads, updateCampaign, deleteCampaign, getDailyUsage, uploadCampaignLeads } from '@/lib/api/dashboard'
+import { getCampaign, getCampaignAnalytics, getCampaignLeads, updateCampaign, deleteCampaign, getDailyUsage, uploadCampaignLeads, getCampaignStatus, getGhostModeSimulations, startGhostMode, stopGhostMode } from '@/lib/api/dashboard'
 import { Campaign, Lead } from '@/lib/types/components'
 import { CampaignForm } from '@/components/campaigns/campaign-form'
 import { CampaignStats as CampaignStatsComponent } from '@/components/campaigns/campaign-stats'
@@ -34,6 +34,21 @@ interface CampaignAnalyticsResponse {
   }
 }
 
+interface GhostSimulationLog {
+  id: number
+  action_type: string
+  target_name?: string
+  target_url?: string
+  result_data?: Record<string, unknown>
+  rating?: number
+  score?: number
+  started_at?: string
+  completed_at?: string
+  simulated_action?: {
+    type?: string
+  }
+}
+
 export default function CampaignDetailsPage() {
   const params = useParams()
   const router = useRouter()
@@ -48,7 +63,27 @@ export default function CampaignDetailsPage() {
   const [editing, setEditing] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [showCompletionModal, setShowCompletionModal] = useState(false)
-  const [dailyUsage, setDailyUsage] = useState({ dailyConnectionsSent: 0, dailyLimit: 20 })
+  
+  const [dailyUsage, setDailyUsage] = useState<{
+    dailyConnectionsSent: number
+    dailyLimit: number
+    effectiveLimit: number
+    remaining: number
+    rateLimitStatus: 'normal' | 'caution' | 'warning' | 'exceeded'
+    warningMessage?: string
+    warningLevel?: 'low' | 'medium' | 'high'
+  }>({
+    dailyConnectionsSent: 0,
+    dailyLimit: 20,
+    effectiveLimit: 20,
+    remaining: 20,
+    rateLimitStatus: 'normal',
+    warningLevel: 'low',
+  })
+  const [ghostModeSimulations, setGhostModeSimulations] = useState<GhostSimulationLog[]>([])
+  const [ghostModeLoading, setGhostModeLoading] = useState(false)
+  const [ghostModeMode, setGhostModeMode] = useState<'simulation' | 'validation' | 'dry_run'>('simulation')
+  const [ghostModeActive, setGhostModeActive] = useState<boolean>(false)
 
   // Lead upload and play/pause states
   const [showUploadModal, setShowUploadModal] = useState(false)
@@ -56,6 +91,9 @@ export default function CampaignDetailsPage() {
   const [uploadLoading, setUploadLoading] = useState(false)
   const [uploadStatus, setUploadStatus] = useState<{ success: boolean; message: string } | null>(null)
   const [actionLoading, setActionLoading] = useState(false)
+
+  // Targeted polling state - only fetch status every 10 seconds
+  const [campaignStatus, setCampaignStatus] = useState<string | null>(null)
 
   const fetchCampaignData = useCallback(async (silent = false) => {
     try {
@@ -88,6 +126,11 @@ export default function CampaignDetailsPage() {
         setDailyUsage({
           dailyConnectionsSent: dailyUsageResponse.data.daily_connections_sent || 0,
           dailyLimit: dailyUsageResponse.data.daily_limit || 20,
+          effectiveLimit: dailyUsageResponse.data.effective_limit || 20,
+          remaining: dailyUsageResponse.data.remaining || 20,
+          rateLimitStatus: dailyUsageResponse.data.rate_limit_status || 'normal',
+          warningMessage: dailyUsageResponse.data.warning_message,
+          warningLevel: dailyUsageResponse.data.warning_level,
         })
       }
     } catch (err) {
@@ -105,6 +148,11 @@ export default function CampaignDetailsPage() {
         setDailyUsage({
           dailyConnectionsSent: dailyUsageResponse.data.daily_connections_sent || 0,
           dailyLimit: dailyUsageResponse.data.daily_limit || 20,
+          effectiveLimit: dailyUsageResponse.data.effective_limit || 20,
+          remaining: dailyUsageResponse.data.remaining || 20,
+          rateLimitStatus: dailyUsageResponse.data.rate_limit_status || 'normal',
+          warningMessage: dailyUsageResponse.data.warning_message,
+          warningLevel: dailyUsageResponse.data.warning_level,
         })
       }
     } catch (err) {
@@ -112,20 +160,56 @@ export default function CampaignDetailsPage() {
     }
   }, [])
 
+  const fetchGhostModeSimulations = useCallback(async () => {
+    if (!campaignId) return
+    try {
+      setGhostModeLoading(true)
+      const response = await getGhostModeSimulations(campaignId)
+      if (response.data && Array.isArray(response.data.simulations)) {
+        const simulations = response.data.simulations as GhostSimulationLog[]
+        setGhostModeSimulations(simulations)
+        // If we get simulations, we have an active ghost mode
+        if (simulations.length > 0 || (response.data as { total?: number }).total !== 0) {
+          setGhostModeActive(true)
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching ghost mode simulations:', err)
+    } finally {
+      setGhostModeLoading(false)
+    }
+  }, [campaignId])
+
   useEffect(() => {
     void (async () => {
       await fetchCampaignData(false)
     })()
   }, [fetchCampaignData])
 
-  // Polling for real-time updates every 10 seconds
+  // Targeted polling: fetch only status every 10 seconds
+  // Full data is fetched only on initial load or manual refresh
+  const fetchCampaignStatus = useCallback(async () => {
+    try {
+      const response = await getCampaignStatus(campaignId)
+      if (response.data && typeof response.data === 'object' && 'status' in response.data) {
+        const statusData = response.data as { status: string }
+        if (statusData.status !== campaign?.status) {
+          setCampaign((prev) => (prev ? { ...prev, status: statusData.status } : null))
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching campaign status during polling:', err)
+    }
+  }, [campaignId, campaign])
+
+  // Poll for status updates every 10 seconds (lightweight - single small API call)
   useEffect(() => {
     if (!campaignId) return
     const interval = setInterval(() => {
-      void fetchCampaignData(true)
+      void fetchCampaignStatus()
     }, 10000)
     return () => clearInterval(interval)
-  }, [campaignId, fetchCampaignData])
+  }, [campaignId, fetchCampaignStatus])
 
 
   const handleUpdateCampaign = async (data: Partial<Campaign>) => {
@@ -391,11 +475,12 @@ export default function CampaignDetailsPage() {
 
       {/* Tabs Navigation */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid grid-cols-4 w-full md:w-auto">
+        <TabsList className="grid grid-cols-5 w-full md:w-auto">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="leads">Leads</TabsTrigger>
           <TabsTrigger value="analytics">Analytics</TabsTrigger>
           <TabsTrigger value="settings">Settings</TabsTrigger>
+          <TabsTrigger value="ghost-mode">Ghost Mode</TabsTrigger>
         </TabsList>
 
         {/* Overview Tab */}
@@ -471,7 +556,35 @@ export default function CampaignDetailsPage() {
                   <DailyProgress 
                     dailyConnectionsSent={dailyUsage.dailyConnectionsSent} 
                     dailyLimit={dailyUsage.dailyLimit}
+                    effectiveLimit={dailyUsage.effectiveLimit}
                   />
+                  {/* Show warning banner if limit is exceeded or approaching */}
+                  {dailyUsage.rateLimitStatus === 'exceeded' && (
+                    <div className="mt-4 rounded-md bg-destructive/10 border border-destructive/20 p-3">
+                      <div className="flex items-start gap-3">
+                        <Icons.AlertTriangle className="h-5 w-5 text-destructive mt-0.5" />
+                        <div>
+                          <h5 className="font-medium text-destructive">Daily Connection Limit Exceeded</h5>
+                          <p className="text-sm text-destructive/80 mt-1">
+                            {dailyUsage.warningMessage || 'You have reached your daily connection limit. No more connections can be sent today.'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {dailyUsage.rateLimitStatus === 'warning' && (
+                    <div className="mt-4 rounded-md bg-amber-500/10 border border-amber-500/20 p-3">
+                      <div className="flex items-start gap-3">
+                        <Icons.AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5" />
+                        <div>
+                          <h5 className="font-medium text-amber-600 dark:text-amber-400">Approaching Rate Limit</h5>
+                          <p className="text-sm text-amber-600/80 dark:text-amber-400/80 mt-1">
+                            {dailyUsage.warningMessage || 'You are approaching your daily connection limit.'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
@@ -663,6 +776,142 @@ export default function CampaignDetailsPage() {
                   </Button>
                 </div>
               )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Ghost Mode Tab */}
+        <TabsContent value="ghost-mode" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Ghost Mode Simulation</CardTitle>
+              <CardDescription>
+                Simulate campaign behavior without actually connecting to LinkedIn
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-6">
+                {/* Toggle for Ghost Mode */}
+                <div className="flex items-center justify-between p-4 border rounded-lg">
+                  <div className="space-y-1">
+                    <h4 className="font-medium">Ghost Mode Status</h4>
+                    <p className="text-sm text-muted-foreground">
+                      {ghostModeActive 
+                        ? "Ghost mode is currently active" 
+                        : "Ghost mode is currently inactive"}
+                    </p>
+                  </div>
+                  <Button
+                    variant={ghostModeActive ? "destructive" : "default"}
+                    onClick={async () => {
+                      if (ghostModeActive) {
+                        await stopGhostMode(campaignId)
+                        setGhostModeActive(false)
+                        fetchGhostModeSimulations()
+                      } else {
+                        await startGhostMode(campaignId)
+                        setGhostModeActive(true)
+                        fetchGhostModeSimulations()
+                      }
+                    }}
+                    disabled={ghostModeLoading}
+                  >
+                    {ghostModeActive 
+                      ? (
+                          <>
+                            <Icons.X className="mr-2 h-4 w-4" />
+                            Stop Simulation
+                          </>
+                        ) 
+                      : (
+                          <>
+                            <Icons.Zap className="mr-2 h-4 w-4" />
+                            Start Simulation
+                          </>
+                        )}
+                  </Button>
+                </div>
+
+                {/* Simulations Data */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-medium">Simulation Logs</h4>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => fetchGhostModeSimulations()}
+                      disabled={ghostModeLoading}
+                    >
+                      <Icons.RefreshCw className={`mr-2 h-4 w-4 ${ghostModeLoading ? 'animate-spin' : ''}`} />
+                      Refresh
+                    </Button>
+                  </div>
+                  
+                  {ghostModeLoading ? (
+                    <div className="space-y-2">
+                      <Skeleton className="h-12 w-full" />
+                      <Skeleton className="h-12 w-full" />
+                      <Skeleton className="h-12 w-full" />
+                    </div>
+                  ) : ghostModeSimulations.length > 0 ? (
+                    <div className="space-y-3">
+                      {ghostModeSimulations.slice(0, 10).map((sim: GhostSimulationLog) => (
+                        <div key={sim.id} className="p-4 border rounded-lg bg-muted/30 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" className="text-xs">
+                                {sim.action_type}
+                              </Badge>
+                              {sim.rating && (
+                                <Badge className="text-xs" variant={
+                                      sim.rating >= 4 ? "default" : 
+                                      sim.rating >= 3 ? "secondary" : "destructive"
+                                    }>
+                                    Rating: {sim.rating}/5
+                                </Badge>
+                              )}
+                            </div>
+                            <span className="text-xs text-muted-foreground">
+                              {new Date(sim.completed_at || '').toLocaleString()}
+                            </span>
+                          </div>
+                          <div className="text-sm">
+                            {sim.target_name && (
+                              <div className="font-medium">{sim.target_name}</div>
+                            )}
+                            {sim.target_url && (
+                              <a 
+                                href={sim.target_url} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="text-sm text-blue-500 hover:underline"
+                              >
+                                {sim.target_url}
+                              </a>
+                            )}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {sim.simulated_action?.type && (
+                              <div>Action: {sim.simulated_action.type}</div>
+                            )}
+                            {typeof sim.score === 'number' && (
+                              <div>Score: {sim.score}</div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-12 border border-dashed rounded-lg">
+                      <Icons.Activity className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                      <h3 className="text-lg font-semibold mb-2">No Simulation Data</h3>
+                      <p className="text-sm text-muted-foreground mb-4">
+                        Start a ghost mode simulation to see simulated activity logs here.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

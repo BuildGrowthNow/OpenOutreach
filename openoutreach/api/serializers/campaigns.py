@@ -91,7 +91,8 @@ class CampaignCreateSerializer(serializers.Serializer):
 
 
 class CampaignUpdateSerializer(serializers.Serializer):
-    """Serializer for updating a campaign."""
+    """Serializer for updating a campaign. Uses partial validation to avoid
+    requiring all fields on update."""
     
     name = serializers.CharField(max_length=200, required=False)
     description = serializers.CharField(required=False, allow_blank=True)
@@ -106,3 +107,13 @@ class CampaignUpdateSerializer(serializers.Serializer):
     is_paused = serializers.BooleanField(required=False)
     model_blob = serializers.JSONField(required=False)
     status = serializers.CharField(required=False)
+    
+    VALID_STATUSES = ['active', 'paused', 'draft']
+    
+    def validate_status(self, value: str) -> str:
+        """Validate status is one of the allowed values."""
+        if value is not None and value.lower() not in self.VALID_STATUSES:
+            raise serializers.ValidationError(
+                f"Invalid status. Must be one of: {', '.join(self.VALID_STATUSES)}"
+            )
+        return value.lower() if value else value

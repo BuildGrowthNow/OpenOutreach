@@ -78,12 +78,14 @@ class LinkedInCredentialsView(APIView):
         if linkedin_profile_id:
             try:
                 linkedin_profile = LinkedInProfile.objects.get(id=linkedin_profile_id)
-                # Verify the profile belongs to the current user or is accessible
-                if not request.user.has_perm('linkedin.change_linkedinprofile', linkedin_profile):
-                    if linkedin_profile.user != request.user:
-                        raise ValidationError({
-                            'linkedin_profile_id': 'You do not have access to this LinkedIn profile'
-                        })
+                # Verify the profile belongs to the current user or user has permission
+                # Allow access if: user owns the profile OR user has change permission
+                if linkedin_profile.user != request.user and not request.user.has_perm(
+                    'linkedin.change_linkedinprofile', linkedin_profile
+                ):
+                    raise ValidationError({
+                        'linkedin_profile_id': 'You do not have access to this LinkedIn profile'
+                    })
             except LinkedInProfile.DoesNotExist:
                 raise ValidationError({
                     'linkedin_profile_id': 'LinkedIn profile not found'

@@ -4,11 +4,14 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
-from django.http import Http404
+from django.http import Http404, HttpResponse
+from django.utils import timezone
 
 from openoutreach.core.models import Campaign
 from openoutreach.crm.models import Deal
 from openoutreach.api.serializers.campaigns import CampaignSerializer, CampaignCreateSerializer, CampaignUpdateSerializer
+from openoutreach.linkedin.models.ghost_mode import GhostCampaign, GhostSimulationLog
+from openoutreach.api.utils import create_pagination_response
 
 
 class CampaignListView(APIView):
@@ -21,8 +24,8 @@ class CampaignListView(APIView):
     permission_classes = [IsAuthenticated]
     
     def get(self, request):
-        """List all campaigns with optional filters."""
-        campaigns = Campaign.objects.all()
+        """List campaigns accessible by the current user with optional filters."""
+        campaigns = Campaign.objects.filter(users=request.user)
         
         # Apply filters
         status_param = request.query_params.get('status')
@@ -50,7 +53,7 @@ class CampaignListView(APIView):
             'pagination': {
                 'page': int(page) if page else 1,
                 'limit': int(limit) if limit else len(serializer.data),
-                'total': Campaign.objects.count(),
+                'total': campaigns.count(),
             }
         })
     
@@ -88,6 +91,8 @@ class CampaignListView(APIView):
                 'cooldown_minutes': campaign.cooldown_minutes,
                 'is_paused': campaign.is_paused,
                 'status': campaign.status,
+                'created_at': campaign.created_at.isoformat() if campaign.created_at else None,
+                'updated_at': campaign.updated_at.isoformat() if campaign.updated_at else None,
             }, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -104,7 +109,7 @@ class CampaignDetailView(APIView):
     
     def get_object(self, pk):
         try:
-            return Campaign.objects.get(pk=pk)
+            return Campaign.objects.filter(users=self.request.user).get(pk=pk)
         except Campaign.DoesNotExist:
             raise Http404
     
@@ -133,6 +138,8 @@ class CampaignDetailView(APIView):
             'active_deals': campaign.deals.filter(state__in=['QUALIFIED', 'READY_TO_CONNECT', 'PENDING', 'CONNECTED']).count(),
             'completed_deals': campaign.deals.filter(state='COMPLETED').count(),
             'failed_deals': campaign.deals.filter(state='FAILED').count(),
+            'created_at': campaign.created_at.isoformat() if campaign.created_at else None,
+            'updated_at': campaign.updated_at.isoformat() if campaign.updated_at else None,
         })
     
     def patch(self, request, pk):
@@ -163,6 +170,8 @@ class CampaignDetailView(APIView):
                 'cooldown_minutes': campaign.cooldown_minutes,
                 'is_paused': campaign.is_paused,
                 'status': campaign.status,
+                'created_at': campaign.created_at.isoformat() if campaign.created_at else None,
+                'updated_at': campaign.updated_at.isoformat() if campaign.updated_at else None,
             })
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -172,6 +181,29 @@ class CampaignDetailView(APIView):
         campaign = self.get_object(pk)
         campaign.delete()
         return Response({'success': True}, status=status.HTTP_204_NO_CONTENT)
+
+
+class CampaignStatusView(APIView):
+    """
+    API view for targeted polling - returns only the campaign status.
+    
+    GET /api/campaigns/{id}/status - Get only campaign status (lightweight polling)
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get_object(self, pk):
+        try:
+            return Campaign.objects.filter(users=self.request.user).get(pk=pk)
+        except Campaign.DoesNotExist:
+            raise Http404
+    
+    def get(self, request, pk):
+        """Get only the campaign status (for efficient polling)."""
+        campaign = self.get_object(pk)
+        return Response({
+            'status': campaign.status,
+            'is_paused': campaign.is_paused,
+        })
 
 
 class CampaignLeadsView(APIView):
@@ -184,7 +216,7 @@ class CampaignLeadsView(APIView):
     
     def get_object(self, pk):
         try:
-            return Campaign.objects.get(pk=pk)
+            return Campaign.objects.filter(users=self.request.user).get(pk=pk)
         except Campaign.DoesNotExist:
             raise Http404
     
@@ -228,8 +260,9 @@ class CampaignLeadsView(APIView):
             name = _extract_lead_name(deal.lead)
             company, title, _ = _extract_lead_info(deal.lead)
             leads_data.append({
-                'id': deal.id,
+                'id': deal.lead.id,  # Use lead.id instead of deal.id for frontend linking
                 'lead_id': deal.lead.id,
+                'deal_id': deal.id,  # Add deal_id for internal use
                 'public_identifier': deal.lead.public_identifier,
                 'linkedin_url': deal.lead.linkedin_url,
                 'name': name,
@@ -237,6 +270,7 @@ class CampaignLeadsView(APIView):
                 'title': title,
                 'state': deal.state,
                 'outcome': deal.outcome,
+                'next_check_pending_at': deal.next_check_pending_at.isoformat() if deal.next_check_pending_at else None,
                 'creation_date': deal.creation_date.isoformat() if deal.creation_date else None,
                 'update_date': deal.update_date.isoformat() if deal.update_date else None,
             })
@@ -268,7 +302,7 @@ class CampaignLeadsUploadView(APIView):
     
     def get_object(self, pk):
         try:
-            return Campaign.objects.get(pk=pk)
+            return Campaign.objects.filter(users=self.request.user).get(pk=pk)
         except Campaign.DoesNotExist:
             raise Http404
             
@@ -377,7 +411,7 @@ class CampaignMessagesView(APIView):
     
     def get_object(self, pk):
         try:
-            return Campaign.objects.get(pk=pk)
+            return Campaign.objects.filter(users=self.request.user).get(pk=pk)
         except Campaign.DoesNotExist:
             raise Http404
     
@@ -450,7 +484,7 @@ class CampaignAnalyticsView(APIView):
     
     def get_object(self, pk):
         try:
-            return Campaign.objects.get(pk=pk)
+            return Campaign.objects.filter(users=self.request.user).get(pk=pk)
         except Campaign.DoesNotExist:
             raise Http404
     
@@ -609,23 +643,42 @@ class CampaignAnalyticsView(APIView):
                 'connections_accepted': day_connections_accepted,
                 'messages_sent': day_messages_sent,
                 'messages_replied': day_messages_replied,
+                'responses': day_messages_replied,  # Alias for frontend compatibility
             })
         
         return Response({
-            'period': period,
-            'campaign_id': pk,
+            'data': {
+                'stats': {
+                    'connections_sent': connections_sent,
+                    'connections_accepted': connections_accepted,
+                    'connection_accept_rate': round(connection_accept_rate, 2),
+                    'messages_sent': messages_sent,
+                    'messages_replied': messages_replied,
+                    'responses': messages_replied,  # Alias for frontend compatibility
+                    'response_rate': round(response_rate, 2),
+                    'conversions': conversions,
+                    'conversion_rate': round(conversion_rate, 2),
+                    'errors': errors,
+                    'rate_limit_warnings': rate_limit_warnings,
+                },
+                'daily_breakdown': daily_breakdown,
+                'pipeline': pipeline,
+            },
             'stats': {
                 'connections_sent': connections_sent,
                 'connections_accepted': connections_accepted,
                 'connection_accept_rate': round(connection_accept_rate, 2),
                 'messages_sent': messages_sent,
                 'messages_replied': messages_replied,
+                'responses': messages_replied,  # Alias for frontend compatibility
                 'response_rate': round(response_rate, 2),
                 'conversions': conversions,
                 'conversion_rate': round(conversion_rate, 2),
                 'errors': errors,
                 'rate_limit_warnings': rate_limit_warnings,
             },
+            'period': period,
+            'campaign_id': pk,
             'daily_breakdown': daily_breakdown,
             'pipeline': pipeline,
         })
@@ -643,7 +696,7 @@ class CampaignStateMachineView(APIView):
     
     def get_object(self, pk):
         try:
-            return Campaign.objects.get(pk=pk)
+            return Campaign.objects.filter(users=self.request.user).get(pk=pk)
         except Campaign.DoesNotExist:
             raise Http404
     
@@ -871,3 +924,318 @@ class CampaignStateMachineView(APIView):
                 'errors': ['No state machine defined for this campaign'],
                 'warnings': [],
             }, status=status.HTTP_404_NOT_FOUND)
+
+
+class CampaignGhostModeSimulationView(APIView):
+    """
+    API view for managing and viewing ghost mode simulations for a campaign.
+    
+    GET /api/campaigns/{id}/ghost-mode/simulations - Get simulation logs
+    POST /api/campaigns/{id}/ghost-mode/start - Start ghost mode
+    POST /api/campaigns/{id}/ghost-mode/stop - Stop ghost mode
+    GET /api/campaigns/{id}/ghost-mode/export/csv - Export simulations as CSV
+    GET /api/campaigns/{id}/ghost-mode/export/json - Export simulations as JSON
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get_object(self, pk):
+        try:
+            return Campaign.objects.filter(users=self.request.user).get(pk=pk)
+        except Campaign.DoesNotExist:
+            raise Http404
+    
+    def get(self, request, pk):
+        """Get ghost mode simulation logs for a campaign."""
+        campaign = self.get_object(pk)
+        
+        ghost_campaign = GhostCampaign.objects.filter(campaign=campaign, is_active=True).first()
+        if not ghost_campaign:
+            return Response({
+                'success': False,
+                'error': 'No active ghost mode for this campaign'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        logs = GhostSimulationLog.objects.filter(
+            ghost_campaign=ghost_campaign
+        ).order_by('-started_at')
+        
+        return Response({
+            'success': True,
+            'campaign_id': ghost_campaign.id,
+            'total': logs.count(),
+            'simulations': [
+                {
+                    'id': log.id,
+                    'action_type': log.action_type,
+                    'target_name': log.target_name,
+                    'target_url': log.target_url,
+                    'result_data': log.result_data,
+                    'rating': log.rating,
+                    'score': log.score,
+                    'started_at': log.started_at.isoformat(),
+                    'completed_at': log.completed_at.isoformat(),
+                    'simulated_action': log.simulated_action,
+                }
+                for log in logs[:100]
+            ],
+        })
+    
+    def post(self, request, pk):
+        """Start or stop ghost mode for a campaign."""
+        campaign = self.get_object(pk)
+        
+        from django.utils import timezone
+        
+        action = request.data.get('action', 'start')
+        
+        if action == 'start':
+            # Create or get ghost campaign
+            ghost_campaign, created = GhostCampaign.objects.get_or_create(
+                campaign=campaign,
+                defaults={
+                    'name': f"{campaign.name} - Ghost Mode",
+                    'mode_type': GhostCampaign.ModeType.SIMULATION,
+                    'start_time': timezone.now(),
+                },
+            )
+            
+            return Response({
+                'success': True,
+                'ghost_campaign_id': ghost_campaign.id,
+                'message': f"Ghost mode started for {campaign.name}",
+                'created': created,
+            })
+        
+        elif action == 'stop':
+            ghost_campaign = GhostCampaign.objects.filter(
+                campaign=campaign, is_active=True
+            ).first()
+            if not ghost_campaign:
+                return Response({
+                    'success': False,
+                    'error': 'No active ghost mode for this campaign'
+                }, status=status.HTTP_404_NOT_FOUND)
+            
+            ghost_campaign.is_active = False
+            ghost_campaign.end_time = timezone.now()
+            ghost_campaign.save()
+            
+            return Response({
+                'success': True,
+                'message': f"Ghost mode stopped for {campaign.name}",
+            })
+        
+        else:
+            return Response({
+                'success': False,
+                'error': 'Invalid action. Use "start" or "stop".'
+            }, status=status.HTTP_400_BAD_REQUEST)
+    
+    def get_export_csv(self, request, pk):
+        """Export ghost mode simulations as CSV."""
+        campaign = self.get_object(pk)
+        
+        ghost_campaign = GhostCampaign.objects.filter(campaign=campaign, is_active=True).first()
+        if not ghost_campaign:
+            return Response({
+                'success': False,
+                'error': 'No active ghost mode for this campaign'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        from django.http import HttpResponse
+        import csv
+        
+        response = HttpResponse(
+            content_type="text/csv",
+            headers={
+                "Content-Disposition": f'attachment; filename="ghost-mode-{ghost_campaign.name}.csv"',
+            },
+        )
+        
+        writer = csv.writer(response)
+        writer.writerow([
+            "timestamp", "action_type", "target_name", "target_url",
+            "result_success", "rating", "score", "simulated_action"
+        ])
+        
+        logs = GhostSimulationLog.objects.filter(ghost_campaign=ghost_campaign)
+        for log in logs:
+            writer.writerow([
+                log.started_at.isoformat(),
+                log.action_type,
+                log.target_name,
+                log.target_url,
+                log.result_data.get("success", False),
+                log.rating,
+                log.score,
+                log.simulated_action,
+            ])
+        
+        return response
+    
+    def get_export_json(self, request, pk):
+        """Export ghost mode simulations as JSON."""
+        campaign = self.get_object(pk)
+        
+        ghost_campaign = GhostCampaign.objects.filter(campaign=campaign, is_active=True).first()
+        if not ghost_campaign:
+            return Response({
+                'success': False,
+                'error': 'No active ghost mode for this campaign'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        logs = GhostSimulationLog.objects.filter(ghost_campaign=ghost_campaign)
+        
+        return Response({
+            'campaign': {
+                'id': ghost_campaign.id,
+                'name': ghost_campaign.name,
+                'description': ghost_campaign.description,
+                'is_active': ghost_campaign.is_active,
+                'mode_type': ghost_campaign.mode_type,
+                'leads_processed': ghost_campaign.leads_processed,
+                'connections_simulated': ghost_campaign.connections_simulated,
+                'messages_simulated': ghost_campaign.messages_simulated,
+                'conversions_simulated': ghost_campaign.conversions_simulated,
+                'avg_rating': ghost_campaign.avg_rating,
+                'avg_score': ghost_campaign.avg_score,
+                'created_at': ghost_campaign.created_at.isoformat(),
+                'updated_at': ghost_campaign.updated_at.isoformat(),
+            },
+            'total_simulations': logs.count(),
+            'simulations': [
+                {
+                    'id': log.id,
+                    'action_type': log.action_type,
+                    'target_name': log.target_name,
+                    'target_url': log.target_url,
+                    'result_data': log.result_data,
+                    'rating': log.rating,
+                    'score': log.score,
+                    'started_at': log.started_at.isoformat(),
+                    'completed_at': log.completed_at.isoformat(),
+                    'simulated_action': log.simulated_action,
+                }
+                for log in logs
+            ],
+        })
+
+
+class CampaignGhostModeSimulationListView(APIView):
+    """
+    API view for fetching ghost mode simulation logs for a campaign.
+    
+    GET /api/campaigns/{id}/ghost-mode/simulations - Get simulation logs
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get_object(self, pk):
+        try:
+            return Campaign.objects.filter(users=self.request.user).get(pk=pk)
+        except Campaign.DoesNotExist:
+            raise Http404
+    
+    def get(self, request, pk):
+        """Get ghost mode simulation logs for a campaign."""
+        campaign = self.get_object(pk)
+        
+        ghost_campaign = GhostCampaign.objects.filter(campaign=campaign, is_active=True).first()
+        if not ghost_campaign:
+            return Response({
+                'success': False,
+                'error': 'No active ghost mode for this campaign'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        logs = GhostSimulationLog.objects.filter(
+            ghost_campaign=ghost_campaign
+        ).order_by('-started_at')
+        
+        return Response({
+            'success': True,
+            'campaign_id': ghost_campaign.id,
+            'total': logs.count(),
+            'simulations': [
+                {
+                    'id': log.id,
+                    'action_type': log.action_type,
+                    'target_name': log.target_name,
+                    'target_url': log.target_url,
+                    'result_data': log.result_data,
+                    'rating': log.rating,
+                    'score': log.score,
+                    'started_at': log.started_at.isoformat(),
+                    'completed_at': log.completed_at.isoformat(),
+                    'simulated_action': log.simulated_action,
+                }
+                for log in logs[:100]
+            ],
+        })
+
+
+class CampaignGhostModeActionView(APIView):
+    """
+    API view for starting/stopping ghost mode for a campaign.
+    
+    POST /api/campaigns/{id}/ghost-mode/action - Start or stop ghost mode (action in body)
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get_object(self, pk):
+        try:
+            return Campaign.objects.filter(users=self.request.user).get(pk=pk)
+        except Campaign.DoesNotExist:
+            raise Http404
+    
+    def post(self, request, pk):
+        """Start or stop ghost mode for a campaign."""
+        campaign = self.get_object(pk)
+        
+        from django.utils import timezone
+        
+        action = request.data.get('action', 'start')
+        
+        if action == 'start':
+            # Create or get ghost campaign
+            ghost_campaign, created = GhostCampaign.objects.get_or_create(
+                campaign=campaign,
+                defaults={
+                    'name': f"{campaign.name} - Ghost Mode",
+                    'mode_type': GhostCampaign.ModeType.SIMULATION,
+                    'start_time': timezone.now(),
+                },
+            )
+            
+            return Response({
+                'success': True,
+                'ghost_campaign_id': ghost_campaign.id,
+                'message': f"Ghost mode started for {campaign.name}",
+                'created': created,
+            })
+        
+        elif action == 'stop':
+            ghost_campaign = GhostCampaign.objects.filter(
+                campaign=campaign, is_active=True
+            ).first()
+            if not ghost_campaign:
+                return Response({
+                    'success': False,
+                    'error': 'No active ghost mode for this campaign'
+                }, status=status.HTTP_404_NOT_FOUND)
+            
+            ghost_campaign.is_active = False
+            ghost_campaign.end_time = timezone.now()
+            ghost_campaign.save()
+            
+            return Response({
+                'success': True,
+                'message': f"Ghost mode stopped for {campaign.name}",
+            })
+        
+        else:
+            return Response({
+                'success': False,
+                'error': 'Invalid action. Use "start" or "stop".'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+
+# No legacy view needed -CampaignGhostModeSimulationListView is the primary view

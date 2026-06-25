@@ -12,7 +12,6 @@ import { LeadCard } from '@/components/leads/lead-card'
 import { LeadStatusBadge } from '@/components/leads/lead-status-badge'
 import { LeadNotes } from '@/components/leads/lead-notes'
 import { MessageThread } from '@/components/messages/message-thread'
-import { MessageList } from '@/components/messages/message-list'
 import { 
   getLead, 
   updateLead, 
@@ -149,7 +148,7 @@ const LeadDetailsPage = () => {
     
     try {
       if (!silent) setMessageLoading(true)
-      const response = await getMessages(undefined, leadId)
+      const response = await getMessages(undefined, undefined, leadId)
       if (response.data?.data) {
         setMessages(response.data.data)
       }
@@ -594,22 +593,6 @@ const LeadDetailsPage = () => {
                 isSending={sendingMessage}
                 leadName={lead.name || 'Lead'}
               />
-              
-              {/* Message List View */}
-              <div className="mt-6">
-                <MessageList
-                  messages={messages}
-                  isLoading={messageLoading}
-                  showActions={true}
-                  onViewLead={(leadId, leadName) => {
-                    // This is the current lead, so we don't need to navigate
-                    console.log('Viewing lead:', leadName)
-                  }}
-                  onViewCampaign={(campaignId, campaignName) => {
-                    alert(`View campaign: ${campaignName} (ID: ${campaignId}) - navigation pending`)
-                  }}
-                />
-              </div>
             </TabsContent>
 
             {/* Campaigns Tab */}

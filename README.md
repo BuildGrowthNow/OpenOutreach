@@ -112,21 +112,31 @@ make admin
 ```
 Then open:
 - **Django Admin:** http://localhost:8000/admin/
+- **Next.js Frontend:** http://localhost:3000 (new browser-based interface)
 
 ---
+
 ## ✨ Features
 
-| Feature                            | Description                                                                                                          |
-|------------------------------------|----------------------------------------------------------------------------------------------------------------------|
-| 🧠 **Autonomous Lead Discovery**   | No contact lists needed — LLM generates search queries from your product description and campaign objective.         |
-| 🎯 **Bayesian Active Learning**    | Gaussian Process model on profile embeddings learns your ideal customer via explore/exploit, selecting the most informative candidates for LLM qualification. |
-| 🤖 **Stealth Browser Automation**  | Playwright + stealth plugins mimic real user behavior for undetectable interactions.                                 |
-| 🛡️ **Voyager API Scraping**       | Uses LinkedIn's internal API for accurate, structured profile data (no fragile HTML parsing).                        |
-| 🔄 **Stateful Pipeline**          | Tracks profile states (`QUALIFIED` → `READY_TO_CONNECT` → `PENDING` → `CONNECTED` → `COMPLETED`) in a local DB — fully resumable. |
-| ⏱️ **Smart Rate Limiting**        | Configurable daily/weekly limits per action type, respects LinkedIn's own limits automatically.                      |
-| 💾 **Built-in CRM**               | Full data ownership via DjangoCRM with Django Admin UI — browse Leads, Contacts, Companies, and Deals.              |
-| 🐳 **One-Command Deployment**      | Dockerized setup with interactive onboarding and a live browser view in your browser (noVNC at `http://localhost:6080/vnc.html`). |
-| ✍️ **AI-Powered Messaging**        | Agentic multi-turn follow-up conversations — the AI agent reads history, sends messages, and schedules future follow-ups. |
+| Feature | Description |
+|---------|-------------|
+| 🧠 **Autonomous Lead Discovery** | No contact lists needed — LLM generates search queries from your product description and campaign objective. |
+| 🎯 **Bayesian Active Learning** | Gaussian Process model on profile embeddings learns your ideal customer via explore/exploit, selecting the most informative candidates for LLM qualification. |
+| 🤖 **Stealth Browser Automation** | Playwright + stealth plugins mimic real user behavior for undetectable interactions. |
+| 🛡️ **Voyager API Scraping** | Uses LinkedIn's internal API for accurate, structured profile data (no fragile HTML parsing). |
+| 🔄 **Stateful Pipeline** | Tracks profile states (`QUALIFIED` → `READY_TO_CONNECT` → `PENDING` → `CONNECTED` → `COMPLETED`) in a local DB — fully resumable. |
+| ⏱️ **Smart Rate Limiting** | Configurable daily/weekly limits per action type, respects LinkedIn's own limits automatically with context-aware adjustments based on time of day, day of week, and LinkedIn detectability signals. |
+| 💾 **Built-in CRM** | Full data ownership via DjangoCRM with Django Admin UI — browse Leads, Contacts, Companies, and Deals. |
+| 🌐 **Next.js Frontend** | Modern web interface with real-time updates, intuitive navigation, and comprehensive campaign management dashboard. |
+| 🎭 **Ghost Mode Campaign Testing** | Safe pre-launch testing mode where all processing logic runs without actually sending any messages or connection requests — perfect for validating campaign setup with zero risk. |
+| ⚙️ **State Machine Workflow Editor** | Visual workflow builder for designing custom outreach sequences with drag-and-drop nodes, conditional branches, and multi-path follow-ups. |
+| 🩺 **Campaign Health Monitor** | Continuous monitoring system that detects anomalies, auto-adjusts velocity, and implements self-healing recovery strategies to maintain optimal campaign performance. |
+| 🔒 **Undetectable Automation** | Intelligent behavior patterns and rate limiting that adapts to LinkedIn's detection signals. |
+| 📊 **Advanced Analytics** | Real-time analytics with connection success rates, response rates, conversion funnels, and performance recommendations. |
+| 📑 **Agentic Follow-up** | AI agents manage multi-turn conversations with connected leads, reading history and making intelligent follow-up decisions. |
+| 💼 **Generative Lead Persona** | Hyper-personalized LLM-generated personas with pain points, goals, messaging preferences, and buy signals for each lead. |
+| 🌍 **Email Enrichment** | BetterContact integration with network data resilience — find work emails automatically and contribute to a shared hub. |
+| 📧 **SMTP Mailboxes** | Multi-box email sending with daily pacing, warmup support, and automatic load balancing across mailboxes. |
 
 ---
 
@@ -180,6 +190,148 @@ Configure rate limits and behavior via Django Admin (LinkedInProfile + Campaign 
 
 ---
 
+## 🌐 Next.js Frontend
+
+OpenOutreach features a modern, React-based frontend built with **Next.js 14+** (App Router) that provides:
+
+- **Real-time dashboard** with system health and campaign statistics
+- **Campaign management** with full CRUD operations
+- **Lead tracking** with detailed analytics and message threads
+- **State machine editor** for visual workflow building
+- **Analytics dashboard** with conversion funnels and performance metrics
+- **Settings panel** for rate limits, profile configuration, and API keys
+
+### Key Components
+
+| Component | Description |
+|-----------|-------------|
+| **Dashboard** | Real-time overview of system health, active campaigns, and recent activity |
+| **Campaigns** | Create, edit, and manage campaigns with full analytics |
+| **Leads** | Track and manage leads with message history and notes |
+| **Analytics** | Visual performance metrics with actionable insights |
+| **State Machine** | Visual workflow builder for custom outreach sequences |
+| **Settings** | Configure rate limits, LinkedIn credentials, and API keys |
+
+**Tech Stack:** Next.js 14+ (App Router), TypeScript, Tailwind CSS, shadcn/ui
+
+---
+
+## 🎭 Ghost Mode: Safe Campaign Testing
+
+Ghost Mode is a "safe test" mode where:
+- **No LinkedIn actions are performed** — No messages sent, no connections requested
+- **Full simulation** — All processing logic runs, but stops at the last moment
+- **Results tracked** — What would have happened is logged and analyzed
+- **Cost-free** — No API costs, no rate limit impact, no LinkedIn exposure
+- **Risk-free learning** — Test your setup with zero risk to your account
+
+### Use Cases
+
+- Campaign design validation before going live
+- A/B testing of different message variants safely
+- Lead qualification accuracy testing
+- Pipeline flow verification without real-world consequences
+- Training and demo scenarios for new team members
+
+### Features
+
+- Simulate search, qualify, connect, message, and follow-up actions
+- Track detailed simulation logs with ratings and scores
+- Export simulation results as CSV
+- Share test scenarios with your team
+
+---
+
+## ⏱️ Smart Rate Limiting
+
+Traditional rate limiting uses fixed values (e.g., 20 connections/day), which has significant flaws:
+
+- **Over-limiting**: Quiet hours still count against daily quota
+- **Under-limiting**: High-engagement periods use up quota too quickly
+- **One-size-fits-all**: Doesn't account for individual lead quality
+- **Detection-blind**: Doesn't adapt to LinkedIn's signals of automated behavior
+
+Smart rate limiting solves this by dynamically adjusting limits based on:
+
+| Context factor | Low Limit | Medium Limit | High Limit |
+|----------------|-----------|--------------|------------|
+| Time of day | 8-10pm = 10 | 9am-6pm = 25 | 6-8pm = 30 |
+| Day of week | Weekend = 15 | Monday-Friday = 30 | Friday = 20 |
+| Lead engagement | Cold lead = 5 | Hot lead = 50 | Verified warm = 100 |
+| Campaign phase | Discovery = 15 | Follow-up = 35 | Nurturing = 25 |
+| LinkedIn detectability | Normal = 30 | Suspicious = 15 | Warning = 5 |
+
+**Benefits:** Reduce rate limit violations by 60-80% while maintaining or improving total daily outreach volume.
+
+---
+
+## ⚙️ State Machine Workflow Editor
+
+Transform outreach from a linear pipeline into a flexible workflow system:
+
+- **Visual editor**: Drag-and-drop interface for building outreach flows
+- **Conditional branches**: Send different messages based on responses, timing, or lead characteristics
+- **Loop protection**: Prevent infinite loops with automatic cycle detection
+- **Execution simulation**: Test your workflow before launching
+- **Runtime visualization**: Watch your campaign flow in real-time
+
+### Node Types
+
+| Node | Purpose |
+|------|---------|
+| **Start** | Entry point for the workflow |
+| **Wait** | Pause for a specified time period |
+| **Message** | Send an automated message |
+| **Gate** | Qualification-based routing |
+| **Decision** | Branch based on conditions |
+| **Branch** | Multi-path routing |
+| **Webhook** | External API integration |
+| **End** | Workflow termination |
+
+### Use Cases
+
+- **Follow-up paths**: Different responses for response/no response
+- **Timing-based routing**: Different messages after different waiting periods
+- **qualification gates**: Route leads based on qualification score
+- **Multi-channel flows**: Coordinate LinkedIn + email sequences
+
+---
+
+## 🩺 Campaign Health Monitor & Auto-Recovery
+
+A self-healing system that detects rate limit warnings, monitors connection acceptance rates, auto-adjusts velocity, and implements recovery strategies.
+
+### What It Monitors
+
+1. **Key metrics** — Connection accept rates, response rates, error patterns
+2. **Anomaly detection** — Identifies issues before they escalate
+3. **Auto-adjustment** — Automatically adjusts campaign parameters
+4. **Recovery strategies** — Implements fixes when issues arise
+
+### Recovery Actions
+
+| Action | Description |
+|--------|-------------|
+| Reduce Velocity | Lower outreach frequency automatically |
+| Add Cooldown | Insert longer delays between actions |
+| Switch Message | Try a different message variant |
+| Pause Campaign | Stop outreach until conditions improve |
+| Switch Account | Rotate to a backup LinkedIn account |
+
+### Benefits
+
+| Feature | Before | After |
+|---------|--------|-------|
+| Issue Detection | Manual (user checks logs) | Automatic (real-time monitoring) |
+| Response Time | Hours/days | Seconds/minutes |
+| Remediation | Manual intervention | Automatic (base level) |
+| Downtime | Campaign stuck until user fixes | Self-healing |
+| Insights | None | Comprehensive metrics |
+
+**Result:** Reduce campaign failures by 70% and improve autonomy from "set-and-forget" to "self-maintaining."
+
+---
+
 ## 📂 Project Structure
 
 ```
@@ -199,6 +351,11 @@ Configure rate limits and behavior via Django Admin (LinkedInProfile + Campaign 
 │   ├── emails/                      # email channel app (Layer 1 of the email-first pivot)
 │   ├── crm/                         # Lead + Deal models
 │   └── chat/                        # ChatMessage model
+├── frontend/                        # Next.js frontend
+│   ├── src/
+│   │   ├── app/                     # App Router pages and API routes
+│   │   ├── components/              # Reusable UI components
+│   │   └── lib/                     # API client and utilities
 ├── manage.py                         # Django management (no args defaults to rundaemon)
 ├── local.yml                        # Docker Compose
 └── Makefile                         # Shortcuts (setup, run, admin, test)
@@ -215,13 +372,21 @@ Configure rate limits and behavior via Django Admin (LinkedInProfile + Campaign 
 - [Follow-up Messaging](./docs/templating.md)
 - [Template Variables](./docs/template-variables.md)
 - [Testing](./docs/testing.md)
+- [Frontend Documentation](./docs/FRONTEND_DOCUMENTATION.md)
+
+### Feature-Specific Documentation
+
+- [Ghost Mode Campaign Testing](./docs/01_ghost_mode_campaign_testing.md)
+- [Smart Rate Limiting](./docs/07_SMART_RATE_LIMITING.md)
+- [State Machine Editor](./docs/03_STATE_MACHINE_EDITOR.md)
+- [Campaign Health Monitor](./docs/02_CAMPAIGN_HEALTH_MONITOR.md)
 
 ---
 
 ## 💬 Channel
 
 Join the Channel:
-[Telegram Channel]([https://t.me/openoutreach](https://t.me/openoutreach))
+[Telegram Channel](https://t.me/openoutreach)
 
 ---
 

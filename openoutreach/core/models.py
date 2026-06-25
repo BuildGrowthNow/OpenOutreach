@@ -102,6 +102,10 @@ class Campaign(models.Model):
         choices=Status.choices,
         default=Status.ACTIVE,
     )
+    
+    # Timestamps
+    created_at: models.DateTimeField = models.DateTimeField(auto_now_add=True)  # type: ignore[var-annotated]
+    updated_at: models.DateTimeField = models.DateTimeField(auto_now=True)  # type: ignore[var-annotated]
 
     # Type hints for reverse relations (from other apps)
     state_graph: "CampaignStateGraph"

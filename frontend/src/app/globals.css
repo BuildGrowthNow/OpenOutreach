@@ -1,130 +1,745 @@
-@import "tailwindcss";
-@import "tw-animate-css";
-@import "shadcn/tailwind.css";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-@custom-variant dark (&:is(.dark *));
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
-  --color-ring: var(--ring);
-  --color-input: var(--input);
-  --color-border: var(--border);
-  --color-destructive: var(--destructive);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-accent: var(--accent);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-muted: var(--muted);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-secondary: var(--secondary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-primary: var(--primary);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-popover: var(--popover);
-  --color-card-foreground: var(--card-foreground);
-  --color-card: var(--card);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
+html {
+  scroll-behavior: auto;
 }
 
-:root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
-}
+@layer properties {
+  @property --button-shadow-opacity {
+    syntax: "<number>";
+    inherits: true;
+    initial-value: 0;
+  }
 
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  @property --button-shadow-spread {
+    syntax: "<number>";
+    inherits: true;
+    initial-value: 0;
+  }
+
+  @property --button-gradient-opacity {
+    syntax: "<number>";
+    inherits: true;
+    initial-value: 0;
+  }
+
+  @property --button-after-opacity {
+    syntax: "<number>";
+    inherits: true;
+    initial-value: 0;
+  }
+
+  @property --coord-y {
+    syntax: "<number>";
+    inherits: true;
+    initial-value: 0;
+  }
+
+  @property --coord-x {
+    syntax: "<number>";
+    inherits: true;
+    initial-value: 0;
+  }
 }
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    border-color: hsl(240, 3.7%, 15.9%);
   }
   body {
-    @apply bg-background text-foreground;
+    color: rgb(244 244 245);
+    background-color: rgb(9 9 11);
+    min-height: 100vh;
   }
-  html {
-    @apply font-sans;
+
+  h1, h2, h3, h4, h5, h6 {
+    font-weight: 700;
+    font-family: var(--font-roboto-slab), serif;
   }
+  
+  :root {
+    --background: 240 10% 4%;
+    --foreground: 0 0% 98%;
+    --card: 240 8% 7%;
+    --card-foreground: 0 0% 98%;
+    --popover: 240 8% 7%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 240 5% 84%;
+    --primary-foreground: 240 10% 4%;
+    --secondary: 240 4% 14%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 240 4% 14%;
+    --muted-foreground: 240 5% 64.9%;
+    --accent: 240 4% 14%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 3.7% 15.9%;
+    --input: 240 3.7% 15.9%;
+    --ring: 240 4.9% 83.9%;
+    --chart-1: 240 5% 84%;
+    --chart-2: 240 4% 64%;
+    --chart-3: 240 4% 46%;
+    --chart-4: 240 4% 30%;
+    --chart-5: 240 6% 22%;
+    --radius: 0.5rem;
+    
+    /* Emerald theme special colors */
+    --emerald-50: #ecfdf5;
+    --emerald-100: #d1fae5;
+    --emerald-200: #a7f3d0;
+    --emerald-300: #6ee7b7;
+    --emerald-400: #34d399;
+    --emerald-500: #10b981;
+    --emerald-600: #059669;
+    --emerald-700: #047857;
+    --emerald-800: #065f46;
+    --emerald-900: #064e3b;
+    --emerald-950: #022c22;
+  }
+  
+  .dark {
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 240 10% 3.9%;
+    --card-foreground: 0 0% 98%;
+    --popover: 240 10% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 240 5% 84%;
+    --primary-foreground: 240 10% 4%;
+    --secondary: 240 3.7% 15.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 240 3.7% 15.9%;
+    --muted-foreground: 240 5% 64.9%;
+    --accent: 240 3.7% 15.9%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 3.7% 15.9%;
+    --input: 240 3.7% 15.9%;
+    --ring: 240 4.9% 83.9%;
+    --chart-1: 240 5% 84%;
+    --chart-2: 240 4% 64%;
+    --chart-3: 240 4% 46%;
+    --chart-4: 240 4% 30%;
+    --chart-5: 240 6% 22%;
+  }
+}
+
+@layer components {
+  .particle-container {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    z-index: 0;
+  }
+
+  .particle {
+    position: absolute;
+    width: 2px;
+    height: 2px;
+    background-color: rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+  }
+
+  .glass-card {
+    border-radius: 0.75rem;
+    border: 1px solid rgba(39, 39, 42, 0.5);
+    background-color: rgba(9, 9, 11, 0.7);
+    backdrop-filter: blur(12px);
+  }
+
+  .gradient-text {
+    background-image: linear-gradient(to right, var(--primary), var(--secondary));
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent;
+  }
+
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.75rem;
+    border: 1px solid rgba(59, 59, 63, 0.5);
+    background-color: rgb(9, 9, 11);
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: rgb(244, 244, 245);
+    transition: background-color 0.2s ease;
+  }
+  .btn-primary:hover {
+    background-color: rgba(39, 39, 42, 0.8);
+  }
+
+  .btn-outline {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.75rem;
+    border: 1px solid rgba(59, 59, 63, 0.5);
+    background-color: transparent;
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: white;
+    transition: background-color 0.2s ease;
+  }
+  .btn-outline:hover {
+    background-color: rgba(9, 9, 11, 0.6);
+  }
+
+  .eyebrow-badge {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 9999px;
+    border: 1px dashed rgba(59, 59, 63, 0.5);
+    background-color: rgba(9, 9, 11, 0.6);
+    padding: 0.375rem 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: rgb(228, 228, 231);
+    backdrop-filter: blur(4px);
+  }
+  .eyebrow-badge strong {
+    font-weight: 600;
+    color: white;
+  }
+
+  /* Lengrowth brand button styles */
+  .lg-button {
+    --coord-x: 0;
+    --coord-y: 0;
+    --button-shadow-opacity: 0;
+    --button-shadow-spread: 0;
+    --button-after-opacity: 0;
+    --button-gradient-opacity: 0;
+    --button-text: rgb(244 244 245);
+    --button-border: rgba(255, 255, 255, 0.12);
+    --button-inner-bg: rgba(24, 24, 27, 0.96);
+    --button-inner-highlight: rgba(255, 255, 255, 0.04);
+    --button-inner-shadow: rgba(0, 0, 0, 0.25);
+    --button-shortcut-bg: rgba(255, 255, 255, 0.04);
+    --button-shortcut-border: rgba(255, 255, 255, 0.08);
+    --button-hover-border: var(--button-border);
+    --button-hover-inner-bg: var(--button-inner-bg);
+    --button-hover-gradient-opacity: 0.22;
+    --button-active-border: var(--button-hover-border);
+    --button-active-inner-bg: var(--button-hover-inner-bg);
+    --button-active-gradient-opacity: 0.32;
+    --button-gradient: conic-gradient(
+      from 180deg,
+      hsl(3 93% 48% / var(--button-gradient-opacity)) 0%,
+      hsl(26 91% 52% / var(--button-gradient-opacity)) 10%,
+      hsl(65 89% 46% / var(--button-gradient-opacity)) 20%,
+      hsl(122 86% 48% / var(--button-gradient-opacity)) 30%,
+      hsl(34 93% 48% / var(--button-gradient-opacity)) 40%,
+      hsl(48 76% 53% / var(--button-gradient-opacity)) 50%,
+      hsl(0 0% 70% / var(--button-gradient-opacity)) 60%,
+      hsl(0 0% 56% / var(--button-gradient-opacity)) 70%,
+      hsl(0 0% 42% / var(--button-gradient-opacity)) 80%,
+      hsl(0 0% 30% / var(--button-gradient-opacity)) 90%,
+      hsl(3 93% 48% / var(--button-gradient-opacity)) 100%
+    );
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    padding: 1px;
+    border: 1px solid var(--button-border);
+    border-radius: 0.75rem;
+    background-color: rgb(255 255 255 / 3%);
+    background-image: var(--button-gradient);
+    background-size: calc(100% + 2px);
+    background-position: -1px -1px;
+    color: var(--button-text);
+    cursor: pointer;
+    white-space: nowrap;
+    box-shadow: 0 8px calc(var(--button-shadow-spread) * 1px) -8px rgba(0, 0, 0, calc(var(--button-shadow-opacity) * 0.01));
+    transition:
+      --button-shadow-opacity 300ms ease,
+      --button-shadow-spread 300ms ease,
+      --button-gradient-opacity 300ms ease,
+      --button-after-opacity 300ms ease,
+      transform 180ms ease,
+      box-shadow 300ms ease,
+      color 200ms ease,
+      background-image 300ms ease,
+      background-color 300ms ease,
+      border-color 300ms ease,
+      opacity 200ms ease;
+  }
+
+  .lg-button::before,
+  .lg-button::after {
+    content: '';
+    pointer-events: none;
+    position: absolute;
+    border-radius: inherit;
+    background-image: var(--button-gradient);
+    transition:
+      opacity 280ms ease,
+      transform 120ms linear;
+  }
+
+  .lg-button::before {
+    display: none;
+  }
+
+  .lg-button::after {
+    width: 180%;
+    height: 180%;
+    filter: saturate(2) blur(5px);
+    opacity: calc(var(--button-after-opacity) / 3);
+    transform: translate(calc(var(--coord-x) * 1px / 1.5), calc(var(--coord-y) * -1px / 1.5));
+    will-change: transform, opacity;
+  }
+
+  .lg-button:hover {
+    --button-shadow-opacity: 16;
+    --button-shadow-spread: 16;
+    --button-after-opacity: 0.7;
+    --button-gradient-opacity: var(--button-hover-gradient-opacity);
+    border-color: var(--button-hover-border);
+    transform: translateY(-1px);
+  }
+
+  .lg-button:active {
+    --button-shadow-opacity: 26;
+    --button-shadow-spread: 26;
+    --button-after-opacity: 0.9;
+    --button-gradient-opacity: var(--button-active-gradient-opacity);
+    border-color: var(--button-active-border);
+    transform: translateY(0);
+  }
+
+  .lg-button:disabled,
+  .lg-button[aria-disabled='true'] {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+  }
+
+  .lg-button__inner {
+    position: relative;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: auto;
+    max-width: 100%;
+    min-width: 100%;
+    min-height: 100%;
+    flex-wrap: nowrap;
+    gap: 0.625rem;
+    white-space: nowrap;
+    border-radius: calc(0.75rem - 0.1rem);
+    background: var(--button-inner-bg);
+    padding: var(--button-inner-padding-y, 0.7rem) var(--button-inner-padding-x, 1rem);
+    box-shadow:
+      inset 0 2px 1px var(--button-inner-highlight),
+      inset 0 -2px 3px var(--button-inner-shadow);
+    transition: background 280ms ease, box-shadow 280ms ease;
+  }
+
+  .lg-button:not(:has(.lg-button__inner)) {
+    z-index: 0;
+    gap: 0.625rem;
+    padding: var(--button-inner-padding-y, 0.7rem) var(--button-inner-padding-x, 1rem);
+    background: var(--button-inner-bg);
+    box-shadow:
+      inset 0 2px 1px var(--button-inner-highlight),
+      inset 0 -2px 3px var(--button-inner-shadow),
+      0 8px calc(var(--button-shadow-spread) * 1px) -8px rgba(0, 0, 0, calc(var(--button-shadow-opacity) * 0.01));
+  }
+
+  .lg-button:not(:has(.lg-button__inner))::after {
+    z-index: -1;
+  }
+
+  .lg-button__inner::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 62%;
+    height: 62%;
+    border-radius: inherit;
+    pointer-events: none;
+    background-image: var(--button-gradient);
+    opacity: calc(var(--button-gradient-opacity) * 1.35);
+    transform: translate(
+      calc(-50% + (var(--coord-x) * 1px / 3)),
+      calc(-50% + (var(--coord-y) * -1px / 3))
+    );
+    filter: saturate(1.35) blur(18px);
+    transition:
+      opacity 300ms ease,
+      transform 0ms linear;
+    will-change: transform, opacity;
+  }
+
+  .lg-button__label {
+    position: relative;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1 1 auto;
+    gap: 0.5rem;
+    flex-wrap: nowrap;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    line-height: 1;
+  }
+
+  .lg-button__label > * {
+    min-width: 0;
+  }
+
+  .lg-button__shortcut {
+    position: relative;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.8rem;
+    flex-shrink: 0;
+    padding: 0.22rem 0.45rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--button-shortcut-border);
+    background: var(--button-shortcut-bg);
+    color: inherit;
+    font-size: 0.72em;
+    font-weight: 500;
+    line-height: 1;
+    white-space: nowrap;
+  }
+
+  .lg-button__shortcut > svg {
+    width: 0.95rem;
+    height: 0.95rem;
+  }
+
+  .lg-button.w-full {
+    width: 100%;
+  }
+
+  .lg-button.w-full .lg-button__inner {
+    width: 100%;
+  }
+
+  .lg-button:hover .lg-button__inner {
+    background: var(--button-hover-inner-bg);
+  }
+
+  .lg-button:active .lg-button__inner {
+    background: var(--button-active-inner-bg);
+  }
+
+  .lg-button--default {
+    --button-text: rgb(244 244 245);
+    --button-border: rgba(255, 255, 255, 0.12);
+    --button-hover-border: rgba(255, 255, 255, 0.2);
+    --button-inner-bg: rgba(39, 39, 42, 0.9);
+    --button-inner-highlight: rgba(255, 255, 255, 0.05);
+    --button-inner-shadow: rgba(0, 0, 0, 0.32);
+    --button-shortcut-bg: rgba(255, 255, 255, 0.05);
+    --button-shortcut-border: rgba(255, 255, 255, 0.09);
+    --button-hover-inner-bg: rgba(63, 63, 70, 0.95);
+    --button-hover-gradient-opacity: 0;
+    --button-active-inner-bg: rgba(82, 82, 91, 0.98);
+    --button-active-gradient-opacity: 0;
+  }
+
+  .lg-button--outline,
+  .lg-button--secondary {
+    --button-text: rgb(244 244 245);
+    --button-border: rgba(255, 255, 255, 0.12);
+    --button-inner-bg: rgba(24, 24, 27, 0.96);
+    --button-inner-highlight: rgba(255, 255, 255, 0.04);
+    --button-inner-shadow: rgba(0, 0, 0, 0.25);
+    --button-shortcut-bg: rgba(255, 255, 255, 0.04);
+    --button-shortcut-border: rgba(255, 255, 255, 0.08);
+    --button-hover-inner-bg: rgba(39, 39, 42, 0.9);
+    --button-hover-gradient-opacity: 0;
+    --button-active-inner-bg: rgba(63, 63, 70, 0.95);
+    --button-active-gradient-opacity: 0;
+  }
+
+  .lg-button--secondary {
+    --button-border: rgba(255, 255, 255, 0.14);
+    --button-inner-bg: rgba(39, 39, 42, 0.9);
+    --button-inner-highlight: rgba(255, 255, 255, 0.05);
+    --button-inner-shadow: rgba(0, 0, 0, 0.32);
+    --button-shortcut-bg: rgba(255, 255, 255, 0.05);
+    --button-shortcut-border: rgba(255, 255, 255, 0.09);
+  }
+
+  .lg-button--ghost {
+    --button-border: transparent;
+    --button-inner-bg: transparent;
+    --button-inner-highlight: transparent;
+    --button-inner-shadow: transparent;
+    --button-shortcut-bg: rgba(255, 255, 255, 0.03);
+    --button-shortcut-border: transparent;
+    --button-hover-inner-bg: rgba(255, 255, 255, 0.1);
+    --button-hover-gradient-opacity: 0;
+    --button-active-inner-bg: rgba(255, 255, 255, 0.15);
+    --button-active-gradient-opacity: 0;
+    background-color: transparent;
+  }
+  
+  .lg-button--ghost:hover {
+    --button-after-opacity: 0;
+  }
+  
+  .lg-button--ghost:active {
+    --button-after-opacity: 0;
+  }
+
+  .lg-button--destructive {
+    --button-text: rgb(255 255 255);
+    --button-border: rgba(127, 29, 29, 0.9);
+    --button-inner-bg: rgba(127, 29, 29, 0.94);
+    --button-inner-highlight: rgba(255, 255, 255, 0.08);
+    --button-inner-shadow: rgba(64, 0, 0, 0.45);
+    --button-shortcut-bg: rgba(255, 255, 255, 0.08);
+    --button-shortcut-border: rgba(255, 255, 255, 0.12);
+    --button-hover-inner-bg: rgba(153, 27, 27, 0.98);
+    --button-hover-gradient-opacity: 0;
+    --button-active-inner-bg: rgba(180, 25, 25, 0.99);
+    --button-active-gradient-opacity: 0;
+  }
+
+  .lg-button--link {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    overflow: visible;
+  }
+
+  .lg-button--link::before,
+  .lg-button--link::after {
+    display: none;
+  }
+
+  .lg-button--link .lg-button__inner {
+    min-width: auto;
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .lg-button--link:not(:has(.lg-button__inner)) {
+    padding: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .lg-button--size-default {
+    --button-inner-padding-y: 0.65rem;
+    --button-inner-padding-x: 1rem;
+    font-size: 0.875rem;
+  }
+
+  .lg-button--size-sm {
+    --button-inner-padding-y: 0.45rem;
+    --button-inner-padding-x: 0.8rem;
+    font-size: 0.75rem;
+  }
+
+  .lg-button--size-lg {
+    --button-inner-padding-y: 0.8rem;
+    --button-inner-padding-x: 1.15rem;
+    font-size: 0.95rem;
+  }
+
+  .lg-button--size-icon {
+    --button-inner-padding-y: 0.6rem;
+    --button-inner-padding-x: 0.6rem;
+  }
+
+  .lg-button--size-icon .lg-button__inner {
+    min-width: fit-content;
+  }
+
+  /* Emerald Theme Button */
+  .lg-button--emerald {
+    --button-text: rgb(255 255 255);
+    --button-border: rgba(16, 185, 129, 0.3);
+    --button-inner-bg: rgba(5, 150, 105, 0.9);
+    --button-inner-highlight: rgba(255, 255, 255, 0.1);
+    --button-inner-shadow: rgba(0, 0, 0, 0.4);
+    --button-shortcut-bg: rgba(255, 255, 255, 0.08);
+    --button-shortcut-border: rgba(16, 185, 129, 0.4);
+    --button-hover-inner-bg: rgba(16, 185, 129, 0.95);
+    --button-hover-border: rgba(16, 185, 129, 0.5);
+    --button-hover-gradient-opacity: 0.3;
+    --button-active-inner-bg: rgba(6, 182, 121, 1);
+    --button-active-gradient-opacity: 0.4;
+    --button-active-border: rgba(16, 185, 129, 0.6);
+    --button-gradient: conic-gradient(
+      from 180deg,
+      hsl(154 72% 46% / var(--button-gradient-opacity)) 0%,
+      hsl(138 65% 38% / var(--button-gradient-opacity)) 20%,
+      hsl(160 70% 36% / var(--button-gradient-opacity)) 40%,
+      hsl(154 72% 46% / var(--button-gradient-opacity)) 60%,
+      hsl(138 65% 38% / var(--button-gradient-opacity)) 80%,
+      hsl(160 70% 36% / var(--button-gradient-opacity)) 100%
+    );
+  }
+
+  .lg-feature-card {
+    width: 100%;
+    white-space: normal;
+    --button-gradient: conic-gradient(
+      from 180deg,
+      hsl(154 72% 46% / var(--button-gradient-opacity)) 0%,
+      hsl(32 93% 60% / var(--button-gradient-opacity)) 25%,
+      hsl(0 0% 62% / var(--button-gradient-opacity)) 50%,
+      hsl(0 0% 42% / var(--button-gradient-opacity)) 75%,
+      hsl(154 72% 46% / var(--button-gradient-opacity)) 100%
+    );
+  }
+
+  .lg-feature-card .lg-button__inner {
+    width: 100%;
+  }
+
+  .lg-feature-card .lg-button__inner::before {
+    width: 124%;
+    height: 124%;
+    filter: saturate(1.4) blur(24px);
+  }
+
+  .lg-feature-card__inner {
+    min-height: 100%;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 1.25rem;
+    padding: 4rem 1.5rem 1.75rem;
+    white-space: normal;
+    text-align: center;
+  }
+
+  .lg-feature-card__step {
+    position: absolute;
+    top: 1.5rem;
+    left: 50%;
+    z-index: 2;
+    display: inline-flex;
+    height: 2rem;
+    width: 2rem;
+    transform: translateX(-50%);
+    align-items: center;
+    justify-content: center;
+    border-radius: 9999px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(9, 9, 11, 0.92);
+    color: rgb(228 228 231);
+    font-size: 0.875rem;
+    font-weight: 600;
+    box-shadow: 0 0 0 6px rgba(0, 0, 0, 0.8);
+  }
+
+  .lg-feature-card__icon {
+    position: relative;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 4.5rem;
+  }
+
+  .lg-feature-card__title {
+    position: relative;
+    z-index: 1;
+    margin: 0;
+    color: rgb(255 255 255);
+    font-size: 1.25rem;
+    font-weight: 700;
+    line-height: 1.25;
+    white-space: normal;
+  }
+
+  .lg-feature-card__description {
+    position: relative;
+    z-index: 1;
+    margin: 0;
+    color: rgb(161 161 170);
+    line-height: 1.65;
+    white-space: normal;
+    text-wrap: balance;
+  }
+}
+
+@media (hover: none), (pointer: coarse), (max-width: 1024px) {
+  .lg-button,
+  .lg-button:hover,
+  .lg-button:active {
+    --button-shadow-opacity: 0;
+    --button-shadow-spread: 0;
+    --button-after-opacity: 0;
+    --button-gradient-opacity: 0;
+    transform: none;
+    transition-duration: 140ms;
+  }
+
+  .lg-button::after,
+  .lg-button__inner::before {
+    opacity: 0;
+    filter: none;
+    transform: translate(-50%, -50%);
+  }
+
+  .lg-feature-card {
+    background-image: none;
+  }
+
+  .lg-feature-card .lg-button__inner {
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  }
+}
+
+/* Add this to your globals.css file */
+.blob-inverse {
+  mix-blend-mode: difference;
+}
+
+.blob-overlay {
+  position: relative;
+  z-index: 1;
+}
+
+.blob-overlay::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-color: rgba(24, 24, 27, 0.9);
+  z-index: -1;
+  border-radius: inherit;
+}
+
+.blob-contrast {
+  position: relative;
+  z-index: 1;
+  background-color: rgba(24, 24, 27, 0.95);
+  box-shadow: 0 10px 24px -12px rgba(0, 0, 0, 0.6), 0 4px 8px -4px rgba(0, 0, 0, 0.35);
+}
+
+.protected-page-shell > .container {
+  max-width: 80rem !important;
 }

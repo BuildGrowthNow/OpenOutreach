@@ -68,7 +68,8 @@ import {
   Message,
   HealthStatus,
   Pagination,
-  LinkMetrics
+  LinkMetrics,
+  LinkedInProfileHealthResponse
 } from '@/lib/types/components'
 
 // RateLimits type is no longer exported from components.ts
@@ -89,6 +90,52 @@ export async function getCampaigns(
 
 export async function getCampaign(id: string): Promise<ApiResponse<Campaign>> {
   return get(`/api/campaigns/${id}`)
+}
+
+// Ghost Mode API
+export interface GhostSimulationLog {
+  id: number
+  action_type: string
+  target_name: string
+  target_url: string
+  result_data: Record<string, unknown>
+  rating: number | null
+  score: number | null
+  started_at: string
+  completed_at: string
+  simulated_action: Record<string, unknown>
+}
+
+export interface GhostSimulationResponse {
+  success: boolean
+  campaign_id: number
+  total: number
+  simulations: GhostSimulationLog[]
+}
+
+export async function getGhostModeSimulations(campaignId: string): Promise<ApiResponse<GhostSimulationResponse>> {
+  return get(`/api/campaigns/${campaignId}/ghost-mode/simulations`)
+}
+
+export async function startGhostMode(campaignId: string): Promise<ApiResponse<{
+  success: boolean
+  ghost_campaign_id: number
+  message: string
+  created: boolean
+}>> {
+  return post(`/api/campaigns/${campaignId}/ghost-mode/action`, { action: 'start' })
+}
+
+export async function stopGhostMode(campaignId: string): Promise<ApiResponse<{
+  success: boolean
+  message: string
+}>> {
+  return post(`/api/campaigns/${campaignId}/ghost-mode/action`, { action: 'stop' })
+}
+
+// Targeted polling - only fetch campaign status for performance
+export async function getCampaignStatus(id: string): Promise<ApiResponse<{ status: string }>> {
+  return get(`/api/campaigns/${id}/status`)
 }
 
 export async function createCampaign(data: Partial<Campaign>): Promise<ApiResponse<Campaign>> {
@@ -285,12 +332,36 @@ export async function reScrapeLeadProfile(id: string): Promise<ApiResponse<{ suc
 export async function getMessages(
   campaign_id?: string,
   deal_id?: string,
+  lead_id?: string,
   page?: number,
   limit?: number
 ): Promise<ApiResponse<{ data: Message[]; pagination: Pagination }>> {
+  // Use lead_id endpoint if available (most specific)
+  if (lead_id) {
+    const params: Record<string, string> = {}
+    if (page) params.page = page.toString()
+    if (limit) params.limit = limit.toString()
+    return get(`/api/leads/${lead_id}/messages`, params)
+  }
+  
+  // Use deal_id endpoint if available
+  if (deal_id) {
+    const params: Record<string, string> = {}
+    if (page) params.page = page.toString()
+    if (limit) params.limit = limit.toString()
+    return get(`/api/deals/${deal_id}/messages`, params)
+  }
+  
+  // Use campaign_id endpoint if available
+  if (campaign_id) {
+    const params: Record<string, string> = {}
+    if (page) params.page = page.toString()
+    if (limit) params.limit = limit.toString()
+    return get(`/api/campaigns/${campaign_id}/messages`, params)
+  }
+  
+  // Fallback to /api/messages if none specified (backend should handle this)
   const params: Record<string, string> = {}
-  if (campaign_id) params.campaign_id = campaign_id
-  if (deal_id) params.deal_id = deal_id
   if (page) params.page = page.toString()
   if (limit) params.limit = limit.toString()
   return get('/api/messages', params)
@@ -298,10 +369,10 @@ export async function getMessages(
 
 // Send message to lead
 export async function sendMessageToLead(
-  deal_id: string,
+  lead_id: string,
   content: string
 ): Promise<ApiResponse<{ success: boolean; message: Message }>> {
-  return post(`/api/leads/${deal_id}/messages`, { content, is_outgoing: true })
+  return post(`/api/leads/${lead_id}/messages`, { content, is_outgoing: true })
 }
 
 // Lead Notes API
@@ -395,12 +466,29 @@ export async function getRateLimits(): Promise<ApiResponse<Settings['rate_limits
   return get('/api/settings/rate-limits')
 }
 
+export interface LinkedinProfileRateLimit {
+  profile_id: number
+  profile_username: string
+  base_limit: number
+  effective_limit: number
+  remaining: number
+  use_multiplier: number
+  day_multiplier: number
+  detectability_score: number
+}
+
 export interface DailyUsageResponse {
   daily_connections_sent: number
   daily_messages_sent: number
-  daily_limit: number
+  daily_limit: number  // Base limit (for backward compatibility)
+  effective_limit: number  // Context-aware effective limit
+  remaining: number  // Total remaining across all profiles
+  rate_limit_status: 'normal' | 'caution' | 'warning' | 'exceeded'
+  warning_message?: string
+  warning_level?: 'low' | 'medium' | 'high'
   last_reset: string
   reset_frequency: string
+  linkedin_profiles: LinkedinProfileRateLimit[]
 }
 
 export async function getDailyUsage(): Promise<ApiResponse<DailyUsageResponse>> {
@@ -458,7 +546,7 @@ export async function validateStateMachine(
   campaignId: string,
   data: StateMachineResponse
 ): Promise<ApiResponse<{ is_valid: boolean; errors: string[]; warnings: Array<{ type: string; message: string }> }>> {
-  return post(`/api/campaigns/${campaignId}/state-machine/validate`, data as unknown)
+  return post(`/api/campaigns/${campaignId}/state-machine/validate`, data as unknown as Record<string, unknown>)
 }
 
 export interface SimulationResult {
@@ -516,7 +604,7 @@ export async function simulateStateMachineExecution(
     error: string | null;
   };
 }>> {
-  return post(`/api/campaigns/${campaignId}/state-machine/simulate`, data)
+  return post(`/api/campaigns/${campaignId}/state-machine/simulate`, data as unknown as Record<string, unknown>)
 }
 
 // LinkedIn Credentials API - Internal representation (with sensitive data)
@@ -606,7 +694,7 @@ export interface CreateLinkedInCredentialsData {
 export async function createLinkedInCredentials(
   data: CreateLinkedInCredentialsData
 ): Promise<ApiResponse<{ success: boolean; id: number; message: string; credentials: LinkedInCredentials }>> {
-  return post('/api/linkedin-credentials', data)
+  return post('/api/linkedin-credentials', data as unknown as Record<string, unknown>)
 }
 
 export interface LinkedInCredentialsUpdate {
@@ -653,6 +741,11 @@ export interface LinkedInProfile {
 
 export async function getLinkedInProfiles(): Promise<ApiResponse<{ profiles: LinkedInProfile[]; count: number }>> {
   return get('/api/linkedin-profiles')
+}
+
+// LinkedIn Profile Health API
+export async function getLinkedInProfileHealth(): Promise<ApiResponse<LinkedInProfileHealthResponse>> {
+  return get('/api/linkedin-profile-health')
 }
 
 // Upload campaign leads (CSV)

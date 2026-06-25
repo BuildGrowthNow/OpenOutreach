@@ -6,6 +6,8 @@ from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 
 from openoutreach.core.models import SiteConfig
+from openoutreach.linkedin.models import LinkedInProfile
+from openoutreach.linkedin.services.smart_rate_limits import SmartRateLimiter, smart_get_remaining
 
 
 class SettingsView(APIView):
@@ -96,14 +98,14 @@ class SettingsView(APIView):
 
 class DailyUsageView(APIView):
     """
-    API view for getting daily usage statistics.
+    API view for getting daily usage statistics with context-aware rate limiting.
     
-    GET /api/settings/daily-usage - Get daily usage statistics
+    GET /api/settings/daily-usage - Get daily usage statistics with effective limits
     """
     permission_classes = [IsAuthenticated]
     
     def get(self, request):
-        """Get daily usage statistics."""
+        """Get daily usage statistics with effective rate limits."""
         from openoutreach.linkedin.models import ActionLog
         from django.utils import timezone
         from datetime import date
@@ -124,7 +126,55 @@ class DailyUsageView(APIView):
         
         # Get the daily connection limit from site config
         config = SiteConfig.load()
-        daily_limit = config.daily_connection_limit
+        base_daily_limit = config.daily_connection_limit
+        
+        # Get effective rate limits per LinkedIn profile (context-aware)
+        effective_limits = []
+        linkedin_profiles = LinkedInProfile.objects.filter(user=request.user)
+        
+        for profile in linkedin_profiles:
+             limiter = SmartRateLimiter(profile)
+             effective_limit = limiter.context.get_effective_limit('connect')
+             remaining = limiter.get_remaining_quota('connect')
+             effective_limits.append({
+                 'profile_id': profile.id,  # type: ignore[attr-defined]
+                 'profile_username': profile.linkedin_username,
+                 'base_limit': base_daily_limit,
+                 'effective_limit': effective_limit,
+                 'remaining': remaining,
+                 'use_multiplier': limiter.context.time_of_day_limit_multiplier,
+                 'day_multiplier': limiter.context.day_of_week_limit_multiplier,
+                 'detectability_score': limiter.context.detectability_score,
+             })
+        
+        # Determine the global effective limit (minimum across all profiles)
+        # This is what actually constrains the system
+        global_effective_limit = min(
+            [limit['effective_limit'] for limit in effective_limits] or [base_daily_limit]
+        )
+        
+        # Calculate remaining global quota
+        global_remaining = sum(limit['remaining'] for limit in effective_limits)
+        
+        # Calculate daily progress including rate limit status
+        rate_limit_status = 'normal'
+        warning_message = None
+        warning_level = None
+        
+        if daily_connections_sent >= global_effective_limit:
+            rate_limit_status = 'exceeded'
+            warning_message = f"Rate limit exceeded! You've sent {daily_connections_sent} connections but your effective limit is {global_effective_limit}"
+            warning_level = 'high'
+        elif daily_connections_sent >= global_effective_limit * 0.8:
+            rate_limit_status = 'warning'
+            remaining = max(0, global_effective_limit - daily_connections_sent)
+            warning_message = f"Approaching rate limit! You have {remaining} connections remaining out of {global_effective_limit} effective limit today"
+            warning_level = 'medium'
+        elif daily_connections_sent >= global_effective_limit * 0.5:
+            rate_limit_status = 'caution'
+            remaining = max(0, global_effective_limit - daily_connections_sent)
+            warning_message = f"Rate limit progress: {remaining} connections remaining out of {global_effective_limit} effective limit today"
+            warning_level = 'low'
         
         # Determine last reset time (midnight of the current day)
         last_reset = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
@@ -135,9 +185,15 @@ class DailyUsageView(APIView):
         return Response({
             'daily_connections_sent': daily_connections_sent,
             'daily_messages_sent': daily_messages_sent,
-            'daily_limit': daily_limit,
+            'daily_limit': base_daily_limit,  # Base limit for backward compatibility
+            'effective_limit': global_effective_limit,  # Context-aware effective limit
+            'remaining': global_remaining,  # Total remaining across all profiles
+            'rate_limit_status': rate_limit_status,  # 'normal', 'caution', 'warning', 'exceeded'
+            'warning_message': warning_message,
+            'warning_level': warning_level,
             'last_reset': last_reset,
             'reset_frequency': reset_frequency,
+            'linkedin_profiles': effective_limits,  # Per-profile breakdown
         })
 
 

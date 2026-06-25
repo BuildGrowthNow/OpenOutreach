@@ -28,29 +28,29 @@ function toSnakeCase(str: string): string {
   return str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
 }
 
-export function keysToCamel<T>(obj: any): T {
+function keysToCamelDeep(obj: unknown): unknown {
   if (Array.isArray(obj)) {
-    return obj.map((v) => keysToCamel(v)) as any
-  } else if (obj !== null && obj !== undefined && obj.constructor === Object) {
+    return obj.map((v) => keysToCamelDeep(v))
+  } else if (obj !== null && obj !== undefined && typeof obj === 'object' && obj.constructor === Object) {
     return Object.keys(obj).reduce(
       (result, key) => ({
         ...result,
-        [toCamelCase(key)]: keysToCamel(obj[key]),
+        [toCamelCase(key)]: keysToCamelDeep((obj as Record<string, unknown>)[key]),
       }),
       {}
-    ) as T
+    )
   }
   return obj
 }
 
-export function keysToSnake(obj: any): any {
+function keysToSnakeDeep(obj: unknown): unknown {
   if (Array.isArray(obj)) {
-    return obj.map((v) => keysToSnake(v))
-  } else if (obj !== null && obj !== undefined && obj.constructor === Object) {
+    return obj.map((v) => keysToSnakeDeep(v))
+  } else if (obj !== null && obj !== undefined && typeof obj === 'object' && obj.constructor === Object) {
     return Object.keys(obj).reduce(
       (result, key) => ({
         ...result,
-        [toSnakeCase(key)]: keysToSnake(obj[key]),
+        [toSnakeCase(key)]: keysToSnakeDeep((obj as Record<string, unknown>)[key]),
       }),
       {}
     )
@@ -69,13 +69,8 @@ async function getHeaders() {
   }
 }
 
-async function handleResponse<T>(response: Response): Promise<ApiResponse<T>> {
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}))
-    throw new ApiError(response.status, errorData.error || errorData.message || "An error occurred")
-  }
-  const data = await response.json()
-  return { data: keysToCamel<T>(data) }
+function handleResponse<T>(data: unknown): ApiResponse<T> {
+  return { data: data as T }
 }
 
 export async function get<T>(path: string, params?: Record<string, string>): Promise<ApiResponse<T>> {
@@ -94,20 +89,26 @@ export async function get<T>(path: string, params?: Record<string, string>): Pro
     cache: "no-store",
     credentials: 'include', // Include cookies for cross-origin requests
   })
-  return handleResponse<T>(response)
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}))
+    throw new ApiError(response.status, errorData.error || errorData.message || "An error occurred")
+  }
+  const data = await response.json()
+  return handleResponse<T>(keysToCamelDeep(data))
 }
 
-export async function post<T>(path: string, body?: unknown): Promise<ApiResponse<T>> {
+export async function post<T>(path: string, body?: Record<string, unknown> | FormData): Promise<ApiResponse<T>> {
   const url = new URL(path, API_URL)
   const headers = await getHeaders()
   
-  let finalBody: any = body
-  let finalHeaders: any = { ...headers }
+  let finalBody: BodyInit | undefined = undefined
+  const finalHeaders: Record<string, string> = { ...headers }
   
   if (body instanceof FormData) {
     delete finalHeaders["Content-Type"]
-  } else {
-    finalBody = JSON.stringify(keysToSnake(body))
+    finalBody = body
+  } else if (body !== undefined) {
+    finalBody = JSON.stringify(keysToSnakeDeep(body))
   }
   
   const response = await fetch(url.toString(), {
@@ -117,7 +118,12 @@ export async function post<T>(path: string, body?: unknown): Promise<ApiResponse
     cache: "no-store",
     credentials: 'include', // Include cookies for cross-origin requests
   })
-  return handleResponse<T>(response)
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}))
+    throw new ApiError(response.status, errorData.error || errorData.message || "An error occurred")
+  }
+  const data = await response.json()
+  return handleResponse<T>(keysToCamelDeep(data))
 }
 
 export async function patch<T>(path: string, body?: Record<string, unknown>): Promise<ApiResponse<T>> {
@@ -126,11 +132,16 @@ export async function patch<T>(path: string, body?: Record<string, unknown>): Pr
   const response = await fetch(url.toString(), {
     method: "PATCH",
     headers,
-    body: JSON.stringify(keysToSnake(body)),
+    body: body ? JSON.stringify(keysToSnakeDeep(body)) : undefined,
     cache: "no-store",
     credentials: 'include', // Include cookies for cross-origin requests
   })
-  return handleResponse<T>(response)
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}))
+    throw new ApiError(response.status, errorData.error || errorData.message || "An error occurred")
+  }
+  const data = await response.json()
+  return handleResponse<T>(keysToCamelDeep(data))
 }
 
 export async function del<T>(path: string): Promise<ApiResponse<T>> {
@@ -142,6 +153,10 @@ export async function del<T>(path: string): Promise<ApiResponse<T>> {
     cache: "no-store",
     credentials: 'include', // Include cookies for cross-origin requests
   })
-  return handleResponse<T>(response)
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}))
+    throw new ApiError(response.status, errorData.error || errorData.message || "An error occurred")
+  }
+  const data = await response.json()
+  return handleResponse<T>(keysToCamelDeep(data))
 }
-

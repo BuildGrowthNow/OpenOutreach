@@ -12,6 +12,10 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/app/auth-provider'
+import { Badge } from '@/components/ui/badge'
+import { useEffect, useState } from 'react'
+import { getLinkedInProfileHealth } from '@/lib/api/dashboard'
+import { LinkedInProfileHealthResponse } from '@/lib/types/components'
 
 interface HeaderProps {
   onMenuClick: () => void
@@ -22,10 +26,90 @@ interface HeaderProps {
 
 const Header = ({ onMenuClick, theme, toggleTheme, className }: HeaderProps) => {
   const { isAuthenticated } = useAuth()
+  const [linkedinHealth, setLinkedinHealth] = useState<LinkedInProfileHealthResponse | null>(null)
+  const [loadingHealth, setLoadingHealth] = useState(true)
 
-  if (!isAuthenticated) {
-    return null
+  const fetchLinkedInHealth = async () => {
+    try {
+      const response = await getLinkedInProfileHealth()
+      if (response.data) {
+        setLinkedinHealth(response.data)
+      }
+    } catch (error) {
+      console.error('Failed to fetch LinkedIn profile health:', error)
+    } finally {
+      setLoadingHealth(false)
+    }
   }
+
+  // Get the worst health status among all profiles
+  const getOverallHealthStatus = () => {
+    if (!linkedinHealth?.profiles || linkedinHealth.profiles.length === 0) {
+      return { label: 'No Profile', color: 'bg-slate-500' }
+    }
+
+    // Process profiles to find worst status
+    let worstStatus: 'neutral' | 'locked' | 'expired' | 'invalid' | 'active' = 'neutral'
+    
+    // Sort profiles by severity (invalid > locked > expired > active > neutral)
+    for (const profile of linkedinHealth.profiles) {
+      if (profile.credentials_status === 'invalid') {
+        return { label: 'LinkedIn Invalid', color: 'bg-red-500' }
+      }
+    }
+    
+    for (const profile of linkedinHealth.profiles) {
+      if (profile.credentials_status === 'locked') {
+        worstStatus = 'locked'
+      }
+    }
+    
+    for (const profile of linkedinHealth.profiles) {
+      if (profile.credentials_status === 'expired') {
+        if (worstStatus === 'neutral') {
+          worstStatus = 'expired'
+        }
+      }
+    }
+    
+    for (const profile of linkedinHealth.profiles) {
+      if (profile.credentials_status === 'active') {
+        if (worstStatus === 'neutral') {
+          worstStatus = 'active'
+        }
+      }
+    }
+
+    const statusColors: Record<'neutral' | 'locked' | 'expired' | 'invalid' | 'active', { label: string; color: string }> = {
+      active: { label: 'LinkedIn Active', color: 'bg-green-500' },
+      locked: { label: 'LinkedIn Locked', color: 'bg-amber-500' },
+      expired: { label: 'LinkedIn Expired', color: 'bg-rose-500' },
+      invalid: { label: 'LinkedIn Invalid', color: 'bg-red-500' },
+      neutral: { label: 'LinkedIn', color: 'bg-slate-500' },
+    }
+
+    return statusColors[worstStatus]
+  }
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      (async () => {
+        try {
+          const response = await getLinkedInProfileHealth()
+          if (response.data) {
+            setLinkedinHealth(response.data)
+          }
+        } catch (error) {
+          console.error('Failed to fetch LinkedIn profile health:', error)
+        } finally {
+          setLoadingHealth(false)
+        }
+      })()
+    }
+  }, [isAuthenticated])
+
+  // Compute health status after data is fetched
+  const healthStatus = getOverallHealthStatus()
 
   return (
     <header
@@ -49,7 +133,25 @@ const Header = ({ onMenuClick, theme, toggleTheme, className }: HeaderProps) => 
         </div>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-3">
+        <div className="hidden md:flex items-center gap-2">
+          {loadingHealth ? (
+            <div className="flex items-center gap-2 px-2 py-1">
+              <div className="h-4 w-4 rounded-full border-2 border-slate-500 border-t-transparent animate-spin" />
+              <span className="text-xs text-muted-foreground">Checking...</span>
+            </div>
+          ) : (
+            <Badge variant="outline" className={cn(
+              'gap-2 px-3 py-1',
+              healthStatus.color,
+              'text-white border-transparent'
+            )}>
+              <span className="h-2 w-2 rounded-full bg-current" />
+              {healthStatus.label}
+            </Badge>
+          )}
+        </div>
+
         <Button variant="ghost" size="icon" onClick={toggleTheme}>
           {theme === 'dark' ? (
             <Sun className="h-5 w-5" />

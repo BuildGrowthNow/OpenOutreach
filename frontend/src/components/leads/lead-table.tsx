@@ -27,6 +27,7 @@ interface LeadTableProps {
   onEdit: (lead: Lead) => void
   onDisqualify: (lead: Lead) => void
   onReScrape: (lead: Lead) => void
+  onMessage?: (lead: Lead) => void
   onSearch: (search: string) => void
   onStatusFilter: (status: string) => void
   onPageChange: (page: number) => void
@@ -41,6 +42,7 @@ export function LeadTable({
   onEdit,
   onDisqualify,
   onReScrape,
+  onMessage,
   onSearch,
   onStatusFilter,
   onPageChange,
@@ -234,43 +236,53 @@ export function LeadTable({
                       )}
                     </div>
                   </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => onView(lead)}
-                        title="View details"
-                      >
-                        <Icons.ExternalLink className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => onReScrape(lead)}
-                        title="Re-scrape profile"
-                      >
-                        <Icons.RefreshCw className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => onEdit(lead)}
-                        title="Edit lead"
-                      >
-                        <Icons.Edit className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="text-red-600 hover:text-red-800 hover:bg-red-50"
-                        onClick={() => onDisqualify(lead)}
-                        title="Disqualify lead"
-                      >
-                        <Icons.Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
+                   <TableCell className="text-right">
+                     <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                       <Button
+                         size="sm"
+                         variant="ghost"
+                         onClick={() => onView(lead)}
+                         title="View details"
+                       >
+                         <Icons.ExternalLink className="h-4 w-4" />
+                       </Button>
+                       {onMessage && (
+                         <Button
+                           size="sm"
+                           variant="ghost"
+                           onClick={() => onMessage(lead)}
+                           title="Send message"
+                         >
+                           <Icons.MessageSquare className="h-4 w-4" />
+                         </Button>
+                       )}
+                       <Button
+                         size="sm"
+                         variant="ghost"
+                         onClick={() => onReScrape(lead)}
+                         title="Re-scrape profile"
+                       >
+                         <Icons.RefreshCw className="h-4 w-4" />
+                       </Button>
+                       <Button
+                         size="sm"
+                         variant="ghost"
+                         onClick={() => onEdit(lead)}
+                         title="Edit lead"
+                       >
+                         <Icons.Edit className="h-4 w-4" />
+                       </Button>
+                       <Button
+                         size="sm"
+                         variant="ghost"
+                         className="text-red-600 hover:text-red-800 hover:bg-red-50"
+                         onClick={() => onDisqualify(lead)}
+                         title="Disqualify lead"
+                       >
+                         <Icons.Trash2 className="h-4 w-4" />
+                       </Button>
+                     </div>
+                   </TableCell>
                 </TableRow>
               ))}
             </TableBody>

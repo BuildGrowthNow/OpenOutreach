@@ -9,14 +9,16 @@ import {
   getCampaignMessages,
   getCampaigns as getCampaignsAPI,
   getLeads as getLeadsAPI,
-  getDailyUsage
+  getDailyUsage,
+  getLinkedInProfileHealth
 } from '@/lib/api/dashboard'
 import {
   Campaign,
   Lead,
   HealthStatus,
   Pagination,
-  DailyUsageResponse
+  DailyUsageResponse,
+  LinkedInProfileHealthResponse
 } from '@/lib/types/components'
 
 // RateLimits type is no longer exported from components.ts
@@ -44,6 +46,10 @@ export function useDashboard() {
   const [dailyUsage, setDailyUsage] = useState<DailyUsageResponse | null>(null)
   const [dailyUsageLoading, setDailyUsageLoading] = useState(true)
   const [dailyUsageError, setDailyUsageError] = useState<string | null>(null)
+
+  const [linkedinProfileHealth, setLinkedinProfileHealth] = useState<LinkedInProfileHealthResponse | null>(null)
+  const [linkedinProfileHealthLoading, setLinkedinProfileHealthLoading] = useState(true)
+  const [linkedinProfileHealthError, setLinkedinProfileHealthError] = useState<string | null>(null)
 
   const fetchCampaigns = useCallback(async (status?: string) => {
     setCampaignsLoading(true)
@@ -120,6 +126,21 @@ export function useDashboard() {
     }
   }, [])
 
+  const fetchLinkedInProfileHealth = useCallback(async () => {
+    setLinkedinProfileHealthLoading(true)
+    setLinkedinProfileHealthError(null)
+    try {
+      const response = await getLinkedInProfileHealth()
+      if (response.data) {
+        setLinkedinProfileHealth(response.data)
+      }
+    } catch (error) {
+      setLinkedinProfileHealthError(error instanceof Error ? error.message : 'Failed to fetch LinkedIn profile health')
+    } finally {
+      setLinkedinProfileHealthLoading(false)
+    }
+  }, [])
+
   return {
     campaigns,
     campaignsLoading,
@@ -140,7 +161,11 @@ export function useDashboard() {
     dailyUsage,
     dailyUsageLoading,
     dailyUsageError,
-    fetchDailyUsage
+    fetchDailyUsage,
+    linkedinProfileHealth,
+    linkedinProfileHealthLoading,
+    linkedinProfileHealthError,
+    fetchLinkedInProfileHealth
   }
 }
 

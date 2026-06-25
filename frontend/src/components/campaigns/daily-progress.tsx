@@ -9,12 +9,15 @@ import { formatDistanceToNow } from 'date-fns'
 interface DailyProgressProps {
   dailyConnectionsSent: number
   dailyLimit: number
+  effectiveLimit?: number
   className?: string
 }
 
-export function DailyProgress({ dailyConnectionsSent, dailyLimit, className }: DailyProgressProps) {
-  const percentage = dailyLimit > 0 ? (dailyConnectionsSent / dailyLimit) * 100 : 0
-  const remaining = dailyLimit - dailyConnectionsSent
+export function DailyProgress({ dailyConnectionsSent, dailyLimit, effectiveLimit, className }: DailyProgressProps) {
+  // Use effective limit if provided, otherwise use dailyLimit
+  const actualLimit = effectiveLimit ?? dailyLimit
+  const percentage = actualLimit > 0 ? (dailyConnectionsSent / actualLimit) * 100 : 0
+  const remaining = actualLimit - dailyConnectionsSent
   const isNearLimit = percentage >= 80
   const isAtLimit = percentage >= 100
 
@@ -26,6 +29,33 @@ export function DailyProgress({ dailyConnectionsSent, dailyLimit, className }: D
 
   const progressColor = getProgressColor()
 
+  // Display warning message when approaching limits
+  let warningMessage = null
+  if (isAtLimit) {
+    warningMessage = (
+      <div className="rounded-md bg-destructive/10 border border-destructive/20 p-2">
+        <div className="flex items-center gap-2 text-destructive text-sm font-medium">
+          <Icons.AlertTriangle className="h-4 w-4" />
+          Daily limit reached! No more connections can be sent today.
+        </div>
+      </div>
+    )
+  } else if (isNearLimit) {
+    warningMessage = (
+      <div className="rounded-md bg-amber-500/10 border border-amber-500/20 p-2">
+        <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 text-sm font-medium">
+          <Icons.AlertCircle className="h-4 w-4" />
+          Approaching limit: {Math.max(0, remaining)} connections remaining
+          {effectiveLimit && effectiveLimit !== dailyLimit && (
+            <span className="text-xs opacity-75">
+              (effective limit: {effectiveLimit}, base limit: {dailyLimit})
+            </span>
+          )}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className={cn('space-y-4', className)}>
       <div className="flex items-center justify-between">
@@ -35,6 +65,11 @@ export function DailyProgress({ dailyConnectionsSent, dailyLimit, className }: D
             {isAtLimit 
               ? 'Daily limit reached' 
               : `${remaining} connections remaining today`}
+            {effectiveLimit && effectiveLimit !== dailyLimit && (
+              <span className="block text-[10px] text-muted-foreground mt-0.5">
+                Effective limit: {effectiveLimit} (context-aware)
+              </span>
+            )}
           </p>
         </div>
         <div className="text-right">
@@ -48,9 +83,11 @@ export function DailyProgress({ dailyConnectionsSent, dailyLimit, className }: D
         <Progress value={percentage} className={cn('h-2', progressColor)} />
         <div className="flex justify-between mt-1 text-xs text-muted-foreground">
           <span>{dailyConnectionsSent} sent</span>
-          <span>{dailyLimit} limit</span>
+          <span>{actualLimit} limit{effectiveLimit && effectiveLimit !== dailyLimit ? ' (effective)' : ''}</span>
         </div>
       </div>
+
+      {warningMessage}
 
       <div className="grid grid-cols-2 gap-4 pt-2">
         <div className="space-y-1">

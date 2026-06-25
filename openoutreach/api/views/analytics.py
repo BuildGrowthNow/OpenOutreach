@@ -35,9 +35,9 @@ class AnalyticsView(APIView):
         else:
             since = timezone.now() - timedelta(days=30)
         
-        # Overall statistics
-        total_campaigns = Campaign.objects.count()
-        total_leads = Deal.objects.count()
+        # Overall statistics (only count campaigns user has access to)
+        total_campaigns = Campaign.objects.filter(users=request.user).count()
+        total_leads = Deal.objects.filter(campaign__users=request.user).count()
         
         # Active deals (in funnel)
         active_deals = Deal.objects.filter(
@@ -101,7 +101,7 @@ class AnalyticsView(APIView):
         
         # Cross-campaign comparison
         campaigns_data = []
-        for campaign in Campaign.objects.all()[:10]:
+        for campaign in Campaign.objects.filter(users=request.user)[:10]:
             campaign_connections = ActionLog.objects.filter(
                 campaign=campaign,
                 action_type=ActionLog.ActionType.CONNECT,
@@ -130,6 +130,32 @@ class AnalyticsView(APIView):
             })
         
         return Response({
+            'data': {
+                'period': period,
+                'overall': {
+                    'total_campaigns': total_campaigns,
+                    'total_leads': total_leads,
+                    'active_deals': active_deals,
+                    'completed_deals': completed_deals,
+                    'failed_deals': failed_deals,
+                },
+                'stats': {
+                    'connections_sent': connections_sent,
+                    'connections_accepted': connections_accepted,
+                    'connection_accept_rate': round(connection_accept_rate, 2),
+                    'response_rate': round(response_rate, 2),
+                    'conversion_rate': round(conversion_rate, 2),
+                },
+                'metrics': {
+                    'connections_sent': connections_sent,
+                    'connections_accepted': connections_accepted,
+                    'connection_accept_rate': round(connection_accept_rate, 2),
+                    'response_rate': round(response_rate, 2),
+                    'conversion_rate': round(conversion_rate, 2),
+                },
+                'pipeline': pipeline,
+                'campaigns': campaigns_data,
+            },
             'period': period,
             'overall': {
                 'total_campaigns': total_campaigns,
@@ -137,6 +163,13 @@ class AnalyticsView(APIView):
                 'active_deals': active_deals,
                 'completed_deals': completed_deals,
                 'failed_deals': failed_deals,
+            },
+            'stats': {
+                'connections_sent': connections_sent,
+                'connections_accepted': connections_accepted,
+                'connection_accept_rate': round(connection_accept_rate, 2),
+                'response_rate': round(response_rate, 2),
+                'conversion_rate': round(conversion_rate, 2),
             },
             'metrics': {
                 'connections_sent': connections_sent,

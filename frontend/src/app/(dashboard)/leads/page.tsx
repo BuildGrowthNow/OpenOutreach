@@ -9,10 +9,11 @@ import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Icons } from '@/lib/types/components'
-import { getLeads, updateLead, reScrapeLeadProfile, createLead } from '@/lib/api/dashboard'
-import { Lead, Pagination } from '@/lib/types/components'
+import { getLeads, updateLead, reScrapeLeadProfile, createLead, sendMessageToLead, getMessages } from '@/lib/api/dashboard'
+import { Lead, Pagination, Message } from '@/lib/types/components'
 import { exportFilteredLeads } from '@/lib/export'
 import { LeadForm } from '@/components/leads/lead-form'
+import { MessageThread } from '@/components/messages/message-thread'
 
 const LeadsPage = () => {
   const router = useRouter()
@@ -36,6 +37,12 @@ const LeadsPage = () => {
     failed: 0
   })
   
+  // Message thread state
+  const [messageLead, setMessageLead] = useState<Lead | null>(null)
+  const [messages, setMessages] = useState<Message[]>([])
+  const [messageLoading, setMessageLoading] = useState(false)
+  const [sendingMessage, setSendingMessage] = useState(false)
+  
   const limit = 20 // Items per page
 
   const fetchLeads = useCallback(async () => {
@@ -46,7 +53,7 @@ const LeadsPage = () => {
       const response = await getLeads(
         statusFilter === 'all' ? undefined : statusFilter,
         search || undefined,
-        disqualifiedFilter,
+         disqualifiedFilter,
         currentPage,
         limit
       )
@@ -166,6 +173,40 @@ const LeadsPage = () => {
       throw err
     } finally {
       setIsSubmitting(false)
+    }
+  }
+
+  const handleSendMessage = (lead: Lead) => {
+    // Reset messages for new conversation
+    setMessages([])
+    setMessageLead(lead)
+  }
+
+  const handleCloseMessageThread = () => {
+    setMessageLead(null)
+    setMessages([])
+  }
+
+  const handleSendMessageToLead = async (content: string) => {
+    if (!messageLead) return
+    
+    try {
+      setSendingMessage(true)
+      const response = await sendMessageToLead(messageLead.id, content)
+      
+      if (response.data?.success && response.data?.message) {
+        // Add the sent message to the list
+        setMessages(prev => response.data ? [...prev, response.data.message] : prev)
+      } else if (response.error) {
+        alert(`Failed to send message: ${response.error}`)
+      } else {
+        alert('Failed to send message: Unknown error')
+      }
+    } catch (error) {
+      console.error('Failed to send message:', error)
+      alert('Failed to send message. Please try again.')
+    } finally {
+      setSendingMessage(false)
     }
   }
 
@@ -294,7 +335,7 @@ const LeadsPage = () => {
         )}
       </div>
 
-      {/* Main Leads Table */}
+       {/* Main Leads Table */}
       <LeadTable
         leads={leads}
         pagination={pagination || undefined}
@@ -303,6 +344,7 @@ const LeadsPage = () => {
         onEdit={handleEditLead}
         onDisqualify={handleDisqualifyLead}
         onReScrape={handleReScrapeLead}
+        onMessage={handleSendMessage}
         onSearch={handleSearch}
         onStatusFilter={handleStatusFilter}
         onPageChange={handlePageChange}
@@ -338,8 +380,8 @@ const LeadsPage = () => {
                   <Button
                     key={value === undefined ? 'all' : value.toString()}
                     size="sm"
-                    variant={(disqualifiedFilter === value) ? 'default' : 'outline'}
-                    onClick={() => setDisqualifiedFilter(value)}
+                     variant={(disqualifiedFilter === value) ? 'default' : 'outline'}
+                     onClick={() => setDisqualifiedFilter(value)}
                   >
                     {value === undefined ? 'All' : value ? 'Yes' : 'No'}
                   </Button>
@@ -370,6 +412,32 @@ const LeadsPage = () => {
         onSubmit={handleSubmitLead}
         isSubmitting={isSubmitting}
       />
+
+       {/* Message Thread Modal */}
+      {messageLead && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <Card className="w-full max-w-2xl max-h-[80vh] flex flex-col">
+            <CardHeader className="border-b flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="text-lg">Conversation with {messageLead.name || 'Lead'}</CardTitle>
+                <p className="text-sm text-muted-foreground">{messageLead.publicIdentifier}</p>
+              </div>
+              <Button size="sm" variant="ghost" onClick={handleCloseMessageThread}>
+                <Icons.X className="h-4 w-4" />
+              </Button>
+            </CardHeader>
+            <div className="flex-1 overflow-hidden">
+              <MessageThread
+                messages={messages}
+                onSendMessage={handleSendMessageToLead}
+                isLoading={messageLoading}
+                isSending={sendingMessage}
+                leadName={messageLead.name || 'Lead'}
+              />
+            </div>
+          </Card>
+        </div>
+      )}
     </div>
   )
 }

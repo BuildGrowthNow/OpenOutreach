@@ -1,6 +1,6 @@
 # API URL Configuration
 
-from django.urls import path, include
+from django.urls import path
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
@@ -26,6 +26,10 @@ from .views.campaigns import (
     CampaignMessagesView,
     CampaignAnalyticsView,
     CampaignStateMachineView,
+    CampaignStatusView,
+    CampaignGhostModeSimulationView,
+    CampaignGhostModeSimulationListView,
+    CampaignGhostModeActionView,
 )
 from .views.leads import (
     LeadListView,
@@ -52,6 +56,7 @@ from .views.linkedin_setup import (
     LinkedInSetupStatusView,
 )
 from .views.linkedin_profiles import LinkedInProfilesListView
+from .views.linkedin_profile_health import LinkedInProfileHealthView
 
 # API URL Patterns (no version prefix for frontend compatibility)
 urlpatterns = [
@@ -90,6 +95,11 @@ urlpatterns = [
     path('campaigns/<int:pk>/state-machine/', CampaignStateMachineView.as_view(), name='campaign-state-machine'),
     path('campaigns/<int:pk>/state-machine/validate/', CampaignStateMachineView.as_view(), name='campaign-state-machine-validate'),
     path('campaigns/<int:pk>/state-machine/simulate/', StateMachineSimulationView.as_view(), name='campaign-state-machine-simulate'),
+    path('campaigns/<int:pk>/status/', CampaignStatusView.as_view(), name='campaign-status'),
+    
+    # Ghost mode endpoints - separate endpoints for different actions
+    path('campaigns/<int:pk>/ghost-mode/simulations/', CampaignGhostModeSimulationListView.as_view(), name='campaign-ghost-mode-simulations'),
+    path('campaigns/<int:pk>/ghost-mode/action/', CampaignGhostModeActionView.as_view(), name='campaign-ghost-mode-action'),
     
     # Leads endpoints
     path('leads/', LeadListView.as_view(), name='lead-list'),
@@ -121,8 +131,9 @@ urlpatterns = [
       path('linkedin-credentials/<int:pk>/health/', LinkedInCredentialsHealthView.as_view(), name='linkedin-credentials-health'),
       path('linkedin-credentials/<int:pk>/logs/', LinkedInCredentialsLogsView.as_view(), name='linkedin-credentials-logs'),
       
-       # LinkedIn profiles endpoints
-       path('linkedin-profiles/', LinkedInProfilesListView.as_view(), name='linkedin-profiles-list'),
+        # LinkedIn profiles endpoints
+        path('linkedin-profiles/', LinkedInProfilesListView.as_view(), name='linkedin-profiles-list'),
+        path('linkedin-profile-health/', LinkedInProfileHealthView.as_view(), name='linkedin-profile-health'),
        
        # LinkedIn setup endpoints (OAuth/cookie guide)
        path('linkedin-setup/cookie-instructions/', LinkedInCookieInstructionsView.as_view(), name='linkedin-setup-cookie-instructions'),

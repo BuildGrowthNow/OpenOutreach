@@ -1,5 +1,5 @@
 import type { Metadata } from "next"
-import { Geist, Geist_Mono } from "next/font/google"
+import { Geist, Geist_Mono, Roboto_Slab } from "next/font/google"
 import "./globals.css"
 import { AuthProvider } from "./auth-provider"
 import { ToastProvider } from "@/components/ui/toast"
@@ -17,9 +17,14 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 })
 
+const robotoSlab = Roboto_Slab({
+  variable: "--font-roboto-slab",
+  subsets: ["latin"],
+})
+
 export const metadata: Metadata = {
-  title: "OpenOutreach",
-  description: "LinkedIn Outreach Automation Dashboard",
+  title: "Lengrowth - LinkedIn Growth Automation",
+  description: "Scale your LinkedIn presence with AI-powered automation and smart workflows",
 }
 
 export default function RootLayout({
@@ -30,7 +35,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${robotoSlab.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
         <ToastProvider>

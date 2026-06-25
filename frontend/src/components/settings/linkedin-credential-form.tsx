@@ -37,28 +37,41 @@ export default function LinkedInCredentialForm({ initialData, onSuccess, onCance
   const [linkedinProfiles, setLinkedinProfiles] = useState<LinkedInProfile[]>([])
   const [loadingProfiles, setLoadingProfiles] = useState(false)
 
+    const loadProfiles = async () => {
+      try {
+        setLoadingProfiles(true)
+        const response = await getLinkedInProfiles()
+        if (response.data && response.data.profiles) {
+          setLinkedinProfiles(response.data.profiles)
+        }
+      } catch (err) {
+        console.error('Failed to load LinkedIn profiles:', err)
+      } finally {
+        setLoadingProfiles(false)
+      }
+    }
+
   // Load LinkedIn profiles on mount (for create mode only)
   useEffect(() => {
     if (!initialData) {
-      loadProfiles()
+      const loadProfilesEffect = async () => {
+        setLoadingProfiles(true)
+        try {
+          const response = await getLinkedInProfiles()
+          if (response.data && response.data.profiles) {
+            setLinkedinProfiles(response.data.profiles)
+          }
+        } catch (err) {
+          console.error('Failed to load LinkedIn profiles:', err)
+        } finally {
+          setLoadingProfiles(false)
+        }
+      }
+      loadProfilesEffect()
     }
   }, [initialData])
 
-   const loadProfiles = async () => {
-     try {
-       setLoadingProfiles(true)
-       const response = await getLinkedInProfiles()
-       if (response.data && response.data.profiles) {
-         setLinkedinProfiles(response.data.profiles)
-       }
-     } catch (err) {
-       console.error('Failed to load LinkedIn profiles:', err)
-     } finally {
-       setLoadingProfiles(false)
-     }
-   }
-
-   const form = useForm<CredentialFormValues>({
+    const form = useForm<CredentialFormValues>({
      resolver: zodResolver(credentialSchema),
      defaultValues: {
        email: initialData?.public_email.replace(/\*\*\*/g, '') || '',

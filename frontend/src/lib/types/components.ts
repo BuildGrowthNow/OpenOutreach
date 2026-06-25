@@ -210,6 +210,7 @@ export interface Lead {
   title?: string
   state: DealState
   outcome?: DealOutcome
+  nextCheckPendingAt?: string
   creationDate: string
   updateDate: string
   contactInfo?: {
@@ -298,4 +299,22 @@ export interface DailyUsageResponse {
   daily_limit: number
   last_reset: string
   reset_frequency: string
+}
+
+// LinkedIn Profile Health Status interfaces
+export interface LinkedInProfileHealth {
+  id: number
+  linkedin_username: string
+  status: boolean
+  credentials_status: string
+  health_score: number
+  health_status: string
+  needs_attention: boolean
+}
+
+export interface LinkedInProfileHealthResponse {
+  profiles: LinkedInProfileHealth[]
+  count: number
+  total_profiles: number
+  needs_attention_count: number
 }
