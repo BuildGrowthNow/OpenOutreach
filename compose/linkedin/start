@@ -46,8 +46,12 @@ if [ "${SKIP_DAEMON:-false}" = "true" ]; then
     gosu ubuntu python manage.py runserver 0.0.0.0:8000 &
     DJANGO_PID=$!
     echo "Django started with PID $DJANGO_PID"
-    # Wait for nginx to finish (it's running in foreground at port 3000)
-    wait $NGINX_PID
+    # Wait for nginx to be running by polling its PID file
+    while [ -f /run/nginx/nginx.pid ] && kill -0 $(cat /run/nginx/nginx.pid) 2>/dev/null; do
+        sleep 5
+    done
+    echo "Nginx stopped, shutting down Django..."
+    kill $DJANGO_PID 2>/dev/null || true
     exit 0
 fi
 
