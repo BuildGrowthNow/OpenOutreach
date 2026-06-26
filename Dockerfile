@@ -35,11 +35,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends nginx && rm -rf
 COPY --from=deps /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
 COPY --from=deps /usr/local/bin /usr/local/bin
 
-# Create nginx directories with proper ownership for ubuntu user
-RUN mkdir -p /var/lib/nginx/body /var/lib/nginx/proxy /var/cache/nginx /run/nginx && \
-    chown -R ubuntu:ubuntu /var/lib/nginx /var/cache/nginx /run/nginx && \
-    chmod -R 755 /var/lib/nginx /var/cache/nginx /run/nginx
-
 # Install Playwright Chromium
 ENV PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers
 ENV EDITOR=nano
@@ -55,8 +50,13 @@ RUN apt-get update \
     && cp /opt/noVNC/vnc.html /opt/noVNC/index.html \
     && rm -rf /var/lib/apt/lists/*
 
-# Create non-root user
+# Create non-root user first
 RUN useradd -m -u 1000 ubuntu
+
+# Now set up nginx directories with proper ownership for ubuntu user
+RUN mkdir -p /var/lib/nginx/body /var/lib/nginx/proxy /var/cache/nginx /run/nginx && \
+    chown -R ubuntu:ubuntu /var/lib/nginx /var/cache/nginx /run/nginx && \
+    chmod -R 755 /var/lib/nginx /var/cache/nginx /run/nginx
 
 # Copy frontend build
 COPY --from=frontend-builder /frontend-build/.next /app/frontend/.next
