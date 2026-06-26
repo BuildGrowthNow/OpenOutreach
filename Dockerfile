@@ -73,10 +73,6 @@ COPY ./compose/linkedin/entrypoint /entrypoint
 COPY ./compose/linkedin/start /start
 COPY ./nginx.conf /etc/nginx/conf.d/default.conf
 
-# Setup nginx to run on port 3000
-RUN sed -i 's/listen 80/listen 3000/g' /etc/nginx/conf.d/default.conf && \
-    sed -i 's/server_name _/server_name localhost/g' /etc/nginx/conf.d/default.conf
-
 RUN sed -i 's/\r$//g' /entrypoint /start && chmod +x /entrypoint /start
 
 COPY --chown=ubuntu:ubuntu . ${APP_HOME}
@@ -86,8 +82,8 @@ RUN chown ubuntu:ubuntu ${APP_HOME} && \
     mkdir -p /app/data /app/openoutreach/media /app/staticfiles && \
     chmod -R 755 /app/data /app/openoutreach/media /app/staticfiles
 
-# Expose ports for frontend (3000) and VNC (6080, 5900)
-EXPOSE 3000 6080 5900
+# Expose ports for frontend (3000), Django API (8000), and VNC (6080, 5900)
+EXPOSE 3000 8000 6080 5900
 
 ENTRYPOINT ["/entrypoint"]
 CMD ["/start"]

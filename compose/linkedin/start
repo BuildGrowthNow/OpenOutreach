@@ -15,6 +15,13 @@ export DISPLAY=:99
 mkdir -p /var/lib/nginx/body /var/lib/nginx/proxy /var/cache/nginx /run/nginx
 chmod 755 /var/lib/nginx /var/cache/nginx /run/nginx
 
+# Start Next.js frontend server on port 3001 (nginx will proxy to it on 3000)
+echo "Starting Next.js server on port 3001..."
+cd /app/frontend && gosu ubuntu node_modules/.bin/next start -p 3001 &
+NEXTJS_PID=$!
+echo "Next.js started with PID $NEXTJS_PID"
+cd /app
+
 # Start nginx for frontend (Next.js) on port 3000
 # nginx must start as ROOT to bind to ports and create PID file
 if [ "${SKIP_DAEMON:-false}" = "true" ]; then
@@ -56,8 +63,9 @@ if [ "${SKIP_DAEMON:-false}" = "true" ]; then
     while pgrep -x nginx > /dev/null; do
         sleep 5
     done
-    echo "Nginx stopped, shutting down Django..."
+    echo "Nginx stopped, shutting down Django and Next.js..."
     kill $DJANGO_PID 2>/dev/null || true
+    kill $NEXTJS_PID 2>/dev/null || true
     exit 0
 fi
 

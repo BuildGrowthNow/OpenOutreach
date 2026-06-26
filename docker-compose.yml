@@ -32,5 +32,6 @@ services:
       - ./openoutreach/media:/app/openoutreach/media
     ports:
       - "3000:3000"
+      - "8000:8000"
       - "6080:6080"
       - "5900:5900"
