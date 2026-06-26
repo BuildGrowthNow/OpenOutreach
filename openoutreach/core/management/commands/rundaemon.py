@@ -51,6 +51,9 @@ class Command(BaseCommand):
 
             config = OnboardConfig()
 
+            # Default campaign name (can be overridden via env)
+            config.campaign_name = os.environ.get("CAMPAIGN_NAME", "LinkedIn Outreach")
+
             # LLM Configuration from env
             if llm_key := os.environ.get("LLM_API_KEY"):
                 config.llm_api_key = llm_key
