@@ -24,6 +24,14 @@ fi
 # Wait for nginx to be ready
 sleep 2
 
+# If SKIP_DAEMON is set, just run migrations and start Django without the daemon
+# This allows configuration via Django Admin frontend
+if [ "${SKIP_DAEMON:-false}" = "true" ]; then
+    echo "SKIP_DAEMON=true - Starting Django admin without daemon..."
+    python manage.py migrate --no-input
+    exec python manage.py runserver 0.0.0.0:8000
+fi
+
 # Run the daemon (migrate + onboard + task queue).
 # Forward any arguments, e.g. --onboard <file>.
 exec python manage.py rundaemon "$@"
