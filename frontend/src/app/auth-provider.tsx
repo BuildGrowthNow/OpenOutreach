@@ -49,12 +49,14 @@ const AuthProviderImpl = ({ children }: { children: React.ReactNode }) => {
     // If auth is still loading, don't redirect yet
     if (isLoading) return
     
-    // Auth pages that don't require authentication
+    // Public pages that don't require authentication (landing page, auth pages)
+    const publicPages = ["/"]
     const authPages = ["/login", "/signup", "/reset-password", "/verify-email"]
+    const isPublicPage = publicPages.some(page => pathname === page)
     const isAuthPage = authPages.some(page => pathname.startsWith(page))
     
-    // If not authenticated and not on an auth page, redirect to login
-    if (!user && !isAuthPage) {
+    // If not authenticated and not on a public or auth page, redirect to login
+    if (!user && !isAuthPage && !isPublicPage) {
       // Preserve current path for callback after login
       const redirectUrl = `${pathname}${searchParams.toString() ? `?${searchParams}` : ""}`
       router.push(`/login?callbackUrl=${encodeURIComponent(redirectUrl)}`)
@@ -127,8 +129,14 @@ const AuthProviderImpl = ({ children }: { children: React.ReactNode }) => {
     }
   }
 
-  // Don't render children until auth state is loaded
-  if (isLoading) {
+  // For public pages (landing page), render immediately without waiting for auth
+  const publicPages = ["/"]
+  const authPages = ["/login", "/signup", "/reset-password", "/verify-email"]
+  const isPublicPage = publicPages.some(page => pathname === page)
+  const isAuthPage = authPages.some(page => pathname.startsWith(page))
+
+  // Don't render children until auth state is loaded (except for public/auth pages)
+  if (isLoading && !isPublicPage && !isAuthPage) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
