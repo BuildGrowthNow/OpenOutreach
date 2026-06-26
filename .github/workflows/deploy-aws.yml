@@ -33,14 +33,28 @@ jobs:
           DJANGO_DEBUG: ${{ secrets.DJANGO_DEBUG }}
           SSH_AUTH_SOCK: /dev/null
         run: |
-          # Deploy to server - create directory
-          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o IdentitiesOnly=yes "${EC2_USER}@${EC2_HOST}" "mkdir -p ~/OpenOutreach"
-          
-          # Copy Dockerfile and docker-compose.yml  
-          tar -c Dockerfile docker-compose.yml | ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o IdentitiesOnly=yes "${EC2_USER}@${EC2_HOST}" "cd ~/OpenOutreach && tar -x && chmod 644 Dockerfile docker-compose.yml"
+          # Clone or update the repository on the server (force reset to avoid merge conflicts)
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o IdentitiesOnly=yes "${EC2_USER}@${EC2_HOST}" "
+            set -e
+            if [ -d ~/OpenOutreach/.git ]; then
+              cd ~/OpenOutreach
+              # Remove unsynced files (Dockerfile, docker-compose.yml, .env) and reset to GitHub
+              git clean -fd
+              git reset --hard
+              git pull origin main
+            else
+              git clone https://github.com/buildgrowthnow/openoutreach.git ~/OpenOutreach
+            fi
+            cd ~/OpenOutreach
+          "
           
           # Deploy with docker-compose
-          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o IdentitiesOnly=yes "${EC2_USER}@${EC2_HOST}" "cd ~/OpenOutreach && docker compose pull && docker compose up -d --build"
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o IdentitiesOnly=yes "${EC2_USER}@${EC2_HOST}" "
+            set -e
+            cd ~/OpenOutreach
+            docker compose down
+            docker compose up -d --build
+          "
           
           echo "Deployment completed successfully!"
 
