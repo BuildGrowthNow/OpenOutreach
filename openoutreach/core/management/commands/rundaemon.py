@@ -38,21 +38,41 @@ class Command(BaseCommand):
 
     def _ensure_onboarded(self):
         from openoutreach.core.onboarding import apply, collect_from_wizard, missing_keys
+        from openoutreach.core.models import SiteConfig, Campaign
+        from openoutreach.linkedin.models import LinkedInProfile
 
+        # If onboarding is complete, skip
         if not missing_keys():
             return
 
-        # Skip interactive onboarding if running in a containerized environment
-        # For Docker containers, onboarding should be done via Django Admin or the frontend
-        # The daemon will fail to start if required resources are missing ( campaigns, LLM config )
-        # but this allows the API to start and be accessible for configuration
-        if os.environ.get("DOCKER_ENV") == "true" or hasattr(sys, 'is_container'):
-            missing = missing_keys()
-            self.stderr.write(
-                f"[INFO] Skipping interactive onboarding in container mode.\n"
-                f"[INFO] Missing onboarding data will need to be configured via Django Admin.\n"
-                f"[INFO] Missing: {', '.join(sorted(missing))}\n"
-            )
+        # In container mode, auto-configure from environment variables
+        if os.environ.get("DOCKER_ENV") == "true":
+            from openoutreach.core.onboarding import OnboardConfig
+
+            config = OnboardConfig()
+
+            # LLM Configuration from env
+            if llm_key := os.environ.get("LLM_API_KEY"):
+                config.llm_api_key = llm_key
+            if llm_base := os.environ.get("LLM_API_BASE"):
+                config.llm_api_base = llm_base
+            if ai_model := os.environ.get("AI_MODEL"):
+                config.ai_model = ai_model
+            # Default LLM provider based on API base
+            if "bedrock" in (llm_base or ""):
+                config.llm_provider = "openai_compatible"
+            else:
+                config.llm_provider = os.environ.get("LLM_PROVIDER", "openai")
+
+            # LinkedIn Configuration from env
+            if linkedin_email := os.environ.get("LINKEDIN_USERNAME"):
+                config.linkedin_email = linkedin_email
+            if linkedin_password := os.environ.get("LINKEDIN_PASSWORD"):
+                config.linkedin_password = linkedin_password
+
+            # Apply the configuration
+            apply(config)
+            self.stderr.write("[INFO] Auto-configured from environment variables.\n")
             return
 
         if sys.stdin.isatty():

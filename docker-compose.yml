@@ -19,6 +19,13 @@ services:
       - DOCKER_ENV=true
       - NEXT_PUBLIC_API_URL=http://localhost:8000
       - NEXT_PUBLIC_APP_URL=http://localhost:3000
+      # LLM Configuration
+      - LLM_API_KEY=${LLM_API_KEY}
+      - LLM_API_BASE=${LLM_API_BASE:-}
+      - AI_MODEL=${AI_MODEL}
+      # LinkedIn Configuration
+      - LINKEDIN_USERNAME=${LINKEDIN_USERNAME}
+      - LINKEDIN_PASSWORD=${LINKEDIN_PASSWORD}
     volumes:
       - ./data:/app/data
       - ./openoutreach/media:/app/openoutreach/media
