@@ -17,7 +17,8 @@ chmod 755 /var/lib/nginx /var/cache/nginx /run/nginx
 
 # Start nginx for frontend (Next.js) on port 3000
 # nginx must start as ROOT to bind to ports and create PID file
-nginx
+# Run in foreground mode (daemon off) for Docker container compatibility
+nginx -g 'daemon off;'
 sleep 1
 NGINX_PID=$(cat /run/nginx/nginx.pid 2>/dev/null || pgrep -x nginx | head -1)
 
