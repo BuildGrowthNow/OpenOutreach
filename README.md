@@ -1,4 +1,4 @@
-![OpenOutreach Logo](docs/logo.png)
+# Lengrowth Outreachs
 
 > **Describe your product. Define your target market. The AI finds the leads for you.**
 
@@ -19,9 +19,9 @@
 
 ---
 
-### 🚀 What is OpenOutreach?
+### 🚀 What is Lengrowth Outreach?
 
-OpenOutreach is a **self-hosted, open-source LinkedIn automation tool** for B2B lead generation. Unlike other tools, **you don't need a list of profiles to contact** — you describe your product and your target market, and the system autonomously discovers, qualifies, and contacts the right people.
+Lengrowth Outreach is a **self-hosted, open-source LinkedIn automation tool** for B2B lead generation. Unlike other tools, **you don't need a list of profiles to contact** — you describe your product and your target market, and the system autonomously discovers, qualifies, and contacts the right people.
 
 **How it works:**
 
@@ -33,7 +33,7 @@ OpenOutreach is a **self-hosted, open-source LinkedIn automation tool** for B2B 
 
 The system gets smarter with every decision. It starts by exploring broadly, then progressively focuses on the highest-value profiles as it learns your ideal customer profile from its own classification history.
 
-**Why choose OpenOutreach?**
+**Why choose Lengrowth Outreach?**
 
 - 🧠 **Autonomous lead discovery** — No contact lists needed; AI finds your ideal customers
 - 🛡️ **Undetectable** — Playwright + stealth plugins mimic real user behavior
@@ -62,12 +62,12 @@ That's it. No spreadsheets, no lead databases, no scraping setup.
 Pre-built images are published to GitHub Container Registry on every push to `master`.
 
 ```bash
-docker run --pull always -it -p 5900:5900 -p 6080:6080 -v ~/.openoutreach/data:/app/data ghcr.io/eracle/openoutreach:latest
+docker run --pull always -it -p 5900:5900 -p 6080:6080 -v ~/.Lengrowth Outreach/data:/app/data ghcr.io/eracle/Lengrowth Outreach:latest
 
 # Open http://localhost:6080/vnc.html in your browser to watch the automation live
 ```
 
-The interactive onboarding walks you through the three inputs above on first run. All data persists in `~/.openoutreach/data` on your host across restarts.
+The interactive onboarding walks you through the three inputs above on first run. All data persists in `~/.Lengrowth Outreach/data` on your host across restarts.
 
 Once the container is running, open **http://localhost:6080/vnc.html** in your browser to watch the browser live (noVNC). Alternatively, connect a native VNC client to `localhost:5900`.
 
@@ -86,8 +86,8 @@ For contributors or if you prefer running directly on your machine.
 
 ### 1. Clone & Set Up
 ```bash
-git clone https://github.com/eracle/OpenOutreach.git
-cd OpenOutreach
+git clone https://github.com/eracle/Lengrowth Outreach.git
+cd Lengrowth Outreach
 
 # Install deps, Playwright browsers, run migrations, and bootstrap CRM
 make setup
@@ -102,7 +102,7 @@ The interactive onboarding will prompt for LinkedIn credentials, LLM API key, an
 
 ### 3. View Your Data (CRM Admin)
 
-OpenOutreach includes a full CRM web interface powered by DjangoCRM:
+Lengrowth Outreach includes a full CRM web interface powered by DjangoCRM:
 ```bash
 # Create an admin account (first time only)
 python manage.py createsuperuser
@@ -142,9 +142,9 @@ Then open:
 
 ## 🤖 Drive LinkedIn from Your Own LLM
 
-OpenOutreach's LinkedIn layer is also published as a standalone, Django-free package —
+Lengrowth Outreach's LinkedIn layer is also published as a standalone, Django-free package —
 [**`linkedin-agent-cli`**](https://github.com/eracle/linkedin-cli) — so you can let *your own*
-LLM agent drive LinkedIn directly, no OpenOutreach install required. Every verb prints a human
+LLM agent drive LinkedIn directly, no Lengrowth Outreach install required. Every verb prints a human
 summary or the full result dict with `--json`, and errors go to stderr with stable types — a
 clean tool-use contract any agent (or any language) can call:
 
@@ -192,7 +192,7 @@ Configure rate limits and behavior via Django Admin (LinkedInProfile + Campaign 
 
 ## 🌐 Next.js Frontend
 
-OpenOutreach features a modern, React-based frontend built with **Next.js 14+** (App Router) that provides:
+Lengrowth Outreach features a modern, React-based frontend built with **Next.js 14+** (App Router) that provides:
 
 - **Real-time dashboard** with system health and campaign statistics
 - **Campaign management** with full CRUD operations
@@ -341,7 +341,7 @@ A self-healing system that detects rate limit warnings, monitors connection acce
 │   ├── docker.md                    # Docker setup guide
 │   ├── templating.md                # Follow-up messaging guide
 │   └── testing.md                   # Testing strategy
-├── openoutreach/                    # single source package; Django apps nested inside
+├── Lengrowth Outreach/                    # single source package; Django apps nested inside
 │   ├── settings.py                  # Django/CRM settings (SQLite at data/db.sqlite3)
 │   ├── core/                        # engine app: daemon, task queue + scheduler,
 │   │                                #   Campaign/SiteConfig/Task, LLM factory, onboarding,
@@ -383,53 +383,9 @@ A self-healing system that detects rate limit warnings, monitors connection acce
 
 ---
 
-## 💬 Channel
-
-Join the Channel:
-[Telegram Channel](https://t.me/openoutreach)
 
 ---
 
-### 🗓️ Book a Free 15-Minute Call
-
-Got a specific use case, feature request, or questions about setup?
-
-Book a **free 15-minute call** — I'd love to hear your needs and improve the tool based on real feedback.
-
-<div align="center">
-
-[![Book a 15-min call](https://img.shields.io/badge/Book%20a%2015--min%20call-28A745?style=for-the-badge&logo=calendar)](https://www.cal.eu/eracle/15min)
-
-</div>
-
----
-
-### ❤️ Support OpenOutreach
-
-This project is built in spare time to provide powerful, **free** open-source growth tools. Your sponsorship funds faster updates and keeps it free for everyone.
-
-<div align="center">
-
-[![Sponsor with GitHub](https://img.shields.io/badge/Sponsor-%E2%9D%A4-ff69b4?style=for-the-badge&logo=github)](https://github.com/sponsors/eracle)
-
-<br/>
-
-| Tier        | Monthly | Benefits                                                              |
-|-------------|---------|-----------------------------------------------------------------------|
-| ☕ Supporter | $5      | Huge thanks + name in README supporters list                          |
-| 🚀 Booster  | $25     | All above + priority feature requests + early access to new campaigns |
-| 🦸 Hero     | $100    | All above + personal 1-on-1 support + influence roadmap               |
-| 💎 Legend   | $500+   | All above + custom feature development + shoutout in releases         |
-
-</div>
-
----
-
-## ⚖️ License
-
-[GNU GPLv3](https://www.gnu.org/licenses/gpl-3.0) — see [LICENCE.md](LICENCE.md)
-
----
 
 ## 📜 Legal Notice
 
@@ -440,17 +396,3 @@ By using this software you accept the [Legal Notice](LEGAL_NOTICE.md). It covers
 **Use at your own risk — no liability assumed.**
 
 ---
-
-<div align="center">
-
-<a href="https://star-history.com/#eracle/OpenOutreach&Date">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=eracle/OpenOutreach&type=Date&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=eracle/OpenOutreach&type=Date" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=eracle/OpenOutreach&type=Date" width="400" />
- </picture>
-</a>
-
-**Made with ❤️**
-
-</div>
