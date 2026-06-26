@@ -40,10 +40,10 @@ ENV PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers
 ENV EDITOR=nano
 RUN playwright install --with-deps chromium
 
-# Install VNC stack
+# Install VNC stack and procps for pgrep command
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        gosu xvfb x11vnc python3-websockify curl nano \
+        gosu xvfb x11vnc python3-websockify curl nano procps \
     && curl -fsSL https://github.com/novnc/noVNC/archive/refs/tags/v1.6.0.tar.gz \
         | tar -xz -C /opt \
     && mv /opt/noVNC-1.6.0 /opt/noVNC \
