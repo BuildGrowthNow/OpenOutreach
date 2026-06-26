@@ -21,7 +21,7 @@
 
 ### 🚀 What is Lengrowth Outreach?
 
-Lengrowth Outreach is a **self-hosted, open-source LinkedIn automation tool** for B2B lead generation. Unlike other tools, **you don't need a list of profiles to contact** — you describe your product and your target market, and the system autonomously discovers, qualifies, and contacts the right people.
+Lengrowth Outreach is a LinkedIn automation tool for B2B lead generation. Unlike other tools, **you don't need a list of profiles to contact** — you describe your product and your target market, and the system autonomously discovers, qualifies, and contacts the right people.
 
 **How it works:**
 
