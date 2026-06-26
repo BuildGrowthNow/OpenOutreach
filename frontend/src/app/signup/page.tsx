@@ -9,6 +9,7 @@
 import { useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
+import Image from "next/image"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -55,21 +56,36 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="flex items-center justify-center min-h-screen">
-      <Card className="mx-auto max-w-sm">
-        <CardHeader>
-          <CardTitle className="text-2xl">Create an Account</CardTitle>
-          <CardDescription>
-            Enter your information to create a new account
-          </CardDescription>
+    <div className="flex items-center justify-center min-h-screen px-4">
+      <Card className="w-full max-w-md">
+        <CardHeader className="space-y-6">
+          {/* Logo - Replace src with actual logo path */}
+          <div className="flex justify-center items-center py-4">
+            <div className="relative h-24 w-64">
+              <Image
+                src="/logo.svg"
+                alt="Lengrowth Logo"
+                fill
+                className="object-contain"
+              />
+            </div>
+          </div>
+          <div className="text-center space-y-2">
+            <CardTitle className="text-3xl">Create an Account</CardTitle>
+            <CardDescription className="text-lg">
+              Enter your information to create a new account
+            </CardDescription>
+          </div>
         </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
+        <CardContent className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-5">
             {error && (
-              <div className="text-sm text-red-500 text-center">{error}</div>
+              <div className="text-sm text-red-500 text-center bg-red-500/10 py-3 rounded-lg border border-red-500/20">
+                {error}
+              </div>
             )}
-            <div className="space-y-2">
-              <Label htmlFor="fullName">Full Name</Label>
+            <div className="space-y-3">
+              <Label htmlFor="fullName" className="text-base font-medium">Full Name</Label>
               <Input
                 id="fullName"
                 type="text"
@@ -77,10 +93,11 @@ export default function SignupPage() {
                 onChange={(e) => setFullName(e.target.value)}
                 placeholder="Enter your full name"
                 required
+                className="h-11 px-4"
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+            <div className="space-y-3">
+              <Label htmlFor="email" className="text-base font-medium">Email</Label>
               <Input
                 id="email"
                 type="email"
@@ -88,10 +105,11 @@ export default function SignupPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="Enter your email"
                 required
+                className="h-11 px-4"
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+            <div className="space-y-3">
+              <Label htmlFor="password" className="text-base font-medium">Password</Label>
               <Input
                 id="password"
                 type="password"
@@ -100,18 +118,19 @@ export default function SignupPage() {
                 placeholder="Create a strong password"
                 minLength={6}
                 required
+                className="h-11 px-4"
               />
               <p className="text-xs text-muted-foreground">
                 Password must be at least 6 characters
               </p>
             </div>
-            <Button type="submit" className="w-full" disabled={isLoading}>
+            <Button type="submit" className="w-full h-11 text-base font-medium" disabled={isLoading}>
               {isLoading ? "Creating account..." : "Sign up"}
             </Button>
           </form>
-          <div className="mt-4 text-center text-sm">
+          <div className="mt-6 text-center text-base">
             Already have an account?{" "}
-            <Link href="/login" className="underline underline-offset-4 hover:text-primary">
+            <Link href="/login" className="underline underline-offset-4 hover:text-primary font-medium transition-colors">
               Login
             </Link>
           </div>

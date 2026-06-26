@@ -23,12 +23,6 @@ const dashboardItems: SidebarItem[] = [
     description: 'Overview & stats'
   },
   {
-    title: 'Health',
-    href: '/health',
-    icon: 'Activity',
-    description: 'System status'
-  },
-  {
     title: 'Campaigns',
     href: '/campaigns',
     icon: 'BarChart3',

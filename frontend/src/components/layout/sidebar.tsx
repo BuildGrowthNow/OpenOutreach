@@ -53,26 +53,41 @@ const Sidebar = ({ items, isOpen, setIsOpen }: SidebarProps) => {
 
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto px-3 py-4">
-          <div className="space-y-1">
-            {items.map((item) => {
+          <div className="space-y-0.5">
+            {items.map((item, index) => {
               const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`)
               return (
-                <Link key={item.href} href={item.href}>
-                  <Button
-                    variant={isActive ? 'secondary' : 'ghost'}
-                    className="w-full justify-start gap-3"
-                  >
-                     {React.createElement(Icons[item.icon], { className: "h-4 w-4" })}
-                    <div className="flex flex-col items-start text-left flex-1">
-                      <span className="text-sm font-medium">{item.title}</span>
-                      {item.description && (
-                        <span className="text-[0.7rem] text-muted-foreground">
-                          {item.description}
+                <div key={item.href} className="relative">
+                  <Link href={item.href}>
+                    <Button
+                      variant={isActive ? 'secondary' : 'ghost'}
+                      className={`
+                        w-full justify-start gap-3 rounded-lg
+                        hover:bg-accent hover:text-accent-foreground
+                        data-[active=true]:bg-accent data-[active=true]:text-accent-foreground
+                      `}
+                      data-active={isActive}
+                    >
+                      {React.createElement(Icons[item.icon], { className: "h-4 w-4" })}
+                      <div className="flex flex-col items-start text-left flex-1">
+                        <span className="text-sm font-medium">{item.title}</span>
+                        {item.description && (
+                          <span className="text-[0.7rem] text-muted-foreground">
+                            {item.description}
+                          </span>
+                        )}
+                      </div>
+                      {isActive && (
+                        <span className="ml-auto flex h-4 w-4 items-center justify-center">
+                          <span className="absolute h-2 w-2 rounded-full bg-current opacity-50"></span>
                         </span>
                       )}
-                    </div>
-                  </Button>
-                </Link>
+                    </Button>
+                  </Link>
+                  {index < items.length - 1 && (
+                    <div className="mx-4 h-px bg-border" />
+                  )}
+                </div>
               )
             })}
           </div>
