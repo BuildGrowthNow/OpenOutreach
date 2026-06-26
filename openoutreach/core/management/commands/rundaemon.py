@@ -1,4 +1,5 @@
 import logging
+import os
 import sys
 
 from django.core.management import call_command
@@ -41,14 +42,27 @@ class Command(BaseCommand):
         if not missing_keys():
             return
 
+        # Skip interactive onboarding if running in a containerized environment
+        # For Docker containers, onboarding should be done via Django Admin or the frontend
+        # The daemon will fail to start if required resources are missing ( campaigns, LLM config )
+        # but this allows the API to start and be accessible for configuration
+        if os.environ.get("DOCKER_ENV") == "true" or hasattr(sys, 'is_container'):
+            missing = missing_keys()
+            self.stderr.write(
+                f"[INFO] Skipping interactive onboarding in container mode.\n"
+                f"[INFO] Missing onboarding data will need to be configured via Django Admin.\n"
+                f"[INFO] Missing: {', '.join(sorted(missing))}\n"
+            )
+            return
+
         if sys.stdin.isatty():
             apply(collect_from_wizard())
         else:
             missing = missing_keys()
             self.stderr.write(
-                f"Onboarding incomplete and no TTY available.\n"
-                f"Missing: {', '.join(sorted(missing))}\n"
-                f"Run with an interactive terminal to complete onboarding."
+                f"[ERROR] Onboarding incomplete and no TTY available.\n"
+                f"[ERROR] Missing: {', '.join(sorted(missing))}\n"
+                f"[ERROR] Run with an interactive terminal to complete onboarding."
             )
             sys.exit(1)
 

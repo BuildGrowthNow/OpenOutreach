@@ -16,6 +16,7 @@ services:
       - HOST_GID=1000
       - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY:-change-in-production}
       - DJANGO_DEBUG=${DJANGO_DEBUG:-false}
+      - DOCKER_ENV=true
       - NEXT_PUBLIC_API_URL=http://localhost:8000
       - NEXT_PUBLIC_APP_URL=http://localhost:3000
     volumes:
