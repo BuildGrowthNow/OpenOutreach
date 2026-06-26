@@ -29,12 +29,6 @@ export function Navbar() {
             <Link href="#how-it-works" className="text-sm font-medium text-zinc-300 hover:text-emerald-400 transition-colors">
               How it Works
             </Link>
-            <Link href="#testimonials" className="text-sm font-medium text-zinc-300 hover:text-emerald-400 transition-colors">
-              Testimonials
-            </Link>
-            <Link href="#pricing" className="text-sm font-medium text-zinc-300 hover:text-emerald-400 transition-colors">
-              Pricing
-            </Link>
           </nav>
 
           {/* Desktop CTA */}
@@ -76,12 +70,6 @@ export function Navbar() {
             </Link>
             <Link href="#how-it-works" className="text-base font-medium text-zinc-300 hover:text-emerald-400" onClick={() => setIsOpen(false)}>
               How it Works
-            </Link>
-            <Link href="#testimonials" className="text-base font-medium text-zinc-300 hover:text-emerald-400" onClick={() => setIsOpen(false)}>
-              Testimonials
-            </Link>
-            <Link href="#pricing" className="text-base font-medium text-zinc-300 hover:text-emerald-400" onClick={() => setIsOpen(false)}>
-              Pricing
             </Link>
             <div className="flex flex-col gap-3 pt-4 border-t border-zinc-800">
               <Link href="/login" className="text-center text-zinc-300" onClick={() => setIsOpen(false)}>

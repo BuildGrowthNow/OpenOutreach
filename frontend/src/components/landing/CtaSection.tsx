@@ -18,39 +18,18 @@ export function CtaSection() {
             LinkedIn Growth?
           </span>
         </h2>
-        <p className="text-lg sm:text-xl text-zinc-400 max-w-2xl mx-auto mb-10">
-          Join thousands of professionals who are already growing their LinkedIn presence with Lengrowth. Start your 14-day free trial today.
-        </p>
+         <p className="text-lg sm:text-xl text-zinc-400 max-w-2xl mx-auto mb-10">
+           Join thousands of professionals who are already growing their LinkedIn presence with Lengrowth. Book a demo today to see how we can help your business.
+         </p>
 
-        <div className="flex flex-col sm:flex-row gap-4 justify-center">
-          <Link href="/signup">
-            <Button className="h-12 px-8 text-lg bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/25">
-              Get Started Now
-              <ChevronRight className="ml-2 h-5 w-5" />
-            </Button>
-          </Link>
-          <Link href="https://calendly.com/lengrowth/lengrowth" target="_blank">
-            <Button variant="outline" className="h-12 px-8 text-lg border-zinc-700 text-zinc-200 hover:bg-zinc-800 hover:border-zinc-600">
-              <Calendar className="mr-2 h-5 w-5" />
-              Talk to Sales
-            </Button>
-          </Link>
-        </div>
-
-        <div className="mt-8 flex justify-center gap-8 text-sm text-zinc-500">
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-emerald-500" />
-            No credit card required
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-emerald-500" />
-            14-day free trial
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-emerald-500" />
-            Cancel anytime
-          </div>
-        </div>
+         <div className="flex flex-col sm:flex-row gap-4 justify-center">
+           <Link href="https://calendly.com/lengrowth/lengrowth" target="_blank">
+             <Button className="h-12 px-8 text-lg bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/25">
+               Book a Demo
+               <ChevronRight className="ml-2 h-5 w-5" />
+             </Button>
+           </Link>
+         </div>
       </div>
     </section>
   );

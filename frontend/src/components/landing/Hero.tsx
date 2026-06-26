@@ -39,36 +39,16 @@ export function Hero() {
             Powered by advanced AI and smart workflows.
           </p>
 
-          {/* CTA Buttons */}
-          <div className="flex flex-col sm:flex-row gap-4">
-            <Link href="/signup">
-              <Button className="h-12 px-8 text-lg bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/25 hover:shadow-emerald-600/40 transition-all">
-                Start Free Trial
-                <ArrowRight className="ml-2 h-5 w-5" />
-              </Button>
-            </Link>
-            <Link href="https://calendly.com/lengrowth/lengrowth" target="_blank">
-              <Button variant="outline" className="h-12 px-8 text-lg border-zinc-700 text-zinc-200 hover:bg-zinc-800 hover:border-zinc-600">
-                <Calendar className="mr-2 h-5 w-5" />
-                Book a Demo
-              </Button>
-            </Link>
-          </div>
+           {/* CTA Buttons */}
+           <div className="flex flex-col sm:flex-row gap-4">
+             <Link href="https://calendly.com/lengrowth/lengrowth" target="_blank">
+               <Button variant="outline" className="h-12 px-8 text-lg border-zinc-700 text-zinc-200 hover:bg-zinc-800 hover:border-zinc-600">
+                 <Calendar className="mr-2 h-5 w-5" />
+                 Book a Demo
+               </Button>
+             </Link>
+           </div>
 
-          {/* Stats */}
-          <div className="mt-16 grid grid-cols-2 gap-8 md:grid-cols-4 w-full max-w-4xl">
-            {[
-              { label: 'Active Users', value: '10K+' },
-              { label: 'Campaigns Run', value: '50K+' },
-              { label: 'Success Rate', value: '85%' },
-              { label: 'Avg ROI', value: '5x' },
-            ].map((stat, index) => (
-              <div key={index} className="text-center">
-                <div className="text-3xl font-bold text-white">{stat.value}</div>
-                <div className="mt-1 text-sm text-zinc-500">{stat.label}</div>
-              </div>
-            ))}
-          </div>
         </div>
       </div>
     </section>
