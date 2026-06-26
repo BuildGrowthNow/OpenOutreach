@@ -90,7 +90,7 @@ export default function ResetPasswordPage() {
             <div className="flex justify-center items-center py-4">
               <div className="relative h-24 w-64">
                 <Image
-                  src="/logo.svg"
+                  src="/logo-white-small.png"
                   alt="Lengrowth Logo"
                   fill
                   className="object-contain"
@@ -123,7 +123,7 @@ export default function ResetPasswordPage() {
           <div className="flex justify-center items-center py-4">
             <div className="relative h-24 w-64">
               <Image
-                src="/logo.svg"
+                src="/logo-white-small.png"
                 alt="Lengrowth Logo"
                 fill
                 className="object-contain"
