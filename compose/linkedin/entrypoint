@@ -15,4 +15,6 @@ fi
 mkdir -p /app/data
 chown ubuntu:ubuntu /app/data
 
-exec gosu ubuntu "$@"
+# Run the start script as root (nginx needs root to start)
+# gosu will be used only for Django processes within start script
+exec "$@"

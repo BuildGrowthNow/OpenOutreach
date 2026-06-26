@@ -11,9 +11,24 @@ Xvfb :99 -screen 0 1920x1080x24 &
 sleep 1
 export DISPLAY=:99
 
+# Ensure nginx directories exist with proper permissions (must be root)
+mkdir -p /var/lib/nginx/body /var/lib/nginx/proxy /var/cache/nginx /run/nginx
+chmod 755 /var/lib/nginx /var/cache/nginx /run/nginx
+
 # Start nginx for frontend (Next.js) on port 3000
-nginx -g 'daemon off;' &
-NGINX_PID=$!
+# nginx must start as ROOT to bind to ports and create PID file
+nginx
+sleep 1
+NGINX_PID=$(cat /run/nginx/nginx.pid 2>/dev/null || pgrep -x nginx | head -1)
+
+# Check if nginx is running
+if ! pgrep -x nginx > /dev/null; then
+    echo "ERROR: nginx failed to start"
+    nginx -t
+    exit 1
+fi
+
+echo "nginx started successfully (PID: $NGINX_PID)"
 
 # VNC remote access (only for open-source local use)
 if [ "${ENABLE_VNC:-false}" = "true" ]; then
@@ -27,8 +42,8 @@ sleep 2
 # If SKIP_DAEMON is set, run migrations and Django in background
 if [ "${SKIP_DAEMON:-false}" = "true" ]; then
     echo "SKIP_DAEMON=true - Starting Django admin without daemon..."
-    python manage.py migrate --no-input
-    python manage.py runserver 0.0.0.0:8000 &
+    gosu ubuntu python manage.py migrate --no-input
+    gosu ubuntu python manage.py runserver 0.0.0.0:8000 &
     DJANGO_PID=$!
     echo "Django started with PID $DJANGO_PID"
     # Wait for nginx to finish (it's running in foreground at port 3000)
@@ -38,4 +53,4 @@ fi
 
 # Run the daemon (migrate + onboard + task queue).
 # Forward any arguments, e.g. --onboard <file>.
-exec python manage.py rundaemon "$@"
+exec gosu ubuntu python manage.py rundaemon "$@"

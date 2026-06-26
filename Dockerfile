@@ -35,6 +35,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends nginx && rm -rf
 COPY --from=deps /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
 COPY --from=deps /usr/local/bin /usr/local/bin
 
+# Create nginx directories with proper ownership for ubuntu user
+RUN mkdir -p /var/lib/nginx/body /var/lib/nginx/proxy /var/cache/nginx /run/nginx && \
+    chown -R ubuntu:ubuntu /var/lib/nginx /var/cache/nginx /run/nginx && \
+    chmod -R 755 /var/lib/nginx /var/cache/nginx /run/nginx
+
 # Install Playwright Chromium
 ENV PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers
 ENV EDITOR=nano
