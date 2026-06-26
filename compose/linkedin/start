@@ -25,7 +25,7 @@ else
     nginx -g 'daemon off;'
 fi
 sleep 1
-NGINX_PID=$(cat /run/nginx/nginx.pid 2>/dev/null || pgrep -x nginx | head -1)
+NGINX_PID=$(cat /run/nginx.pid 2>/dev/null || pgrep -x nginx | head -1)
 
 # Check if nginx is running
 if ! pgrep -x nginx > /dev/null; then
@@ -52,8 +52,8 @@ if [ "${SKIP_DAEMON:-false}" = "true" ]; then
     gosu ubuntu python manage.py runserver 0.0.0.0:8000 &
     DJANGO_PID=$!
     echo "Django started with PID $DJANGO_PID"
-    # Wait for nginx to be running by polling its PID file
-    while [ -f /run/nginx/nginx.pid ] && kill -0 $(cat /run/nginx/nginx.pid) 2>/dev/null; do
+    # Keep running as long as nginx is alive (use pgrep since daemon mode uses /run/nginx.pid)
+    while pgrep -x nginx > /dev/null; do
         sleep 5
     done
     echo "Nginx stopped, shutting down Django..."
