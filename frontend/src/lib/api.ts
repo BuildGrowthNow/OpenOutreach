@@ -1,4 +1,4 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://linkedin-api.lengrowth.com"
 
 import { supabase } from './supabase/client'
 

@@ -8,7 +8,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import { Icons } from '@/lib/types/components'
-import { getSettings, type Settings } from '@/lib/api/dashboard'
+import { getSettings, getLinkedInSetupStatus, type Settings } from '@/lib/api/dashboard'
 import { useDashboard } from '@/hooks/use-dashboard'
 import { HealthStatus } from '@/components/dashboard/health-status'
 import { formatDistanceToNow } from 'date-fns'
@@ -18,6 +18,7 @@ import RateLimitForm from '@/components/settings/rate-limit-form'
 import LinkedInCredentialForm from '@/components/settings/linkedin-credential-form'
 import LinkedInCredentialCard from '@/components/settings/linkedin-credential-card'
 import { LinkedInSetupGuide } from '@/components/settings/linkedin-setup-guide'
+import { LinkedInSetupModal } from '@/components/settings/linkedin-setup-modal'
 import { Settings as SettingsIcon } from 'lucide-react'
 import { 
   getLinkedInCredentials, 
@@ -37,6 +38,7 @@ export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<'rate-limits' | 'profile' | 'linkedin-credentials' | 'setup-guide' | 'system' | 'status'>('rate-limits')
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [editingCredential, setEditingCredential] = useState<LinkedInCredentials | null>(null)
+  const [isLinkedInSetupModalOpen, setIsLinkedInSetupModalOpen] = useState(false)
   const { toast } = useToast()
 
   const loadLinkedInCredentials = useCallback(async () => {
@@ -67,6 +69,47 @@ export default function SettingsPage() {
     }
   }, [])
 
+  // Check if LinkedIn setup modal should be shown (after signup or if credentials are missing)
+  useEffect(() => {
+    // Check if there's a pending LinkedIn setup from the modal or from localStorage/session
+    const shouldShowSetupModal = () => {
+      // Check session storage for pending setup
+      if (typeof window !== 'undefined') {
+        const pending = sessionStorage.getItem('openoutreach_linkedin_setup_pending')
+        if (pending) {
+          sessionStorage.removeItem('openoutreach_linkedin_setup_pending')
+          return true
+        }
+        // Check URL params for tab
+        const params = new URLSearchParams(window.location.search)
+        if (params.get('show-linkedin-modal') === 'true') {
+          return true
+        }
+      }
+      return false
+    }
+
+    // Check if user passed through signup and LinkedIn is not configured
+    const checkLinkedInSetup = async () => {
+      try {
+        const response = await getLinkedInSetupStatus()
+        if (response.data) {
+          const { setup_complete } = response.data.status
+          // If LinkedIn is NOT configured, show the setup modal
+          if (!setup_complete) {
+            setIsLinkedInSetupModalOpen(true)
+          }
+        }
+      } catch (err) {
+        console.debug('Failed to check LinkedIn setup status:', err)
+      }
+    }
+
+    if (shouldShowSetupModal() || typeof window !== 'undefined') {
+      void checkLinkedInSetup()
+    }
+  }, [])
+
   useEffect(() => {
     void (async () => {
       await loadSettings()
@@ -79,6 +122,11 @@ export default function SettingsPage() {
   }
 
   const handleLinkedInCredentialsUpdate = () => {
+    loadLinkedInCredentials()
+  }
+
+  const handleLinkedInSetupComplete = () => {
+    setIsLinkedInSetupModalOpen(false)
     loadLinkedInCredentials()
   }
 
@@ -195,7 +243,13 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <>
+      <LinkedInSetupModal 
+        isOpen={isLinkedInSetupModalOpen} 
+        onOpenChange={setIsLinkedInSetupModalOpen}
+        onSetupComplete={handleLinkedInSetupComplete}
+      />
+      <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
@@ -371,7 +425,7 @@ export default function SettingsPage() {
            <LinkedInSetupGuide />
          </TabsContent>
 
-         <TabsContent value="system" className="space-y-6">
+        <TabsContent value="system" className="space-y-6">
          <Card>
            <CardHeader>
              <CardTitle>System Configuration</CardTitle>
@@ -480,7 +534,8 @@ export default function SettingsPage() {
        </TabsContent>
       </Tabs>
     </div>
-  )
+  </>
+)
 }
 
 interface ServiceHealth {

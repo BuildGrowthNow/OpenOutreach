@@ -82,6 +82,10 @@ RUN chown ubuntu:ubuntu ${APP_HOME} && \
     mkdir -p /app/data /app/openoutreach/media /app/staticfiles && \
     chmod -R 755 /app/data /app/openoutreach/media /app/staticfiles
 
+# Fix frontend cache directory permissions for Next.js image optimization
+RUN mkdir -p /app/frontend/.next/cache/images && \
+    chown -R ubuntu:ubuntu /app/frontend/.next/cache
+
 # Expose ports for frontend (3000), Django API (8000), and VNC (6080, 5900)
 EXPOSE 3000 8000 6080 5900
 

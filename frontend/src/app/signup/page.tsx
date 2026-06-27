@@ -6,7 +6,7 @@
 
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import Image from "next/image"
@@ -22,6 +22,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useAuthStore } from "@/lib/authStore"
+import { getLinkedInSetupStatus } from "@/lib/api/dashboard"
 
 export default function SignupPage() {
   const [fullName, setFullName] = useState("")
@@ -29,10 +30,42 @@ export default function SignupPage() {
   const [password, setPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [checkingLinkedIn, setCheckingLinkedIn] = useState(false)
   const signup = useAuthStore((state) => state.signup)
   const router = useRouter()
   const searchParams = useSearchParams()
   const callbackUrl = searchParams.get("callbackUrl") || "/dashboard"
+
+  // Check if LinkedIn is configured after signup - this runs after signup completes
+  useEffect(() => {
+    const shouldCheckLinkedIn = searchParams.get("check-linkedin") === "true"
+    
+    if (shouldCheckLinkedIn) {
+      const checkLinkedInStatus = async () => {
+        try {
+          setCheckingLinkedIn(true)
+          const response = await getLinkedInSetupStatus()
+          
+          if (response.data && !response.data.status.setup_complete) {
+            // LinkedIn is NOT configured - show modal
+            sessionStorage.setItem('openoutreach_linkedin_setup_pending', 'true')
+            router.push('/settings')
+          } else {
+            // LinkedIn is configured - go to dashboard
+            router.push(callbackUrl)
+          }
+        } catch (err) {
+          console.error('Failed to check LinkedIn status:', err)
+          // On error, still go to dashboard (user can set up LinkedIn later)
+          router.push(callbackUrl)
+        } finally {
+          setCheckingLinkedIn(false)
+        }
+      }
+      
+      checkLinkedInStatus()
+    }
+  }, [searchParams, router, callbackUrl])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -46,7 +79,8 @@ export default function SignupPage() {
         setError(result.error)
       } else {
         // Show success message - user needs to verify email
-        router.push(`/login?signup=success`)
+        // After email verification, users will be asked to configure LinkedIn
+        router.push(`/login?signup=success&check-linkedin=true`)
       }
     } catch (err) {
       setError("An unexpected error occurred. Please try again.")

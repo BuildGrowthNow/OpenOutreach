@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { LayoutDashboard, Activity, Users, MessageSquare, RefreshCw, AlertCircle } from 'lucide-react'
+import { LayoutDashboard, Activity, Users, MessageSquare, RefreshCw, AlertCircle, Plus, Mail } from 'lucide-react'
 import { StatsCard } from '@/components/dashboard/stats-card'
 import { RecentActivity } from '@/components/dashboard/recent-activity'
 import { Badge } from '@/components/ui/badge'
@@ -12,6 +13,9 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 
 const NOW = Date.now()
+
+// Card height class for consistent card heights
+const CARD_HEIGHT_CLASS = "min-h-[280px]"
 
 // Helper to round to 1 decimal place
 function roundTo1Decimal(value: number): string {
@@ -28,6 +32,7 @@ interface ActivityItem {
 }
 
 const Dashboard = () => {
+  const router = useRouter()
   const { 
     campaigns, 
     campaignsLoading, 
@@ -144,10 +149,10 @@ const Dashboard = () => {
             <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
-          <Button size="sm">
-            <LayoutDashboard className="mr-2 h-4 w-4" />
-            New Campaign
-          </Button>
+           <Button size="sm" onClick={() => router.push('/campaigns')}>
+             <LayoutDashboard className="mr-2 h-4 w-4" />
+             New Campaign
+           </Button>
         </div>
       </div>
 
@@ -184,6 +189,7 @@ const Dashboard = () => {
              trendUp={stats.totalCampaigns > 0}
              icon="LayoutDashboard"
              description="Active campaigns"
+             className={CARD_HEIGHT_CLASS}
            />
            <StatsCard
              title="Total Leads"
@@ -192,6 +198,7 @@ const Dashboard = () => {
              trendUp={stats.totalLeads > 0}
              icon="Users"
              description="All time leads"
+             className={CARD_HEIGHT_CLASS}
            />
            <StatsCard
              title="Connected"
@@ -200,6 +207,7 @@ const Dashboard = () => {
              trendUp={stats.connectedLeads > 0}
              icon="Users"
              description="Connection rate"
+             className={CARD_HEIGHT_CLASS}
            />
            <StatsCard
              title="Messages Sent"
@@ -208,6 +216,7 @@ const Dashboard = () => {
              trendUp={stats.messagesSent > 0}
              icon="MessageSquare"
              description="Total messages"
+             className={CARD_HEIGHT_CLASS}
            />
         </div>
       )}
@@ -220,19 +229,19 @@ const Dashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 gap-3">
-              <Button variant="outline" className="flex flex-col gap-2 h-auto py-4">
-                <Users className="h-8 w-8" />
+              <Button variant="outline" className="flex flex-col gap-2 h-auto py-4" onClick={() => router.push('/leads')}>
+                <Plus className="h-8 w-8" />
                 <span className="text-sm font-medium">Add New Lead</span>
               </Button>
-              <Button variant="outline" className="flex flex-col gap-2 py-4">
-                <MessageSquare className="h-8 w-8" />
+              <Button variant="outline" className="flex flex-col gap-2 py-4" onClick={() => router.push('/leads')}>
+                <Mail className="h-8 w-8" />
                 <span className="text-sm font-medium">New Message</span>
               </Button>
-              <Button variant="outline" className="flex flex-col gap-2 py-4">
+              <Button variant="outline" className="flex flex-col gap-2 py-4" onClick={() => router.push('/campaigns')}>
                 <LayoutDashboard className="h-8 w-8" />
                 <span className="text-sm font-medium">Campaign Stats</span>
               </Button>
-              <Button variant="outline" className="flex flex-col gap-2 py-4">
+              <Button variant="outline" className="flex flex-col gap-2 py-4" onClick={() => router.push('/dashboard/health')}>
                 <Activity className="h-8 w-8" />
                 <span className="text-sm font-medium">View Health</span>
               </Button>
