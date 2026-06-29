@@ -2,8 +2,8 @@
 Django Channels consumers for real-time notification delivery.
 """
 import json
-from channels.generic.websocket import AsyncWebsocketConsumer
-from channels.db import database_sync_to_async
+from channels.generic.websocket import AsyncWebsocketConsumer  # type: ignore[import-untyped]
+from channels.db import database_sync_to_async  # type: ignore[import-untyped]
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 

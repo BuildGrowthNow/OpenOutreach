@@ -56,7 +56,7 @@ def create_notification_with_realtime(recipient, notification_type, title, messa
         if emit_notification_to_user:
             try:
                 notification_data = {
-                    "notification_id": notification.id,
+                    "notification_id": notification.id,  # type: ignore[attr-defined]
                     "notification_type": notification_type,
                     "title": title,
                     "message": message,

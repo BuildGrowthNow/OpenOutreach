@@ -13,7 +13,7 @@ class TrackedLinkSerializer(serializers.ModelSerializer):
     campaign_name = serializers.SerializerMethodField()
     total_clicks = serializers.IntegerField(read_only=True)
     
-    class Meta:
+    class Meta:  # type: ignore[misc]
         model = TrackedLink
         fields = [
             'id', 'campaign', 'campaign_name', 'original_url', 'short_code',
@@ -34,7 +34,7 @@ class TrackedLinkSerializer(serializers.ModelSerializer):
         if request and hasattr(request, 'user'):
             from openoutreach.core.models import Campaign
             campaigns = Campaign.objects.filter(users=request.user)
-            fields['campaign'].queryset = campaigns
+            fields['campaign'].queryset = campaigns  # type: ignore[assignment]
         return fields
 
 
@@ -166,7 +166,7 @@ class CampaignTemplateSerializer(serializers.ModelSerializer):
     created_by = serializers.PrimaryKeyRelatedField(read_only=True)
     created_by_username = serializers.SerializerMethodField()
     
-    class Meta:
+    class Meta:  # type: ignore[misc]
         model = CampaignTemplate
         fields = [
             'id', 'name', 'description', 'campaign_objective',

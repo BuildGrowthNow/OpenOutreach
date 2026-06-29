@@ -18,6 +18,10 @@ def _ensure_crm_data(django_db_setup, django_db_blocker):
     Uses `db` fixture (not transactional_db) for compatibility.
     Since transaction=True tests rollback, we re-create data each time.
     """
+    # Print database info for debugging
+    from django.conf import settings
+    print(f"\n\nDATABASE INFO: {settings.DATABASES}\n\n")
+    
     with django_db_blocker.unblock():
         setup_crm()
 

@@ -5,11 +5,10 @@ It standardizes the response format to include pagination, stats, and meta infor
 in a predictable structure.
 """
 
-from typing import Any, Dict, Optional, List, TypeVar, Generic
+from typing import Any, Dict, Optional, List
 from dataclasses import dataclass
 
 
-T = TypeVar('T')
 
 
 @dataclass
@@ -115,7 +114,7 @@ class APIResponseBuilder:
 
 
 def create_pagination_response(
-    data: T,
+    data: Any,
     page: int,
     limit: int,
     total: int,

@@ -100,11 +100,13 @@ class LinksListView(APIView):
                 'message': 'Invalid URL format',
             }, status=status.HTTP_400_BAD_REQUEST)
         
+        # Import Campaign at function start for proper type binding
+        from openoutreach.core.models import Campaign
+        
         # Get campaign (optional, for assignment)
         campaign = None
         if campaign_id:
             try:
-                from openoutreach.core.models import Campaign
                 campaign = Campaign.objects.get(id=campaign_id)
                 
                 # Check if user has access to this campaign

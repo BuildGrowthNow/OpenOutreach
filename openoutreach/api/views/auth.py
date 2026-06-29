@@ -1,5 +1,6 @@
 # Authentication API Views
 
+from typing import Any
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, permissions
@@ -17,7 +18,7 @@ import jwt
 
 # Use Django's default User model
 from django.contrib.auth import get_user_model
-User = get_user_model()
+User = get_user_model()  # type: Any
 logger = logging.getLogger(__name__)
 
 

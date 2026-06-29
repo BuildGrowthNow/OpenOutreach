@@ -9,7 +9,7 @@ class NotificationSerializer(serializers.ModelSerializer):
     campaign_name = serializers.CharField(source="campaign.name", read_only=True, allow_null=True)
     deal_name = serializers.CharField(source="deal.lead.name", read_only=True, allow_null=True)
 
-    class Meta:
+    class Meta:  # type: ignore[misc]
         model = Notification
         fields = [
             "id",

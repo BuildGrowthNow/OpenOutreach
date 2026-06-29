@@ -81,7 +81,7 @@ def sse_notification_stream(request):
 
         # Get the channel layer
         try:
-            channel_layer = get_channel_layer()
+            channel_layer = get_channel_layer()  # type: ignore[possibly-unbound]
             if channel_layer is None:
                 # No channel layer available - use keepalive only
                 while True:
@@ -157,7 +157,7 @@ def emit_notification_to_user(user_id, notification_data):
         return  # Channels not available
 
     try:
-        channel_layer = get_channel_layer()
+        channel_layer = get_channel_layer()  # type: ignore[possibly-unbound]
         if channel_layer is None:
             return
 
@@ -209,7 +209,7 @@ def emit_notification_to_campaign(campaign, notification_data):
         return  # Channels not available
 
     try:
-        channel_layer = get_channel_layer()
+        channel_layer = get_channel_layer()  # type: ignore[possibly-unbound]
         if channel_layer is None:
             return
 
@@ -254,7 +254,7 @@ def emit_campaign_status_update(campaign_id, status, message=None):
         return
 
     try:
-        channel_layer = get_channel_layer()
+        channel_layer = get_channel_layer()  # type: ignore[possibly-unbound]
         if channel_layer is None:
             return
 
@@ -293,7 +293,7 @@ def emit_campaign_error(campaign_id, error_message, deal_id=None):
         return
 
     try:
-        channel_layer = get_channel_layer()
+        channel_layer = get_channel_layer()  # type: ignore[possibly-unbound]
         if channel_layer is None:
             return
 

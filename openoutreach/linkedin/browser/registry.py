@@ -53,7 +53,7 @@ def cli_parser(description: str):
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "openoutreach.settings")
 
     import django
-    django.setup()
+    django.setup()  # type: ignore[attr-defined]
 
     from openoutreach.core.logging import configure_logging
     configure_logging(level=logging.DEBUG)
