@@ -253,9 +253,11 @@ if not DEBUG:
     ])
 
 # ==================== MongoDB Configuration ====================
-# MongoDB integration via Djongo connector
+# MongoDB integration via PyMongo connector
 # Set MONGODB_ENABLED=true in environment to use MongoDB
 # For MongoDB Atlas: set MONGODB_ATLAS_URI=mongodb+srv://user:pass@cluster.mongodb.net/dbname
+# Note: MongoDB backend for Django ORM not available for Django 5.x
+# Use pymongo directly for MongoDB operations when MONGODB_ENABLED=true
 
 # Type annotation for MongoDB_URI
 MongoDB_URI: str | None = None
@@ -288,7 +290,7 @@ try:
     # Configure MongoDB connection based on environment
     if MONGODB_ENABLED:
         MongoDB_URI = get_mongodb_uri() or MONGODB_ATLAS_URI
-        logger.info("MongoDB integration enabled via Djongo")
+        logger.info("MongoDB integration enabled via PyMongo")
     else:
         logger.info("MongoDB integration disabled, using SQLite")
         
@@ -345,17 +347,19 @@ LOGGING = {
 }
 
 # MongoDB Database Configuration (when MONGODB_ENABLED=true)
-# Uses Djongo connector to interface with MongoDB
+# 
+# NOTE: Djongo (MongoDB backend for Django) does not support Django 5.x currently.
+# The project uses Django 5.2, and there's no stable MongoDB backend that supports it.
+# 
+# Options for MongoDB integration:
+# 1. Downgrade to Django 3.1.x (not recommended - breaks other packages)
+# 2. Use pymongo directly for MongoDB operations
+# 3. Wait for a compatible MongoDB backend to be released
+#
+# For now, when MONGODB_ENABLED=true, we'll use pymongo directly for MongoDB operations
+# while keeping SQLite as the default database for Django models.
 if MONGODB_ENABLED:
-    #type: ignore[typeddict-item]
-    DATABASES = {  # type: ignore[assignment]
-        'default': {
-            'ENGINE': 'djongo',
-            'NAME': MONGODB_NAME,
-            'ENFORCE_SCHEMA': False,
-            'LOGGING': {
-                'level': 'DEBUG' if DEBUG else 'INFO',
-                'log_queries': DEBUG,
-            },
-        }
-    }
+    logger.info("MongoDB integration enabled via PyMongo")
+    logger.warning("Note: MongoDB backend not available for Django 5.x yet.")
+    logger.warning("Django models will continue to use SQLite.")
+    logger.warning("Use pymongo directly for MongoDB operations.")
