@@ -246,10 +246,19 @@ def get_mongodb_collection(collection_name: str) -> Optional[Collection]:
 def check_mongodb_connection() -> bool:
     """
     Check if MongoDB connection is active.
+    Attempts to connect if not already connected and MongoDB is enabled.
     
     Returns:
         True if connected, False otherwise
     """
+    # Try to connect if not already connected
+    if mongodb_connection._initialized and not mongodb_connection.client:
+        try:
+            if _is_mongodb_enabled() and _get_mongodb_uri():
+                mongodb_connection.connect()
+        except Exception:
+            pass
+    
     return mongodb_connection.client is not None and mongodb_connection.database is not None
 
 
@@ -257,3 +266,24 @@ def reset_mongodb_connection() -> None:
     """Reset the MongoDB connection (for testing)."""
     mongodb_connection.disconnect()
     mongodb_connection._initialized = False
+
+
+def initialize_mongodb_connection() -> bool:
+    """
+    Initialize MongoDB connection after Django is configured.
+    This can be called after Django setup to establish the connection
+    if it was deferred during module initialization.
+    
+    Returns:
+        True if connection successful, False otherwise
+    """
+    # Only try to connect if not already initialized
+    if mongodb_connection._client is None:
+        try:
+            if _is_mongodb_enabled() and _get_mongodb_uri():
+                return mongodb_connection.connect()
+            else:
+                logger.info("MongoDB is disabled or URI not configured")
+        except Exception as e:
+            logger.error(f"Failed to initialize MongoDB connection: {e}")
+    return False
