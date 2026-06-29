@@ -4,14 +4,18 @@ Script to fix orphaned foreign key data in the database.
 This deletes LinkedIn profiles that have user_id references to non-existent users.
 """
 import os
+import sys
 import django
+
+# Add the app directory to Python path
+sys.path.insert(0, '/app')
 
 # Setup Django
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'openoutreach.settings')
 django.setup()
 
 from django.contrib.auth.models import User
-from linkedin.models import LinkedInProfile
+from openoutreach.linkedin.models import LinkedInProfile
 from django.db import transaction
 
 def fix_orphaned_data():
