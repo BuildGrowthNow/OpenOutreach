@@ -32,5 +32,23 @@ from .utils import (
     validate_document,
 )
 
+# Import models
+from .models import (
+    Lead,
+    Campaign,
+    Deal,
+    Message,
+    Note,
+    LeadPersona,
+    TrackedLink,
+    LinkClick,
+    LinkDealConversion,
+    LinkedInCredentials,
+    LinkedInCredentialLog,
+    SiteConfig,
+    Task,
+    ensure_mongodb_indexes,
+)
+
 # Import T from utils, but we don't define it here to avoid redefinition error
 # T = TypeVar('T')  # Already defined in utils.py

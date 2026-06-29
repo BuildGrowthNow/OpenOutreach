@@ -6,7 +6,7 @@ from openoutreach.mongodb.connection import check_mongodb_connection, get_mongod
 print(f"Connection: {check_mongodb_connection()}")
 db = get_mongodb()
 print(f"DB: {db}")
-if db:
+if db is not None:
     print(f"Collections: {db.list_collection_names()}")
 else:
     print("DB is None")

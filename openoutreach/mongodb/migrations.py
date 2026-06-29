@@ -15,7 +15,7 @@ from .connection import check_mongodb_connection, get_mongodb_collection
 from .models import (
     Lead, Campaign, Deal, Message, Note, LeadPersona,
     TrackedLink, LinkClick, LinkDealConversion, LinkedInCredentials,
-    LinkedInCredentialLog, SiteConfig, Task, BaseMongoModel
+    LinkedInCredentialLog, SiteConfig, Task
 )
 
 logger = logging.getLogger(__name__)

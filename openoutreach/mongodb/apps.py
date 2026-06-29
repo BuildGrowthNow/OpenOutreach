@@ -16,7 +16,8 @@ class MongoDBConfig(AppConfig):
             
             if check_mongodb_connection():
                 db = get_mongodb()
-                logger.info(f"MongoDB connected: {db.name if db else 'unknown'}")
+                if db is not None:
+                    logger.info(f"MongoDB connected: {db.name}")
                 
                 # Ensure indexes exist
                 ensure_mongodb_indexes()

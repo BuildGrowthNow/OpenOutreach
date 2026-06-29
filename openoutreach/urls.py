@@ -13,6 +13,8 @@ urlpatterns: list[Union[URLResolver, URLPattern]] = [
     path("l/", include("openoutreach.crm.urls")),
     # Notifications URLS (for real-time updates via SSE)
     path("api/", include("openoutreach.notifications.urls")),
+    # MongoDB health check endpoint
+    path("api/", include("openoutreach.mongodb.urls")),
 ]
 
 # Use list.extend for type compatibility

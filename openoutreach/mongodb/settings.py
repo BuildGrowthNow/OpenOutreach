@@ -6,7 +6,21 @@ Supports both dual-write (SQLite + MongoDB) and MongoDB-only configurations.
 """
 
 import os
+import sys
+from pathlib import Path
 from typing import Optional
+
+# Load .env file if available (for development)
+try:
+    from dotenv import load_dotenv
+    # Get the root directory (parent of openoutreach)
+    ROOT_DIR = Path(__file__).resolve().parent.parent.parent
+    env_path = ROOT_DIR / ".env"
+    if env_path.exists():
+        load_dotenv(env_path)
+except ImportError:
+    # python-dotenv not installed, use system environment variables
+    pass
 
 # MongoDB Configuration
 MONGODB_ENABLED = os.environ.get('MONGODB_ENABLED', 'false').lower() == 'true'

@@ -10,7 +10,7 @@ print(f"Connection established: {check_mongodb_connection()}")
 print(f"Client: {mongodb_connection.client}")
 db = get_mongodb()
 print(f"Database: {db}")
-if db:
+if db is not None:
     print(f"Database name: {db.name}")
     collections = db.list_collection_names()
     print(f"Collections: {collections}")
