@@ -40,6 +40,10 @@ DATABASES = {
         "NAME": BASE_DIR / "data" / "db.sqlite3",
         "TEST": {
             "NAME": BASE_DIR / "data" / "test_db.sqlite3",
+            "MIGRATE": True,
+            "OPTIONS": {
+                "timeout": 30,
+            },
         },
     }
 }

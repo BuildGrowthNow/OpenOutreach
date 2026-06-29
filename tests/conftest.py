@@ -7,6 +7,12 @@ os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = "true"
 import numpy as np
 import pytest
 
+# Setup Django before other imports
+import django
+
+# Initialize Django
+django.setup()
+
 from openoutreach.core.management.setup_crm import setup_crm
 from tests.factories import UserFactory
 
@@ -99,3 +105,9 @@ def fake_session(db):
     )
 
     return FakeAccountSession(django_user=user, linkedin_profile=linkedin_profile, campaign=campaign)
+
+
+def pytest_configure(config):
+    """Override pytest-django database configuration to reuse the main database."""
+    # This prevents pytest-django from creating an in-memory test database
+    config._django_db_setup = True

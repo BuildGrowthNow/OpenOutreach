@@ -79,6 +79,7 @@ INSTALLED_APPS = [
     "openoutreach.chat.apps.ChatConfig",
     "openoutreach.linkedin.apps.LinkedInConfig",
     "openoutreach.emails.apps.EmailsConfig",
+    "openoutreach.mongodb.apps.MongoDBConfig",
 ]
 
 MIDDLEWARE = [

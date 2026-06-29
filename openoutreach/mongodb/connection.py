@@ -12,12 +12,33 @@ from pymongo import MongoClient
 from pymongo.collection import Collection
 from pymongo.database import Database
 
-from .settings import (
-    MONGODB_ENABLED,
-    MONGODB_ATLAS_URI,
-    get_mongodb_uri,
-    get_mongodb_config
-)
+# Import django.conf.settings at module level, not the values directly
+# This ensures Django's settings (which are loaded last) take precedence
+from django.conf import settings as django_settings
+
+# Use helper functions to access settings dynamically at runtime
+def _is_mongodb_enabled() -> bool:
+    """Check if MongoDB is enabled by reading Django settings."""
+    try:
+        return django_settings.MONGODB_ENABLED
+    except AttributeError:
+        return False
+
+def _get_mongodb_uri() -> Optional[str]:
+    """Get MongoDB URI from Django settings."""
+    try:
+        from openoutreach.mongodb.settings import get_mongodb_uri as get_base_uri
+        return get_base_uri() or getattr(django_settings, 'MONGODB_ATLAS_URI', None)
+    except Exception:
+        return None
+
+def _get_mongodb_config() -> dict:
+    """Get MongoDB config from Django settings."""
+    try:
+        from openoutreach.mongodb.settings import get_mongodb_config as get_base_config
+        return get_base_config()
+    except Exception:
+        return {}
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +75,7 @@ class MongoDBConnection:
         self._database = None
         self._initialized = True  # type: ignore[has-type]
         
-        if MONGODB_ENABLED:
+        if _is_mongodb_enabled():
             self.connect()
         else:
             logger.info("MongoDB is disabled. Using SQLite only.")
@@ -72,7 +93,7 @@ class MongoDBConnection:
         
         try:
             # Get connection URI
-            uri = get_mongodb_uri() or MONGODB_ATLAS_URI
+            uri = _get_mongodb_uri()
             
             if not uri:
                 logger.warning("No MongoDB connection URI configured")
@@ -91,7 +112,7 @@ class MongoDBConnection:
             self._client.admin.command('ping')
             
             # Get database
-            db_name = settings.MONGODB_NAME if hasattr(settings, 'MONGODB_NAME') else 'openoutreach'
+            db_name = getattr(settings, 'MONGODB_NAME', 'openoutreach')
             self._database = self._client[db_name]
             
             logger.info("MongoDB connection established successfully")

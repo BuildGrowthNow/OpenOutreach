@@ -17,6 +17,7 @@ run: ## run the daemon
 	python manage.py rundaemon
 
 test: ## run the test suite
+	python manage.py migrate --no-input
 	.venv/bin/pytest
 
 admin: ## start the Django Admin web server
@@ -31,7 +32,7 @@ logs: ## follow the logs of the service
 	docker compose -f local.yml logs -f
 
 docker-test: ## run tests in Docker
-	docker compose -f local.yml run --remove-orphans app py.test -vv -p no:cacheprovider
+	docker compose -f local.yml run --remove-orphans app python manage.py migrate --no-input && py.test -vv -p no:cacheprovider
 
 stop: ## stop all services defined in Docker Compose
 	docker compose -f local.yml stop
