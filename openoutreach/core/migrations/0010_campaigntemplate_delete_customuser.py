@@ -5,7 +5,18 @@ from django.conf import settings
 from django.db import migrations, models
 
 
+def cleanup_orphaned_campaign_users(apps, schema_editor):
+    """Remove orphaned user associations from Campaign ManyToMany field."""
+    from django.db import connection
+    
+    # Direct SQL to delete all entries in the many-to-many table
+    # This avoids foreign key constraint issues
+    with connection.cursor() as cursor:
+        cursor.execute("DELETE FROM core_campaign_users")
+
+
 class Migration(migrations.Migration):
+    atomic = False  # Disable atomic transactions for this migration
 
     dependencies = [
         ("core", "0009_add_campaign_created_at_updated_at"),
@@ -13,6 +24,10 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        migrations.RunPython(
+            code=cleanup_orphaned_campaign_users,
+            reverse_code=None,
+        ),
         migrations.CreateModel(
             name="CampaignTemplate",
             fields=[
