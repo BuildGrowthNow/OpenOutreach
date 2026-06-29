@@ -75,10 +75,16 @@ class MongoDBConnection:
         self._database = None
         self._initialized = True  # type: ignore[has-type]
         
-        if _is_mongodb_enabled():
-            self.connect()
-        else:
-            logger.info("MongoDB is disabled. Using SQLite only.")
+        # Check if Django is configured before accessing settings
+        try:
+            django_settings.DATABASES  # Check if DATABASES is configured
+            if _is_mongodb_enabled():
+                self.connect()
+            else:
+                logger.info("MongoDB is disabled. Using SQLite only.")
+        except Exception:
+            # Django not configured yet, skip connection until explicitly requested
+            logger.debug("Django not configured yet, deferring MongoDB connection")
     
     def connect(self) -> bool:
         """
@@ -209,10 +215,18 @@ mongodb_connection = MongoDBConnection()
 def get_mongodb() -> Optional[Database]:
     """
     Get the MongoDB database connection.
+    Attempts to connect if not already connected and MongoDB is enabled.
     
     Returns:
         MongoDB Database object or None if not connected
     """
+    # Try to connect if not already connected
+    if mongodb_connection._initialized and not mongodb_connection.client:
+        try:
+            if _is_mongodb_enabled() and _get_mongodb_uri():
+                mongodb_connection.connect()
+        except Exception:
+            pass
     return mongodb_connection.database
 
 
