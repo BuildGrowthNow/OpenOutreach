@@ -79,11 +79,12 @@ class MongoDBConnection:
                 return False
             
             # Create client with connection options
+            # Use fallback defaults if settings don't exist
             self._client = MongoClient(
                 uri,
-                serverSelectionTimeoutMS=settings.MONGODB_SERVER_SELECTION_TIMEOUT,
-                connectTimeoutMS=settings.MONGODB_CONNECT_TIMEOUT,
-                socketTimeoutMS=settings.MONGODB_SOCKET_TIMEOUT
+                serverSelectionTimeoutMS=getattr(settings, 'MONGODB_SERVER_SELECTION_TIMEOUT', 30000),
+                connectTimeoutMS=getattr(settings, 'MONGODB_CONNECT_TIMEOUT', 30000),
+                socketTimeoutMS=getattr(settings, 'MONGODB_SOCKET_TIMEOUT', 10000)
             )
             
             # Verify connection
