@@ -7,17 +7,42 @@ from datetime import datetime
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'openoutreach.settings')
 django.setup()
 
-from openoutreach.mongodb.connection import get_mongodb_client
+from openoutreach.mongodb.connection import (
+    MongoDBConnection,
+    get_mongodb,
+    get_mongodb_collection
+)
 
 def test_mongodb():
     """Test MongoDB connection and create a test document."""
     try:
         print("Testing MongoDB connection...")
-        client = get_mongodb_client()
-        print(f"Connected to MongoDB: {client.server_info()}")
         
-        db = client['openoutreach']
-        collection = db['test_collection']
+        # Get MongoDB connection instance
+        conn = MongoDBConnection()
+        
+        # Check if MongoDB is enabled
+        if not conn.client:
+            print("MongoDB is not enabled. Check MONGODB_ENABLED in settings.")
+            # Still test that we can connect to the configured MongoDB server
+            from openoutreach.mongodb.settings import MONGODB_ENABLED, MONGODB_ATLAS_URI
+            print(f"MONGODB_ENABLED: {MONGODB_ENABLED}")
+            print(f"MONGODB_ATLAS_URI: {'***' + MONGODB_ATLAS_URI[-10:] if MONGODB_ATLAS_URI else 'Not set'}")
+            return False
+        
+        # Test connection with ping
+        conn.client.admin.command('ping')
+        print("MongoDB connection successful!")
+        
+        db = get_mongodb()
+        if not db:
+            print("Failed to get MongoDB database")
+            return False
+        
+        collection = get_mongodb_collection('test_collection')
+        if not collection:
+            print("Failed to get test_collection")
+            return False
         
         # Insert a test document
         test_data = {
@@ -32,11 +57,13 @@ def test_mongodb():
         doc = collection.find_one({'_id': result.inserted_id})
         print(f"Retrieved document: {doc}")
         
-        client.close()
+        conn.disconnect()
         print("MongoDB connection test completed successfully!")
         return True
     except Exception as e:
         print(f"Error testing MongoDB: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 if __name__ == '__main__':
