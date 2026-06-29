@@ -124,7 +124,7 @@ const Dashboard = () => {
   const isLoading = campaignsLoading || leadsLoading || healthLoading
 
   return (
-    <div className="flex-1 space-y-6 p-4 md:p-6 lg:p-8">
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
         <div className="flex items-center gap-2">
@@ -182,42 +182,42 @@ const Dashboard = () => {
         </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-           <StatsCard
-             title="Total Campaigns"
-             value={stats.totalCampaigns}
-             trend={stats.totalCampaigns > 0 ? `+${Math.min(stats.totalCampaigns, 10)}` : "+0"}
-             trendUp={stats.totalCampaigns > 0}
-             icon="LayoutDashboard"
-             description="Active campaigns"
-             className={CARD_HEIGHT_CLASS}
-           />
-           <StatsCard
-             title="Total Leads"
-             value={stats.totalLeads}
-             trend={stats.totalLeads > 0 ? `+${Math.min(Math.floor(stats.totalLeads * 0.12), 20)}%` : "+0%"}
-             trendUp={stats.totalLeads > 0}
-             icon="Users"
-             description="All time leads"
-             className={CARD_HEIGHT_CLASS}
-           />
-           <StatsCard
-             title="Connected"
-             value={stats.connectedLeads}
-             trend={stats.connectedLeads > 0 ? `+${Math.min(Math.floor(stats.connectedLeads * 0.08), 15)}%` : "+0%"}
-             trendUp={stats.connectedLeads > 0}
-             icon="Users"
-             description="Connection rate"
-             className={CARD_HEIGHT_CLASS}
-           />
-           <StatsCard
-             title="Messages Sent"
-             value={stats.messagesSent}
-             trend={stats.messagesSent > 0 ? `+${Math.min(Math.floor(stats.messagesSent * 0.05), 25)}%` : "+0%"}
-             trendUp={stats.messagesSent > 0}
-             icon="MessageSquare"
-             description="Total messages"
-             className={CARD_HEIGHT_CLASS}
-           />
+            <StatsCard
+              title="Total Campaigns"
+              value={stats.totalCampaigns}
+              trend={stats.totalCampaigns > 0 ? `+${Math.min(stats.totalCampaigns, 10)}` : undefined}
+              trendUp={stats.totalCampaigns > 0}
+              icon="LayoutDashboard"
+              description="Active campaigns"
+              className={CARD_HEIGHT_CLASS}
+            />
+            <StatsCard
+              title="Total Leads"
+              value={stats.totalLeads}
+              trend={stats.totalLeads > 0 ? `+${Math.min(Math.floor(stats.totalLeads * 0.12), 20)}%` : undefined}
+              trendUp={stats.totalLeads > 0}
+              icon="Users"
+              description="All time leads"
+              className={CARD_HEIGHT_CLASS}
+            />
+            <StatsCard
+              title="Connected"
+              value={stats.connectedLeads}
+              trend={stats.connectedLeads > 0 ? `+${Math.min(Math.floor(stats.connectedLeads * 0.08), 15)}%` : undefined}
+              trendUp={stats.connectedLeads > 0}
+              icon="Users"
+              description="Connection rate"
+              className={CARD_HEIGHT_CLASS}
+            />
+            <StatsCard
+              title="Messages Sent"
+              value={stats.messagesSent}
+              trend={stats.messagesSent > 0 ? `+${Math.min(Math.floor(stats.messagesSent * 0.05), 25)}%` : undefined}
+              trendUp={stats.messagesSent > 0}
+              icon="MessageSquare"
+              description="Total messages"
+              className={CARD_HEIGHT_CLASS}
+            />
         </div>
       )}
 
@@ -233,15 +233,15 @@ const Dashboard = () => {
                 <Plus className="h-8 w-8" />
                 <span className="text-sm font-medium">Add New Lead</span>
               </Button>
-              <Button variant="outline" className="flex flex-col gap-2 py-4" onClick={() => router.push('/leads')}>
+              <Button variant="outline" className="flex flex-col gap-2 h-auto  py-4" onClick={() => router.push('/leads')}>
                 <Mail className="h-8 w-8" />
                 <span className="text-sm font-medium">New Message</span>
               </Button>
-              <Button variant="outline" className="flex flex-col gap-2 py-4" onClick={() => router.push('/campaigns')}>
+              <Button variant="outline" className="flex flex-col gap-2 h-auto  py-4" onClick={() => router.push('/campaigns')}>
                 <LayoutDashboard className="h-8 w-8" />
                 <span className="text-sm font-medium">Campaign Stats</span>
               </Button>
-              <Button variant="outline" className="flex flex-col gap-2 py-4" onClick={() => router.push('/dashboard/health')}>
+              <Button variant="outline" className="flex flex-col gap-2 h-auto  py-4" onClick={() => router.push('/dashboard/health')}>
                 <Activity className="h-8 w-8" />
                 <span className="text-sm font-medium">View Health</span>
               </Button>

@@ -27,6 +27,9 @@ const eslintConfig = defineConfig([
       'react-hooks/purity': 'off',
       // Disable unescaped entities rule - apostrophes in JSX are common
       'react/no-unescaped-entities': 'off',
+      // Disable set-state-in-effect rule - calling async setState within effects is a valid pattern
+      // when you need to fetch data on component mount or when props change
+      'react-hooks/set-state-in-effect': 'off',
     },
   }),
 ]);

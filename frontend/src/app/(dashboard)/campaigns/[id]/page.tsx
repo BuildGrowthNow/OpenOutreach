@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -11,13 +12,14 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Icons } from '@/lib/types/components'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
-import { getCampaign, getCampaignAnalytics, getCampaignLeads, updateCampaign, deleteCampaign, getDailyUsage, uploadCampaignLeads, getCampaignStatus, getGhostModeSimulations, startGhostMode, stopGhostMode } from '@/lib/api/dashboard'
-import { Campaign, Lead } from '@/lib/types/components'
+import { getCampaign, getCampaignAnalytics, getCampaignLeads, updateCampaign, deleteCampaign, getDailyUsage, uploadCampaignLeads, getCampaignStatus, getGhostModeSimulations, startGhostMode, stopGhostMode, createCampaignTemplate, addLeadToCampaign } from '@/lib/api/dashboard'
+import { Campaign, Lead, CampaignTemplateCreateData } from '@/lib/types/components'
 import { CampaignForm } from '@/components/campaigns/campaign-form'
 import { CampaignStats as CampaignStatsComponent } from '@/components/campaigns/campaign-stats'
 import { CampaignList as CampaignListComponent } from '@/components/campaigns/campaign-list'
 import { DailyProgress } from '@/components/campaigns/daily-progress'
 import { cn } from '@/lib/utils'
+import { LinksManager } from '@/components/campaign/LinksManager'
 
 interface CampaignAnalyticsResponse {
   stats: {
@@ -91,6 +93,47 @@ export default function CampaignDetailsPage() {
   const [uploadLoading, setUploadLoading] = useState(false)
   const [uploadStatus, setUploadStatus] = useState<{ success: boolean; message: string } | null>(null)
   const [actionLoading, setActionLoading] = useState(false)
+  
+  // Save as Template states
+  const [showSaveTemplateModal, setShowSaveTemplateModal] = useState(false)
+  const [newTemplateName, setNewTemplateName] = useState('')
+  const [newTemplateDescription, setNewTemplateDescription] = useState('')
+  const [newTemplateIsPublic, setNewTemplateIsPublic] = useState(false)
+  const [saveTemplateLoading, setSaveTemplateLoading] = useState(false)
+
+  // Handle save as template
+  const handleSaveAsTemplate = async () => {
+    if (!campaign) return
+    
+    try {
+      setSaveTemplateLoading(true)
+      const templateData: CampaignTemplateCreateData = {
+        name: newTemplateName.trim() || `${campaign.name} (Template)`,
+        description: newTemplateDescription.trim() || campaign.description,
+        campaign_objective: campaign.campaignObjective,
+        ghost_mode_enabled: campaign.ghostModeEnabled,
+        velocity: campaign.velocity,
+        cooldown_minutes: campaign.cooldownMinutes,
+        is_public: newTemplateIsPublic,
+      }
+      
+      const response = await createCampaignTemplate(templateData)
+      if (response.data) {
+        setShowSaveTemplateModal(false)
+        setNewTemplateName('')
+        setNewTemplateDescription('')
+        setNewTemplateIsPublic(false)
+        // Optionally navigate to templates page
+        router.push('/campaigns/templates')
+      } else {
+        setError(response.error || response.message || 'Failed to save template')
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred while saving template')
+    } finally {
+      setSaveTemplateLoading(false)
+    }
+  }
 
   // Targeted polling state - only fetch status every 10 seconds
   const [campaignStatus, setCampaignStatus] = useState<string | null>(null)
@@ -446,6 +489,10 @@ export default function CampaignDetailsPage() {
               Start
             </Button>
           ) : null}
+          <Button variant="outline" onClick={handleSaveAsTemplate}>
+            <Icons.Save className="mr-2 h-4 w-4" />
+            Save as Template
+          </Button>
           <Button variant="outline" onClick={() => setEditing(true)}>
             <Icons.Edit className="mr-2 h-4 w-4" />
             Edit
@@ -475,10 +522,11 @@ export default function CampaignDetailsPage() {
 
       {/* Tabs Navigation */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid grid-cols-5 w-full md:w-auto">
+        <TabsList className="grid grid-cols-6 w-full md:w-auto">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="leads">Leads</TabsTrigger>
           <TabsTrigger value="analytics">Analytics</TabsTrigger>
+          <TabsTrigger value="links">Links</TabsTrigger>
           <TabsTrigger value="settings">Settings</TabsTrigger>
           <TabsTrigger value="ghost-mode">Ghost Mode</TabsTrigger>
         </TabsList>
@@ -916,6 +964,11 @@ export default function CampaignDetailsPage() {
           </Card>
         </TabsContent>
 
+        {/* Links Tab */}
+        <TabsContent value="links" className="space-y-6">
+          <LinksManager campaignId={campaignId} />
+        </TabsContent>
+
         {/* Analytics Tab */}
         <TabsContent value="analytics" className="space-y-6">
           {analytics ? (
@@ -1025,6 +1078,58 @@ export default function CampaignDetailsPage() {
           isEditing
         />
       )}
+
+      {/* Save as Template Modal */}
+      <Dialog open={showSaveTemplateModal} onOpenChange={setShowSaveTemplateModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Save Campaign as Template</DialogTitle>
+            <DialogDescription>
+              Save this campaign configuration as a reusable template
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label htmlFor="template-name" className="text-sm font-medium">Template Name</label>
+              <Input
+                id="template-name"
+                value={newTemplateName}
+                onChange={e => setNewTemplateName(e.target.value)}
+                placeholder="Enter template name"
+              />
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="template-description" className="text-sm font-medium">Description</label>
+              <Input
+                id="template-description"
+                value={newTemplateDescription}
+                onChange={e => setNewTemplateDescription(e.target.value)}
+                placeholder="Brief description of the template"
+              />
+            </div>
+            <div className="flex items-center space-x-2 p-3 rounded-lg border">
+              <Switch
+                checked={newTemplateIsPublic}
+                onCheckedChange={setNewTemplateIsPublic}
+              />
+              <div className="space-y-0.5">
+                <label className="text-sm font-medium">Public Template</label>
+                <p className="text-xs text-muted-foreground">
+                  Make this template available to all team members
+                </p>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowSaveTemplateModal(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveAsTemplate} disabled={saveTemplateLoading}>
+              {saveTemplateLoading ? 'Saving...' : 'Save Template'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -9,16 +9,30 @@ import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Icons } from '@/lib/types/components'
-import { getLinks } from '@/lib/api/dashboard'
+import { getLinks, TrackedLink } from '@/lib/api/dashboard'
 import { Breadcrumb } from '@/components/layout/breadcrumb'
 import LinkStats from '@/components/links/link-stats'
-import { LinkMetrics } from '@/lib/types/components'
 
 const NOW = Date.now()
 const DAY_MS = 24 * 60 * 60 * 1000
 
+// Helper function to get link metrics from TrackedLink
+function getLinkMetrics(link: TrackedLink) {
+  return {
+    id: link.id,
+    url: link.original_url || '',
+    shortUrl: link.short_code || '',
+    campaignId: link.campaign?.id || '',
+    campaignName: link.campaign?.name || '',
+    clicks: link.total_clicks || 0,
+    uniqueVisitors: link.unique_clicks || 0,
+    lastClickAt: link.last_clicked_at || '',
+    createdAt: link.created_at || '',
+  }
+}
+
 export default function LinksPage() {
-  const [links, setLinks] = useState<LinkMetrics[]>([])
+  const [links, setLinks] = useState<TrackedLink[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
@@ -46,15 +60,18 @@ export default function LinksPage() {
     })()
   }, [loadLinks])
 
+  // Get metrics for filtering and sorting
   const filteredLinks = useMemo(() => links.filter(link => {
-    const matchesSearch = link.url.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         link.campaignName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         link.shortUrl.toLowerCase().includes(searchTerm.toLowerCase())
+    const metrics = getLinkMetrics(link)
+    
+    const matchesSearch = metrics.url.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         metrics.campaignName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         metrics.shortUrl.toLowerCase().includes(searchTerm.toLowerCase())
 
     if (selectedType === 'all') return matchesSearch
-    if (selectedType === 'high-traffic') return matchesSearch && link.clicks > 100
+    if (selectedType === 'high-traffic') return matchesSearch && metrics.clicks > 100
     if (selectedType === 'recent') {
-      const lastClick = new Date(link.lastClickAt)
+      const lastClick = new Date(metrics.lastClickAt)
       const sevenDaysAgo = new Date(NOW - 7 * DAY_MS)
       return matchesSearch && lastClick > sevenDaysAgo
     }
@@ -63,10 +80,10 @@ export default function LinksPage() {
 
   const totalStats = {
     totalLinks: links.length,
-    totalClicks: links.reduce((sum, link) => sum + link.clicks, 0),
-    totalUniqueVisitors: links.reduce((sum, link) => sum + link.uniqueVisitors, 0),
+    totalClicks: links.reduce((sum, link) => sum + (link.total_clicks || 0), 0),
+    totalUniqueVisitors: links.reduce((sum, link) => sum + (link.unique_clicks || 0), 0),
     averageClickThroughRate: links.length > 0 
-      ? (links.reduce((sum, link) => sum + (link.clicks / Math.max(link.uniqueVisitors, 1)), 0) / links.length * 100).toFixed(1)
+      ? (links.reduce((sum, link) => sum + ((link.total_clicks || 0) / Math.max(link.unique_clicks || 1, 1)), 0) / links.length * 100).toFixed(1)
       : '0.0'
   }
 
@@ -158,7 +175,7 @@ export default function LinksPage() {
           <CardContent>
             <div className="text-2xl font-bold">{totalStats.totalLinks}</div>
             <p className="text-xs text-muted-foreground">
-              Across {new Set(links.map(l => l.campaignId)).size} campaigns
+              Across {new Set(links.map(l => l.campaign?.id || '')).size} campaigns
             </p>
             <div className="mt-2 h-2 bg-gray-100 rounded-full overflow-hidden">
               <div className="h-full bg-blue-500" style={{ width: `${Math.min(100, (totalStats.totalLinks / 50) * 100)}%` }} />
@@ -203,7 +220,7 @@ export default function LinksPage() {
           <CardContent>
             <div className="text-2xl font-bold">
               {links.filter(l => {
-                const lastClick = new Date(l.lastClickAt)
+                const lastClick = new Date(l.last_clicked_at || '')
                 const thirtyDaysAgo = new Date(NOW - 30 * DAY_MS)
                 return lastClick > thirtyDaysAgo
               }).length}
@@ -212,7 +229,7 @@ export default function LinksPage() {
               Links with clicks in last 30 days
             </p>
             <div className="mt-2 h-2 bg-gray-100 rounded-full overflow-hidden">
-              <div className="h-full bg-yellow-500" style={{ width: `${(links.filter(l => new Date(l.lastClickAt) > new Date(NOW - 30 * DAY_MS)).length / Math.max(links.length, 1)) * 100}%` }} />
+              <div className="h-full bg-yellow-500" style={{ width: `${(links.filter(l => new Date(l.last_clicked_at || '') > new Date(NOW - 30 * DAY_MS)).length / Math.max(links.length, 1)) * 100}%` }} />
             </div>
           </CardContent>
         </Card>
@@ -268,64 +285,67 @@ export default function LinksPage() {
             <CardContent>
               <div className="space-y-4">
                 {filteredLinks.length > 0 ? (
-                  filteredLinks.map(link => (
-                    <div key={link.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center space-x-2 mb-2">
-                          <Badge variant="outline" className="text-xs">
-                            {link.campaignName}
-                          </Badge>
-                          <Badge variant="secondary" className="text-xs">
-                            {link.clicks} clicks
-                          </Badge>
-                          {new Date(link.lastClickAt) > new Date(NOW - DAY_MS) && (
-                            <Badge variant="default" className="text-xs bg-green-100 text-green-800 hover:bg-green-100">
-                              Active Today
+                  filteredLinks.map(link => {
+                    const metrics = getLinkMetrics(link)
+                    return (
+                      <div key={link.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center space-x-2 mb-2">
+                            <Badge variant="outline" className="text-xs">
+                              {metrics.campaignName}
                             </Badge>
-                          )}
-                        </div>
-                        
-                        <div className="flex items-center space-x-2">
-                          <Icons.ExternalLink className="h-4 w-4 text-gray-400 flex-shrink-0" />
-                          <div className="flex-1 min-w-0">
-                            <a 
-                              href={link.url} 
-                              target="_blank" 
-                              rel="noopener noreferrer"
-                              className="text-sm font-medium text-blue-600 hover:text-blue-800 truncate block"
-                            >
-                              {link.url}
-                            </a>
-                            <div className="flex items-center space-x-2 mt-1">
-                              <span className="text-xs text-gray-500">Short URL:</span>
-                              <code className="text-xs bg-gray-100 px-2 py-1 rounded">
-                                {window.location.origin}/l/{link.shortUrl}
-                              </code>
-                              <Button 
-                                variant="ghost" 
-                                size="sm" 
-                                className="h-6 px-2"
-                                onClick={() => navigator.clipboard.writeText(`${window.location.origin}/l/${link.shortUrl}`)}
+                            <Badge variant="secondary" className="text-xs">
+                              {metrics.clicks} clicks
+                            </Badge>
+                            {new Date(metrics.lastClickAt) > new Date(NOW - DAY_MS) && (
+                              <Badge variant="default" className="text-xs bg-green-100 text-green-800 hover:bg-green-100">
+                                Active Today
+                              </Badge>
+                            )}
+                          </div>
+                          
+                          <div className="flex items-center space-x-2">
+                            <Icons.ExternalLink className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <a 
+                                href={metrics.url} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="text-sm font-medium text-blue-600 hover:text-blue-800 truncate block"
                               >
-                                <Icons.ExternalLink className="h-3 w-3 mr-1" />
-                                Copy
-                              </Button>
+                                {metrics.url}
+                              </a>
+                              <div className="flex items-center space-x-2 mt-1">
+                                <span className="text-xs text-gray-500">Short URL:</span>
+                                <code className="text-xs bg-gray-100 px-2 py-1 rounded">
+                                  {window.location.origin}/l/{metrics.shortUrl}
+                                </code>
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm" 
+                                  className="h-6 px-2"
+                                  onClick={() => navigator.clipboard.writeText(`${window.location.origin}/l/${metrics.shortUrl}`)}
+                                >
+                                  <Icons.ExternalLink className="h-3 w-3 mr-1" />
+                                  Copy
+                                </Button>
+                              </div>
                             </div>
                           </div>
                         </div>
-                      </div>
-                      
-                      <div className="text-right space-y-1">
-                        <div className="text-sm font-medium">{link.clicks.toLocaleString()} clicks</div>
-                        <div className="text-xs text-gray-500">
-                          {link.uniqueVisitors.toLocaleString()} unique
+                        
+                        <div className="text-right space-y-1">
+                          <div className="text-sm font-medium">{metrics.clicks.toLocaleString()} clicks</div>
+                          <div className="text-xs text-gray-500">
+                            {metrics.uniqueVisitors.toLocaleString()} unique
+                          </div>
+                          <div className="text-xs">
+                            Last: {new Date(metrics.lastClickAt).toLocaleDateString()}
+                          </div>
                         </div>
-                        <div className="text-xs">
-                          Last: {new Date(link.lastClickAt).toLocaleDateString()}
-                        </div>
                       </div>
-                    </div>
-                  ))
+                    )
+                  })
                 ) : (
                   <div className="text-center py-8">
                     <Icons.Link className="h-12 w-12 text-gray-300 mx-auto mb-4" />
@@ -350,15 +370,15 @@ export default function LinksPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-6">
-                {Array.from(new Set(links.map(l => l.campaignId))).map(campaignId => {
-                  const campaignLinks = links.filter(l => l.campaignId === campaignId)
-                  const campaignName = campaignLinks[0]?.campaignName || 'Unknown Campaign'
+                {Array.from(new Set(links.map(l => l.campaign?.id || ''))).map(campaignId => {
+                  const campaignLinks = links.filter(l => l.campaign?.id === campaignId)
+                  const campaignName = campaignLinks[0]?.campaign?.name || 'Unknown Campaign'
                   const campaignStats = {
                     totalLinks: campaignLinks.length,
-                    totalClicks: campaignLinks.reduce((sum, l) => sum + l.clicks, 0),
-                    totalUnique: campaignLinks.reduce((sum, l) => sum + l.uniqueVisitors, 0),
+                    totalClicks: campaignLinks.reduce((sum, l) => sum + (l.total_clicks || 0), 0),
+                    totalUnique: campaignLinks.reduce((sum, l) => sum + (l.unique_clicks || 0), 0),
                     avgCTR: campaignLinks.length > 0 
-                      ? (campaignLinks.reduce((sum, l) => sum + (l.clicks / Math.max(l.uniqueVisitors, 1)), 0) / campaignLinks.length * 100).toFixed(1)
+                      ? (campaignLinks.reduce((sum, l) => sum + ((l.total_clicks || 0) / Math.max(l.unique_clicks || 1, 1)), 0) / campaignLinks.length * 100).toFixed(1)
                       : '0.0'
                   }
                   
@@ -389,7 +409,7 @@ export default function LinksPage() {
                         </div>
                         <div className="text-center">
                           <div className="text-2xl font-bold">
-                            {campaignLinks.filter(l => l.clicks > 0).length}
+                            {campaignLinks.filter(l => (l.total_clicks || 0) > 0).length}
                           </div>
                           <p className="text-xs text-gray-500">Active Links</p>
                         </div>
@@ -404,7 +424,7 @@ export default function LinksPage() {
 
         <TabsContent value="analytics" className="space-y-6">
           {filteredLinks.length > 0 && (
-            <LinkStats links={filteredLinks} />
+            <LinkStats links={filteredLinks.map(getLinkMetrics)} />
           )}
         </TabsContent>
 
@@ -431,7 +451,7 @@ export default function LinksPage() {
                     <label className="block text-sm font-medium mb-2">Campaign</label>
                     <select className="w-full border rounded-md px-3 py-2 text-sm">
                       <option value="">Select Campaign</option>
-                      {Array.from(new Set(links.map(l => l.campaignName))).map(name => (
+                      {Array.from(new Set(links.map(l => l.campaign?.name || ''))).filter(name => name).map(name => (
                         <option key={name} value={name}>{name}</option>
                       ))}
                     </select>

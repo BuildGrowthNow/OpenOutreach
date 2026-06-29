@@ -32,6 +32,10 @@ const toastVariants = cva(
         default: 'border bg-background text-foreground',
         destructive:
           'destructive group border-destructive bg-destructive text-destructive-foreground',
+        success: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+        error: 'border-rose-500/20 bg-rose-500/10 text-rose-600 dark:text-rose-400',
+        info: 'border-blue-500/20 bg-blue-500/10 text-blue-600 dark:text-blue-400',
+        warning: 'border-amber-500/20 bg-amber-500/10 text-amber-600 dark:text-amber-400',
       },
     },
     defaultVariants: {
@@ -43,14 +47,17 @@ const toastVariants = cva(
 const Toast = React.forwardRef<
   React.ElementRef<typeof ToastPrimitives.Root>,
   React.ComponentPropsWithoutRef<typeof ToastPrimitives.Root> &
-    VariantProps<typeof toastVariants>
->(({ className, variant, ...props }, ref) => {
+    VariantProps<typeof toastVariants> & { icon?: React.ReactNode }
+>(({ className, variant, icon, ...props }, ref) => {
   return (
     <ToastPrimitives.Root
       ref={ref}
       className={cn(toastVariants({ variant }), className)}
       {...props}
-    />
+    >
+      {icon && <div className="flex h-5 w-5 items-center justify-center rounded-full bg-current/10 text-current">{icon}</div>}
+      {props.children}
+    </ToastPrimitives.Root>
   )
 })
 Toast.displayName = ToastPrimitives.Root.displayName
@@ -112,7 +119,7 @@ const ToastDescription = React.forwardRef<
 ))
 ToastDescription.displayName = ToastPrimitives.Description.displayName
 
-type ToastProps = React.ComponentPropsWithoutRef<typeof Toast>
+type ToastProps = React.ComponentPropsWithoutRef<typeof Toast> & { icon?: React.ReactNode }
 
 type ToastActionElement = React.ReactElement<typeof ToastAction>
 

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 import * as z from 'zod'
@@ -27,7 +28,9 @@ import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Campaign } from '@/lib/types/components'
+import { Icons } from '@/lib/types/components'
+import { Campaign, CampaignTemplate } from '@/lib/types/components'
+import { getCampaignTemplates } from '@/lib/api/dashboard'
 
 const formSchema = z.object({
   name: z.string().min(3, 'Name must be at least 3 characters').max(100, 'Name is too long'),
@@ -59,7 +62,12 @@ export function CampaignForm({
   onSubmit,
   isEditing = false,
 }: CampaignFormProps) {
+  const router = useRouter()
   const [loading, setLoading] = useState(false)
+  const [templates, setTemplates] = useState<CampaignTemplate[]>([])
+  const [templateLoading, setTemplateLoading] = useState(false)
+  const [selectedTemplate, setSelectedTemplate] = useState<CampaignTemplate | null>(null)
+  const [showTemplateList, setShowTemplateList] = useState(!isEditing)
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -76,6 +84,43 @@ export function CampaignForm({
       status: 'draft',
     },
   })
+
+  // Fetch templates when opening the form for a new campaign
+  useEffect(() => {
+    if (!isEditing && !campaign && !templates.length) {
+      void (async () => {
+        try {
+          setTemplateLoading(true)
+          const response = await getCampaignTemplates()
+          if (response.data && response.data.data) {
+            setTemplates(response.data.data)
+          }
+        } catch (err) {
+          console.error('Error fetching templates:', err)
+        } finally {
+          setTemplateLoading(false)
+        }
+      })()
+    }
+  }, [isEditing, campaign, templates.length])
+
+  // Clone template when selected
+  useEffect(() => {
+    if (selectedTemplate && !campaign) {
+      form.reset({
+        name: selectedTemplate.name,
+        description: selectedTemplate.description || undefined,
+        campaignObjective: selectedTemplate.campaign_objective || undefined,
+        ghostModeEnabled: selectedTemplate.ghost_mode_enabled,
+        velocity: selectedTemplate.velocity,
+        cooldownMinutes: selectedTemplate.cooldown_minutes,
+        status: 'draft',
+        isFreemium: false,
+        productDocs: undefined,
+        bookingLink: undefined,
+      })
+    }
+  }, [selectedTemplate, campaign, form])
 
   useEffect(() => {
     if (campaign) {
@@ -135,10 +180,11 @@ export function CampaignForm({
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
             <Tabs defaultValue="basic" className="w-full">
-              <TabsList className="grid w-full grid-cols-3">
+              <TabsList className="grid w-full grid-cols-4">
                 <TabsTrigger value="basic">Basic Info</TabsTrigger>
                 <TabsTrigger value="settings">Settings</TabsTrigger>
                 <TabsTrigger value="advanced">Advanced</TabsTrigger>
+                <TabsTrigger value="templates">Templates</TabsTrigger>
               </TabsList>
 
               <TabsContent value="basic" className="space-y-4">
@@ -362,6 +408,95 @@ export function CampaignForm({
                     </FormItem>
                   )}
                 />
+              </TabsContent>
+
+              <TabsContent value="templates" className="space-y-4">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-1">
+                      <h4 className="font-medium">Use Template</h4>
+                      <p className="text-sm text-muted-foreground">
+                        Select a campaign template to clone its configuration
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setShowTemplateList(!showTemplateList)}
+                    >
+                      Browse Templates
+                    </Button>
+                  </div>
+
+                  {showTemplateList && (
+                    <div className="rounded-lg border border-dashed p-6 bg-muted/30">
+                      {templateLoading ? (
+                        <div className="text-center py-4">
+                          <Icons.RefreshCw className="h-8 w-8 animate-spin mx-auto text-muted-foreground" />
+                          <p className="text-sm text-muted-foreground mt-2">Loading templates...</p>
+                        </div>
+                      ) : templates.length === 0 ? (
+                        <div className="text-center py-6">
+                          <p className="text-sm text-muted-foreground">No templates found</p>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="mt-2"
+                            onClick={() => router.push('/campaigns/templates')}
+                          >
+                            Create Template
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="space-y-2 max-h-60 overflow-y-auto">
+                          {templates.map(template => (
+                            <div
+                              key={template.id}
+                              className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-colors ${
+                                selectedTemplate?.id === template.id
+                                  ? 'bg-primary/10 border-primary'
+                                  : 'hover:bg-muted/50'
+                              }`}
+                              onClick={() => setSelectedTemplate(template)}
+                            >
+                              <div className="space-y-1">
+                                <div className="font-medium">{template.name}</div>
+                                <div className="text-xs text-muted-foreground line-clamp-1">
+                                  {template.description || 'No description'}
+                                </div>
+                              </div>
+                              {selectedTemplate?.id === template.id && (
+                                <Icons.CheckCircle className="h-5 w-5 text-primary" />
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {selectedTemplate && (
+                    <div className="rounded-lg bg-blue-500/5 border border-blue-500/20 p-4">
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-1">
+                          <p className="text-sm font-medium text-blue-600 dark:text-blue-400">
+                            Template Selected: {selectedTemplate.name}
+                          </p>
+                          <p className="text-xs text-blue-600/80 dark:text-blue-400/80">
+                            Click "Create Campaign" to apply template settings
+                          </p>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setSelectedTemplate(null)}
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </TabsContent>
             </Tabs>
 

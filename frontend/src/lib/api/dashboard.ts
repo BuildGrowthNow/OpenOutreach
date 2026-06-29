@@ -72,8 +72,8 @@ import {
   LinkedInProfileHealthResponse
 } from '@/lib/types/components'
 
-// RateLimits type is no longer exported from components.ts
-// Use Settings.rate_limits from this file for the new canonical shape
+// Re-export types for convenience
+export type { Campaign, Lead, Message, HealthStatus, Pagination, LinkMetrics, LinkedInProfileHealthResponse }
 
 // Campaign API
 export async function getCampaigns(
@@ -306,6 +306,13 @@ export async function updateLead(
   return patch(`/api/leads/${id}`, data)
 }
 
+export async function addLeadToCampaign(
+  id: string,
+  campaignId: string
+): Promise<ApiResponse<{ success: boolean; dealId: number; created: boolean }>> {
+  return post(`/api/leads/${id}/add-to-campaign/`, { campaign_id: campaignId })
+}
+
 export interface LeadProfile {
   first_name?: string
   last_name?: string
@@ -412,9 +419,26 @@ export async function deleteLeadNote(
   return del(`/api/leads/${lead_id}/notes/${note_id}`)
 }
 
-// Links API
-export async function getLinks(): Promise<ApiResponse<{ data: LinkMetrics[]; pagination: Pagination }>> {
-  return get('/api/links')
+// Tracked Link API
+export interface TrackedLink {
+  id: string
+  campaign_id?: string
+  campaign?: {
+    id: string
+    name: string
+  }
+  original_url: string
+  short_code: string
+  is_active: boolean
+  total_clicks: number
+  unique_clicks?: number
+  utm_source?: string
+  utm_medium?: string
+  utm_campaign?: string
+  utm_term?: string
+  utm_content?: string
+  last_clicked_at?: string
+  created_at: string
 }
 
 export interface LinkBreakdown {
@@ -431,8 +455,60 @@ export interface LinkBreakdown {
   }>
 }
 
-export async function getLink(id: string): Promise<ApiResponse<LinkMetrics & { breakdown: LinkBreakdown }>> {
+export interface LinkClick {
+  id: string
+  ip_address: string
+  user_agent: string
+  referrer: string
+  clicked_at: string
+}
+
+export async function getLinks(campaignId?: string): Promise<ApiResponse<{ data: TrackedLink[]; count: number }>> {
+  const params: Record<string, string> = {}
+  if (campaignId) params.campaign_id = campaignId
+  return get('/api/links', params)
+}
+
+export async function getLink(id: string): Promise<ApiResponse<{ 
+  status: string
+  result: TrackedLink & { breakdown: LinkBreakdown }
+}>> {
   return get(`/api/links/${id}`)
+}
+
+export async function createLink(data: Partial<TrackedLink>): Promise<ApiResponse<{ 
+  status: string
+  id: number
+  short_code: string
+  url: string
+}>> {
+  return post('/api/links', data)
+}
+
+export async function updateLink(
+  id: string,
+  data: Partial<TrackedLink>
+): Promise<ApiResponse<{
+  status: string
+  id: number
+  short_code: string
+  is_active: boolean
+}>> {
+  return patch(`/api/links/${id}`, data)
+}
+
+export async function deleteLink(id: string): Promise<ApiResponse<{
+  status: string
+  message: string
+}>> {
+  return del(`/api/links/${id}`)
+}
+
+export async function getLinkClicks(linkId: string): Promise<ApiResponse<{
+  data: LinkClick[]
+  count: number
+}>> {
+  return get(`/api/links/${linkId}/clicks`)
 }
 
 // Settings API
@@ -662,6 +738,11 @@ export interface LinkedInCredentialsHealth {
     last_verified: string | null
     last_used: string | null
     health_score: number
+    error_details?: {
+      message?: string
+      error_type?: string
+      details?: Record<string, unknown>
+    }
   }
 }
 
@@ -852,5 +933,58 @@ export interface LinkedInSetupStatus {
 
 export async function getLinkedInSetupStatus(): Promise<ApiResponse<LinkedInSetupStatus>> {
   return get('/api/linkedin-setup/status')
+}
+
+// Campaign Templates API
+import { CampaignTemplate, CampaignTemplateCreateData } from '@/lib/types/components'
+
+export async function getCampaignTemplates(
+  publicParam?: string,
+  page?: number,
+  limit?: number
+): Promise<ApiResponse<{ data: CampaignTemplate[]; pagination: Pagination }>> {
+  const params: Record<string, string> = {}
+  if (publicParam) params.public = publicParam
+  if (page) params.page = page.toString()
+  if (limit) params.limit = limit.toString()
+  return get('/api/campaign-templates', params)
+}
+
+export async function getCampaignTemplate(id: string): Promise<ApiResponse<CampaignTemplate>> {
+  return get(`/api/campaign-templates/${id}`)
+}
+
+export async function createCampaignTemplate(
+  data: CampaignTemplateCreateData
+): Promise<ApiResponse<CampaignTemplate>> {
+  return post('/api/campaign-templates', data as unknown as Record<string, unknown>)
+}
+
+export async function updateCampaignTemplate(
+  id: string,
+  data: Partial<CampaignTemplateCreateData>
+): Promise<ApiResponse<CampaignTemplate>> {
+  return patch(`/api/campaign-templates/${id}`, data as unknown as Record<string, unknown>)
+}
+
+export async function deleteCampaignTemplate(id: string): Promise<ApiResponse<{ success: boolean }>> {
+  return del(`/api/campaign-templates/${id}`)
+}
+
+export async function cloneCampaignTemplate(id: string, data?: { name?: string; is_public?: boolean }): Promise<ApiResponse<CampaignTemplate>> {
+  return post(`/api/campaign-templates/${id}/clone`, data || {})
+}
+
+export async function createCampaignFromTemplate(
+  id: string,
+  data: { name?: string; description?: string }
+): Promise<ApiResponse<{ id: number; name: string; description: string }>> {
+  return post(`/api/campaign-templates/${id}/create-campaign`, data)
+}
+
+// Re-export AddToCampaignModal types for convenience
+export interface AddToCampaignParams {
+  leadId: string
+  campaignId: string
 }
 

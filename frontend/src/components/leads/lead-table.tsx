@@ -28,6 +28,7 @@ interface LeadTableProps {
   onDisqualify: (lead: Lead) => void
   onReScrape: (lead: Lead) => void
   onMessage?: (lead: Lead) => void
+  onAddToCampaign?: (lead: Lead, campaignId: string) => void
   onSearch: (search: string) => void
   onStatusFilter: (status: string) => void
   onPageChange: (page: number) => void
@@ -43,6 +44,7 @@ export function LeadTable({
   onDisqualify,
   onReScrape,
   onMessage,
+  onAddToCampaign,
   onSearch,
   onStatusFilter,
   onPageChange,
@@ -254,6 +256,16 @@ export function LeadTable({
                            title="Send message"
                          >
                            <Icons.MessageSquare className="h-4 w-4" />
+                         </Button>
+                       )}
+                       {onAddToCampaign && (
+                         <Button
+                           size="sm"
+                           variant="ghost"
+                           onClick={() => onAddToCampaign(lead, '')}
+                           title="Add to campaign"
+                         >
+                           <Icons.Users className="h-4 w-4" />
                          </Button>
                        )}
                        <Button

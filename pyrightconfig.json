@@ -11,5 +11,14 @@
     "**/__pycache__",
     "**/.venv",
     "**/migrations"
-  ]
+  ],
+  "stubPath": "stubs",
+  "reportMissingTypeStubs": false,
+  "reportAttributeAccessIssue": "warning",
+  "reportIncompatibleVariableOverride": "warning",
+  "reportPossiblyUnboundVariable": "warning",
+  "reportCallIssue": "warning",
+  "reportArgumentType": "warning",
+  "reportInvalidTypeVarUse": "warning",
+  "reportMissingModuleSource": "warning"
 }

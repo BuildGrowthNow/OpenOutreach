@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     "rest_framework",
     "rest_framework_simplejwt",
     "corsheaders",
+    "channels",
     # Local apps
     "openoutreach.api.apps.ApiConfig",
     "openoutreach.crm.apps.CrmConfig",
@@ -50,6 +51,7 @@ INSTALLED_APPS = [
     "openoutreach.core.apps.CoreConfig",
     "openoutreach.linkedin.apps.LinkedInConfig",
     "openoutreach.emails.apps.EmailsConfig",
+    "openoutreach.notifications.apps.NotificationsConfig",
 ]
 
 MIDDLEWARE = [
@@ -336,3 +338,16 @@ MONGODB_PASSWORD: str | None = None
 # Site ID for Django sites framework
 # =============================================================================
 SITE_ID = 1
+
+# =============================================================================
+# Django Channels Configuration for WebSocket support
+# =============================================================================
+# Use in-memory channel layer for development (use Redis in production)
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels.layers.InMemoryChannelLayer"
+    }
+}
+
+# ASGI application - required for Channels
+ASGI_APPLICATION = "openoutreach.routing.application"

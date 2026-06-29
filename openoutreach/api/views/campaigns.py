@@ -146,6 +146,10 @@ class CampaignDetailView(APIView):
         """Update campaign."""
         campaign = self.get_object(pk)
         
+        # Store old values for comparison
+        old_is_paused = campaign.is_paused
+        old_status = campaign.status
+        
         serializer = CampaignUpdateSerializer(data=request.data, partial=True)
         if serializer.is_valid():
             # Update fields if provided
@@ -155,6 +159,9 @@ class CampaignDetailView(APIView):
                 setattr(campaign, field, value)
             
             campaign.save()
+            
+            # Emit real-time notifications for status changes
+            self._emit_status_change_notifications(campaign, old_is_paused, old_status)
             
             return Response({
                 'id': campaign.id,
@@ -175,6 +182,34 @@ class CampaignDetailView(APIView):
             })
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    def _emit_status_change_notifications(self, campaign, old_is_paused, old_status):
+        """
+        Emit real-time notifications when campaign status changes.
+        
+        Args:
+            campaign: The updated Campaign instance
+            old_is_paused: Previous is_paused value
+            old_status: Previous status value
+        """
+        try:
+            from openoutreach.notifications.signals import (
+                create_campaign_status_change_notification
+            )
+            
+            # Check for status change
+            if old_status != campaign.status:
+                create_campaign_status_change_notification(campaign, "status_changed")
+            
+            # Check for is_paused change
+            elif old_is_paused != campaign.is_paused:
+                if campaign.is_paused:
+                    create_campaign_status_change_notification(campaign, "paused")
+                else:
+                    create_campaign_status_change_notification(campaign, "started")
+        except Exception:
+            # Don't crash if notification fails
+            pass
     
     def delete(self, request, pk):
         """Delete campaign."""

@@ -5,6 +5,8 @@ import { Sidebar } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
 import { cn } from '@/lib/utils'
 import { Icons } from '@/lib/types/components'
+import { DashboardContainer } from '@/components/dashboard/dashboard-container'
+import { LinkedinBanner } from '@/components/layout/linkedin-banner'
 
 type SidebarIcon = keyof typeof Icons
 
@@ -12,51 +14,48 @@ interface SidebarItem {
   title: string
   href: string
   icon: SidebarIcon
-  description?: string
 }
 
 const dashboardItems: SidebarItem[] = [
   {
     title: 'Dashboard',
     href: '/dashboard',
-    icon: 'LayoutDashboard',
-    description: 'Overview & stats'
+    icon: 'LayoutDashboard'
   },
   {
     title: 'Campaigns',
     href: '/campaigns',
-    icon: 'BarChart3',
-    description: 'Manage campaigns'
+    icon: 'BarChart3'
   },
   {
     title: 'Leads',
     href: '/leads',
-    icon: 'Users',
-    description: 'Lead management'
+    icon: 'Users'
   },
   {
     title: 'Messages',
     href: '/messages',
-    icon: 'MessageSquare',
-    description: 'Communication'
+    icon: 'MessageSquare'
+  },
+  {
+    title: 'State Machine',
+    href: '/state-machine',
+    icon: 'Workflow'
   },
   {
     title: 'Analytics',
     href: '/analytics',
-    icon: 'BarChartBig',
-    description: 'Performance metrics'
+    icon: 'BarChartBig'
   },
   {
     title: 'Links',
     href: '/links',
-    icon: 'Link',
-    description: 'Track links'
+    icon: 'Link'
   },
   {
     title: 'Settings',
     href: '/settings',
-    icon: 'Settings',
-    description: 'System settings'
+    icon: 'Settings'
   },
 ]
 
@@ -66,19 +65,12 @@ interface DashboardLayoutProps {
 
 const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
-  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
-    if (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
-      return 'light'
-    }
-    return 'dark'
-  })
-
-  const toggleTheme = () => {
-    setTheme(prev => prev === 'light' ? 'dark' : 'light')
-  }
 
   return (
-    <div className={cn('flex h-screen overflow-hidden', theme === 'dark' ? 'dark' : '')}>
+    <div className={cn('flex h-screen overflow-hidden dark')}>
+      {/* LinkedIn Connection Banner - Shows at top when LinkedIn is not connected */}
+      <LinkedinBanner />
+
       {/* Sidebar */}
       <Sidebar
         items={dashboardItems}
@@ -87,18 +79,16 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
       />
 
       {/* Main Content Area */}
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="flex flex-1 flex-col overflow-hidden bg-background">
         {/* Header */}
         <Header
           onMenuClick={() => setIsSidebarOpen(true)}
-          theme={theme}
-          toggleTheme={toggleTheme}
         />
 
-        {/* Page Content */}
-        <main className="flex-1 overflow-y-auto bg-background">
+        {/* Page Content - Now wrapped in DashboardContainer for consistent padding */}
+        <DashboardContainer>
           {children}
-        </main>
+        </DashboardContainer>
       </div>
     </div>
   )

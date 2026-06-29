@@ -250,7 +250,6 @@ export default function SettingsPage() {
         onSetupComplete={handleLinkedInSetupComplete}
       />
       <div className="space-y-6">
-      <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
           <p className="text-muted-foreground">
@@ -521,22 +520,25 @@ export default function SettingsPage() {
          </Card>
        </TabsContent>
 
-       <TabsContent value="status" className="space-y-6">
-         <div className="flex items-center justify-between">
-           <div>
-             <h1 className="text-3xl font-bold tracking-tight">System Status</h1>
-             <p className="text-muted-foreground">
-               Real-time system health and service status
-             </p>
-           </div>
-         </div>
-         <SystemStatus />
-       </TabsContent>
-      </Tabs>
-    </div>
-  </>
-)
-}
+        <TabsContent value="status" className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight">System Status</h1>
+              <p className="text-muted-foreground">
+                Real-time system health and service status
+              </p>
+            </div>
+            <Button variant="outline" onClick={loadSettings}>
+              <Icons.RefreshCw className="h-4 w-4 mr-2" />
+              Refresh
+            </Button>
+          </div>
+          <SystemStatus />
+        </TabsContent>
+       </Tabs>
+   </>
+  )
+  }
 
 interface ServiceHealth {
   name: string

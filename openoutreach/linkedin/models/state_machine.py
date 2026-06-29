@@ -56,6 +56,7 @@ class StateNode(models.Model):
     TYPE_BRANCH = 'branch'
     TYPE_WEBHOOK = 'webhook'
     TYPE_END = 'end'
+    TYPE_LINK = 'link'
     
     TYPE_CHOICES = [
         (TYPE_START, 'Start'),
@@ -65,6 +66,7 @@ class StateNode(models.Model):
         (TYPE_DECISION, 'Decision'),
         (TYPE_BRANCH, 'Branch'),
         (TYPE_WEBHOOK, 'Webhook'),
+        (TYPE_LINK, 'Insert Tracked Link'),
         (TYPE_END, 'End'),
     ]
     

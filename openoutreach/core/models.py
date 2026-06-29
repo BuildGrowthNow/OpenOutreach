@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 from django.contrib.auth.models import User
 from django.db import models
 from django.utils import timezone
+from django.utils.text import slugify
 
 if TYPE_CHECKING:
     from openoutreach.linkedin.models import CampaignStateGraph
@@ -72,6 +73,33 @@ class SiteConfig(models.Model):
         return obj
 
 
+class CampaignTemplate(models.Model):
+    """Template for creating campaigns with predefined settings."""
+    
+    id: models.AutoField  # type: ignore[assignment]
+    
+    name: models.CharField = models.CharField(max_length=200)  # type: ignore[var-annotated]
+    description: models.TextField = models.TextField(blank=True)  # type: ignore[var-annotated]
+    campaign_objective: models.TextField = models.TextField(blank=True)  # type: ignore[var-annotated]
+    ghost_mode_enabled: models.BooleanField = models.BooleanField(default=False)  # type: ignore[var-annotated]
+    velocity: models.PositiveIntegerField = models.PositiveIntegerField(default=20)  # type: ignore[var-annotated]
+    cooldown_minutes: models.PositiveIntegerField = models.PositiveIntegerField(default=0)  # type: ignore[var-annotated]
+    
+    # Template sharing
+    is_public: models.BooleanField = models.BooleanField(default=False)  # type: ignore[var-annotated]
+    created_by: models.ForeignKey = models.ForeignKey(User, on_delete=models.CASCADE, related_name='campaign_templates')  # type: ignore[var-annotated]
+    
+    # Timestamps
+    created_at: models.DateTimeField = models.DateTimeField(auto_now_add=True)  # type: ignore[var-annotated]
+    updated_at: models.DateTimeField = models.DateTimeField(auto_now=True)  # type: ignore[var-annotated]
+    
+    def __str__(self) -> str:
+        return self.name
+    
+    class Meta:
+        ordering = ['-created_at']
+
+
 class Campaign(models.Model):
     # Type hints for Django's automatic fields
     id: models.AutoField  # type: ignore[assignment]
@@ -107,12 +135,25 @@ class Campaign(models.Model):
     created_at: models.DateTimeField = models.DateTimeField(auto_now_add=True)  # type: ignore[var-annotated]
     updated_at: models.DateTimeField = models.DateTimeField(auto_now=True)  # type: ignore[var-annotated]
 
+    # Links - references to TrackedLink from crm app for URL tracking
+    # Using a ManyToMany through a string reference to avoid circular imports
+    # The existing TrackedLink model has a ForeignKey to Campaign already,
+    # but we'll also allow multiple campaigns to use the same link
+    # For now, we just reference the model for type hints
+    if TYPE_CHECKING:
+        from openoutreach.crm.models import TrackedLink
+        tracked_links: models.Manager['TrackedLink']
+
     # Type hints for reverse relations (from other apps)
     state_graph: "CampaignStateGraph"
     deals: "models.Manager[Deal]"
     
     def __str__(self) -> str:
         return self.name
+
+
+# NOTE: We use the existing TrackedLink from crm.models.link for link tracking
+# This avoids duplicate models and allows both apps to share the same functionality
 
 
 class TaskQuerySet(models.QuerySet):

@@ -222,6 +222,10 @@ class StateMachineEngine:
             # End node - campaign completed
             return {'success': True, 'output': {'completed': True}}
         
+        elif node.node_type == StateNode.TYPE_LINK:
+            # Link node - inject tracked link into message
+            return self._execute_link_node(node, deal, session)
+        
         else:
             # Unknown node type
             return {'success': True, 'output': {'action': node.node_type}}
@@ -297,6 +301,128 @@ class StateMachineEngine:
         
         return len(errors) == 0, errors + warnings
     
+    def _execute_link_node(self, node: StateNode, deal: Deal, session=None) -> Dict:
+        """
+        Execute a link node - generates/inserts a tracked link into a message.
+        
+        Config expected:
+        - link_id: ID of TrackedLink to use (optional, if not provided, creates one)
+        - link_url: URL to track (optional, used if link_id not provided)
+        - message_template: Template with {{LINK}} placeholder or custom text
+        - link_type: 'booking', 'product', or 'custom'
+        
+        Returns message with link injected.
+        """
+        from openoutreach.crm.models import TrackedLink
+        
+        config = node.config or {}
+        link_id = config.get('link_id')
+        link_url = config.get('link_url', '')
+        message_template = config.get('message_template', '')
+        link_type = config.get('link_type', 'custom')
+        
+        try:
+            # Get or create tracked link
+            tracked_link = None
+            
+            if link_id:
+                # Use existing link
+                try:
+                    tracked_link = TrackedLink.objects.get(id=link_id)
+                except TrackedLink.DoesNotExist:
+                    return {
+                        'success': False,
+                        'output': {'link_injected': False},
+                        'error': f'Tracked link with ID {link_id} not found',
+                    }
+            elif link_url:
+                # Create new tracked link or get existing one
+                # Use a hash of the URL for consistent lookup
+                import hashlib
+                import random
+                import string
+                
+                url_hash = hashlib.md5(link_url.encode()).hexdigest()[:8]
+                # Create a readable short code
+                chars = string.ascii_lowercase + string.digits
+                short_code = url_hash[:4] + ''.join(random.sample(chars, 4))
+                
+                tracked_link, created = TrackedLink.objects.get_or_create(
+                    short_code=short_code,
+                    defaults={
+                        'original_url': link_url,
+                        'campaign': deal.campaign,
+                        'utm_campaign': deal.campaign.name if deal.campaign else link_type,
+                    }
+                )
+            
+            if not tracked_link:
+                return {
+                    'success': False,
+                    'output': {'link_injected': False},
+                    'error': 'No link URL or link ID provided',
+                }
+            
+            # Generate short URL
+            short_url = tracked_link.get_short_url()
+            
+            # Inject link into message template
+            message_with_link = message_template.replace('{{LINK}}', short_url)
+            message_with_link = message_with_link.replace('{{SHORT_URL}}', short_url)
+            
+            # If no template, create one with the link
+            if not message_with_link:
+                message_with_link = f"Check out this link: {short_url}"
+            
+            # Save message to chat
+            try:
+                from openoutreach.chat.models import ChatMessage
+                from openoutreach.linkedin.models import LinkedInProfile
+                
+                outgoing_message = ChatMessage.objects.create(
+                    deal=deal,
+                    sender='outgoing',
+                    message=message_with_link,
+                    is_outgoing=True,
+                    creation_date=timezone.now(),
+                )
+                
+                # Record link click placeholder (simulated for now)
+                # Actual click tracking happens when user visits the link
+                tracked_link.record_click()
+                
+                # Record action if we have a LinkedIn profile
+                linkedin_profile = session.linkedin_profile if session and hasattr(session, 'linkedin_profile') else None
+                if linkedin_profile:
+                    linkedin_profile.record_action("follow_up", deal.campaign)
+                
+                return {
+                    'success': True,
+                    'output': {
+                        'link_injected': True,
+                        'link_id': tracked_link.id,
+                        'link_url': short_url,
+                        'message_id': outgoing_message.id,
+                        'message_with_link': message_with_link,
+                    },
+                    'last_message': {'is_outgoing': True},
+                }
+            except Exception as e:
+                logger.error(f"Failed to create message with link: {e}")
+                return {
+                    'success': False,
+                    'output': {'link_injected': False},
+                    'error': str(e),
+                }
+                
+        except Exception as e:
+            logger.error(f"Failed to execute link node: {e}")
+            return {
+                'success': False,
+                'output': {'link_injected': False},
+                'error': str(e),
+            }
+    
     def simulate_execution(self, deal: Deal, start_node_id: Optional[int] = None) -> Dict:
         """Simulate state machine execution for a deal."""
         simulation = {
@@ -339,6 +465,15 @@ class StateMachineEngine:
                 template = current_node.config.get('message_template_text', '')
                 if template:
                     simulation['messages_sent'].append(template)
+            
+            # Check if link node
+            if current_node.node_type == StateNode.TYPE_LINK:
+                link_url = current_node.config.get('link_url', '')
+                link_id = current_node.config.get('link_id')
+                if link_url:
+                    simulation['messages_sent'].append(f'[Link: {link_url}]')
+                elif link_id:
+                    simulation['messages_sent'].append(f'[Link ID: {link_id}]')
             
             # Get next node
             next_node = self.next_node(current_node, deal)

@@ -4,13 +4,13 @@ import React from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Button } from '@/components/ui/button'
+import { Separator } from '@/components/ui/separator'
 import { Icons } from '@/lib/types/components'
 
 interface SidebarItem {
   title: string
   href: string
   icon: keyof typeof Icons
-  description?: string
 }
 
 interface SidebarProps {
@@ -47,56 +47,48 @@ const Sidebar = ({ items, isOpen, setIsOpen }: SidebarProps) => {
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
               {React.createElement(Icons.Sparkles, { className: "h-5 w-5" })}
             </div>
-            <span>OpenOutreach</span>
+            <span>Lengrowth</span>
           </div>
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 overflow-y-auto px-3 py-4">
-          <div className="space-y-0.5">
+        <nav className="flex-1 overflow-y-auto py-2">
+          <div className="space-y-1 px-2">
             {items.map((item, index) => {
               const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`)
               return (
-                <div key={item.href} className="relative">
-                  <Link href={item.href}>
-                    <Button
-                      variant={isActive ? 'secondary' : 'ghost'}
-                      className={`
-                        w-full justify-start gap-3 rounded-lg
-                        hover:bg-accent hover:text-accent-foreground
-                        data-[active=true]:bg-accent data-[active=true]:text-accent-foreground
-                      `}
-                      data-active={isActive}
-                    >
-                      {React.createElement(Icons[item.icon], { className: "h-4 w-4" })}
-                      <div className="flex flex-col items-start text-left flex-1">
+                <React.Fragment key={item.href}>
+                  <div className="relative group">
+                    <Link href={item.href}>
+                      <Button
+                        variant={isActive ? 'secondary' : 'ghost'}
+                        size="sm"
+                        className="w-full justify-start gap-3 rounded-md px-2"
+                        data-active={isActive}
+                      >
+                        {React.createElement(Icons[item.icon], { className: "h-4 w-4 shrink-0" })}
                         <span className="text-sm font-medium">{item.title}</span>
-                        {item.description && (
-                          <span className="text-[0.7rem] text-muted-foreground">
-                            {item.description}
+                        {isActive && (
+                          <span className="ml-auto flex h-4 w-4 items-center justify-center">
+                            <span className="absolute h-2 w-2 rounded-full bg-current opacity-50"></span>
                           </span>
                         )}
-                      </div>
-                      {isActive && (
-                        <span className="ml-auto flex h-4 w-4 items-center justify-center">
-                          <span className="absolute h-2 w-2 rounded-full bg-current opacity-50"></span>
-                        </span>
-                      )}
-                    </Button>
-                  </Link>
+                      </Button>
+                    </Link>
+                  </div>
                   {index < items.length - 1 && (
-                    <div className="mx-4 h-px bg-border" />
+                    <Separator className="mx-2" />
                   )}
-                </div>
+                </React.Fragment>
               )
             })}
           </div>
         </nav>
 
         {/* Footer - Logout */}
-        <div className="border-t p-3">
+        <div className="border-t p-2">
           <Link href="/api/auth/logout">
-            <Button variant="outline" className="w-full justify-start gap-2">
+            <Button variant="outline" className="w-full justify-start gap-3 rounded-md px-2" size="sm">
               {React.createElement(Icons.LogOut, { className: "h-4 w-4" })}
               <span className="text-sm">Logout</span>
             </Button>

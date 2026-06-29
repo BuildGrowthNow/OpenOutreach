@@ -35,11 +35,11 @@ const StatsCard = ({
       <CardContent>
         <div className="text-2xl font-bold">{value}</div>
         <p className="text-xs text-muted-foreground mt-1">{description}</p>
-        {trend && (
-          <p className={`text-xs mt-2 ${trendUp ? 'text-emerald-500' : 'text-red-500'}`}>
-            {trendUp ? 'up ' : 'down '}{trend} <span className="text-muted-foreground">vs last period</span>
-          </p>
-        )}
+         {trend && trend !== '+0%' && trend !== '0%' && (
+           <p className={`text-xs mt-2 ${trendUp ? 'text-emerald-500' : 'text-red-500'}`}>
+             {trendUp ? 'up ' : 'down '}{trend} <span className="text-muted-foreground">vs last period</span>
+           </p>
+         )}
       </CardContent>
     </Card>
   )

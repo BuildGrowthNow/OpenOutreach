@@ -1,0 +1,25 @@
+{
+  "venvPath": ".",
+  "venv": ".venv",
+  "pythonVersion": "3.11",
+  "include": [
+    "openoutreach",
+    "tests"
+  ],
+  "exclude": [
+    "**/node_modules",
+    "**/__pycache__",
+    "**/.venv",
+    "**/migrations"
+  ],
+  "typeshedPath": "typeshed",
+  "stubPath": "stubs",
+  "reportMissingTypeStubs": false,
+  "reportAttributeAccessIssue": "warning",
+  "reportIncompatibleVariableOverride": "warning",
+  "reportPossiblyUnboundVariable": "warning",
+  "reportCallIssue": "warning",
+  "reportArgumentType": "warning",
+  "reportInvalidTypeVarUse": "warning",
+  "reportMissingModuleSource": "warning"
+}

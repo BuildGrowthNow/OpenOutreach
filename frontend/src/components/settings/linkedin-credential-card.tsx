@@ -5,6 +5,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Icons } from '@/lib/types/components'
+import { AlertCircle } from 'lucide-react'
 import { 
   LinkedInCredentials, 
   verifyLinkedInCredentials, 
@@ -168,16 +169,46 @@ export default function LinkedInCredentialCard({ credential, onRefresh }: Linked
     }
   }
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'active': return 'bg-green-500'
-      case 'invalid': return 'bg-red-500'
-      case 'expired': return 'bg-yellow-500'
-      case 'locked': return 'bg-gray-500'
-      case 'backup': return 'bg-blue-500'
-      default: return 'bg-gray-500'
-    }
-  }
+   const getStatusColor = (status: string) => {
+     switch (status) {
+       case 'active': return 'bg-green-500'
+       case 'invalid': return 'bg-red-500'
+       case 'expired': return 'bg-yellow-500'
+       case 'locked': return 'bg-gray-500'
+       case 'backup': return 'bg-blue-500'
+       default: return 'bg-gray-500'
+     }
+   }
+
+     // Define interface for health_status with optional error details
+     interface HealthStatusWithDetails {
+       error_details?: { message?: string; code?: string };
+       details?: { error_message?: string; reason?: string };
+       health_score?: number;
+       days_until_expiry?: number | null;
+       days_since_rotation?: number;
+       verification_failures?: number;
+       last_verified?: string;
+       last_used?: string;
+     }
+
+     // Get error message from credential health status if available
+     const getErrorMessage = () => {
+       // Check health_status for error details - these may or may not exist
+       const details = credential.health_status as HealthStatusWithDetails
+       if (details.error_details?.message) {
+         return details.error_details.message
+       }
+       if (details.details && typeof details.details === 'object') {
+         if (details.details.error_message) {
+           return details.details.error_message
+         }
+         if (details.details.reason) {
+           return details.details.reason
+         }
+       }
+       return null
+     }
 
   return (
     <Card>
@@ -247,6 +278,27 @@ export default function LinkedInCredentialCard({ credential, onRefresh }: Linked
               )}
             </div>
           )}
+
+          {/* Error Details Section */}
+          {credential.status === 'invalid' || credential.status === 'locked' || credential.status === 'expired' ? (
+            <Alert variant="destructive" className="bg-red-500/10 border-red-200">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription className="space-y-2">
+                <div className="font-semibold text-red-700">Connection Issue Detected</div>
+                <div className="text-sm text-red-600">
+                  Status: <span className="font-medium capitalize">{credential.status}</span>
+                </div>
+                {getErrorMessage() && (
+                  <div className="text-sm text-red-600 bg-red-100/50 rounded p-2">
+                    Error: {getErrorMessage()}
+                  </div>
+                )}
+                <p className="text-xs text-red-500/80 mt-2">
+                  You can try verifying these credentials or use a different account for your campaigns.
+                </p>
+              </AlertDescription>
+            </Alert>
+          ) : null}
 
           <div className="flex flex-wrap gap-2 mt-2">
             <Button 

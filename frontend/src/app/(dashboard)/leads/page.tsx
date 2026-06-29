@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Icons } from '@/lib/types/components'
-import { getLeads, updateLead, reScrapeLeadProfile, createLead, sendMessageToLead, getMessages } from '@/lib/api/dashboard'
+import { getLeads, updateLead, reScrapeLeadProfile, createLead, sendMessageToLead, getMessages, addLeadToCampaign } from '@/lib/api/dashboard'
 import { Lead, Pagination, Message } from '@/lib/types/components'
 import { exportFilteredLeads } from '@/lib/export'
 import { LeadForm } from '@/components/leads/lead-form'
@@ -28,6 +28,7 @@ const LeadsPage = () => {
   const [currentPage, setCurrentPage] = useState(1)
   const [showLeadForm, setShowLeadForm] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [editingLead, setEditingLead] = useState<Lead | null>(null)
   const [stats, setStats] = useState({
     total: 0,
     connected: 0,
@@ -94,8 +95,8 @@ const LeadsPage = () => {
   }
 
   const handleEditLead = (lead: Lead) => {
-    // TODO: Implement edit modal using LeadForm
-    console.log('Edit lead:', lead)
+    setEditingLead(lead)
+    setShowLeadForm(true)
   }
 
   const handleDisqualifyLead = async (lead: Lead) => {
@@ -155,21 +156,33 @@ const LeadsPage = () => {
     try {
       setIsSubmitting(true)
       
-      // Create the lead directly using the API
-      const leadResponse = await createLead({
-        linkedinUrl: leadData.linkedinUrl,
-        publicIdentifier: leadData.publicIdentifier,
-        name: leadData.name,
-      })
-      
-      if (leadResponse.data) {
-        setShowLeadForm(false)
-        await fetchLeads() // Refresh the list
+      // If editing an existing lead, use patch/put instead of create
+      if (editingLead && editingLead.id) {
+        const response = await updateLead(editingLead.id, leadData)
+        if (response.data) {
+          setShowLeadForm(false)
+          setEditingLead(null)
+          await fetchLeads() // Refresh the list
+        } else {
+          throw new Error(response.error || 'Failed to update lead')
+        }
       } else {
-        throw new Error(leadResponse.error || 'Failed to create lead')
+        // Create the lead directly using the API
+        const leadResponse = await createLead({
+          linkedinUrl: leadData.linkedinUrl,
+          publicIdentifier: leadData.publicIdentifier,
+          name: leadData.name,
+        })
+        
+        if (leadResponse.data) {
+          setShowLeadForm(false)
+          await fetchLeads() // Refresh the list
+        } else {
+          throw new Error(leadResponse.error || 'Failed to create lead')
+        }
       }
     } catch (err) {
-      alert(`Failed to add lead: ${err instanceof Error ? err.message : 'Unknown error'}`)
+      alert(`Failed to add/update lead: ${err instanceof Error ? err.message : 'Unknown error'}`)
       throw err
     } finally {
       setIsSubmitting(false)
@@ -211,7 +224,7 @@ const LeadsPage = () => {
   }
 
   return (
-    <div className="flex-1 space-y-6 p-4 md:p-6 lg:p-8">
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Leads Management</h1>
@@ -345,6 +358,20 @@ const LeadsPage = () => {
         onDisqualify={handleDisqualifyLead}
         onReScrape={handleReScrapeLead}
         onMessage={handleSendMessage}
+        onAddToCampaign={async (lead, campaignId) => {
+          if (campaignId) {
+            try {
+              const response = await addLeadToCampaign(lead.id, campaignId)
+              if (response.data?.success) {
+                await fetchLeads() // Refresh the list
+              } else {
+                alert(response.error || 'Failed to add lead to campaign')
+              }
+            } catch (err) {
+              alert(`Failed to add lead to campaign: ${err instanceof Error ? err.message : 'Unknown error'}`)
+            }
+          }
+        }}
         onSearch={handleSearch}
         onStatusFilter={handleStatusFilter}
         onPageChange={handlePageChange}

@@ -6,10 +6,41 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Icons } from '@/lib/types/components'
-import { LinkMetrics } from '@/lib/types/components'
+import { TrackedLink } from '@/lib/api/dashboard'
 
 interface LinkStatsProps {
-  links: LinkMetrics[]
+  links: (TrackedLink | LinkMetrics)[]
+}
+
+// Helper type to handle both TrackedLink and LinkMetrics
+interface LinkMetrics {
+  id: string
+  url: string
+  shortUrl: string
+  campaignId: string
+  campaignName: string
+  clicks: number
+  uniqueVisitors: number
+  lastClickAt: string
+  createdAt: string
+}
+
+// Helper function to convert either type to LinkMetrics
+function toLinkMetrics(link: TrackedLink | LinkMetrics): LinkMetrics {
+  if ('original_url' in link) {
+    return {
+      id: link.id,
+      url: link.original_url || '',
+      shortUrl: link.short_code || '',
+      campaignId: link.campaign?.id || '',
+      campaignName: link.campaign?.name || '',
+      clicks: link.total_clicks || 0,
+      uniqueVisitors: link.unique_clicks || 0,
+      lastClickAt: link.last_clicked_at || '',
+      createdAt: link.created_at || '',
+    }
+  }
+  return link as LinkMetrics
 }
 
 export default function LinkStats({ links }: LinkStatsProps) {
@@ -38,9 +69,12 @@ export default function LinkStats({ links }: LinkStatsProps) {
     )
   }
 
+  // Convert links to metrics for processing
+  const linkMetrics = links.map(toLinkMetrics)
+
   const filteredLinks = campaignFilter === 'all' 
-    ? links 
-    : links.filter(link => link.campaignId === campaignFilter)
+    ? linkMetrics 
+    : linkMetrics.filter(link => link.campaignId === campaignFilter)
 
   // Calculate statistics
   const stats = {
@@ -90,8 +124,8 @@ export default function LinkStats({ links }: LinkStatsProps) {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Campaigns</SelectItem>
-              {Array.from(new Set(links.map(l => l.campaignId))).map(campaignId => {
-                const campaign = links.find(l => l.campaignId === campaignId)
+              {Array.from(new Set(linkMetrics.map(l => l.campaignId))).map(campaignId => {
+                const campaign = linkMetrics.find(l => l.campaignId === campaignId)
                 return (
                   <SelectItem key={campaignId} value={campaignId}>
                     {campaign?.campaignName || campaignId}

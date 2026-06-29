@@ -9,9 +9,11 @@ import { Badge } from '@/components/ui/badge'
 import { Icons } from '@/lib/types/components'
 import { cn } from '@/lib/utils'
 
+type NodeTypes = 'state' | 'start' | 'end' | 'wait' | 'message' | 'gate' | 'decision' | 'branch'
+
 interface NodeProps {
   id: string
-  type: 'state' | 'start' | 'end'
+  type: NodeTypes
   name: string
   description?: string
   isSelected?: boolean
@@ -49,6 +51,16 @@ export function Node({
         return 'border-emerald-500 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
       case 'end':
         return 'border-red-500 bg-red-500/10 text-red-600 dark:text-red-400'
+      case 'wait':
+        return 'border-yellow-500 bg-yellow-500/10 text-yellow-600 dark:text-yellow-400'
+      case 'message':
+        return 'border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-400'
+      case 'gate':
+        return 'border-purple-500 bg-purple-500/10 text-purple-600 dark:text-purple-400'
+      case 'decision':
+        return 'border-orange-500 bg-orange-500/10 text-orange-600 dark:text-orange-400'
+      case 'branch':
+        return 'border-cyan-500 bg-cyan-500/10 text-cyan-600 dark:text-cyan-400'
       default:
         return 'border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-400'
     }
@@ -60,6 +72,16 @@ export function Node({
         return <Icons.Play className="h-4 w-4" />
       case 'end':
         return <Icons.StopCircle className="h-4 w-4" />
+      case 'wait':
+        return <Icons.Clock className="h-4 w-4" />
+      case 'message':
+        return <Icons.MessageSquare className="h-4 w-4" />
+      case 'gate':
+        return <Icons.Lock className="h-4 w-4" />
+      case 'decision':
+        return <Icons.SlidersHorizontal className="h-4 w-4" />
+      case 'branch':
+        return <Icons.Network className="h-4 w-4" />
       default:
         return <Icons.Circle className="h-4 w-4" />
     }

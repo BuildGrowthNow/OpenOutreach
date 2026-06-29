@@ -1,221 +1,315 @@
-# Links API Views
+# API Views for Links Management
 
-from datetime import timedelta
-
-from rest_framework import status
-from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated
-from django.http import Http404
+from rest_framework.response import Response
+from rest_framework import status, permissions
+from rest_framework_simplejwt.authentication import JWTAuthentication
+from rest_framework.decorators import api_view, permission_classes
+from django.core.exceptions import ValidationError
+from django.core.validators import validate_email
 from django.utils import timezone
+import logging
 
-from openoutreach.crm.models import TrackedLink, LinkClick
+from django.contrib.auth import get_user_model
+User = get_user_model()
+logger = logging.getLogger(__name__)
 
 
-class LinksView(APIView):
+class LinksListView(APIView):
     """
-    API view for managing tracked links.
-    
-    GET /api/links - List tracked links
-    POST /api/links - Create tracking link
+    List all tracked links, or create a new link.
     """
-    permission_classes = [IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
     
-    def get(self, request):
-        """List tracked links with filtering."""
-        # Query tracked links from database
-        links = TrackedLink.objects.all().order_by('-created_at')
+    def get(self, request, format=None):
+        """
+        GET /api/links/
+        Returns all tracked links available to the user.
+        """
+        from openoutreach.crm.models import TrackedLink
         
-        # Apply filters
-        campaign_id = request.query_params.get('campaign_id')
-        if campaign_id:
-            links = links.filter(campaign_id=campaign_id)
+        # Get links from campaigns the user has access to
+        user_campaigns = request.user.campaigns.all()
+        links = TrackedLink.objects.filter(
+            campaign__in=user_campaigns
+        ).distinct()
         
-        is_active = request.query_params.get('is_active')
-        if is_active is not None:
-            links = links.filter(is_active=is_active.lower() == 'true')
-        
-        # Pagination
-        page = request.query_params.get('page')
-        limit = request.query_params.get('limit')
-        total = links.count()
-        
-        if page and limit:
-            try:
-                page_num = int(page)
-                limit_num = int(limit)
-                start = (page_num - 1) * limit_num
-                end = start + limit_num
-                links = links[start:end]
-            except (ValueError, TypeError):
-                pass
-        
-        # Serialize links
-        links_data = []
-        for link in links:
-            links_data.append({
-                'id': link.id,
-                'campaign_id': link.campaign.id if link.campaign else None,
-                'campaign_name': link.campaign.name if link.campaign else 'General',
-                'original_url': link.original_url,
-                'tracked_url': link.get_short_url(request),
-                'tracked_url_code': f"https://yourdomain.com/l/{link.short_code}",
-                'clicks': link.total_clicks,
-                'unique_clicks': link.clicks.all().distinct().count() if hasattr(link.clicks, 'all') else link.total_clicks,
-                'conversion_rate': link.conversion_rate,
-                'created_at': link.created_at.isoformat(),
-                'is_active': link.is_active,
-                'utm_source': link.utm_source,
-                'utm_medium': link.utm_medium,
-                'utm_campaign': link.utm_campaign,
-            })
+        data = [{
+            'id': link.id,
+            'campaign': {
+                'id': link.campaign.id,
+                'name': link.campaign.name,
+            } if link.campaign else None,
+            'original_url': link.original_url,
+            'short_code': link.short_code,
+            'is_active': link.is_active,
+            'total_clicks': link.total_clicks,
+            'utm_source': link.utm_source,
+            'utm_medium': link.utm_medium,
+            'utm_campaign': link.utm_campaign,
+            'created_at': link.created_at.isoformat(),
+        } for link in links]
         
         return Response({
-            'data': links_data,
-            'pagination': {
-                'page': int(page) if page else 1,
-                'limit': int(limit) if limit else len(links_data),
-                'total': total,
-            }
-        })
+            'status': 'success',
+            'count': links.count(),
+            'results': data,
+        }, status=status.HTTP_200_OK)
     
-    def post(self, request):
-        """Create a new tracked link."""
+    def post(self, request, format=None):
+        """
+        POST /api/links/
+        Create a new tracked link.
+        Request: {
+            "original_url": "https://example.com",
+            "campaign_id": 1,
+            "utm_source": "linkedin",
+            "utm_medium": "message",
+            "utm_campaign": "campaign_name"
+        }
+        """
+        from openoutreach.crm.models import TrackedLink
+        
         original_url = request.data.get('original_url')
         campaign_id = request.data.get('campaign_id')
-        short_code = request.data.get('short_code')
         utm_source = request.data.get('utm_source', '')
         utm_medium = request.data.get('utm_medium', '')
         utm_campaign = request.data.get('utm_campaign', '')
         
         if not original_url:
             return Response({
-                'success': False,
-                'error': 'original_url is required'
+                'status': 'error',
+                'message': 'original_url is required',
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        # Generate short code if not provided
-        import random
-        import string
-        if not short_code:
-            short_code = ''.join(
-                random.choices(string.ascii_lowercase + string.digits, k=8)
-            )
+        try:
+            # Validate URL format
+            validate_email(original_url)  # This won't work for URLs
+        except ValidationError:
+            pass  # URL validation will be done by models.URLField
         
-        # Check if short code exists
-        if TrackedLink.objects.filter(short_code=short_code).exists():
+        try:
+            # Validate URL format properly
+            from django.core.validators import URLValidator
+            validator = URLValidator()
+            validator(original_url)
+        except ValidationError:
             return Response({
-                'success': False,
-                'error': 'short_code already exists'
+                'status': 'error',
+                'message': 'Invalid URL format',
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        # Create the tracked link
+        # Get campaign (optional, for assignment)
+        campaign = None
+        if campaign_id:
+            try:
+                from openoutreach.core.models import Campaign
+                campaign = Campaign.objects.get(id=campaign_id)
+                
+                # Check if user has access to this campaign
+                if campaign not in request.user.campaigns.all():
+                    return Response({
+                        'status': 'error',
+                        'message': 'You do not have access to this campaign',
+                    }, status=status.HTTP_403_FORBIDDEN)
+                    
+            except Campaign.DoesNotExist:
+                return Response({
+                    'status': 'error',
+                    'message': 'Campaign not found',
+                }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Create the link
         link = TrackedLink.objects.create(
+            campaign=campaign,
             original_url=original_url,
-            short_code=short_code,
-            campaign_id=campaign_id,
-            utm_source=utm_source[:100],
-            utm_medium=utm_medium[:100],
-            utm_campaign=utm_campaign[:100],
+            utm_source=utm_source,
+            utm_medium=utm_medium,
+            utm_campaign=utm_campaign,
         )
         
+        logger.info(f"Created tracked link: {link.short_code} for campaign: {campaign.name if campaign else 'global'}")
+        
         return Response({
+            'status': 'success',
             'id': link.id,
-            'original_url': link.original_url,
-            'tracked_url': link.get_short_url(request),
-            'tracked_url_code': f"https://yourdomain.com/l/{link.short_code}",
             'short_code': link.short_code,
-            'campaign_id': link.campaign.id if link.campaign else None,
-            'is_active': link.is_active,
-            'created_at': link.created_at.isoformat(),
+            'url': f"/l/{link.short_code}",
         }, status=status.HTTP_201_CREATED)
 
 
-class LinkDetailView(APIView):
+class LinksDetailView(APIView):
     """
-    API view for link details and breakdown.
-    
-    GET /api/links/{id} - Get link details
-    PATCH /api/links/{id} - Update link
+    Retrieve, update, or delete a tracked link.
     """
-    permission_classes = [IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
     
     def get_object(self, pk):
+        from openoutreach.crm.models import TrackedLink
         try:
             return TrackedLink.objects.get(pk=pk)
         except TrackedLink.DoesNotExist:
-            raise Http404
+            return None
     
-    def get(self, request, pk):
-        """Get link details with breakdown."""
+    def get(self, request, pk, format=None):
+        """
+        GET /api/links/{pk}/
+        Returns details of a specific tracked link.
+        """
         link = self.get_object(pk)
+        if not link:
+            return Response({
+                'status': 'error',
+                'message': 'Link not found',
+            }, status=status.HTTP_404_NOT_FOUND)
         
-        # Calculate breakdown from clicks - already imported at top
+        # Check if user has access to this link's campaign
+        if link.campaign and link.campaign not in request.user.campaigns.all():
+            return Response({
+                'status': 'error',
+                'message': 'You do not have access to this link',
+            }, status=status.HTTP_403_FORBIDDEN)
         
-        # Device breakdown
-        device_breakdown = {}
-        for click in link.clicks.all():
-            device = click.device_type or 'unknown'
-            device_breakdown[device] = device_breakdown.get(device, 0) + 1
-        
-        # Country breakdown (placeholder - would need geoip service in production)
-        country_breakdown = {}
-        
-        # Source breakdown
-        source_breakdown = {}
-        
-        # Daily breakdown (last 7 days)
-        daily_breakdown = []
-        for i in range(7):
-            day_start = timezone.now() - timedelta(days=6-i)
-            day_end = day_start + timedelta(days=1)
-            
-            day_clicks = link.clicks.filter(
-                clicked_at__gte=day_start,
-                clicked_at__lt=day_end
-            ).count()
-            
-            daily_breakdown.append({
-                'date': day_start.strftime('%Y-%m-%d'),
-                'clicks': day_clicks,
-            })
-        
-        # Hourly breakdown
-        hourly_breakdown = []
-        for hour in range(24):
-            hourly_clicks = link.clicks.filter(
-                clicked_at__hour=hour
-            ).count()
-            
-            hourly_breakdown.append({
-                'hour': hour,
-                'clicks': hourly_clicks,
-            })
+        data = {
+            'id': link.id,
+            'campaign': {
+                'id': link.campaign.id,
+                'name': link.campaign.name,
+            } if link.campaign else None,
+            'original_url': link.original_url,
+            'short_code': link.short_code,
+            'is_active': link.is_active,
+            'total_clicks': link.total_clicks,
+            'unique_clicks': link.unique_clicks,
+            'utm_source': link.utm_source,
+            'utm_medium': link.utm_medium,
+            'utm_campaign': link.utm_campaign,
+            'utm_term': link.utm_term,
+            'utm_content': link.utm_content,
+            'last_clicked_at': link.last_clicked_at.isoformat() if link.last_clicked_at else None,
+            'last_ip': link.last_ip,
+            'last_user_agent': link.last_user_agent,
+            'created_at': link.created_at.isoformat(),
+        }
         
         return Response({
+            'status': 'success',
+            'result': data,
+        }, status=status.HTTP_200_OK)
+    
+    def put(self, request, pk, format=None):
+        """
+        PUT /api/links/{pk}/
+        Update a tracked link.
+        """
+        link = self.get_object(pk)
+        if not link:
+            return Response({
+                'status': 'error',
+                'message': 'Link not found',
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Check if user has access to this link's campaign
+        if link.campaign and link.campaign not in request.user.campaigns.all():
+            return Response({
+                'status': 'error',
+                'message': 'You do not have access to this link',
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        # Update fields
+        if 'original_url' in request.data:
+            link.original_url = request.data['original_url']
+        if 'is_active' in request.data:
+            link.is_active = request.data['is_active']
+        if 'utm_source' in request.data:
+            link.utm_source = request.data['utm_source']
+        if 'utm_medium' in request.data:
+            link.utm_medium = request.data['utm_medium']
+        if 'utm_campaign' in request.data:
+            link.utm_campaign = request.data['utm_campaign']
+        if 'utm_term' in request.data:
+            link.utm_term = request.data['utm_term']
+        if 'utm_content' in request.data:
+            link.utm_content = request.data['utm_content']
+        
+        link.save()
+        
+        return Response({
+            'status': 'success',
             'id': link.id,
-            'campaign_id': link.campaign.id if link.campaign else None,
-            'campaign_name': link.campaign.name if link.campaign else 'General',
-            'original_url': link.original_url,
-            'tracked_url': link.get_short_url(request),
-            'tracked_url_code': f"https://yourdomain.com/l/{link.short_code}",
-            'clicks': link.total_clicks,
-            'unique_clicks': link.clicks.all().distinct().count() if hasattr(link.clicks, 'all') else link.total_clicks,
-            'conversion_rate': link.conversion_rate,
-            'created_at': link.created_at.isoformat(),
+            'short_code': link.short_code,
             'is_active': link.is_active,
-            'breakdown': {
-                'by_device': device_breakdown,
-                'by_country': country_breakdown,
-                'by_source': source_breakdown,
-                'daily': daily_breakdown,
-                'hourly': hourly_breakdown,
-            },
-            'utm_parameters': {
-                'source': link.utm_source,
-                'medium': link.utm_medium,
-                'campaign': link.utm_campaign,
-                'term': link.utm_term,
-                'content': link.utm_content,
-            },
-        })
+        }, status=status.HTTP_200_OK)
+    
+    def delete(self, request, pk, format=None):
+        """
+        DELETE /api/links/{pk}/
+        Delete a tracked link.
+        """
+        link = self.get_object(pk)
+        if not link:
+            return Response({
+                'status': 'error',
+                'message': 'Link not found',
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Check if user has access to this link's campaign
+        if link.campaign and link.campaign not in request.user.campaigns.all():
+            return Response({
+                'status': 'error',
+                'message': 'You do not have access to this link',
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        link.delete()
+        
+        return Response({
+            'status': 'success',
+            'message': 'Link deleted successfully',
+        }, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def link_redirect_view(request, short_code):
+    """
+    Redirect from short link to original URL and record the click.
+    """
+    from openoutreach.crm.models import TrackedLink, LinkClick
+    from django.http import HttpResponseRedirect
+    from django.utils import timezone
+    
+    try:
+        link = TrackedLink.objects.get(short_code=short_code)
+    except TrackedLink.DoesNotExist:
+        return Response({
+            'status': 'error',
+            'message': 'Link not found',
+        }, status=status.HTTP_404_NOT_FOUND)
+    
+    if not link.is_active:
+        return Response({
+            'status': 'error',
+            'message': 'Link is not active',
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    # Record the click
+    ip_address = request.META.get('HTTP_X_FORWARDED_FOR') or request.META.get('REMOTE_ADDR')
+    user_agent = request.META.get('HTTP_USER_AGENT', '')[:500]
+    referrer = request.META.get('HTTP_REFERER', '')[:500]
+    
+    LinkClick.objects.create(
+        link=link,
+        ip_address=ip_address,
+        user_agent=user_agent,
+        referrer=referrer,
+    )
+    
+    # Update link stats
+    link.total_clicks += 1
+    link.last_clicked_at = timezone.now()
+    link.save(update_fields=['total_clicks', 'last_clicked_at'])
+    
+    # Redirect to original URL
+    return HttpResponseRedirect(link.original_url)

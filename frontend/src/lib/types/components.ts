@@ -49,10 +49,14 @@ import {
   Network,
   Workflow,
   ArrowRight,
-  Zap,
-  Check,
-  Handshake,
-  Trophy,
+   Zap,
+   Check,
+   Handshake,
+   Trophy,
+   Ghost,
+   Shield,
+   Copy,
+   Clipboard,
   Calendar,
   Briefcase,
   TrendingDown,
@@ -74,7 +78,9 @@ import {
   Eye,
   EyeOff,
   Info,
-  Save
+  Save,
+  Terminal,
+  Bell
 } from 'lucide-react'
 
 export type Icon = React.FC<React.SVGProps<SVGSVGElement>>
@@ -95,6 +101,7 @@ export const Icons = {
   CheckCircle2,
   AlertCircle,
   AlertTriangle,
+  Bell,
   Moon,
   Sun,
   Search,
@@ -128,11 +135,15 @@ export const Icons = {
   Network,
   Workflow,
   ArrowRight,
-  Zap,
-  Check,
-  Handshake,
-  Trophy,
-  Calendar,
+   Zap,
+   Check,
+   Handshake,
+   Trophy,
+   Ghost,
+   Shield,
+   Copy,
+   Clipboard,
+   Calendar,
   Briefcase,
   TrendingDown,
   ListTodo,
@@ -153,7 +164,8 @@ export const Icons = {
   Eye,
   EyeOff,
   Info,
-  Save
+  Save,
+  Terminal
 }
 
 // Campaign status variants
@@ -220,6 +232,10 @@ export interface Lead {
   messagesCount?: number
   lastMessageAt?: string
   notes?: string
+  notesCount?: number
+  lastNotes?: Array<{ id: string; content: string }>
+  campaignId?: string
+  campaignName?: string
   disqualified?: boolean
 }
 
@@ -310,6 +326,8 @@ export interface LinkedInProfileHealth {
   health_score: number
   health_status: string
   needs_attention: boolean
+  last_error?: string | null
+  last_verification?: string | null
 }
 
 export interface LinkedInProfileHealthResponse {
@@ -317,4 +335,32 @@ export interface LinkedInProfileHealthResponse {
   count: number
   total_profiles: number
   needs_attention_count: number
+}
+
+// Campaign Template types
+export interface CampaignTemplate {
+  id: number
+  name: string
+  description?: string
+  campaign_objective?: string
+  ghost_mode_enabled: boolean
+  velocity: number
+  cooldown_minutes: number
+  is_public: boolean
+  created_by: {
+    id: number
+    username: string
+  }
+  created_at: string
+  updated_at: string
+}
+
+export interface CampaignTemplateCreateData {
+  name: string
+  description?: string
+  campaign_objective?: string
+  ghost_mode_enabled?: boolean
+  velocity?: number
+  cooldown_minutes?: number
+  is_public?: boolean
 }

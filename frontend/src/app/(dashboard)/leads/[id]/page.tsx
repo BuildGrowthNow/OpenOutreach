@@ -8,21 +8,24 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Icons } from '@/lib/types/components'
-import { LeadCard } from '@/components/leads/lead-card'
 import { LeadStatusBadge } from '@/components/leads/lead-status-badge'
 import { LeadNotes } from '@/components/leads/lead-notes'
 import { MessageThread } from '@/components/messages/message-thread'
-import { 
-  getLead, 
-  updateLead, 
-  reScrapeLeadProfile, 
-  getMessages, 
+import { LeadForm } from '@/components/leads/lead-form'
+import { AddToCampaignModal } from '@/components/modals/add-to-campaign-modal'
+import {
+  getLead,
+  updateLead,
+  reScrapeLeadProfile,
+  getMessages,
   sendMessageToLead,
   getLeadNotes,
   createLeadNote,
   updateLeadNote,
   deleteLeadNote,
-  type Note as ApiNote
+  getCampaigns,
+  type Note as ApiNote,
+  type Campaign
 } from '@/lib/api/dashboard'
 import { Lead, DealState, DealOutcome, Message } from '@/lib/types/components'
 import { formatDistanceToNow } from 'date-fns'
@@ -60,6 +63,7 @@ const LeadDetailsPage = () => {
     createdAt: string
     updatedAt?: string
   }>>([])
+  const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [notesLoading, setNotesLoading] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -67,6 +71,21 @@ const LeadDetailsPage = () => {
   const [messageLoading, setMessageLoading] = useState(false)
   const [sendingMessage, setSendingMessage] = useState(false)
   const [savingNote, setSavingNote] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [showAddToCampaign, setShowAddToCampaign] = useState(false)
+
+  const fetchProfileData = useCallback(async (id: string) => {
+    try {
+      const response = await reScrapeLeadProfile(id)
+      if (response.data?.profile) {
+        setProfile(response.data.profile)
+      } else if (response.data?.success && response.data?.profile) {
+        setProfile(response.data.profile)
+      }
+    } catch (err) {
+      console.error('Failed to fetch profile data:', err)
+    }
+  }, [])
 
   const fetchLeadDetails = useCallback(async () => {
     try {
@@ -77,13 +96,9 @@ const LeadDetailsPage = () => {
       
       if (response.data) {
         setLead(response.data)
-        // TODO: Fetch profile data from separate endpoint if available
-        setProfile({
-          firstName: response.data.name?.split(' ')[0],
-          lastName: response.data.name?.split(' ').slice(1).join(' '),
-          headline: response.data.title,
-          location: 'Unknown Location'
-        })
+        
+        // Fetch full profile data from separate endpoint
+        await fetchProfileData(leadId)
       } else {
         setError(response.error || 'Failed to fetch lead details')
       }
@@ -94,12 +109,24 @@ const LeadDetailsPage = () => {
     }
   }, [leadId])
 
+  const fetchCampaigns = useCallback(async () => {
+    try {
+      const response = await getCampaigns()
+      if (response.data?.data) {
+        setCampaigns(response.data.data)
+      }
+    } catch (err) {
+      console.error('Failed to fetch campaigns:', err)
+    }
+  }, [])
+
   useEffect(() => {
     if (!leadId) return
     void (async () => {
       await fetchLeadDetails()
+      await fetchCampaigns()
     })()
-  }, [leadId, fetchLeadDetails])
+  }, [leadId, fetchLeadDetails, fetchCampaigns])
 
   const handleReScrape = async () => {
     if (!lead) return
@@ -109,6 +136,7 @@ const LeadDetailsPage = () => {
       if (response.data?.success) {
         alert('Profile re-scraped successfully!')
         await fetchLeadDetails()
+        await fetchCampaigns()
       } else {
         alert(`Failed to re-scrape profile: ${response.error || 'Unknown error'}`)
       }
@@ -133,9 +161,55 @@ const LeadDetailsPage = () => {
     }
   }
 
-  const handleEdit = () => {
-    // TODO: Implement edit modal
-    alert('Edit functionality coming soon!')
+  const handleEditSubmit = async (data: Partial<Lead>) => {
+    if (!lead) return
+    
+    try {
+      setShowEditModal(false)
+      setLoading(true)
+      const response = await updateLead(lead.id, data)
+      
+      if (response.data) {
+        setLead(response.data)
+        alert('Lead updated successfully!')
+        await fetchProfileData(lead.id)
+      } else {
+        alert(`Failed to update lead: ${response.error || 'Unknown error'}`)
+      }
+    } catch (err) {
+      console.error('Failed to update lead:', err)
+      alert('Failed to update lead. Please try again.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleAddToCampaign = async (campaignId: string) => {
+    if (!lead) return
+    
+    try {
+      const response = await fetch(`/api/leads/${lead.id}/add-to-campaign/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ campaign_id: parseInt(campaignId) }),
+      })
+
+      const data = await response.json()
+      
+      if (response.ok && data.success) {
+        alert('Lead added to campaign successfully!')
+        setShowAddToCampaign(false)
+        await fetchLeadDetails()
+        await fetchCampaigns()
+      } else {
+        alert(`Failed to add to campaign: ${data.error || 'Unknown error'}`)
+      }
+    } catch (err) {
+      console.error('Failed to add to campaign:', err)
+      alert('Failed to add to campaign. Please try again.')
+    }
   }
 
   const handleBack = () => {
@@ -159,7 +233,7 @@ const LeadDetailsPage = () => {
     }
   }, [leadId])
 
-  // Fetch messages when tab changes to messages or notes, and poll
+  // Fetch messages when tab changes to messages, and poll
   useEffect(() => {
     if (activeTab !== 'messages' || !leadId) return
     void (async () => {
@@ -303,7 +377,7 @@ const LeadDetailsPage = () => {
 
   if (loading) {
     return (
-      <div className="flex-1 p-4 md:p-6 lg:p-8">
+      <div className="space-y-6">
         <div className="flex items-center justify-center h-96">
           <div className="flex flex-col items-center gap-4">
             <Icons.RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -316,7 +390,7 @@ const LeadDetailsPage = () => {
 
   if (error || !lead) {
     return (
-      <div className="flex-1 p-4 md:p-6 lg:p-8">
+      <div className="space-y-6">
         <Card>
           <CardContent className="flex flex-col items-center justify-center h-96 gap-4">
             <Icons.AlertCircle className="h-12 w-12 text-red-500" />
@@ -340,7 +414,7 @@ const LeadDetailsPage = () => {
   }
 
   return (
-    <div className="flex-1 space-y-6 p-4 md:p-6 lg:p-8">
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
@@ -399,7 +473,7 @@ const LeadDetailsPage = () => {
                       <Badge variant="outline" className={lead.disqualified ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700'}>
                         {lead.disqualified ? 'Disqualified' : 'Active'}
                       </Badge>
-                      <Button size="sm" variant="outline" onClick={handleEdit}>
+                      <Button size="sm" variant="outline" onClick={() => setShowEditModal(true)}>
                         <Icons.Edit className="mr-2 h-3.5 w-3.5" />
                         Edit Status
                       </Button>
@@ -460,10 +534,16 @@ const LeadDetailsPage = () => {
                 <CardHeader>
                   <CardTitle className="flex items-center justify-between">
                     <span>Contact Information</span>
-                    <Button size="sm" variant="outline" onClick={handleEdit}>
-                      <Icons.Edit className="mr-2 h-3.5 w-3.5" />
-                      Edit Contact Info
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="outline" onClick={() => setShowEditModal(true)}>
+                        <Icons.Edit className="mr-2 h-3.5 w-3.5" />
+                        Edit Contact Info
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => setShowAddToCampaign(true)}>
+                        <Icons.Users className="mr-2 h-3.5 w-3.5" />
+                        Add to Campaign
+                      </Button>
+                    </div>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -516,7 +596,7 @@ const LeadDetailsPage = () => {
                         <div className="grid grid-cols-2 gap-4">
                           <div>
                             <div className="text-sm text-muted-foreground mb-1">Company</div>
-                            <div className="font-medium">{lead.company || 'Not specified'}</div>
+                            <div className="font-medium">{profile.headline || lead.company || 'Not specified'}</div>
                           </div>
                           <div>
                             <div className="text-sm text-muted-foreground mb-1">Title</div>
@@ -545,7 +625,7 @@ const LeadDetailsPage = () => {
                           <Separator />
                           <div>
                             <div className="text-sm text-muted-foreground mb-2">Summary</div>
-                            <div className="text-sm leading-relaxed">{profile.summary}</div>
+                            <div className="text-sm leading-relaxed whitespace-pre-wrap">{profile.summary}</div>
                           </div>
                         </>
                       )}
@@ -559,7 +639,7 @@ const LeadDetailsPage = () => {
                             <div className="space-y-3">
                               {profile.experience.map((exp, index) => (
                                 <div key={index} className="space-y-1">
-                                  <div className="font-medium">{exp.title} • {exp.company}</div>
+                                  <div className="font-medium">{exp.title || 'Role'} • {exp.company || 'Company'}</div>
                                   {exp.duration && (
                                     <div className="text-sm text-muted-foreground">{exp.duration}</div>
                                   )}
@@ -574,7 +654,7 @@ const LeadDetailsPage = () => {
                     <div className="text-center py-8">
                       <Icons.AlertCircle className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
                       <div className="text-muted-foreground">Profile information not available</div>
-                      <Button onClick={handleReScrape} className="mt-4">
+                      <Button onClick={() => handleReScrape()} className="mt-4">
                         <Icons.RefreshCw className="mr-2 h-4 w-4" />
                         Re-scrape Profile
                       </Button>
@@ -602,13 +682,41 @@ const LeadDetailsPage = () => {
                   <CardTitle>Campaign Participation</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-center py-12">
-                    <Icons.BarChart3 className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-                    <div className="text-muted-foreground">Campaign participation data coming soon</div>
-                    <div className="text-sm text-muted-foreground mt-1">
-                      View which campaigns this lead is part of
+                  {campaigns.length > 0 ? (
+                    <div className="space-y-4">
+                      {campaigns.map(campaign => (
+                        <div key={campaign.id} className="p-4 border rounded-lg hover:bg-muted/50 transition-colors">
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <h3 className="font-medium">{campaign.name}</h3>
+                              {campaign.description && (
+                                <p className="text-sm text-muted-foreground mt-1">{campaign.description}</p>
+                              )}
+                              <div className="flex items-center gap-2 mt-2">
+                                <Badge variant="outline" className="text-xs">
+                                  {campaign.status || 'Draft'}
+                                </Badge>
+                                {campaign.ghostModeEnabled && (
+                                  <Badge variant="secondary" className="text-xs">
+                                    Ghost Mode
+                                  </Badge>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  </div>
+                  ) : (
+                    <div className="text-center py-12">
+                      <Icons.BarChart3 className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+                      <div className="text-muted-foreground">This lead is not part of any campaigns</div>
+                      <Button onClick={() => setShowAddToCampaign(true)} className="mt-4">
+                        <Icons.Users className="mr-2 h-4 w-4" />
+                        Add to Campaign
+                      </Button>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </TabsContent>
@@ -627,7 +735,7 @@ const LeadDetailsPage = () => {
                 <Icons.RefreshCw className="mr-2 h-4 w-4" />
                 Re-scrape Profile
               </Button>
-              <Button variant="outline" className="w-full justify-start" onClick={handleEdit}>
+              <Button variant="outline" className="w-full justify-start" onClick={() => setShowEditModal(true)}>
                 <Icons.Edit className="mr-2 h-4 w-4" />
                 Edit Lead Info
               </Button>
@@ -635,7 +743,7 @@ const LeadDetailsPage = () => {
                 <Icons.MessageSquare className="mr-2 h-4 w-4" />
                 Send Message
               </Button>
-              <Button variant="outline" className="w-full justify-start">
+              <Button variant="outline" className="w-full justify-start" onClick={() => setShowAddToCampaign(true)}>
                 <Icons.Link className="mr-2 h-4 w-4" />
                 View Campaigns
               </Button>
@@ -684,12 +792,35 @@ const LeadDetailsPage = () => {
             onAddNote={handleAddNote}
             onEditNote={handleEditNote}
             onDeleteNote={handleDeleteNote}
-            isLoading={false}
+            isLoading={notesLoading}
             isSaving={savingNote}
             leadName={lead.name || 'Lead'}
           />
         </div>
       </div>
+
+      {/* Edit Lead Modal */}
+      <LeadForm
+        open={showEditModal}
+        onOpenChange={setShowEditModal}
+        lead={lead}
+        onSubmit={handleEditSubmit}
+        isSubmitting={loading}
+      />
+
+      {/* Add to Campaign Modal */}
+      {campaigns.length > 0 && (
+        <AddToCampaignModal
+          open={showAddToCampaign}
+          onOpenChange={setShowAddToCampaign}
+          leadId={lead.id}
+          leadName={lead.name}
+          onSuccess={() => {
+            setShowAddToCampaign(false)
+            void fetchLeadDetails()
+          }}
+        />
+      )}
     </div>
   )
 }

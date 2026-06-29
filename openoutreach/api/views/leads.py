@@ -82,13 +82,52 @@ class LeadListView(APIView):
         elif disqualified_param == 'false':
             leads = leads.filter(disqualified=False)
         
-        # Serialization: Use select_related to optimize queries
-        leads = leads.select_related().prefetch_related('deals')
-        total = leads.count()
+        # Get all deals for these leads
+        from openoutreach.crm.models import Deal, Note
+        
+        # Find all deal IDs for these leads
+        all_deals = Deal.objects.filter(lead__in=leads).select_related('campaign', 'lead')
+        deals_by_lead: dict[int, list[Deal]] = {}
+        for deal in all_deals:
+            if deal.lead_id not in deals_by_lead:
+                deals_by_lead[deal.lead_id] = []
+            deals_by_lead[deal.lead_id].append(deal)
+        
+        # Get notes for all these deals
+        deal_ids = list(deals_by_lead.keys())
+        notes_count_by_deal: dict[int, int] = {}
+        last_notes_by_deal: dict[int, Note] = {}
+        if deal_ids:
+            notes = Note.objects.filter(deal_id__in=deal_ids).select_related('deal')
+            
+            # Count notes per deal
+            from collections import defaultdict
+            notes_count_by_deal = defaultdict(int)
+            for note in notes:
+                notes_count_by_deal[note.deal_id] += 1
+            
+            # Get last 2 notes per deal
+            for deal_id in deal_ids:
+                deal_notes = Note.objects.filter(deal_id=deal_id).order_by('-created_at')[:2]
+                if deal_notes:
+                    last_notes_by_deal[deal_id] = deal_notes[0]
+        
+        # Get messages for these deals
+        from openoutreach.crm.models import Message
+        messages_by_deal: dict[int, list[Message]] = {}
+        if deal_ids:
+            msgs = Message.objects.filter(deal_id__in=deal_ids).select_related('deal')
+            for msg in msgs:
+                if msg.deal_id not in messages_by_deal:
+                    messages_by_deal[msg.deal_id] = []
+                messages_by_deal[msg.deal_id].append(msg)
         
         # Pagination
         page = request.query_params.get('page')
         limit = request.query_params.get('limit')
+        
+        # Get total count before pagination
+        total = leads.count()
         
         if page and limit:
             try:
@@ -103,12 +142,42 @@ class LeadListView(APIView):
         # Serialize leads with all required fields for frontend
         leads_data = []
         for lead in leads:
+            deals = deals_by_lead.get(lead.id, [])
+            
             # Get latest deal for this lead
-            deal = lead.deals.order_by('-creation_date').first()
+            deal = deals[0] if deals else None
             
             # Extract name, company, title from contact info
             name = _extract_lead_name(lead)
             company, title, _ = _extract_lead_info(lead)
+            
+            # Get message count from all deals
+            messages_count = 0
+            for d in deals:
+                msg_list = messages_by_deal.get(d.id, [])
+                messages_count += len(msg_list)
+            
+            # Get last message date
+            last_message_at = None
+            for d in deals:
+                msg_list = messages_by_deal.get(d.id, [])
+                if msg_list:
+                    for m in msg_list:
+                        if last_message_at is None or m.created_at > last_message_at:
+                            last_message_at = m.created_at
+            
+            # Get notes count and last notes
+            notes_count = 0
+            last_notes: list[dict] = []
+            for d in deals:
+                nc = notes_count_by_deal.get(d.id, 0)
+                notes_count += nc
+                if d.id in last_notes_by_deal:
+                    n = last_notes_by_deal[d.id]
+                    last_notes.append({
+                        'id': str(n.id),
+                        'content': n.content,
+                    })
             
             leads_data.append({
                 'id': lead.id,
@@ -119,12 +188,16 @@ class LeadListView(APIView):
                 'title': title,
                 'state': deal.state if deal else None,
                 'outcome': deal.outcome if deal else None,
+                'campaignId': deal.campaign.id if deal and deal.campaign else None,
+                'campaignName': deal.campaign.name if deal and deal.campaign else None,
                 'creationDate': lead.creation_date.isoformat() if lead.creation_date else None,
                 'updateDate': lead.update_date.isoformat() if lead.update_date else None,
                 'contactInfo': lead.contact_info if lead.contact_info else None,
                 'apiEmail': lead.api_email,
-                'messagesCount': 0,  # Will be populated below
-                'lastMessageAt': None,
+                'messagesCount': messages_count,
+                'lastMessageAt': last_message_at.isoformat() if last_message_at else None,
+                'notesCount': notes_count,
+                'lastNotes': last_notes[:2],  # Last 2 notes
                 'disqualified': lead.disqualified,
             })
         
@@ -256,11 +329,35 @@ class LeadDetailView(APIView):
         lead = self.get_object(pk)
         
         # Get fields to update
-        disqualified = request.data.get('disqualified')
+        data = request.data
         
+        # Update basic fields
+        linkedin_url = data.get('linkedinUrl')
+        public_identifier = data.get('publicIdentifier')
+        disqualified = data.get('disqualified')
+        notes = data.get('notes')
+        
+        if linkedin_url is not None and linkedin_url != lead.linkedin_url:
+            lead.linkedin_url = linkedin_url
+        if public_identifier is not None and public_identifier != lead.public_identifier:
+            lead.public_identifier = public_identifier
         if disqualified is not None:
             lead.disqualified = bool(disqualified)
-            lead.save(update_fields=['disqualified'])
+        if notes is not None:
+            lead.notes = notes
+        
+        # Update contact info if provided
+        contact_info = data.get('contactInfo')
+        if contact_info is not None:
+            lead.contact_info = contact_info
+        
+        # Update api email if provided
+        api_email = data.get('apiEmail')
+        if api_email is not None:
+            lead.api_email = api_email
+        
+        # Save the lead
+        lead.save()
         
         # Extract name, company, title from contact info
         name = _extract_lead_name(lead)
@@ -274,6 +371,7 @@ class LeadDetailView(APIView):
             'company': company,
             'title': title,
             'disqualified': lead.disqualified,
+            'notes': lead.notes,
             'creationDate': lead.creation_date.isoformat() if lead.creation_date else None,
             'updateDate': lead.update_date.isoformat() if lead.update_date else None,
             'contactInfo': lead.contact_info if lead.contact_info else None,
@@ -536,6 +634,65 @@ class LeadCreateView(APIView):
             'apiEmail': lead.api_email,
             'disqualified': lead.disqualified,
         }, status=status.HTTP_201_CREATED)
+
+
+class LeadAddToCampaignView(APIView):
+    """
+    API view for adding a lead to a campaign.
+    
+    POST /api/leads/{id}/add-to-campaign/ - Add lead to campaign
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get_object(self, pk):
+        try:
+            return Lead.objects.get(pk=pk)
+        except Lead.DoesNotExist:
+            raise Http404
+    
+    def post(self, request, pk):
+        """Add lead to campaign."""
+        lead = self.get_object(pk)
+        campaign_id = request.data.get('campaign_id')
+        
+        if not campaign_id:
+            return Response({
+                'success': False,
+                'error': 'campaign_id is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            campaign_id = int(campaign_id)
+        except (ValueError, TypeError):
+            return Response({
+                'success': False,
+                'error': 'Invalid campaign_id'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            from openoutreach.crm.models import Deal
+            from openoutreach.crm.models.deal import DealState
+            
+            # Check if deal already exists
+            deal, created = Deal.objects.get_or_create(
+                lead=lead,
+                campaign_id=campaign_id,
+                defaults={
+                    'state': DealState.QUALIFIED,
+                    'outcome': '',
+                }
+            )
+            
+            return Response({
+                'success': True,
+                'dealId': deal.id,
+                'created': created,
+            })
+        except Exception as e:
+            return Response({
+                'success': False,
+                'error': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class LeadNotesView(APIView):

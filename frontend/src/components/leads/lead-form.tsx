@@ -40,7 +40,7 @@ export function LeadForm({
   isSubmitting = false 
 }: LeadFormProps) {
   const isEditMode = !!lead
-  const title = isEditMode ? 'Edit Lead' : 'Add New Lead'
+  const title = isEditMode && lead?.id ? `Edit Lead - ID: ${lead.id}` : 'Add New Lead'
   
   const [formData, setFormData] = useState<Partial<Lead>>({
     name: lead?.name || '',

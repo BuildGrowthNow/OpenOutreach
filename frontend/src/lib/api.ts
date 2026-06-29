@@ -97,6 +97,24 @@ export async function get<T>(path: string, params?: Record<string, string>): Pro
   return handleResponse<T>(keysToCamelDeep(data))
 }
 
+export async function put<T>(path: string, body?: Record<string, unknown>): Promise<ApiResponse<T>> {
+  const url = new URL(path, API_URL)
+  const headers = await getHeaders()
+  const response = await fetch(url.toString(), {
+    method: "PUT",
+    headers,
+    body: body ? JSON.stringify(keysToSnakeDeep(body)) : undefined,
+    cache: "no-store",
+    credentials: 'include', // Include cookies for cross-origin requests
+  })
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}))
+    throw new ApiError(response.status, errorData.error || errorData.message || "An error occurred")
+  }
+  const data = await response.json()
+  return handleResponse<T>(keysToCamelDeep(data))
+}
+
 export async function post<T>(path: string, body?: Record<string, unknown> | FormData): Promise<ApiResponse<T>> {
   const url = new URL(path, API_URL)
   const headers = await getHeaders()

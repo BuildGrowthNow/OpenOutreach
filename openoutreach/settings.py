@@ -8,8 +8,8 @@ import logging
 from pathlib import Path
 from datetime import timedelta
 
-# Custom user model
-AUTH_USER_MODEL = 'core.CustomUser'
+# Use Django's default User model (from django.contrib.auth)
+# No custom user model needed - using default auth.User
 from typing import Optional
 
 # Create logger
@@ -55,6 +55,11 @@ DEBUG = True
 
 ALLOWED_HOSTS = ["*"]
 
+# Disable Django's automatic trailing slash addition
+# APPEND_SLASH = False prevents 301 redirects when frontend calls
+# endpoints without trailing slashes (which would lose authentication headers)
+APPEND_SLASH = False
+
 # Application definition
 INSTALLED_APPS = [
     "django.contrib.sites",
@@ -72,7 +77,6 @@ INSTALLED_APPS = [
     "openoutreach.api.apps.ApiConfig",
     "openoutreach.crm.apps.CrmConfig",
     "openoutreach.chat.apps.ChatConfig",
-    "openoutreach.core.apps.CoreConfig",
     "openoutreach.linkedin.apps.LinkedInConfig",
     "openoutreach.emails.apps.EmailsConfig",
 ]

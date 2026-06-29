@@ -6,9 +6,9 @@ import { Button } from '@/components/ui/button'
 import { Icons } from '@/lib/types/components'
 import { cn } from '@/lib/utils'
 
-interface Node {
+export interface Node {
   id: string
-  type: 'state' | 'start' | 'end'
+  type: 'state' | 'start' | 'end' | 'wait' | 'message' | 'gate' | 'decision' | 'branch'
   name: string
   description?: string
   x: number
@@ -17,7 +17,7 @@ interface Node {
   height: number
 }
 
-interface Edge {
+export interface Edge {
   id: string
   sourceId: string
   targetId: string
@@ -64,6 +64,16 @@ export function Canvas({
         return 'border-emerald-500 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
       case 'end':
         return 'border-red-500 bg-red-500/10 text-red-600 dark:text-red-400'
+      case 'wait':
+        return 'border-yellow-500 bg-yellow-500/10 text-yellow-600 dark:text-yellow-400'
+      case 'message':
+        return 'border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-400'
+      case 'gate':
+        return 'border-purple-500 bg-purple-500/10 text-purple-600 dark:text-purple-400'
+      case 'decision':
+        return 'border-orange-500 bg-orange-500/10 text-orange-600 dark:text-orange-400'
+      case 'branch':
+        return 'border-cyan-500 bg-cyan-500/10 text-cyan-600 dark:text-cyan-400'
       default:
         return 'border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-400'
     }
@@ -182,6 +192,51 @@ export function Canvas({
     onAddNode('state', x, y)
   }
 
+  const handleAddWaitNode = () => {
+    if (!onAddNode) return
+    const rect = canvasRef.current?.getBoundingClientRect()
+    if (!rect) return
+    const x = Math.random() * rect.width * 0.7
+    const y = Math.random() * rect.height * 0.7
+    onAddNode('wait', x, y)
+  }
+
+  const handleAddMessageNode = () => {
+    if (!onAddNode) return
+    const rect = canvasRef.current?.getBoundingClientRect()
+    if (!rect) return
+    const x = Math.random() * rect.width * 0.7
+    const y = Math.random() * rect.height * 0.7
+    onAddNode('message', x, y)
+  }
+
+  const handleAddGateNode = () => {
+    if (!onAddNode) return
+    const rect = canvasRef.current?.getBoundingClientRect()
+    if (!rect) return
+    const x = Math.random() * rect.width * 0.7
+    const y = Math.random() * rect.height * 0.7
+    onAddNode('gate', x, y)
+  }
+
+  const handleAddDecisionNode = () => {
+    if (!onAddNode) return
+    const rect = canvasRef.current?.getBoundingClientRect()
+    if (!rect) return
+    const x = Math.random() * rect.width * 0.7
+    const y = Math.random() * rect.height * 0.7
+    onAddNode('decision', x, y)
+  }
+
+  const handleAddBranchNode = () => {
+    if (!onAddNode) return
+    const rect = canvasRef.current?.getBoundingClientRect()
+    if (!rect) return
+    const x = Math.random() * rect.width * 0.7
+    const y = Math.random() * rect.height * 0.7
+    onAddNode('branch', x, y)
+  }
+
   const handleAddEndNode = () => {
     if (!onAddNode) return
     const rect = canvasRef.current?.getBoundingClientRect()
@@ -237,14 +292,54 @@ export function Canvas({
           >
             <Icons.Circle className="h-4 w-4 text-blue-500" />
           </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleAddEndNode}
-            title="Add End Node"
-          >
-            <Icons.StopCircle className="h-4 w-4 text-red-500" />
-          </Button>
+           <Button
+             variant="ghost"
+             size="icon"
+             onClick={handleAddWaitNode}
+             title="Add Wait Node"
+           >
+             <Icons.Clock className="h-4 w-4 text-yellow-500" />
+           </Button>
+           <Button
+             variant="ghost"
+             size="icon"
+             onClick={handleAddMessageNode}
+             title="Add Message Node"
+           >
+             <Icons.MessageSquare className="h-4 w-4 text-blue-500" />
+           </Button>
+           <Button
+             variant="ghost"
+             size="icon"
+             onClick={handleAddGateNode}
+             title="Add Gate Node"
+           >
+             <Icons.Lock className="h-4 w-4 text-purple-500" />
+           </Button>
+           <Button
+             variant="ghost"
+             size="icon"
+             onClick={handleAddDecisionNode}
+             title="Add Decision Node"
+           >
+             <Icons.SlidersHorizontal className="h-4 w-4 text-orange-500" />
+           </Button>
+           <Button
+             variant="ghost"
+             size="icon"
+             onClick={handleAddBranchNode}
+             title="Add Branch Node"
+           >
+             <Icons.Network className="h-4 w-4 text-cyan-500" />
+           </Button>
+           <Button
+             variant="ghost"
+             size="icon"
+             onClick={handleAddEndNode}
+             title="Add End Node"
+           >
+             <Icons.StopCircle className="h-4 w-4 text-red-500" />
+           </Button>
         </div>
       )}
 

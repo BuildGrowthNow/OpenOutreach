@@ -34,6 +34,7 @@ class Lead(models.Model):
     #                  finder slice (p1-e3). null = not found.
     contact_info = models.JSONField(null=True, blank=True, default=None)
     api_email = models.EmailField(null=True, blank=True, default=None)
+    notes = models.TextField(null=True, blank=True, help_text="Notes about this lead")
     disqualified = models.BooleanField(default=False)
     creation_date = models.DateTimeField(default=timezone.now)
     update_date = models.DateTimeField(auto_now=True)

@@ -15,9 +15,9 @@ from datetime import datetime, timedelta
 import logging
 import jwt
 
-# Import custom user model from core app
-from openoutreach.core.users import CustomUser
-User = CustomUser
+# Use Django's default User model
+from django.contrib.auth import get_user_model
+User = get_user_model()
 logger = logging.getLogger(__name__)
 
 
@@ -53,7 +53,7 @@ class CustomTokenObtainPairView(TokenObtainPairView):
             try:
                 token = RefreshToken(access_token)
                 user_id = token['user_id']
-                user = CustomUser.objects.get(id=user_id)
+                user = User.objects.get(id=user_id)
                 
                 # Add user data to response
                 response.data['user'] = {
