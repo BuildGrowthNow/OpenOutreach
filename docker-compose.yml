@@ -24,9 +24,12 @@ services:
       - LLM_API_KEY=${LLM_API_KEY}
       - LLM_API_BASE=${LLM_API_BASE:-}
       - AI_MODEL=${AI_MODEL}
-      # LinkedIn Configuration
-      - LINKEDIN_USERNAME=${LINKEDIN_USERNAME}
-      - LINKEDIN_PASSWORD=${LINKEDIN_PASSWORD}
+       # LinkedIn Configuration
+       - LINKEDIN_USERNAME=${LINKEDIN_USERNAME}
+       - LINKEDIN_PASSWORD=${LINKEDIN_PASSWORD}
+       # MongoDB Configuration
+       - MONGODB_ENABLED=${MONGODB_ENABLED:-true}
+       - MONGODB_ATLAS_URI=${MONGODB_ATLAS_URI}
     volumes:
       - ./data:/app/data
       - ./openoutreach/media:/app/openoutreach/media
