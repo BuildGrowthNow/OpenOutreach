@@ -20,6 +20,7 @@ from openoutreach.mongodb.connection import (
     get_mongodb_collection,
     check_mongodb_connection,
     reset_mongodb_connection,
+    initialize_mongodb_connection,
 )
 from openoutreach.mongodb.models import (
     Lead,
@@ -69,7 +70,11 @@ class TestLeadModel:
 
     def setup_method(self):
         """Setup for each test method."""
+        from openoutreach.mongodb.connection import _is_mongodb_enabled, _get_mongodb_uri
+        print(f"\nIs MongoDB enabled: {_is_mongodb_enabled()}")
+        print(f"MongoDB URI: {_get_mongodb_uri()}")
         reset_mongodb_connection()
+        initialize_mongodb_connection()
 
     def test_create_lead(self):
         """Test creating a new lead in MongoDB."""
@@ -147,6 +152,7 @@ class TestCampaignModel:
     def setup_method(self):
         """Setup for each test method."""
         reset_mongodb_connection()
+        initialize_mongodb_connection()
 
     def test_create_campaign(self):
         """Test creating a new campaign in MongoDB."""
@@ -212,6 +218,7 @@ class TestDealModel:
     def setup_method(self):
         """Setup for each test method."""
         reset_mongodb_connection()
+        initialize_mongodb_connection()
 
     def test_create_deal(self):
         """Test creating a new deal in MongoDB."""
@@ -268,6 +275,7 @@ class TestMessageModel:
     def setup_method(self):
         """Setup for each test method."""
         reset_mongodb_connection()
+        initialize_mongodb_connection()
 
     def test_create_message(self):
         """Test creating a message."""
@@ -333,6 +341,7 @@ class TestNoteModel:
     def setup_method(self):
         """Setup for each test method."""
         reset_mongodb_connection()
+        initialize_mongodb_connection()
 
     def test_create_note(self):
         """Test creating a note."""
@@ -397,6 +406,7 @@ class TestLeadPersonaModel:
     def setup_method(self):
         """Setup for each test method."""
         reset_mongodb_connection()
+        initialize_mongodb_connection()
 
     def test_create_lead_persona(self):
         """Test creating a lead persona."""
@@ -477,6 +487,7 @@ class TestTrackedLinkModel:
     def setup_method(self):
         """Setup for each test method."""
         reset_mongodb_connection()
+        initialize_mongodb_connection()
 
     def test_create_tracked_link(self):
         """Test creating a tracked link."""
@@ -558,6 +569,7 @@ class TestLinkClickModel:
     def setup_method(self):
         """Setup for each test method."""
         reset_mongodb_connection()
+        initialize_mongodb_connection()
 
     def test_create_link_click(self):
         """Test creating a link click."""
@@ -627,6 +639,7 @@ class TestLinkDealConversionModel:
     def setup_method(self):
         """Setup for each test method."""
         reset_mongodb_connection()
+        initialize_mongodb_connection()
 
     def test_create_link_conversion(self):
         """Test creating a link conversion."""
@@ -708,6 +721,7 @@ class TestLinkedInCredentialsModel:
     def setup_method(self):
         """Setup for each test method."""
         reset_mongodb_connection()
+        initialize_mongodb_connection()
 
     def test_create_linkedin_credentials(self):
         """Test creating LinkedIn credentials."""
@@ -787,6 +801,7 @@ class TestLinkedInCredentialLogModel:
     def setup_method(self):
         """Setup for each test method."""
         reset_mongodb_connection()
+        initialize_mongodb_connection()
 
     def test_create_credential_log(self):
         """Test creating a credential log."""
@@ -852,6 +867,7 @@ class TestSiteConfigModel:
     def setup_method(self):
         """Setup for each test method."""
         reset_mongodb_connection()
+        initialize_mongodb_connection()
 
     def test_create_site_config(self):
         """Test creating a site config."""
@@ -918,6 +934,7 @@ class TestTaskModel:
     def setup_method(self):
         """Setup for each test method."""
         reset_mongodb_connection()
+        initialize_mongodb_connection()
 
     def test_create_task(self):
         """Test creating a task."""
@@ -985,6 +1002,7 @@ class TestMongoDBIndexes:
     def setup_method(self):
         """Setup for each test method."""
         reset_mongodb_connection()
+        initialize_mongodb_connection()
 
     def test_indexes_exist(self):
         """Test that indexes are created for all collections."""
@@ -1044,6 +1062,7 @@ class TestMongoDBMigration:
     def setup_method(self):
         """Setup for each test method."""
         reset_mongodb_connection()
+        initialize_mongodb_connection()
 
     def test_migration_models_sync(self):
         """Test that migration models are properly synchronized."""

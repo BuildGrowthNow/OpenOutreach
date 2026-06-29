@@ -22,7 +22,19 @@ EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 # =============================================================================
 # MongoDB Configuration (Development)
 # =============================================================================
-MONGODB_ENABLED = False
+# Read MongoDB settings from environment variables for development
+import os
+from openoutreach.mongodb.settings import get_mongodb_uri, get_mongodb_config
+
+# Read from environment variables (set in docker-compose.yml)
+MONGODB_ENABLED = os.environ.get("MONGODB_ENABLED", "false").lower() == "true"
+MONGODB_NAME = os.environ.get("MONGODB_NAME", "openoutreach")
+MONGODB_HOST = os.environ.get("MONGODB_HOST", "localhost")
+MONGODB_PORT = int(os.environ.get("MONGODB_PORT", "27017"))
+MONGODB_USER = os.environ.get("MONGODB_USER")
+MONGODB_PASSWORD = os.environ.get("MONGODB_PASSWORD")
+MONGODB_ATLAS_URI = os.environ.get("MONGODB_ATLAS_URI", "")
+DUAL_WRITE_ENABLED = os.environ.get("DUAL_WRITE_ENABLED", "false").lower() == "true"
 
 # =============================================================================
 # Logging (Development - verbose)
