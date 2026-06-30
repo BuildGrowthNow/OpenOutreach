@@ -32,6 +32,36 @@ except ImportError:
     SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY")
     SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY")
 
+# =============================================================================
+# Django Core Configuration
+# =============================================================================
+
+# Local development default (used if not found in environment)
+SECRET_KEY_DEV = "openoutreach-local-dev-key-change-in-production"
+
+# Load SECRET_KEY from environment variables
+SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", os.environ.get("SECRET_KEY", SECRET_KEY_DEV))
+
+# Load DEBUG from environment (default to False in production)
+DEBUG = os.environ.get("DEBUG", "False").lower() in ("true", "1", "t")
+
+# Load ALLOWED_HOSTS from environment - comma-separated list
+# Strip protocol (http/https) from hostnames if present
+ALLOWED_HOSTS_STR = os.environ.get("ALLOWED_HOSTS", "")
+if ALLOWED_HOSTS_STR:
+    ALLOWED_HOSTS = []
+    for host in ALLOWED_HOSTS_STR.split(","):
+        host = host.strip()
+        # Remove protocol prefix if present
+        if host.startswith("https://"):
+            host = host[8:]
+        elif host.startswith("http://"):
+            host = host[7:]
+        if host:
+            ALLOWED_HOSTS.append(host)
+else:
+    ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
+
 # Log Supabase configuration status
 if SUPABASE_URL and SUPABASE_ANON_KEY:
     logger.info("Supabase configuration loaded successfully")
@@ -48,12 +78,6 @@ os.environ.setdefault("DJANGO_ALLOW_ASYNC_UNSAFE", "true")
 ROOT_DIR = Path(__file__).resolve().parent.parent
 
 BASE_DIR = ROOT_DIR
-
-SECRET_KEY = "openoutreach-local-dev-key-change-in-production"
-
-DEBUG = True
-
-ALLOWED_HOSTS = ["*"]
 
 # Disable Django's automatic trailing slash addition
 # APPEND_SLASH = False prevents 301 redirects when frontend calls
@@ -214,14 +238,27 @@ SIMPLE_JWT = {
 }
 
 # CORS Configuration for frontend-backend communication
-CORS_ALLOW_ALL_ORIGINS = True  # For development only
+CORS_ALLOW_ALL_ORIGINS = DEBUG  # Allow all origins in development
 CORS_ALLOW_CREDENTIALS = True
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",  # Next.js frontend
-    "http://localhost:3001",
-    "http://127.0.0.1:3000",
-    "http://127.0.0.1:3001",
-]
+
+# Load CORS allowed origins from environment
+CORS_ALLOWED_ORIGINS_STR = os.environ.get("CORS_ALLOWED_ORIGINS", "")
+if CORS_ALLOWED_ORIGINS_STR:
+    CORS_ALLOWED_ORIGINS = [origin.strip() for origin in CORS_ALLOWED_ORIGINS_STR.split(",")]
+else:
+    CORS_ALLOWED_ORIGINS = [
+        "http://localhost:3000",  # Next.js frontend (development)
+        "http://localhost:3001",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:3001",
+    ]
+
+# Production CORS origins (added when DEBUG=False)
+if not DEBUG:
+    CORS_ALLOWED_ORIGINS.extend([
+        "https://linkedin.lengrowth.com",  # Main website
+        "https://linkedin-api.lengrowth.com",  # API URL
+    ])
 CORS_ALLOW_METHODS = [
     'DELETE',
     'GET',
@@ -242,16 +279,7 @@ CORS_ALLOW_HEADERS = [
     'x-requested-with',
 ]
 
-# Environment-specific settings
-if not DEBUG:
-    CORS_ALLOW_ALL_ORIGINS = False
-    SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', SECRET_KEY)
-    
-    # Add production CORS origins
-    CORS_ALLOWED_ORIGINS.extend([
-        "https://your-production-domain.com",
-        # Add other production domains as needed
-    ])
+# Note: Production CORS and SECRET_KEY handling is now in the default configuration above
 
 # ==================== MongoDB Configuration ====================
 # MongoDB integration via PyMongo connector
@@ -276,17 +304,15 @@ try:
         MONGODB_ENABLED,
         MONGODB_NAME,
         MONGODB_HOST,
-        MONGODB_PORT,
         MONGODB_ATLAS_URI,
-        DUAL_WRITE_ENABLED,
         get_mongodb_uri,
         get_mongodb_config
     )
     
+    # MongoDB connection timeout settings (from settings module)
     MONGODB_SERVER_SELECTION_TIMEOUT = 30000
     MONGODB_CONNECT_TIMEOUT = 30000
     MONGODB_SOCKET_TIMEOUT = 10000
-    MONGODB_NAME = MONGODB_NAME
     
     # Configure MongoDB connection based on environment
     if MONGODB_ENABLED:
