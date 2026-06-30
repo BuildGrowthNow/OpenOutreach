@@ -4,5 +4,5 @@ from . import views
 app_name = "mongodb"
 
 urlpatterns = [
-    path("health/", views.health_check, name="health_check"),
+    path("mongodb/health/", views.health_check, name="health_check"),
 ]

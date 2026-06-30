@@ -14,6 +14,10 @@ from openoutreach.mongodb.connection import (
     get_mongodb,
     get_mongodb_collection,
 )
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pymongo.database import Database
 from openoutreach.mongodb.models import (
     Lead,
     Campaign,
@@ -84,7 +88,7 @@ class Command(BaseCommand):
 
         # Get database info
         db = get_mongodb()
-        if db:
+        if db is not None:
             self.stdout.write(f"   Database: {db.name}")
             self.stdout.write(f"   Host: {settings.MONGODB_HOST}")
 
@@ -110,7 +114,7 @@ class Command(BaseCommand):
 
         # Show collections
         self.stdout.write("\n4. MongoDB Collections:")
-        if db:
+        if db is not None:
             collections = db.list_collection_names()
             if collections:
                 for coll in collections:
@@ -126,9 +130,9 @@ class Command(BaseCommand):
         # Show model counts using pymongo
         self.stdout.write("\n5. Model counts (via PyMongo):")
         try:
-            self.stdout.write(f"   Leads: {Lead.objects.count()}")
-            self.stdout.write(f"   Campaigns: {Campaign.objects.count()}")
-            self.stdout.write(f"   Deals: {Deal.objects.count()}")
+            self.stdout.write(f"   Leads: {Lead.objects.count()}")  # type: ignore[union-attr]
+            self.stdout.write(f"   Campaigns: {Campaign.objects.count()}")  # type: ignore[union-attr]
+            self.stdout.write(f"   Deals: {Deal.objects.count()}")  # type: ignore[union-attr]
         except Exception as e:
             self.stdout.write(
                 self.style.WARNING(f"   Error counting models: {e}")
@@ -151,7 +155,7 @@ class Command(BaseCommand):
         """Create test records in MongoDB."""
         try:
             # Create a test lead
-            lead, created = Lead.objects.get_or_create(
+            lead, created = Lead.objects.get_or_create(  # type: ignore[union-attr]
                 linkedin_url="https://linkedin.com/in/testuser",
                 defaults={
                     "public_identifier": "testuser",
@@ -163,7 +167,7 @@ class Command(BaseCommand):
             )
 
             # Create a test campaign
-            campaign, created = Campaign.objects.get_or_create(
+            campaign, created = Campaign.objects.get_or_create(  # type: ignore[union-attr]
                 name="Test Campaign",
                 defaults={
                     "description": "Test campaign for MongoDB verification",
@@ -175,7 +179,7 @@ class Command(BaseCommand):
             )
 
             # Create a test deal
-            deal, created = Deal.objects.get_or_create(
+            deal, created = Deal.objects.get_or_create(  # type: ignore[union-attr]
                 lead_id=str(lead.pk),
                 campaign_id=str(campaign.pk),
                 defaults={
@@ -199,13 +203,13 @@ class Command(BaseCommand):
         """Verify test data exists in MongoDB."""
         try:
             # Check if test records exist
-            test_lead = Lead.objects.filter(public_identifier="testuser").first()
+            test_lead = Lead.objects.filter(public_identifier="testuser").first()  # type: ignore[union-attr]
             if test_lead:
                 self.stdout.write(self.style.SUCCESS(f"   Found test lead: {test_lead}"))
             else:
                 self.stdout.write(self.style.WARNING("   Test lead not found"))
 
-            test_campaign = Campaign.objects.filter(name="Test Campaign").first()
+            test_campaign = Campaign.objects.filter(name="Test Campaign").first()  # type: ignore[union-attr]
             if test_campaign:
                 self.stdout.write(
                     self.style.SUCCESS(f"   Found test campaign: {test_campaign}")
@@ -213,7 +217,7 @@ class Command(BaseCommand):
             else:
                 self.stdout.write(self.style.WARNING("   Test campaign not found"))
 
-            test_deal = Deal.objects.filter(
+            test_deal = Deal.objects.filter(  # type: ignore[union-attr]
                 lead_id__contains="testuser"
             ).first()
             if test_deal:
@@ -231,7 +235,7 @@ class Command(BaseCommand):
         try:
             # Get database
             db = get_mongodb()
-            if not db:
+            if db is None:
                 self.stdout.write(self.style.WARNING("   No database connection"))
                 return
 

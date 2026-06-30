@@ -107,7 +107,7 @@ const LeadDetailsPage = () => {
     } finally {
       setLoading(false)
     }
-  }, [leadId])
+  }, [leadId, fetchProfileData])
 
   const fetchCampaigns = useCallback(async () => {
     try {

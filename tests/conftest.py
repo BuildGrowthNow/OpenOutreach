@@ -2,13 +2,14 @@ import os
 from unittest.mock import patch
 from asgiref.sync import sync_to_async
 
-os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = "true"
-
+# Setup Django before other imports
+import django
 import numpy as np
 import pytest
 
-# Setup Django before other imports
-import django
+# Set Django settings module before Django setup
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "openoutreach.settings.development")
+os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = "true"
 
 # Initialize Django
 django.setup()
@@ -17,19 +18,39 @@ from openoutreach.core.management.setup_crm import setup_crm
 from tests.factories import UserFactory
 
 
-@pytest.fixture(autouse=True)
-def _ensure_crm_data(django_db_setup, django_db_blocker):
-    """
-    Ensure CRM bootstrap data exists before every test.
-    Uses `db` fixture (not transactional_db) for compatibility.
-    Since transaction=True tests rollback, we re-create data each time.
-    """
-    # Print database info for debugging
-    from django.conf import settings
-    print(f"\n\nDATABASE INFO: {settings.DATABASES}\n\n")
+@pytest.fixture(scope="session", autouse=True)
+def _setup_mongodb_connection():
+    """Initialize MongoDB connection once per test session.
     
-    with django_db_blocker.unblock():
-        setup_crm()
+    This ensures the MongoDB connection is available for all tests
+    and persists across test classes.
+    
+    Note: We don't call reset_mongodb_connection() here because that would
+    close the connection. The test_mongodb_models.py file handles resetting
+    between tests as needed.
+    """
+    try:
+        from openoutreach.mongodb.connection import (
+            initialize_mongodb_connection,
+            get_mongodb,
+            _is_mongodb_enabled,
+        )
+        
+        if _is_mongodb_enabled():
+            # Check if already initialized
+            db = get_mongodb()
+            if db is None:
+                # Only initialize if no connection exists
+                if initialize_mongodb_connection():
+                    print("MongoDB connection initialized successfully for test session")
+                else:
+                    print("Warning: MongoDB initialization returned False")
+            else:
+                print("MongoDB connection already exists")
+        else:
+            print("MongoDB is disabled - skipping connection")
+    except Exception as e:
+        print(f"Warning: Failed to initialize MongoDB connection: {e}")
 
 
 @pytest.fixture(autouse=True)
@@ -52,6 +73,52 @@ def _mock_contact_capture(request):
     else:
         with patch("openoutreach.crm.models.lead.Lead.capture_contact_info", return_value=None):
             yield
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _django_db_setup(django_db_setup, django_db_blocker):
+    """Ensure the Django database is properly set up with CRM data for all tests.
+    
+    This fixture runs once per session and ensures migrations are applied
+    and CRM data is set up before any tests run.
+    """
+    with django_db_blocker.unblock():
+        setup_crm()
+
+
+@pytest.fixture
+def db(request, django_db_setup, django_db_blocker):
+    """Provide a database fixture for tests that need it.
+    
+    This fixture ensures CRM data is set up before tests that need database access.
+    """
+    if "mongodb" not in str(request.path):
+        with django_db_blocker.unblock():
+            setup_crm()
+
+
+@pytest.fixture
+def deal_with_lead(db, fake_session):
+    """Create a deal for use in summary tests."""
+    from openoutreach.core.models import Campaign
+    from openoutreach.crm.models import Lead, Deal
+    from datetime import datetime
+    
+    campaign = Campaign.objects.first()
+    if not campaign:
+        campaign = Campaign.objects.create(name="Test Campaign")
+    
+    lead = Lead.objects.create(
+        linkedin_url="https://www.linkedin.com/in/testuser/",
+        public_identifier="testuser",
+    )
+    
+    deal = Deal.objects.create(
+        lead=lead,
+        campaign=campaign,
+    )
+    
+    return deal
 
 
 class FakeAccountSession:
@@ -105,9 +172,3 @@ def fake_session(db):
     )
 
     return FakeAccountSession(django_user=user, linkedin_profile=linkedin_profile, campaign=campaign)
-
-
-def pytest_configure(config):
-    """Override pytest-django database configuration to reuse the main database."""
-    # This prevents pytest-django from creating an in-memory test database
-    config._django_db_setup = True

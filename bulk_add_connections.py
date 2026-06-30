@@ -68,8 +68,7 @@ def add_connections_as_seeds(campaign, public_ids, session):
     Note: Leads will still go through qualification to filter your ICP.
     """
     from openoutreach.crm.models import Deal, DealState, Lead
-    from openoutreach.linkedin.db.leads import create_enriched_lead
-    from openoutreach.core.db.deals import promote_lead_to_deal
+    from openoutreach.linkedin.db.leads import create_enriched_lead, promote_lead_to_deal
     from linkedin_cli.url_utils import public_id_to_url, url_to_public_id
     
     created = 0

@@ -561,42 +561,42 @@ function SystemStatus() {
     fetchHealth()
   }
 
-  const lastCheck = healthStatus?.system.timestamp || INITIAL_TIMESTAMP
+   const lastCheck = healthStatus?.system.timestamp || INITIAL_TIMESTAMP
 
-  const serviceHistory = useMemo<ServiceHealth[]>(() => {
-    const timestamp = new Date(NOW - 10000).toISOString()
+   const serviceHistory = useMemo<ServiceHealth[]>(() => {
+     const timestamp = new Date(NOW - 10000).toISOString()
 
-    if (healthStatus) {
-      const services: ServiceHealth[] = []
+     if (healthStatus) {
+       const services: ServiceHealth[] = []
 
-      if (healthStatus.services?.database) {
-        services.push({
-          name: 'Database',
-          status: healthStatus.services.database as 'connected' | 'degraded' | 'disconnected',
-          latency_ms: 12,
-          lastCheck: timestamp,
-        })
-      }
+       if (healthStatus.services?.database) {
+         services.push({
+           name: 'Database',
+           status: healthStatus.services.database as 'connected' | 'degraded' | 'disconnected',
+           latency_ms: 12,
+           lastCheck: timestamp,
+         })
+       }
 
-      services.push({
-        name: 'API',
-        status: healthStatus.status === 'operational' ? 'connected' : 'degraded',
-        latency_ms: 15,
-        lastCheck: timestamp,
-      })
-      services.push({ name: 'Search', status: 'connected', latency_ms: 8, lastCheck: timestamp })
-      services.push({ name: 'Email', status: 'connected', latency_ms: 25, lastCheck: timestamp })
-      return services
-    }
+       services.push({
+         name: 'API',
+         status: healthStatus.status === 'operational' ? 'connected' : 'degraded',
+         latency_ms: 15,
+         lastCheck: timestamp,
+       })
+       services.push({ name: 'Search', status: 'connected', latency_ms: 8, lastCheck: timestamp })
+       services.push({ name: 'Email', status: 'connected', latency_ms: 25, lastCheck: timestamp })
+       return services
+     }
 
-    return [
-      { name: 'Database', status: 'connected', latency_ms: 5, lastCheck: timestamp },
-      { name: 'Cache', status: 'connected', latency_ms: 1, lastCheck: timestamp },
-      { name: 'API', status: 'connected', latency_ms: 15, lastCheck: timestamp },
-      { name: 'Search', status: 'connected', latency_ms: 8, lastCheck: timestamp },
-      { name: 'Email', status: 'connected', latency_ms: 25, lastCheck: timestamp },
-    ]
-  }, [healthStatus])
+     return [
+       { name: 'Database', status: 'connected', latency_ms: 5, lastCheck: timestamp },
+       { name: 'Cache', status: 'connected', latency_ms: 1, lastCheck: timestamp },
+       { name: 'API', status: 'connected', latency_ms: 15, lastCheck: timestamp },
+       { name: 'Search', status: 'connected', latency_ms: 8, lastCheck: timestamp },
+       { name: 'Email', status: 'connected', latency_ms: 25, lastCheck: timestamp },
+     ]
+   }, [healthStatus, NOW])
 
   if (!healthStatus) {
     return (

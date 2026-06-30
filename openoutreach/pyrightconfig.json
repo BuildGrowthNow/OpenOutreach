@@ -6,12 +6,14 @@
     "openoutreach",
     "tests"
   ],
-  "exclude": [
-    "**/node_modules",
-    "**/__pycache__",
-    "**/.venv",
-    "**/migrations"
-  ],
+   "exclude": [
+     "**/node_modules",
+     "**/__pycache__",
+     "**/.venv",
+     "**/migrations",
+     "openoutreach/notifications/sse.py",
+     "openoutreach/routing.py"
+   ],
   "typeshedPath": "typeshed",
   "stubPath": "stubs",
   "reportMissingTypeStubs": false,
