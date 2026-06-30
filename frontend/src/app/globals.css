@@ -89,6 +89,7 @@ html {
     --chart-4: 240 4% 30%;
     --chart-5: 240 6% 22%;
     --radius: 0.5rem;
+    --font-lato: "Lato", sans-serif;
 
     /* Emerald theme special colors */
     --emerald-50: #ecfdf5;
@@ -130,12 +131,11 @@ html {
     --chart-4: 240 4% 30%;
     --chart-5: 240 6% 22%;
   }
+
   html {
     @apply font-sans;
   }
-}
 
-@layer components {
   .particle-container {
     position: absolute;
     width: 100%;
@@ -656,7 +656,7 @@ html {
     border-radius: 9999px;
     border: 1px solid rgba(255, 255, 255, 0.12);
     background: rgba(9, 9, 11, 0.92);
-    color: rgb(228 228 231);
+    color: rgb(228 228, 231);
     font-size: 0.875rem;
     font-weight: 600;
     box-shadow: 0 0 0 6px rgba(0, 0, 0, 0.8);
