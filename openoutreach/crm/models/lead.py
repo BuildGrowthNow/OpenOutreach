@@ -16,16 +16,19 @@ logger = logging.getLogger(__name__)
 class Lead(models.Model):
     # Type hints for Django's automatic fields
     id: models.AutoField  # type: ignore[assignment]
-    
+
     # Type hints for reverse relations
     deals: models.Manager  # type: ignore[assignment]
+
     class Meta:
         verbose_name = _("Lead")
         verbose_name_plural = _("Leads")
 
     linkedin_url = models.URLField(max_length=200, unique=True)
     public_identifier = models.CharField(max_length=200, unique=True)
-    urn = models.CharField(max_length=200, null=True, blank=True, unique=True, db_index=True)
+    urn = models.CharField(
+        max_length=200, null=True, blank=True, unique=True, db_index=True
+    )
     embedding = models.BinaryField(null=True, blank=True)
     # Email enrichment — one field per source (roadmap: p1-e1 storage decision):
     #   contact_info — raw LinkedIn contact-info overlay {email, emails, phone_numbers},
@@ -73,7 +76,11 @@ class Lead(models.Model):
         urn = profile.get("urn") or None
         if urn and self.urn != urn:
             if Lead.objects.filter(urn=urn).exclude(pk=self.pk).exists():
-                logger.warning("URN %s already owned by another lead — skipping for %s", urn, self.public_identifier)
+                logger.warning(
+                    "URN %s already owned by another lead — skipping for %s",
+                    urn,
+                    self.public_identifier,
+                )
             else:
                 self.urn = urn
                 self.save(update_fields=["urn"])
@@ -115,7 +122,11 @@ class Lead(models.Model):
         """
         if self.api_email:
             return True
-        from openoutreach.emails.finder import FinderQuery, FinderUnavailable, resolve_email
+        from openoutreach.emails.finder import (
+            FinderQuery,
+            FinderUnavailable,
+            resolve_email,
+        )
 
         try:
             result = resolve_email(FinderQuery(linkedin_url=self.linkedin_url))
@@ -197,7 +208,8 @@ class Lead(models.Model):
         from openoutreach.crm.models import DealState
 
         deals = Deal.objects.filter(
-            campaign=campaign, lead_id__isnull=False,
+            campaign=campaign,
+            lead_id__isnull=False,
         ).values_list("lead_id", "state", "outcome")
 
         label_by_lead: dict[int, int] = {}
@@ -212,8 +224,9 @@ class Lead(models.Model):
             return np.empty((0, 384), dtype=np.float32), np.empty(0, dtype=np.int32)
 
         leads_with_emb = dict(
-            cls.objects.filter(pk__in=label_by_lead, embedding__isnull=False)
-            .values_list("pk", "embedding")
+            cls.objects.filter(
+                pk__in=label_by_lead, embedding__isnull=False
+            ).values_list("pk", "embedding")
         )
 
         X_list, y_list = [], []

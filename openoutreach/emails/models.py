@@ -1,5 +1,6 @@
 # openoutreach/emails/models.py
 """Mailbox: one SMTP sending inbox, imported from the provider's creds export."""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -24,8 +25,11 @@ class MailboxManager(models.Manager):
 
     def least_loaded_under_cap(self):
         """The under-cap box with the most headroom today, or None if all are capped."""
-        ranked = [(box, sent) for box in self.all()
-                  if (sent := box.sent_today()) < box.daily_limit]
+        ranked = [
+            (box, sent)
+            for box in self.all()
+            if (sent := box.sent_today()) < box.daily_limit
+        ]
         if not ranked:
             return None
         return min(ranked, key=lambda pair: pair[1])[0]

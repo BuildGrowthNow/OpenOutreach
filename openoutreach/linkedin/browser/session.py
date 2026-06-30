@@ -39,6 +39,7 @@ class AccountSession:
     def campaigns(self):
         """All campaigns this user belongs to (cached)."""
         from openoutreach.core.models import Campaign
+
         return list(Campaign.objects.filter(users=self.django_user))
 
     def ensure_browser(self):
@@ -95,7 +96,9 @@ class AccountSession:
             if cookie.get("name") == _AUTH_COOKIE_NAME:
                 expires = cookie.get("expires", -1)
                 if expires > 0 and expires < time.time():
-                    logger.warning("Auth cookie expired for %s — re-authenticating", self)
+                    logger.warning(
+                        "Auth cookie expired for %s — re-authenticating", self
+                    )
                     self.close()
                     start_browser_session(session=self)
                 return

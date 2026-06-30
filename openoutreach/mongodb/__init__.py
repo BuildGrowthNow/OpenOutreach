@@ -13,6 +13,7 @@ Features:
 """
 
 from .settings import *
+
 # Import only connection-related items that don't redefine T from utils
 from .connection import (
     MongoDBConnection,
@@ -22,6 +23,7 @@ from .connection import (
     check_mongodb_connection,
     reset_mongodb_connection,
 )
+
 # Import utils without T (already imported from connection)
 from .utils import (
     AggregationPipelines,
@@ -47,6 +49,7 @@ from .models import (
     LinkedInCredentialLog,
     SiteConfig,
     Task,
+    SupabaseUser,
     ensure_mongodb_indexes,
 )
 

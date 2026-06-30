@@ -1,6 +1,7 @@
 # openoutreach/emails/bettercontact.py
 """BetterContact email lookup — a single-key managed waterfall over an async
 submit→poll HTTP contract. `find_email` is the only public function."""
+
 from __future__ import annotations
 
 import logging
@@ -48,13 +49,15 @@ def _session(api_key: str) -> requests.Session:
 
 def _submit(session: requests.Session, query: FinderQuery) -> str | None:
     payload = {
-        "data": [{
-            "first_name": query.first_name,
-            "last_name": query.last_name,
-            "company": query.company,
-            "company_domain": query.company_domain,
-            "linkedin_url": query.linkedin_url,
-        }],
+        "data": [
+            {
+                "first_name": query.first_name,
+                "last_name": query.last_name,
+                "company": query.company,
+                "company_domain": query.company_domain,
+                "linkedin_url": query.linkedin_url,
+            }
+        ],
         "enrich_email_address": True,
         "enrich_phone_number": False,
     }

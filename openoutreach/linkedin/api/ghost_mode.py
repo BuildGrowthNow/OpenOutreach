@@ -2,6 +2,7 @@
 """
 Ghost Mode API endpoints for managing ghost campaign simulations.
 """
+
 from __future__ import annotations
 
 import csv
@@ -56,12 +57,14 @@ def ghost_start_view(request, campaign_id: int) -> JsonResponse:
         },
     )
 
-    return JsonResponse({
-        "success": True,
-        "ghost_campaign_id": ghost_campaign.id,
-        "message": f"Ghost mode started for {campaign.name}",
-        "created": created,
-    })
+    return JsonResponse(
+        {
+            "success": True,
+            "ghost_campaign_id": ghost_campaign.id,
+            "message": f"Ghost mode started for {campaign.name}",
+            "created": created,
+        }
+    )
 
 
 @csrf_exempt
@@ -78,18 +81,20 @@ def ghost_stop_view(request, campaign_id: int) -> JsonResponse:
         campaign=campaign, is_active=True
     ).first()
     if not ghost_campaign:
-        return JsonResponse({
-            "error": "No active ghost mode for this campaign"
-        }, status=404)
+        return JsonResponse(
+            {"error": "No active ghost mode for this campaign"}, status=404
+        )
 
     ghost_campaign.is_active = False
     ghost_campaign.end_time = timezone.now()
     ghost_campaign.save()
 
-    return JsonResponse({
-        "success": True,
-        "message": f"Ghost mode stopped for {campaign.name}",
-    })
+    return JsonResponse(
+        {
+            "success": True,
+            "message": f"Ghost mode stopped for {campaign.name}",
+        }
+    )
 
 
 def ghost_campaign_view(request, campaign_id: int) -> JsonResponse:
@@ -110,29 +115,31 @@ def ghost_simulations_view(request, campaign_id: int) -> JsonResponse:
         return JsonResponse({"error": "Ghost campaign not found"}, status=404)
 
     # Get logs
-    logs = GhostSimulationLog.objects.filter(
-        ghost_campaign=ghost_campaign
-    ).order_by("-started_at")
+    logs = GhostSimulationLog.objects.filter(ghost_campaign=ghost_campaign).order_by(
+        "-started_at"
+    )
 
-    return JsonResponse({
-        "campaign_id": ghost_campaign.id,
-        "total": logs.count(),
-        "simulations": [
-            {
-                "id": log.id,
-                "action_type": log.action_type,
-                "target_name": log.target_name,
-                "target_url": log.target_url,
-                "result_data": log.result_data,
-                "rating": log.rating,
-                "score": log.score,
-                "started_at": log.started_at.isoformat(),
-                "completed_at": log.completed_at.isoformat(),
-                "simulated_action": log.simulated_action,
-            }
-            for log in logs[:100]
-        ],
-    })
+    return JsonResponse(
+        {
+            "campaign_id": ghost_campaign.id,
+            "total": logs.count(),
+            "simulations": [
+                {
+                    "id": log.id,
+                    "action_type": log.action_type,
+                    "target_name": log.target_name,
+                    "target_url": log.target_url,
+                    "result_data": log.result_data,
+                    "rating": log.rating,
+                    "score": log.score,
+                    "started_at": log.started_at.isoformat(),
+                    "completed_at": log.completed_at.isoformat(),
+                    "simulated_action": log.simulated_action,
+                }
+                for log in logs[:100]
+            ],
+        }
+    )
 
 
 def ghost_export_csv_view(request, campaign_id: int) -> HttpResponse:
@@ -150,23 +157,33 @@ def ghost_export_csv_view(request, campaign_id: int) -> HttpResponse:
     )
 
     writer = csv.writer(response)
-    writer.writerow([
-        "timestamp", "action_type", "target_name", "target_url",
-        "result_success", "rating", "score", "simulated_action"
-    ])
+    writer.writerow(
+        [
+            "timestamp",
+            "action_type",
+            "target_name",
+            "target_url",
+            "result_success",
+            "rating",
+            "score",
+            "simulated_action",
+        ]
+    )
 
     logs = GhostSimulationLog.objects.filter(ghost_campaign=ghost_campaign)
     for log in logs:
-        writer.writerow([
-            log.started_at.isoformat(),
-            log.action_type,
-            log.target_name,
-            log.target_url,
-            log.result_data.get("success", False),
-            log.rating,
-            log.score,
-            log.simulated_action,
-        ])
+        writer.writerow(
+            [
+                log.started_at.isoformat(),
+                log.action_type,
+                log.target_name,
+                log.target_url,
+                log.result_data.get("success", False),
+                log.rating,
+                log.score,
+                log.simulated_action,
+            ]
+        )
 
     return response
 
@@ -180,22 +197,24 @@ def ghost_export_json_view(request, campaign_id: int) -> JsonResponse:
 
     logs = GhostSimulationLog.objects.filter(ghost_campaign=ghost_campaign)
 
-    return JsonResponse({
-        "campaign": ghost_campaign_to_dict(ghost_campaign),
-        "total_simulations": logs.count(),
-        "simulations": [
-            {
-                "id": log.id,
-                "action_type": log.action_type,
-                "target_name": log.target_name,
-                "target_url": log.target_url,
-                "result_data": log.result_data,
-                "rating": log.rating,
-                "score": log.score,
-                "started_at": log.started_at.isoformat(),
-                "completed_at": log.completed_at.isoformat(),
-                "simulated_action": log.simulated_action,
-            }
-            for log in logs
-        ],
-    })
+    return JsonResponse(
+        {
+            "campaign": ghost_campaign_to_dict(ghost_campaign),
+            "total_simulations": logs.count(),
+            "simulations": [
+                {
+                    "id": log.id,
+                    "action_type": log.action_type,
+                    "target_name": log.target_name,
+                    "target_url": log.target_url,
+                    "result_data": log.result_data,
+                    "rating": log.rating,
+                    "score": log.score,
+                    "started_at": log.started_at.isoformat(),
+                    "completed_at": log.completed_at.isoformat(),
+                    "simulated_action": log.simulated_action,
+                }
+                for log in logs
+            ],
+        }
+    )

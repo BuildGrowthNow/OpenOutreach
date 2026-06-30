@@ -1,5 +1,6 @@
 # openoutreach/linkedin/pipeline/freemium_pool.py
 """Freemium candidate selection — seed profiles (QUALIFIED Deals) first, then undiscovered."""
+
 from __future__ import annotations
 
 import logging
@@ -21,12 +22,15 @@ def find_freemium_candidate(session, qualifier) -> dict | None:
     campaign = session.campaign
 
     # All embedded lead IDs
-    embedded_pks = set(Lead.objects.filter(embedding__isnull=False).values_list("pk", flat=True))
+    embedded_pks = set(
+        Lead.objects.filter(embedding__isnull=False).values_list("pk", flat=True)
+    )
 
     # Seed profiles: QUALIFIED Deals in this campaign (ready to connect)
     seed_pks = set(
-        Deal.objects.filter(campaign=campaign, state=DealState.QUALIFIED)
-        .values_list("lead_id", flat=True)
+        Deal.objects.filter(campaign=campaign, state=DealState.QUALIFIED).values_list(
+            "lead_id", flat=True
+        )
     )
     seed_pks &= embedded_pks  # must have embeddings
 

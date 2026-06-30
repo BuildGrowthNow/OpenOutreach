@@ -15,6 +15,7 @@ Three generators chain via next(upstream, None):
 Each qualify_source iteration produces exactly one label, which shifts the GP
 model — preventing the infinite-search-without-qualifying bug.
 """
+
 from __future__ import annotations
 
 import logging
@@ -24,8 +25,14 @@ import numpy as np
 
 from openoutreach.core.conf import CAMPAIGN_CONFIG
 from openoutreach.linkedin.ml.qualifier import BayesianQualifier
-from openoutreach.linkedin.pipeline.qualify import fetch_qualification_candidates, run_qualification
-from openoutreach.linkedin.pipeline.ready_pool import find_ready_candidate, promote_to_ready
+from openoutreach.linkedin.pipeline.qualify import (
+    fetch_qualification_candidates,
+    run_qualification,
+)
+from openoutreach.linkedin.pipeline.ready_pool import (
+    find_ready_candidate,
+    promote_to_ready,
+)
 from openoutreach.linkedin.pipeline.search import run_search
 
 logger = logging.getLogger(__name__)
@@ -60,7 +67,8 @@ def _needs_search(qualifier: BayesianQualifier, candidates) -> bool:
         logger.debug(
             "GP predictions degenerate (all ~%.3f) with %d obs — "
             "skipping search, qualifying from existing pool",
-            float(probs[0]), qualifier.n_obs,
+            float(probs[0]),
+            qualifier.n_obs,
         )
         return False
 
@@ -74,9 +82,16 @@ def _needs_search(qualifier: BayesianQualifier, candidates) -> bool:
         "Pool (%d unlabeled) has no P >= %.3f in exploit mode "
         "(neg=%d, pos=%d, n_obs=%d, base=%.2f). "
         "P distribution: min=%.3f, p25=%.3f, median=%.3f, p75=%.3f, max=%.3f",
-        len(candidates), threshold, n_neg, n_pos, n, base,
-        float(np.min(probs)), float(np.percentile(probs, 25)),
-        float(np.median(probs)), float(np.percentile(probs, 75)),
+        len(candidates),
+        threshold,
+        n_neg,
+        n_pos,
+        n,
+        base,
+        float(np.min(probs)),
+        float(np.percentile(probs, 25)),
+        float(np.median(probs)),
+        float(np.percentile(probs, 75)),
         float(np.max(probs)),
     )
     return True
@@ -126,7 +141,9 @@ def qualify_source(session, qualifier: BayesianQualifier) -> Generator[str, None
         yield result
 
 
-def ready_source(session, qualifier: BayesianQualifier, threshold: float | None = None) -> Generator[dict, None, None]:
+def ready_source(
+    session, qualifier: BayesianQualifier, threshold: float | None = None
+) -> Generator[dict, None, None]:
     """Yield ready-to-connect candidates, pulling from qualify when needed."""
     if threshold is None:
         threshold = float(CAMPAIGN_CONFIG["min_ready_to_connect_prob"])  # type: ignore[arg-type]

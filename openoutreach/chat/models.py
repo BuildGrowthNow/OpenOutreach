@@ -8,6 +8,7 @@ from django.urls import reverse
 
 if TYPE_CHECKING:
     from django.contrib.auth import get_user_model
+
     User = get_user_model()
 else:
     User = settings.AUTH_USER_MODEL
@@ -15,7 +16,6 @@ else:
 
 class ChatMessage(models.Model):
     id: int  # auto-generated primary key
-
 
     class Meta:
         verbose_name = _("message")
@@ -35,36 +35,45 @@ class ChatMessage(models.Model):
     )
 
     content = models.TextField(  # type: ignore[assignment]
-        blank=True, default='',
-        verbose_name=_("Message")
-    )    
+        blank=True, default="", verbose_name=_("Message")
+    )
     owner = models.ForeignKey(  # type: ignore[assignment]
-        settings.AUTH_USER_MODEL, blank=True, null=True, on_delete=models.CASCADE,
+        settings.AUTH_USER_MODEL,
+        blank=True,
+        null=True,
+        on_delete=models.CASCADE,
         verbose_name=_("Owner"),
         related_name="%(app_label)s_%(class)s_owner_related",
     )
     answer_to = models.ForeignKey(  # type: ignore[assignment]
-        'self', blank=True, null=True, on_delete=models.CASCADE,
+        "self",
+        blank=True,
+        null=True,
+        on_delete=models.CASCADE,
         related_name="%(app_label)s_%(class)s_answer_to_related",
-        verbose_name=_("answer to")
+        verbose_name=_("answer to"),
     )
     topic = models.ForeignKey(  # type: ignore[assignment]
-        'self', blank=True, null=True, on_delete=models.CASCADE,
+        "self",
+        blank=True,
+        null=True,
+        on_delete=models.CASCADE,
         related_name="%(app_label)s_%(class)s_topic_related",
     )
     recipients = models.ManyToManyField(  # type: ignore[assignment]
-        settings.AUTH_USER_MODEL, blank=True,
+        settings.AUTH_USER_MODEL,
+        blank=True,
         verbose_name=_("recipients"),
         related_name="%(app_label)s_%(class)s_recipients_related",
     )
     to = models.ManyToManyField(  # type: ignore[assignment]
-        settings.AUTH_USER_MODEL, blank=True,
+        settings.AUTH_USER_MODEL,
+        blank=True,
         verbose_name=_("to"),
         related_name="%(app_label)s_%(class)s_to_related",
     )
     creation_date = models.DateTimeField(  # type: ignore[assignment]
-        default=timezone.now,
-        verbose_name=_("Creation date")
+        default=timezone.now, verbose_name=_("Creation date")
     )
     linkedin_urn = models.CharField(  # type: ignore[assignment]
         max_length=300,
@@ -76,8 +85,9 @@ class ChatMessage(models.Model):
         verbose_name=_("Outgoing"),
         help_text=_("True if sent by us, False if received"),
     )
+
     def __str__(self) -> str:
-        return f'{truncatechars(self.content, 70)}'
-    
+        return f"{truncatechars(self.content, 70)}"
+
     def get_absolute_url(self) -> str:
-        return reverse(f'admin:chat_{self._meta.model_name}_change', args=[str(self.id)])  # type: ignore[attr-defined]
+        return reverse(f"admin:chat_{self._meta.model_name}_change", args=[str(self.id)])  # type: ignore[attr-defined]

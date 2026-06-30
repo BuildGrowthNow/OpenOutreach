@@ -13,15 +13,15 @@ class MongoDBConfig(AppConfig):
         try:
             from .connection import check_mongodb_connection, get_mongodb
             from .models import ensure_mongodb_indexes
-            
+
             if check_mongodb_connection():
                 db = get_mongodb()
                 if db is not None:
                     logger.info(f"MongoDB connected: {db.name}")
-                
+
                 # Ensure indexes exist
                 ensure_mongodb_indexes()
-                
+
                 logger.info("MongoDB initialization completed successfully")
             else:
                 logger.info("MongoDB not enabled or not available")

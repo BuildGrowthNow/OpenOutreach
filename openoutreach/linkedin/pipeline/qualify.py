@@ -1,5 +1,6 @@
 # openoutreach/linkedin/pipeline/qualify.py
 """Qualify orchestration for the lazy chain."""
+
 from __future__ import annotations
 
 import logging
@@ -24,8 +25,9 @@ def fetch_qualification_candidates(session):
     lead_ids = {ld["lead_id"] for ld in leads}
 
     candidates = list(
-        Lead.objects.filter(pk__in=lead_ids, embedding__isnull=False)
-        .order_by("creation_date")
+        Lead.objects.filter(pk__in=lead_ids, embedding__isnull=False).order_by(
+            "creation_date"
+        )
     )
     if candidates:
         return candidates
@@ -67,14 +69,20 @@ def run_qualification(session, qualifier: BayesianQualifier) -> str | None:
             candidate = candidates[best_idx]
             selection_score = (strategy, float(scores[best_idx]))
             n_neg, n_pos = qualifier.class_counts
-            logger.info("Strategy: %s (neg=%d, pos=%d)",
-                        colored(strategy, "cyan", attrs=["bold"]), n_neg, n_pos)
+            logger.info(
+                "Strategy: %s (neg=%d, pos=%d)",
+                colored(strategy, "cyan", attrs=["bold"]),
+                n_neg,
+                n_pos,
+            )
 
     lead_id = candidate.pk
     public_id = candidate.public_identifier
     embedding = candidate.embedding_array
     if embedding is None:
-        logger.warning("No embedding for lead %d (%s) — disqualifying", lead_id, public_id)
+        logger.warning(
+            "No embedding for lead %d (%s) — disqualifying", lead_id, public_id
+        )
         return None
 
     # Use a different variable name to avoid type interference from previous assignment
@@ -84,15 +92,29 @@ def run_qualification(session, qualifier: BayesianQualifier) -> str | None:
         # Type: predicted is tuple[float, float, float] when not None
         pred_prob, entropy, std = predicted  # type: ignore
         stats = format_prediction(pred_prob, entropy, std, qualifier.n_obs)
-        sel = f", {selection_score[0]}={selection_score[1]:.4f}" if selection_score else ""
+        sel = (
+            f", {selection_score[0]}={selection_score[1]:.4f}"
+            if selection_score
+            else ""
+        )
         logger.debug("%s (%s%s) — querying LLM", public_id, stats, sel)
     else:
-        logger.debug("%s GP not fitted (%d obs) — querying LLM", public_id, qualifier.n_obs)
+        logger.debug(
+            "%s GP not fitted (%d obs) — querying LLM", public_id, qualifier.n_obs
+        )
 
     profile_text = _fetch_profile_text(session, lead_id, public_id)
     if not profile_text:
         logger.warning("No profile text for lead %d \u2014 disqualifying", lead_id)
-        _save_qualification_result(session, qualifier, lead_id, public_id, embedding, 0, "no profile text available")
+        _save_qualification_result(
+            session,
+            qualifier,
+            lead_id,
+            public_id,
+            embedding,
+            0,
+            "no profile text available",
+        )
         return public_id
 
     campaign = session.campaign
@@ -101,11 +123,21 @@ def run_qualification(session, qualifier: BayesianQualifier) -> str | None:
         product_docs=campaign.product_docs,
         campaign_objective=campaign.campaign_objective,
     )
-    _save_qualification_result(session, qualifier, lead_id, public_id, embedding, label, reason)
+    _save_qualification_result(
+        session, qualifier, lead_id, public_id, embedding, label, reason
+    )
     return public_id
 
 
-def _save_qualification_result(session, qualifier: BayesianQualifier, lead_id: int, public_id: str, embedding: np.ndarray, label: int, reason: str):
+def _save_qualification_result(
+    session,
+    qualifier: BayesianQualifier,
+    lead_id: int,
+    public_id: str,
+    embedding: np.ndarray,
+    label: int,
+    reason: str,
+):
     # LLM rejections are tracked as FAILED Deals with "Disqualified" closing reason
     # (campaign-scoped), not as Lead.disqualified (permanent account-level exclusion).
     from openoutreach.core.db.deals import create_disqualified_deal
@@ -120,7 +152,12 @@ def _save_qualification_result(session, qualifier: BayesianQualifier, lead_id: i
             logger.warning("Cannot promote %s: %s \u2014 disqualifying", public_id, e)
             create_disqualified_deal(session, public_id, reason=str(e))
             return
-        logger.info("%s %s: %s", public_id, colored("QUALIFIED", "green", attrs=["bold"]), reason)
+        logger.info(
+            "%s %s: %s",
+            public_id,
+            colored("QUALIFIED", "green", attrs=["bold"]),
+            reason,
+        )
         # Enrich at the QUALIFIED gate (only qualified leads ever reach here).
         # Tri-state: True = hit (proceed QUALIFIED), False = genuine miss (park
         # in NO_EMAIL, out of the connect pool), None = finder off/unreachable
@@ -129,8 +166,12 @@ def _save_qualification_result(session, qualifier: BayesianQualifier, lead_id: i
             from openoutreach.core.db.deals import set_profile_state
             from openoutreach.crm.models import DealState
 
-            set_profile_state(session, public_id, DealState.NO_EMAIL.value,
-                              reason="No email found by finder")
+            set_profile_state(
+                session,
+                public_id,
+                DealState.NO_EMAIL.value,
+                reason="No email found by finder",
+            )
     else:
         create_disqualified_deal(session, public_id, reason=reason)
 

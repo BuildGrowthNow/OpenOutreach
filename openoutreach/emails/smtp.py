@@ -3,6 +3,7 @@
 
 No test send — boxes are mid-warmup; we only confirm the credentials log in.
 """
+
 from __future__ import annotations
 
 import smtplib
@@ -22,7 +23,8 @@ def verify_auth(host: str, port: int, username: str, password: str) -> tuple[boo
     except smtplib.SMTPAuthenticationError as e:
         hint = (
             " — paste the Google app password, not the mailbox login password"
-            if e.smtp_code in (534, 535) else ""
+            if e.smtp_code in (534, 535)
+            else ""
         )
         return False, f"auth rejected ({e.smtp_code}){hint}"
     except (smtplib.SMTPException, OSError) as e:

@@ -43,10 +43,13 @@ class SiteConfig(models.Model):
     # Rate limit configuration
     daily_connection_limit: models.PositiveIntegerField = models.PositiveIntegerField(default=20)  # type: ignore[var-annotated]
     daily_follow_up_limit: models.PositiveIntegerField = models.PositiveIntegerField(default=25)  # type: ignore[var-annotated]
-    velocity: models.PositiveIntegerField = models.PositiveIntegerField(default=20)  # max actions per time period  # type: ignore[var-annotated]
-    cooldown_minutes: models.PositiveIntegerField = models.PositiveIntegerField(default=0)  # minutes between actions  # type: ignore[var-annotated]
+    velocity: models.PositiveIntegerField = models.PositiveIntegerField(
+        default=20
+    )  # max actions per time period  # type: ignore[var-annotated]
+    cooldown_minutes: models.PositiveIntegerField = models.PositiveIntegerField(
+        default=0
+    )  # minutes between actions  # type: ignore[var-annotated]
 
-    
     # BetterContact email-finder key; blank disables enrichment (see emails/bettercontact.py).
     bettercontact_api_key = models.CharField(max_length=500, blank=True, default="")
     # Central contacts service (see openoutreach/contacts/). The token is earned
@@ -55,7 +58,7 @@ class SiteConfig(models.Model):
     # it). The URL is blank by default (falls back to DEFAULT_CONTACTS_API_URL).
     contacts_api_token = models.CharField(max_length=500, blank=True, default="")
     contacts_api_url = models.CharField(max_length=500, blank=True, default="")
-    
+
     class Meta:
         verbose_name = "Site Configuration"
         verbose_name_plural = "Site Configuration"
@@ -75,35 +78,35 @@ class SiteConfig(models.Model):
 
 class CampaignTemplate(models.Model):
     """Template for creating campaigns with predefined settings."""
-    
+
     id: models.AutoField  # type: ignore[assignment]
-    
+
     name: models.CharField = models.CharField(max_length=200)  # type: ignore[var-annotated]
     description: models.TextField = models.TextField(blank=True)  # type: ignore[var-annotated]
     campaign_objective: models.TextField = models.TextField(blank=True)  # type: ignore[var-annotated]
     ghost_mode_enabled: models.BooleanField = models.BooleanField(default=False)  # type: ignore[var-annotated]
     velocity: models.PositiveIntegerField = models.PositiveIntegerField(default=20)  # type: ignore[var-annotated]
     cooldown_minutes: models.PositiveIntegerField = models.PositiveIntegerField(default=0)  # type: ignore[var-annotated]
-    
+
     # Template sharing
     is_public: models.BooleanField = models.BooleanField(default=False)  # type: ignore[var-annotated]
-    created_by: models.ForeignKey = models.ForeignKey(User, on_delete=models.CASCADE, related_name='campaign_templates')  # type: ignore[var-annotated]
-    
+    created_by: models.ForeignKey = models.ForeignKey(User, on_delete=models.CASCADE, related_name="campaign_templates")  # type: ignore[var-annotated]
+
     # Timestamps
     created_at: models.DateTimeField = models.DateTimeField(auto_now_add=True)  # type: ignore[var-annotated]
     updated_at: models.DateTimeField = models.DateTimeField(auto_now=True)  # type: ignore[var-annotated]
-    
+
     def __str__(self) -> str:
         return self.name
-    
+
     class Meta:
-        ordering = ['-created_at']
+        ordering = ["-created_at"]
 
 
 class Campaign(models.Model):
     # Type hints for Django's automatic fields
     id: models.AutoField  # type: ignore[assignment]
-    
+
     class Status(models.TextChoices):
         ACTIVE = "active"
         PAUSED = "paused"
@@ -120,17 +123,23 @@ class Campaign(models.Model):
     action_fraction: models.FloatField = models.FloatField(default=0.2)  # type: ignore[var-annotated]
     seed_public_ids: models.JSONField = models.JSONField(default=list, blank=True)  # type: ignore[var-annotated]
     model_blob: models.BinaryField = models.BinaryField(null=True, blank=True)  # type: ignore[var-annotated]
-    
+
     # Campaign configuration for auto-recovery
-    velocity: models.PositiveIntegerField = models.PositiveIntegerField(default=20)  # max actions per time period  # type: ignore[var-annotated]
-    cooldown_minutes: models.PositiveIntegerField = models.PositiveIntegerField(default=0)  # minutes between actions  # type: ignore[var-annotated]
-    is_paused: models.BooleanField = models.BooleanField(default=False)  # pause the campaign  # type: ignore[var-annotated]
+    velocity: models.PositiveIntegerField = models.PositiveIntegerField(
+        default=20
+    )  # max actions per time period  # type: ignore[var-annotated]
+    cooldown_minutes: models.PositiveIntegerField = models.PositiveIntegerField(
+        default=0
+    )  # minutes between actions  # type: ignore[var-annotated]
+    is_paused: models.BooleanField = models.BooleanField(
+        default=False
+    )  # pause the campaign  # type: ignore[var-annotated]
     status: models.CharField = models.CharField(  # type: ignore[var-annotated]
         max_length=10,
         choices=Status.choices,
         default=Status.ACTIVE,
     )
-    
+
     # Timestamps
     created_at: models.DateTimeField = models.DateTimeField(auto_now_add=True)  # type: ignore[var-annotated]
     updated_at: models.DateTimeField = models.DateTimeField(auto_now=True)  # type: ignore[var-annotated]
@@ -142,12 +151,13 @@ class Campaign(models.Model):
     # For now, we just reference the model for type hints
     if TYPE_CHECKING:
         from openoutreach.crm.models import TrackedLink
-        tracked_links: models.Manager['TrackedLink']
+
+        tracked_links: models.Manager["TrackedLink"]
 
     # Type hints for reverse relations (from other apps)
     state_graph: "CampaignStateGraph"
     deals: "models.Manager[Deal]"
-    
+
     def __str__(self) -> str:
         return self.name
 
@@ -204,10 +214,10 @@ class Task(models.Model):
 
     def __str__(self) -> str:
         return f"{self.task_type} [{self.status}] scheduled={self.scheduled_at}"
-    
+
     def get_error_message(self) -> str | None:
         """Get the last error message from payload if available."""
-        return (self.payload or {}).get('last_error')
+        return (self.payload or {}).get("last_error")
 
     def mark_running(self):
         self.status = self.Status.RUNNING
@@ -221,7 +231,7 @@ class Task(models.Model):
 
     def mark_failed(self, error_message: str | None = None):
         """Mark the task as failed. This is a terminal state.
-        
+
         Args:
             error_message: Optional error message to store in payload for debugging.
                           Message will be stored in payload['error'].
@@ -230,6 +240,8 @@ class Task(models.Model):
         # Store error details in payload for debugging
         if error_message:
             updated_payload = dict(self.payload or {})
-            updated_payload['last_error'] = error_message[:500]  # Truncate to avoid huge payloads
+            updated_payload["last_error"] = error_message[
+                :500
+            ]  # Truncate to avoid huge payloads
             self.payload = updated_payload
         self.save(update_fields=["status"])

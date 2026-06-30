@@ -1,5 +1,6 @@
 # openoutreach/core/logging.py
 """Centralized logging configuration with colored output and startup banner."""
+
 from __future__ import annotations
 
 import logging
@@ -61,7 +62,7 @@ class ColoredFormatter(logging.Formatter):
 
 _BRANDS = {
     "bettercontact": ("BetterContact", (155, 81, 224)),  # bettercontact.rocks #9b51e0
-    "icemail": ("IceMail", (34, 197, 94)),               # icemail.ai --brand #22c55e
+    "icemail": ("IceMail", (34, 197, 94)),  # icemail.ai --brand #22c55e
 }
 
 
@@ -82,9 +83,18 @@ def brand(service: str, text: str | None = None) -> str:
         return label
     return f"\033[38;2;{r};{g};{b}m{label}\033[0m"
 
+
 SILENCED_LOGGERS = (
-    "urllib3", "httpx", "pydantic_ai", "openai", "playwright",
-    "httpcore", "fastembed", "huggingface_hub", "filelock", "asyncio",
+    "urllib3",
+    "httpx",
+    "pydantic_ai",
+    "openai",
+    "playwright",
+    "httpcore",
+    "fastembed",
+    "huggingface_hub",
+    "filelock",
+    "asyncio",
 )
 
 

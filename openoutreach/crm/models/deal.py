@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 # Deal model for CRM
 
 from typing import TYPE_CHECKING
@@ -25,6 +26,7 @@ class DealState(models.TextChoices):
     machine). String values match the library's UI states so lifting a returned
     string into this enum is a plain ``DealState(value)`` lookup at the boundary.
     """
+
     QUALIFIED = "Qualified"
     READY_TO_CONNECT = "Ready to Connect"
     PENDING = "Pending"
@@ -50,12 +52,16 @@ class Deal(models.Model):
         verbose_name = _("Deal")
         verbose_name_plural = _("Deals")
         constraints = [
-            models.UniqueConstraint(fields=["lead", "campaign"], name="unique_deal_per_campaign"),
+            models.UniqueConstraint(
+                fields=["lead", "campaign"], name="unique_deal_per_campaign"
+            ),
         ]
 
     lead: models.ForeignKey = models.ForeignKey("Lead", on_delete=models.CASCADE)  # type: ignore[var-annotated,assignment]
     campaign: models.ForeignKey = models.ForeignKey(  # type: ignore[var-annotated,assignment]
-        "core.Campaign", on_delete=models.CASCADE, related_name="deals",
+        "core.Campaign",
+        on_delete=models.CASCADE,
+        related_name="deals",
     )
     state: models.CharField = models.CharField(  # type: ignore[var-annotated]
         max_length=20,
@@ -83,18 +89,18 @@ class Deal(models.Model):
     campaign_id: int  # type: ignore[assignment]
     messages: models.Manager  # type: ignore[assignment]
     state_machines: models.Manager  # type: ignore[assignment]
-    
+
     # Email tracking - used for mailbox pacing (per-box daily limits)
     mailbox: models.ForeignKey = models.ForeignKey(  # type: ignore[var-annotated,assignment]
         "emails.Mailbox",
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='deals',
+        related_name="deals",
     )
     email_sent_at: models.DateTimeField = models.DateTimeField(null=True, blank=True)  # type: ignore[var-annotated]
 
     def __str__(self) -> str:
-        lead_id: int = getattr(self, 'lead_id', 0)  # type: ignore[var-annotated]
+        lead_id: int = getattr(self, "lead_id", 0)  # type: ignore[var-annotated]
         lead_str = str(self.lead) if lead_id else "?"
         return f"{lead_str} [{self.state}]"

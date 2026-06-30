@@ -5,8 +5,7 @@ import { X, ExternalLink, TrendingUp, Users, Globe, Monitor } from 'lucide-react
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { TrackedLink, LinkBreakdown } from '@/lib/api/dashboard'
+import { TrackedLink, LinkBreakdown, getLinkAnalytics } from '@/lib/api/dashboard'
 
 interface LinkStatsDashboardProps {
   link: TrackedLink
@@ -15,42 +14,32 @@ interface LinkStatsDashboardProps {
 
 export function LinkStatsDashboard({ link, onClose }: LinkStatsDashboardProps) {
   const [breakdown, setBreakdown] = useState<LinkBreakdown | null>(null)
+  const [linkDetails, setLinkDetails] = useState<TrackedLink | null>(null)
   const [loading, setLoading] = useState(true)
-  const [clickHistory, setClickHistory] = useState<{ date: string; clicks: number }[]>([])
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    // Fetch link details with breakdown
+    // Fetch link analytics from backend
     const fetchStats = async () => {
       try {
-        // In real implementation, this would call getLink(link.id)
-        // For now, using placeholder data based on link stats
-        setBreakdown({
-          by_device: {
-            desktop: Math.round((link.total_clicks || 0) * 0.6),
-            mobile: Math.round((link.total_clicks || 0) * 0.35),
-            tablet: Math.round((link.total_clicks || 0) * 0.05),
-          },
-          by_source: {
-            linkedin: Math.round((link.total_clicks || 0) * 0.7),
-            direct: Math.round((link.total_clicks || 0) * 0.15),
-            referral: Math.round((link.total_clicks || 0) * 0.1),
-          },
-          daily: [
-            { date: 'Mon', clicks: Math.round((link.total_clicks || 0) / 7) },
-            { date: 'Tue', clicks: Math.round((link.total_clicks || 0) / 7) },
-            { date: 'Wed', clicks: Math.round((link.total_clicks || 0) / 7) },
-            { date: 'Thu', clicks: Math.round((link.total_clicks || 0) / 7) },
-            { date: 'Fri', clicks: Math.round((link.total_clicks || 0) / 7) },
-            { date: 'Sat', clicks: Math.round((link.total_clicks || 0) / 14) },
-            { date: 'Sun', clicks: Math.round((link.total_clicks || 0) / 14) },
-          ],
-        })
+        setLoading(true)
+        setError(null)
+        
+        const response = await getLinkAnalytics(link.id)
+        if (response.data) {
+          setBreakdown(response.data.breakdown)
+          setLinkDetails(response.data.link)
+        } else {
+          setError(response.error || 'Failed to fetch link analytics')
+        }
       } catch (error) {
         console.error('Error fetching link stats:', error)
+        setError('Failed to load analytics. Please try again.')
       } finally {
         setLoading(false)
       }
     }
+    
     fetchStats()
   }, [link])
 
@@ -62,24 +51,24 @@ export function LinkStatsDashboard({ link, onClose }: LinkStatsDashboardProps) {
   const deviceTotals = breakdown?.by_device
   const sourceTotals = breakdown?.by_source
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <Card className="w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <div className="space-y-1">
-            <CardTitle className="text-2xl">Link Analytics</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              Analysis for: <span className="font-mono text-blue-600">{link.short_code}</span>
-            </p>
-          </div>
-          <Button variant="ghost" size="icon" onClick={onClose}>
-            <X className="h-5 w-5" />
-          </Button>
-        </CardHeader>
+   return (
+     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+       <Card className="w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+           <div className="space-y-1">
+             <CardTitle className="text-2xl">Link Analytics</CardTitle>
+             <p className="text-sm text-muted-foreground">
+               Analysis for: <span className="font-mono text-blue-600">{link.short_code}</span>
+             </p>
+           </div>
+           <Button variant="ghost" size="icon" onClick={onClose}>
+             <X className="h-5 w-5" />
+           </Button>
+         </CardHeader>
 
-        <CardContent className="overflow-y-auto flex-1 space-y-6">
-          {/* Quick Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+         <CardContent className="overflow-y-auto flex-1 space-y-6">
+           {/* Quick Stats */}
+           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <Card className="border-amber-500/20">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -142,174 +131,168 @@ export function LinkStatsDashboard({ link, onClose }: LinkStatsDashboardProps) {
             </Card>
           </div>
 
-          {/* Tabs */}
-          <Tabs defaultValue="overview" className="w-full">
-            <TabsList className="grid grid-cols-3">
-              <TabsTrigger value="overview">Overview</TabsTrigger>
-              <TabsTrigger value="devices">Devices</TabsTrigger>
-              <TabsTrigger value="sources">Traffic Sources</TabsTrigger>
-            </TabsList>
-
-            {/* Overview Tab */}
-            <TabsContent value="overview" className="space-y-4 mt-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Clicks Over Time</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {breakdown?.daily && breakdown.daily.length > 0 ? (
-                    <div className="h-64 flex items-end justify-between gap-2">
-                      {breakdown.daily.map((day, index) => (
-                        <div key={index} className="flex flex-col items-center gap-2 w-full group relative">
-                           <div 
-                             className="w-full bg-blue-500/80 rounded-t-md hover:bg-blue-500 transition-all duration-300"
-                             style={{ height: `${Math.max(((day.clicks || 0) / (totalClicks / 5)) * 100, 2)}%` }}
-                           />
-                           <span className="text-xs text-muted-foreground">{day.date}</span>
-                           <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-muted px-2 py-1 rounded text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity">
-                             {day.clicks || 0} clicks
-                           </div>
+           {/* Clicks Over Time */}
+           <Card>
+             <CardHeader>
+               <CardTitle className="flex items-center gap-2">
+                 <TrendingUp className="h-5 w-5 text-muted-foreground" />
+                 Clicks Over Time
+               </CardTitle>
+             </CardHeader>
+             <CardContent>
+               {breakdown?.daily && breakdown.daily.length > 0 ? (
+                 <div className="h-64 flex items-end justify-between gap-2">
+                   {breakdown.daily.map((day, index) => (
+                     <div key={index} className="flex flex-col items-center gap-2 w-full group relative">
+                        <div 
+                          className="w-full bg-blue-500/80 rounded-t-md hover:bg-blue-500 transition-all duration-300"
+                          style={{ height: `${Math.max(((day.clicks || 0) / (totalClicks / 5)) * 100, 2)}%` }}
+                        />
+                        <span className="text-xs text-muted-foreground">{day.date}</span>
+                        <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-muted px-2 py-1 rounded text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity">
+                          {day.clicks || 0} clicks
                         </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="h-64 flex items-center justify-center text-muted-foreground">
-                      No click data available
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
+                     </div>
+                   ))}
+                 </div>
+               ) : (
+                 <div className="h-64 flex items-center justify-center text-muted-foreground">
+                   No click data available
+                 </div>
+               )}
+             </CardContent>
+           </Card>
 
-            {/* Devices Tab */}
-            <TabsContent value="devices" className="space-y-4 mt-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Device Breakdown</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {!deviceTotals || (!deviceTotals.desktop && !deviceTotals.mobile && !deviceTotals.tablet) ? (
-                      <div className="text-center py-8 text-muted-foreground">
-                        No device data available
-                      </div>
-                    ) : (
-                      <>
-                        {deviceTotals.desktop !== undefined && (
-                          <div className="space-y-2">
-                            <div className="flex justify-between text-sm">
-                              <span>Desktop</span>
-                              <span className="font-medium">{deviceTotals.desktop.toLocaleString()}</span>
-                            </div>
-                            <div className="h-2 bg-muted rounded-full overflow-hidden">
-                              <div 
-                                className="h-full bg-blue-600 rounded-full"
-                                style={{ width: `${(deviceTotals.desktop / totalClicks) * 100}%` }}
-                              />
-                            </div>
-                          </div>
-                        )}
-                        {deviceTotals.mobile !== undefined && (
-                          <div className="space-y-2">
-                            <div className="flex justify-between text-sm">
-                              <span>Mobile</span>
-                              <span className="font-medium">{deviceTotals.mobile.toLocaleString()}</span>
-                            </div>
-                            <div className="h-2 bg-muted rounded-full overflow-hidden">
-                              <div 
-                                className="h-full bg-emerald-600 rounded-full"
-                                style={{ width: `${(deviceTotals.mobile / totalClicks) * 100}%` }}
-                              />
-                            </div>
-                          </div>
-                        )}
-                        {deviceTotals.tablet !== undefined && (
-                          <div className="space-y-2">
-                            <div className="flex justify-between text-sm">
-                              <span>Tablet</span>
-                              <span className="font-medium">{deviceTotals.tablet.toLocaleString()}</span>
-                            </div>
-                            <div className="h-2 bg-muted rounded-full overflow-hidden">
-                              <div 
-                                className="h-full bg-purple-600 rounded-full"
-                                style={{ width: `${(deviceTotals.tablet / totalClicks) * 100}%` }}
-                              />
-                            </div>
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
+           {/* Device Breakdown */}
+           <Card>
+             <CardHeader>
+               <CardTitle className="flex items-center gap-2">
+                 <Monitor className="h-5 w-5 text-muted-foreground" />
+                 Device Breakdown
+               </CardTitle>
+             </CardHeader>
+             <CardContent>
+               <div className="space-y-4">
+                 {!deviceTotals || (!deviceTotals.desktop && !deviceTotals.mobile && !deviceTotals.tablet) ? (
+                   <div className="text-center py-8 text-muted-foreground">
+                     No device data available
+                   </div>
+                 ) : (
+                   <>
+                     {deviceTotals.desktop !== undefined && (
+                       <div className="space-y-2">
+                         <div className="flex justify-between text-sm">
+                           <span>Desktop</span>
+                           <span className="font-medium">{deviceTotals.desktop.toLocaleString()}</span>
+                         </div>
+                         <div className="h-2 bg-muted rounded-full overflow-hidden">
+                           <div 
+                             className="h-full bg-blue-600 rounded-full"
+                             style={{ width: `${(deviceTotals.desktop / totalClicks) * 100}%` }}
+                           />
+                         </div>
+                       </div>
+                     )}
+                     {deviceTotals.mobile !== undefined && (
+                       <div className="space-y-2">
+                         <div className="flex justify-between text-sm">
+                           <span>Mobile</span>
+                           <span className="font-medium">{deviceTotals.mobile.toLocaleString()}</span>
+                         </div>
+                         <div className="h-2 bg-muted rounded-full overflow-hidden">
+                           <div 
+                             className="h-full bg-emerald-600 rounded-full"
+                             style={{ width: `${(deviceTotals.mobile / totalClicks) * 100}%` }}
+                           />
+                         </div>
+                       </div>
+                     )}
+                     {deviceTotals.tablet !== undefined && (
+                       <div className="space-y-2">
+                         <div className="flex justify-between text-sm">
+                           <span>Tablet</span>
+                           <span className="font-medium">{deviceTotals.tablet.toLocaleString()}</span>
+                         </div>
+                         <div className="h-2 bg-muted rounded-full overflow-hidden">
+                           <div 
+                             className="h-full bg-purple-600 rounded-full"
+                             style={{ width: `${(deviceTotals.tablet / totalClicks) * 100}%` }}
+                           />
+                         </div>
+                       </div>
+                     )}
+                   </>
+                 )}
+               </div>
+             </CardContent>
+           </Card>
 
-            {/* Sources Tab */}
-            <TabsContent value="sources" className="space-y-4 mt-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Traffic Sources</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {!sourceTotals || (!sourceTotals.linkedin && !sourceTotals.direct && !sourceTotals.referral) ? (
-                      <div className="text-center py-8 text-muted-foreground">
-                        No source data available
-                      </div>
-                    ) : (
-                      <>
-                        {sourceTotals.linkedin !== undefined && (
-                          <div className="space-y-2">
-                            <div className="flex justify-between text-sm">
-                              <span>LinkedIn</span>
-                              <span className="font-medium">{sourceTotals.linkedin.toLocaleString()}</span>
-                            </div>
-                            <div className="h-2 bg-muted rounded-full overflow-hidden">
-                              <div 
-                                className="h-full bg-[#0a66c2] rounded-full"
-                                style={{ width: `${(sourceTotals.linkedin / totalClicks) * 100}%` }}
-                              />
-                            </div>
-                          </div>
-                        )}
-                        {sourceTotals.direct !== undefined && (
-                          <div className="space-y-2">
-                            <div className="flex justify-between text-sm">
-                              <span>Direct</span>
-                              <span className="font-medium">{sourceTotals.direct.toLocaleString()}</span>
-                            </div>
-                            <div className="h-2 bg-muted rounded-full overflow-hidden">
-                              <div 
-                                className="h-full bg-gray-600 rounded-full"
-                                style={{ width: `${(sourceTotals.direct / totalClicks) * 100}%` }}
-                              />
-                            </div>
-                          </div>
-                        )}
-                        {sourceTotals.referral !== undefined && (
-                          <div className="space-y-2">
-                            <div className="flex justify-between text-sm">
-                              <span>Referral</span>
-                              <span className="font-medium">{sourceTotals.referral.toLocaleString()}</span>
-                            </div>
-                            <div className="h-2 bg-muted rounded-full overflow-hidden">
-                              <div 
-                                className="h-full bg-purple-600 rounded-full"
-                                style={{ width: `${(sourceTotals.referral / totalClicks) * 100}%` }}
-                              />
-                            </div>
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
+           {/* Traffic Sources */}
+           <Card>
+             <CardHeader>
+               <CardTitle className="flex items-center gap-2">
+                 <Globe className="h-5 w-5 text-muted-foreground" />
+                 Traffic Sources
+               </CardTitle>
+             </CardHeader>
+             <CardContent>
+               <div className="space-y-4">
+                 {!sourceTotals || (!sourceTotals.linkedin && !sourceTotals.direct && !sourceTotals.referral) ? (
+                   <div className="text-center py-8 text-muted-foreground">
+                     No source data available
+                   </div>
+                 ) : (
+                   <>
+                     {sourceTotals.linkedin !== undefined && (
+                       <div className="space-y-2">
+                         <div className="flex justify-between text-sm">
+                           <span>LinkedIn</span>
+                           <span className="font-medium">{sourceTotals.linkedin.toLocaleString()}</span>
+                         </div>
+                         <div className="h-2 bg-muted rounded-full overflow-hidden">
+                           <div 
+                             className="h-full bg-[#0a66c2] rounded-full"
+                             style={{ width: `${(sourceTotals.linkedin / totalClicks) * 100}%` }}
+                           />
+                         </div>
+                       </div>
+                     )}
+                     {sourceTotals.direct !== undefined && (
+                       <div className="space-y-2">
+                         <div className="flex justify-between text-sm">
+                           <span>Direct</span>
+                           <span className="font-medium">{sourceTotals.direct.toLocaleString()}</span>
+                         </div>
+                         <div className="h-2 bg-muted rounded-full overflow-hidden">
+                           <div 
+                             className="h-full bg-gray-600 rounded-full"
+                             style={{ width: `${(sourceTotals.direct / totalClicks) * 100}%` }}
+                           />
+                         </div>
+                       </div>
+                     )}
+                     {sourceTotals.referral !== undefined && (
+                       <div className="space-y-2">
+                         <div className="flex justify-between text-sm">
+                           <span>Referral</span>
+                           <span className="font-medium">{sourceTotals.referral.toLocaleString()}</span>
+                         </div>
+                         <div className="h-2 bg-muted rounded-full overflow-hidden">
+                           <div 
+                             className="h-full bg-purple-600 rounded-full"
+                             style={{ width: `${(sourceTotals.referral / totalClicks) * 100}%` }}
+                           />
+                         </div>
+                       </div>
+                     )}
+                   </>
+                 )}
+               </div>
+             </CardContent>
+           </Card>
 
-          {/* Link Details */}
-          <Card>
+           {/* Link Details */}
+           <Card>
             <CardHeader>
               <CardTitle>Link Details</CardTitle>
             </CardHeader>

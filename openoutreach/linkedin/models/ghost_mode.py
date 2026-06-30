@@ -1,5 +1,6 @@
 # openoutreach/linkedin/models/ghost_mode.py
 """Ghost Mode campaign models for safe testing without sending real actions."""
+
 from __future__ import annotations
 
 from django.contrib.auth import get_user_model

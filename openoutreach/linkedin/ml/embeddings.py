@@ -1,5 +1,6 @@
 # openoutreach/linkedin/ml/embeddings.py
 """Fastembed text embedding utilities."""
+
 from __future__ import annotations
 
 import logging
@@ -22,7 +23,9 @@ def _get_model():
         model_name = CAMPAIGN_CONFIG["embedding_model"]
         logger.debug("Loading embedding model: %s", model_name)
         FASTEMBED_CACHE_DIR.mkdir(parents=True, exist_ok=True)
-        _model = TextEmbedding(model_name=model_name, cache_dir=str(FASTEMBED_CACHE_DIR))
+        _model = TextEmbedding(
+            model_name=model_name, cache_dir=str(FASTEMBED_CACHE_DIR)
+        )
     return _model
 
 
@@ -38,5 +41,3 @@ def embed_texts(texts: list[str]) -> np.ndarray:
     model = _get_model()
     embeddings = list(model.embed(texts))
     return np.array(embeddings, dtype=np.float32)
-
-

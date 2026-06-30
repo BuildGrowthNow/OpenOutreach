@@ -1,5 +1,6 @@
 # openoutreach/linkedin/pipeline/ready_pool.py
 """Ready-to-connect pool: GP confidence gate between NEW and READY_TO_CONNECT."""
+
 from __future__ import annotations
 
 import logging
@@ -51,7 +52,9 @@ def promote_to_ready(session, qualifier: BayesianQualifier, threshold: float) ->
         if prob > threshold:
             pid = p.get("public_identifier", "?")
             logger.info("%s READY_TO_CONNECT (P(f>0.5)=%.3f)", pid, prob)
-            set_profile_state(session, p["public_identifier"], DealState.READY_TO_CONNECT.value)
+            set_profile_state(
+                session, p["public_identifier"], DealState.READY_TO_CONNECT.value
+            )
             promoted += 1
 
     return promoted

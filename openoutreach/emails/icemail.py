@@ -12,6 +12,7 @@ The other sheet — the login-credentials one (``Email | Password | Recovery Ema
 | …``) — carries the *login* password, which Gmail rejects for SMTP (534-5.7.9).
 Pasting it is the easy mistake, so we detect it and say which sheet to use instead.
 """
+
 from __future__ import annotations
 
 import csv

@@ -35,4 +35,6 @@ class Command(BaseCommand):
             return
 
         created = create_seed_leads(campaign, public_ids)
-        self.stdout.write(self.style.SUCCESS(f"{created} seed profile(s) added as QUALIFIED."))
+        self.stdout.write(
+            self.style.SUCCESS(f"{created} seed profile(s) added as QUALIFIED.")
+        )

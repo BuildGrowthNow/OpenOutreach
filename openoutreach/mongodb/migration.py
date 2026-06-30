@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 class MigrationManager:
     """
     Handles migration of data from SQLite to MongoDB.
-    
+
     Provides methods to:
     - Count SQLite records
     - Migrate records to MongoDB
@@ -57,37 +57,51 @@ class MigrationManager:
     def get_sqlite_counts(self) -> Dict[str, int]:
         """
         Get counts of records in all SQLite tables.
-        
+
         Returns:
             Dictionary mapping table names to record counts
         """
         counts = {}
-        
+
         try:
             from openoutreach.core.models import Task
-            from openoutreach.crm.models import Deal as CRMDeal, LinkClick, LinkDealConversion, TrackedLink, Message as CRMMessage
+            from openoutreach.crm.models import (
+                Deal as CRMDeal,
+                LinkClick,
+                LinkDealConversion,
+                TrackedLink,
+                Message as CRMMessage,
+            )
             from openoutreach.linkedin.models import (
                 Campaign as LinkedInCampaign,
                 LinkedInProfile as LeadModel,
             )
-            
-            counts["leads"] = LeadModel.objects.count() if LeadModel.objects.exists() else 0
-            counts["campaigns"] = LinkedInCampaign.objects.count() if LinkedInCampaign.objects.exists() else 0
+
+            counts["leads"] = (
+                LeadModel.objects.count() if LeadModel.objects.exists() else 0
+            )
+            counts["campaigns"] = (
+                LinkedInCampaign.objects.count()
+                if LinkedInCampaign.objects.exists()
+                else 0
+            )
             counts["deals"] = CRMDeal.objects.count() if CRMDeal.objects.exists() else 0
-            counts["messages"] = CRMMessage.objects.count() if CRMMessage.objects.exists() else 0
+            counts["messages"] = (
+                CRMMessage.objects.count() if CRMMessage.objects.exists() else 0
+            )
             counts["tasks"] = Task.objects.count() if Task.objects.exists() else 0
-            
+
         except ImportError as e:
             logger.warning(f"Could not import all SQLite models: {e}")
         except Exception as e:
             logger.error(f"Error counting SQLite records: {e}")
-        
+
         return counts
 
     def migrate_all(self) -> Dict[str, Any]:
         """
         Migrate all data from SQLite to MongoDB.
-        
+
         Returns:
             Dictionary with migration results
         """
@@ -133,7 +147,7 @@ class MigrationManager:
     def verify_migration(self) -> Dict[str, Any]:
         """
         Verify that migration was complete by comparing counts.
-        
+
         Returns:
             Dictionary with verification results
         """
@@ -150,7 +164,9 @@ class MigrationManager:
         if db is not None:
             for collection in db.list_collection_names():
                 try:
-                    results["mongodb_counts"][collection] = db[collection].count_documents({})
+                    results["mongodb_counts"][collection] = db[
+                        collection
+                    ].count_documents({})
                 except Exception as e:
                     results["mongodb_counts"][collection] = f"error: {e}"
 
@@ -163,7 +179,7 @@ class MigrationManager:
         for sqlite_table, mongodb_collection in comparisons.items():
             sqlite_count = results["sqlite_counts"].get(sqlite_table, 0)
             mongodb_count = results["mongodb_counts"].get(mongodb_collection, 0)
-            
+
             if isinstance(sqlite_count, int) and isinstance(mongodb_count, int):
                 if mongodb_count < sqlite_count:
                     results["mismatches"].append(
@@ -176,22 +192,22 @@ class MigrationManager:
         """Migrate leads from SQLite to MongoDB."""
         try:
             from openoutreach.linkedin.models import LinkedInProfile as LeadModel
-            
+
             count = 0
             for lead in LeadModel.objects.all():
                 mongodb_lead = Lead(
-                    linkedin_url=getattr(lead, 'linkedin_url', ""),
-                    public_identifier=getattr(lead, 'public_identifier', ""),
-                    urn=getattr(lead, 'urn', None),
-                    embedding=getattr(lead, 'embedding', None),
-                    contact_info=getattr(lead, 'contact_info', {}) or {},
-                    api_email=getattr(lead, 'api_email', None),
-                    disqualified=getattr(lead, 'disqualified', False),
-                    creation_date=getattr(lead, 'creation_date', None),
+                    linkedin_url=getattr(lead, "linkedin_url", ""),
+                    public_identifier=getattr(lead, "public_identifier", ""),
+                    urn=getattr(lead, "urn", None),
+                    embedding=getattr(lead, "embedding", None),
+                    contact_info=getattr(lead, "contact_info", {}) or {},
+                    api_email=getattr(lead, "api_email", None),
+                    disqualified=getattr(lead, "disqualified", False),
+                    creation_date=getattr(lead, "creation_date", None),
                 )
                 mongodb_lead.save()
                 count += 1
-            
+
             logger.info(f"Migrated {count} leads to MongoDB")
             return count
         except Exception as e:
@@ -202,25 +218,25 @@ class MigrationManager:
         """Migrate campaigns from SQLite to MongoDB."""
         try:
             from openoutreach.linkedin.models import Campaign as LinkedInCampaign
-            
+
             count = 0
             for campaign in LinkedInCampaign.objects.all():
                 mongodb_campaign = Campaign(
-                    name=getattr(campaign, 'name', ""),
-                    product_docs=getattr(campaign, 'product_docs', ""),
-                    campaign_objective=getattr(campaign, 'campaign_objective', ""),
-                    booking_link=getattr(campaign, 'booking_link', ""),
-                    is_freemium=getattr(campaign, 'is_freemium', False),
-                    action_fraction=getattr(campaign, 'action_fraction', 0.2),
-                    seed_public_ids=getattr(campaign, 'seed_public_ids', []),
-                    velocity=getattr(campaign, 'velocity', 20),
-                    cooldown_minutes=getattr(campaign, 'cooldown_minutes', 0),
-                    is_paused=getattr(campaign, 'is_paused', False),
-                    created_at=getattr(campaign, 'created_at', None),
+                    name=getattr(campaign, "name", ""),
+                    product_docs=getattr(campaign, "product_docs", ""),
+                    campaign_objective=getattr(campaign, "campaign_objective", ""),
+                    booking_link=getattr(campaign, "booking_link", ""),
+                    is_freemium=getattr(campaign, "is_freemium", False),
+                    action_fraction=getattr(campaign, "action_fraction", 0.2),
+                    seed_public_ids=getattr(campaign, "seed_public_ids", []),
+                    velocity=getattr(campaign, "velocity", 20),
+                    cooldown_minutes=getattr(campaign, "cooldown_minutes", 0),
+                    is_paused=getattr(campaign, "is_paused", False),
+                    created_at=getattr(campaign, "created_at", None),
                 )
                 mongodb_campaign.save()
                 count += 1
-            
+
             logger.info(f"Migrated {count} campaigns to MongoDB")
             return count
         except Exception as e:
@@ -231,12 +247,14 @@ class MigrationManager:
         """Migrate deals from SQLite to MongoDB."""
         try:
             from openoutreach.crm.models import Deal as CRMDeal
-            
+
             count = 0
             for deal in CRMDeal.objects.all():
                 mongodb_deal = Deal(
                     lead_id=str(deal.lead_id) if hasattr(deal, "lead_id") else "",
-                    campaign_id=str(deal.campaign_id) if hasattr(deal, "campaign_id") else "",
+                    campaign_id=(
+                        str(deal.campaign_id) if hasattr(deal, "campaign_id") else ""
+                    ),
                     state=getattr(deal, "state", Deal.DealState.QUALIFIED),
                     outcome=getattr(deal, "outcome", ""),
                     reason=getattr(deal, "reason", ""),
@@ -249,7 +267,7 @@ class MigrationManager:
                 )
                 mongodb_deal.save()
                 count += 1
-            
+
             logger.info(f"Migrated {count} deals to MongoDB")
             return count
         except Exception as e:
@@ -260,7 +278,7 @@ class MigrationManager:
         """Migrate messages from SQLite to MongoDB."""
         try:
             from openoutreach.crm.models import Message
-            
+
             count = 0
             for message in Message.objects.all():
                 mongodb_message = Message(
@@ -271,7 +289,7 @@ class MigrationManager:
                 )
                 mongodb_message.save()
                 count += 1
-            
+
             logger.info(f"Migrated {count} messages to MongoDB")
             return count
         except Exception as e:
@@ -282,7 +300,7 @@ class MigrationManager:
         """Migrate notes from SQLite to MongoDB."""
         try:
             from openoutreach.crm.models import Note as CRMNote
-            
+
             count = 0
             for note in CRMNote.objects.all():
                 mongodb_note = Note(
@@ -293,7 +311,7 @@ class MigrationManager:
                 )
                 mongodb_note.save()
                 count += 1
-            
+
             logger.info(f"Migrated {count} notes to MongoDB")
             return count
         except Exception as e:
@@ -306,7 +324,7 @@ class MigrationManager:
         leads = Lead.objects().all()
         for lead in leads:
             persona = LeadPersona(
-                lead_id=str(lead._id) if hasattr(lead, '_id') else "",
+                lead_id=str(lead._id) if hasattr(lead, "_id") else "",
                 campaign_id="",
                 pain_points=["price", "features"],
                 goals=["increase sales"],
@@ -314,7 +332,7 @@ class MigrationManager:
             )
             persona.save()
             count += 1
-        
+
         logger.info(f"Migrated {count} lead personas to MongoDB")
         return count
 
@@ -322,7 +340,7 @@ class MigrationManager:
         """Migrate tracked links from SQLite to MongoDB."""
         try:
             from openoutreach.crm.models import TrackedLink
-            
+
             count = 0
             for link in TrackedLink.objects.all():
                 mongodb_link = TrackedLink(
@@ -339,7 +357,7 @@ class MigrationManager:
                 )
                 mongodb_link.save()
                 count += 1
-            
+
             logger.info(f"Migrated {count} tracked links to MongoDB")
             return count
         except Exception as e:
@@ -350,7 +368,7 @@ class MigrationManager:
         """Migrate link clicks from SQLite to MongoDB."""
         try:
             from openoutreach.crm.models import LinkClick
-            
+
             count = 0
             for click in LinkClick.objects.all():
                 mongodb_click = LinkClick(
@@ -364,7 +382,7 @@ class MigrationManager:
                 )
                 mongodb_click.save()
                 count += 1
-            
+
             logger.info(f"Migrated {count} link clicks to MongoDB")
             return count
         except Exception as e:
@@ -375,7 +393,7 @@ class MigrationManager:
         """Migrate link deal conversions from SQLite to MongoDB."""
         try:
             from openoutreach.crm.models import LinkDealConversion
-            
+
             count = 0
             for conversion in LinkDealConversion.objects.all():
                 mongodb_conversion = LinkDealConversion(
@@ -386,7 +404,7 @@ class MigrationManager:
                 )
                 mongodb_conversion.save()
                 count += 1
-            
+
             logger.info(f"Migrated {count} link deal conversions to MongoDB")
             return count
         except Exception as e:
@@ -397,7 +415,7 @@ class MigrationManager:
         """Migrate LinkedIn credentials from SQLite to MongoDB."""
         try:
             from openoutreach.crm.models import LinkedInCredentials as LinkedInCreds
-            
+
             count = 0
             for cred in LinkedInCreds.objects.all():
                 mongodb_cred = LinkedInCredentials(
@@ -407,7 +425,9 @@ class MigrationManager:
                     username=getattr(cred, "username", ""),
                     status=getattr(cred, "status", "active"),
                     last_verified=getattr(cred, "last_verified", None),
-                    verification_failed_at=getattr(cred, "verification_failed_at", None),
+                    verification_failed_at=getattr(
+                        cred, "verification_failed_at", None
+                    ),
                     verification_failures=getattr(cred, "verification_failures", 0),
                     usage_count=getattr(cred, "usage_count", 0),
                     last_used=getattr(cred, "last_used", None),
@@ -419,12 +439,18 @@ class MigrationManager:
                     rotation_required_days=getattr(cred, "rotation_required_days", 90),
                     is_primary=getattr(cred, "is_primary", True),
                     is_backup=getattr(cred, "is_backup", False),
-                    backup_of_id=str(getattr(cred, "backup_of_id", None)) if getattr(cred, "backup_of_id", None) else None,
-                    security_alert_sent_at=getattr(cred, "security_alert_sent_at", None),
+                    backup_of_id=(
+                        str(getattr(cred, "backup_of_id", None))
+                        if getattr(cred, "backup_of_id", None)
+                        else None
+                    ),
+                    security_alert_sent_at=getattr(
+                        cred, "security_alert_sent_at", None
+                    ),
                 )
                 mongodb_cred.save()
                 count += 1
-            
+
             logger.info(f"Migrated {count} LinkedIn credentials to MongoDB")
             return count
         except Exception as e:
@@ -435,7 +461,7 @@ class MigrationManager:
         """Migrate LinkedIn credential logs from SQLite to MongoDB."""
         try:
             from openoutreach.crm.models import LinkedInCredentialLog
-            
+
             count = 0
             for log in LinkedInCredentialLog.objects.all():
                 mongodb_log = LinkedInCredentialLog(
@@ -448,7 +474,7 @@ class MigrationManager:
                 )
                 mongodb_log.save()
                 count += 1
-            
+
             logger.info(f"Migrated {count} LinkedIn credential logs to MongoDB")
             return count
         except Exception as e:
@@ -459,7 +485,7 @@ class MigrationManager:
         """Migrate site configs from SQLite to MongoDB."""
         try:
             from openoutreach.core.models import SiteConfig
-            
+
             count = 0
             for config in SiteConfig.objects.all():
                 mongodb_config = SiteConfig(
@@ -470,7 +496,9 @@ class MigrationManager:
                     finder_api_key=getattr(config, "finder_api_key", ""),
                     linkedin_username=getattr(config, "linkedin_username", ""),
                     linkedin_campaign=getattr(config, "linkedin_campaign", ""),
-                    daily_connection_limit=getattr(config, "daily_connection_limit", 20),
+                    daily_connection_limit=getattr(
+                        config, "daily_connection_limit", 20
+                    ),
                     daily_follow_up_limit=getattr(config, "daily_follow_up_limit", 25),
                     velocity=getattr(config, "velocity", 20),
                     cooldown_minutes=getattr(config, "cooldown_minutes", 0),
@@ -480,7 +508,7 @@ class MigrationManager:
                 )
                 mongodb_config.save()
                 count += 1
-            
+
             logger.info(f"Migrated {count} site configs to MongoDB")
             return count
         except Exception as e:
@@ -491,7 +519,7 @@ class MigrationManager:
         """Migrate tasks from SQLite to MongoDB."""
         try:
             from openoutreach.core.models import Task
-            
+
             count = 0
             for task in Task.objects.all():
                 mongodb_task = Task(
@@ -505,7 +533,7 @@ class MigrationManager:
                 )
                 mongodb_task.save()
                 count += 1
-            
+
             logger.info(f"Migrated {count} tasks to MongoDB")
             return count
         except Exception as e:

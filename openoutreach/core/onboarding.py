@@ -7,6 +7,7 @@ Two ways to supply config:
 
 Both return an OnboardConfig; ``apply()`` is the single write path.
 """
+
 from __future__ import annotations
 
 import logging
@@ -28,6 +29,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Config dataclass (pure data — no I/O)
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class OnboardConfig:
@@ -53,6 +55,7 @@ class OnboardConfig:
     def from_json(cls, path: str) -> OnboardConfig:
         import json
         import dataclasses
+
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
         valid_fields = {field.name for field in dataclasses.fields(cls)}
@@ -60,18 +63,23 @@ class OnboardConfig:
         return cls(**filtered_data)
 
 
-
 # ---------------------------------------------------------------------------
 # State inspection
 # ---------------------------------------------------------------------------
 
 _CAMPAIGN_KEYS = {
-    "campaign_name", "product_description", "campaign_objective",
-    "booking_link", "seed_urls",
+    "campaign_name",
+    "product_description",
+    "campaign_objective",
+    "booking_link",
+    "seed_urls",
 }
 _ACCOUNT_KEYS = {
-    "linkedin_email", "linkedin_password", "newsletter",
-    "connect_daily_limit", "follow_up_daily_limit",
+    "linkedin_email",
+    "linkedin_password",
+    "newsletter",
+    "connect_daily_limit",
+    "follow_up_daily_limit",
     "legal_acceptance",
 }
 _LLM_KEYS = {"llm_provider", "llm_api_key", "ai_model", "llm_api_base"}
@@ -99,7 +107,10 @@ def missing_keys() -> set[str]:
     if not cfg.ai_model:
         keys.add("ai_model")
     # llm_api_base is only required for the openai_compatible provider.
-    if cfg.llm_provider == SiteConfig.LLMProvider.OPENAI_COMPATIBLE and not cfg.llm_api_base:
+    if (
+        cfg.llm_provider == SiteConfig.LLMProvider.OPENAI_COMPATIBLE
+        and not cfg.llm_api_base
+    ):
         keys.add("llm_api_base")
 
     return keys
@@ -108,6 +119,7 @@ def missing_keys() -> set[str]:
 # ---------------------------------------------------------------------------
 # Interactive collection (needs TTY)
 # ---------------------------------------------------------------------------
+
 
 def collect_from_wizard() -> OnboardConfig:
     """Run the questionary wizard for missing fields; return an OnboardConfig.
@@ -126,21 +138,23 @@ def collect_from_wizard() -> OnboardConfig:
     if answers is None:
         raise SystemExit("Onboarding cancelled.")
 
-    return OnboardConfig(**{
-        k: v for k, v in answers.items()
-        if k in OnboardConfig.__dataclass_fields__
-    })
+    return OnboardConfig(
+        **{k: v for k, v in answers.items() if k in OnboardConfig.__dataclass_fields__}
+    )
 
 
 # ---------------------------------------------------------------------------
 # Record creation (pure DB, no I/O)
 # ---------------------------------------------------------------------------
 
+
 def _read_default_file(path) -> str:
     return path.read_text(encoding="utf-8").strip() if path.exists() else ""
 
 
-def _create_campaign(name: str, product_docs: str, objective: str, booking_link: str = ""):
+def _create_campaign(
+    name: str, product_docs: str, objective: str, booking_link: str = ""
+):
     """Create a Campaign record and return it."""
     from openoutreach.core.models import Campaign
 
@@ -208,6 +222,7 @@ def _create_seed_leads(campaign, seed_urls: str) -> None:
 # Single write path
 # ---------------------------------------------------------------------------
 
+
 def apply(config: OnboardConfig) -> None:
     """Idempotent: create missing Campaign, Account, env vars, and legal acceptance."""
     from openoutreach.core.management.setup_crm import DEFAULT_CAMPAIGN_NAME
@@ -219,8 +234,10 @@ def apply(config: OnboardConfig) -> None:
     if campaign is None and config.campaign_name:
         campaign = _create_campaign(
             name=config.campaign_name or DEFAULT_CAMPAIGN_NAME,
-            product_docs=config.product_description or _read_default_file(DEFAULT_PRODUCT_DOCS),
-            objective=config.campaign_objective or _read_default_file(DEFAULT_CAMPAIGN_OBJECTIVE),
+            product_docs=config.product_description
+            or _read_default_file(DEFAULT_PRODUCT_DOCS),
+            objective=config.campaign_objective
+            or _read_default_file(DEFAULT_CAMPAIGN_OBJECTIVE),
             booking_link=config.booking_link,
         )
         _create_seed_leads(campaign, config.seed_urls)
@@ -241,6 +258,7 @@ def apply(config: OnboardConfig) -> None:
 
     # LLM config → DB
     from openoutreach.core.models import SiteConfig
+
     cfg = SiteConfig.load()
     updated = False
     for field, val in [
@@ -259,4 +277,5 @@ def apply(config: OnboardConfig) -> None:
     # Legal
     if config.legal_acceptance:
         from openoutreach.linkedin.models import LinkedInProfile as LP
+
         LP.objects.filter(legal_accepted=False, active=True).update(legal_accepted=True)

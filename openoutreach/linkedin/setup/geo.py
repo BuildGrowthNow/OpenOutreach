@@ -12,6 +12,7 @@ Voyager API ``location.countryCode`` field, but answer different questions:
   set (EU/EEA + UK + CH only).  Gates contribution into the central contacts
   store and the user-level forced-give-back override.
 """
+
 from __future__ import annotations
 
 import logging
@@ -25,18 +26,47 @@ logger = logging.getLogger(__name__)
 # New Zealand (Unsolicited Electronic Messages Act 2007).
 GDPR_COUNTRY_CODES: set[str] = {
     # EU member states
-    "at", "be", "bg", "hr", "cy",
-    "cz", "dk", "ee", "fi", "fr",
-    "de", "gr", "hu", "ie", "it",
-    "lv", "lt", "lu", "mt", "nl",
-    "pl", "pt", "ro", "sk", "si",
-    "es", "se",
+    "at",
+    "be",
+    "bg",
+    "hr",
+    "cy",
+    "cz",
+    "dk",
+    "ee",
+    "fi",
+    "fr",
+    "de",
+    "gr",
+    "hu",
+    "ie",
+    "it",
+    "lv",
+    "lt",
+    "lu",
+    "mt",
+    "nl",
+    "pl",
+    "pt",
+    "ro",
+    "sk",
+    "si",
+    "es",
+    "se",
     # EEA (non-EU)
-    "is", "li", "no",
+    "is",
+    "li",
+    "no",
     # UK
     "gb",
     # Other opt-in jurisdictions
-    "ch", "ca", "br", "au", "jp", "kr", "nz",
+    "ch",
+    "ca",
+    "br",
+    "au",
+    "jp",
+    "kr",
+    "nz",
 }
 
 
@@ -58,14 +88,37 @@ def is_gdpr_protected(country_code: str | None) -> bool:
 # don't bear on collection), so Brazil/Canada/etc. leads are collectable.
 EEA_UK_CH: set[str] = {
     # EU member states
-    "at", "be", "bg", "hr", "cy",
-    "cz", "dk", "ee", "fi", "fr",
-    "de", "gr", "hu", "ie", "it",
-    "lv", "lt", "lu", "mt", "nl",
-    "pl", "pt", "ro", "sk", "si",
-    "es", "se",
+    "at",
+    "be",
+    "bg",
+    "hr",
+    "cy",
+    "cz",
+    "dk",
+    "ee",
+    "fi",
+    "fr",
+    "de",
+    "gr",
+    "hu",
+    "ie",
+    "it",
+    "lv",
+    "lt",
+    "lu",
+    "mt",
+    "nl",
+    "pl",
+    "pt",
+    "ro",
+    "sk",
+    "si",
+    "es",
+    "se",
     # EEA (non-EU)
-    "is", "li", "no",
+    "is",
+    "li",
+    "no",
     # UK
     "gb",
     # Switzerland
@@ -98,12 +151,14 @@ def apply_gdpr_newsletter_override(session, country_code: str | None):
         session.linkedin_profile.save(update_fields=["subscribe_newsletter"])
         logger.info(
             "Non-GDPR country (%s): auto-enabled newsletter for %s",
-            country_code, session,
+            country_code,
+            session,
         )
     else:
         logger.debug(
             "GDPR-protected country (%s): newsletter config unchanged for %s",
-            country_code, session,
+            country_code,
+            session,
         )
 
 
@@ -126,5 +181,7 @@ def apply_gdpr_contribution_override(session, country_code: str | None):
         profile.save(update_fields=["contribute_to_hub"])
     logger.info(
         "Operator country (%s): store contribution %s for %s",
-        country_code, "enabled" if contribute else "disabled", session,
+        country_code,
+        "enabled" if contribute else "disabled",
+        session,
     )

@@ -1,5 +1,6 @@
 # openoutreach/linkedin/pipeline/search_keywords.py
 """LLM-based generation of LinkedIn People search keywords."""
+
 from __future__ import annotations
 
 import logging
@@ -14,6 +15,7 @@ logger = logging.getLogger(__name__)
 
 class SearchKeywords(BaseModel):
     """Structured LLM output for search keyword generation."""
+
     keywords: list[str] = Field(description="List of LinkedIn People search queries")
 
 

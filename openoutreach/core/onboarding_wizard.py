@@ -34,6 +34,7 @@ def _go_back(event):
 
 # -- Validators ---------------------------------------------------------------
 
+
 def _required(val: str) -> bool | str:
     return True if val.strip() else "This field is required."
 
@@ -47,6 +48,7 @@ def _integer(val: str) -> bool | str:
 
 
 # -- Helpers ------------------------------------------------------------------
+
 
 def _clear():
     os.system("clear" if os.name != "nt" else "cls")
@@ -101,7 +103,9 @@ class Question:
 class Text(Question):
     def _prompt(self, default, **_):
         return questionary.text(
-            self.message, default=default, key_bindings=_kb,
+            self.message,
+            default=default,
+            key_bindings=_kb,
             validate=_required if self.required else None,
             instruction=self._instruction,
         ).ask()
@@ -110,7 +114,9 @@ class Text(Question):
 class Password(Question):
     def _prompt(self, default, **_):
         return questionary.password(
-            self.message, default=default, key_bindings=_kb,
+            self.message,
+            default=default,
+            key_bindings=_kb,
             validate=_required if self.required else None,
         ).ask()
 
@@ -149,7 +155,9 @@ class IntText(Question):
 
     def _prompt(self, default, **_):
         return questionary.text(
-            self.message, default=str(default), key_bindings=_kb,
+            self.message,
+            default=str(default),
+            key_bindings=_kb,
             validate=_integer,
         ).ask()
 
@@ -166,7 +174,14 @@ class IntText(Question):
 class Autocomplete(Question):
     """Type-to-filter searchable select with lazily resolved choices."""
 
-    def __init__(self, key: str, message: str, *, resolver: Callable[[Dict[str, Any]], List[str]], default: str = ""):
+    def __init__(
+        self,
+        key: str,
+        message: str,
+        *,
+        resolver: Callable[[Dict[str, Any]], List[str]],
+        default: str = "",
+    ):
         super().__init__(key=key, message=message, default=default)
         self.resolver = resolver
 
@@ -174,10 +189,15 @@ class Autocomplete(Question):
         choices = self.resolver(answers or {})
         if not choices:
             return questionary.text(
-                self.message, default=default, key_bindings=_kb,
+                self.message,
+                default=default,
+                key_bindings=_kb,
             ).ask()
         return questionary.autocomplete(
-            self.message, choices=choices, default=default, key_bindings=_kb,
+            self.message,
+            choices=choices,
+            default=default,
+            key_bindings=_kb,
             validate=lambda val: val in choices or "Please select a valid option",
         ).ask()
 
@@ -193,7 +213,8 @@ class MultilineText(Question):
         if self.required:
             return self._inline_prompt(default)
         proceed = questionary.confirm(
-            self.message, default=bool(default),
+            self.message,
+            default=bool(default),
         ).ask()
         if proceed is None:
             return proceed

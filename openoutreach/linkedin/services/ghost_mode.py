@@ -1,5 +1,6 @@
 # openoutreach/linkedin/services/ghost_mode.py
 """Ghost Mode interceptor for safe testing without sending real LinkedIn actions."""
+
 from __future__ import annotations
 
 import logging
@@ -93,16 +94,22 @@ class GhostModeInterceptor:
 
         leads = []
         for i in range(num_leads):
-            leads.append({
-                "name": f"Lead_{i+1}",
-                "public_identifier": f"lead{i+1}",
-                "linkedin_url": f"https://linkedin.com/in/lead{i+1}",
-                "company": random.choice(["Company A", "Company B", "Company C"]),
-                "job_title": random.choice(["Manager", "Director", "VP", "Founder"]),
-                "industry": random.choice(["Tech", "Marketing", "Sales", "Finance"]),
-                "match_score": random.uniform(0.3, 0.9),
-                "match_reason": f"Match found for keyword: {random.choice(search_keywords) if search_keywords else 'general'}",
-            })
+            leads.append(
+                {
+                    "name": f"Lead_{i+1}",
+                    "public_identifier": f"lead{i+1}",
+                    "linkedin_url": f"https://linkedin.com/in/lead{i+1}",
+                    "company": random.choice(["Company A", "Company B", "Company C"]),
+                    "job_title": random.choice(
+                        ["Manager", "Director", "VP", "Founder"]
+                    ),
+                    "industry": random.choice(
+                        ["Tech", "Marketing", "Sales", "Finance"]
+                    ),
+                    "match_score": random.uniform(0.3, 0.9),
+                    "match_reason": f"Match found for keyword: {random.choice(search_keywords) if search_keywords else 'general'}",
+                }
+            )
 
         return {
             "success": True,
@@ -151,7 +158,9 @@ class GhostModeInterceptor:
             "message_id": f"msg_{timezone.now().timestamp():.0f}",
             "will_response": will_response,
             "simulated_delay_hours": 24 if will_response else None,
-            "simulated_response_content": "Thanks for connecting!" if will_response else None,
+            "simulated_response_content": (
+                "Thanks for connecting!" if will_response else None
+            ),
         }
 
     def _simulate_follow_up(self, target_data: Dict, context: Optional[Dict]) -> Dict:

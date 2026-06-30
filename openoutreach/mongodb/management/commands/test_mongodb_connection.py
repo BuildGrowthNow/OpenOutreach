@@ -79,11 +79,11 @@ class Command(BaseCommand):
         # Check connection
         self.stdout.write("\n1. Checking MongoDB connection...")
         if check_mongodb_connection():
-            self.stdout.write(self.style.SUCCESS("   [OK] MongoDB connection is active"))
-        else:
             self.stdout.write(
-                self.style.WARNING("   [FAIL] MongoDB not connected")
+                self.style.SUCCESS("   [OK] MongoDB connection is active")
             )
+        else:
+            self.stdout.write(self.style.WARNING("   [FAIL] MongoDB not connected"))
             return
 
         # Get database info
@@ -134,16 +134,16 @@ class Command(BaseCommand):
             self.stdout.write(f"   Campaigns: {Campaign.objects.count()}")  # type: ignore[union-attr]
             self.stdout.write(f"   Deals: {Deal.objects.count()}")  # type: ignore[union-attr]
         except Exception as e:
-            self.stdout.write(
-                self.style.WARNING(f"   Error counting models: {e}")
-            )
+            self.stdout.write(self.style.WARNING(f"   Error counting models: {e}"))
 
         # Summary
         self.stdout.write("\n" + "=" * 60)
         self.stdout.write(self.style.SUCCESS("MongoDB connection test completed!"))
         self.stdout.write("\nNext steps:")
         self.stdout.write("1. Run 'python manage.py migrate' to create collections")
-        self.stdout.write("2. Use 'python manage.py test_mongodb_connection --create-test-data'")
+        self.stdout.write(
+            "2. Use 'python manage.py test_mongodb_connection --create-test-data'"
+        )
         self.stdout.write("3. Check MongoDB Compass to verify data")
         self.stdout.write("\nTo enable MongoDB in production:")
         self.stdout.write("- Set MONGODB_ENABLED=true in your .env file")
@@ -205,7 +205,9 @@ class Command(BaseCommand):
             # Check if test records exist
             test_lead = Lead.objects.filter(public_identifier="testuser").first()  # type: ignore[union-attr]
             if test_lead:
-                self.stdout.write(self.style.SUCCESS(f"   Found test lead: {test_lead}"))
+                self.stdout.write(
+                    self.style.SUCCESS(f"   Found test lead: {test_lead}")
+                )
             else:
                 self.stdout.write(self.style.WARNING("   Test lead not found"))
 

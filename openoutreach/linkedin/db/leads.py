@@ -44,7 +44,8 @@ def create_enriched_lead(session, url: str, profile: Dict[str, Any]) -> Optional
         if urn and Lead.objects.filter(urn=urn).exists():
             logger.info(
                 "Lead with URN %s already exists — skipping duplicate %s",
-                urn, public_id,
+                urn,
+                public_id,
             )
             return None
         lead = Lead.objects.create(linkedin_url=clean_url, public_identifier=public_id)
@@ -76,6 +77,7 @@ def promote_lead_to_deal(session, public_id: str, reason: str = ""):
     )
 
     from termcolor import colored
+
     logger.info("%s %s", public_id, colored("QUALIFIED", "green", attrs=["bold"]))
     return deal
 
@@ -141,7 +143,9 @@ def discover_and_enrich(session, urls):
     if len(new_urls) > max_per_page:
         new_urls = new_urls[:max_per_page]
 
-    logger.info("Discovered %d new profiles (%d total on page)", len(new_urls), len(urls))
+    logger.info(
+        "Discovered %d new profiles (%d total on page)", len(new_urls), len(urls)
+    )
 
     min_delay = CAMPAIGN_CONFIG["enrich_min_delay_seconds"]
     max_delay = CAMPAIGN_CONFIG["enrich_max_delay_seconds"]

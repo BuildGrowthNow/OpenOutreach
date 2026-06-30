@@ -23,7 +23,8 @@ def increment_connect_attempts(session, public_id: str) -> int:
     from openoutreach.crm.models import Deal
 
     deal = Deal.objects.filter(
-        lead__public_identifier=public_id, campaign=session.campaign,
+        lead__public_identifier=public_id,
+        campaign=session.campaign,
     ).first()
     if not deal:
         return 1
@@ -63,7 +64,9 @@ def _existing_deal_or_lead(public_id: str, campaign):
     """
     from openoutreach.crm.models import Deal, Lead
 
-    existing = Deal.objects.filter(lead__public_identifier=public_id, campaign=campaign).first()
+    existing = Deal.objects.filter(
+        lead__public_identifier=public_id, campaign=campaign
+    ).first()
     if existing:
         return None, existing
     lead = Lead.objects.filter(public_identifier=public_id).first()
@@ -87,10 +90,14 @@ def _capture_contact_info(lead, session) -> None:
     try:
         lead.capture_contact_info(session)
     except (ProfileInaccessibleError, IOError) as exc:
-        logger.warning("contact-info capture failed for %s: %s", lead.public_identifier, exc)
+        logger.warning(
+            "contact-info capture failed for %s: %s", lead.public_identifier, exc
+        )
 
 
-def set_profile_state(session, public_identifier: str, new_state: str, reason: str = "", outcome: str = ""):
+def set_profile_state(
+    session, public_identifier: str, new_state: str, reason: str = "", outcome: str = ""
+):
     """Move the Deal to the corresponding state and enqueue the implied next task.
 
     Campaign-scoped: only finds Deals in the current campaign.
@@ -104,15 +111,19 @@ def set_profile_state(session, public_identifier: str, new_state: str, reason: s
     from openoutreach.core.scheduler import on_deal_state_entered
 
     deal = (
-        Deal.objects.filter(lead__public_identifier=public_identifier, campaign=session.campaign)
+        Deal.objects.filter(
+            lead__public_identifier=public_identifier, campaign=session.campaign
+        )
         .select_related("lead")
         .first()
     )
     if not deal:
-        raise ValueError(f"No Deal for {public_identifier} — cannot set state {new_state}")
+        raise ValueError(
+            f"No Deal for {public_identifier} — cannot set state {new_state}"
+        )
 
     ps = DealState(new_state)
-    state_changed = (deal.state != ps)
+    state_changed = deal.state != ps
 
     deal.state = ps
 
@@ -126,7 +137,9 @@ def set_profile_state(session, public_identifier: str, new_state: str, reason: s
     label, color, attrs = _STATE_LOG_STYLE.get(ps, ("ERROR", "red", ["bold"]))
     suffix = f" ({reason})" if reason else ""
     if state_changed:
-        logger.info("%s %s%s", public_identifier, colored(label, color, attrs=attrs), suffix)
+        logger.info(
+            "%s %s%s", public_identifier, colored(label, color, attrs=attrs), suffix
+        )
     else:
         logger.debug("%s %s (unchanged)%s", public_identifier, label, suffix)
 
@@ -152,7 +165,9 @@ def get_profile_dict_for_public_id(session, public_id: str) -> dict | None:
     from openoutreach.crm.models import Deal
 
     deal = (
-        Deal.objects.filter(lead__public_identifier=public_id, campaign=session.campaign)
+        Deal.objects.filter(
+            lead__public_identifier=public_id, campaign=session.campaign
+        )
         .select_related("lead")
         .first()
     )
@@ -190,7 +205,9 @@ def create_disqualified_deal(session, public_id: str, reason: str = ""):
     )
 
     suffix = f" ({reason})" if reason else ""
-    logger.info("%s %s%s", public_id, colored("DISQUALIFIED", "red", attrs=["bold"]), suffix)
+    logger.info(
+        "%s %s%s", public_id, colored("DISQUALIFIED", "red", attrs=["bold"]), suffix
+    )
     return deal
 
 
@@ -215,8 +232,12 @@ def create_freemium_deal(session, public_id: str):
 
 
 def _create_deal(
-    *, lead, state, session,
-    outcome="", reason="",
+    *,
+    lead,
+    state,
+    session,
+    outcome="",
+    reason="",
 ):
     """Shared Deal creation with common defaults."""
     from openoutreach.crm.models import Deal

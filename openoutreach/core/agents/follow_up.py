@@ -4,6 +4,7 @@
 Single LLM call with structured output — no tool-calling loop.
 The handler in tasks/follow_up.py executes the decision.
 """
+
 from __future__ import annotations
 
 import logging
@@ -31,10 +32,18 @@ class FollowUpDecision(BaseModel):
         default=None,
         description="The message to send. Required when action='send_message'.",
     )
-    outcome: Literal[
-        "converted", "not_interested", "wrong_fit", "no_budget",
-        "has_solution", "bad_timing", "unresponsive",
-    ] | None = Field(
+    outcome: (
+        Literal[
+            "converted",
+            "not_interested",
+            "wrong_fit",
+            "no_budget",
+            "has_solution",
+            "bad_timing",
+            "unresponsive",
+        ]
+        | None
+    ) = Field(
         default=None,
         description="Why the conversation ended. Required when action='mark_completed'.",
     )
@@ -78,14 +87,20 @@ def _format_recent_messages(messages: list, now: datetime) -> str:
         if not content:
             continue
         speaker = "Me" if m.is_outgoing else "Lead"
-        prefix = f"{speaker} ({_humanize_age(m.creation_date, now)})" if m.creation_date else speaker
+        prefix = (
+            f"{speaker} ({_humanize_age(m.creation_date, now)})"
+            if m.creation_date
+            else speaker
+        )
         lines.append(f"{prefix}: {content}")
     return "\n".join(lines) or "No recent messages."
 
 
 def _days_since_last_outgoing(messages: list, now: datetime) -> int | None:
     """Whole days since the most recent outgoing message, or None if there are none."""
-    timestamps = [m.creation_date for m in messages if m.is_outgoing and m.creation_date]
+    timestamps = [
+        m.creation_date for m in messages if m.is_outgoing and m.creation_date
+    ]
     if not timestamps:
         return None
     return max((now - max(timestamps)).days, 0)
@@ -165,11 +180,7 @@ def _load_recent_messages(deal, limit: int = RECENT_MESSAGES_WINDOW) -> list:
     """Last `limit` ChatMessages for `deal`, in chronological order."""
     from openoutreach.chat.models import ChatMessage
 
-    qs = (
-        ChatMessage.objects
-        .filter(deal=deal)
-        .order_by("-creation_date", "-pk")[:limit]
-    )
+    qs = ChatMessage.objects.filter(deal=deal).order_by("-creation_date", "-pk")[:limit]
     return list(reversed(list(qs)))
 
 
@@ -182,7 +193,10 @@ def _render_system_prompt(session, deal, recent_messages: list) -> str:
 
     campaign = deal.campaign
     self_prof = session.self_profile
-    self_name = f"{self_prof.get('first_name', '')} {self_prof.get('last_name', '')}".strip() or session.django_user.username
+    self_name = (
+        f"{self_prof.get('first_name', '')} {self_prof.get('last_name', '')}".strip()
+        or session.django_user.username
+    )
 
     # Get persona context if available
     persona = get_lead_persona(deal)
@@ -228,7 +242,9 @@ def run_follow_up_agent(session, deal) -> FollowUpDecision:
     )
     decision = run_agent_sync(agent.run(system_prompt)).output
     if decision is None:
-        raise RuntimeError(f"LLM returned unparseable response for follow-up of {public_id}")
+        raise RuntimeError(
+            f"LLM returned unparseable response for follow-up of {public_id}"
+        )
 
     logger.info("follow_up agent for %s: %s", public_id, decision.action)
     return decision
@@ -253,13 +269,16 @@ if __name__ == "__main__":
         public_id = task.payload["public_id"]
         campaign_id = task.payload["campaign_id"]
         from openoutreach.core.models import Campaign
+
         campaign = Campaign.objects.get(pk=campaign_id)
         session.campaign = campaign
     else:
         public_id = args.profile
 
     deal = (
-        Deal.objects.filter(lead__public_identifier=public_id, campaign=session.campaign)
+        Deal.objects.filter(
+            lead__public_identifier=public_id, campaign=session.campaign
+        )
         .select_related("lead", "campaign")
         .first()
     )

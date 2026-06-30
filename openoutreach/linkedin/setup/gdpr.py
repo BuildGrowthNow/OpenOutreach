@@ -7,6 +7,7 @@ for jurisdictions with opt-in email marketing laws.  Non-GDPR accounts
 get ``subscribe_newsletter`` auto-enabled so they join the OpenOutreach
 newsletter; GDPR-protected accounts keep their existing config.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -21,18 +22,47 @@ logger = logging.getLogger(__name__)
 # New Zealand (Unsolicited Electronic Messages Act 2007).
 GDPR_COUNTRY_CODES: set[str] = {
     # EU member states
-    "at", "be", "bg", "hr", "cy",
-    "cz", "dk", "ee", "fi", "fr",
-    "de", "gr", "hu", "ie", "it",
-    "lv", "lt", "lu", "mt", "nl",
-    "pl", "pt", "ro", "sk", "si",
-    "es", "se",
+    "at",
+    "be",
+    "bg",
+    "hr",
+    "cy",
+    "cz",
+    "dk",
+    "ee",
+    "fi",
+    "fr",
+    "de",
+    "gr",
+    "hu",
+    "ie",
+    "it",
+    "lv",
+    "lt",
+    "lu",
+    "mt",
+    "nl",
+    "pl",
+    "pt",
+    "ro",
+    "sk",
+    "si",
+    "es",
+    "se",
     # EEA (non-EU)
-    "is", "li", "no",
+    "is",
+    "li",
+    "no",
     # UK
     "gb",
     # Other opt-in jurisdictions
-    "ch", "ca", "br", "au", "jp", "kr", "nz",
+    "ch",
+    "ca",
+    "br",
+    "au",
+    "jp",
+    "kr",
+    "nz",
 }
 
 
@@ -58,10 +88,12 @@ def apply_gdpr_newsletter_override(session: Any, country_code: str | None) -> No
         session.linkedin_profile.save(update_fields=["subscribe_newsletter"])
         logger.info(
             "Non-GDPR country (%s): auto-enabled newsletter for %s",
-            country_code, session,
+            country_code,
+            session,
         )
     else:
         logger.debug(
             "GDPR-protected country (%s): newsletter config unchanged for %s",
-            country_code, session,
+            country_code,
+            session,
         )

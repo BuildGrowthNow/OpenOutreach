@@ -1,5 +1,6 @@
 # openoutreach/linkedin/pipeline/search.py
 """Search keyword management and LinkedIn People search."""
+
 from __future__ import annotations
 
 import logging
@@ -21,8 +22,9 @@ def run_search(session) -> str | None:
 
     if not SearchKeyword.objects.filter(campaign=campaign, used=False).exists():
         used = list(
-            SearchKeyword.objects.filter(campaign=campaign, used=True)
-            .values_list("keyword", flat=True)
+            SearchKeyword.objects.filter(campaign=campaign, used=True).values_list(
+                "keyword", flat=True
+            )
         )
         fresh = generate_search_keywords(
             product_docs=campaign.product_docs,
@@ -48,7 +50,9 @@ def run_search(session) -> str | None:
     kw.used_at = timezone.now()
     kw.save()
 
-    logger.info(colored("\u25b6 search", "magenta", attrs=["bold"]) + " keyword=%r", kw.keyword)
+    logger.info(
+        colored("\u25b6 search", "magenta", attrs=["bold"]) + " keyword=%r", kw.keyword
+    )
     urls = [p["url"] for p in search_people(session, kw.keyword)["profiles"]]
     discover_and_enrich(session, urls)
     return kw.keyword

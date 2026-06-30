@@ -13,7 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Icons } from '@/lib/types/components'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { getCampaigns, getStateMachine, updateStateMachine, validateStateMachine, simulateStateMachine } from '@/lib/api/dashboard'
+import { getCampaigns, getStateMachine, updateStateMachine, validateStateMachine, simulateStateMachine, executeStateMachine } from '@/lib/api/dashboard'
 import { Canvas } from '@/components/state-machine'
 
 import type { Node as CanvasNode, Edge as CanvasEdge } from '@/components/state-machine/canvas'
@@ -33,6 +33,12 @@ interface StateMachineData {
 interface Campaign {
   id: string
   name: string
+}
+
+interface Lead {
+  id: string
+  name?: string
+  email?: string
 }
 
 const StateMachinePage = () => {
@@ -78,6 +84,30 @@ const StateMachinePage = () => {
   const [simulationDeals, setSimulationDeals] = useState<string[]>([])
   const [selectedSimulationDeal, setSelectedSimulationDeal] = useState<string>('')
 
+  // Execution
+  const [executionResult, setExecutionResult] = useState<{
+    success: boolean
+    execution: {
+      state_machine_id: number
+      current_node_id: number | null
+      current_node_name: string | null
+      status: string
+      steps_executed: number
+      logs: Array<{
+        id: number
+        node_id: number | null
+        node_name: string | null
+        action: string
+        result: Record<string, unknown>
+        timestamp: string
+      }>
+      error: string | null
+    }
+  } | null>(null)
+  const [executing, setExecuting] = useState(false)
+  const [executionDeals, setExecutionDeals] = useState<string[]>([])
+  const [selectedExecutionDeal, setSelectedExecutionDeal] = useState<string>('')
+
   // Node editing
   const [editingNode, setEditingNode] = useState<CanvasNode | null>(null)
   const [nodeEditorOpen, setNodeEditorOpen] = useState(false)
@@ -97,9 +127,11 @@ const StateMachinePage = () => {
       setCampaignsLoading(true)
       const response = await getCampaigns()
       if (response.data) {
-        setCampaigns(response.data.data || [])
-        if (!selectedCampaignId && response.data.data.length > 0) {
-          setSelectedCampaignId(response.data.data[0].id)
+        const campaigns = response.data.data || []
+        setCampaigns(campaigns)
+        // Only auto-select if we don't have a selectedCampaignId yet
+        if (!selectedCampaignId && campaigns.length > 0) {
+          setSelectedCampaignId(campaigns[0].id)
         }
       }
     } catch (err) {
@@ -446,6 +478,48 @@ const StateMachinePage = () => {
     }
   }, [selectedCampaignId, selectedSimulationDeal])
 
+  // Execute state machine
+  const handleExecute = useCallback(async () => {
+    if (!selectedCampaignId || !selectedExecutionDeal) return
+    
+    try {
+      setExecuting(true)
+      const response = await executeStateMachine(selectedCampaignId, selectedExecutionDeal)
+      
+      if (response.data) {
+        setExecutionResult(response.data)
+      } else {
+        setError(response.error || 'Execution failed')
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Execution failed')
+    } finally {
+      setExecuting(false)
+    }
+  }, [selectedCampaignId, selectedExecutionDeal])
+
+  // Fetch deals for simulation/execution
+  const fetchDeals = useCallback(async () => {
+    if (!selectedCampaignId) return
+    
+    try {
+      const response = await fetch(`/api/campaigns/${selectedCampaignId}/leads`, {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        const leads = data.data?.data || []
+        setSimulationDeals(leads.map((lead: Lead) => `${lead.id} - ${lead.name || lead.email || 'Unknown'}`))
+        setExecutionDeals(leads.map((lead: Lead) => `${lead.id} - ${lead.name || lead.email || 'Unknown'}`))
+      }
+    } catch (err) {
+      console.error('Error fetching deals:', err)
+    }
+  }, [selectedCampaignId])
+
   // Sync canvas nodes and edges with stateMachine when it changes
   // This helps keep the visual editor in sync with the state machine data
   // Using useRef to track previous values to avoid unnecessary updates
@@ -495,6 +569,11 @@ const StateMachinePage = () => {
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [campaignId])
+
+  // Fetch deals when campaign changes
+  useEffect(() => {
+    void fetchDeals()
+  }, [fetchDeals])
 
   // Fetch state machine when campaign changes
   useEffect(() => {
@@ -640,10 +719,11 @@ const StateMachinePage = () => {
 
       {/* Tabs */}
       <Tabs defaultValue="editor">
-        <TabsList className="grid grid-cols-3 w-full md:w-auto">
+        <TabsList className="grid grid-cols-4 w-full md:w-auto">
           <TabsTrigger value="editor">Visual Editor</TabsTrigger>
           <TabsTrigger value="validation">Validation</TabsTrigger>
           <TabsTrigger value="simulation">Simulation</TabsTrigger>
+          <TabsTrigger value="execution">Execution</TabsTrigger>
         </TabsList>
 
         {/* Editor Tab */}
@@ -660,9 +740,13 @@ const StateMachinePage = () => {
                 <div className="text-center py-12">
                   <Icons.Workflow className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
                   <h3 className="text-lg font-semibold mb-2">No Campaigns Available</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Create a campaign first to set up a state machine
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Create a campaign first to set up a state machine.
                   </p>
+                  <Button onClick={() => router.push('/campaigns')} size="sm">
+                    <Icons.ChevronRight className="mr-2 h-4 w-4" />
+                    Go to Campaigns
+                  </Button>
                 </div>
               ) : (
                 <Canvas
@@ -833,6 +917,112 @@ const StateMachinePage = () => {
                         <Alert variant="destructive">
                           <Icons.AlertCircle className="h-4 w-4" />
                           <AlertDescription>{simulationResult.simulation.error}</AlertDescription>
+                        </Alert>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Execution Tab */}
+        <TabsContent value="execution" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Execute State Machine</CardTitle>
+              <CardDescription>
+                Run your workflow on a real deal
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="space-y-2">
+                <Label htmlFor="execution-deal">Select Lead</Label>
+                <Select 
+                  value={selectedExecutionDeal} 
+                  onValueChange={setSelectedExecutionDeal}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a lead to execute" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {executionDeals.length === 0 ? (
+                      <SelectItem value="no-deals" disabled>No execution data available</SelectItem>
+                    ) : (
+                      executionDeals.map(deal => (
+                        <SelectItem key={deal} value={deal}>
+                          {deal}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <Button 
+                onClick={handleExecute} 
+                disabled={executing || !selectedExecutionDeal}
+                className="w-full"
+              >
+                {executing ? (
+                  <Icons.RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Icons.Play className="mr-2 h-4 w-4" />
+                )}
+                Execute
+              </Button>
+
+              {executionResult && (
+                <div className="space-y-4">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Execution Result</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-muted-foreground">Status:</span>
+                        <Badge variant={executionResult.execution.status === 'completed' ? 'default' : 'outline'}>
+                          {executionResult.execution.status}
+                        </Badge>
+                      </div>
+                      
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-muted-foreground">Steps Executed:</span>
+                        <span className="font-medium">{executionResult.execution.steps_executed}</span>
+                      </div>
+                      
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-muted-foreground">Current Node:</span>
+                        <span className="font-medium">{executionResult.execution.current_node_name || 'N/A'}</span>
+                      </div>
+
+                      {executionResult.execution.logs.length > 0 && (
+                        <div className="space-y-2">
+                          <h4 className="font-medium">Execution Logs</h4>
+                          <div className="space-y-2">
+                            {executionResult.execution.logs.map((log, i) => (
+                              <div key={log.id} className="flex items-start gap-2 text-sm bg-muted p-2 rounded">
+                                <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-medium mt-0.5">
+                                  {i + 1}
+                                </span>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center justify-between">
+                                    <span className="font-medium truncate">{log.action}</span>
+                                    <span className="text-xs text-muted-foreground">{log.timestamp}</span>
+                                  </div>
+                                  <div className="text-muted-foreground mt-1 truncate">{log.result ? JSON.stringify(log.result) : ''}</div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {executionResult.execution.error && (
+                        <Alert variant="destructive">
+                          <Icons.AlertCircle className="h-4 w-4" />
+                          <AlertDescription>{executionResult.execution.error}</AlertDescription>
                         </Alert>
                       )}
                     </CardContent>

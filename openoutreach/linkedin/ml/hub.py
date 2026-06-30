@@ -1,5 +1,6 @@
 # openoutreach/linkedin/ml/hub.py
 """Campaign kit: download from HuggingFace, lazy-load, freemium campaign import."""
+
 from __future__ import annotations
 
 import json
@@ -57,14 +58,21 @@ def load_kit_config(kit_dir: Path) -> Optional[dict]:
         config_path = kit_dir / "config.json"
         data = json.loads(config_path.read_text())
 
-        required = ("action_fraction", "product_docs", "campaign_objective",
-                     "booking_link")
+        required = (
+            "action_fraction",
+            "product_docs",
+            "campaign_objective",
+            "booking_link",
+        )
         for key in required:
             if key not in data:
                 logger.debug("[Freemium] Kit config missing key: %s", key)
                 return None
 
-        logger.debug("[Freemium] Kit config loaded (action_fraction=%.2f)", data["action_fraction"])
+        logger.debug(
+            "[Freemium] Kit config loaded (action_fraction=%.2f)",
+            data["action_fraction"],
+        )
         return data
     except Exception:
         logger.debug("[Freemium] Kit config load failed", exc_info=True)

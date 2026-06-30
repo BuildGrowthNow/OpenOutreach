@@ -22,7 +22,7 @@ def subscribe_to_newsletter(email: str, linkedin: str | None = None) -> bool:
     data = {
         "EMAIL": email,
         "email_address_check": "",  # leave empty (honeypot)
-        "locale": "en"
+        "locale": "en",
     }
     if linkedin:
         data["LINKEDIN"] = linkedin
@@ -31,7 +31,7 @@ def subscribe_to_newsletter(email: str, linkedin: str | None = None) -> bool:
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         "Origin": "https://sibforms.com",
         "Referer": "https://sibforms.com/",
-        "Content-Type": "application/x-www-form-urlencoded"
+        "Content-Type": "application/x-www-form-urlencoded",
     }
 
     try:
@@ -52,7 +52,9 @@ def subscribe_to_newsletter(email: str, linkedin: str | None = None) -> bool:
 
         logger.warning(
             "Newsletter subscription failed for %s - status=%d - response: %s",
-            email, r.status_code, r.text[:250]
+            email,
+            r.status_code,
+            r.text[:250],
         )
         return False
 
@@ -61,7 +63,9 @@ def subscribe_to_newsletter(email: str, linkedin: str | None = None) -> bool:
         return False
 
 
-def ensure_newsletter_subscription(session: AccountSession, linkedin_url: str | None = None):
+def ensure_newsletter_subscription(
+    session: AccountSession, linkedin_url: str | None = None
+):
     """Subscribe the account to the OpenOutreach newsletter if enabled."""
     lp = session.linkedin_profile
 

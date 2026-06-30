@@ -25,6 +25,7 @@ A single long-lived loop on a dedicated thread eliminates both: all HTTP
 clients live on the same loop forever, and the runner thread's asyncio
 slot stays inside this module — the caller thread is never touched.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -41,6 +42,7 @@ _MAX_RETRIES = 8
 
 # ── Async runner ─────────────────────────────────────────────────────
 
+
 class _AgentRunner:
     """Owns one persistent asyncio loop on a dedicated daemon thread.
 
@@ -53,7 +55,10 @@ class _AgentRunner:
         self._loop = asyncio.new_event_loop()
         ready = threading.Event()
         threading.Thread(
-            target=self._serve, args=(ready,), daemon=True, name="llm-runner",
+            target=self._serve,
+            args=(ready,),
+            daemon=True,
+            name="llm-runner",
         ).start()
         ready.wait()
 
@@ -64,10 +69,14 @@ class _AgentRunner:
 
     def run(self, coro: Awaitable[_T]) -> _T:
         """Submit *coro* to the runner loop; block until it completes."""
+
         # Convert Awaitable to Coroutine for run_coroutine_threadsafe
         async def _ensure_coroutine() -> _T:
             return await coro
-        return asyncio.run_coroutine_threadsafe(_ensure_coroutine(), self._loop).result()
+
+        return asyncio.run_coroutine_threadsafe(
+            _ensure_coroutine(), self._loop
+        ).result()
 
 
 _runner: _AgentRunner | None = None
@@ -91,10 +100,12 @@ def run_agent_sync(coro: Awaitable[_T]) -> _T:
 
 # ── Per-provider builders ────────────────────────────────────────────
 
+
 def _build_openai(cfg):
     from openai import AsyncOpenAI
     from pydantic_ai.models.openai import OpenAIModel
     from pydantic_ai.providers.openai import OpenAIProvider
+
     client = AsyncOpenAI(api_key=cfg.llm_api_key, max_retries=_MAX_RETRIES)
     return OpenAIModel(cfg.ai_model, provider=OpenAIProvider(openai_client=client))
 
@@ -103,13 +114,17 @@ def _build_anthropic(cfg):
     from anthropic import AsyncAnthropic
     from pydantic_ai.models.anthropic import AnthropicModel
     from pydantic_ai.providers.anthropic import AnthropicProvider
+
     client = AsyncAnthropic(api_key=cfg.llm_api_key, max_retries=_MAX_RETRIES)
-    return AnthropicModel(cfg.ai_model, provider=AnthropicProvider(anthropic_client=client))
+    return AnthropicModel(
+        cfg.ai_model, provider=AnthropicProvider(anthropic_client=client)
+    )
 
 
 def _build_google(cfg):
     from pydantic_ai.models.google import GoogleModel
     from pydantic_ai.providers.google import GoogleProvider
+
     return GoogleModel(cfg.ai_model, provider=GoogleProvider(api_key=cfg.llm_api_key))
 
 
@@ -117,6 +132,7 @@ def _build_groq(cfg):
     from groq import AsyncGroq
     from pydantic_ai.models.groq import GroqModel
     from pydantic_ai.providers.groq import GroqProvider
+
     client = AsyncGroq(api_key=cfg.llm_api_key, max_retries=_MAX_RETRIES)
     return GroqModel(cfg.ai_model, provider=GroqProvider(groq_client=client))
 
@@ -124,12 +140,14 @@ def _build_groq(cfg):
 def _build_mistral(cfg):
     from pydantic_ai.models.mistral import MistralModel
     from pydantic_ai.providers.mistral import MistralProvider
+
     return MistralModel(cfg.ai_model, provider=MistralProvider(api_key=cfg.llm_api_key))
 
 
 def _build_cohere(cfg):
     from pydantic_ai.models.cohere import CohereModel
     from pydantic_ai.providers.cohere import CohereProvider
+
     return CohereModel(cfg.ai_model, provider=CohereProvider(api_key=cfg.llm_api_key))
 
 
@@ -138,9 +156,14 @@ def _build_openai_compatible(cfg):
         raise ValueError("LLM_API_BASE is required for the openai_compatible provider.")
     from pydantic_ai.models.openai import OpenAIModel
     from pydantic_ai.providers.openai import OpenAIProvider
-    return OpenAIModel(cfg.ai_model, provider=OpenAIProvider(
-        base_url=cfg.llm_api_base, api_key=cfg.llm_api_key,
-    ))
+
+    return OpenAIModel(
+        cfg.ai_model,
+        provider=OpenAIProvider(
+            base_url=cfg.llm_api_base,
+            api_key=cfg.llm_api_key,
+        ),
+    )
 
 
 _PROVIDER_BUILDERS: dict[str, Callable] = {
@@ -155,6 +178,7 @@ _PROVIDER_BUILDERS: dict[str, Callable] = {
 
 
 # ── Model factory ────────────────────────────────────────────────────
+
 
 def _validated_site_config():
     """Load `SiteConfig` and assert the required LLM fields are populated."""

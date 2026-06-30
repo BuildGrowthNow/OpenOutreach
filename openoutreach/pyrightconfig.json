@@ -11,8 +11,9 @@
      "**/__pycache__",
      "**/.venv",
      "**/migrations",
-     "openoutreach/notifications/sse.py",
-     "openoutreach/routing.py"
+    // These files are now formatted by black and should be checked
+    // "openoutreach/notifications/sse.py",
+    // "openoutreach/routing.py"
    ],
   "typeshedPath": "typeshed",
   "stubPath": "stubs",

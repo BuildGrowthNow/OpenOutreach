@@ -1,5 +1,6 @@
 # openoutreach/linkedin/setup/freemium.py
 """Freemium campaign creation from kit config."""
+
 from __future__ import annotations
 
 import logging
@@ -33,8 +34,11 @@ def import_freemium_campaign(kit_config: dict):
     for lp in LinkedInProfile.objects.filter(active=True).select_related("user"):
         campaign.users.add(lp.user)
 
-    logger.info("[Freemium] Campaign imported: %s (action_fraction=%.2f)",
-               campaign_name, kit_config["action_fraction"])
+    logger.info(
+        "[Freemium] Campaign imported: %s (action_fraction=%.2f)",
+        campaign_name,
+        kit_config["action_fraction"],
+    )
     return campaign
 
 
@@ -52,7 +56,9 @@ def seed_profiles(session, kit_config: dict):
     for public_id in public_ids:
         url = public_id_to_url(public_id)
 
-        lead, _ = Lead.objects.get_or_create(public_identifier=public_id, defaults={"linkedin_url": url})
+        lead, _ = Lead.objects.get_or_create(
+            public_identifier=public_id, defaults={"linkedin_url": url}
+        )
 
         lead.get_embedding(session)
         create_freemium_deal(session, public_id)

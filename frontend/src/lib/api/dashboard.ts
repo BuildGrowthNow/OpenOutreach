@@ -469,11 +469,12 @@ export async function getLinks(campaignId?: string): Promise<ApiResponse<{ data:
   return get('/api/links', params)
 }
 
-export async function getLink(id: string): Promise<ApiResponse<{ 
+export async function getLinkAnalytics(id: string): Promise<ApiResponse<{ 
   status: string
-  result: TrackedLink & { breakdown: LinkBreakdown }
+  link: TrackedLink
+  breakdown: LinkBreakdown
 }>> {
-  return get(`/api/links/${id}`)
+  return get(`/api/links/${id}/analytics`)
 }
 
 export async function createLink(data: Partial<TrackedLink>): Promise<ApiResponse<{ 
@@ -648,6 +649,33 @@ export async function simulateStateMachine(
   dealId: string
 ): Promise<ApiResponse<SimulationResult>> {
   return post('/api/state-machine/simulate', { campaign_id: campaignId, deal_id: dealId })
+}
+
+export interface ExecutionResult {
+  success: boolean
+  execution: {
+    state_machine_id: number
+    current_node_id: number | null
+    current_node_name: string | null
+    status: string
+    steps_executed: number
+    logs: Array<{
+      id: number
+      node_id: number | null
+      node_name: string | null
+      action: string
+      result: Record<string, unknown>
+      timestamp: string
+    }>
+    error: string | null
+  }
+}
+
+export async function executeStateMachine(
+  campaignId: string,
+  dealId: string
+): Promise<ApiResponse<ExecutionResult>> {
+  return post('/api/state-machine/execute', { campaign_id: campaignId, deal_id: dealId })
 }
 
 

@@ -6,6 +6,7 @@ None. `system_timezone()` tries them in order and validates each
 candidate against the tzdata database; falls back to "UTC" on exotic
 systems.
 """
+
 from __future__ import annotations
 
 import os
@@ -46,7 +47,7 @@ def _tz_from_etc_localtime() -> str | None:
         return None
     marker = "/zoneinfo/"
     idx = target.rfind(marker)
-    return target[idx + len(marker):] if idx >= 0 else None
+    return target[idx + len(marker) :] if idx >= 0 else None
 
 
 def _is_valid_iana(name: str) -> bool:

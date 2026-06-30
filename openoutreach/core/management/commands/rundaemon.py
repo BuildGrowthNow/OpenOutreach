@@ -19,6 +19,7 @@ class Command(BaseCommand):
         self._ensure_newsletter(session)
 
         from openoutreach.core.daemon import run_daemon
+
         run_daemon(session)
 
     # -- Steps ---------------------------------------------------------------
@@ -34,10 +35,15 @@ class Command(BaseCommand):
         call_command("migrate", "--no-input")
 
         from openoutreach.core.management.setup_crm import setup_crm
+
         setup_crm()
 
     def _ensure_onboarded(self):
-        from openoutreach.core.onboarding import apply, collect_from_wizard, missing_keys
+        from openoutreach.core.onboarding import (
+            apply,
+            collect_from_wizard,
+            missing_keys,
+        )
         from openoutreach.core.models import SiteConfig, Campaign
         from openoutreach.linkedin.models import LinkedInProfile
 
@@ -90,11 +96,16 @@ class Command(BaseCommand):
             sys.exit(1)
 
     def _create_session(self):
-        from openoutreach.linkedin.browser.registry import get_first_active_profile, get_or_create_session
+        from openoutreach.linkedin.browser.registry import (
+            get_first_active_profile,
+            get_or_create_session,
+        )
         from openoutreach.core.models import SiteConfig
 
         if not SiteConfig.load().llm_api_key:
-            logger.error("LLM_API_KEY is required. Set it in Site Configuration (Django Admin).")
+            logger.error(
+                "LLM_API_KEY is required. Set it in Site Configuration (Django Admin)."
+            )
             sys.exit(1)
 
         profile = get_first_active_profile()
@@ -107,9 +118,13 @@ class Command(BaseCommand):
         if not session.campaigns:
             logger.error("No campaigns found for this user.")
             sys.exit(1)
-        campaign = next(
-            (c for c in session.campaigns if not c.is_freemium), None,
-        ) or session.campaigns[0]
+        campaign = (
+            next(
+                (c for c in session.campaigns if not c.is_freemium),
+                None,
+            )
+            or session.campaigns[0]
+        )
         session.campaign = campaign
 
         return session

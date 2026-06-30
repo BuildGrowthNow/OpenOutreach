@@ -5,7 +5,6 @@ from pathlib import Path
 
 from openoutreach.core.tz_detect import system_timezone
 
-
 # ----------------------------------------------------------------------
 # Paths
 # ----------------------------------------------------------------------
@@ -46,8 +45,8 @@ DEFAULT_EMAIL_DAILY_LIMIT = 30
 # weekends are no longer special-cased (humans use LinkedIn 7 days a week).
 # ----------------------------------------------------------------------
 ENABLE_ACTIVE_HOURS = True
-ACTIVE_START_HOUR = 9   # inclusive, local time
-ACTIVE_END_HOUR = 19    # exclusive, local time
+ACTIVE_START_HOUR = 9  # inclusive, local time
+ACTIVE_END_HOUR = 19  # exclusive, local time
 ACTIVE_TIMEZONE = system_timezone()
 
 # ----------------------------------------------------------------------
@@ -70,10 +69,8 @@ CAMPAIGN_CONFIG = {
     "enrich_min_delay_seconds": 6,
     "enrich_max_delay_seconds": 10,
     "enrich_max_per_page": 10,
-    "burst_min_seconds": 2700,   # 45 min
-    "burst_max_seconds": 3900,   # 65 min
-    "break_min_seconds": 600,    # 10 min
-    "break_max_seconds": 1200,   # 20 min
+    "burst_min_seconds": 2700,  # 45 min
+    "burst_max_seconds": 3900,  # 65 min
+    "break_min_seconds": 600,  # 10 min
+    "break_max_seconds": 1200,  # 20 min
 }
-
-

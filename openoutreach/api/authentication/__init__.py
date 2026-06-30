@@ -13,10 +13,10 @@ from .supabase import (
 )
 
 __all__ = [
-    'JWTAuthentication',
-    'SessionAuthentication',
-    'SupabaseJWTAuthentication',
-    'InvalidTokenError',
-    'validate_supabase_token',
-    'create_or_link_django_user',
+    "JWTAuthentication",
+    "SessionAuthentication",
+    "SupabaseJWTAuthentication",
+    "InvalidTokenError",
+    "validate_supabase_token",
+    "create_or_link_django_user",
 ]

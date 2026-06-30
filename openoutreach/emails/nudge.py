@@ -6,13 +6,17 @@ and a working mailbox exist, it prompts (on a TTY) or logs (headless) the next s
 step — copy drawn from the GLF angle in marketing/email-sequence.md, filled with
 the user's own pipeline numbers. Never blocks: email is a deferrable upgrade.
 """
+
 from __future__ import annotations
 
 import logging
 import sys
 from dataclasses import dataclass, field
 
-from openoutreach.core.conf import DEFAULT_CONNECT_DAILY_LIMIT, DEFAULT_EMAIL_DAILY_LIMIT
+from openoutreach.core.conf import (
+    DEFAULT_CONNECT_DAILY_LIMIT,
+    DEFAULT_EMAIL_DAILY_LIMIT,
+)
 from openoutreach.core.logging import brand
 from openoutreach.core.models import SiteConfig
 from openoutreach.core.onboarding_wizard import _BACK, IntText, MultilineText, Password
@@ -34,6 +38,7 @@ CONFIGURED = "configured"
 
 
 # ── Setup state ──────────────────────────────────────────────────
+
 
 def email_state() -> str:
     """Which setup step is next: NO_BETTERCONTACT, NO_MAILBOX, or CONFIGURED."""
@@ -121,11 +126,14 @@ def pipeline_stats() -> dict:
         "qualified": Deal.objects.filter(state=DealState.QUALIFIED).count(),
         "pending": Deal.objects.filter(state=DealState.PENDING).count(),
         "resolved_emails": Lead.objects.filter(api_email__isnull=False).count(),
-        "connect_cap": profile.connect_daily_limit if profile else DEFAULT_CONNECT_DAILY_LIMIT,
+        "connect_cap": (
+            profile.connect_daily_limit if profile else DEFAULT_CONNECT_DAILY_LIMIT
+        ),
     }
 
 
 # ── Mailbox import (parse → auth-check → store; no console I/O) ───
+
 
 @dataclass
 class ImportReport:
@@ -134,7 +142,9 @@ class ImportReport:
     failures: list[tuple[str, str]] = field(default_factory=list)  # (email, reason)
 
 
-def import_mailboxes(pasted: str, daily_limit: int = DEFAULT_EMAIL_DAILY_LIMIT) -> ImportReport:
+def import_mailboxes(
+    pasted: str, daily_limit: int = DEFAULT_EMAIL_DAILY_LIMIT
+) -> ImportReport:
     """Parse an App-Passwords paste, then auth-check and store each box.
 
     Raises ValueError (from ``parse_mailboxes``) when the paste isn't the App
@@ -159,13 +169,18 @@ def _store_mailboxes(rows: list[tuple[str, str]], daily_limit: int) -> ImportRep
             continue
         Mailbox.objects.update_or_create(
             username=email,
-            defaults={"password": password, "from_address": email, "daily_limit": daily_limit},
+            defaults={
+                "password": password,
+                "from_address": email,
+                "daily_limit": daily_limit,
+            },
         )
         report.stored += 1
     return report
 
 
 # ── Interactive prompt ───────────────────────────────────────────
+
 
 def prompt_email_setup() -> None:
     """Drive the email-setup steps: BetterContact key, then IceMail mailboxes.
@@ -215,13 +230,19 @@ def _prompt_step(state: str) -> bool:
 
 def _collect_bettercontact_key() -> None:
     print("  Your first 50 lookups are free with the subscription — try it at no cost.")
-    key = Password("bettercontact_api_key", "BetterContact API key (Enter to skip):", required=False).ask("")
+    key = Password(
+        "bettercontact_api_key",
+        "BetterContact API key (Enter to skip):",
+        required=False,
+    ).ask("")
     if not key or key == _BACK:
         return
     cfg = SiteConfig.load()
     cfg.bettercontact_api_key = key
     cfg.save()
-    logger.info("BetterContact key saved — enrichment is on; emails resolve as leads qualify.")
+    logger.info(
+        "BetterContact key saved — enrichment is on; emails resolve as leads qualify."
+    )
 
 
 def _collect_mailboxes() -> None:
@@ -286,7 +307,12 @@ def _print_report(report: ImportReport) -> None:
     if not report.parsed:
         print("  No mailboxes found — include the header row (Email, App Password).")
         return
-    print(f"  Parsed {report.parsed} mailbox(es); {report.stored} authenticated and saved.")
+    print(
+        f"  Parsed {report.parsed} mailbox(es); {report.stored} authenticated and saved."
+    )
 
 
-_COLLECT_BY_STATE = {NO_BETTERCONTACT: _collect_bettercontact_key, NO_MAILBOX: _collect_mailboxes}
+_COLLECT_BY_STATE = {
+    NO_BETTERCONTACT: _collect_bettercontact_key,
+    NO_MAILBOX: _collect_mailboxes,
+}

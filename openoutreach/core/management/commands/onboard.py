@@ -30,13 +30,20 @@ class Command(BaseCommand):
         parser.add_argument("--llm-api-base", default="")
         parser.add_argument("--newsletter", action="store_true", default=True)
         parser.add_argument("--no-newsletter", dest="newsletter", action="store_false")
-        parser.add_argument("--connect-daily-limit", type=int, default=DEFAULT_CONNECT_DAILY_LIMIT)
-        parser.add_argument("--follow-up-daily-limit", type=int, default=DEFAULT_FOLLOW_UP_DAILY_LIMIT)
+        parser.add_argument(
+            "--connect-daily-limit", type=int, default=DEFAULT_CONNECT_DAILY_LIMIT
+        )
+        parser.add_argument(
+            "--follow-up-daily-limit", type=int, default=DEFAULT_FOLLOW_UP_DAILY_LIMIT
+        )
         parser.add_argument("--legal-acceptance", action="store_true")
 
     def handle(self, *args, **options):
         from openoutreach.core.onboarding import (
-            OnboardConfig, apply, collect_from_wizard, missing_keys,
+            OnboardConfig,
+            apply,
+            collect_from_wizard,
+            missing_keys,
         )
 
         if not options["non_interactive"]:

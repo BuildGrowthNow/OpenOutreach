@@ -11,15 +11,18 @@ from .serializers import NotificationSerializer
 class NotificationListView(APIView):
     """
     API view for listing and managing notifications.
-    
+
     GET /api/notifications/ - List user's notifications (latest first, with pagination)
     POST /api/notifications/read-all/ - Mark all as read
     """
+
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         """List user's notifications with optional filters."""
-        notifications = Notification.objects.filter(recipient=request.user).order_by("-created_at")
+        notifications = Notification.objects.filter(recipient=request.user).order_by(
+            "-created_at"
+        )
 
         # Optional filters
         is_read = request.query_params.get("is_read")
@@ -46,68 +49,86 @@ class NotificationListView(APIView):
                 pass
 
         serializer = NotificationSerializer(notifications, many=True)
-        return Response({
-            "data": serializer.data,
-            "pagination": {
-                "page": int(page) if page else 1,
-                "limit": int(limit) if limit else len(serializer.data),
-                "total": total,
-            },
-            "unread_count": Notification.objects.filter(recipient=request.user, is_read=False).count(),
-        })
+        return Response(
+            {
+                "data": serializer.data,
+                "pagination": {
+                    "page": int(page) if page else 1,
+                    "limit": int(limit) if limit else len(serializer.data),
+                    "total": total,
+                },
+                "unread_count": Notification.objects.filter(
+                    recipient=request.user, is_read=False
+                ).count(),
+            }
+        )
 
     def post(self, request):
         """Mark all notifications as read."""
         Notification.objects.filter(recipient=request.user, is_read=False).update(
             is_read=True, read_at=timezone.now()
         )
-        return Response({"success": True, "message": "All notifications marked as read"})
+        return Response(
+            {"success": True, "message": "All notifications marked as read"}
+        )
 
 
 class NotificationMarkAllAsReadView(APIView):
     """
     API view to mark all notifications as read.
-    
+
     POST /api/notifications/read-all/ - Mark all notifications as read
     """
+
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
         """Mark all notifications as read."""
-        updated = Notification.objects.filter(recipient=request.user, is_read=False).update(
-            is_read=True, read_at=timezone.now()
-        )
+        updated = Notification.objects.filter(
+            recipient=request.user, is_read=False
+        ).update(is_read=True, read_at=timezone.now())
         return Response({"success": True, "updated_count": updated})
 
 
 class NotificationSummaryView(APIView):
     """
     API view to get notification summary (unread count + recent notifications).
-    
+
     GET /api/notifications/summary/ - Get notification summary
     """
+
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         """Get notification summary."""
-        unread_count = Notification.objects.filter(recipient=request.user, is_read=False).count()
-        recent_notifications = Notification.objects.filter(recipient=request.user).order_by("-created_at")[:10]
+        unread_count = Notification.objects.filter(
+            recipient=request.user, is_read=False
+        ).count()
+        recent_notifications = Notification.objects.filter(
+            recipient=request.user
+        ).order_by("-created_at")[:10]
 
         from .serializers import NotificationSerializer
-        return Response({
-            "unread_count": unread_count,
-            "recent_notifications": NotificationSerializer(recent_notifications, many=True).data,
-        })
+
+        return Response(
+            {
+                "unread_count": unread_count,
+                "recent_notifications": NotificationSerializer(
+                    recent_notifications, many=True
+                ).data,
+            }
+        )
 
 
 class NotificationDetailView(APIView):
     """
     API view for individual notification operations.
-    
+
     GET /api/notifications/{id}/ - Get specific notification
     PATCH /api/notifications/{id}/read/ - Mark as read
     DELETE /api/notifications/{id}/ - Delete notification
     """
+
     permission_classes = [IsAuthenticated]
 
     def get_object(self, pk, user):

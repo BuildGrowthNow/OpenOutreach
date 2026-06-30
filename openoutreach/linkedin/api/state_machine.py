@@ -2,6 +2,7 @@
 """
 State Machine API endpoints for managing campaign workflow state machines.
 """
+
 from __future__ import annotations
 
 import logging
@@ -81,19 +82,31 @@ def state_machine_to_dict(state_machine: CampaignState) -> Dict[str, Any]:
     return {
         "id": state_machine.id,
         "deal_id": state_machine.deal.id,
-        "deal_urn": str(state_machine.deal.lead.urn) if state_machine.deal.lead.urn else None,
+        "deal_urn": (
+            str(state_machine.deal.lead.urn) if state_machine.deal.lead.urn else None
+        ),
         "state_graph_id": state_machine.state_graph.id,
         "state_graph_name": state_machine.state_graph.name,
-        "current_node_id": state_machine.current_node.id if state_machine.current_node else None,
-        "current_node_name": state_machine.current_node.name if state_machine.current_node else None,
+        "current_node_id": (
+            state_machine.current_node.id if state_machine.current_node else None
+        ),
+        "current_node_name": (
+            state_machine.current_node.name if state_machine.current_node else None
+        ),
         "previous_nodes": state_machine.previous_nodes,
         "status": state_machine.status,
         "error_message": state_machine.error_message,
-        "wait_until": state_machine.wait_until.isoformat() if state_machine.wait_until else None,
+        "wait_until": (
+            state_machine.wait_until.isoformat() if state_machine.wait_until else None
+        ),
         "wait_reason": state_machine.wait_reason,
         "metadata": state_machine.metadata,
         "started_at": state_machine.started_at.isoformat(),
-        "completed_at": state_machine.completed_at.isoformat() if state_machine.completed_at else None,
+        "completed_at": (
+            state_machine.completed_at.isoformat()
+            if state_machine.completed_at
+            else None
+        ),
     }
 
 
@@ -104,19 +117,20 @@ def state_graph_create_view(request, campaign_id: int) -> JsonResponse:
         campaign = Campaign.objects.get(id=campaign_id)
     except Campaign.DoesNotExist:
         return JsonResponse({"error": "Campaign not found"}, status=404)
-    
+
     from openoutreach.linkedin.services.state_machine import StateMachineEngine
-    
+
     if request.method == "POST":
         import json
+
         data = json.loads(request.body)
-        
+
         # Validate graph data
         name = data.get("name", "Untitled State Graph")
         description = data.get("description", "")
         is_active = data.get("is_active", True)
         graph_data = data.get("graph_data", {"nodes": [], "transitions": []})
-        
+
         state_graph, created = CampaignStateGraph.objects.get_or_create(
             campaign=campaign,
             defaults={
@@ -124,9 +138,9 @@ def state_graph_create_view(request, campaign_id: int) -> JsonResponse:
                 "description": description,
                 "is_active": is_active,
                 "graph_data": graph_data,
-            }
+            },
         )
-        
+
         if not created:
             state_graph.name = name
             state_graph.description = description
@@ -135,20 +149,22 @@ def state_graph_create_view(request, campaign_id: int) -> JsonResponse:
             state_graph.is_valid = False
             state_graph.validation_errors = []
             state_graph.save()
-        
+
         # Validate the graph
         is_valid, errors = StateMachineEngine(state_graph).validate_graph()
         state_graph.is_valid = is_valid
         state_graph.validation_errors = errors
         state_graph.save()
-        
-        return JsonResponse({
-            "success": True,
-            "state_graph": state_graph_to_dict(state_graph),
-            "validation_errors": errors,
-            "created": created,
-        })
-    
+
+        return JsonResponse(
+            {
+                "success": True,
+                "state_graph": state_graph_to_dict(state_graph),
+                "validation_errors": errors,
+                "created": created,
+            }
+        )
+
     return JsonResponse({"error": "Method not allowed"}, status=405)
 
 
@@ -159,11 +175,14 @@ def state_graph_view(request, campaign_id: int) -> JsonResponse:
         state_graph = CampaignStateGraph.objects.get(campaign_id=campaign_id)
         return JsonResponse(state_graph_to_dict(state_graph))
     except CampaignStateGraph.DoesNotExist:
-        return JsonResponse({
-            "error": "State graph not found",
-            "default": True,
-            "message": "No state graph configured for this campaign",
-        }, status=404)
+        return JsonResponse(
+            {
+                "error": "State graph not found",
+                "default": True,
+                "message": "No state graph configured for this campaign",
+            },
+            status=404,
+        )
 
 
 @csrf_exempt
@@ -173,11 +192,12 @@ def state_graph_update_view(request, campaign_id: int) -> JsonResponse:
         state_graph = CampaignStateGraph.objects.get(campaign_id=campaign_id)
     except CampaignStateGraph.DoesNotExist:
         return JsonResponse({"error": "State graph not found"}, status=404)
-    
+
     if request.method == "POST":
         import json
+
         data = json.loads(request.body)
-        
+
         # Update fields
         if "name" in data:
             state_graph.name = data["name"]
@@ -188,22 +208,25 @@ def state_graph_update_view(request, campaign_id: int) -> JsonResponse:
         if "graph_data" in data:
             state_graph.graph_data = data["graph_data"]
             state_graph.is_valid = False  # Reset validity on update
-        
+
         state_graph.save()
-        
+
         # Re-validate the graph
         from openoutreach.linkedin.services.state_machine import StateMachineEngine
+
         is_valid, errors = StateMachineEngine(state_graph).validate_graph()
         state_graph.is_valid = is_valid
         state_graph.validation_errors = errors
         state_graph.save()
-        
-        return JsonResponse({
-            "success": True,
-            "state_graph": state_graph_to_dict(state_graph),
-            "validation_errors": errors,
-        })
-    
+
+        return JsonResponse(
+            {
+                "success": True,
+                "state_graph": state_graph_to_dict(state_graph),
+                "validation_errors": errors,
+            }
+        )
+
     return JsonResponse({"error": "Method not allowed"}, status=405)
 
 
@@ -214,20 +237,28 @@ def state_graph_validate_view(request, campaign_id: int) -> JsonResponse:
         state_graph = CampaignStateGraph.objects.get(campaign_id=campaign_id)
     except CampaignStateGraph.DoesNotExist:
         return JsonResponse({"error": "State graph not found"}, status=404)
-    
+
     from openoutreach.linkedin.services.state_machine import StateMachineEngine
+
     is_valid, errors = StateMachineEngine(state_graph).validate_graph()
-    
+
     state_graph.is_valid = is_valid
     state_graph.validation_errors = errors
     state_graph.save()
-    
-    return JsonResponse({
-        "success": True,
-        "is_valid": is_valid,
-        "errors": errors,
-        "warnings": [e for e in errors if e.get("type") != "missing_start" and e.get("type") != "multiple_starts"],
-    })
+
+    return JsonResponse(
+        {
+            "success": True,
+            "is_valid": is_valid,
+            "errors": errors,
+            "warnings": [
+                e
+                for e in errors
+                if e.get("type") != "missing_start"
+                and e.get("type") != "multiple_starts"
+            ],
+        }
+    )
 
 
 @csrf_exempt
@@ -237,14 +268,16 @@ def state_graph_delete_view(request, campaign_id: int) -> JsonResponse:
         state_graph = CampaignStateGraph.objects.get(campaign_id=campaign_id)
     except CampaignStateGraph.DoesNotExist:
         return JsonResponse({"error": "State graph not found"}, status=404)
-    
+
     if request.method == "DELETE":
         state_graph.delete()
-        return JsonResponse({
-            "success": True,
-            "message": "State graph deleted successfully",
-        })
-    
+        return JsonResponse(
+            {
+                "success": True,
+                "message": "State graph deleted successfully",
+            }
+        )
+
     return JsonResponse({"error": "Method not allowed"}, status=405)
 
 
@@ -255,13 +288,15 @@ def state_graph_nodes_view(request, campaign_id: int) -> JsonResponse:
         state_graph = CampaignStateGraph.objects.get(campaign_id=campaign_id)
     except CampaignStateGraph.DoesNotExist:
         return JsonResponse({"error": "State graph not found"}, status=404)
-    
+
     nodes = StateNode.objects.filter(state_graph=state_graph, is_active=True)
-    
-    return JsonResponse({
-        "nodes": [state_node_to_dict(node) for node in nodes],
-        "total": nodes.count(),
-    })
+
+    return JsonResponse(
+        {
+            "nodes": [state_node_to_dict(node) for node in nodes],
+            "total": nodes.count(),
+        }
+    )
 
 
 @csrf_exempt
@@ -271,17 +306,23 @@ def state_graph_transitions_view(request, campaign_id: int) -> JsonResponse:
         state_graph = CampaignStateGraph.objects.get(campaign_id=campaign_id)
     except CampaignStateGraph.DoesNotExist:
         return JsonResponse({"error": "State graph not found"}, status=404)
-    
-    transitions = StateTransition.objects.filter(state_graph=state_graph, is_active=True)
-    
-    return JsonResponse({
-        "transitions": [state_transition_to_dict(t) for t in transitions],
-        "total": transitions.count(),
-    })
+
+    transitions = StateTransition.objects.filter(
+        state_graph=state_graph, is_active=True
+    )
+
+    return JsonResponse(
+        {
+            "transitions": [state_transition_to_dict(t) for t in transitions],
+            "total": transitions.count(),
+        }
+    )
 
 
 @csrf_exempt
-def simulate_state_machine_view(request, campaign_id: int, deal_id: int) -> JsonResponse:
+def simulate_state_machine_view(
+    request, campaign_id: int, deal_id: int
+) -> JsonResponse:
     """Simulate state machine execution for a deal."""
     try:
         campaign = Campaign.objects.get(id=campaign_id)
@@ -290,26 +331,33 @@ def simulate_state_machine_view(request, campaign_id: int, deal_id: int) -> Json
         return JsonResponse({"error": "Campaign not found"}, status=404)
     except Campaign.deals.model.DoesNotExist:
         return JsonResponse({"error": "Deal not found"}, status=404)
-    
+
     try:
         state_graph = campaign.state_graph
         if not state_graph or not state_graph.is_active:
-            return JsonResponse({
-                "success": False,
-                "error": "State graph not active",
-            }, status=400)
-        
+            return JsonResponse(
+                {
+                    "success": False,
+                    "error": "State graph not active",
+                },
+                status=400,
+            )
+
         from openoutreach.linkedin.services.state_machine import simulate_state_machine
+
         result = simulate_state_machine(campaign_id, deal_id)
-        
+
         return JsonResponse(result)
-    
+
     except Exception as e:
         logger.exception(f"Error simulating state machine: {e}")
-        return JsonResponse({
-            "success": False,
-            "error": str(e),
-        }, status=500)
+        return JsonResponse(
+            {
+                "success": False,
+                "error": str(e),
+            },
+            status=500,
+        )
 
 
 @csrf_exempt
@@ -319,22 +367,24 @@ def execute_state_machine_step_view(request, state_machine_id: int) -> JsonRespo
         state_machine = CampaignState.objects.get(id=state_machine_id)
     except CampaignState.DoesNotExist:
         return JsonResponse({"error": "State machine not found"}, status=404)
-    
+
     if request.method == "POST":
         from openoutreach.linkedin.services.state_machine import StateMachineEngine
-        
+
         # Get session from request (in production, you'd pass the session through)
         session = None  # Will be handled by the caller
-        
+
         engine = StateMachineEngine(state_machine.state_graph)
         success, message = engine.execute_step(state_machine, session)
-        
-        return JsonResponse({
-            "success": success,
-            "message": message,
-            "state_machine": state_machine_to_dict(state_machine),
-        })
-    
+
+        return JsonResponse(
+            {
+                "success": success,
+                "message": message,
+                "state_machine": state_machine_to_dict(state_machine),
+            }
+        )
+
     return JsonResponse({"error": "Method not allowed"}, status=405)
 
 
@@ -345,26 +395,28 @@ def state_machine_execution_logs_view(request, state_machine_id: int) -> JsonRes
         state_machine = CampaignState.objects.get(id=state_machine_id)
     except CampaignState.DoesNotExist:
         return JsonResponse({"error": "State machine not found"}, status=404)
-    
+
     logs = state_machine.execution_logs.all().order_by("-timestamp")
-    
-    return JsonResponse({
-        "state_machine_id": state_machine.id,
-        "total": logs.count(),
-        "logs": [
-            {
-                "id": log.id,
-                "node_id": log.node.id if log.node else None,
-                "node_name": log.node.name if log.node else None,
-                "transition_id": log.transition.id if log.transition else None,
-                "action": log.action,
-                "result": log.result,
-                "error": log.error,
-                "timestamp": log.timestamp.isoformat(),
-            }
-            for log in logs[:100]
-        ],
-    })
+
+    return JsonResponse(
+        {
+            "state_machine_id": state_machine.id,
+            "total": logs.count(),
+            "logs": [
+                {
+                    "id": log.id,
+                    "node_id": log.node.id if log.node else None,
+                    "node_name": log.node.name if log.node else None,
+                    "transition_id": log.transition.id if log.transition else None,
+                    "action": log.action,
+                    "result": log.result,
+                    "error": log.error,
+                    "timestamp": log.timestamp.isoformat(),
+                }
+                for log in logs[:100]
+            ],
+        }
+    )
 
 
 @csrf_exempt
@@ -374,15 +426,15 @@ def state_machines_view(request, campaign_id: int) -> JsonResponse:
         campaign = Campaign.objects.get(id=campaign_id)
     except Campaign.DoesNotExist:
         return JsonResponse({"error": "Campaign not found"}, status=404)
-    
-    state_machines = CampaignState.objects.filter(
-        deal__campaign=campaign
-    ).order_by("-started_at")
-    
-    return JsonResponse({
-        "campaign_id": campaign.id,
-        "total": state_machines.count(),
-        "state_machines": [
-            state_machine_to_dict(sm) for sm in state_machines[:50]
-        ],
-    })
+
+    state_machines = CampaignState.objects.filter(deal__campaign=campaign).order_by(
+        "-started_at"
+    )
+
+    return JsonResponse(
+        {
+            "campaign_id": campaign.id,
+            "total": state_machines.count(),
+            "state_machines": [state_machine_to_dict(sm) for sm in state_machines[:50]],
+        }
+    )

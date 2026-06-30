@@ -11,7 +11,12 @@ from .state_machine import (
     CampaignState,
     CampaignExecutionLog,
 )
-from .rate_limits import SmartRateLimitContext, RateLimitWarning, EngagementLevel, LinkedInDetectability
+from .rate_limits import (
+    SmartRateLimitContext,
+    RateLimitWarning,
+    EngagementLevel,
+    LinkedInDetectability,
+)
 
 import logging
 from datetime import date
@@ -86,7 +91,9 @@ class LinkedInProfile(models.Model):
     def record_action(self, action_type: str, campaign: Campaign) -> None:
         """Persist a rate-limited action."""
         ActionLog.objects.create(
-            linkedin_profile=self, campaign=campaign, action_type=action_type,
+            linkedin_profile=self,
+            campaign=campaign,
+            action_type=action_type,
         )
 
     def mark_exhausted(self, action_type: str) -> None:
@@ -97,7 +104,8 @@ class LinkedInProfile(models.Model):
     def _daily_count(self, action_type: str) -> int:
         today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
         return ActionLog.objects.filter(
-            linkedin_profile=self, action_type=action_type,
+            linkedin_profile=self,
+            action_type=action_type,
             created_at__gte=today_start,
         ).count()
 
@@ -139,11 +147,11 @@ class ActionLog(models.Model):
     )
     action_type = models.CharField(max_length=20, choices=ActionType.choices)
     created_at = models.DateTimeField(auto_now_add=True)
-    
+
     # Status and error tracking (for action logs)
     status: models.CharField = models.CharField(max_length=20, blank=True)  # type: ignore[var-annotated]
     error_message: models.TextField = models.TextField(blank=True)  # type: ignore[var-annotated]
-    
+
     # Type hints for Django's automatic fields
     id: models.AutoField  # type: ignore[assignment]
     linkedin_profile_id: int  # type: ignore[assignment]

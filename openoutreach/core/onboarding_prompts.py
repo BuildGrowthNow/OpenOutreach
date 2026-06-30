@@ -18,14 +18,20 @@ from openoutreach.core.onboarding_wizard import (
 # ── Campaign ─────────────────────────────────────────────────────
 
 CAMPAIGN_NAME = Text("campaign_name", "Campaign name", default="LinkedIn Outreach")
-PRODUCT_DESCRIPTION = MultilineText("product_description", "Product/service description")
+PRODUCT_DESCRIPTION = MultilineText(
+    "product_description", "Product/service description"
+)
 CAMPAIGN_OBJECTIVE = MultilineText(
     "campaign_objective",
     "Campaign objective (e.g. 'sell analytics platform to CTOs')",
 )
-BOOKING_LINK = Text("booking_link", "Booking link (e.g. https://cal.com/you)", required=False)
+BOOKING_LINK = Text(
+    "booking_link", "Booking link (e.g. https://cal.com/you)", required=False
+)
 SEED_URLS = MultilineText(
-    "seed_urls", "LinkedIn seed profile URLs (one per line)", required=False,
+    "seed_urls",
+    "LinkedIn seed profile URLs (one per line)",
+    required=False,
 )
 
 # ── LinkedIn account ─────────────────────────────────────────────
@@ -36,11 +42,19 @@ LINKEDIN_PASSWORD = Password("linkedin_password", "LinkedIn password")
 # ── LLM ──────────────────────────────────────────────────────────
 
 LLM_PROVIDERS = [
-    "openai", "anthropic", "google", "groq", "mistral", "cohere", "openai_compatible",
+    "openai",
+    "anthropic",
+    "google",
+    "groq",
+    "mistral",
+    "cohere",
+    "openai_compatible",
 ]
 LLM_PROVIDER = Autocomplete(
-    "llm_provider", "LLM provider",
-    resolver=lambda _: LLM_PROVIDERS, default="openai",
+    "llm_provider",
+    "LLM provider",
+    resolver=lambda _: LLM_PROVIDERS,
+    default="openai",
 )
 LLM_API_KEY = Password("llm_api_key", "LLM API key (e.g. sk-...)")
 AI_MODEL = Text("ai_model", "AI model (e.g. gpt-4o, claude-sonnet-4-5-20250929)")
@@ -52,10 +66,18 @@ LLM_API_BASE = Text(
 
 # ── Preferences ──────────────────────────────────────────────────
 
-NEWSLETTER = Confirm("newsletter", "Subscribe to OpenOutreach newsletter?", default=True)
-CONNECT_DAILY = IntText("connect_daily_limit", "Connection requests daily limit", default=50)
-CONNECT_WEEKLY = IntText("connect_weekly_limit", "Connection requests weekly limit", default=250)
-FOLLOW_UP_DAILY = IntText("follow_up_daily_limit", "Follow-up messages daily limit", default=100)
+NEWSLETTER = Confirm(
+    "newsletter", "Subscribe to OpenOutreach newsletter?", default=True
+)
+CONNECT_DAILY = IntText(
+    "connect_daily_limit", "Connection requests daily limit", default=50
+)
+CONNECT_WEEKLY = IntText(
+    "connect_weekly_limit", "Connection requests weekly limit", default=250
+)
+FOLLOW_UP_DAILY = IntText(
+    "follow_up_daily_limit", "Follow-up messages daily limit", default=100
+)
 
 # ── Legal ────────────────────────────────────────────────────────
 
@@ -69,11 +91,20 @@ LEGAL = Confirm(
 # ── Profile ──────────────────────────────────────────────────────
 
 SELF_HOSTED_QUESTIONS = [
-    CAMPAIGN_NAME, PRODUCT_DESCRIPTION, CAMPAIGN_OBJECTIVE, BOOKING_LINK,
+    CAMPAIGN_NAME,
+    PRODUCT_DESCRIPTION,
+    CAMPAIGN_OBJECTIVE,
+    BOOKING_LINK,
     SEED_URLS,
-    LINKEDIN_EMAIL, LINKEDIN_PASSWORD,
-    LLM_PROVIDER, LLM_API_KEY, AI_MODEL, LLM_API_BASE,
+    LINKEDIN_EMAIL,
+    LINKEDIN_PASSWORD,
+    LLM_PROVIDER,
+    LLM_API_KEY,
+    AI_MODEL,
+    LLM_API_BASE,
     NEWSLETTER,
-    CONNECT_DAILY, CONNECT_WEEKLY, FOLLOW_UP_DAILY,
+    CONNECT_DAILY,
+    CONNECT_WEEKLY,
+    FOLLOW_UP_DAILY,
     LEGAL,
 ]

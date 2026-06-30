@@ -6,6 +6,7 @@ campaign-scoped derived caches: deleting them and re-running the lazy path
 rebuilds them from source (a Voyager re-scrape for `profile_summary`,
 `ChatMessage` rows for `chat_summary`).
 """
+
 from __future__ import annotations
 
 import json
@@ -92,6 +93,7 @@ class _ReconcileResponse(BaseModel):
 
 # ── LLM boundary ──
 
+
 def extract_facts(
     text: str,
     *,
@@ -128,6 +130,7 @@ def extract_facts(
 
 # ── Profile summary ──
 
+
 def materialize_profile_summary_if_missing(deal, session) -> None:
     """Build `deal.profile_summary` lazily on first follow-up touch.
 
@@ -143,7 +146,8 @@ def materialize_profile_summary_if_missing(deal, session) -> None:
     if not profile:
         logger.warning(
             "materialize_profile_summary: empty profile for deal=%s lead=%s",
-            deal.pk, lead.public_identifier,
+            deal.pk,
+            lead.public_identifier,
         )
         return
 
@@ -167,11 +171,14 @@ def materialize_profile_summary_if_missing(deal, session) -> None:
     deal.save(update_fields=["profile_summary"])
     logger.info(
         "profile_summary built for deal=%s lead=%s (%d facts)",
-        deal.pk, lead.public_identifier, len(facts),
+        deal.pk,
+        lead.public_identifier,
+        len(facts),
     )
 
 
 # ── Chat summary ──
+
 
 def _format_messages_for_extraction(messages: Iterable) -> str:
     """Render ChatMessages as a labeled transcript for fact extraction.
@@ -226,7 +233,9 @@ def update_chat_summary(deal, new_messages, *, seller_name: str) -> None:
     deal.save(update_fields=["chat_summary"])
     logger.info(
         "chat_summary updated for deal=%s (+%d new facts → %d total)",
-        deal.pk, len(new_facts), len(reconciled),
+        deal.pk,
+        len(new_facts),
+        len(reconciled),
     )
 
 
@@ -237,9 +246,12 @@ def update_chat_summary(deal, new_messages, *, seller_name: str) -> None:
 #   - vector-store ops → in-memory dict (Deal.chat_summary is a flat list)
 #   - mem0's `self.llm.generate_response` → pydantic-ai Agent.run via run_agent_sync
 
+
 def reconcile_facts(
-    existing: list[str], new_facts: list[str],
-    *, seller_name: str,
+    existing: list[str],
+    new_facts: list[str],
+    *,
+    seller_name: str,
 ) -> list[str]:
     """Reconcile `new_facts` against `existing` via mem0's UPDATE prompt.
 
@@ -254,7 +266,9 @@ def reconcile_facts(
 
 
 def _request_memory_actions(
-    existing: list[str], new_facts: list[str], seller_name: str,
+    existing: list[str],
+    new_facts: list[str],
+    seller_name: str,
 ) -> list[_MemoryAction]:
     """Run mem0's UPDATE prompt and return the parsed event list.
 
@@ -291,7 +305,9 @@ def _parse_memory_response(text: str) -> dict:
         return json.loads(extract_json(text), strict=False)
 
 
-def _apply_memory_actions(existing: list[str], actions: list[_MemoryAction]) -> list[str]:
+def _apply_memory_actions(
+    existing: list[str], actions: list[_MemoryAction]
+) -> list[str]:
     """Apply ADD/UPDATE/DELETE/NONE events to a flat fact list keyed by index."""
     store: dict[str, str] = {str(idx): fact for idx, fact in enumerate(existing)}
     next_id = len(existing)

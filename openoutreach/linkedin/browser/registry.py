@@ -34,9 +34,13 @@ def resolve_profile(username: str | None = None) -> Any | None:  # type: ignore[
     if username:
         from openoutreach.linkedin.models import LinkedInProfile
 
-        return LinkedInProfile.objects.select_related("user").filter(
-            user__username=username,
-        ).first()
+        return (
+            LinkedInProfile.objects.select_related("user")
+            .filter(
+                user__username=username,
+            )
+            .first()
+        )
     return get_first_active_profile()
 
 
@@ -53,13 +57,17 @@ def cli_parser(description: str):
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "openoutreach.settings")
 
     import django
+
     django.setup()  # type: ignore[attr-defined]
 
     from openoutreach.core.logging import configure_logging
+
     configure_logging(level=logging.DEBUG)
 
     parser = argparse.ArgumentParser(description=description)
-    parser.add_argument("--handle", default=None, help="Django username (default: first active profile)")
+    parser.add_argument(
+        "--handle", default=None, help="Django username (default: first active profile)"
+    )
     return parser
 
 

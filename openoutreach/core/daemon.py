@@ -39,7 +39,7 @@ _HANDLERS = {
 }
 
 HEARTBEAT_INTERVAL = 300  # 5 minutes
-HEARTBEAT_SLICE = 60      # wake every minute during long sleeps
+HEARTBEAT_SLICE = 60  # wake every minute during long sleeps
 HEALTH_CHECK_INTERVAL = 3600  # Run health check every hour
 
 
@@ -47,25 +47,37 @@ def _run_health_checks(session) -> None:
     """Run health checks for all campaigns in the session."""
     from openoutreach.linkedin.models.health import HealthAlert
     from openoutreach.linkedin.services.health_monitor import CampaignHealthMonitor
-    
+
     logger.debug("Running health checks for %d campaigns", len(session.campaigns))
-    
+
     for campaign in session.campaigns:
         try:
             monitor = CampaignHealthMonitor(campaign)
             alerts = monitor.run_health_check()
-            
+
             for alert in alerts:
                 alert.save()
-                logger.warning("ALERT: campaign=%s type=%s severity=%s message=%s",
-                              campaign.name, alert.alert_type, alert.severity, alert.message)
-                
+                logger.warning(
+                    "ALERT: campaign=%s type=%s severity=%s message=%s",
+                    campaign.name,
+                    alert.alert_type,
+                    alert.severity,
+                    alert.message,
+                )
+
                 # Auto-remediate low/medium severity alerts
-                if alert.severity in [HealthAlert.SEVERITY_LOW, HealthAlert.SEVERITY_MEDIUM]:
+                if alert.severity in [
+                    HealthAlert.SEVERITY_LOW,
+                    HealthAlert.SEVERITY_MEDIUM,
+                ]:
                     if monitor.auto_remediate(alert):
-                        logger.info("Auto-remediation applied for alert: %s", alert.message)
+                        logger.info(
+                            "Auto-remediation applied for alert: %s", alert.message
+                        )
         except Exception as e:
-            logger.error("Error running health check for campaign %s: %s", campaign.name, e)
+            logger.error(
+                "Error running health check for campaign %s: %s", campaign.name, e
+            )
 
 
 # ── Cloud promo ──────────────────────────────────────────────────────
@@ -229,7 +241,10 @@ def _build_qualifiers(campaigns, cfg, kit_model=None):
                     colored("GP qualifier warm-started", "cyan")
                     + " on %d labelled samples (%d positive, %d negative)"
                     + " for campaign %s",
-                    len(y), int((y == 1).sum()), int((y == 0).sum()), campaign,
+                    len(y),
+                    int((y == 1).sum()),
+                    int((y == 0).sum()),
+                    campaign,
                 )
             qualifiers[campaign.pk] = q
             n_regular += 1
@@ -256,7 +271,9 @@ def seconds_until_active() -> float:
         return 0.0
 
     candidate = timezone.make_aware(
-        now.replace(hour=ACTIVE_START_HOUR, minute=0, second=0, microsecond=0, tzinfo=None),
+        now.replace(
+            hour=ACTIVE_START_HOUR, minute=0, second=0, microsecond=0, tzinfo=None
+        ),
         timezone=tz,
     )
     if candidate <= now:
@@ -279,7 +296,8 @@ def _exit_on_checkpoint(session, task, url: str) -> None:
     logger.error(
         colored(
             f"ACCOUNT CHECKPOINTED — {session.linkedin_profile.linkedin_username}",
-            "red", attrs=["bold"],
+            "red",
+            attrs=["bold"],
         )
     )
     logger.error("Clear the challenge in a real browser: %s", url)
@@ -309,11 +327,14 @@ def run_daemon(session):
             prev_campaign = session.campaign
             session.campaign = freemium_campaign
             from openoutreach.linkedin.setup.freemium import seed_profiles
+
             seed_profiles(session, kit["config"])
             session.campaign = prev_campaign
 
     qualifiers = _build_qualifiers(
-        session.campaigns, cfg, kit_model=kit["model"] if kit else None,
+        session.campaigns,
+        cfg,
+        kit_model=kit["model"] if kit else None,
     )
 
     campaigns = session.campaigns
@@ -339,7 +360,9 @@ def run_daemon(session):
             h, m = int(pause // 3600), int(pause % 3600 // 60)
             logger.info("Outside active hours — sleeping %dh%02dm", h, m)
             sleep_with_heartbeat(
-                pause, heartbeat, f"outside active hours, {h}h{m:02d}m left",
+                pause,
+                heartbeat,
+                f"outside active hours, {h}h{m:02d}m left",
             )
             rhythm.reset()
             continue
@@ -350,6 +373,7 @@ def run_daemon(session):
             # stuck without a pending task (e.g. because a prior handler
             # crashed) gets a fresh task here; this is the retry mechanism.
             from openoutreach.core.scheduler import reconcile
+
             reconcile(session)
 
             wait = Task.objects.seconds_to_next()  # type: ignore[union-attr]
@@ -362,7 +386,9 @@ def run_daemon(session):
                 h, m = int(wait // 3600), int(wait % 3600 // 60)
                 logger.info("Next task in %dh%02dm — sleeping", h, m)
                 sleep_with_heartbeat(
-                    wait, heartbeat, f"next task in {h}h{m:02d}m",
+                    wait,
+                    heartbeat,
+                    f"next task in {h}h{m:02d}m",
                 )
                 rhythm.reset()
             continue
@@ -406,11 +432,13 @@ def run_daemon(session):
             task.mark_failed(error_message=error_msg)
             logger.error(
                 colored("Daemon stopped — LLM API error", "red", attrs=["bold"])
-                + "\n%s\nCheck llm_provider, ai_model, llm_api_key, and llm_api_base in Admin → Site Configuration.", e,
+                + "\n%s\nCheck llm_provider, ai_model, llm_api_key, and llm_api_base in Admin → Site Configuration.",
+                e,
             )
             return
         except Exception:
             import traceback
+
             error_msg = f"Task execution failed: {traceback.format_exc()[:500]}"
             task.mark_failed(error_message=error_msg)
             logger.error(
@@ -431,16 +459,16 @@ def run_daemon(session):
             task.pk,
             task.payload.get("campaign_id", "unknown"),
         )
-        
+
         # Health check: run every HEALTH_CHECK_INTERVAL seconds
-        if hasattr(session, '_last_health_check'):
+        if hasattr(session, "_last_health_check"):
             if time.monotonic() - session._last_health_check >= HEALTH_CHECK_INTERVAL:
                 _run_health_checks(session)
                 session._last_health_check = time.monotonic()
         else:
             session._last_health_check = time.monotonic()
             _run_health_checks(session)
-        
+
         # TODO(tmp): Cloud/CLI promo disabled — still advertises the retired
         # openoutreach CLI (GH issue). Re-enable with email-first messaging.
         # cloud_promo.maybe_log()

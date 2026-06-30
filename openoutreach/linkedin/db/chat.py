@@ -1,6 +1,5 @@
 import logging
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -30,7 +29,9 @@ def sync_conversation(session, public_identifier: str) -> list[dict]:
     """
     lead, deal = _get_lead_and_deal(session, public_identifier)
     if deal is None:
-        logger.debug("sync: no deal for %s in %s — skipping", public_identifier, session.campaign)
+        logger.debug(
+            "sync: no deal for %s in %s — skipping", public_identifier, session.campaign
+        )
         return []
 
     new_messages = _sync_from_api(session, public_identifier, deal)
@@ -56,7 +57,9 @@ def _sync_from_api(session, public_identifier: str, deal) -> list:
     """
     from openoutreach.chat.models import ChatMessage
     from linkedin_cli.actions.conversations import (
-        find_conversation_urn, find_conversation_urn_via_navigation, parse_message_element,
+        find_conversation_urn,
+        find_conversation_urn_via_navigation,
+        parse_message_element,
     )
     from linkedin_cli.api.client import PlaywrightLinkedinAPI
     from linkedin_cli.api.messaging import fetch_messages
@@ -78,7 +81,9 @@ def _sync_from_api(session, public_identifier: str, deal) -> list:
 
     # Fetch messages
     raw = fetch_messages(api, conversation_urn)
-    elements = raw.get("data", {}).get("messengerMessagesBySyncToken", {}).get("elements", [])
+    elements = (
+        raw.get("data", {}).get("messengerMessagesBySyncToken", {}).get("elements", [])
+    )
 
     self_urn = session.self_profile["urn"]
     new_messages: list = []
@@ -98,17 +103,29 @@ def _sync_from_api(session, public_identifier: str, deal) -> list:
                 "content": parsed["text"],
                 "is_outgoing": is_outgoing,
                 "owner": session.django_user,
-                **({"creation_date": parsed["delivered_at"]} if parsed["delivered_at"] else {}),
+                **(
+                    {"creation_date": parsed["delivered_at"]}
+                    if parsed["delivered_at"]
+                    else {}
+                ),
             },
         )
         if created:
             new_messages.append(obj)
-            logger.debug("sync: new message from %s for %s", parsed["sender_name"], public_identifier)
+            logger.debug(
+                "sync: new message from %s for %s",
+                parsed["sender_name"],
+                public_identifier,
+            )
 
     # Sort new messages chronologically so the LLM sees them in order.
     new_messages.sort(key=lambda m: m.creation_date or m.pk)
-    logger.debug("sync: processed %d messages for %s (%d new)",
-                 len(elements), public_identifier, len(new_messages))
+    logger.debug(
+        "sync: processed %d messages for %s (%d new)",
+        len(elements),
+        public_identifier,
+        len(new_messages),
+    )
     return new_messages
 
 
@@ -118,7 +135,11 @@ def _read_from_db(deal) -> list[dict]:
 
     lead_name = deal.lead.public_identifier or "them"
 
-    messages = ChatMessage.objects.filter(deal=deal).select_related("owner").order_by("creation_date")
+    messages = (
+        ChatMessage.objects.filter(deal=deal)
+        .select_related("owner")
+        .order_by("creation_date")
+    )
 
     result = []
     for msg in messages:
@@ -126,13 +147,23 @@ def _read_from_db(deal) -> list[dict]:
             continue
         if msg.is_outgoing:
             owner = msg.owner
-            sender = f"{owner.first_name or ''} {owner.last_name or ''}".strip() if owner else "me"
+            sender = (
+                f"{owner.first_name or ''} {owner.last_name or ''}".strip()
+                if owner
+                else "me"
+            )
         else:
             sender = lead_name
-        result.append({
-            "sender": sender or "me",
-            "text": msg.content,
-            "timestamp": msg.creation_date.strftime("%Y-%m-%d %H:%M") if msg.creation_date else "",
-            "is_outgoing": msg.is_outgoing,
-        })
+        result.append(
+            {
+                "sender": sender or "me",
+                "text": msg.content,
+                "timestamp": (
+                    msg.creation_date.strftime("%Y-%m-%d %H:%M")
+                    if msg.creation_date
+                    else ""
+                ),
+                "is_outgoing": msg.is_outgoing,
+            }
+        )
     return result

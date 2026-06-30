@@ -6,6 +6,7 @@ OpenOutreach concerns, so they live here. The reusable *mechanics* — launching
 stealthed browser, driving the login form, clearing checkpoints — stay in the
 Django-free ``linkedin_cli.browser`` library and are called from here.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -39,13 +40,19 @@ def start_browser_session(session: Any) -> None:
     if storage_state:
         logger.info("Loading saved session for %s", session)
 
-    session.page, session.context, session.browser, session.playwright = launch_browser(storage_state=storage_state)
+    session.page, session.context, session.browser, session.playwright = launch_browser(
+        storage_state=storage_state
+    )
 
     if not storage_state:
         lp = session.linkedin_profile
-        authenticate(session, username=lp.linkedin_username, password=lp.linkedin_password)
+        authenticate(
+            session, username=lp.linkedin_username, password=lp.linkedin_password
+        )
         _save_cookies(session)
-        logger.info(colored("Login successful – session saved", "green", attrs=["bold"]))
+        logger.info(
+            colored("Login successful – session saved", "green", attrs=["bold"])
+        )
     else:
         session.page.goto(LINKEDIN_FEED_URL)
         dismiss_comply_gate(session.page)

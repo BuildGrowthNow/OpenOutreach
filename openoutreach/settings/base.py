@@ -3,6 +3,7 @@
 Base Django settings for OpenOutreach.
 This is the foundation configuration used by all environments.
 """
+
 import os
 from pathlib import Path
 from datetime import timedelta
@@ -241,8 +242,8 @@ LOGGING: dict[str, Any] = {
         },
         "structured": {
             "format": '{"timestamp": "%(asctime)s", "level": "%(levelname)s", '
-                      '"logger": "%(name)s", "module": "%(module)s", '
-                      '"lineno": %(lineno)d, "message": "%(message)s"}',
+            '"logger": "%(name)s", "module": "%(module)s", '
+            '"lineno": %(lineno)d, "message": "%(message)s"}',
             "style": "%",
         },
     },
@@ -343,11 +344,7 @@ SITE_ID = 1
 # Django Channels Configuration for WebSocket support
 # =============================================================================
 # Use in-memory channel layer for development (use Redis in production)
-CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels.layers.InMemoryChannelLayer"
-    }
-}
+CHANNEL_LAYERS = {"default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}}
 
 # ASGI application - required for Channels
 ASGI_APPLICATION = "openoutreach.routing.application"

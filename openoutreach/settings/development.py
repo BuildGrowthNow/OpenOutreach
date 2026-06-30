@@ -2,13 +2,16 @@
 """
 Development Django settings for OpenOutreach.
 """
+
 from .base import *
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "django-insecure-dev-key-change-in-production")
+SECRET_KEY = os.environ.get(
+    "DJANGO_SECRET_KEY", "django-insecure-dev-key-change-in-production"
+)
 
 # Allow all hosts in development
 ALLOWED_HOSTS = ["localhost", "127.0.0.1", "*"]

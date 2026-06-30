@@ -6,6 +6,7 @@
 the lookup and waits for the result. A missing API key or a miss yields None,
 never an error, so enrichment can't take down the daemon.
 """
+
 from __future__ import annotations
 
 import logging

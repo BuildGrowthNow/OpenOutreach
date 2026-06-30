@@ -1,5 +1,6 @@
 # openoutreach/linkedin/setup/seeds.py
 """User-provided seed profiles: parse URLs, create Leads + QUALIFIED Deals."""
+
 from __future__ import annotations
 
 import logging
@@ -43,7 +44,9 @@ def create_seed_leads(campaign, public_ids: list[str]) -> int:
     for public_id in public_ids:
         url = public_id_to_url(public_id)
 
-        lead, _ = Lead.objects.get_or_create(public_identifier=public_id, defaults={"linkedin_url": url})
+        lead, _ = Lead.objects.get_or_create(
+            public_identifier=public_id, defaults={"linkedin_url": url}
+        )
 
         if Deal.objects.filter(lead=lead, campaign=campaign).exists():
             logger.debug("Seed %s already has a deal, skipping", public_id)

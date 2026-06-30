@@ -6,6 +6,7 @@ oldest-due PENDING deal at execution time. If the recheck leaves the
 deal in PENDING, the backoff is doubled and ``next_check_pending_at``
 re-stamped via the ``on_deal_state_entered`` hook.
 """
+
 from __future__ import annotations
 
 import logging
@@ -37,6 +38,7 @@ def _next_due_pending_deal(campaign):
 
 def _double_backoff(deal) -> float:
     from openoutreach.core.conf import CAMPAIGN_CONFIG
+
     current = deal.backoff_hours or CAMPAIGN_CONFIG["check_pending_recheck_after_hours"]
     # Fix type issues: current might be Any | object, ensure it's a number
     backoff_value = float(current) if current is not None else 1.0  # type: ignore
@@ -57,7 +59,9 @@ def handle_check_pending(task, session, qualifiers):
     public_id = deal.lead.public_identifier
     logger.info(
         "[%s] %s %s",
-        campaign, colored("▶ check_pending", "magenta", attrs=["bold"]), public_id,
+        campaign,
+        colored("▶ check_pending", "magenta", attrs=["bold"]),
+        public_id,
     )
 
     profile = deal.lead.to_profile_dict()

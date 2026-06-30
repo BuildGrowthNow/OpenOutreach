@@ -3,6 +3,7 @@
 Production Django settings for OpenOutreach.
 This configuration is used for the production environment.
 """
+
 import os
 from .base import *
 
@@ -49,7 +50,9 @@ EMAIL_PORT = int(os.environ.get("DJANGO_EMAIL_PORT", "587"))
 EMAIL_USE_TLS = os.environ.get("DJANGO_EMAIL_USE_TLS", "true").lower() == "true"
 EMAIL_HOST_USER = os.environ.get("DJANGO_EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.environ.get("DJANGO_EMAIL_HOST_PASSWORD", "")
-DEFAULT_FROM_EMAIL = os.environ.get("DJANGO_DEFAULT_FROM_EMAIL", "noreply@openoutreach.com")
+DEFAULT_FROM_EMAIL = os.environ.get(
+    "DJANGO_DEFAULT_FROM_EMAIL", "noreply@openoutreach.com"
+)
 
 # =============================================================================
 # MongoDB Configuration (Production)

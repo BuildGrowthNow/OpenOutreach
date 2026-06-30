@@ -8,6 +8,7 @@ Signals:
 - create_campaign_error_notification: For campaign errors
 - create_action_error_notification: For action log errors
 """
+
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.utils import timezone
@@ -18,13 +19,16 @@ from .models import Notification
 def get_model(app_label, model_name):
     """Lazy model lookup to avoid circular imports."""
     from django.apps import apps
+
     return apps.get_model(app_label, model_name)
 
 
-def create_notification_with_realtime(recipient, notification_type, title, message, **kwargs):
+def create_notification_with_realtime(
+    recipient, notification_type, title, message, **kwargs
+):
     """
     Create a notification and emit real-time update if Channels is available.
-    
+
     Args:
         recipient: User or list of users to notify
         notification_type: Type of notification
@@ -37,10 +41,10 @@ def create_notification_with_realtime(recipient, notification_type, title, messa
         from .sse import emit_notification_to_user
     except ImportError:
         emit_notification_to_user = None
-    
+
     # Support single user or multiple users
     recipients = recipient if isinstance(recipient, (list, tuple)) else [recipient]
-    
+
     notifications_created = []
     for user in recipients:
         notification = Notification.objects.create(
@@ -48,10 +52,10 @@ def create_notification_with_realtime(recipient, notification_type, title, messa
             notification_type=notification_type,
             title=title,
             message=message,
-            **kwargs
+            **kwargs,
         )
         notifications_created.append(notification)
-        
+
         # Emit real-time notification if Channels is available
         if emit_notification_to_user:
             try:
@@ -69,32 +73,32 @@ def create_notification_with_realtime(recipient, notification_type, title, messa
                     notification_data["deal_id"] = kwargs["deal"].id
                 if kwargs.get("data"):
                     notification_data["data"] = kwargs["data"]
-                    
+
                 emit_notification_to_user(user.id, notification_data)
             except Exception:
                 # Don't crash if emit fails
                 pass
-    
+
     return notifications_created
 
 
 def create_campaign_status_change_notification(campaign, status_change, user=None):
     """
     Create a notification when a campaign status changes.
-    
+
     Args:
         campaign: The Campaign instance
         status_change: String describing the change (e.g., "paused", "started", "completed")
         user: Optional specific user to notify (defaults to all campaign users)
     """
     Notification = get_model("notifications", "Notification")
-    
+
     try:
         from .sse import emit_notification_to_user, emit_campaign_status_update
     except ImportError:
         emit_notification_to_user = None
         emit_campaign_status_update = None
-    
+
     if status_change == "paused":
         title = f"Campaign '{campaign.name}' paused"
         message = f"The campaign '{campaign.name}' has been paused by a user."
@@ -112,13 +116,13 @@ def create_campaign_status_change_notification(campaign, status_change, user=Non
         status_value = "completed"
     else:
         return  # Unknown status change
-    
+
     # Notify all users associated with the campaign
     recipients = [user] if user else campaign.users.all()
-    
+
     if not recipients:
         return
-    
+
     for u in recipients:
         notification = Notification.objects.create(
             recipient=u,
@@ -127,20 +131,23 @@ def create_campaign_status_change_notification(campaign, status_change, user=Non
             message=message,
             campaign=campaign,
         )
-        
+
         # Emit real-time notification if Channels is available
         if emit_notification_to_user:
             try:
-                emit_notification_to_user(u.id, {
-                    "notification_id": notification.id,
-                    "notification_type": notification_type,
-                    "title": title,
-                    "message": message,
-                    "timestamp": timezone.now().isoformat(),
-                })
+                emit_notification_to_user(
+                    u.id,
+                    {
+                        "notification_id": notification.id,
+                        "notification_type": notification_type,
+                        "title": title,
+                        "message": message,
+                        "timestamp": timezone.now().isoformat(),
+                    },
+                )
             except Exception:
                 pass
-    
+
     # Emit campaign status update via WebSocket
     if emit_campaign_status_update:
         try:
@@ -149,10 +156,12 @@ def create_campaign_status_change_notification(campaign, status_change, user=Non
             pass
 
 
-def create_rate_limit_warning_notification(campaign, profile_username, warning_message, user=None):
+def create_rate_limit_warning_notification(
+    campaign, profile_username, warning_message, user=None
+):
     """
     Create a notification for rate limit warnings.
-    
+
     Args:
         campaign: The Campaign instance
         profile_username: The LinkedIn profile username that hit the rate limit
@@ -160,20 +169,20 @@ def create_rate_limit_warning_notification(campaign, profile_username, warning_m
         user: Optional specific user to notify (defaults to all campaign users)
     """
     Notification = get_model("notifications", "Notification")
-    
+
     try:
         from .sse import emit_notification_to_user
     except ImportError:
         emit_notification_to_user = None
-    
+
     title = f"Rate limit warning for {profile_username}"
     message = f"Rate limit warning for '{campaign.name}': {warning_message}"
-    
+
     recipients = [user] if user else campaign.users.all()
-    
+
     if not recipients:
         return
-    
+
     for u in recipients:
         notification = Notification.objects.create(
             recipient=u,
@@ -182,17 +191,20 @@ def create_rate_limit_warning_notification(campaign, profile_username, warning_m
             message=message,
             campaign=campaign,
         )
-        
+
         # Emit real-time notification if Channels is available
         if emit_notification_to_user:
             try:
-                emit_notification_to_user(u.id, {
-                    "notification_id": notification.id,
-                    "notification_type": Notification.TYPE_RATE_LIMIT_WARNING,
-                    "title": title,
-                    "message": message,
-                    "timestamp": timezone.now().isoformat(),
-                })
+                emit_notification_to_user(
+                    u.id,
+                    {
+                        "notification_id": notification.id,
+                        "notification_type": Notification.TYPE_RATE_LIMIT_WARNING,
+                        "title": title,
+                        "message": message,
+                        "timestamp": timezone.now().isoformat(),
+                    },
+                )
             except Exception:
                 pass
 
@@ -200,7 +212,7 @@ def create_rate_limit_warning_notification(campaign, profile_username, warning_m
 def create_campaign_error_notification(campaign, error_message, deal=None, user=None):
     """
     Create a notification for campaign errors.
-    
+
     Args:
         campaign: The Campaign instance
         error_message: Description of the error
@@ -208,21 +220,21 @@ def create_campaign_error_notification(campaign, error_message, deal=None, user=
         user: Optional specific user to notify
     """
     Notification = get_model("notifications", "Notification")
-    
+
     try:
         from .sse import emit_notification_to_user, emit_campaign_error
     except ImportError:
         emit_notification_to_user = None
         emit_campaign_error = None
-    
+
     title = f"Campaign error in '{campaign.name}'"
     message = f"Error in '{campaign.name}': {error_message}"
-    
+
     recipients = [user] if user else campaign.users.all()
-    
+
     if not recipients:
         return
-    
+
     for u in recipients:
         notification = Notification.objects.create(
             recipient=u,
@@ -232,20 +244,23 @@ def create_campaign_error_notification(campaign, error_message, deal=None, user=
             campaign=campaign,
             deal=deal,
         )
-        
+
         # Emit real-time notification if Channels is available
         if emit_notification_to_user:
             try:
-                emit_notification_to_user(u.id, {
-                    "notification_id": notification.id,
-                    "notification_type": Notification.TYPE_CAMPAIGN_ERROR,
-                    "title": title,
-                    "message": message,
-                    "timestamp": timezone.now().isoformat(),
-                })
+                emit_notification_to_user(
+                    u.id,
+                    {
+                        "notification_id": notification.id,
+                        "notification_type": Notification.TYPE_CAMPAIGN_ERROR,
+                        "title": title,
+                        "message": message,
+                        "timestamp": timezone.now().isoformat(),
+                    },
+                )
             except Exception:
                 pass
-    
+
     # Emit campaign error via WebSocket
     if emit_campaign_error:
         try:
@@ -259,29 +274,33 @@ def create_new_message_notification(sender, instance, created, **kwargs):
     """Create notification when a new message is received (inbound)."""
     if not created:
         return
-    
+
     # Check if this is an inbound message
     if not getattr(instance, "is_outgoing", True):
         return  # Only create notifications for inbound messages
-    
+
     try:
         # Get related models
         Deal = get_model("crm", "Deal")
         Campaign = get_model("core", "Campaign")
-        
+
         # Get the deal and campaign
         deal = instance.deal
         campaign = deal.campaign if hasattr(deal, "campaign") else None
-        
+
         if not campaign:
             return
-        
+
         # Get all users associated with the campaign (excluding the message sender)
-        campaign_users = campaign.users.exclude(id=instance.owner_id) if instance.owner else campaign.users.all()
-        
+        campaign_users = (
+            campaign.users.exclude(id=instance.owner_id)
+            if instance.owner
+            else campaign.users.all()
+        )
+
         if not campaign_users:
             return
-        
+
         # Create notifications with real-time delivery
         for user in campaign_users:
             create_notification_with_realtime(
@@ -294,11 +313,12 @@ def create_new_message_notification(sender, instance, created, **kwargs):
                 data={
                     "message_id": instance.id,
                     "deal_id": deal.id,
-                }
+                },
             )
     except Exception:
         # Log error but don't crash the signal
         import logging
+
         logging.exception("Error in create_new_message_notification")
 
 
@@ -307,41 +327,42 @@ def create_action_error_notification(sender, instance, created, **kwargs):
     """Create error notification when an ActionLog entry has an error."""
     if not created:
         return
-    
+
     try:
         # Get error message from the action log
         error_message = None
-        
+
         # Check for error_message attribute
         if hasattr(instance, "error_message") and instance.error_message:
             error_message = instance.error_message
-        
+
         # Check for error in payload (for ActionLog entries stored in payload)
         elif hasattr(instance, "payload") and instance.payload:
             error_message = instance.payload.get("error")
-        
+
         if not error_message:
             return
-        
+
         # Get related models
         Deal = get_model("crm", "Deal")
         Campaign = get_model("core", "Campaign")
-        
+
         # Get the deal and campaign
         deal = instance.deal if hasattr(instance, "deal") else None
         campaign = instance.campaign if hasattr(instance, "campaign") else None
-        
+
         if not campaign:
             # Try to get campaign from deal
             if deal:
                 campaign = deal.campaign if hasattr(deal, "campaign") else None
-        
+
         if not campaign:
             return
-        
+
         # Create error notification for all campaign users
         create_campaign_error_notification(campaign, error_message, deal=deal)
     except Exception:
         # Log error but don't crash the signal
         import logging
+
         logging.exception("Error in create_action_error_notification")

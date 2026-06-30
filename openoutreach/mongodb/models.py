@@ -28,14 +28,239 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T")
 
 
+class SupabaseUser:
+    """
+    MongoDB SupabaseUser model.
+
+    Tracks the relationship between Supabase users and Django users.
+    Allows efficient lookup of Django users by Supabase user ID.
+    Uses pymongo directly for data operations.
+    """
+
+    def __init__(
+        self,
+        _id: Optional[str] = None,
+        supabase_user_id: str = "",
+        django_user_id: Optional[str] = None,
+        email: str = "",
+        full_name: str = "",
+        created_at: Optional[datetime] = None,
+        last_login: Optional[datetime] = None,
+        token_data: Optional[Dict[str, Any]] = None,
+        is_active: bool = True,
+    ):
+        self._id = _id or str(uuid4())
+        self.supabase_user_id = supabase_user_id
+        self.django_user_id = django_user_id
+        self.email = email
+        self.full_name = full_name
+        self.created_at = created_at or datetime.utcnow()
+        self.last_login = last_login
+        self.token_data = token_data or {}
+        self.is_active = is_active
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert model instance to dictionary for MongoDB storage."""
+        data = {
+            "_id": self._id,
+            "supabase_user_id": self.supabase_user_id,
+            "django_user_id": self.django_user_id,
+            "email": self.email,
+            "full_name": self.full_name,
+            "created_at": self.created_at,
+            "last_login": self.last_login,
+            "token_data": self.token_data,
+            "is_active": self.is_active,
+        }
+        return data
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "SupabaseUser":
+        """Create SupabaseUser instance from MongoDB document."""
+        return cls(
+            _id=str(data.get("_id")),
+            supabase_user_id=data.get("supabase_user_id", ""),
+            django_user_id=data.get("django_user_id"),
+            email=data.get("email", ""),
+            full_name=data.get("full_name", ""),
+            created_at=data.get("created_at"),
+            last_login=data.get("last_login"),
+            token_data=data.get("token_data", {}),
+            is_active=data.get("is_active", True),
+        )
+
+    def save(self) -> str:
+        """Save the Supabase user to MongoDB."""
+        collection = get_mongodb_collection("supabase_users")
+        if collection is None:
+            raise RuntimeError("MongoDB collection 'supabase_users' not available")
+
+        doc = self.to_dict()
+        result = collection.update_one(
+            {"supabase_user_id": self.supabase_user_id}, {"$set": doc}, upsert=True
+        )
+        return str(result.upserted_id or self._id)
+
+    @classmethod
+    def get(cls, supabase_user_id: str) -> Optional["SupabaseUser"]:
+        """Get a Supabase user by Supabase user ID."""
+        collection = get_mongodb_collection("supabase_users")
+        if collection is None:
+            return None
+
+        try:
+            data = collection.find_one({"supabase_user_id": supabase_user_id})
+            if data:
+                return cls.from_dict(data)
+            return None
+        except Exception as e:
+            logger.error(f"Failed to get Supabase user '{supabase_user_id}': {e}")
+            return None
+
+    @classmethod
+    def get_by_django_user_id(cls, django_user_id: str) -> Optional["SupabaseUser"]:
+        """Get a Supabase user by Django user ID."""
+        collection = get_mongodb_collection("supabase_users")
+        if collection is None:
+            return None
+
+        try:
+            data = collection.find_one({"django_user_id": django_user_id})
+            if data:
+                return cls.from_dict(data)
+            return None
+        except Exception as e:
+            logger.error(
+                f"Failed to get Supabase user by Django user ID '{django_user_id}': {e}"
+            )
+            return None
+
+    @classmethod
+    def delete(cls, supabase_user_id: str) -> bool:
+        """Delete a Supabase user by ID."""
+        collection = get_mongodb_collection("supabase_users")
+        if collection is None:
+            return False
+
+        try:
+            result = collection.delete_one({"supabase_user_id": supabase_user_id})
+            return result.deleted_count > 0
+        except Exception as e:
+            logger.error(f"Failed to delete Supabase user '{supabase_user_id}': {e}")
+            return False
+
+    def __str__(self):
+        return f"SupabaseUser#{self.supabase_user_id[:8]} ({self.email})"
+
+    @property
+    def pk(self):
+        """Get the primary key."""
+        return self._id
+
+    @pk.setter
+    def pk(self, value):
+        """Set the primary key."""
+        self._id = value
+
+    @classmethod
+    def objects(cls) -> "SupabaseUserManager":
+        """Get the SupabaseUserManager for querying users."""
+        return SupabaseUserManager()
+
+
+class SupabaseUserManager:
+    """Manager for SupabaseUser queries."""
+
+    def __init__(self):
+        self.collection = None
+
+    def _get_collection(self) -> Optional[Collection]:
+        if self.collection is None:
+            self.collection = get_mongodb_collection("supabase_users")
+        return self.collection
+
+    def all(self) -> List["SupabaseUser"]:
+        """Get all Supabase users."""
+        collection = self._get_collection()
+        if collection is None:
+            return []
+
+        try:
+            users = []
+            for data in collection.find():
+                users.append(SupabaseUser.from_dict(data))
+            return users
+        except Exception as e:
+            logger.error(f"Failed to get all Supabase users: {e}")
+            return []
+
+    def filter(self, **kwargs) -> List["SupabaseUser"]:
+        """Filter Supabase users by criteria."""
+        collection = self._get_collection()
+        if collection is None:
+            return []
+
+        try:
+            users = []
+            for data in collection.find(kwargs):
+                users.append(SupabaseUser.from_dict(data))
+            return users
+        except Exception as e:
+            logger.error(f"Failed to filter Supabase users: {e}")
+            return []
+
+    def count(self) -> int:
+        """Count total Supabase users."""
+        collection = self._get_collection()
+        if collection is None:
+            return 0
+
+        try:
+            return collection.count_documents({})
+        except Exception as e:
+            logger.error(f"Failed to count Supabase users: {e}")
+            return 0
+
+    def get(self, **kwargs) -> Optional["SupabaseUser"]:
+        """Get a single Supabase user by criteria."""
+        collection = self._get_collection()
+        if collection is None:
+            return None
+
+        try:
+            data = collection.find_one(kwargs)
+            if data:
+                return SupabaseUser.from_dict(data)
+            return None
+        except Exception as e:
+            logger.error(f"Failed to get Supabase user: {e}")
+            return None
+
+    def get_or_create(
+        self, defaults: Optional[Dict[str, Any]] = None, **kwargs
+    ) -> tuple["SupabaseUser", bool]:
+        """Get existing Supabase user or create new one."""
+        existing = self.get(**kwargs)
+        if existing:
+            return existing, False
+
+        data = kwargs.copy()
+        if defaults:
+            data.update(defaults)
+
+        user = SupabaseUser(**data)
+        user.save()
+        return user, True
+
+
 class Lead:
     """
     MongoDB Lead model.
-    
+
     Represents a lead in the CRM system with MongoDB-specific fields.
     Uses pymongo directly for data operations.
     """
-    
+
     def __init__(
         self,
         _id: Optional[str] = None,
@@ -46,6 +271,7 @@ class Lead:
         contact_info: Optional[Dict[str, Any]] = None,
         api_email: Optional[str] = None,
         disqualified: bool = False,
+        user_id: Optional[str] = None,  # Reference to Django User
         creation_date: Optional[datetime] = None,
     ):
         self._id = _id or str(uuid4())
@@ -56,8 +282,9 @@ class Lead:
         self.contact_info = contact_info or {}
         self.api_email = api_email
         self.disqualified = disqualified
+        self.user_id = user_id  # Reference to Django User who created/owns this lead
         self.creation_date = creation_date or datetime.utcnow()
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert model instance to dictionary for MongoDB storage."""
         data = {
@@ -74,9 +301,11 @@ class Lead:
             data["contact_info"] = self.contact_info
         if self.api_email:
             data["api_email"] = self.api_email
+        if self.user_id:
+            data["user_id"] = self.user_id
         data["disqualified"] = self.disqualified
         return data
-    
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "Lead":
         """Create Lead instance from MongoDB document."""
@@ -89,30 +318,27 @@ class Lead:
             contact_info=data.get("contact_info", {}),
             api_email=data.get("api_email"),
             disqualified=data.get("disqualified", False),
+            user_id=data.get("user_id"),
             creation_date=data.get("creation_date"),
         )
-    
+
     def save(self) -> str:
         """Save the lead to MongoDB."""
         collection = get_mongodb_collection("leads")
         if collection is None:
             raise RuntimeError("MongoDB collection 'leads' not available")
-        
+
         doc = self.to_dict()
-        result = collection.update_one(
-            {"_id": self._id},
-            {"$set": doc},
-            upsert=True
-        )
+        result = collection.update_one({"_id": self._id}, {"$set": doc}, upsert=True)
         return str(result.upserted_id or self._id)
-    
+
     @classmethod
     def get(cls, lead_id: str) -> Optional["Lead"]:
         """Get a lead by ID."""
         collection = get_mongodb_collection("leads")
         if collection is None:
             return None
-        
+
         try:
             data = collection.find_one({"_id": lead_id})
             if data:
@@ -121,30 +347,32 @@ class Lead:
         except Exception as e:
             logger.error(f"Failed to get lead '{lead_id}': {e}")
             return None
-    
+
     @classmethod
     def find_by_public_identifier(cls, public_identifier: str) -> Optional["Lead"]:
         """Find a lead by public identifier."""
         collection = get_mongodb_collection("leads")
         if collection is None:
             return None
-        
+
         try:
             data = collection.find_one({"public_identifier": public_identifier})
             if data:
                 return cls.from_dict(data)
             return None
         except Exception as e:
-            logger.error(f"Failed to find lead by public_identifier '{public_identifier}': {e}")
+            logger.error(
+                f"Failed to find lead by public_identifier '{public_identifier}': {e}"
+            )
             return None
-    
+
     @classmethod
     def find_by_linkedin_url(cls, linkedin_url: str) -> Optional["Lead"]:
         """Find a lead by LinkedIn URL."""
         collection = get_mongodb_collection("leads")
         if collection is None:
             return None
-        
+
         try:
             data = collection.find_one({"linkedin_url": linkedin_url})
             if data:
@@ -153,37 +381,53 @@ class Lead:
         except Exception as e:
             logger.error(f"Failed to find lead by linkedin_url '{linkedin_url}': {e}")
             return None
-    
+
+    @classmethod
+    def find_by_user_id(cls, user_id: str) -> List["Lead"]:
+        """Find leads by user ID (creator)."""
+        collection = get_mongodb_collection("leads")
+        if collection is None:
+            return []
+
+        try:
+            leads = []
+            for data in collection.find({"user_id": user_id}):
+                leads.append(cls.from_dict(data))
+            return leads
+        except Exception as e:
+            logger.error(f"Failed to find leads by user_id '{user_id}': {e}")
+            return []
+
     @classmethod
     def delete(cls, lead_id: str) -> bool:
         """Delete a lead by ID."""
         collection = get_mongodb_collection("leads")
         if collection is None:
             return False
-        
+
         try:
             result = collection.delete_one({"_id": lead_id})
             return result.deleted_count > 0
         except Exception as e:
             logger.error(f"Failed to delete lead '{lead_id}': {e}")
             return False
-    
+
     def __str__(self):
         label = self.public_identifier or self.linkedin_url or f"Lead#{self._id[:8]}"
         if self.disqualified:
             return f"(Disqualified) {label}"
         return label
-    
+
     @property
     def pk(self):
         """Get the primary key."""
         return self._id
-    
+
     @pk.setter
     def pk(self, value):
         """Set the primary key."""
         self._id = value
-    
+
     @classmethod
     def objects(cls) -> "LeadManager":
         """Get the LeadManager for querying leads."""
@@ -192,21 +436,21 @@ class Lead:
 
 class LeadManager:
     """Manager for Lead queries."""
-    
+
     def __init__(self):
         self.collection = None
-    
+
     def _get_collection(self) -> Optional[Collection]:
         if self.collection is None:
             self.collection = get_mongodb_collection("leads")
         return self.collection
-    
+
     def all(self) -> List[Lead]:
         """Get all leads."""
         collection = self._get_collection()
         if collection is None:
             return []
-        
+
         try:
             leads = []
             for data in collection.find():
@@ -215,13 +459,13 @@ class LeadManager:
         except Exception as e:
             logger.error(f"Failed to get all leads: {e}")
             return []
-    
+
     def filter(self, **kwargs) -> List[Lead]:
         """Filter leads by criteria."""
         collection = self._get_collection()
         if collection is None:
             return []
-        
+
         try:
             leads = []
             for data in collection.find(kwargs):
@@ -230,25 +474,25 @@ class LeadManager:
         except Exception as e:
             logger.error(f"Failed to filter leads: {e}")
             return []
-    
+
     def count(self) -> int:
         """Count total leads."""
         collection = self._get_collection()
         if collection is None:
             return 0
-        
+
         try:
             return collection.count_documents({})
         except Exception as e:
             logger.error(f"Failed to count leads: {e}")
             return 0
-    
+
     def get(self, **kwargs) -> Optional[Lead]:
         """Get a single lead by criteria."""
         collection = self._get_collection()
         if collection is None:
             return None
-        
+
         try:
             data = collection.find_one(kwargs)
             if data:
@@ -257,17 +501,19 @@ class LeadManager:
         except Exception as e:
             logger.error(f"Failed to get lead: {e}")
             return None
-    
-    def get_or_create(self, defaults: Optional[Dict[str, Any]] = None, **kwargs) -> tuple["Lead", bool]:
+
+    def get_or_create(
+        self, defaults: Optional[Dict[str, Any]] = None, **kwargs
+    ) -> tuple["Lead", bool]:
         """Get existing lead or create new one."""
         existing = self.get(**kwargs)
         if existing:
             return existing, False
-        
+
         data = kwargs.copy()
         if defaults:
             data.update(defaults)
-        
+
         lead = Lead(**data)
         lead.save()
         return lead, True
@@ -276,11 +522,11 @@ class LeadManager:
 class Campaign:
     """
     MongoDB Campaign model.
-    
+
     Represents a marketing campaign with MongoDB-specific fields.
     Uses pymongo directly for data operations.
     """
-    
+
     def __init__(
         self,
         _id: Optional[str] = None,
@@ -310,7 +556,7 @@ class Campaign:
         self.cooldown_minutes = cooldown_minutes
         self.is_paused = is_paused
         self.created_at = created_at or datetime.utcnow()
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert model instance to dictionary for MongoDB storage."""
         data = {
@@ -330,7 +576,7 @@ class Campaign:
         if self.model_blob:
             data["model_blob"] = self.model_blob
         return data
-    
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "Campaign":
         """Create Campaign instance from MongoDB document."""
@@ -349,28 +595,24 @@ class Campaign:
             is_paused=data.get("is_paused", False),
             created_at=data.get("created_at"),
         )
-    
+
     def save(self) -> str:
         """Save the campaign to MongoDB."""
         collection = get_mongodb_collection("campaigns")
         if collection is None:
             raise RuntimeError("MongoDB collection 'campaigns' not available")
-        
+
         doc = self.to_dict()
-        result = collection.update_one(
-            {"_id": self._id},
-            {"$set": doc},
-            upsert=True
-        )
+        result = collection.update_one({"_id": self._id}, {"$set": doc}, upsert=True)
         return str(result.upserted_id or self._id)
-    
+
     @classmethod
     def get(cls, campaign_id: str) -> Optional["Campaign"]:
         """Get a campaign by ID."""
         collection = get_mongodb_collection("campaigns")
         if collection is None:
             return None
-        
+
         try:
             data = collection.find_one({"_id": campaign_id})
             if data:
@@ -379,14 +621,14 @@ class Campaign:
         except Exception as e:
             logger.error(f"Failed to get campaign '{campaign_id}': {e}")
             return None
-    
+
     @classmethod
     def find_by_name(cls, name: str) -> Optional["Campaign"]:
         """Find a campaign by name."""
         collection = get_mongodb_collection("campaigns")
         if collection is None:
             return None
-        
+
         try:
             data = collection.find_one({"name": name})
             if data:
@@ -395,34 +637,34 @@ class Campaign:
         except Exception as e:
             logger.error(f"Failed to find campaign by name '{name}': {e}")
             return None
-    
+
     @classmethod
     def delete(cls, campaign_id: str) -> bool:
         """Delete a campaign by ID."""
         collection = get_mongodb_collection("campaigns")
         if collection is None:
             return False
-        
+
         try:
             result = collection.delete_one({"_id": campaign_id})
             return result.deleted_count > 0
         except Exception as e:
             logger.error(f"Failed to delete campaign '{campaign_id}': {e}")
             return False
-    
+
     def __str__(self):
         return self.name
-    
+
     @property
     def pk(self):
         """Get the primary key."""
         return self._id
-    
+
     @pk.setter
     def pk(self, value):
         """Set the primary key."""
         self._id = value
-    
+
     @classmethod
     def objects(cls) -> "CampaignManager":
         """Get the CampaignManager for querying campaigns."""
@@ -431,21 +673,21 @@ class Campaign:
 
 class CampaignManager:
     """Manager for Campaign queries."""
-    
+
     def __init__(self):
         self.collection = None
-    
+
     def _get_collection(self) -> Optional[Collection]:
         if self.collection is None:
             self.collection = get_mongodb_collection("campaigns")
         return self.collection
-    
+
     def all(self) -> List[Campaign]:
         """Get all campaigns."""
         collection = self._get_collection()
         if collection is None:
             return []
-        
+
         try:
             campaigns = []
             for data in collection.find():
@@ -454,13 +696,13 @@ class CampaignManager:
         except Exception as e:
             logger.error(f"Failed to get all campaigns: {e}")
             return []
-    
+
     def filter(self, **kwargs) -> List[Campaign]:
         """Filter campaigns by criteria."""
         collection = self._get_collection()
         if collection is None:
             return []
-        
+
         try:
             campaigns = []
             for data in collection.find(kwargs):
@@ -469,25 +711,25 @@ class CampaignManager:
         except Exception as e:
             logger.error(f"Failed to filter campaigns: {e}")
             return []
-    
+
     def count(self) -> int:
         """Count total campaigns."""
         collection = self._get_collection()
         if collection is None:
             return 0
-        
+
         try:
             return collection.count_documents({})
         except Exception as e:
             logger.error(f"Failed to count campaigns: {e}")
             return 0
-    
+
     def get(self, **kwargs) -> Optional[Campaign]:
         """Get a single campaign by criteria."""
         collection = self._get_collection()
         if collection is None:
             return None
-        
+
         try:
             data = collection.find_one(kwargs)
             if data:
@@ -496,17 +738,19 @@ class CampaignManager:
         except Exception as e:
             logger.error(f"Failed to get campaign: {e}")
             return None
-    
-    def get_or_create(self, defaults: Optional[Dict[str, Any]] = None, **kwargs) -> tuple["Campaign", bool]:
+
+    def get_or_create(
+        self, defaults: Optional[Dict[str, Any]] = None, **kwargs
+    ) -> tuple["Campaign", bool]:
         """Get existing campaign or create new one."""
         existing = self.get(**kwargs)
         if existing:
             return existing, False
-        
+
         data = kwargs.copy()
         if defaults:
             data.update(defaults)
-        
+
         campaign = Campaign(**data)
         campaign.save()
         return campaign, True
@@ -515,11 +759,11 @@ class CampaignManager:
 class Deal:
     """
     MongoDB Deal model.
-    
+
     Represents a deal in the CRM system linked to a lead and campaign.
     Uses pymongo directly for data operations.
     """
-    
+
     class DealState:
         QUALIFIED = "Qualified"
         READY_TO_CONNECT = "Ready to Connect"
@@ -528,7 +772,7 @@ class Deal:
         COMPLETED = "Completed"
         FAILED = "Failed"
         NO_EMAIL = "No Email"
-    
+
     class Outcome:
         CONVERTED = "converted"
         NOT_INTERESTED = "not_interested"
@@ -538,12 +782,13 @@ class Deal:
         BAD_TIMING = "bad_timing"
         UNRESPONSIVE = "unresponsive"
         UNKNOWN = "unknown"
-    
+
     def __init__(
         self,
         _id: Optional[str] = None,
         lead_id: str = "",
         campaign_id: str = "",
+        user_id: Optional[str] = None,  # Reference to Django User (owner)
         state: str = DealState.QUALIFIED,
         outcome: str = "",
         reason: str = "",
@@ -557,6 +802,7 @@ class Deal:
         self._id = _id or str(uuid4())
         self.lead_id = lead_id
         self.campaign_id = campaign_id
+        self.user_id = user_id  # Reference to Django User who owns this deal
         self.state = state
         self.outcome = outcome
         self.reason = reason
@@ -566,7 +812,7 @@ class Deal:
         self.profile_summary = profile_summary or {}
         self.chat_summary = chat_summary or {}
         self.creation_date = creation_date or datetime.utcnow()
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert model instance to dictionary for MongoDB storage."""
         data = {
@@ -582,10 +828,12 @@ class Deal:
             "chat_summary": self.chat_summary,
             "creation_date": self.creation_date,
         }
+        if self.user_id:
+            data["user_id"] = self.user_id
         if self.next_check_pending_at:
             data["next_check_pending_at"] = self.next_check_pending_at
         return data
-    
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "Deal":
         """Create Deal instance from MongoDB document."""
@@ -593,6 +841,7 @@ class Deal:
             _id=str(data.get("_id")),
             lead_id=data.get("lead_id", ""),
             campaign_id=data.get("campaign_id", ""),
+            user_id=data.get("user_id"),
             state=data.get("state", cls.DealState.QUALIFIED),
             outcome=data.get("outcome", ""),
             reason=data.get("reason", ""),
@@ -603,28 +852,24 @@ class Deal:
             chat_summary=data.get("chat_summary", {}),
             creation_date=data.get("creation_date"),
         )
-    
+
     def save(self) -> str:
         """Save the deal to MongoDB."""
         collection = get_mongodb_collection("deals")
         if collection is None:
             raise RuntimeError("MongoDB collection 'deals' not available")
-        
+
         doc = self.to_dict()
-        result = collection.update_one(
-            {"_id": self._id},
-            {"$set": doc},
-            upsert=True
-        )
+        result = collection.update_one({"_id": self._id}, {"$set": doc}, upsert=True)
         return str(result.upserted_id or self._id)
-    
+
     @classmethod
     def get(cls, deal_id: str) -> Optional["Deal"]:
         """Get a deal by ID."""
         collection = get_mongodb_collection("deals")
         if collection is None:
             return None
-        
+
         try:
             data = collection.find_one({"_id": deal_id})
             if data:
@@ -633,14 +878,14 @@ class Deal:
         except Exception as e:
             logger.error(f"Failed to get deal '{deal_id}': {e}")
             return None
-    
+
     @classmethod
     def find_by_lead_id(cls, lead_id: str) -> List["Deal"]:
         """Find deals by lead ID."""
         collection = get_mongodb_collection("deals")
         if collection is None:
             return []
-        
+
         try:
             deals = []
             for data in collection.find({"lead_id": lead_id}):
@@ -649,14 +894,14 @@ class Deal:
         except Exception as e:
             logger.error(f"Failed to find deals by lead_id '{lead_id}': {e}")
             return []
-    
+
     @classmethod
     def find_by_campaign_id(cls, campaign_id: str) -> List["Deal"]:
         """Find deals by campaign ID."""
         collection = get_mongodb_collection("deals")
         if collection is None:
             return []
-        
+
         try:
             deals = []
             for data in collection.find({"campaign_id": campaign_id}):
@@ -665,34 +910,50 @@ class Deal:
         except Exception as e:
             logger.error(f"Failed to find deals by campaign_id '{campaign_id}': {e}")
             return []
-    
+
+    @classmethod
+    def find_by_user_id(cls, user_id: str) -> List["Deal"]:
+        """Find deals by user ID."""
+        collection = get_mongodb_collection("deals")
+        if collection is None:
+            return []
+
+        try:
+            deals = []
+            for data in collection.find({"user_id": user_id}):
+                deals.append(cls.from_dict(data))
+            return deals
+        except Exception as e:
+            logger.error(f"Failed to find deals by user_id '{user_id}': {e}")
+            return []
+
     @classmethod
     def delete(cls, deal_id: str) -> bool:
         """Delete a deal by ID."""
         collection = get_mongodb_collection("deals")
         if collection is None:
             return False
-        
+
         try:
             result = collection.delete_one({"_id": deal_id})
             return result.deleted_count > 0
         except Exception as e:
             logger.error(f"Failed to delete deal '{deal_id}': {e}")
             return False
-    
+
     def __str__(self):
         return f"Deal#{self._id[:8]} - {self.state}"
-    
+
     @property
     def pk(self):
         """Get the primary key."""
         return self._id
-    
+
     @pk.setter
     def pk(self, value):
         """Set the primary key."""
         self._id = value
-    
+
     @classmethod
     def objects(cls) -> "DealManager":
         """Get the DealManager for querying deals."""
@@ -702,7 +963,7 @@ class Deal:
 class Message:
     """
     MongoDB Message model.
-    
+
     Represents a message in the CRM system.
     Uses pymongo directly for data operations.
     """
@@ -713,12 +974,14 @@ class Message:
         deal_id: str = "",
         content: str = "",
         is_outgoing: bool = True,
+        user_id: Optional[str] = None,  # Reference to Django User (author)
         created_at: Optional[datetime] = None,
     ):
         self._id = _id or str(uuid4())
         self.deal_id = deal_id
         self.content = content
         self.is_outgoing = is_outgoing
+        self.user_id = user_id  # Reference to Django User who created this message
         self.created_at = created_at or datetime.utcnow()
 
     def to_dict(self) -> Dict[str, Any]:
@@ -730,6 +993,8 @@ class Message:
             "is_outgoing": self.is_outgoing,
             "created_at": self.created_at,
         }
+        if self.user_id:
+            data["user_id"] = self.user_id
         return data
 
     @classmethod
@@ -740,6 +1005,7 @@ class Message:
             deal_id=data.get("deal_id", ""),
             content=data.get("content", ""),
             is_outgoing=data.get("is_outgoing", True),
+            user_id=data.get("user_id"),
             created_at=data.get("created_at"),
         )
 
@@ -750,11 +1016,7 @@ class Message:
             raise RuntimeError("MongoDB collection 'messages' not available")
 
         doc = self.to_dict()
-        result = collection.update_one(
-            {"_id": self._id},
-            {"$set": doc},
-            upsert=True
-        )
+        result = collection.update_one({"_id": self._id}, {"$set": doc}, upsert=True)
         return str(result.upserted_id or self._id)
 
     @classmethod
@@ -787,6 +1049,22 @@ class Message:
             return messages
         except Exception as e:
             logger.error(f"Failed to find messages by deal_id '{deal_id}': {e}")
+            return []
+
+    @classmethod
+    def find_by_user_id(cls, user_id: str) -> List["Message"]:
+        """Find messages by user ID."""
+        collection = get_mongodb_collection("messages")
+        if collection is None:
+            return []
+
+        try:
+            messages = []
+            for data in collection.find({"user_id": user_id}):
+                messages.append(cls.from_dict(data))
+            return messages
+        except Exception as e:
+            logger.error(f"Failed to find messages by user_id '{user_id}': {e}")
             return []
 
     @classmethod
@@ -890,7 +1168,9 @@ class MessageManager:
             logger.error(f"Failed to get message: {e}")
             return None
 
-    def get_or_create(self, defaults: Optional[Dict[str, Any]] = None, **kwargs) -> tuple["Message", bool]:
+    def get_or_create(
+        self, defaults: Optional[Dict[str, Any]] = None, **kwargs
+    ) -> tuple["Message", bool]:
         """Get existing message or create new one."""
         existing = self.get(**kwargs)
         if existing:
@@ -908,7 +1188,7 @@ class MessageManager:
 class Note:
     """
     MongoDB Note model.
-    
+
     Represents a note on a deal.
     Uses pymongo directly for data operations.
     """
@@ -918,13 +1198,17 @@ class Note:
         _id: Optional[str] = None,
         deal_id: str = "",
         content: str = "",
-        created_by_id: Optional[str] = None,
+        created_by_id: Optional[str] = None,  # Reference to Django User (creator)
+        user_id: Optional[str] = None,  # Reference to Django User (owner/creator)
         created_at: Optional[datetime] = None,
     ):
         self._id = _id or str(uuid4())
         self.deal_id = deal_id
         self.content = content
-        self.created_by_id = created_by_id
+        self.created_by_id = (
+            created_by_id  # Reference to Django User who created (legacy)
+        )
+        self.user_id = user_id  # Reference to Django User who owns/created this note
         self.created_at = created_at or datetime.utcnow()
 
     def to_dict(self) -> Dict[str, Any]:
@@ -933,9 +1217,12 @@ class Note:
             "_id": self._id,
             "deal_id": self.deal_id,
             "content": self.content,
-            "created_by_id": self.created_by_id,
             "created_at": self.created_at,
         }
+        if self.created_by_id:
+            data["created_by_id"] = self.created_by_id
+        if self.user_id:
+            data["user_id"] = self.user_id
         return data
 
     @classmethod
@@ -946,6 +1233,7 @@ class Note:
             deal_id=data.get("deal_id", ""),
             content=data.get("content", ""),
             created_by_id=data.get("created_by_id"),
+            user_id=data.get("user_id"),
             created_at=data.get("created_at"),
         )
 
@@ -956,11 +1244,7 @@ class Note:
             raise RuntimeError("MongoDB collection 'notes' not available")
 
         doc = self.to_dict()
-        result = collection.update_one(
-            {"_id": self._id},
-            {"$set": doc},
-            upsert=True
-        )
+        result = collection.update_one({"_id": self._id}, {"$set": doc}, upsert=True)
         return str(result.upserted_id or self._id)
 
     @classmethod
@@ -993,6 +1277,22 @@ class Note:
             return notes
         except Exception as e:
             logger.error(f"Failed to find notes by deal_id '{deal_id}': {e}")
+            return []
+
+    @classmethod
+    def find_by_user_id(cls, user_id: str) -> List["Note"]:
+        """Find notes by user ID."""
+        collection = get_mongodb_collection("notes")
+        if collection is None:
+            return []
+
+        try:
+            notes = []
+            for data in collection.find({"user_id": user_id}):
+                notes.append(cls.from_dict(data))
+            return notes
+        except Exception as e:
+            logger.error(f"Failed to find notes by user_id '{user_id}': {e}")
             return []
 
     @classmethod
@@ -1096,7 +1396,9 @@ class NoteManager:
             logger.error(f"Failed to get note: {e}")
             return None
 
-    def get_or_create(self, defaults: Optional[Dict[str, Any]] = None, **kwargs) -> tuple["Note", bool]:
+    def get_or_create(
+        self, defaults: Optional[Dict[str, Any]] = None, **kwargs
+    ) -> tuple["Note", bool]:
         """Get existing note or create new one."""
         existing = self.get(**kwargs)
         if existing:
@@ -1114,7 +1416,7 @@ class NoteManager:
 class LeadPersona:
     """
     MongoDB LeadPersona model.
-    
+
     Represents a detailed digital twin of a lead.
     Uses pymongo directly for data operations.
     """
@@ -1124,6 +1426,7 @@ class LeadPersona:
         _id: Optional[str] = None,
         lead_id: str = "",
         campaign_id: str = "",
+        user_id: Optional[str] = None,  # Reference to Django User (creator)
         pain_points: Optional[List[str]] = None,
         goals: Optional[List[str]] = None,
         messaging_preferences: Optional[Dict[str, Any]] = None,
@@ -1137,6 +1440,7 @@ class LeadPersona:
         self._id = _id or str(uuid4())
         self.lead_id = lead_id
         self.campaign_id = campaign_id
+        self.user_id = user_id  # Reference to Django User who created this persona
         self.pain_points = pain_points or []
         self.goals = goals or []
         self.messaging_preferences = messaging_preferences or {}
@@ -1163,6 +1467,8 @@ class LeadPersona:
             "generated_at": self.generated_at,
             "last_updated": self.last_updated,
         }
+        if self.user_id:
+            data["user_id"] = self.user_id
         return data
 
     @classmethod
@@ -1172,6 +1478,7 @@ class LeadPersona:
             _id=str(data.get("_id")),
             lead_id=data.get("lead_id", ""),
             campaign_id=data.get("campaign_id", ""),
+            user_id=data.get("user_id"),
             pain_points=data.get("pain_points", []),
             goals=data.get("goals", []),
             messaging_preferences=data.get("messaging_preferences", {}),
@@ -1190,11 +1497,7 @@ class LeadPersona:
             raise RuntimeError("MongoDB collection 'lead_personas' not available")
 
         doc = self.to_dict()
-        result = collection.update_one(
-            {"_id": self._id},
-            {"$set": doc},
-            upsert=True
-        )
+        result = collection.update_one({"_id": self._id}, {"$set": doc}, upsert=True)
         return str(result.upserted_id or self._id)
 
     @classmethod
@@ -1243,6 +1546,22 @@ class LeadPersona:
             return personae
         except Exception as e:
             logger.error(f"Failed to find personae by campaign_id '{campaign_id}': {e}")
+            return []
+
+    @classmethod
+    def find_by_user_id(cls, user_id: str) -> List["LeadPersona"]:
+        """Find lead personae by user ID."""
+        collection = get_mongodb_collection("lead_personas")
+        if collection is None:
+            return []
+
+        try:
+            personae = []
+            for data in collection.find({"user_id": user_id}):
+                personae.append(cls.from_dict(data))
+            return personae
+        except Exception as e:
+            logger.error(f"Failed to find personae by user_id '{user_id}': {e}")
             return []
 
     @classmethod
@@ -1346,7 +1665,9 @@ class LeadPersonaManager:
             logger.error(f"Failed to get persona: {e}")
             return None
 
-    def get_or_create(self, defaults: Optional[Dict[str, Any]] = None, **kwargs) -> tuple["LeadPersona", bool]:
+    def get_or_create(
+        self, defaults: Optional[Dict[str, Any]] = None, **kwargs
+    ) -> tuple["LeadPersona", bool]:
         """Get existing persona or create new one."""
         existing = self.get(**kwargs)
         if existing:
@@ -1364,7 +1685,7 @@ class LeadPersonaManager:
 class TrackedLink:
     """
     MongoDB TrackedLink model.
-    
+
     Represents a tracked marketing link with UTM parameters.
     Uses pymongo directly for data operations.
     """
@@ -1373,6 +1694,7 @@ class TrackedLink:
         self,
         _id: Optional[str] = None,
         campaign_id: Optional[str] = None,
+        user_id: Optional[str] = None,  # Reference to Django User (creator)
         original_url: str = "",
         short_code: str = "",
         is_active: bool = True,
@@ -1390,6 +1712,7 @@ class TrackedLink:
     ):
         self._id = _id or str(uuid4())
         self.campaign_id = campaign_id
+        self.user_id = user_id  # Reference to Django User who created this link
         self.original_url = original_url
         self.short_code = short_code
         self.is_active = is_active
@@ -1425,6 +1748,8 @@ class TrackedLink:
             "last_ip": self.last_ip,
             "last_user_agent": self.last_user_agent,
         }
+        if self.user_id:
+            data["user_id"] = self.user_id
         return data
 
     @classmethod
@@ -1433,6 +1758,7 @@ class TrackedLink:
         return cls(
             _id=str(data.get("_id")),
             campaign_id=data.get("campaign_id"),
+            user_id=data.get("user_id"),
             original_url=data.get("original_url", ""),
             short_code=data.get("short_code", ""),
             is_active=data.get("is_active", True),
@@ -1456,11 +1782,7 @@ class TrackedLink:
             raise RuntimeError("MongoDB collection 'tracked_links' not available")
 
         doc = self.to_dict()
-        result = collection.update_one(
-            {"_id": self._id},
-            {"$set": doc},
-            upsert=True
-        )
+        result = collection.update_one({"_id": self._id}, {"$set": doc}, upsert=True)
         return str(result.upserted_id or self._id)
 
     @classmethod
@@ -1492,7 +1814,9 @@ class TrackedLink:
                 return cls.from_dict(data)
             return None
         except Exception as e:
-            logger.error(f"Failed to find tracked link by short_code '{short_code}': {e}")
+            logger.error(
+                f"Failed to find tracked link by short_code '{short_code}': {e}"
+            )
             return None
 
     @classmethod
@@ -1509,6 +1833,22 @@ class TrackedLink:
             return links
         except Exception as e:
             logger.error(f"Failed to find links by campaign_id '{campaign_id}': {e}")
+            return []
+
+    @classmethod
+    def find_by_user_id(cls, user_id: str) -> List["TrackedLink"]:
+        """Find tracked links by user ID."""
+        collection = get_mongodb_collection("tracked_links")
+        if collection is None:
+            return []
+
+        try:
+            links = []
+            for data in collection.find({"user_id": user_id}):
+                links.append(cls.from_dict(data))
+            return links
+        except Exception as e:
+            logger.error(f"Failed to find links by user_id '{user_id}': {e}")
             return []
 
     @classmethod
@@ -1612,7 +1952,9 @@ class TrackedLinkManager:
             logger.error(f"Failed to get tracked link: {e}")
             return None
 
-    def get_or_create(self, defaults: Optional[Dict[str, Any]] = None, **kwargs) -> tuple["TrackedLink", bool]:
+    def get_or_create(
+        self, defaults: Optional[Dict[str, Any]] = None, **kwargs
+    ) -> tuple["TrackedLink", bool]:
         """Get existing tracked link or create new one."""
         existing = self.get(**kwargs)
         if existing:
@@ -1630,7 +1972,7 @@ class TrackedLinkManager:
 class LinkClick:
     """
     MongoDB LinkClick model.
-    
+
     Represents an individual click on a tracked link.
     Uses pymongo directly for data operations.
     """
@@ -1690,11 +2032,7 @@ class LinkClick:
             raise RuntimeError("MongoDB collection 'link_clicks' not available")
 
         doc = self.to_dict()
-        result = collection.update_one(
-            {"_id": self._id},
-            {"$set": doc},
-            upsert=True
-        )
+        result = collection.update_one({"_id": self._id}, {"$set": doc}, upsert=True)
         return str(result.upserted_id or self._id)
 
     @classmethod
@@ -1830,7 +2168,9 @@ class LinkClickManager:
             logger.error(f"Failed to get link click: {e}")
             return None
 
-    def get_or_create(self, defaults: Optional[Dict[str, Any]] = None, **kwargs) -> tuple["LinkClick", bool]:
+    def get_or_create(
+        self, defaults: Optional[Dict[str, Any]] = None, **kwargs
+    ) -> tuple["LinkClick", bool]:
         """Get existing link click or create new one."""
         existing = self.get(**kwargs)
         if existing:
@@ -1848,7 +2188,7 @@ class LinkClickManager:
 class LinkDealConversion:
     """
     MongoDB LinkDealConversion model.
-    
+
     Represents a conversion from a link click to a deal.
     Uses pymongo directly for data operations.
     """
@@ -1893,14 +2233,12 @@ class LinkDealConversion:
         """Save the link conversion to MongoDB."""
         collection = get_mongodb_collection("link_deal_conversions")
         if collection is None:
-            raise RuntimeError("MongoDB collection 'link_deal_conversions' not available")
+            raise RuntimeError(
+                "MongoDB collection 'link_deal_conversions' not available"
+            )
 
         doc = self.to_dict()
-        result = collection.update_one(
-            {"_id": self._id},
-            {"$set": doc},
-            upsert=True
-        )
+        result = collection.update_one({"_id": self._id}, {"$set": doc}, upsert=True)
         return str(result.upserted_id or self._id)
 
     @classmethod
@@ -2052,7 +2390,9 @@ class LinkDealConversionManager:
             logger.error(f"Failed to get conversion: {e}")
             return None
 
-    def get_or_create(self, defaults: Optional[Dict[str, Any]] = None, **kwargs) -> tuple["LinkDealConversion", bool]:
+    def get_or_create(
+        self, defaults: Optional[Dict[str, Any]] = None, **kwargs
+    ) -> tuple["LinkDealConversion", bool]:
         """Get existing conversion or create new one."""
         existing = self.get(**kwargs)
         if existing:
@@ -2070,18 +2410,18 @@ class LinkDealConversionManager:
 class LinkedInCredentials:
     """
     MongoDB LinkedInCredentials model.
-    
+
     Represents LinkedIn credentials with encrypted storage.
     Uses pymongo directly for data operations.
     """
 
-    STATUS_STORED = 'stored'
-    STATUS_TESTED = 'tested'
-    STATUS_ACTIVE = 'active'
-    STATUS_INVALID = 'invalid'
-    STATUS_EXPIRED = 'expired'
-    STATUS_LOCKED = 'locked'
-    STATUS_BACKUP = 'backup'
+    STATUS_STORED = "stored"
+    STATUS_TESTED = "tested"
+    STATUS_ACTIVE = "active"
+    STATUS_INVALID = "invalid"
+    STATUS_EXPIRED = "expired"
+    STATUS_LOCKED = "locked"
+    STATUS_BACKUP = "backup"
 
     def __init__(
         self,
@@ -2097,6 +2437,7 @@ class LinkedInCredentials:
         usage_count: int = 0,
         last_used: Optional[datetime] = None,
         campaign_id: Optional[str] = None,
+        user_id: Optional[str] = None,  # Reference to Django User (owner)
         created_at: Optional[datetime] = None,
         updated_at: Optional[datetime] = None,
         expires_at: Optional[datetime] = None,
@@ -2119,6 +2460,7 @@ class LinkedInCredentials:
         self.usage_count = usage_count
         self.last_used = last_used
         self.campaign_id = campaign_id
+        self.user_id = user_id  # Reference to Django User who owns these credentials
         self.created_at = created_at or datetime.utcnow()
         self.updated_at = updated_at or datetime.utcnow()
         self.expires_at = expires_at
@@ -2154,6 +2496,8 @@ class LinkedInCredentials:
             "backup_of_id": self.backup_of_id,
             "security_alert_sent_at": self.security_alert_sent_at,
         }
+        if self.user_id:
+            data["user_id"] = self.user_id
         return data
 
     @classmethod
@@ -2172,6 +2516,7 @@ class LinkedInCredentials:
             usage_count=data.get("usage_count", 0),
             last_used=data.get("last_used"),
             campaign_id=data.get("campaign_id"),
+            user_id=data.get("user_id"),
             created_at=data.get("created_at"),
             updated_at=data.get("updated_at"),
             expires_at=data.get("expires_at"),
@@ -2187,14 +2532,12 @@ class LinkedInCredentials:
         """Save the LinkedIn credentials to MongoDB."""
         collection = get_mongodb_collection("linkedin_credentials")
         if collection is None:
-            raise RuntimeError("MongoDB collection 'linkedin_credentials' not available")
+            raise RuntimeError(
+                "MongoDB collection 'linkedin_credentials' not available"
+            )
 
         doc = self.to_dict()
-        result = collection.update_one(
-            {"_id": self._id},
-            {"$set": doc},
-            upsert=True
-        )
+        result = collection.update_one({"_id": self._id}, {"$set": doc}, upsert=True)
         return str(result.upserted_id or self._id)
 
     @classmethod
@@ -2226,7 +2569,9 @@ class LinkedInCredentials:
                 return cls.from_dict(data)
             return None
         except Exception as e:
-            logger.error(f"Failed to find credentials by profile_id '{profile_id}': {e}")
+            logger.error(
+                f"Failed to find credentials by profile_id '{profile_id}': {e}"
+            )
             return None
 
     @classmethod
@@ -2242,7 +2587,25 @@ class LinkedInCredentials:
                 credentials.append(cls.from_dict(data))
             return credentials
         except Exception as e:
-            logger.error(f"Failed to find credentials by campaign_id '{campaign_id}': {e}")
+            logger.error(
+                f"Failed to find credentials by campaign_id '{campaign_id}': {e}"
+            )
+            return []
+
+    @classmethod
+    def find_by_user_id(cls, user_id: str) -> List["LinkedInCredentials"]:
+        """Find credentials by user ID."""
+        collection = get_mongodb_collection("linkedin_credentials")
+        if collection is None:
+            return []
+
+        try:
+            credentials = []
+            for data in collection.find({"user_id": user_id}):
+                credentials.append(cls.from_dict(data))
+            return credentials
+        except Exception as e:
+            logger.error(f"Failed to find credentials by user_id '{user_id}': {e}")
             return []
 
     @classmethod
@@ -2256,7 +2619,9 @@ class LinkedInCredentials:
             result = collection.delete_one({"_id": credential_id})
             return result.deleted_count > 0
         except Exception as e:
-            logger.error(f"Failed to delete LinkedIn credentials '{credential_id}': {e}")
+            logger.error(
+                f"Failed to delete LinkedIn credentials '{credential_id}': {e}"
+            )
             return False
 
     def __str__(self) -> str:
@@ -2346,7 +2711,9 @@ class LinkedInCredentialsManager:
             logger.error(f"Failed to get credential: {e}")
             return None
 
-    def get_or_create(self, defaults: Optional[Dict[str, Any]] = None, **kwargs) -> tuple["LinkedInCredentials", bool]:
+    def get_or_create(
+        self, defaults: Optional[Dict[str, Any]] = None, **kwargs
+    ) -> tuple["LinkedInCredentials", bool]:
         """Get existing credential or create new one."""
         existing = self.get(**kwargs)
         if existing:
@@ -2364,18 +2731,18 @@ class LinkedInCredentialsManager:
 class LinkedInCredentialLog:
     """
     MongoDB LinkedInCredentialLog model.
-    
+
     Represents an audit log for LinkedIn credential actions.
     Uses pymongo directly for data operations.
     """
 
-    ACTION_VERIFIED = 'verified'
-    ACTION_FAILED = 'failed'
-    ACTION_LOCKED = 'locked'
-    ACTION_UNLOCKED = 'unlocked'
-    ACTION_ROTATED = 'rotated'
-    ACTION_BACKUP = 'backup'
-    ACTION_USAGE = 'usage'
+    ACTION_VERIFIED = "verified"
+    ACTION_FAILED = "failed"
+    ACTION_LOCKED = "locked"
+    ACTION_UNLOCKED = "unlocked"
+    ACTION_ROTATED = "rotated"
+    ACTION_BACKUP = "backup"
+    ACTION_USAGE = "usage"
 
     def __init__(
         self,
@@ -2425,14 +2792,12 @@ class LinkedInCredentialLog:
         """Save the credential log to MongoDB."""
         collection = get_mongodb_collection("linkedin_credential_logs")
         if collection is None:
-            raise RuntimeError("MongoDB collection 'linkedin_credential_logs' not available")
+            raise RuntimeError(
+                "MongoDB collection 'linkedin_credential_logs' not available"
+            )
 
         doc = self.to_dict()
-        result = collection.update_one(
-            {"_id": self._id},
-            {"$set": doc},
-            upsert=True
-        )
+        result = collection.update_one({"_id": self._id}, {"$set": doc}, upsert=True)
         return str(result.upserted_id or self._id)
 
     @classmethod
@@ -2568,7 +2933,9 @@ class LinkedInCredentialLogManager:
             logger.error(f"Failed to get log: {e}")
             return None
 
-    def get_or_create(self, defaults: Optional[Dict[str, Any]] = None, **kwargs) -> tuple["LinkedInCredentialLog", bool]:
+    def get_or_create(
+        self, defaults: Optional[Dict[str, Any]] = None, **kwargs
+    ) -> tuple["LinkedInCredentialLog", bool]:
         """Get existing log or create new one."""
         existing = self.get(**kwargs)
         if existing:
@@ -2586,7 +2953,7 @@ class LinkedInCredentialLogManager:
 class SiteConfig:
     """
     MongoDB SiteConfig model.
-    
+
     Represents global site configuration.
     Uses pymongo directly for data operations.
     """
@@ -2674,11 +3041,7 @@ class SiteConfig:
             raise RuntimeError("MongoDB collection 'site_config' not available")
 
         doc = self.to_dict()
-        result = collection.update_one(
-            {"_id": self._id},
-            {"$set": doc},
-            upsert=True
-        )
+        result = collection.update_one({"_id": self._id}, {"$set": doc}, upsert=True)
         return str(result.upserted_id or self._id)
 
     @classmethod
@@ -2710,7 +3073,9 @@ class SiteConfig:
                 return cls.from_dict(data)
             return None
         except Exception as e:
-            logger.error(f"Failed to find site config by llm_provider '{llm_provider}': {e}")
+            logger.error(
+                f"Failed to find site config by llm_provider '{llm_provider}': {e}"
+            )
             return None
 
     @classmethod
@@ -2814,7 +3179,9 @@ class SiteConfigManager:
             logger.error(f"Failed to get config: {e}")
             return None
 
-    def get_or_create(self, defaults: Optional[Dict[str, Any]] = None, **kwargs) -> tuple["SiteConfig", bool]:
+    def get_or_create(
+        self, defaults: Optional[Dict[str, Any]] = None, **kwargs
+    ) -> tuple["SiteConfig", bool]:
         """Get existing config or create new one."""
         existing = self.get(**kwargs)
         if existing:
@@ -2832,7 +3199,7 @@ class SiteConfigManager:
 class Task:
     """
     MongoDB Task model.
-    
+
     Represents a scheduled task in the system.
     Uses pymongo directly for data operations.
     """
@@ -2854,6 +3221,7 @@ class Task:
         status: str = STATUS_PENDING,
         scheduled_at: Optional[datetime] = None,
         payload: Optional[Dict[str, Any]] = None,
+        user_id: Optional[str] = None,  # Reference to Django User (owner)
         created_at: Optional[datetime] = None,
         started_at: Optional[datetime] = None,
         completed_at: Optional[datetime] = None,
@@ -2863,6 +3231,7 @@ class Task:
         self.status = status
         self.scheduled_at = scheduled_at or datetime.utcnow()
         self.payload = payload or {}
+        self.user_id = user_id  # Reference to Django User who owns this task
         self.created_at = created_at or datetime.utcnow()
         self.started_at = started_at
         self.completed_at = completed_at
@@ -2876,9 +3245,13 @@ class Task:
             "scheduled_at": self.scheduled_at,
             "payload": self.payload,
             "created_at": self.created_at,
-            "started_at": self.started_at,
-            "completed_at": self.completed_at,
         }
+        if self.user_id:
+            data["user_id"] = self.user_id
+        if self.started_at:
+            data["started_at"] = self.started_at
+        if self.completed_at:
+            data["completed_at"] = self.completed_at
         return data
 
     @classmethod
@@ -2890,6 +3263,7 @@ class Task:
             status=data.get("status", cls.STATUS_PENDING),
             scheduled_at=data.get("scheduled_at"),
             payload=data.get("payload", {}),
+            user_id=data.get("user_id"),
             created_at=data.get("created_at"),
             started_at=data.get("started_at"),
             completed_at=data.get("completed_at"),
@@ -2902,11 +3276,7 @@ class Task:
             raise RuntimeError("MongoDB collection 'tasks' not available")
 
         doc = self.to_dict()
-        result = collection.update_one(
-            {"_id": self._id},
-            {"$set": doc},
-            upsert=True
-        )
+        result = collection.update_one({"_id": self._id}, {"$set": doc}, upsert=True)
         return str(result.upserted_id or self._id)
 
     @classmethod
@@ -2939,6 +3309,22 @@ class Task:
             return tasks
         except Exception as e:
             logger.error(f"Failed to find tasks by status '{status}': {e}")
+            return []
+
+    @classmethod
+    def find_by_user_id(cls, user_id: str) -> List["Task"]:
+        """Find tasks by user ID."""
+        collection = get_mongodb_collection("tasks")
+        if collection is None:
+            return []
+
+        try:
+            tasks = []
+            for data in collection.find({"user_id": user_id}):
+                tasks.append(cls.from_dict(data))
+            return tasks
+        except Exception as e:
+            logger.error(f"Failed to find tasks by user_id '{user_id}': {e}")
             return []
 
     @classmethod
@@ -3042,7 +3428,9 @@ class TaskManager:
             logger.error(f"Failed to get task: {e}")
             return None
 
-    def get_or_create(self, defaults: Optional[Dict[str, Any]] = None, **kwargs) -> tuple["Task", bool]:
+    def get_or_create(
+        self, defaults: Optional[Dict[str, Any]] = None, **kwargs
+    ) -> tuple["Task", bool]:
         """Get existing task or create new one."""
         existing = self.get(**kwargs)
         if existing:
@@ -3059,21 +3447,21 @@ class TaskManager:
 
 class DealManager:
     """Manager for Deal queries."""
-    
+
     def __init__(self):
         self.collection = None
-    
+
     def _get_collection(self) -> Optional[Collection]:
         if self.collection is None:
             self.collection = get_mongodb_collection("deals")
         return self.collection
-    
+
     def all(self) -> List[Deal]:
         """Get all deals."""
         collection = self._get_collection()
         if collection is None:
             return []
-        
+
         try:
             deals = []
             for data in collection.find():
@@ -3082,13 +3470,13 @@ class DealManager:
         except Exception as e:
             logger.error(f"Failed to get all deals: {e}")
             return []
-    
+
     def filter(self, **kwargs) -> List[Deal]:
         """Filter deals by criteria."""
         collection = self._get_collection()
         if collection is None:
             return []
-        
+
         try:
             deals = []
             for data in collection.find(kwargs):
@@ -3097,25 +3485,25 @@ class DealManager:
         except Exception as e:
             logger.error(f"Failed to filter deals: {e}")
             return []
-    
+
     def count(self) -> int:
         """Count total deals."""
         collection = self._get_collection()
         if collection is None:
             return 0
-        
+
         try:
             return collection.count_documents({})
         except Exception as e:
             logger.error(f"Failed to count deals: {e}")
             return 0
-    
+
     def get(self, **kwargs) -> Optional[Deal]:
         """Get a single deal by criteria."""
         collection = self._get_collection()
         if collection is None:
             return None
-        
+
         try:
             data = collection.find_one(kwargs)
             if data:
@@ -3124,17 +3512,19 @@ class DealManager:
         except Exception as e:
             logger.error(f"Failed to get deal: {e}")
             return None
-    
-    def get_or_create(self, defaults: Optional[Dict[str, Any]] = None, **kwargs) -> tuple["Deal", bool]:
+
+    def get_or_create(
+        self, defaults: Optional[Dict[str, Any]] = None, **kwargs
+    ) -> tuple["Deal", bool]:
         """Get existing deal or create new one."""
         existing = self.get(**kwargs)
         if existing:
             return existing, False
-        
+
         data = kwargs.copy()
         if defaults:
             data.update(defaults)
-        
+
         deal = Deal(**data)
         deal.save()
         return deal, True
@@ -3145,95 +3535,154 @@ def ensure_mongodb_indexes():
     if not check_mongodb_connection():
         logger.warning("MongoDB not connected, skipping index creation")
         return
-    
+
     db = get_mongodb()
     if db is None:
         return
-    
+
     indexes = [
+        # Supabase Users indexes
+        (
+            "supabase_users",
+            [
+                ("supabase_user_id", {"name": "supabase_user_id_idx", "unique": True}),
+                ("django_user_id", {"name": "django_user_id_idx"}),
+                ("email", {"name": "email_idx"}),
+                ("is_active", {"name": "is_active_idx"}),
+            ],
+        ),
         # Lead indexes
-        ("leads", [
-            ("public_identifier", {"name": "public_identifier_idx"}),
-            ("linkedin_url", {"name": "linkedin_url_idx"}),
-            ("creation_date", {"name": "creation_date_idx"}),
-        ]),
+        (
+            "leads",
+            [
+                ("public_identifier", {"name": "public_identifier_idx"}),
+                ("linkedin_url", {"name": "linkedin_url_idx"}),
+                ("creation_date", {"name": "creation_date_idx"}),
+                ("user_id", {"name": "user_id_idx"}),
+            ],
+        ),
         # Campaign indexes
-        ("campaigns", [
-            ("name", {"name": "name_idx"}),
-            ("is_paused", {"name": "is_paused_idx"}),
-        ]),
+        (
+            "campaigns",
+            [
+                ("name", {"name": "name_idx"}),
+                ("is_paused", {"name": "is_paused_idx"}),
+            ],
+        ),
         # Deal indexes
-        ("deals", [
-            ("lead_id", {"name": "lead_id_idx"}),
-            ("campaign_id", {"name": "campaign_id_idx"}),
-            ("state", {"name": "state_idx"}),
-        ]),
+        (
+            "deals",
+            [
+                ("lead_id", {"name": "lead_id_idx"}),
+                ("campaign_id", {"name": "campaign_id_idx"}),
+                ("state", {"name": "state_idx"}),
+                ("user_id", {"name": "user_id_idx"}),
+            ],
+        ),
         # Message indexes
-        ("messages", [
-            ("deal_id", {"name": "deal_id_idx"}),
-            ("created_at", {"name": "created_at_idx"}),
-        ]),
+        (
+            "messages",
+            [
+                ("deal_id", {"name": "deal_id_idx"}),
+                ("created_at", {"name": "created_at_idx"}),
+                ("user_id", {"name": "user_id_idx"}),
+            ],
+        ),
         # Note indexes
-        ("notes", [
-            ("deal_id", {"name": "deal_id_idx"}),
-            ("created_at", {"name": "created_at_idx"}),
-        ]),
+        (
+            "notes",
+            [
+                ("deal_id", {"name": "deal_id_idx"}),
+                ("created_at", {"name": "created_at_idx"}),
+                ("user_id", {"name": "user_id_idx"}),
+            ],
+        ),
         # Lead Persona indexes
-        ("lead_personas", [
-            ("lead_id", {"name": "lead_id_idx"}),
-            ("campaign_id", {"name": "campaign_id_idx"}),
-            ("generated_at", {"name": "generated_at_idx"}),
-        ]),
+        (
+            "lead_personas",
+            [
+                ("lead_id", {"name": "lead_id_idx"}),
+                ("campaign_id", {"name": "campaign_id_idx"}),
+                ("generated_at", {"name": "generated_at_idx"}),
+                ("user_id", {"name": "user_id_idx"}),
+            ],
+        ),
         # Tracked Link indexes
-        ("tracked_links", [
-            ("campaign_id", {"name": "campaign_id_idx"}),
-            ("short_code", {"name": "short_code_idx"}),
-            ("created_at", {"name": "created_at_idx"}),
-        ]),
+        (
+            "tracked_links",
+            [
+                ("campaign_id", {"name": "campaign_id_idx"}),
+                ("short_code", {"name": "short_code_idx"}),
+                ("created_at", {"name": "created_at_idx"}),
+                ("user_id", {"name": "user_id_idx"}),
+            ],
+        ),
         # Link Click indexes
-        ("link_clicks", [
-            ("link_id", {"name": "link_id_idx"}),
-            ("clicked_at", {"name": "clicked_at_idx"}),
-            ("ip_address", {"name": "ip_address_idx"}),
-        ]),
+        (
+            "link_clicks",
+            [
+                ("link_id", {"name": "link_id_idx"}),
+                ("clicked_at", {"name": "clicked_at_idx"}),
+                ("ip_address", {"name": "ip_address_idx"}),
+            ],
+        ),
         # Link Deal Conversion indexes
-        ("link_deal_conversions", [
-            ("link_id", {"name": "link_id_idx"}),
-            ("deal_id", {"name": "deal_id_idx"}),
-            ("converted_at", {"name": "converted_at_idx"}),
-        ]),
+        (
+            "link_deal_conversions",
+            [
+                ("link_id", {"name": "link_id_idx"}),
+                ("deal_id", {"name": "deal_id_idx"}),
+                ("converted_at", {"name": "converted_at_idx"}),
+            ],
+        ),
         # LinkedIn Credentials indexes
-        ("linkedin_credentials", [
-            ("linkedin_profile_id", {"name": "linkedin_profile_id_idx"}),
-            ("campaign_id", {"name": "campaign_id_idx"}),
-            ("status", {"name": "status_idx"}),
-            ("last_verified", {"name": "last_verified_idx"}),
-        ]),
+        (
+            "linkedin_credentials",
+            [
+                ("linkedin_profile_id", {"name": "linkedin_profile_id_idx"}),
+                ("campaign_id", {"name": "campaign_id_idx"}),
+                ("status", {"name": "status_idx"}),
+                ("last_verified", {"name": "last_verified_idx"}),
+                ("user_id", {"name": "user_id_idx"}),
+            ],
+        ),
         # LinkedIn Credential Log indexes
-        ("linkedin_credential_logs", [
-            ("credential_id", {"name": "credential_id_idx"}),
-            ("created_at", {"name": "created_at_idx"}),
-        ]),
+        (
+            "linkedin_credential_logs",
+            [
+                ("credential_id", {"name": "credential_id_idx"}),
+                ("created_at", {"name": "created_at_idx"}),
+            ],
+        ),
         # Site Config indexes
-        ("site_config", [
-            ("llm_provider", {"name": "llm_provider_idx"}),
-        ]),
+        (
+            "site_config",
+            [
+                ("llm_provider", {"name": "llm_provider_idx"}),
+            ],
+        ),
         # Task indexes
-        ("tasks", [
-            ("status", {"name": "status_idx"}),
-            ("scheduled_at", {"name": "scheduled_at_idx"}),
-            ("task_type", {"name": "task_type_idx"}),
-            ("created_at", {"name": "created_at_idx"}),
-        ]),
+        (
+            "tasks",
+            [
+                ("status", {"name": "status_idx"}),
+                ("scheduled_at", {"name": "scheduled_at_idx"}),
+                ("task_type", {"name": "task_type_idx"}),
+                ("created_at", {"name": "created_at_idx"}),
+                ("user_id", {"name": "user_id_idx"}),
+            ],
+        ),
     ]
-    
+
     for collection_name, collection_indexes in indexes:
         try:
             collection = db[collection_name]
             for field_name, options in collection_indexes:
                 try:
                     collection.create_index(field_name, name=options["name"])
-                    logger.info(f"Created index '{options['name']}' on '{collection_name}'")
+                    logger.info(
+                        f"Created index '{options['name']}' on '{collection_name}'"
+                    )
                 except Exception as e:
                     logger.error(f"Failed to create index '{options['name']}': {e}")
         except Exception as e:

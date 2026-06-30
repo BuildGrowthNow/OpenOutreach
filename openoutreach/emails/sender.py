@@ -5,6 +5,7 @@ No error handling by design: a failed send raises and the EMAIL task is marked
 FAILED by the daemon, then retried on the next cycle. The mailbox is left
 untouched — re-import with fixed credentials to repair a dead box.
 """
+
 from __future__ import annotations
 
 import smtplib
@@ -29,7 +30,9 @@ def send_email(
     (both are prior Message-IDs). The returned Message-ID is stored on the
     outgoing ChatMessage so the next touch can thread onto it.
     """
-    message = _build_message(mailbox, to_address, subject, body, in_reply_to, references)
+    message = _build_message(
+        mailbox, to_address, subject, body, in_reply_to, references
+    )
     _deliver(mailbox, message)
     return message["Message-ID"]
 
@@ -37,7 +40,9 @@ def send_email(
 # ── Message assembly ──────────────────────────────────────────────
 
 
-def _build_message(mailbox, to_address, subject, body, in_reply_to, references) -> EmailMessage:
+def _build_message(
+    mailbox, to_address, subject, body, in_reply_to, references
+) -> EmailMessage:
     """Assemble the email with threading headers and a domain-anchored Message-ID."""
     message = EmailMessage()
     message["Message-ID"] = _mint_message_id(mailbox.from_address)

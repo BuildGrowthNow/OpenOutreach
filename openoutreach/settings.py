@@ -2,6 +2,7 @@
 """
 Django settings for OpenOutreach with REST API configuration.
 """
+
 import os
 import sys
 import logging
@@ -40,7 +41,9 @@ except ImportError:
 SECRET_KEY_DEV = "openoutreach-local-dev-key-change-in-production"
 
 # Load SECRET_KEY from environment variables
-SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", os.environ.get("SECRET_KEY", SECRET_KEY_DEV))
+SECRET_KEY = os.environ.get(
+    "DJANGO_SECRET_KEY", os.environ.get("SECRET_KEY", SECRET_KEY_DEV)
+)
 
 # Load DEBUG from environment (default to False in production)
 DEBUG = os.environ.get("DEBUG", "False").lower() in ("true", "1", "t")
@@ -168,73 +171,68 @@ TESTING = sys.argv[1:2] == ["test"]
 
 # REST Framework Configuration
 REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
-        'rest_framework.authentication.SessionAuthentication',
-        'rest_framework.authentication.BasicAuthentication',
+    "DEFAULT_AUTHENTICATION_CLASSES": (
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        "rest_framework.authentication.SessionAuthentication",
+        "rest_framework.authentication.BasicAuthentication",
         # Supabase JWT Authentication (for frontend)
-        'openoutreach.api.authentication.supabase.SupabaseJWTAuthentication',
+        "openoutreach.api.authentication.supabase.SupabaseJWTAuthentication",
     ),
-    'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.IsAuthenticated',
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticated",
     ],
-    'DEFAULT_RENDERER_CLASSES': [
-        'rest_framework.renderers.JSONRenderer',
-        'rest_framework.renderers.BrowsableAPIRenderer',
+    "DEFAULT_RENDERER_CLASSES": [
+        "rest_framework.renderers.JSONRenderer",
+        "rest_framework.renderers.BrowsableAPIRenderer",
     ],
-    'DEFAULT_PARSER_CLASSES': [
-        'rest_framework.parsers.JSONParser',
-        'rest_framework.parsers.FormParser',
-        'rest_framework.parsers.MultiPartParser',
+    "DEFAULT_PARSER_CLASSES": [
+        "rest_framework.parsers.JSONParser",
+        "rest_framework.parsers.FormParser",
+        "rest_framework.parsers.MultiPartParser",
     ],
-    'DEFAULT_THROTTLE_CLASSES': [
-        'rest_framework.throttling.AnonRateThrottle',
-        'rest_framework.throttling.UserRateThrottle',
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
     ],
-    'DEFAULT_THROTTLE_RATES': {
-        'anon': '100/day',
-        'user': '1000/day',
+    "DEFAULT_THROTTLE_RATES": {
+        "anon": "100/day",
+        "user": "1000/day",
     },
-    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': 20,
-    'DEFAULT_FILTER_BACKENDS': [
-        'rest_framework.filters.SearchFilter',
-        'rest_framework.filters.OrderingFilter',
+    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    "PAGE_SIZE": 20,
+    "DEFAULT_FILTER_BACKENDS": [
+        "rest_framework.filters.SearchFilter",
+        "rest_framework.filters.OrderingFilter",
     ],
-    'EXCEPTION_HANDLER': 'rest_framework.views.exception_handler',
+    "EXCEPTION_HANDLER": "rest_framework.views.exception_handler",
 }
 
 # JWT Authentication Configuration
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
-    'ROTATE_REFRESH_TOKENS': True,
-    'BLACKLIST_AFTER_ROTATION': True,
-    'UPDATE_LAST_LOGIN': False,
-    
-    'ALGORITHM': 'HS256',
-    'SIGNING_KEY': SECRET_KEY,
-    'VERIFYING_KEY': None,
-    'AUDIENCE': None,
-    'ISSUER': None,
-    'JWK_URL': None,
-    'LEEWAY': 0,
-    
-    'AUTH_HEADER_TYPES': ('Bearer',),
-    'AUTH_HEADER_NAME': 'HTTP_AUTHORIZATION',
-    'USER_ID_FIELD': 'id',
-    'USER_ID_CLAIM': 'user_id',
-    'USER_AUTHENTICATION_RULE': 'rest_framework_simplejwt.authentication.default_user_authentication_rule',
-    
-    'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
-    'TOKEN_TYPE_CLAIM': 'token_type',
-    'TOKEN_USER_CLASS': 'rest_framework_simplejwt.models.TokenUser',
-    
-    'JTI_CLAIM': 'jti',
-    
-    'SLIDING_TOKEN_REFRESH_EXP_CLAIM': 'refresh_exp',
-    'SLIDING_TOKEN_LIFETIME': timedelta(minutes=5),
-    'SLIDING_TOKEN_REFRESH_LIFETIME': timedelta(days=1),
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
+    "UPDATE_LAST_LOGIN": False,
+    "ALGORITHM": "HS256",
+    "SIGNING_KEY": SECRET_KEY,
+    "VERIFYING_KEY": None,
+    "AUDIENCE": None,
+    "ISSUER": None,
+    "JWK_URL": None,
+    "LEEWAY": 0,
+    "AUTH_HEADER_TYPES": ("Bearer",),
+    "AUTH_HEADER_NAME": "HTTP_AUTHORIZATION",
+    "USER_ID_FIELD": "id",
+    "USER_ID_CLAIM": "user_id",
+    "USER_AUTHENTICATION_RULE": "rest_framework_simplejwt.authentication.default_user_authentication_rule",
+    "AUTH_TOKEN_CLASSES": ("rest_framework_simplejwt.tokens.AccessToken",),
+    "TOKEN_TYPE_CLAIM": "token_type",
+    "TOKEN_USER_CLASS": "rest_framework_simplejwt.models.TokenUser",
+    "JTI_CLAIM": "jti",
+    "SLIDING_TOKEN_REFRESH_EXP_CLAIM": "refresh_exp",
+    "SLIDING_TOKEN_LIFETIME": timedelta(minutes=5),
+    "SLIDING_TOKEN_REFRESH_LIFETIME": timedelta(days=1),
 }
 
 # CORS Configuration for frontend-backend communication
@@ -244,7 +242,9 @@ CORS_ALLOW_CREDENTIALS = True
 # Load CORS allowed origins from environment
 CORS_ALLOWED_ORIGINS_STR = os.environ.get("CORS_ALLOWED_ORIGINS", "")
 if CORS_ALLOWED_ORIGINS_STR:
-    CORS_ALLOWED_ORIGINS = [origin.strip() for origin in CORS_ALLOWED_ORIGINS_STR.split(",")]
+    CORS_ALLOWED_ORIGINS = [
+        origin.strip() for origin in CORS_ALLOWED_ORIGINS_STR.split(",")
+    ]
 else:
     CORS_ALLOWED_ORIGINS = [
         "http://localhost:3000",  # Next.js frontend (development)
@@ -255,28 +255,30 @@ else:
 
 # Production CORS origins (added when DEBUG=False)
 if not DEBUG:
-    CORS_ALLOWED_ORIGINS.extend([
-        "https://linkedin.lengrowth.com",  # Main website
-        "https://linkedin-api.lengrowth.com",  # API URL
-    ])
+    CORS_ALLOWED_ORIGINS.extend(
+        [
+            "https://linkedin.lengrowth.com",  # Main website
+            "https://linkedin-api.lengrowth.com",  # API URL
+        ]
+    )
 CORS_ALLOW_METHODS = [
-    'DELETE',
-    'GET',
-    'OPTIONS',
-    'PATCH',
-    'POST',
-    'PUT',
+    "DELETE",
+    "GET",
+    "OPTIONS",
+    "PATCH",
+    "POST",
+    "PUT",
 ]
 CORS_ALLOW_HEADERS = [
-    'accept',
-    'accept-encoding',
-    'authorization',
-    'content-type',
-    'dnt',
-    'origin',
-    'user-agent',
-    'x-csrftoken',
-    'x-requested-with',
+    "accept",
+    "accept-encoding",
+    "authorization",
+    "content-type",
+    "dnt",
+    "origin",
+    "user-agent",
+    "x-csrftoken",
+    "x-requested-with",
 ]
 
 # Note: Production CORS and SECRET_KEY handling is now in the default configuration above
@@ -306,21 +308,21 @@ try:
         MONGODB_HOST,
         MONGODB_ATLAS_URI,
         get_mongodb_uri,
-        get_mongodb_config
+        get_mongodb_config,
     )
-    
+
     # MongoDB connection timeout settings (from settings module)
     MONGODB_SERVER_SELECTION_TIMEOUT = 30000
     MONGODB_CONNECT_TIMEOUT = 30000
     MONGODB_SOCKET_TIMEOUT = 10000
-    
+
     # Configure MongoDB connection based on environment
     if MONGODB_ENABLED:
         MongoDB_URI = get_mongodb_uri() or MONGODB_ATLAS_URI
         logger.info("MongoDB integration enabled via PyMongo")
     else:
         logger.info("MongoDB integration disabled, using SQLite")
-        
+
 except ImportError:
     MONGODB_ENABLED = False
     logger.info("MongoDB module not available, using SQLite only")
@@ -329,55 +331,55 @@ except ImportError:
 # Logging Configuration
 # =============================================================================
 LOGGING = {
-    'version': 1,
-    'disable_existing_loggers': False,
-    'formatters': {
-        'verbose': {
-            'format': '[{levelname}] {asctime} {name}:{module}:{lineno} - {message}',
-            'style': '{',
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "verbose": {
+            "format": "[{levelname}] {asctime} {name}:{module}:{lineno} - {message}",
+            "style": "{",
         },
-        'simple': {
-            'format': '[{levelname}] {message}',
-            'style': '{',
-        },
-    },
-    'handlers': {
-        'console': {
-            'class': 'logging.StreamHandler',
-            'formatter': 'simple',
-        },
-        'file': {
-            'class': 'logging.FileHandler',
-            'filename': str(ROOT_DIR / 'data' / 'app.log'),
-            'formatter': 'verbose',
+        "simple": {
+            "format": "[{levelname}] {message}",
+            "style": "{",
         },
     },
-    'root': {
-        'handlers': ['console'],
-        'level': 'INFO',
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "simple",
+        },
+        "file": {
+            "class": "logging.FileHandler",
+            "filename": str(ROOT_DIR / "data" / "app.log"),
+            "formatter": "verbose",
+        },
     },
-    'loggers': {
-        'openoutreach': {
-            'handlers': ['console', 'file'],
-            'level': 'DEBUG',
-            'propagate': True,
+    "root": {
+        "handlers": ["console"],
+        "level": "INFO",
+    },
+    "loggers": {
+        "openoutreach": {
+            "handlers": ["console", "file"],
+            "level": "DEBUG",
+            "propagate": True,
         },
-        'openoutreach.mongodb': {
-            'handlers': ['console', 'file'],
-            'level': 'DEBUG',
-            'propagate': True,
+        "openoutreach.mongodb": {
+            "handlers": ["console", "file"],
+            "level": "DEBUG",
+            "propagate": True,
         },
-        'django.db.backends': {
-            'level': 'ERROR',
+        "django.db.backends": {
+            "level": "ERROR",
         },
     },
 }
 
 # MongoDB Database Configuration (when MONGODB_ENABLED=true)
-# 
+#
 # NOTE: Djongo (MongoDB backend for Django) does not support Django 5.x currently.
 # The project uses Django 5.2, and there's no stable MongoDB backend that supports it.
-# 
+#
 # Options for MongoDB integration:
 # 1. Downgrade to Django 3.1.x (not recommended - breaks other packages)
 # 2. Use pymongo directly for MongoDB operations

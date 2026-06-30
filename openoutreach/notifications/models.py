@@ -37,7 +37,7 @@ class Notification(models.Model):
     )
     title = models.CharField(max_length=255, help_text="Notification title")
     message = models.TextField(help_text="Notification message content")
-    
+
     # Campaign is in the 'core' app
     campaign = models.ForeignKey(
         "core.Campaign",
@@ -53,10 +53,18 @@ class Notification(models.Model):
         blank=True,
         help_text="Related deal (if any)",
     )
-    is_read = models.BooleanField(default=False, help_text="Whether notification has been read")
-    read_at = models.DateTimeField(null=True, blank=True, help_text="When notification was read")
-    data = models.JSONField(default=dict, blank=True, help_text="Additional JSON data for the notification")
-    created_at = models.DateTimeField(default=timezone.now, help_text="When notification was created")
+    is_read = models.BooleanField(
+        default=False, help_text="Whether notification has been read"
+    )
+    read_at = models.DateTimeField(
+        null=True, blank=True, help_text="When notification was read"
+    )
+    data = models.JSONField(
+        default=dict, blank=True, help_text="Additional JSON data for the notification"
+    )
+    created_at = models.DateTimeField(
+        default=timezone.now, help_text="When notification was created"
+    )
 
     class Meta:
         ordering = ["-created_at"]
@@ -81,12 +89,14 @@ class Notification(models.Model):
         return cls.objects.filter(recipient=user, is_read=False).count()
 
     @classmethod
-    def create_notification(cls, recipient, notification_type, title, message, **kwargs):
+    def create_notification(
+        cls, recipient, notification_type, title, message, **kwargs
+    ):
         """Create a new notification."""
         return cls.objects.create(
             recipient=recipient,
             notification_type=notification_type,
             title=title,
             message=message,
-            **kwargs
+            **kwargs,
         )

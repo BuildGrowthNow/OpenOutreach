@@ -5,9 +5,15 @@ from .models import Notification
 class NotificationSerializer(serializers.ModelSerializer):
     """Serializer for Notification model."""
 
-    recipient_username = serializers.CharField(source="recipient.username", read_only=True)
-    campaign_name = serializers.CharField(source="campaign.name", read_only=True, allow_null=True)
-    deal_name = serializers.CharField(source="deal.lead.name", read_only=True, allow_null=True)
+    recipient_username = serializers.CharField(
+        source="recipient.username", read_only=True
+    )
+    campaign_name = serializers.CharField(
+        source="campaign.name", read_only=True, allow_null=True
+    )
+    deal_name = serializers.CharField(
+        source="deal.lead.name", read_only=True, allow_null=True
+    )
 
     class Meta:  # type: ignore[misc]
         model = Notification

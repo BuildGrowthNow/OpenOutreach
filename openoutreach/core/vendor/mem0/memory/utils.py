@@ -20,9 +20,8 @@ def remove_code_blocks(content: str) -> str:
     """
     pattern = r"^```[a-zA-Z0-9]*\n([\s\S]*?)\n```$"
     match = re.match(pattern, content.strip())
-    match_res=match.group(1).strip() if match else content.strip()
+    match_res = match.group(1).strip() if match else content.strip()
     return re.sub(r"<think>.*?</think>", "", match_res, flags=re.DOTALL).strip()
-
 
 
 def extract_json(text):

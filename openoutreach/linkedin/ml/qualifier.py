@@ -1,5 +1,6 @@
 # openoutreach/linkedin/ml/qualifier.py
 """GP Regression qualifier: BALD active learning via exact GP posterior."""
+
 from __future__ import annotations
 
 import logging
@@ -18,6 +19,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Qualifier protocol — shared interface for BayesianQualifier & KitQualifier
 # ---------------------------------------------------------------------------
+
 
 @runtime_checkable
 class Qualifier(Protocol):
@@ -40,11 +42,16 @@ def format_prediction(prob: float, entropy: float, std: float, n_obs: int) -> st
 
 class QualificationDecision(BaseModel):
     """Structured LLM output for lead qualification."""
-    qualified: bool = Field(description="True if the profile is a good prospect, False otherwise")
+
+    qualified: bool = Field(
+        description="True if the profile is a good prospect, False otherwise"
+    )
     reason: str = Field(description="Brief explanation for the decision")
 
 
-def qualify_with_llm(profile_text: str, product_docs: str, campaign_objective: str) -> tuple[int, str]:
+def qualify_with_llm(
+    profile_text: str, product_docs: str, campaign_objective: str
+) -> tuple[int, str]:
     """Call LLM to qualify a profile. Returns (label, reason).
 
     label: 1 = accept, 0 = reject.
@@ -77,6 +84,7 @@ def qualify_with_llm(profile_text: str, product_docs: str, campaign_objective: s
 # Numerics
 # ---------------------------------------------------------------------------
 
+
 def _binary_entropy(p):
     """H(p) = -p log p - (1-p) log(1-p), safe for edge values."""
     p = np.asarray(p, dtype=np.float64)
@@ -93,6 +101,7 @@ def _prob_above_half(mean, std):
 # Shared helpers
 # ---------------------------------------------------------------------------
 
+
 def _gpr_predict(pipe, X: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """Transform through all steps except GPR, then predict with return_std.
 
@@ -106,7 +115,7 @@ def _gpr_predict(pipe, X: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     if X.ndim == 1:
         X = X.reshape(1, -1)
     X_transformed = Pipeline(pipe.steps[:-1]).transform(X)
-    return pipe.named_steps['gpr'].predict(X_transformed, return_std=True)
+    return pipe.named_steps["gpr"].predict(X_transformed, return_std=True)
 
 
 def _load_profile_embeddings(profiles: list, session, *, skip_missing: bool = False):
@@ -129,7 +138,9 @@ def _load_profile_embeddings(profiles: list, session, *, skip_missing: bool = Fa
     return result
 
 
-def _rank_by_score(profiles: list, pipeline, session, *, skip_missing: bool = False) -> list:
+def _rank_by_score(
+    profiles: list, pipeline, session, *, skip_missing: bool = False
+) -> list:
     """Rank profiles by raw pipeline.predict() score (descending).
 
     Works with any sklearn-compatible pipeline — no GPR-specific logic.
@@ -141,7 +152,9 @@ def _rank_by_score(profiles: list, pipeline, session, *, skip_missing: bool = Fa
     X = np.array([emb for _, emb in scored], dtype=np.float64)
     scores = pipeline.predict(X)
 
-    ranked = sorted(zip(scores, [p for p, _ in scored]), key=lambda t: t[0], reverse=True)
+    ranked = sorted(
+        zip(scores, [p for p, _ in scored]), key=lambda t: t[0], reverse=True
+    )
     return [p for _, p in ranked]
 
 
@@ -156,6 +169,7 @@ def _explain_score(pipeline, embedding: np.ndarray) -> float:
 # ---------------------------------------------------------------------------
 # BayesianQualifier  (GP Regression backend)
 # ---------------------------------------------------------------------------
+
 
 class BayesianQualifier:
     """Gaussian Process Regressor for active learning qualification.
@@ -175,8 +189,13 @@ class BayesianQualifier:
     re-fitted on ALL accumulated data whenever predictions are needed.
     """
 
-    def __init__(self, seed: int = 42, embedding_dim: int = 384, n_mc_samples: int = 100,
-                 campaign=None):
+    def __init__(
+        self,
+        seed: int = 42,
+        embedding_dim: int = 384,
+        n_mc_samples: int = 100,
+        campaign=None,
+    ):
         self.embedding_dim = embedding_dim
         self._seed = seed
         self._n_mc_samples = n_mc_samples
@@ -241,21 +260,31 @@ class BayesianQualifier:
         X_fit, y_fit = self._balance(X_arr, y_arr)
         n = X_fit.shape[0]
 
-        self._pipeline = Pipeline([
-            ('scaler', StandardScaler()),
-            ('gpr', GaussianProcessRegressor(
-                kernel=ConstantKernel(1.0) * RBF(length_scale=np.sqrt(self.embedding_dim)),
-                n_restarts_optimizer=3,
-                random_state=self._seed,
-                alpha=0.1,
-            )),
-        ])
+        self._pipeline = Pipeline(
+            [
+                ("scaler", StandardScaler()),
+                (
+                    "gpr",
+                    GaussianProcessRegressor(
+                        kernel=ConstantKernel(1.0)
+                        * RBF(length_scale=np.sqrt(self.embedding_dim)),
+                        n_restarts_optimizer=3,
+                        random_state=self._seed,
+                        alpha=0.1,
+                    ),
+                ),
+            ]
+        )
         self._pipeline.fit(X_fit, y_fit)
-        lml = self._pipeline.named_steps['gpr'].log_marginal_likelihood_value_
+        lml = self._pipeline.named_steps["gpr"].log_marginal_likelihood_value_
 
         self._fitted = True
-        logger.debug("GPR fitted on %d observations (%d after balancing, LML=%.2f)",
-                      len(self._y), n, lml)
+        logger.debug(
+            "GPR fitted on %d observations (%d after balancing, LML=%.2f)",
+            len(self._y),
+            n,
+            lml,
+        )
         self._persist_pipeline()
         return True
 
@@ -285,7 +314,11 @@ class BayesianQualifier:
         logger.debug(
             "Balancing training set: %d → %d (kept all %d minority, "
             "subsampled %d → %d majority)",
-            len(y), len(keep), n_min, n_max, cap,
+            len(y),
+            len(keep),
+            n_min,
+            n_max,
+            cap,
         )
         return X[keep], y[keep]
 
@@ -340,9 +373,8 @@ class BayesianQualifier:
         f_mean, f_std = _gpr_predict(self._pipeline, embeddings)
 
         # MC sample: (M, N) draws from GP posterior
-        f_samples = (
-            f_mean[np.newaxis, :]
-            + f_std[np.newaxis, :] * self._rng.randn(self._n_mc_samples, len(f_mean))
+        f_samples = f_mean[np.newaxis, :] + f_std[np.newaxis, :] * self._rng.randn(
+            self._n_mc_samples, len(f_mean)
         )
         # Probit link: each sample gives a smooth probability via Φ(f - 0.5)
         p_samples = norm.cdf(f_samples - 0.5)
@@ -366,7 +398,9 @@ class BayesianQualifier:
         mean, std = _gpr_predict(self._pipeline, embeddings)
         return _prob_above_half(mean, std)
 
-    def acquisition_scores(self, embeddings: np.ndarray) -> tuple[str, np.ndarray] | None:
+    def acquisition_scores(
+        self, embeddings: np.ndarray
+    ) -> tuple[str, np.ndarray] | None:
         """Score candidates using the balance-driven acquisition strategy.
 
         - Exploit mode (n_neg > n_pos): returns predicted probabilities P(f > 0.5)
@@ -410,7 +444,9 @@ class BayesianQualifier:
         if not profiles:
             return []
         if not self._fit_if_needed():
-            logger.debug("rank_profiles: GPR not fitted (%d obs) — returning empty", self.n_obs)
+            logger.debug(
+                "rank_profiles: GPR not fitted (%d obs) — returning empty", self.n_obs
+            )
             return []
         return _rank_by_score(profiles, self._pipeline, session)
 
@@ -423,7 +459,9 @@ class BayesianQualifier:
         if emb is None:
             return "No embedding found for profile"
         if not self._fit_if_needed():
-            return f"Model not fitted yet ({self.n_obs} observations, need both classes)"
+            return (
+                f"Model not fitted yet ({self.n_obs} observations, need both classes)"
+            )
         mean, std = _gpr_predict(self._pipeline, emb)
         gp_mean = float(mean[0])
         p_above = float(_prob_above_half(mean, std)[0])
@@ -445,6 +483,7 @@ class BayesianQualifier:
 # ---------------------------------------------------------------------------
 # KitQualifier  (pre-trained kit model for freemium campaigns)
 # ---------------------------------------------------------------------------
+
 
 class KitQualifier:
     """Qualifier for freemium campaigns backed by a pre-trained GPR kit model.

@@ -11,6 +11,7 @@ only trusted boundary). The cheap ``is_eea_located`` check here just avoids a
 pointless round-trip for a lead we already know is out of scope — it reads the
 lead's own ``country_code`` (persisted at discovery), so there is no extra scrape.
 """
+
 from __future__ import annotations
 
 import logging
@@ -57,11 +58,18 @@ def resolve(lead) -> str | None:
     emails = payload.get("emails") or []
     email = emails[0] if emails else None
     if email:
-        logger.info("hub: resolved %s for %s (saved a paid lookup) — %s credits available",
-                    email, lead.public_identifier, credits)
+        logger.info(
+            "hub: resolved %s for %s (saved a paid lookup) — %s credits available",
+            email,
+            lead.public_identifier,
+            credits,
+        )
     else:
-        logger.info("hub: no stored email for %s — falling back to BetterContact (store balance: %s credits)",
-                    lead.public_identifier, credits)
+        logger.info(
+            "hub: no stored email for %s — falling back to BetterContact (store balance: %s credits)",
+            lead.public_identifier,
+            credits,
+        )
     return email
 
 
@@ -77,15 +85,23 @@ def contribute(session, lead, emails: list[str], origin: str) -> None:
     give-back is skipped (no email, no vector — and so no give-to-get credit).
     """
     if not session.linkedin_profile.contribute_to_hub:
-        logger.debug("hub: operator opted out of the store — skipping %s", lead.public_identifier)
+        logger.debug(
+            "hub: operator opted out of the store — skipping %s", lead.public_identifier
+        )
         return
     emails = [e for e in emails if e]
     if not emails:
-        logger.debug("hub: nothing to contribute for %s — no email captured", lead.public_identifier)
+        logger.debug(
+            "hub: nothing to contribute for %s — no email captured",
+            lead.public_identifier,
+        )
         return
     if is_eea_located(lead.country_code):
-        logger.debug("hub: skipping %s (%s) — EEA/UK/CH lead, out of store scope",
-                     lead.public_identifier, lead.country_code)
+        logger.debug(
+            "hub: skipping %s (%s) — EEA/UK/CH lead, out of store scope",
+            lead.public_identifier,
+            lead.country_code,
+        )
         return
 
     config = SiteConfig.load()
@@ -97,7 +113,9 @@ def contribute(session, lead, emails: list[str], origin: str) -> None:
     }
     _attach_embedding(lead, record)
     if config.contacts_api_token:
-        _send(config, "contribute", record, lead, headers=_auth(config.contacts_api_token))
+        _send(
+            config, "contribute", record, lead, headers=_auth(config.contacts_api_token)
+        )
     else:
         _register(config, session, record, lead)
 
@@ -124,7 +142,8 @@ def _register(config: SiteConfig, session, record: dict, lead) -> None:
     """
     body = {
         "linkedin_public_id": session.self_profile.get("public_identifier"),
-        "subscriber_email": session.django_user.email or session.linkedin_profile.linkedin_username,
+        "subscriber_email": session.django_user.email
+        or session.linkedin_profile.linkedin_username,
         **record,
     }
     response = _send(config, "register", body, lead)
@@ -136,18 +155,28 @@ def _register(config: SiteConfig, session, record: dict, lead) -> None:
     logger.info("hub: registered — API token earned and stored")
 
 
-def _send(config: SiteConfig, path: str, body: dict, lead, headers: dict | None = None) -> dict | None:
+def _send(
+    config: SiteConfig, path: str, body: dict, lead, headers: dict | None = None
+) -> dict | None:
     """POST one record; log + swallow any transport failure. Returns the JSON
     body on success, else ``None``."""
     try:
-        resp = requests.post(_endpoint(config, path), json=body, headers=headers, timeout=_TIMEOUT_S)
+        resp = requests.post(
+            _endpoint(config, path), json=body, headers=headers, timeout=_TIMEOUT_S
+        )
         resp.raise_for_status()
     except requests.RequestException as exc:
-        logger.info("hub: give-back unavailable for %s: %s", lead.public_identifier, exc)
+        logger.info(
+            "hub: give-back unavailable for %s: %s", lead.public_identifier, exc
+        )
         return None
     payload = resp.json()
-    logger.info("hub: contributed %s (%s) to the central store — %s credits available",
-                lead.public_identifier, lead.country_code, payload["credits"])
+    logger.info(
+        "hub: contributed %s (%s) to the central store — %s credits available",
+        lead.public_identifier,
+        lead.country_code,
+        payload["credits"],
+    )
     return payload
 
 
