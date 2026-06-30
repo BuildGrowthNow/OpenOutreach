@@ -17,15 +17,31 @@ chmod 755 /var/lib/nginx /var/cache/nginx /run/nginx
 
 # Start Next.js frontend server on port 3001 (nginx will proxy to it on 3000)
 echo "Starting Next.js server on port 3001..."
-if cd /app/frontend; then
+if [ -d /app/frontend ]; then
+    cd /app/frontend
     gosu ubuntu node_modules/.bin/next start -p 3001 &
     NEXTJS_PID=$!
     echo "Next.js started with PID $NEXTJS_PID"
+    cd /app
+    
+    # Wait for Next.js to be ready (up to 30 seconds)
+    echo "Waiting for Next.js to be ready..."
+    for i in $(seq 1 30); do
+        # Check if Next.js process is running and listening on port 3001
+        if ss -tlnp 2>/dev/null | grep -q ":3001"; then
+            echo "Next.js is ready and listening on port 3001!"
+            break
+        fi
+        if [ $i -eq 30 ]; then
+            echo "ERROR: Next.js failed to start within 30 seconds"
+            exit 1
+        fi
+        sleep 1
+    done
 else
-    echo "ERROR: Failed to cd to /app/frontend"
-   NEXTJS_PID=""
+    echo "ERROR: /app/frontend directory not found"
+    NEXTJS_PID=""
 fi
-cd /app
 
 # Start nginx for frontend (Next.js) on port 3000
 # nginx must start as ROOT to bind to ports and create PID file
