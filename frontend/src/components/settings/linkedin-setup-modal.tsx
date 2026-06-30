@@ -48,14 +48,14 @@ export function LinkedInSetupModal({ isOpen, onOpenChange, onSetupComplete }: Li
     }
   }
 
-   const handleOpenChange = (open: boolean) => {
-     if (!open && status?.status.setup_complete) {
-       if (onSetupComplete) {
-         onSetupComplete()
-       }
-     }
-     onOpenChange(open)
-   }
+  const handleOpenChange = (open: boolean) => {
+    if (!open && status?.status.setup_complete) {
+      if (onSetupComplete) {
+        onSetupComplete()
+      }
+    }
+    onOpenChange(open)
+  }
 
   if (!isOpen) return null
 
@@ -84,80 +84,80 @@ export function LinkedInSetupModal({ isOpen, onOpenChange, onSetupComplete }: Li
             <AlertTitle>Setup Error</AlertTitle>
             <AlertDescription>{error}</AlertDescription>
           </Alert>
-         ) : status?.status ? (
+        ) : status?.status ? (
           <div className="space-y-6">
             {/* Setup Status Overview */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Card className={`border-l-4 ${
-                 status.status.linkedin_credentials.exists 
-                   ? 'border-green-500 bg-green-50/50 dark:bg-green-900/20' 
-                   : 'border-red-500 bg-red-50/50 dark:bg-red-900/20'
-               }`}>
-                 <CardHeader>
-                   <CardTitle className="text-base flex items-center gap-2">
-                     <Icons.Lock className={`h-4 w-4 ${
-                       status.status.linkedin_credentials.exists 
-                         ? 'text-green-600' 
-                         : 'text-red-600'
-                     }`} />
-                     LinkedIn Credentials
-                   </CardTitle>
-                   <CardDescription>
-                     {status.status.linkedin_credentials.exists 
-                       ? 'You have configured LinkedIn credentials' 
-                       : 'LinkedIn credentials are NOT configured'}
-                   </CardDescription>
-                 </CardHeader>
-                 <CardContent>
-                   <div className="text-2xl font-bold">
-                     {status.status.linkedin_credentials.exists 
-                       ? 'Configured' 
-                       : 'Missing'}
-                   </div>
-                   <p className="text-sm text-muted-foreground mt-1">
-                     {status.status.linkedin_credentials.count} credential(s) found
-                   </p>
-                 </CardContent>
-               </Card>
+                status.status.linkedin_credentials.exists
+                  ? 'border-green-500 bg-green-50/50 dark:bg-green-900/20'
+                  : 'border-red-500 bg-red-50/50 dark:bg-red-900/20'
+              }`}>
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Icons.Lock className={`h-4 w-4 ${
+                      status.status.linkedin_credentials.exists
+                        ? 'text-green-600'
+                        : 'text-red-600'
+                    }`} />
+                    LinkedIn Credentials
+                  </CardTitle>
+                  <CardDescription>
+                    {status.status.linkedin_credentials.exists
+                      ? 'You have configured LinkedIn credentials'
+                      : 'LinkedIn credentials are NOT configured'}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">
+                    {status.status.linkedin_credentials.exists
+                      ? 'Configured'
+                      : 'Missing'}
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {status.status.linkedin_credentials.count} credential(s) found
+                  </p>
+                </CardContent>
+              </Card>
 
-               <Card className={`border-l-4 ${
-                 status.status.linkedin_profile.exists 
-                   ? 'border-green-500 bg-green-50/50 dark:bg-green-900/20' 
-                   : 'border-red-500 bg-red-50/50 dark:bg-red-900/20'
-               }`}>
-                 <CardHeader>
-                   <CardTitle className="text-base flex items-center gap-2">
-                     <Icons.User className={`h-4 w-4 ${
-                       status.status.linkedin_profile.exists 
-                         ? 'text-green-600' 
-                         : 'text-red-600'
-                     }`} />
-                     LinkedIn Profile
-                   </CardTitle>
-                   <CardDescription>
-                     {status.status.linkedin_profile.exists 
-                       ? 'Your LinkedIn profile is configured' 
-                       : 'Your LinkedIn profile is NOT configured'}
-                   </CardDescription>
-                 </CardHeader>
-                 <CardContent>
-                   <div className="text-2xl font-bold">
-                     {status.status.linkedin_profile.exists 
-                       ? 'Configured' 
-                       : 'Missing'}
-                   </div>
-                   <p className="text-sm text-muted-foreground mt-1">
-                     {status.status.linkedin_profile.count} profile(s) found
-                   </p>
-                 </CardContent>
-               </Card>
+              <Card className={`border-l-4 ${
+                status.status.linkedin_profile.exists
+                  ? 'border-green-500 bg-green-50/50 dark:bg-green-900/20'
+                  : 'border-red-500 bg-red-50/50 dark:bg-red-900/20'
+              }`}>
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Icons.User className={`h-4 w-4 ${
+                      status.status.linkedin_profile.exists
+                        ? 'text-green-600'
+                        : 'text-red-600'
+                    }`} />
+                    LinkedIn Profile
+                  </CardTitle>
+                  <CardDescription>
+                    {status.status.linkedin_profile.exists
+                      ? 'Your LinkedIn profile is configured'
+                      : 'Your LinkedIn profile is NOT configured'}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">
+                    {status.status.linkedin_profile.exists
+                      ? 'Configured'
+                      : 'Missing'}
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {status.status.linkedin_profile.count} profile(s) found
+                  </p>
+                </CardContent>
+              </Card>
             </div>
 
-            {/* What You Need to Do */}
+            {/* What You Need to Do - Step by Step */}
             <div className="space-y-4">
               <h3 className="text-lg font-semibold flex items-center gap-2">
                 <Icons.ListTodo className="h-5 w-5 text-blue-600" />
-                What You Need To Do
+                Step-by-Step Setup
               </h3>
               <div className="space-y-3">
                 <div className="flex items-start gap-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100 dark:border-blue-800">
@@ -166,10 +166,10 @@ export function LinkedInSetupModal({ isOpen, onOpenChange, onSetupComplete }: Li
                   </div>
                   <div>
                     <h4 className="font-medium text-blue-900 dark:text-blue-100">
-                      Sign in to LinkedIn
+                      Set Up Your LinkedIn Profile
                     </h4>
                     <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
-                      Visit LinkedIn and sign in with your credentials so we can access your account
+                      Go to <strong className="text-blue-900 dark:text-blue-100">Settings {'>'} LinkedIn Credentials</strong> tab and add your LinkedIn email and password
                     </p>
                   </div>
                 </div>
@@ -180,10 +180,10 @@ export function LinkedInSetupModal({ isOpen, onOpenChange, onSetupComplete }: Li
                   </div>
                   <div>
                     <h4 className="font-medium text-blue-900 dark:text-blue-100">
-                      Provide Your Credentials
+                      Confirm Setup
                     </h4>
                     <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
-                      Enter your LinkedIn email and password securely in our settings
+                      After adding your credentials, the system will automatically verify them
                     </p>
                   </div>
                 </div>
@@ -194,13 +194,18 @@ export function LinkedInSetupModal({ isOpen, onOpenChange, onSetupComplete }: Li
                   </div>
                   <div>
                     <h4 className="font-medium text-blue-900 dark:text-blue-100">
-                      Start Running Campaigns
+                      Create Your First Campaign
                     </h4>
                     <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
-                      Once configured, you can start your LinkedIn outreach campaigns
+                      Once LinkedIn is set up, you can create and run outreach campaigns
                     </p>
                   </div>
                 </div>
+              </div>
+              <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                <p className="text-xs text-blue-700 dark:text-blue-300">
+                  <strong>Note:</strong> You only need to set up LinkedIn once. The same profile will work for all your campaigns.
+                </p>
               </div>
             </div>
 
@@ -216,17 +221,22 @@ export function LinkedInSetupModal({ isOpen, onOpenChange, onSetupComplete }: Li
 
             {/* Action Buttons */}
             <div className="flex flex-col sm:flex-row gap-3 pt-2">
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 size="lg"
-                onClick={() => window.open('https://www.linkedin.com/login', '_blank')}
+                onClick={() => {
+                  // Open LinkedIn login in a new tab
+                  if (typeof window !== 'undefined') {
+                    window.open('https://www.linkedin.com/login', '_blank')
+                  }
+                }}
               >
                 <Icons.Link className="h-5 w-5 mr-2" />
                 Sign in to LinkedIn
               </Button>
-              
-              <Button 
-                variant="secondary" 
+
+              <Button
+                variant="secondary"
                 size="lg"
                 onClick={() => {
                   // Navigate to settings page and show LinkedIn credentials tab

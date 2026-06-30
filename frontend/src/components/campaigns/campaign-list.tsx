@@ -164,7 +164,11 @@ export function CampaignList({ leads, campaignId, className }: CampaignListProps
               <TableRow>
                 <TableCell colSpan={5} className="text-center py-8">
                   <Icons.Users className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
-                  <p className="text-sm text-muted-foreground">No leads found</p>
+                  <p className="text-sm text-muted-foreground">
+                    {searchQuery
+                      ? 'No leads match your search. Try adjusting your search query.'
+                      : 'No leads found in this campaign yet. Start adding leads to track progress.'}
+                  </p>
                   {searchQuery && (
                     <Button
                       variant="ghost"
@@ -173,6 +177,17 @@ export function CampaignList({ leads, campaignId, className }: CampaignListProps
                       className="mt-2"
                     >
                       Clear search
+                    </Button>
+                  )}
+                  {!searchQuery && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => router.push(`/campaigns/${campaignId}/leads`)}
+                      className="mt-2"
+                    >
+                      <Icons.Download className="mr-2 h-4 w-4" />
+                      Add Leads
                     </Button>
                   )}
                 </TableCell>
@@ -184,11 +199,11 @@ export function CampaignList({ leads, campaignId, className }: CampaignListProps
                   className="cursor-pointer hover:bg-muted/50"
                   onClick={() => handleLeadClick(lead.id)}
                 >
-                  <TableCell>
-                    <div className="font-medium">{lead.name || 'Unnamed Lead'}</div>
-                    <div className="text-sm text-muted-foreground">{lead.title || 'No title'}</div>
-                  </TableCell>
-                  <TableCell>{lead.company || 'No company'}</TableCell>
+                    <TableCell>
+                      <div className="font-medium">{lead.name || <span className="text-muted-foreground italic">Unnamed Lead</span>}</div>
+                      <div className="text-sm text-muted-foreground">{lead.title || <span className="text-muted-foreground italic">Unnamed Lead</span>}</div>
+                    </TableCell>
+                   <TableCell>{lead.company || <span className="text-muted-foreground italic">Unnamed Lead</span>}</TableCell>
                   <TableCell>
                     <Badge variant="outline" className={cn(stateColorMapping[lead.state])}>
                       {lead.state.replace(/_/g, ' ')}

@@ -29,8 +29,8 @@ import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Icons } from '@/lib/types/components'
-import { Campaign, CampaignTemplate } from '@/lib/types/components'
-import { getCampaignTemplates } from '@/lib/api/dashboard'
+import { Campaign, CampaignTemplate, LinkedInSetupStatus } from '@/lib/types/components'
+import { getLinkedInSetupStatus, getCampaignTemplates } from '@/lib/api/dashboard'
 
 const formSchema = z.object({
   name: z.string().min(3, 'Name must be at least 3 characters').max(100, 'Name is too long'),
@@ -64,6 +64,8 @@ export function CampaignForm({
 }: CampaignFormProps) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
+  const [linkedinSetupStatus, setLinkedinSetupStatus] = useState<LinkedInSetupStatus | null>(null)
+  const [checkingLinkedin, setCheckingLinkedin] = useState(false)
   const [templates, setTemplates] = useState<CampaignTemplate[]>([])
   const [templateLoading, setTemplateLoading] = useState(false)
   const [selectedTemplate, setSelectedTemplate] = useState<CampaignTemplate | null>(null)
@@ -84,6 +86,28 @@ export function CampaignForm({
       status: 'draft',
     },
   })
+
+  // Check LinkedIn setup status when form opens (for new campaigns)
+  useEffect(() => {
+    if (open && !isEditing && !campaign) {
+      void (async () => {
+        try {
+          setCheckingLinkedin(true)
+          const response = await getLinkedInSetupStatus()
+          if (response.data) {
+            setLinkedinSetupStatus(response.data)
+          }
+        } catch (err) {
+          console.error('Error checking LinkedIn setup status:', err)
+        } finally {
+          setCheckingLinkedin(false)
+        }
+      })()
+    } else {
+      setLinkedinSetupStatus(null)
+      setCheckingLinkedin(false)
+    }
+  }, [open, isEditing, campaign])
 
   // Fetch templates when opening the form for a new campaign
   useEffect(() => {
@@ -163,6 +187,51 @@ export function CampaignForm({
     } finally {
       setLoading(false)
     }
+  }
+
+  // Check if LinkedIn is configured before allowing campaign creation
+  if (checkingLinkedin) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-[600px]">
+          <div className="flex items-center justify-center py-12 space-x-4">
+            <Icons.RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
+            <span className="text-muted-foreground">Checking setup status...</span>
+          </div>
+        </DialogContent>
+      </Dialog>
+    )
+  }
+
+  // If LinkedIn is not configured, show an informative message
+  if (!isEditing && !campaign && linkedinSetupStatus?.status.linkedin_credentials.count === 0) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-[500px]">
+          <div className="flex flex-col items-center justify-center py-8 text-center space-y-4">
+            <div className="w-16 h-16 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+              <Icons.AlertCircle className="h-8 w-8 text-red-600" />
+            </div>
+            <div className="space-y-2">
+              <h3 className="text-lg font-semibold">LinkedIn Not Configured</h3>
+              <p className="text-sm text-muted-foreground">
+                You must set up LinkedIn credentials before creating a campaign.
+              </p>
+            </div>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                window.location.href = '/settings?tab=linkedin-credentials'
+                onOpenChange(false)
+              }}
+            >
+              <Icons.Settings className="h-4 w-4 mr-2" />
+              Go to LinkedIn Settings
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    )
   }
 
   return (
@@ -282,22 +351,22 @@ export function CampaignForm({
                     control={form.control}
                     name="velocity"
                     render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Daily Velocity</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            min="1"
-                            max="100"
-                            placeholder="10"
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormDescription>
-                          Max daily connects
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
+                    <FormItem>
+                      <FormLabel>Daily Connection Limit</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          min="1"
+                          max="100"
+                          placeholder="10"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        Maximum number of connections to send per day
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
                     )}
                   />
 

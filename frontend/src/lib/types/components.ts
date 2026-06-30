@@ -364,3 +364,26 @@ export interface CampaignTemplateCreateData {
   cooldown_minutes?: number
   is_public?: boolean
 }
+
+// LinkedIn Setup Status types
+export interface LinkedInSetupStatus {
+  success: boolean
+  status: {
+    linkedin_profile: {
+      exists: boolean
+      count: number
+      requires_attention: boolean
+    }
+    linkedin_credentials: {
+      exists: boolean
+      count: number
+      active_count: number
+      requires_attention: boolean
+    }
+    setup_complete: boolean
+    setup_progress: {
+      current: number
+      total: number
+    }
+  }
+}

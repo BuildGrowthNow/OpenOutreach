@@ -147,10 +147,12 @@ export function MessageThread({
                 className="min-h-[60px] resize-none"
                 disabled={isSending}
               />
-              <div className="text-xs text-muted-foreground mt-2 flex justify-between">
-                <span>Press Enter to send, Shift+Enter for new line</span>
-                <span>{newMessage.length}/1000</span>
-              </div>
+               <div className="text-xs text-muted-foreground mt-2 flex justify-between">
+                 <span>Press Enter to send, Shift+Enter for new line</span>
+                 <span className={newMessage.length >= 900 ? 'text-destructive' : newMessage.length >= 800 ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}>
+                   {newMessage.length}/1000
+                 </span>
+               </div>
             </div>
             <div>
               <Button

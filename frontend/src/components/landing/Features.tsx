@@ -68,8 +68,8 @@ const features: Feature[] = [
   },
   {
     icon: Zap,
-    title: 'API Access',
-    description: 'Connect Lengrowth with your CRM and other tools using our robust API.',
+    title: 'Connects with Your Tools',
+    description: 'Easily connect Lengrowth with your CRM and other business tools.',
   },
 ];
 

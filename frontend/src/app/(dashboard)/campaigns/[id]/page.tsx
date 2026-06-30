@@ -211,8 +211,8 @@ export default function CampaignDetailsPage() {
       if (response.data && Array.isArray(response.data.simulations)) {
         const simulations = response.data.simulations as GhostSimulationLog[]
         setGhostModeSimulations(simulations)
-        // If we get simulations, we have an active ghost mode
-        if (simulations.length > 0 || (response.data as { total?: number }).total !== 0) {
+        // Only show as active if there are actual simulation entries
+        if (simulations.length > 0) {
           setGhostModeActive(true)
         }
       }
@@ -470,7 +470,7 @@ export default function CampaignDetailsPage() {
               {campaign.status.charAt(0).toUpperCase() + campaign.status.slice(1)}
             </Badge>
           </div>
-          <p className="text-muted-foreground">{campaign.description || 'No description'}</p>
+          <p className="text-muted-foreground">{campaign.description || <span className="text-muted-foreground italic">No description</span>}</p>
         </div>
         <div className="flex gap-2">
           {campaign.status === 'active' ? (
@@ -528,7 +528,7 @@ export default function CampaignDetailsPage() {
           <TabsTrigger value="analytics">Analytics</TabsTrigger>
           <TabsTrigger value="links">Links</TabsTrigger>
           <TabsTrigger value="settings">Settings</TabsTrigger>
-          <TabsTrigger value="ghost-mode">Ghost Mode</TabsTrigger>
+          <TabsTrigger value="ghost-mode">Safe Test Mode</TabsTrigger>
         </TabsList>
 
         {/* Overview Tab */}
@@ -572,10 +572,10 @@ export default function CampaignDetailsPage() {
                             <div className="flex items-center gap-3">
                               <div className="h-2 w-2 rounded-full bg-emerald-500" />
                               <div>
-                                <p className="font-medium">{(lead as { name?: string }).name || 'Unnamed Lead'}</p>
-                                <p className="text-sm text-muted-foreground">
-                                  {(lead as { company?: string }).company || 'No company'}
-                                </p>
+                                 <p className="font-medium">{(lead as { name?: string }).name || <span className="text-muted-foreground italic">Unnamed Lead</span>}</p>
+                                 <p className="text-sm text-muted-foreground">
+                                   {(lead as { company?: string }).company || <span className="text-muted-foreground italic">Unnamed Lead</span>}
+                                 </p>
                               </div>
                             </div>
                             <Badge variant="outline">{(lead as { state?: string }).state}</Badge>
@@ -650,8 +650,8 @@ export default function CampaignDetailsPage() {
                       </Badge>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-sm text-muted-foreground">Daily Velocity</span>
-                      <span className="font-medium">{campaign.velocity} connects/day</span>
+                      <span className="text-sm text-muted-foreground">Daily Connection Limit</span>
+                      <span className="font-medium">{campaign.velocity} connections/day</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-sm text-muted-foreground">Cooldown</span>
@@ -718,7 +718,7 @@ export default function CampaignDetailsPage() {
                             </div>
                             <div className="space-y-2">
                               <div className="text-sm text-muted-foreground">Connection Accept Rate</div>
-                              <div className="text-2xl font-bold">{stats.connection_accept_rate.toFixed(1)}%</div>
+                              <div className="text-2xl font-bold">{stats.connection_accept_rate >= 0 ? stats.connection_accept_rate.toFixed(1) : '0.0'}%</div>
                             </div>
                             <div className="space-y-2">
                               <div className="text-sm text-muted-foreground">Messages Sent</div>
@@ -774,10 +774,10 @@ export default function CampaignDetailsPage() {
                 </DialogTrigger>
                 <DialogContent>
                   <DialogHeader>
-                    <DialogTitle>Import 1st-Degree Connections</DialogTitle>
+                    <DialogTitle>Import Connections (CSV)</DialogTitle>
                     <DialogDescription>
-                      Upload a CSV file containing your 1st-degree LinkedIn connections.
-                      The CSV must have one LinkedIn profile URL or public identifier per line (or a header row starting with firstName/lastName).
+                      Upload a CSV file containing LinkedIn profiles or connection URLs to add as campaign leads.
+                      The CSV should have one profile URL or public identifier per line (or a header row starting with firstName/lastName).
                     </DialogDescription>
                   </DialogHeader>
                   <div className="space-y-4 py-4">
@@ -787,8 +787,22 @@ export default function CampaignDetailsPage() {
                         id="csv-file"
                         type="file" 
                         accept=".csv"
-                        onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0] || null;
+                          if (file && !file.name.toLowerCase().endsWith('.csv')) {
+                            setUploadStatus({ success: false, message: 'Please select a valid CSV file (.csv)' });
+                            setUploadFile(null);
+                          } else {
+                            setUploadFile(file);
+                            setUploadStatus(null);
+                          }
+                        }}
                       />
+                      {uploadStatus && !uploadStatus.success && (
+                        <Alert variant="destructive">
+                          <AlertDescription>{uploadStatus.message}</AlertDescription>
+                        </Alert>
+                      )}
                     </div>
                     {uploadStatus && (
                       <Alert variant={uploadStatus.success ? "default" : "destructive"}>
@@ -1022,7 +1036,7 @@ export default function CampaignDetailsPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-4">
                   <div>
-                    <h4 className="font-medium mb-2">Velocity Settings</h4>
+                    <h4 className="font-medium mb-2">Connection Settings</h4>
                     <p className="text-sm text-muted-foreground">
                       Daily: {campaign.velocity} connections<br />
                       Cooldown: {campaign.cooldownMinutes} minutes

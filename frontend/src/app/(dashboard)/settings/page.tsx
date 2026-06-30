@@ -424,35 +424,35 @@ export default function SettingsPage() {
            <LinkedInSetupGuide />
          </TabsContent>
 
-        <TabsContent value="system" className="space-y-6">
-         <Card>
-           <CardHeader>
-             <CardTitle>System Configuration</CardTitle>
-             <CardDescription>
-               Current system configuration and LLM settings
-             </CardDescription>
-           </CardHeader>
-           <CardContent className="space-y-4">
-             {settings && (
-               <>
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                   <div>
-                     <h3 className="font-semibold mb-2">LLM Configuration</h3>
-                     <div className="space-y-2">
-                       <div className="flex justify-between">
-                         <span className="text-muted-foreground">Provider:</span>
-                         <span className="font-medium">{settings.llm.provider}</span>
-                       </div>
-                       <div className="flex justify-between">
-                         <span className="text-muted-foreground">Model:</span>
-                         <span className="font-medium">{settings.llm.model}</span>
-                       </div>
-                       <div className="flex justify-between">
-                         <span className="text-muted-foreground">API Base:</span>
-                         <span className="font-medium truncate">{settings.llm.api_base}</span>
-                       </div>
-                     </div>
-                   </div>
+          <TabsContent value="system" className="space-y-6">
+           <Card>
+            <CardHeader>
+              <CardTitle>System Configuration</CardTitle>
+              <CardDescription>
+                Current system configuration and AI message settings
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {settings && (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <h3 className="font-semibold mb-2">AI Message Generation</h3>
+                      <div className="space-y-2">
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Provider:</span>
+                          <span className="font-medium">{settings.llm.provider}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Model:</span>
+                          <span className="font-medium">{settings.llm.model}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">API Endpoint:</span>
+                          <span className="font-medium truncate">{settings.llm.api_base}</span>
+                        </div>
+                      </div>
+                    </div>
                    
                    <div>
                      <h3 className="font-semibold mb-2">LinkedIn Profile</h3>
@@ -498,7 +498,7 @@ export default function SettingsPage() {
                            <div className="text-2xl font-bold">
                              {settings.rate_limits.velocity}
                            </div>
-                           <p className="text-sm text-muted-foreground">Velocity</p>
+                            <p className="text-sm text-muted-foreground">Daily Limit</p>
                          </div>
                        </CardContent>
                      </Card>
