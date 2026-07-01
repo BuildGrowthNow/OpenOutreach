@@ -93,7 +93,10 @@ class SupabaseUser:
         """Save the Supabase user to MongoDB."""
         collection = get_mongodb_collection("supabase_users")
         if collection is None:
-            raise RuntimeError("MongoDB collection 'supabase_users' not available")
+            logger.warning(
+                "MongoDB collection 'supabase_users' not available; skipping SupabaseUser save"
+            )
+            return self._id
 
         doc = self.to_dict()
         result = collection.update_one(

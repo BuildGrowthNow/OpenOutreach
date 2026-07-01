@@ -398,7 +398,9 @@ class SupabaseJWTAuthentication(BaseAuthentication):
                     f"Updated SupabaseUser record for Django user {django_user_id}"
                 )
         except Exception as e:
-            logger.error(f"Error linking Supabase user to Django user: {e}")
+            logger.warning(
+                f"MongoDB unavailable or write failed; skipping Supabase user link: {e}"
+            )
 
     def authenticate_header(self, request: HttpRequest) -> str:
         """
