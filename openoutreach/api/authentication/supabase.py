@@ -59,30 +59,40 @@ class SupabaseJWTAuthentication(BaseAuthentication):
         """
         # Get the Authorization header
         auth_header = request.META.get("HTTP_AUTHORIZATION", "")
+        logger.debug(f"[SupabaseJWTAuth] Checking auth header: '{auth_header[:100] if auth_header else '(empty)'}...'")
+        logger.debug(f"[SupabaseJWTAuth] Full META keys: {list(request.META.keys())}")
+        logger.debug(f"[SupabaseJWTAuth] AUTHORIZATION header raw: '{request.META.get('HTTP_AUTHORIZATION', '(not found)')}'")
 
         if not auth_header:
+            logger.debug("[SupabaseJWTAuth] No Authorization header found, skipping auth")
             return None
 
         # Check if it's a Bearer token
         parts = auth_header.split()
         if len(parts) != 2 or parts[0].lower() != "bearer":
+            logger.debug(f"[SupabaseJWTAuth] Invalid Bearer format: '{auth_header}'")
             return None
 
         access_token = parts[1]
 
         if not access_token:
+            logger.debug("[SupabaseJWTAuth] Empty access token")
             return None
+
+        logger.debug(f"[SupabaseJWTAuth] Token prefix: {access_token[:30]}...")
 
         try:
             # Verify and decode the token
             user = self._authenticate_token(access_token)
+            logger.info(f"[SupabaseJWTAuth] Successfully authenticated user: {user.username if hasattr(user, 'username') else user}")
             return (user, access_token)
 
         except InvalidTokenError as e:
+            logger.error(f"[SupabaseJWTAuth] Invalid token error: {e}")
             raise AuthenticationFailed(str(e))
         except Exception as e:
-            logger.error(f"Authentication error: {e}")
-            raise AuthenticationFailed("Invalid token")
+            logger.error(f"[SupabaseJWTAuth] Authentication error: {e}", exc_info=True)
+            raise AuthenticationFailed(f"Invalid token: {str(e)}")
 
     def _authenticate_token(self, token: str) -> Any:
         """

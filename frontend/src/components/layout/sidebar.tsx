@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { Icons } from '@/lib/types/components'
+import { supabase } from '@/lib/supabase/client'
 
 interface SidebarItem {
   title: string
@@ -85,15 +86,26 @@ const Sidebar = ({ items, isOpen, setIsOpen }: SidebarProps) => {
           </div>
         </nav>
 
-        {/* Footer - Logout */}
-        <div className="border-t p-2">
-          <Link href="/api/auth/logout">
-            <Button variant="outline" className="w-full justify-start gap-3 rounded-md px-2" size="sm">
-              {React.createElement(Icons.LogOut, { className: "h-4 w-4" })}
-              <span className="text-sm">Logout</span>
-            </Button>
-          </Link>
-        </div>
+         {/* Footer - Logout */}
+         <div className="border-t p-2">
+           <Button 
+             variant="outline" 
+             className="w-full justify-start gap-3 rounded-md px-2" 
+             size="sm"
+             onClick={async () => {
+               try {
+                 await supabase.auth.signOut()
+                 window.location.href = '/'
+               } catch (error) {
+                 console.error('Logout error:', error)
+                 window.location.href = '/'
+               }
+             }}
+           >
+             {React.createElement(Icons.LogOut, { className: "h-4 w-4" })}
+             <span className="text-sm">Logout</span>
+           </Button>
+         </div>
       </aside>
     </>
   )

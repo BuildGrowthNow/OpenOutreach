@@ -63,10 +63,18 @@ async function getHeaders() {
   
   // Note: We don't need to manually add cookies because they're sent automatically
   // by the browser when making same-origin requests
-  return {
+  const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    ...(session?.access_token ? { "Authorization": `Bearer ${session.access_token}` } : {}),
   }
+  
+  if (session?.access_token) {
+    headers["Authorization"] = `Bearer ${session.access_token}`
+    console.log('[API] Authorization header set:', headers["Authorization"].substring(0, 50) + '...')
+  } else {
+    console.log('[API] No session found - auth will fail')
+  }
+  
+  return headers
 }
 
 function handleResponse<T>(data: unknown): ApiResponse<T> {

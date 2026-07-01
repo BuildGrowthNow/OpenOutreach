@@ -16,6 +16,7 @@ import { useAuth } from '@/app/auth-provider'
 import { useRouter } from 'next/navigation'
 import { Badge } from '@/components/ui/badge'
 import { useEffect, useState } from 'react'
+import { supabase } from '@/lib/supabase/client'
 import { getLinkedInProfileHealth } from '@/lib/api/dashboard'
 import { LinkedInProfileHealthResponse } from '@/lib/types/components'
 import { AlertCircle } from 'lucide-react'
@@ -407,13 +408,20 @@ const Header = ({ onMenuClick, className }: HeaderProps) => {
               <Settings className="h-4 w-4" />
               Settings
             </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem asChild>
-              <a href="/api/auth/logout" className="cursor-pointer">
-                <LogOut className="h-4 w-4" />
-                Logout
-              </a>
-            </DropdownMenuItem>
+             <DropdownMenuSeparator />
+             <DropdownMenuItem className="gap-2 cursor-pointer" onClick={async () => {
+               try {
+                 await supabase.auth.signOut()
+                 window.location.href = '/'
+               } catch (error) {
+                 console.error('Logout error:', error)
+                 // Still redirect to home even if signOut fails
+                 window.location.href = '/'
+               }
+             }}>
+               <LogOut className="h-4 w-4" />
+               Logout
+             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

@@ -18,8 +18,9 @@ services:
       - DJANGO_DEBUG=${DJANGO_DEBUG:-false}
       - DOCKER_ENV=true
       - SKIP_DAEMON=true
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
-      - NEXT_PUBLIC_APP_URL=http://localhost:3000
+      - NEXT_PUBLIC_API_URL=https://linkedin-api.lengrowth.com
+      - NEXT_PUBLIC_APP_URL=https://linkedin.lengrowth.com
+      
       # LLM Configuration
       - LLM_API_KEY=${LLM_API_KEY}
       - LLM_API_BASE=${LLM_API_BASE:-}
@@ -33,6 +34,7 @@ services:
     volumes:
       - ./data:/app/data
       - ./openoutreach/media:/app/openoutreach/media
+      
     ports:
       - "3000:3000"
       - "8000:8000"
