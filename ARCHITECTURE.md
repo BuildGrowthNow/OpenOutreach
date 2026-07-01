@@ -34,7 +34,7 @@ only at wiring points (the daemon's handler map, onboarding's profile setup).
 ### `rundaemon` management command (`management/commands/rundaemon.py`)
 
 Startup sequence:
-1. **Configure logging** — DEBUG level, suppresses noisy third-party loggers (urllib3, httpx, pydantic_ai, openai, playwright, etc.).
+1. **Configure logging** — defaults to INFO via the OPENOUTREACH_LOG_LEVEL environment variable, suppresses noisy third-party loggers (urllib3, httpx, pydantic_ai, openai, playwright, pymongo, etc.).
 2. **Ensure DB** — `migrate --no-input` + `setup_crm` (idempotent).
 3. **Onboard** — checks `missing_keys()`; if incomplete: uses `--onboard <config.json>` (non-interactive), falls back to interactive wizard (TTY), or exits with clear error (no TTY).
 4. **Validate** — `LLM_API_KEY`, active `LinkedInProfile`, at least one campaign.

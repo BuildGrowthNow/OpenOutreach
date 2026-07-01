@@ -9,14 +9,39 @@ import logging
 from pathlib import Path
 from datetime import timedelta
 
-# Initialize logging
+# Initialize logging with an informational default to keep noisy third-party logs out of the console.
+log_level_name = os.environ.get("OPENOUTREACH_LOG_LEVEL", "INFO").upper()
+log_level = getattr(logging, log_level_name, logging.INFO)
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=log_level,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(sys.stdout),
-    ]
+    ],
+    force=True,
 )
+
+for noisy_logger in (
+    "urllib3",
+    "urllib3.connectionpool",
+    "httpx",
+    "pydantic_ai",
+    "openai",
+    "playwright",
+    "httpcore",
+    "fastembed",
+    "huggingface_hub",
+    "filelock",
+    "asyncio",
+    "requests",
+    "pymongo",
+    "pymongo.command",
+    "pymongo.monitor",
+    "pymongo.network",
+    "pymongo.topology",
+    "bson",
+):
+    logging.getLogger(noisy_logger).setLevel(logging.WARNING)
 
 # Use Django's default User model (from django.contrib.auth)
 # No custom user model needed - using default auth.User

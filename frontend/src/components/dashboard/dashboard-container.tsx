@@ -16,7 +16,7 @@ interface DashboardContainerProps {
 export function DashboardContainer({
   children,
   className,
-  maxWidth = '2xl',
+  maxWidth = 'full',
   padding = 'lg',
 }: DashboardContainerProps) {
   // Max-width classes

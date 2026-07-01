@@ -51,11 +51,11 @@ const Dashboard = () => {
   const [refreshing, setRefreshing] = useState(false)
   // Fetch initial data
   useEffect(() => {
-    fetchCampaigns('active')
-    fetchLeads('QUALIFIED')
     fetchHealth()
-    fetchRateLimits()
-  }, [fetchCampaigns, fetchLeads, fetchHealth, fetchRateLimits])
+  }, [fetchHealth])
+  
+  // Note: Campaigns, leads, and rate limits require authentication
+  // They will be fetched in the useDashboard hook with proper error handling
 
   const activity = useMemo<ActivityItem[]>(() => {
     if (campaigns.length === 0 && leads.length === 0) {

@@ -86,6 +86,7 @@ def brand(service: str, text: str | None = None) -> str:
 
 SILENCED_LOGGERS = (
     "urllib3",
+    "urllib3.connectionpool",
     "httpx",
     "pydantic_ai",
     "openai",
@@ -95,11 +96,22 @@ SILENCED_LOGGERS = (
     "huggingface_hub",
     "filelock",
     "asyncio",
+    "requests",
+    "pymongo",
+    "pymongo.command",
+    "pymongo.monitor",
+    "pymongo.network",
+    "pymongo.topology",
+    "bson",
 )
 
 
-def configure_logging(level: int = logging.DEBUG) -> None:
+def configure_logging(level: int | None = None) -> None:
     """Configure root logger with colored output and silence noisy libraries."""
+    if level is None:
+        configured_level = os.environ.get("OPENOUTREACH_LOG_LEVEL", "INFO").upper()
+        level = getattr(logging, configured_level, logging.INFO)
+
     root = logging.getLogger()
     root.handlers.clear()
 

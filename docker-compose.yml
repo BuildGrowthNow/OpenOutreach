@@ -16,6 +16,7 @@ services:
       - HOST_GID=1000
       - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY:-change-in-production}
       - DJANGO_DEBUG=${DJANGO_DEBUG:-false}
+      - OPENOUTREACH_LOG_LEVEL=${OPENOUTREACH_LOG_LEVEL:-INFO}
       - DOCKER_ENV=true
       - SKIP_DAEMON=true
       - NEXT_PUBLIC_API_URL=https://linkedin-api.lengrowth.com

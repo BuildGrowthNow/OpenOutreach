@@ -54,14 +54,11 @@ def get_supabase_jwks():
         try:
             response = requests.get(jwks_uri, timeout=5)
             response.raise_for_status()
-            logger.info(f"[SupabaseAuth] Fetched JWKS from {jwks_uri}")
+            logger.debug(f"[SupabaseAuth] Fetched JWKS from {jwks_uri}")
             return response.json()
         except Exception as e:
-                    # Use print to ensure message appears in container logs even if logging is misconfigured
-                    print(f"[SupabaseAuth] JWKS fetch failed for {jwks_uri}: {e}")
-                    logger.debug(f"[SupabaseAuth] JWKS fetch failed for {jwks_uri}: {e}")
+            logger.debug(f"[SupabaseAuth] JWKS fetch failed for {jwks_uri}: {e}")
 
-    print(f"[SupabaseAuth] Failed to fetch JWKS from any known Supabase endpoint for {supabase_url}")
     logger.error(f"[SupabaseAuth] Failed to fetch JWKS from any known Supabase endpoint for {supabase_url}")
     return None
 
@@ -112,14 +109,14 @@ def verify_token_with_jwks(token: str) -> Dict[str, Any]:
         header = jwt.get_unverified_header(token)
         alg = header.get('alg', 'HS256')
         kid = header.get('kid')
-        logger.info(f"[SupabaseAuth] Token algorithm: {alg}, kid: {kid}")
+        logger.debug(f"[SupabaseAuth] Token algorithm: {alg}, kid: {kid}")
     except Exception as e:
         raise InvalidTokenError(f"Failed to decode token header: {e}")
     
     # Decode payload without verification
     try:
         payload = jwt.decode(token, options={"verify_signature": False})
-        logger.info(f"[SupabaseAuth] Token payload decoded successfully")
+        logger.debug("[SupabaseAuth] Token payload decoded successfully")
     except Exception as e:
         raise InvalidTokenError(f"Failed to decode token payload: {e}")
     
@@ -133,7 +130,7 @@ def verify_token_with_jwks(token: str) -> Dict[str, Any]:
                 algorithms=[alg],
                 options={"verify_aud": False},
             )
-            logger.info(f"[SupabaseAuth] Token verified successfully with {alg} using SERVICE_KEY")
+            logger.debug(f"[SupabaseAuth] Token verified successfully with {alg} using SERVICE_KEY")
             return payload
         except PyJWTError as e:
             logger.warning(f"[SupabaseAuth] {alg} verification with SERVICE_KEY failed: {e}")
@@ -174,7 +171,7 @@ def verify_token_with_jwks(token: str) -> Dict[str, Any]:
                         algorithms=allowed_algorithms,  # type: ignore[arg-type]
                         options={"verify_aud": False},
                     )
-                    logger.info(f"[SupabaseAuth] Token verified successfully with {alg} using JWKS")
+                    logger.debug(f"[SupabaseAuth] Token verified successfully with {alg} using JWKS")
                     return payload
                 except PyJWTError as e:
                     raise InvalidTokenError(f"{alg} verification failed: {e}")
@@ -208,8 +205,7 @@ class SupabaseJWTAuthentication(BaseAuthentication):
         """
         # Get the Authorization header
         auth_header = request.META.get("HTTP_AUTHORIZATION", "")
-        logger.info(f"[SupabaseJWTAuth] Checking auth header: '{auth_header[:50] if auth_header else '(empty)'}...'")
-        print(f"[SupabaseJWTAuth] Raw Authorization header: {auth_header[:200]}")
+        logger.debug(f"[SupabaseJWTAuth] Checking auth header: '{auth_header[:50] if auth_header else '(empty)'}...'")
         
         if not auth_header:
             logger.debug("[SupabaseJWTAuth] No Authorization header found, skipping auth")
@@ -228,20 +224,19 @@ class SupabaseJWTAuthentication(BaseAuthentication):
             return None
 
         logger.debug(f"[SupabaseJWTAuth] Token prefix: {access_token[:30]}...")
-        logger.info("[SupabaseJWTAuth] Attempting token verification")
+        logger.debug("[SupabaseJWTAuth] Attempting token verification")
 
         try:
             # Log token header for debugging
             try:
                 th = jwt.get_unverified_header(access_token)
-                print(f"[SupabaseJWTAuth] Token header: {th}")
-                logger.debug(f"Token header: {th}")
+                logger.debug(f"[SupabaseJWTAuth] Token header: {th}")
             except Exception as _e:
-                print(f"[SupabaseJWTAuth] Failed to get token header: {_e}")
+                logger.debug(f"[SupabaseJWTAuth] Failed to get token header: {_e}")
 
             # Verify and decode the token using JWKS
             user = self._authenticate_token(access_token)
-            logger.info(f"[SupabaseJWTAuth] Successfully authenticated user: {user.username if hasattr(user, 'username') else user}")
+            logger.debug(f"[SupabaseJWTAuth] Successfully authenticated user: {user.username if hasattr(user, 'username') else user}")
             return (user, access_token)
 
         except InvalidTokenError as e:
@@ -301,7 +296,7 @@ class SupabaseJWTAuthentication(BaseAuthentication):
         try:
             # Use the new JWKS-based verification
             payload = verify_token_with_jwks(token)
-            logger.info("[SupabaseJWTAuth] Signature verification successful")
+            logger.debug("[SupabaseJWTAuth] Signature verification successful")
         except InvalidTokenError as e:
             raise
 
