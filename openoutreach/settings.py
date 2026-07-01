@@ -169,14 +169,22 @@ USE_TZ = True
 
 TESTING = sys.argv[1:2] == ["test"]
 
-# REST Framework Configuration
+# =============================================================================
+# REST Framework Configuration - Supabase JWT must be FIRST
+# =============================================================================
+# The SupabaseJWTAuthentication must be the FIRST authentication class
+# because the frontend sends Supabase JWT tokens (signed with Supabase's service key)
+# not Django SimpleJWT tokens (signed with SECRET_KEY)
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
+        # Supabase JWT Authentication (for frontend) - MUST BE FIRST
+        # This authenticates users using Supabase JWT tokens
+        "openoutreach.api.authentication.supabase.SupabaseJWTAuthentication",
+        # Django SimpleJWT (for admin/internal use)
         "rest_framework_simplejwt.authentication.JWTAuthentication",
+        # Session and Basic authentication for fallback
         "rest_framework.authentication.SessionAuthentication",
         "rest_framework.authentication.BasicAuthentication",
-        # Supabase JWT Authentication (for frontend)
-        "openoutreach.api.authentication.supabase.SupabaseJWTAuthentication",
     ),
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
@@ -207,7 +215,9 @@ REST_FRAMEWORK = {
     "EXCEPTION_HANDLER": "rest_framework.views.exception_handler",
 }
 
-# JWT Authentication Configuration
+# =============================================================================
+# JWT Authentication Configuration (for Django SimpleJWT)
+# =============================================================================
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
@@ -235,7 +245,9 @@ SIMPLE_JWT = {
     "SLIDING_TOKEN_REFRESH_LIFETIME": timedelta(days=1),
 }
 
+# =============================================================================
 # CORS Configuration for frontend-backend communication
+# =============================================================================
 CORS_ALLOW_ALL_ORIGINS = DEBUG  # Allow all origins in development
 CORS_ALLOW_CREDENTIALS = True
 
@@ -248,147 +260,21 @@ if CORS_ALLOWED_ORIGINS_STR:
 else:
     CORS_ALLOWED_ORIGINS = [
         "http://localhost:3000",  # Next.js frontend (development)
-        "http://localhost:3001",
         "http://127.0.0.1:3000",
-        "http://127.0.0.1:3001",
     ]
 
-# Production CORS origins (added when DEBUG=False)
+# In production, add the production domain
 if not DEBUG:
     CORS_ALLOWED_ORIGINS.extend(
         [
-            "https://linkedin.lengrowth.com",  # Main website
-            "https://linkedin-api.lengrowth.com",  # API URL
+            "https://linkedin.lengrowth.com",
+            "https://linkedin-api.lengrowth.com",
         ]
     )
-CORS_ALLOW_METHODS = [
-    "DELETE",
-    "GET",
-    "OPTIONS",
-    "PATCH",
-    "POST",
-    "PUT",
-]
-CORS_ALLOW_HEADERS = [
-    "accept",
-    "accept-encoding",
-    "authorization",
-    "content-type",
-    "dnt",
-    "origin",
-    "user-agent",
-    "x-csrftoken",
-    "x-requested-with",
-]
 
-# Note: Production CORS and SECRET_KEY handling is now in the default configuration above
-
-# ==================== MongoDB Configuration ====================
-# MongoDB integration via PyMongo connector
-# Set MONGODB_ENABLED=true in environment to use MongoDB
-# For MongoDB Atlas: set MONGODB_ATLAS_URI=mongodb+srv://user:pass@cluster.mongodb.net/dbname
-# Note: MongoDB backend for Django ORM not available for Django 5.x
-# Use pymongo directly for MongoDB operations when MONGODB_ENABLED=true
-
-# Type annotation for MongoDB_URI
-MongoDB_URI: str | None = None
-
-# Pre-initialize MongoDB settings with defaults (overridden by the import below)
-MONGODB_ENABLED: bool = False
-MONGODB_NAME: str = "openoutreach"
-MONGODB_HOST: str = "localhost"
-MONGODB_PORT: int = 27017
-MONGODB_ATLAS_URI: str | None = None
-DUAL_WRITE_ENABLED: bool = False
-
-try:
-    from openoutreach.mongodb.settings import (
-        MONGODB_ENABLED,
-        MONGODB_NAME,
-        MONGODB_HOST,
-        MONGODB_ATLAS_URI,
-        get_mongodb_uri,
-        get_mongodb_config,
-    )
-
-    # MongoDB connection timeout settings (from settings module)
-    MONGODB_SERVER_SELECTION_TIMEOUT = 30000
-    MONGODB_CONNECT_TIMEOUT = 30000
-    MONGODB_SOCKET_TIMEOUT = 10000
-
-    # Configure MongoDB connection based on environment
-    if MONGODB_ENABLED:
-        MongoDB_URI = get_mongodb_uri() or MONGODB_ATLAS_URI
-        logger.info("MongoDB integration enabled via PyMongo")
-    else:
-        logger.info("MongoDB integration disabled, using SQLite")
-
-except ImportError:
-    MONGODB_ENABLED = False
-    logger.info("MongoDB module not available, using SQLite only")
-
-# =============================================================================
-# Logging Configuration
-# =============================================================================
-LOGGING = {
-    "version": 1,
-    "disable_existing_loggers": False,
-    "formatters": {
-        "verbose": {
-            "format": "[{levelname}] {asctime} {name}:{module}:{lineno} - {message}",
-            "style": "{",
-        },
-        "simple": {
-            "format": "[{levelname}] {message}",
-            "style": "{",
-        },
-    },
-    "handlers": {
-        "console": {
-            "class": "logging.StreamHandler",
-            "formatter": "simple",
-        },
-        "file": {
-            "class": "logging.FileHandler",
-            "filename": str(ROOT_DIR / "data" / "app.log"),
-            "formatter": "verbose",
-        },
-    },
-    "root": {
-        "handlers": ["console"],
-        "level": "INFO",
-    },
-    "loggers": {
-        "openoutreach": {
-            "handlers": ["console", "file"],
-            "level": "DEBUG",
-            "propagate": True,
-        },
-        "openoutreach.mongodb": {
-            "handlers": ["console", "file"],
-            "level": "DEBUG",
-            "propagate": True,
-        },
-        "django.db.backends": {
-            "level": "ERROR",
-        },
-    },
-}
-
-# MongoDB Database Configuration (when MONGODB_ENABLED=true)
-#
-# NOTE: Djongo (MongoDB backend for Django) does not support Django 5.x currently.
-# The project uses Django 5.2, and there's no stable MongoDB backend that supports it.
-#
-# Options for MongoDB integration:
-# 1. Downgrade to Django 3.1.x (not recommended - breaks other packages)
-# 2. Use pymongo directly for MongoDB operations
-# 3. Wait for a compatible MongoDB backend to be released
-#
-# For now, when MONGODB_ENABLED=true, we'll use pymongo directly for MongoDB operations
-# while keeping SQLite as the default database for Django models.
-if MONGODB_ENABLED:
-    logger.info("MongoDB integration enabled via PyMongo")
-    logger.warning("Note: MongoDB backend not available for Django 5.x yet.")
-    logger.warning("Django models will continue to use SQLite.")
-    logger.warning("Use pymongo directly for MongoDB operations.")
+CSRF_TRUSTED_ORIGINS = []
+if not DEBUG:
+    CSRF_TRUSTED_ORIGINS = [
+        "https://linkedin.lengrowth.com",
+        "https://linkedin-api.lengrowth.com",
+    ]
