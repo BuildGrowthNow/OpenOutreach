@@ -31,6 +31,11 @@ services:
       # MongoDB Configuration
       - MONGODB_ENABLED=${MONGODB_ENABLED:-true}
       - MONGODB_ATLAS_URI=${MONGODB_ATLAS_URI}
+      
+      # Supabase Configuration
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
     volumes:
       - ./data:/app/data
       - ./openoutreach/media:/app/openoutreach/media
