@@ -17,6 +17,15 @@ if [ -d /app/frontend ]; then
     cd /app/frontend
     gosu ubuntu node_modules/.bin/next start -p 3000 &
     NEXTJS_PID=$!
+
+    sleep 2
+
+    if ! kill -0 $NEXTJS_PID 2>/dev/null; then
+        echo "Next.js process died immediately"
+        exit 1
+    fi
+
+    ps -p $NEXTJS_PID
     echo "Next.js started with PID $NEXTJS_PID"
     cd /app
     
@@ -24,7 +33,7 @@ if [ -d /app/frontend ]; then
     echo "Waiting for Next.js to be ready..."
     for i in $(seq 1 30); do
         # Check if Next.js process is running and listening on port 3000
-        if ss -tlnp 2>/dev/null | grep -q ":3000"; then
+        if curl -sf http://localhost:3000 >/dev/null; then
             echo "Next.js is ready and listening on port 3000!"
             break
         fi
