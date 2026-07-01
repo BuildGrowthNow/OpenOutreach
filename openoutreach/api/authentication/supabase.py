@@ -127,7 +127,12 @@ def verify_token_with_jwks(token: str) -> Dict[str, Any]:
     service_key = getattr(settings, 'SUPABASE_SERVICE_KEY', None)
     if service_key and alg.startswith('HS'):
         try:
-            payload = jwt.decode(token, service_key, algorithms=[alg])
+            payload = jwt.decode(
+                token,
+                service_key,
+                algorithms=[alg],
+                options={"verify_aud": False},
+            )
             logger.info(f"[SupabaseAuth] Token verified successfully with {alg} using SERVICE_KEY")
             return payload
         except PyJWTError as e:
@@ -163,7 +168,12 @@ def verify_token_with_jwks(token: str) -> Dict[str, Any]:
                     else:
                         allowed_algorithms = [alg]
                     
-                    payload = jwt.decode(token, key_obj, algorithms=allowed_algorithms)  # type: ignore[arg-type]
+                    payload = jwt.decode(
+                        token,
+                        key_obj,
+                        algorithms=allowed_algorithms,  # type: ignore[arg-type]
+                        options={"verify_aud": False},
+                    )
                     logger.info(f"[SupabaseAuth] Token verified successfully with {alg} using JWKS")
                     return payload
                 except PyJWTError as e:
