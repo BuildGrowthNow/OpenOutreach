@@ -9,6 +9,15 @@ import logging
 from pathlib import Path
 from datetime import timedelta
 
+# Initialize logging
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+    ]
+)
+
 # Use Django's default User model (from django.contrib.auth)
 # No custom user model needed - using default auth.User
 from typing import Optional
@@ -32,6 +41,19 @@ except ImportError:
     SUPABASE_URL = os.environ.get("SUPABASE_URL")
     SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY")
     SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY")
+
+# Log Supabase configuration status
+if SUPABASE_URL and SUPABASE_ANON_KEY:
+    logger.info(f"Supabase configuration loaded successfully (URL: {SUPABASE_URL})")
+    if SUPABASE_SERVICE_KEY:
+        logger.info(f"Supabase SERVICE_KEY loaded (first 20 chars: {SUPABASE_SERVICE_KEY[:20]}...)")
+    else:
+        logger.warning("Supabase SERVICE_KEY NOT configured - JWT verification will fail")
+else:
+    logger.warning(
+        "Supabase not fully configured. Some authentication features may not work. "
+        "Please set SUPABASE_URL, SUPABASE_ANON_KEY, and SUPABASE_SERVICE_KEY in environment."
+    )
 
 # =============================================================================
 # Django Core Configuration
@@ -64,15 +86,6 @@ if ALLOWED_HOSTS_STR:
             ALLOWED_HOSTS.append(host)
 else:
     ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
-
-# Log Supabase configuration status
-if SUPABASE_URL and SUPABASE_ANON_KEY:
-    logger.info("Supabase configuration loaded successfully")
-else:
-    logger.warning(
-        "Supabase not fully configured. Some authentication features may not work. "
-        "Please set SUPABASE_URL, SUPABASE_ANON_KEY, and SUPABASE_SERVICE_KEY in environment."
-    )
 
 # Playwright's sync API runs inside an async event loop, which triggers
 # Django's async-safety check. We only use the ORM synchronously, so this is safe.
