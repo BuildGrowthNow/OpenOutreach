@@ -44,9 +44,9 @@ class SupabaseJWTAuthentication(BaseAuthentication):
     Authentication header format: Authorization: Bearer <supabase_jwt_token>
     """
 
-    # Supabase JWT algorithm - RS256 is the default for Supabase
-    # HS256 can be used if configured in Supabase project settings
-    ALGORITHM = "RS256"
+    # Supabase JWT algorithm - HS256 is the default for Supabase
+    # RS256 can be used if configured in Supabase project settings
+    ALGORITHM = "HS256"
 
     def authenticate(self, request: HttpRequest) -> Optional[Tuple[Any, Any]]:
         """
