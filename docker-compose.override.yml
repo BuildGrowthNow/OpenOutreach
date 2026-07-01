@@ -1,0 +1,9 @@
+version: '3.8'
+services:
+  openoutreach:
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    volumes:
+      - ./:/app
+      - ./data:/app/data
+      - ./openoutreach/media:/app/openoutreach/media
