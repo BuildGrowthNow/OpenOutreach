@@ -254,9 +254,14 @@ CORS_ALLOW_CREDENTIALS = True
 # Load CORS allowed origins from environment
 CORS_ALLOWED_ORIGINS_STR = os.environ.get("CORS_ALLOWED_ORIGINS", "")
 if CORS_ALLOWED_ORIGINS_STR:
-    CORS_ALLOWED_ORIGINS = [
-        origin.strip() for origin in CORS_ALLOWED_ORIGINS_STR.split(",")
-    ]
+    CORS_ALLOWED_ORIGINS = []
+    for origin in CORS_ALLOWED_ORIGINS_STR.split(","):
+        origin = origin.strip()
+        # Skip localhost entries in production (they don't work with HTTPS cross-origin)
+        if origin in ("localhost", "127.0.0.1") and not DEBUG:
+            continue
+        if origin:
+            CORS_ALLOWED_ORIGINS.append(origin)
 else:
     CORS_ALLOWED_ORIGINS = [
         "http://localhost:3000",  # Next.js frontend (development)
@@ -265,12 +270,10 @@ else:
 
 # In production, add the production domain
 if not DEBUG:
-    CORS_ALLOWED_ORIGINS.extend(
-        [
-            "https://linkedin.lengrowth.com",
-            "https://linkedin-api.lengrowth.com",
-        ]
-    )
+    # Only add if not already present from CORS_ALLOWED_ORIGINS
+    for origin in ["https://linkedin.lengrowth.com", "https://linkedin-api.lengrowth.com"]:
+        if origin not in CORS_ALLOWED_ORIGINS:
+            CORS_ALLOWED_ORIGINS.append(origin)
 
 CSRF_TRUSTED_ORIGINS = []
 if not DEBUG:

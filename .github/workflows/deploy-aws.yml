@@ -56,6 +56,27 @@ jobs:
             docker compose up -d --build
           "
           
+          # Fix SSL certificate permissions for nginx
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o IdentitiesOnly=yes "${EC2_USER}@${EC2_HOST}" "
+            set -e
+            echo 'Running SSL permissions fix...'
+            # Add www-data to ssl-cert group
+            if getent group ssl-cert; then
+              usermod -a -G ssl-cert www-data
+            else
+              groupadd ssl-cert
+              usermod -a -G ssl-cert www-data
+            fi
+            # Make certificates readable
+            chmod 750 /etc/letsencrypt/live/
+            chmod 750 /etc/letsencrypt/archive/
+            chmod -R 640 /etc/letsencrypt/archive/*
+            chmod -R 640 /etc/letsencrypt/live/*
+            # Test and restart nginx
+            nginx -t && systemctl restart nginx
+            echo 'SSL permissions fix completed!'
+          "
+          
           echo "Deployment completed successfully!"
 
       - name: Cleanup SSH
