@@ -38,6 +38,8 @@ jobs:
             set -e
             if [ -d ~/OpenOutreach/.git ]; then
               cd ~/OpenOutreach
+              # Ensure deploy user owns workspace files before cleanup
+              sudo chown -R "${EC2_USER}:${EC2_USER}" .
               # Remove unsynced files (Dockerfile, docker-compose.yml, .env) and reset to GitHub
               git clean -fd
               git reset --hard
