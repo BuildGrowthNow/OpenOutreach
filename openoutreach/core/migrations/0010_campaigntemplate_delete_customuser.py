@@ -65,7 +65,12 @@ class Migration(migrations.Migration):
                 "ordering": ["-created_at"],
             },
         ),
-        migrations.DeleteModel(
-            name="CustomUser",
+        migrations.SeparateDatabaseAndState(
+            database_operations=[],
+            state_operations=[
+                migrations.DeleteModel(
+                    name="CustomUser",
+                ),
+            ],
         ),
     ]
