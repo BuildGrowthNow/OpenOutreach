@@ -7,7 +7,7 @@ It also handles the automatic creation/linking of Django users with Supabase use
 
 import logging
 from datetime import datetime
-from typing import Optional, Tuple, Any, Dict
+from typing import Optional, Tuple, Any, Dict, Union
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -20,6 +20,7 @@ from rest_framework.authentication import (
 from rest_framework.exceptions import AuthenticationFailed, NotAuthenticated
 import jwt
 from jwt import PyJWTError
+from jwt.algorithms import ECAlgorithm, RSAAlgorithm, HMACAlgorithm
 import requests
 
 from openoutreach.mongodb.models import SupabaseUser
@@ -49,20 +50,29 @@ def get_supabase_jwks():
         return None
 
 
-def get_algorithm_from_token(token: str) -> str:
-    """Get the algorithm from the JWT header."""
+def decode_jwk_key(key: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """
+    Decode a JWK key into a dict format suitable for jwt.decode().
+    
+    Returns None if decoding fails.
+    """
     try:
-        header = jwt.get_unverified_header(token)
-        return header.get('alg', 'HS256')
+        if key.get('kty') == 'RSA':
+            # For RSA keys, return the key dict as-is
+            return key
+        elif key.get('kty') == 'EC':
+            # For EC keys, return the key dict as-is
+            return key
+        return None
     except Exception as e:
-        logger.warning(f"[SupabaseAuth] Could not decode token header: {e}")
-        return 'HS256'
+        logger.error(f"[SupabaseAuth] Failed to decode JWK key: {e}")
+        return None
 
 
 def verify_token_with_jwks(token: str) -> Dict[str, Any]:
     """
     Verify a Supabase JWT token using the JWKS endpoint.
-    Supports both HS256 and RS256 algorithms.
+    Supports HS256, RS256, and ES256 algorithms.
     
     Returns the decoded payload if verification succeeds.
     Raises InvalidTokenError if verification fails.
@@ -87,54 +97,53 @@ def verify_token_with_jwks(token: str) -> Dict[str, Any]:
     except Exception as e:
         raise InvalidTokenError(f"Failed to decode token payload: {e}")
     
-    # Check ifSUPABASE_SERVICE_KEY is available and we should try HS256 first
+    # Check if SUPABASE_SERVICE_KEY is available for HS256
     service_key = getattr(settings, 'SUPABASE_SERVICE_KEY', None)
     if service_key and alg.startswith('HS'):
         try:
-            payload = jwt.decode(token, service_key, algorithms=[alg])  # type: ignore[arg-type]
-            logger.info(f"[SupabaseAuth] Token verified successfully with HS256 using SERVICE_KEY")
+            payload = jwt.decode(token, service_key, algorithms=[alg])
+            logger.info(f"[SupabaseAuth] Token verified successfully with {alg} using SERVICE_KEY")
             return payload
         except PyJWTError as e:
-            logger.warning(f"[SupabaseAuth] HS256 verification with SERVICE_KEY failed: {e}")
+            logger.warning(f"[SupabaseAuth] {alg} verification with SERVICE_KEY failed: {e}")
     
-    # Try JWKS for RS256 or if SERVICE_KEY verification failed
-    if alg.startswith('RS'):
+    # Try JWKS for RS256/ES256 or if SERVICE_KEY verification failed
+    if alg.startswith('RS') or alg.startswith('ES'):
         jwks = get_supabase_jwks()
         if jwks:
             # Find the key in JWKS
-            rsa_key = None
+            key_obj = None
             if kid:
                 for key in jwks.get('keys', []):
                     if key.get('kid') == kid:
-                        # Build key dict manually from jwks format
-                        key_dict = {
-                            'kty': key.get('kty'),
-                            'kid': key.get('kid'),
-                            'use': key.get('use'),
-                            'n': key.get('n'),
-                            'e': key.get('e'),
-                        }
-                        rsa_key = jwt.algorithms.RSAAlgorithm.from_jwk(key_dict) # type: ignore
+                        key_obj = decode_jwk_key(key)
                         break
             
-            if rsa_key:
+            if key_obj:
                 try:
-                    payload = jwt.decode(token, rsa_key, algorithms=[alg])  # type: ignore[attr-defined]
-                    logger.info("[SupabaseAuth] Token verified successfully with RS256 using JWKS")
+                    # Get the allowed algorithms based on the token's algorithm
+                    if alg == 'RS256':
+                        allowed_algorithms = ['RS256']
+                    elif alg == 'ES256':
+                        allowed_algorithms = ['ES256']
+                    elif alg == 'RS384':
+                        allowed_algorithms = ['RS384']
+                    elif alg == 'RS512':
+                        allowed_algorithms = ['RS512']
+                    elif alg == 'ES384':
+                        allowed_algorithms = ['ES384']
+                    elif alg == 'ES512':
+                        allowed_algorithms = ['ES512']
+                    else:
+                        allowed_algorithms = [alg]
+                    
+                    payload = jwt.decode(token, key_obj, algorithms=allowed_algorithms)  # type: ignore[arg-type]
+                    logger.info(f"[SupabaseAuth] Token verified successfully with {alg} using JWKS")
                     return payload
                 except PyJWTError as e:
-                    raise InvalidTokenError(f"RS256 verification failed: {e}")
+                    raise InvalidTokenError(f"{alg} verification failed: {e}")
             
             logger.warning(f"[SupabaseAuth] No matching key found in JWKS for kid: {kid}")
-    
-    # If we get here, try SERVICE_KEY as last resort (for HS256)
-    if service_key:
-        try:
-            payload = jwt.decode(token, service_key, algorithms=['HS256'])  # type: ignore[arg-type]
-            logger.info("[SupabaseAuth] Token verified successfully with HS256 (fallback)")
-            return payload
-        except PyJWTError as e:
-            raise InvalidTokenError(f"Token signature verification failed: {e}")
     
     raise InvalidTokenError("No suitable verification method found")
 
@@ -144,7 +153,7 @@ class SupabaseJWTAuthentication(BaseAuthentication):
     Custom JWT authentication class that validates Supabase JWT tokens.
     
     This class now supports:
-    1. Automatic detection of token algorithm (HS256 or RS256)
+    1. Automatic detection of token algorithm (HS256, RS256, ES256)
     2. Verification using Supabase's JWKS endpoint (public keys)
     3. Fallback to SERVICE_KEY for HS256 tokens
     4. Detailed logging for debugging
@@ -202,7 +211,7 @@ class SupabaseJWTAuthentication(BaseAuthentication):
         Verify and decode the Supabase JWT token using JWKS.
         
         This method uses JWKS (JSON Web Key Set) to verify the token signature,
-        which supports both HS256 and RS256 algorithms used by Supabase.
+        which supports HS256, RS256, and ES256 algorithms used by Supabase.
         """
         if not token:
             raise InvalidTokenError("Token is empty")
