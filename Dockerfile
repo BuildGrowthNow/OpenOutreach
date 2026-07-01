@@ -37,8 +37,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl && \
     curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
     apt-get install -y --no-install-recommends nodejs && rm -rf /var/lib/apt/lists/*
 
-# Install nginx for serving frontend
-RUN apt-get update && apt-get install -y --no-install-recommends nginx && rm -rf /var/lib/apt/lists/*
+# Nginx is not installed in container - server nginx handles routing
 
 # Copy installed Python packages from the build stage
 COPY --from=deps /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
@@ -62,11 +61,6 @@ RUN apt-get update \
 # Create non-root user first
 RUN useradd -m -u 1000 ubuntu
 
-# Now set up nginx directories with proper ownership for ubuntu user
-RUN mkdir -p /var/lib/nginx/body /var/lib/nginx/proxy /var/cache/nginx /run/nginx && \
-    chown -R ubuntu:ubuntu /var/lib/nginx /var/cache/nginx /run/nginx && \
-    chmod -R 755 /var/lib/nginx /var/cache/nginx /run/nginx
-
 # Copy frontend build
 COPY --from=frontend-builder /frontend-build/.next /app/frontend/.next
 COPY --from=frontend-builder /frontend-build/node_modules /app/frontend/node_modules
@@ -80,7 +74,6 @@ WORKDIR ${APP_HOME}
 
 COPY ./compose/linkedin/entrypoint /entrypoint
 COPY ./compose/linkedin/start /start
-COPY ./nginx.conf /etc/nginx/conf.d/default.conf
 
 RUN sed -i 's/\r$//g' /entrypoint /start && chmod +x /entrypoint /start
 

@@ -1,5 +1,5 @@
 #!/bin/bash
-# compose/start - Start nginx, Next.js, VNC, and Django
+# compose/start - Start Next.js and Django (no container nginx)
 
 # Don't use errexit - let the script continue even if individual commands fail
 set -o pipefail
@@ -11,15 +11,11 @@ Xvfb :99 -screen 0 1920x1080x24 &
 sleep 1
 export DISPLAY=:99
 
-# Ensure nginx directories exist with proper permissions (must be root)
-mkdir -p /var/lib/nginx/body /var/lib/nginx/proxy /var/cache/nginx /run/nginx
-chmod 755 /var/lib/nginx /var/cache/nginx /run/nginx
-
-# Start Next.js frontend server on port 3001 (nginx will proxy to it on 3000)
-echo "Starting Next.js server on port 3001..."
+# Start Next.js frontend server on port 3000 (nginx is not used in container)
+echo "Starting Next.js server on port 3000..."
 if [ -d /app/frontend ]; then
     cd /app/frontend
-    gosu ubuntu node_modules/.bin/next start -p 3001 &
+    gosu ubuntu node_modules/.bin/next start -p 3000 &
     NEXTJS_PID=$!
     echo "Next.js started with PID $NEXTJS_PID"
     cd /app
@@ -27,9 +23,9 @@ if [ -d /app/frontend ]; then
     # Wait for Next.js to be ready (up to 30 seconds)
     echo "Waiting for Next.js to be ready..."
     for i in $(seq 1 30); do
-        # Check if Next.js process is running and listening on port 3001
-        if ss -tlnp 2>/dev/null | grep -q ":3001"; then
-            echo "Next.js is ready and listening on port 3001!"
+        # Check if Next.js process is running and listening on port 3000
+        if ss -tlnp 2>/dev/null | grep -q ":3000"; then
+            echo "Next.js is ready and listening on port 3000!"
             break
         fi
         if [ $i -eq 30 ]; then
@@ -43,45 +39,13 @@ else
     NEXTJS_PID=""
 fi
 
-# Start nginx for frontend (Next.js) on port 3000
-# nginx must start as ROOT to bind to ports and create PID file
-if [ "${SKIP_DAEMON:-false}" = "true" ]; then
-    # When SKIP_DAEMON is true, run nginx in background (daemon off but in background)
-    nginx -g 'daemon off; error_log /dev/stdout warn;' &
-    NGINX_PID=$!
-else
-    # Normal mode: run nginx in foreground
-    nginx -g 'daemon off;'
-fi
-
-# Wait for nginx to be ready
-sleep 1
-
-# Check if nginx is running
-if [ "${SKIP_DAEMON:-false}" = "true" ]; then
-    if ! kill -0 $NGINX_PID 2>/dev/null; then
-        echo "ERROR: nginx failed to start"
-        nginx -t
-        exit 1
-    fi
-else
-    if ! pgrep -x nginx > /dev/null; then
-        echo "ERROR: nginx failed to start"
-        nginx -t
-        exit 1
-    fi
-    NGINX_PID=$(pgrep -x nginx | head -1)
-fi
-
-echo "nginx started successfully (PID: $NGINX_PID)"
-
 # VNC remote access (only for open-source local use)
 if [ "${ENABLE_VNC:-false}" = "true" ]; then
     x11vnc -display :99 -forever -shared -nopw &
     websockify --web /opt/noVNC 6080 localhost:5900 &
 fi
 
-# Wait for nginx to be ready
+# Wait for Next.js to be ready
 sleep 2
 
 # If SKIP_DAEMON is set, run migrations and Django in background
@@ -91,14 +55,12 @@ if [ "${SKIP_DAEMON:-false}" = "true" ]; then
     gosu ubuntu python manage.py runserver 0.0.0.0:8000 &
     DJANGO_PID=$!
     echo "Django started with PID $DJANGO_PID"
-    # Keep running as long as nginx is alive
-    # Check by PID since we started nginx in background with a known PID
-    while kill -0 $NGINX_PID 2>/dev/null; do
+    # Keep running as long as Next.js is alive
+    while kill -0 $NEXTJS_PID 2>/dev/null; do
         sleep 5
     done
-    echo "Nginx stopped, shutting down Django and Next.js..."
+    echo "Next.js stopped, shutting down Django..."
     kill $DJANGO_PID 2>/dev/null || true
-    kill $NEXTJS_PID 2>/dev/null || true
     exit 0
 fi
 
