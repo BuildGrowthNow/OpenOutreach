@@ -133,10 +133,12 @@ EMAIL_SUBJECT_PREFIX = "CRM: "
 # =============================================================================
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
+        # Supabase JWT Authentication must be first so frontend-sent
+        # Supabase tokens are validated before Django SimpleJWT is tried.
+        "openoutreach.api.authentication.supabase.SupabaseJWTAuthentication",
         "rest_framework_simplejwt.authentication.JWTAuthentication",
         "rest_framework.authentication.SessionAuthentication",
         "rest_framework.authentication.BasicAuthentication",
-        "openoutreach.api.authentication.supabase.SupabaseJWTAuthentication",
     ),
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
