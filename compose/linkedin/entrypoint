@@ -13,7 +13,7 @@ fi
 
 # Ensure /app/data exists and is owned by the runtime user.
 mkdir -p /app/data
-chown ubuntu:ubuntu /app/data
+chown -R ubuntu:ubuntu /app/data
 
 # Run the start script as root (nginx needs root to start)
 # gosu will be used only for Django processes within start script
