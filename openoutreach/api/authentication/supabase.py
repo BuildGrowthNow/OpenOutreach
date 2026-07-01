@@ -22,6 +22,7 @@ import jwt
 from jwt import PyJWTError
 from jwt.algorithms import ECAlgorithm, RSAAlgorithm, HMACAlgorithm
 import requests
+import json
 
 from openoutreach.mongodb.models import SupabaseUser
 from typing import TYPE_CHECKING, cast
@@ -39,30 +40,52 @@ def get_supabase_jwks():
     if not supabase_url:
         logger.warning("[SupabaseAuth] SUPABASE_URL not configured")
         return None
-    
-    jwks_uri = f"{supabase_url}/rest/v1/jwks"
-    try:
-        response = requests.get(jwks_uri, timeout=5)
-        response.raise_for_status()
-        return response.json()
-    except Exception as e:
-        logger.error(f"[SupabaseAuth] Failed to fetch JWKS from {jwks_uri}: {e}")
-        return None
+    # Supabase exposes JWKS at a few possible endpoints depending on project config.
+    # Try them in order until one succeeds.
+    candidates = [
+        f"{supabase_url}/auth/v1/certs",
+        f"{supabase_url}/auth/v1/.well-known/jwks.json",
+        f"{supabase_url}/.well-known/jwks.json",
+        f"{supabase_url}/auth/v1/jwks",
+        f"{supabase_url}/rest/v1/jwks",
+    ]
+
+    for jwks_uri in candidates:
+        try:
+            response = requests.get(jwks_uri, timeout=5)
+            response.raise_for_status()
+            logger.info(f"[SupabaseAuth] Fetched JWKS from {jwks_uri}")
+            return response.json()
+        except Exception as e:
+            logger.debug(f"[SupabaseAuth] JWKS fetch failed for {jwks_uri}: {e}")
+
+    logger.error(f"[SupabaseAuth] Failed to fetch JWKS from any known Supabase endpoint for {supabase_url}")
+    return None
 
 
-def decode_jwk_key(key: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+def decode_jwk_key(key: Dict[str, Any]) -> Optional[Any]:
     """
-    Decode a JWK key into a dict format suitable for jwt.decode().
-    
-    Returns None if decoding fails.
+    Decode a JWK key into a key object or bytes suitable for `jwt.decode()`.
+
+    Returns a PEM/key object or None if decoding fails.
     """
     try:
-        if key.get('kty') == 'RSA':
-            # For RSA keys, return the key dict as-is
-            return key
-        elif key.get('kty') == 'EC':
-            # For EC keys, return the key dict as-is
-            return key
+        kty = key.get('kty')
+        if not kty:
+            return None
+
+        # Convert JWK dict to a PEM/public key object accepted by PyJWT
+        jwk_json = json.dumps(key)
+        if kty == 'RSA':
+            return RSAAlgorithm.from_jwk(jwk_json)
+        elif kty == 'EC':
+            return ECAlgorithm.from_jwk(jwk_json)
+        elif kty == 'oct':
+            # symmetric key (HMAC)
+            # the 'k' field is base64url-encoded key material
+            k = key.get('k')
+            if k:
+                return HMACAlgorithm.from_jwk(jwk_json)
         return None
     except Exception as e:
         logger.error(f"[SupabaseAuth] Failed to decode JWK key: {e}")
