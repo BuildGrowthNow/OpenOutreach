@@ -124,6 +124,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "openoutreach.middleware.auth_logging.AuthHeaderLoggingMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "corsheaders.middleware.CorsMiddleware",  # Added for CORS support
     "django.middleware.locale.LocaleMiddleware",
