@@ -57,8 +57,11 @@ def get_supabase_jwks():
             logger.info(f"[SupabaseAuth] Fetched JWKS from {jwks_uri}")
             return response.json()
         except Exception as e:
-            logger.debug(f"[SupabaseAuth] JWKS fetch failed for {jwks_uri}: {e}")
+                    # Use print to ensure message appears in container logs even if logging is misconfigured
+                    print(f"[SupabaseAuth] JWKS fetch failed for {jwks_uri}: {e}")
+                    logger.debug(f"[SupabaseAuth] JWKS fetch failed for {jwks_uri}: {e}")
 
+    print(f"[SupabaseAuth] Failed to fetch JWKS from any known Supabase endpoint for {supabase_url}")
     logger.error(f"[SupabaseAuth] Failed to fetch JWKS from any known Supabase endpoint for {supabase_url}")
     return None
 
@@ -196,6 +199,7 @@ class SupabaseJWTAuthentication(BaseAuthentication):
         # Get the Authorization header
         auth_header = request.META.get("HTTP_AUTHORIZATION", "")
         logger.info(f"[SupabaseJWTAuth] Checking auth header: '{auth_header[:50] if auth_header else '(empty)'}...'")
+        print(f"[SupabaseJWTAuth] Raw Authorization header: {auth_header[:200]}")
         
         if not auth_header:
             logger.debug("[SupabaseJWTAuth] No Authorization header found, skipping auth")
@@ -217,6 +221,14 @@ class SupabaseJWTAuthentication(BaseAuthentication):
         logger.info("[SupabaseJWTAuth] Attempting token verification")
 
         try:
+            # Log token header for debugging
+            try:
+                th = jwt.get_unverified_header(access_token)
+                print(f"[SupabaseJWTAuth] Token header: {th}")
+                logger.debug(f"Token header: {th}")
+            except Exception as _e:
+                print(f"[SupabaseJWTAuth] Failed to get token header: {_e}")
+
             # Verify and decode the token using JWKS
             user = self._authenticate_token(access_token)
             logger.info(f"[SupabaseJWTAuth] Successfully authenticated user: {user.username if hasattr(user, 'username') else user}")
