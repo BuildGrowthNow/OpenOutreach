@@ -348,89 +348,89 @@ const LeadsPage = () => {
         )}
       </div>
 
-       {/* Main Leads Table */}
-      <LeadTable
-        leads={leads}
-        pagination={pagination || undefined}
-        loading={loading}
-        onView={handleViewLead}
-        onEdit={handleEditLead}
-        onDisqualify={handleDisqualifyLead}
-        onReScrape={handleReScrapeLead}
-        onMessage={handleSendMessage}
-        onAddToCampaign={async (lead, campaignId) => {
-          if (campaignId) {
-            try {
-              const response = await addLeadToCampaign(lead.id, campaignId)
-              if (response.data?.success) {
-                await fetchLeads() // Refresh the list
-              } else {
-                alert(response.error || 'Failed to add lead to campaign')
-              }
-            } catch (err) {
-              alert(`Failed to add lead to campaign: ${err instanceof Error ? err.message : 'Unknown error'}`)
-            }
-          }
-        }}
-        onSearch={handleSearch}
-        onStatusFilter={handleStatusFilter}
-        onPageChange={handlePageChange}
-        onExport={handleExport}
-      />
+       {/* Filter Options */}
+       <Card>
+         <CardHeader>
+           <CardTitle className="text-base">Filters</CardTitle>
+         </CardHeader>
+         <CardContent>
+           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+             <div className="space-y-3">
+               <div className="font-medium">Status</div>
+               <div className="flex flex-wrap gap-2">
+                 {['all', 'QUALIFIED', 'CONNECTED', 'PENDING', 'COMPLETED', 'FAILED'].map((status) => (
+                   <Button
+                     key={status}
+                     size="sm"
+                     variant={statusFilter === status ? 'default' : 'outline'}
+                     onClick={() => handleStatusFilter(status)}
+                   >
+                     {status === 'all' ? 'All' : status.replace('_', ' ').toLowerCase()}
+                   </Button>
+                 ))}
+               </div>
+             </div>
+             <div className="space-y-3">
+               <div className="font-medium">Disqualified</div>
+               <div className="flex flex-wrap gap-2">
+                 {[undefined, false, true].map((value) => (
+                   <Button
+                     key={value === undefined ? 'all' : value.toString()}
+                     size="sm"
+                      variant={(disqualifiedFilter === value) ? 'default' : 'outline'}
+                      onClick={() => setDisqualifiedFilter(value)}
+                   >
+                     {value === undefined ? 'All' : value ? 'Yes' : 'No'}
+                   </Button>
+                 ))}
+               </div>
+             </div>
+             <div className="space-y-3">
+               <div className="font-medium">Quick Actions</div>
+               <div className="flex flex-col gap-2">
+                 <Button variant="outline" size="sm" onClick={handleExport}>
+                   <Icons.Download className="mr-2 h-3.5 w-3.5" />
+                   Export All Leads
+                 </Button>
+                 <Button variant="outline" size="sm" onClick={() => window.open('https://www.linkedin.com', '_blank')}>
+                   <Icons.Globe className="mr-2 h-3.5 w-3.5" />
+                   Open LinkedIn
+                 </Button>
+               </div>
+             </div>
+           </div>
+         </CardContent>
+       </Card>
 
-      {/* Filter Options */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Filter Options</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="space-y-3">
-              <div className="font-medium">Status</div>
-              <div className="flex flex-wrap gap-2">
-                {['all', 'QUALIFIED', 'CONNECTED', 'PENDING', 'COMPLETED', 'FAILED'].map((status) => (
-                  <Button
-                    key={status}
-                    size="sm"
-                    variant={statusFilter === status ? 'default' : 'outline'}
-                    onClick={() => handleStatusFilter(status)}
-                  >
-                    {status === 'all' ? 'All' : status.replace('_', ' ').toLowerCase()}
-                  </Button>
-                ))}
-              </div>
-            </div>
-            <div className="space-y-3">
-              <div className="font-medium">Disqualified</div>
-              <div className="flex flex-wrap gap-2">
-                {[undefined, false, true].map((value) => (
-                  <Button
-                    key={value === undefined ? 'all' : value.toString()}
-                    size="sm"
-                     variant={(disqualifiedFilter === value) ? 'default' : 'outline'}
-                     onClick={() => setDisqualifiedFilter(value)}
-                  >
-                    {value === undefined ? 'All' : value ? 'Yes' : 'No'}
-                  </Button>
-                ))}
-              </div>
-            </div>
-            <div className="space-y-3">
-              <div className="font-medium">Quick Actions</div>
-              <div className="flex flex-col gap-2">
-                <Button variant="outline" size="sm" onClick={handleExport}>
-                  <Icons.Download className="mr-2 h-3.5 w-3.5" />
-                  Export All Leads
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => window.open('https://www.linkedin.com', '_blank')}>
-                  <Icons.Globe className="mr-2 h-3.5 w-3.5" />
-                  Open LinkedIn
-                </Button>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+       {/* Main Leads Table */}
+       <LeadTable
+         leads={leads}
+         pagination={pagination || undefined}
+         loading={loading}
+         onView={handleViewLead}
+         onEdit={handleEditLead}
+         onDisqualify={handleDisqualifyLead}
+         onReScrape={handleReScrapeLead}
+         onMessage={handleSendMessage}
+         onAddToCampaign={async (lead, campaignId) => {
+           if (campaignId) {
+             try {
+               const response = await addLeadToCampaign(lead.id, campaignId)
+               if (response.data?.success) {
+                 await fetchLeads() // Refresh the list
+               } else {
+                 alert(response.error || 'Failed to add lead to campaign')
+               }
+             } catch (err) {
+               alert(`Failed to add lead to campaign: ${err instanceof Error ? err.message : 'Unknown error'}`)
+             }
+           }
+         }}
+         onSearch={handleSearch}
+         onStatusFilter={handleStatusFilter}
+         onPageChange={handlePageChange}
+         onExport={handleExport}
+       />
 
       {/* Lead Form Dialog */}
       <LeadForm

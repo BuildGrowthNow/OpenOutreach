@@ -373,7 +373,7 @@ export function LinkedInConnectionTab({ onSetupComplete }: LinkedInConnectionTab
                         Add Credential
                       </Button>
                     </DialogTrigger>
-                    <DialogContent>
+                    <DialogContent className="max-w-3xl">
                       <DialogHeader>
                         <DialogTitle>Add LinkedIn Credential</DialogTitle>
                         <DialogDescription>
@@ -410,7 +410,7 @@ export function LinkedInConnectionTab({ onSetupComplete }: LinkedInConnectionTab
                         Add Your First Credential
                       </Button>
                     </DialogTrigger>
-                    <DialogContent>
+                    <DialogContent className="max-w-3xl">
                       <DialogHeader>
                         <DialogTitle>Add LinkedIn Credential</DialogTitle>
                         <DialogDescription>

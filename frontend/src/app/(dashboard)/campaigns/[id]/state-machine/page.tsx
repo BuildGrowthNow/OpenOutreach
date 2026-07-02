@@ -281,7 +281,7 @@ export default function StateMachinePage() {
                 Simulate
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[500px]">
+            <DialogContent className="sm:max-w-[600px]">
               <DialogHeader>
                 <DialogTitle>Simulate State Machine</DialogTitle>
                 <DialogDescription>

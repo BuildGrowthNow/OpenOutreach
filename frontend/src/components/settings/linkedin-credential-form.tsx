@@ -242,11 +242,11 @@ export default function LinkedInCredentialForm({ initialData, onSuccess, onCance
                              <SelectContent>
                                {loadingProfiles ? (
                                  <SelectItem value="loading" disabled>Loading profiles...</SelectItem>
-                               ) : linkedinProfiles.length === 0 ? (
-                                 <SelectItem value="" disabled>
-                                   No LinkedIn profiles available. Please create one first.
-                                 </SelectItem>
-                               ) : (
+                                ) : linkedinProfiles.length === 0 ? (
+                                  <SelectItem value="no-profiles" disabled>
+                                    No LinkedIn profiles available. Please create one first.
+                                  </SelectItem>
+                                ) : (
                                  linkedinProfiles.map((profile) => (
                                    <SelectItem key={profile.id} value={profile.id.toString()}>
                                      {profile.linkedin_username} - {profile.active ? 'Active' : 'Inactive'}

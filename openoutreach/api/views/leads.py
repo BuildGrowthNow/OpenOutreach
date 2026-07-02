@@ -7,7 +7,44 @@ from rest_framework.permissions import IsAuthenticated
 from django.http import Http404
 
 from openoutreach.crm.models import Lead, Deal
-from openoutreach.crm.models.deal import DealState
+from openoutreach.crm.models.deal import DealState, Deal
+
+
+def _normalize_status(status_param: str | None) -> str | None:
+    """Normalize status parameter to title case for database queries.
+    
+    Converts from various formats to title case:
+    - "QUALIFIED" -> "Qualified"
+    - "qualified" -> "Qualified"
+    - "Ready to Connect" -> "Ready to Connect" (unchanged)
+    
+    Note: Uses simple title() but then handles known special cases.
+    """
+    if not status_param:
+        return None
+    
+    # Convert to title case first
+    normalized = status_param.title()
+    
+    # Handle known multi-word states that title() would incorrectly format
+    # title() converts "no_email" to "No_Email", so we need to handle this
+    special_cases = {
+        "Ready To Connect": "Ready to Connect",
+        "Ready to connect": "Ready to Connect",  # Edge case
+        "No_Email": "No Email",
+        "no_email": "No Email",  # Edge case
+    }
+    
+    return special_cases.get(normalized, normalized)
+
+
+def _is_valid_status(status_param: str | None) -> bool:
+    """Check if status parameter is a valid DealState value."""
+    if not status_param:
+        return True
+    # Normalize and check if the result is a valid DealState value
+    normalized = _normalize_status(status_param)
+    return normalized in DealState.values
 
 
 def _extract_lead_name(lead: Lead) -> str | None:
@@ -70,8 +107,13 @@ class LeadListView(APIView):
         disqualified_param = request.query_params.get("disqualified")
 
         if status_param:
-            # Filter by deal status
-            leads = leads.filter(deals__state=status_param).distinct()
+            # Normalize and validate status parameter
+            normalized_status = _normalize_status(status_param)
+            if normalized_status and _is_valid_status(normalized_status):
+                leads = leads.filter(deals__state=normalized_status).distinct()
+            else:
+                # Return empty results if status is invalid
+                leads = leads.none()
 
         if search_param:
             leads = leads.filter(

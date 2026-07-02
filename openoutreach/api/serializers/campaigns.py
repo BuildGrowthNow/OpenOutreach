@@ -61,22 +61,16 @@ class TrackedLinkSerializer(serializers.ModelSerializer):
         return fields
 
 
-class CampaignStatsSerializer(serializers.ModelSerializer):
+class CampaignStatsSerializer(serializers.Serializer):
     """Serializer for computed campaign statistics."""
-
-    class Meta:
-        model = Campaign
-        fields = []
 
     def to_representation(self, instance):
         """Compute and return statistics for the campaign."""
-        user = self.context.get("request").user if self.context and "request" in self.context else None
+        request = self.context.get("request") if self.context else None
+        user = request.user if request and hasattr(request, "user") else None
         
         # Get deals for this campaign
         deals = instance.deals.all()
-        if user:
-            # Filter by user if available
-            deals = deals.filter(lead__id__in=Deal.objects.filter(campaign=instance).values_list('lead_id', flat=True))
 
         # Count deals by state
         total_leads = deals.count()

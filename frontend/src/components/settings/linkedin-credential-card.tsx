@@ -373,7 +373,7 @@ export default function LinkedInCredentialCard({ credential, onRefresh }: Linked
         </div>
 
         <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
-          <DialogContent>
+          <DialogContent className="max-w-3xl">
             <DialogHeader>
               <DialogTitle>Edit LinkedIn Credential</DialogTitle>
               <DialogDescription>
@@ -396,7 +396,7 @@ export default function LinkedInCredentialCard({ credential, onRefresh }: Linked
         </Dialog>
 
         <Dialog open={showLogsDialog} onOpenChange={setShowLogsDialog}>
-          <DialogContent className="max-h-[80vh] overflow-y-auto">
+          <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Credential Audit Logs</DialogTitle>
               <DialogDescription>
