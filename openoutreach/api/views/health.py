@@ -90,17 +90,25 @@ def _check_database() -> Dict[str, Any]:
         with connection.cursor() as cursor:
             cursor.execute("SELECT 1")
             cursor.fetchone()
+        # Convert Path objects to strings to ensure JSON serialization
+        database_name = connection.settings_dict.get("NAME", "unknown")
+        if hasattr(database_name, "__fspath__"):
+            database_name = str(database_name)
         return {
             "connected": True,
             "engine": str(connection.settings_dict["ENGINE"]),
-            "database": connection.settings_dict["NAME"],
+            "database": database_name,
         }
     except Exception as e:
+        # Convert Path objects to strings to ensure JSON serialization
+        database_name = connection.settings_dict.get("NAME", "unknown")
+        if hasattr(database_name, "__fspath__"):
+            database_name = str(database_name)
         return {
             "connected": False,
             "error": str(e),
             "engine": str(connection.settings_dict.get("ENGINE", "unknown")),
-            "database": connection.settings_dict.get("NAME", "unknown"),
+            "database": database_name,
         }
 
 
