@@ -82,22 +82,29 @@ export function LinkedinBanner({ alwaysShow = false, onConnect }: LinkedinBanner
   }
 
   return (
-    <div className="fixed top-0 left-0 right-0 z-[60] animate-slide-down">
-      <div className="bg-amber-500 text-white border-b border-amber-600">
-        <div className="container mx-auto px-4 py-3">
+    <div className="fixed bottom-4 right-4 z-[60] w-[600px] max-w-[90vw] animate-slide-up">
+      <div className="bg-amber-500 text-white border border-amber-600 rounded-lg shadow-lg overflow-hidden">
+        <div className="px-4 py-3" style={{ minHeight: '200px', maxHeight: '300px' }}>
           <div className="flex items-start gap-3">
             <div className="flex-shrink-0 pt-0.5">
               <AlertCircle className="h-5 w-5 text-amber-100" />
             </div>
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-1">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between mb-1">
                 <h3 className="font-semibold text-sm">LinkedIn Not Connected</h3>
                 <Badge variant="secondary" className="bg-amber-600 text-white border-0 text-xs">
                   Action Required
                 </Badge>
+                <button 
+                  onClick={handleDismiss}
+                  className="text-amber-100 hover:text-white hover:bg-white/10 rounded p-1 transition-colors flex-shrink-0 ml-2"
+                  type="button"
+                >
+                  <X className="h-4 w-4" />
+                </button>
               </div>
-              <p className="text-sm text-amber-50 mb-2">
-                Your OpenOutreach account requires LinkedIn configuration to function properly. 
+              <p className="text-sm text-amber-50 mb-3 line-clamp-2">
+                Your OpenOutreach account requires LinkedIn configuration to function properly.
                 Without LinkedIn credentials, you cannot run campaigns or connect with leads.
               </p>
               <div className="flex flex-wrap gap-2">

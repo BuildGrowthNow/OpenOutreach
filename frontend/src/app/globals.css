@@ -880,7 +880,28 @@
   animation: slideDown 0.3s ease-out forwards;
 }
 
+/* Slide up animation for bottom-right banner */
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-up {
+  animation: slideUp 0.3s ease-out forwards;
+}
+
 /* Space above content when banner is visible */
 .content-with-banner {
   padding-top: 3rem !important;
+}
+
+/* Space bottom-right for banner */
+.content-with-bottom-banner {
+  margin-bottom: 250px !important;
 }
