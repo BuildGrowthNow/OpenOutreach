@@ -1,40 +1,49 @@
 # Health API View
 
-from rest_framework.decorators import authentication_classes, permission_classes
-from rest_framework.permissions import AllowAny
+from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.permissions import AllowAny
+from rest_framework.parsers import JSONParser
+from rest_framework.renderers import JSONRenderer
 from django.db import connection
 import platform
 import psutil
 from typing import Any, Dict
 
 
-@authentication_classes([])
-@permission_classes([AllowAny])
-def health_view(request) -> Response:
+class HealthView(APIView):
     """
-    GET /api/health
-    Returns system health status including database connectivity.
+    Health check endpoint to verify system status and database connectivity.
     This endpoint is public and does not require authentication.
     """
-    health_data: Dict[str, Any] = {
-        "system": _get_system_info(),
-        "database": _check_database(),
-        "services": _check_services(),
-    }
+    authentication_classes = []
+    permission_classes = [AllowAny]
+    renderer_classes = [JSONRenderer]
+    parser_classes = [JSONParser]
 
-    # Determine overall system status
-    overall_status = "operational"
-    if not health_data["database"]["connected"]:
-        overall_status = "degraded"
-    if health_data["database"].get("error") or health_data["services"].get("error"):
-        overall_status = "unhealthy"
+    def get(self, request) -> Response:
+        """
+        GET /api/health
+        Returns system health status including database connectivity.
+        """
+        health_data: Dict[str, Any] = {
+            "system": _get_system_info(),
+            "database": _check_database(),
+            "services": _check_services(),
+        }
 
-    health_data["status"] = overall_status
-    health_data["message"] = _get_status_message(overall_status)
+        # Determine overall system status
+        overall_status = "operational"
+        if not health_data["database"]["connected"]:
+            overall_status = "degraded"
+        if health_data["database"].get("error") or health_data["services"].get("error"):
+            overall_status = "unhealthy"
 
-    return Response(health_data, status=status.HTTP_200_OK)
+        health_data["status"] = overall_status
+        health_data["message"] = _get_status_message(overall_status)
+
+        return Response(health_data, status=status.HTTP_200_OK)
 
 
 def _get_system_info() -> Dict[str, Any]:
