@@ -7,7 +7,7 @@ from rest_framework_simplejwt.views import (
     TokenVerifyView,
 )
 
-from .views.health import HealthView
+from .views.health import health_view
 from .views.auth import (
     CustomTokenObtainPairView,
     AuthView,
@@ -102,7 +102,7 @@ urlpatterns = [
         name="verify-supabase-token",
     ),
     # Health endpoint
-    path("health/", HealthView.as_view(), name="health"),
+    path("health/", health_view, name="health"),
     # Settings endpoints
     path("settings/", SettingsView.as_view(), name="settings"),
     path("settings/rate-limits/", RateLimitsView.as_view(), name="rate-limits"),
@@ -285,7 +285,7 @@ urlpatterns = [
 # Add no-trailing-slash versions of all endpoints
 urlpatterns += [
     # Health endpoint (no trailing slash)
-    re_path(r"^health$", HealthView.as_view(), name="health-no-slash"),
+    re_path(r"^health$", health_view, name="health-no-slash"),
     # Settings endpoints (no trailing slash)
     re_path(r"^settings$", SettingsView.as_view(), name="settings-no-slash"),
     re_path(
