@@ -21,6 +21,8 @@ logging.basicConfig(
     force=True,
 )
 
+# Suppress verbose logging from all third-party libraries
+# Set logging to WARNING or higher for noisy loggers
 for noisy_logger in (
     "urllib3",
     "urllib3.connectionpool",
@@ -42,9 +44,59 @@ for noisy_logger in (
     "pymongo.server_selection",
     "pymongo.connection",
     "pymongo.client",
+    "pymongo.uri_parser",
+    "pymongo.events",
+    "pymongo.operations",
+    "pymongo.ismaster",
+    "pymongo.hello",
+    "pymongo.server",
+    "pymongo.pool",
+    "pymongo.restricted",
+    "gridfs",
     "bson",
 ):
     logging.getLogger(noisy_logger).setLevel(logging.WARNING)
+
+# Explicitly set all MongoDB-related loggers to WARNING or higher to suppress DEBUG logs
+logging.getLogger("openoutreach.mongodb").setLevel(logging.WARNING)
+
+# For pymongo driver logs (server heartbeat, topology, etc.), set to CRITICAL to suppress
+# Only ERROR and CRITICAL messages will be visible (index/collection creation errors)
+logging.getLogger("pymongo-topology").setLevel(logging.CRITICAL)
+logging.getLogger("pymongo-server-selection").setLevel(logging.CRITICAL)
+logging.getLogger("pymongo-monitor").setLevel(logging.CRITICAL)
+logging.getLogger("pymongo-network").setLevel(logging.CRITICAL)
+logging.getLogger("pymongo.client").setLevel(logging.CRITICAL)
+logging.getLogger("pymongo").setLevel(logging.WARNING)
+
+# Clear existing handlers on MongoDB-related loggers to prevent duplicate logging
+for logger_name in (
+    "pymongo",
+    "pymongo.command",
+    "pymongo.monitor",
+    "pymongo.network",
+    "pymongo.topology",
+    "pymongo.server_selection",
+    "pymongo.connection",
+    "pymongo.client",
+    "pymongo.uri_parser",
+    "pymongo.events",
+    "pymongo.operations",
+    "pymongo.ismaster",
+    "pymongo.hello",
+    "pymongo.server",
+    "pymongo.pool",
+    "pymongo.restricted",
+    "pymongo-driver",
+):
+    try:
+        logger = logging.getLogger(logger_name)
+        logger.setLevel(logging.ERROR)  # Only show actual errors
+        # Remove any existing handlers
+        logger.handlers = []
+        logger.propagate = False
+    except Exception:
+        pass
 
 # Use Django's default User model (from django.contrib.auth)
 # No custom user model needed - using default auth.User

@@ -9,6 +9,25 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Separator } from '@/components/ui/separator'
 import { Icons } from '@/lib/types/components'
 import { getLinkedInSetupGuide, getLinkedInSetupStatus, getLinkedInCookieInstructions, type LinkedInSetupGuide, type LinkedInSetupStatus, type LinkedInCookieInstructions } from '@/lib/api/dashboard'
+
+interface LinkedInSetupStatusData {
+  linkedin_profile: {
+    exists: boolean
+    count: number
+    requires_attention?: boolean
+  }
+  linkedin_credentials: {
+    exists: boolean
+    count: number
+    active_count?: number
+    requires_attention?: boolean
+  }
+  setup_complete: boolean
+  setup_progress: {
+    current: number
+    total: number
+  }
+}
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 
 interface LinkedInSetupGuideProps {
@@ -16,11 +35,12 @@ interface LinkedInSetupGuideProps {
 }
 
 export function LinkedInSetupGuide({ onSetupComplete }: LinkedInSetupGuideProps) {
-  const [guide, setGuide] = useState<LinkedInSetupGuide | null>(null)
-  const [status, setStatus] = useState<LinkedInSetupStatus | null>(null)
-  const [instructions, setInstructions] = useState<LinkedInCookieInstructions | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+   const [guide, setGuide] = useState<LinkedInSetupGuide | null>(null)
+   const [statusData, setStatusData] = useState<LinkedInSetupStatus | null>(null)
+   const [instructions, setInstructions] = useState<LinkedInCookieInstructions | null>(null)
+   const [loading, setLoading] = useState(true)
+   const [error, setError] = useState<string | null>(null)
+   const [hasError, setHasError] = useState(false)
   const [showCookieInstructions, setShowCookieInstructions] = useState(false)
 
   useEffect(() => {
@@ -34,7 +54,7 @@ export function LinkedInSetupGuide({ onSetupComplete }: LinkedInSetupGuideProps)
         ])
         
         if (guideRes.data) setGuide(guideRes.data)
-        if (statusRes.data) setStatus(statusRes.data)
+         if (statusRes.data) setStatusData(statusRes.data)
         if (instructionsRes.data) setInstructions(instructionsRes.data)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load setup guide')
@@ -76,7 +96,7 @@ export function LinkedInSetupGuide({ onSetupComplete }: LinkedInSetupGuideProps)
     )
   }
 
-  if (!guide || !instructions || !status) {
+  if (!guide || !instructions || !statusData) {
     return (
       <div className="flex-1 p-4 md:p-6 lg:p-8">
         <Alert variant="destructive">
@@ -87,6 +107,30 @@ export function LinkedInSetupGuide({ onSetupComplete }: LinkedInSetupGuideProps)
       </div>
     )
   }
+
+   const getStatusValue = (key: string, defaultValue: unknown = null): unknown => {
+     if (!statusData) return defaultValue
+     // First check status.status, then status directly
+     const statusObj = (statusData as LinkedInSetupStatus).status as Record<string, unknown>
+     return statusObj[key] ?? ((statusData as unknown) as Record<string, unknown>)[key] ?? defaultValue
+   }
+
+   const linkedinProfile = (statusData?.status?.linkedin_profile ?? {}) as LinkedInSetupStatusData['linkedin_profile']
+   const linkedinCredentials = (statusData?.status?.linkedin_credentials ?? {}) as LinkedInSetupStatusData['linkedin_credentials']
+   const setupComplete = Boolean(statusData?.status?.setup_complete ?? false)
+   const setupProgress = (statusData?.status?.setup_progress ?? { current: 0, total: 0 }) as LinkedInSetupStatusData['setup_progress']
+
+  // Helper to safely access properties
+  const getProperty = (obj: Record<string, unknown>, key: string, defaultValue: unknown = null) => {
+    return obj[key] ?? defaultValue
+  }
+
+  const profileExists = Boolean(getProperty(linkedinProfile, 'exists', false))
+  const credExists = Boolean(getProperty(linkedinCredentials, 'exists', false))
+  const profileCount = Number(getProperty(linkedinProfile, 'count', 0))
+  const credCount = Number(getProperty(linkedinCredentials, 'count', 0))
+  const progressCurrent = Number(getProperty(setupProgress, 'current', 0))
+  const progressTotal = Number(getProperty(setupProgress, 'total', 0))
 
   return (
     <div className="flex-1 space-y-6 p-4 md:p-6 lg:p-8">
@@ -99,17 +143,17 @@ export function LinkedInSetupGuide({ onSetupComplete }: LinkedInSetupGuideProps)
           </p>
         </div>
         <div className="flex items-center gap-4">
-          {status.status.setup_complete ? (
-            <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
-              <Icons.CheckCircle className="mr-2 h-3.5 w-3.5" />
-              Setup Complete
-            </Badge>
-          ) : (
-            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-              <Icons.AlertCircle className="mr-2 h-3.5 w-3.5" />
-              Setup Required
-            </Badge>
-          )}
+          {setupComplete ? (
+          <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
+            <Icons.CheckCircle className="mr-2 h-3.5 w-3.5" />
+            Setup Complete
+          </Badge>
+        ) : (
+          <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+            <Icons.AlertCircle className="mr-2 h-3.5 w-3.5" />
+            Setup Required
+          </Badge>
+        )}
           <Button onClick={handleStartSetup}>
             <Icons.Settings className="mr-2 h-4 w-4" />
             Go to Settings
@@ -127,40 +171,40 @@ export function LinkedInSetupGuide({ onSetupComplete }: LinkedInSetupGuideProps)
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className={`p-4 rounded-lg ${status.status.linkedin_profile.exists ? 'bg-green-50' : 'bg-red-50'}`}>
+            <div className={`p-4 rounded-lg ${profileExists ? 'bg-green-50' : 'bg-red-50'}`}>
               <div className="flex items-center gap-2 mb-2">
-                <Icons.User className={`h-5 w-5 ${status.status.linkedin_profile.exists ? 'text-green-600' : 'text-red-600'}`} />
+                <Icons.User className={`h-5 w-5 ${profileExists ? 'text-green-600' : 'text-red-600'}`} />
                 <span className="font-medium">LinkedIn Profile</span>
               </div>
               <div className="text-sm text-muted-foreground">
-                {status.status.linkedin_profile.exists ? 'Configured' : 'Not Configured'}
+                {profileExists ? 'Configured' : 'Not Configured'}
               </div>
               <div className="text-xs mt-1">
-                {status.status.linkedin_profile.count} profile(s) found
+                {profileCount} profile(s) found
               </div>
             </div>
-            <div className={`p-4 rounded-lg ${status.status.linkedin_credentials.exists ? 'bg-green-50' : 'bg-red-50'}`}>
+            <div className={`p-4 rounded-lg ${credExists ? 'bg-green-50' : 'bg-red-50'}`}>
               <div className="flex items-center gap-2 mb-2">
-                <Icons.Lock className={`h-5 w-5 ${status.status.linkedin_credentials.exists ? 'text-green-600' : 'text-red-600'}`} />
+                <Icons.Lock className={`h-5 w-5 ${credExists ? 'text-green-600' : 'text-red-600'}`} />
                 <span className="font-medium">LinkedIn Credentials</span>
               </div>
               <div className="text-sm text-muted-foreground">
-                {status.status.linkedin_credentials.exists ? 'Configured' : 'Not Configured'}
+                {credExists ? 'Configured' : 'Not Configured'}
               </div>
               <div className="text-xs mt-1">
-                {status.status.linkedin_credentials.count} credential(s) found
+                {credCount} credential(s) found
               </div>
             </div>
-            <div className={`p-4 rounded-lg ${status.status.setup_complete ? 'bg-green-50' : 'bg-amber-50'}`}>
+            <div className={`p-4 rounded-lg ${setupComplete ? 'bg-green-50' : 'bg-amber-50'}`}>
               <div className="flex items-center gap-2 mb-2">
-                <Icons.CheckCircle className={`h-5 w-5 ${status.status.setup_complete ? 'text-green-600' : 'text-amber-600'}`} />
+                <Icons.CheckCircle className={`h-5 w-5 ${setupComplete ? 'text-green-600' : 'text-amber-600'}`} />
                 <span className="font-medium">Overall Status</span>
               </div>
               <div className="text-sm text-muted-foreground">
-                {status.status.setup_complete ? 'Ready' : 'In Progress'}
+                {setupComplete ? 'Ready' : 'In Progress'}
               </div>
               <div className="text-xs mt-1">
-                {status.status.setup_progress.current} / {status.status.setup_progress.total} steps complete
+                {progressCurrent} / {progressTotal} steps complete
               </div>
             </div>
           </div>

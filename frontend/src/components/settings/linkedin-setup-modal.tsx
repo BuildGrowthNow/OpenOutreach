@@ -7,8 +7,27 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Icons } from '@/lib/types/components'
-import { getLinkedInSetupStatus, type LinkedInSetupStatus } from '@/lib/api/dashboard'
+import { getLinkedInSetupStatus, LinkedInSetupStatus } from '@/lib/api/dashboard'
 import { useToast } from '@/components/ui/use-toast'
+
+interface LinkedInSetupStatusData {
+  linkedin_profile: {
+    exists: boolean
+    count: number
+    requires_attention?: boolean
+  }
+  linkedin_credentials: {
+    exists: boolean
+    count: number
+    active_count?: number
+    requires_attention?: boolean
+  }
+  setup_complete: boolean
+  setup_progress: {
+    current: number
+    total: number
+  }
+}
 
 interface LinkedInSetupModalProps {
   isOpen: boolean
@@ -19,7 +38,7 @@ interface LinkedInSetupModalProps {
 export function LinkedInSetupModal({ isOpen, onOpenChange, onSetupComplete }: LinkedInSetupModalProps) {
   const router = useRouter()
   const { toast } = useToast()
-  const [status, setStatus] = useState<LinkedInSetupStatus | null>(null)
+  const [statusData, setStatusData] = useState<LinkedInSetupStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -30,7 +49,7 @@ export function LinkedInSetupModal({ isOpen, onOpenChange, onSetupComplete }: Li
           setLoading(true)
           const response = await getLinkedInSetupStatus()
           if (response.data) {
-            setStatus(response.data)
+            setStatusData(response.data)
           }
         } catch (err) {
           setError(err instanceof Error ? err.message : 'Failed to load setup status')
@@ -48,8 +67,20 @@ export function LinkedInSetupModal({ isOpen, onOpenChange, onSetupComplete }: Li
     }
   }
 
+  const getStatusValue = (key: string, defaultValue: unknown = null): unknown => {
+    if (!statusData) return defaultValue
+    // First check status.data.status, then status.data directly
+    const statusObj = (statusData as LinkedInSetupStatus).status as Record<string, unknown>
+    return statusObj[key] ?? ((statusData as unknown) as Record<string, unknown>)[key] ?? defaultValue
+  }
+
+  const linkedinProfile = (statusData?.status?.linkedin_profile ?? {}) as LinkedInSetupStatusData['linkedin_profile']
+  const linkedinCredentials = (statusData?.status?.linkedin_credentials ?? {}) as LinkedInSetupStatusData['linkedin_credentials']
+  const setupComplete = Boolean(statusData?.status?.setup_complete ?? false)
+  const setupProgress = (statusData?.status?.setup_progress ?? { current: 0, total: 0 }) as LinkedInSetupStatusData['setup_progress']
+
   const handleOpenChange = (open: boolean) => {
-    if (!open && status?.status.setup_complete) {
+    if (!open && setupComplete) {
       if (onSetupComplete) {
         onSetupComplete()
       }
@@ -84,70 +115,70 @@ export function LinkedInSetupModal({ isOpen, onOpenChange, onSetupComplete }: Li
             <AlertTitle>Setup Error</AlertTitle>
             <AlertDescription>{error}</AlertDescription>
           </Alert>
-        ) : status?.status ? (
+        ) : statusData ? (
           <div className="space-y-6">
             {/* Setup Status Overview */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Card className={`border-l-4 ${
-                status.status.linkedin_credentials.exists
+                Boolean(linkedinCredentials.exists)
                   ? 'border-green-500 bg-green-50/50 dark:bg-green-900/20'
                   : 'border-red-500 bg-red-50/50 dark:bg-red-900/20'
               }`}>
                 <CardHeader>
                   <CardTitle className="text-base flex items-center gap-2">
                     <Icons.Lock className={`h-4 w-4 ${
-                      status.status.linkedin_credentials.exists
+                      Boolean(linkedinCredentials.exists)
                         ? 'text-green-600'
                         : 'text-red-600'
                     }`} />
                     LinkedIn Credentials
                   </CardTitle>
                   <CardDescription>
-                    {status.status.linkedin_credentials.exists
+                    {Boolean(linkedinCredentials.exists)
                       ? 'You have configured LinkedIn credentials'
                       : 'LinkedIn credentials are NOT configured'}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">
-                    {status.status.linkedin_credentials.exists
+                    {Boolean(linkedinCredentials.exists)
                       ? 'Configured'
                       : 'Missing'}
                   </div>
                   <p className="text-sm text-muted-foreground mt-1">
-                    {status.status.linkedin_credentials.count} credential(s) found
+                    {Number(linkedinCredentials.count) || 0} credential(s) found
                   </p>
                 </CardContent>
               </Card>
 
               <Card className={`border-l-4 ${
-                status.status.linkedin_profile.exists
+                Boolean(linkedinProfile.exists)
                   ? 'border-green-500 bg-green-50/50 dark:bg-green-900/20'
                   : 'border-red-500 bg-red-50/50 dark:bg-red-900/20'
               }`}>
                 <CardHeader>
                   <CardTitle className="text-base flex items-center gap-2">
                     <Icons.User className={`h-4 w-4 ${
-                      status.status.linkedin_profile.exists
+                      Boolean(linkedinProfile.exists)
                         ? 'text-green-600'
                         : 'text-red-600'
                     }`} />
                     LinkedIn Profile
                   </CardTitle>
                   <CardDescription>
-                    {status.status.linkedin_profile.exists
+                    {Boolean(linkedinProfile.exists)
                       ? 'Your LinkedIn profile is configured'
                       : 'Your LinkedIn profile is NOT configured'}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">
-                    {status.status.linkedin_profile.exists
+                    {Boolean(linkedinProfile.exists)
                       ? 'Configured'
                       : 'Missing'}
                   </div>
                   <p className="text-sm text-muted-foreground mt-1">
-                    {status.status.linkedin_profile.count} profile(s) found
+                    {Number(linkedinProfile.count) || 0} profile(s) found
                   </p>
                 </CardContent>
               </Card>

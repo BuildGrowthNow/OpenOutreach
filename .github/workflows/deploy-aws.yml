@@ -57,8 +57,35 @@ jobs:
             docker compose down
             docker compose up -d --build
           "
-          
-          echo "Deployment completed successfully!"
+
+      - name: Wait for services to start
+        run: |
+          echo "Waiting 15 seconds for services to initialize..."
+          sleep 15
+
+      - name: Check Docker Compose Status
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+        run: |
+          echo "Checking Docker Compose status..."
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o IdentitiesOnly=yes "${EC2_USER}@${EC2_HOST}" "
+            set -e
+            cd ~/OpenOutreach
+            docker compose ps -a
+          "
+
+      - name: Check Docker Logs
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+        run: |
+          echo "Checking Docker logs for services..."
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o IdentitiesOnly=yes "${EC2_USER}@${EC2_HOST}" "
+            set -e
+            cd ~/OpenOutreach
+            docker compose logs --tail=50
+          "
 
       - name: Cleanup SSH
         if: always()

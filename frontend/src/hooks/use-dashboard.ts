@@ -141,33 +141,33 @@ export function useDashboard() {
     }
   }, [])
 
-  return {
-    campaigns,
-    campaignsLoading,
-    campaignsError,
-    fetchCampaigns,
-    leads,
-    leadsLoading,
-    leadsError,
-    fetchLeads,
-    healthStatus,
-    healthLoading,
-    healthError,
-    fetchHealth,
-    rateLimits,
-    rateLimitsLoading,
-    rateLimitsError,
-    fetchRateLimits,
-    dailyUsage,
-    dailyUsageLoading,
-    dailyUsageError,
-    fetchDailyUsage,
-    linkedinProfileHealth,
-    linkedinProfileHealthLoading,
-    linkedinProfileHealthError,
-    fetchLinkedInProfileHealth
-  }
-}
+   return {
+     campaigns,
+     campaignsLoading,
+     campaignsError,
+     fetchCampaigns,
+     leads,
+     leadsLoading,
+     leadsError,
+     fetchLeads,
+     healthStatus,
+     healthLoading,
+     healthError,
+     fetchHealth,
+     rateLimits,
+     rateLimitsLoading,
+     rateLimitsError,
+     fetchRateLimits,
+     dailyUsage,
+     dailyUsageLoading,
+     dailyUsageError,
+     fetchDailyUsage,
+     linkedinProfileHealth,
+     linkedinProfileHealthLoading,
+     linkedinProfileHealthError,
+     fetchLinkedInProfileHealth
+   }
+ }
 
 interface CampaignAnalytics {
   period?: string
