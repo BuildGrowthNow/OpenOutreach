@@ -270,12 +270,12 @@ export function LinkedInConnectionTab({ onSetupComplete }: LinkedInConnectionTab
         </div>
         <div className="flex items-center gap-4">
           {setupComplete ? (
-            <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
+            <Badge variant="outline" className="bg-emerald-950/30 text-emerald-400 border-emerald-800/50 dark:bg-emerald-900/20 dark:text-emerald-400">
               <Icons.CheckCircle className="mr-2 h-3.5 w-3.5" />
               LinkedIn Connected
             </Badge>
           ) : (
-            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+            <Badge variant="outline" className="bg-blue-950/30 text-blue-400 border-blue-800/50 dark:bg-blue-900/20 dark:text-blue-400">
               <Icons.AlertCircle className="mr-2 h-3.5 w-3.5" />
               Setup Required
             </Badge>
@@ -297,39 +297,39 @@ export function LinkedInConnectionTab({ onSetupComplete }: LinkedInConnectionTab
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className={`p-4 rounded-lg ${profileExists ? 'bg-green-50' : 'bg-red-50'}`}>
+            <div className={`p-4 rounded-lg border ${profileExists ? 'bg-green-950/30 border-green-900/50 dark:bg-green-900/20 dark:border-green-800/50' : 'bg-red-950/30 border-red-900/50 dark:bg-red-900/20 dark:border-red-800/50'}`}>
               <div className="flex items-center gap-2 mb-2">
-                <Icons.User className={`h-5 w-5 ${profileExists ? 'text-green-600' : 'text-red-600'}`} />
-                <span className="font-medium">LinkedIn Profile</span>
+                <Icons.User className={`h-5 w-5 ${profileExists ? 'text-green-400' : 'text-red-400'}`} />
+                <span className="font-medium text-zinc-100">LinkedIn Profile</span>
               </div>
               <div className="text-sm text-muted-foreground">
                 {profileExists ? 'Configured' : 'Not Configured'}
               </div>
-              <div className="text-xs mt-1">
+              <div className="text-xs mt-1 text-zinc-400">
                 {profileCount} profile(s) found
               </div>
             </div>
-            <div className={`p-4 rounded-lg ${credExists ? 'bg-green-50' : 'bg-red-50'}`}>
+            <div className={`p-4 rounded-lg border ${credExists ? 'bg-green-950/30 border-green-900/50 dark:bg-green-900/20 dark:border-green-800/50' : 'bg-red-950/30 border-red-900/50 dark:bg-red-900/20 dark:border-red-800/50'}`}>
               <div className="flex items-center gap-2 mb-2">
-                <Icons.Lock className={`h-5 w-5 ${credExists ? 'text-green-600' : 'text-red-600'}`} />
-                <span className="font-medium">LinkedIn Credentials</span>
+                <Icons.Lock className={`h-5 w-5 ${credExists ? 'text-green-400' : 'text-red-400'}`} />
+                <span className="font-medium text-zinc-100">LinkedIn Credentials</span>
               </div>
               <div className="text-sm text-muted-foreground">
                 {credExists ? 'Configured' : 'Not Configured'}
               </div>
-              <div className="text-xs mt-1">
+              <div className="text-xs mt-1 text-zinc-400">
                 {credCount} credential(s) found
               </div>
             </div>
-            <div className={`p-4 rounded-lg ${setupComplete ? 'bg-green-50' : 'bg-amber-50'}`}>
+            <div className={`p-4 rounded-lg border ${setupComplete ? 'bg-green-950/30 border-green-900/50 dark:bg-green-900/20 dark:border-green-800/50' : 'bg-amber-950/30 border-amber-900/50 dark:bg-amber-900/20 dark:border-amber-800/50'}`}>
               <div className="flex items-center gap-2 mb-2">
-                <Icons.CheckCircle className={`h-5 w-5 ${setupComplete ? 'text-green-600' : 'text-amber-600'}`} />
-                <span className="font-medium">Overall Status</span>
+                <Icons.CheckCircle className={`h-5 w-5 ${setupComplete ? 'text-green-400' : 'text-amber-400'}`} />
+                <span className="font-medium text-zinc-100">Overall Status</span>
               </div>
               <div className="text-sm text-muted-foreground">
                 {setupComplete ? 'Ready' : 'In Progress'}
               </div>
-              <div className="text-xs mt-1">
+              <div className="text-xs mt-1 text-zinc-400">
                 {progressCurrent} / {progressTotal} steps complete
               </div>
             </div>
@@ -561,13 +561,13 @@ export function LinkedInConnectionTab({ onSetupComplete }: LinkedInConnectionTab
                         The simplest way to get started. Add your LinkedIn email and password directly.
                       </p>
                       <div className="flex flex-wrap gap-2">
-                        <Badge variant="outline" className="bg-green-50 text-green-700">
+                        <Badge variant="outline" className="bg-green-950/30 text-green-400 border-green-800/50 dark:bg-green-900/20 dark:border-green-800/50">
                           <CheckCircle className="mr-1 h-3 w-3" /> Easy Setup
                         </Badge>
-                        <Badge variant="outline" className="bg-green-50 text-green-700">
+                        <Badge variant="outline" className="bg-green-950/30 text-green-400 border-green-800/50 dark:bg-green-900/20 dark:border-green-800/50">
                           <CheckCircle className="mr-1 h-3 w-3" /> No Browser Required
                         </Badge>
-                        <Badge variant="outline" className="bg-amber-50 text-amber-700">
+                        <Badge variant="outline" className="bg-amber-950/30 text-amber-400 border-amber-800/50 dark:bg-amber-900/20 dark:border-amber-800/50">
                           <AlertCircle className="mr-1 h-3 w-3" /> Password Required
                         </Badge>
                       </div>
@@ -575,11 +575,11 @@ export function LinkedInConnectionTab({ onSetupComplete }: LinkedInConnectionTab
                         <p className="text-sm text-muted-foreground mb-3">What you need:</p>
                         <ul className="space-y-1 text-sm">
                           <li className="flex items-start gap-2">
-                            <Icons.CheckCircle className="h-4 w-4 text-green-600 flex-shrink-0 mt-0.5" />
+                            <Icons.CheckCircle className="h-4 w-4 text-green-400 flex-shrink-0 mt-0.5" />
                             <span>A LinkedIn account</span>
                           </li>
                           <li className="flex items-start gap-2">
-                            <Icons.CheckCircle className="h-4 w-4 text-green-600 flex-shrink-0 mt-0.5" />
+                            <Icons.CheckCircle className="h-4 w-4 text-green-400 flex-shrink-0 mt-0.5" />
                             <span>Your LinkedIn email and password</span>
                           </li>
                         </ul>
@@ -600,13 +600,13 @@ export function LinkedInConnectionTab({ onSetupComplete }: LinkedInConnectionTab
                         Advanced method for those who prefer not to enter their password.
                       </p>
                       <div className="flex flex-wrap gap-2">
-                        <Badge variant="outline" className="bg-green-50 text-green-700">
+                        <Badge variant="outline" className="bg-green-950/30 text-green-400 border-green-800/50 dark:bg-green-900/20 dark:border-green-800/50">
                           <CheckCircle className="mr-1 h-3 w-3" /> No Password Needed
                         </Badge>
-                        <Badge variant="outline" className="bg-amber-50 text-amber-700">
+                        <Badge variant="outline" className="bg-amber-950/30 text-amber-400 border-amber-800/50 dark:bg-amber-900/20 dark:border-amber-800/50">
                           <AlertCircle className="mr-1 h-3 w-3" /> Browser Required
                         </Badge>
-                        <Badge variant="outline" className="bg-amber-50 text-amber-700">
+                        <Badge variant="outline" className="bg-amber-950/30 text-amber-400 border-amber-800/50 dark:bg-amber-900/20 dark:border-amber-800/50">
                           <AlertCircle className="mr-1 h-3 w-3" /> More Complex
                         </Badge>
                       </div>
@@ -625,10 +625,10 @@ export function LinkedInConnectionTab({ onSetupComplete }: LinkedInConnectionTab
                 </div>
               </div>
 
-              <Alert className="bg-amber-50 border-amber-200">
-                <AlertCircle className="h-5 w-5 text-amber-600" />
-                <h4 className="font-medium text-amber-900 dark:text-amber-100">Important</h4>
-                <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
+              <Alert className="bg-amber-950/30 border-amber-900/50 dark:bg-amber-900/20 dark:border-amber-800/50">
+                <AlertCircle className="h-5 w-5 text-amber-400" />
+                <h4 className="font-medium text-amber-400 dark:text-amber-300">Important</h4>
+                <p className="text-sm text-amber-400 dark:text-amber-300 mt-1">
                   Both methods are secure. Choose the one that best fits your comfort level.
                   Once credentials are added, the system will automatically verify them.
                 </p>
@@ -653,15 +653,15 @@ export function LinkedInConnectionTab({ onSetupComplete }: LinkedInConnectionTab
               {instructions.instructions.steps.map((step) => (
                 <div key={step.step} className="space-y-2">
                   <div className="flex items-center gap-3">
-                    <div className="flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-700 font-semibold text-sm">
+                    <div className="flex items-center justify-center w-8 h-8 rounded-full bg-zinc-800 text-zinc-100 font-semibold text-sm">
                       {step.step}
                     </div>
                     <h4 className="font-medium">{step.title}</h4>
                   </div>
                   <p className="text-sm text-muted-foreground ml-11">{step.description}</p>
                   {step.note && (
-                    <div className="ml-11 p-2 bg-amber-50 rounded text-sm text-amber-800">
-                      <Icons.AlertCircle className="h-4 w-4 inline mr-2" />
+                    <div className="ml-11 p-2 bg-amber-950/30 border border-amber-900/50 rounded text-sm text-amber-400 dark:bg-amber-900/20 dark:border-amber-800/50">
+                      <Icons.AlertCircle className="h-4 w-4 inline mr-2 text-amber-400" />
                       {step.note}
                     </div>
                   )}
@@ -689,9 +689,9 @@ export function LinkedInConnectionTab({ onSetupComplete }: LinkedInConnectionTab
               )}
 
               {instructions.instructions.security_note && (
-                <Alert className="border-amber-200 bg-amber-50">
-                  <Icons.Lock className="h-4 w-4 text-amber-600" />
-                  <AlertDescription>
+                <Alert className="border-amber-900/50 bg-amber-950/30 dark:border-amber-800/50 dark:bg-amber-900/20">
+                  <Icons.Lock className="h-4 w-4 text-amber-400" />
+                  <AlertDescription className="text-amber-400 dark:text-amber-300">
                     {instructions.instructions.security_note}
                   </AlertDescription>
                 </Alert>
@@ -700,14 +700,14 @@ export function LinkedInConnectionTab({ onSetupComplete }: LinkedInConnectionTab
               {instructions.instructions.verification && (
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
-                    <Icons.CheckCircle className="h-5 w-5 text-green-600" />
-                    <h4 className="font-medium">{instructions.instructions.verification.title}</h4>
+                    <Icons.CheckCircle className="h-5 w-5 text-green-400" />
+                    <h4 className="font-medium text-zinc-100">{instructions.instructions.verification.title}</h4>
                   </div>
                   <p className="text-sm text-muted-foreground">
                     {instructions.instructions.verification.description}
                   </p>
-                  <div className="p-2 bg-green-50 rounded text-sm text-green-700">
-                    <Icons.CheckCircle className="h-4 w-4 inline mr-2" />
+                  <div className="p-2 bg-green-950/30 border border-green-900/50 rounded text-sm text-green-400 dark:bg-green-900/20 dark:border-green-800/50">
+                    <Icons.CheckCircle className="h-4 w-4 inline mr-2 text-green-400" />
                     {instructions.instructions.verification.success}
                   </div>
                 </div>

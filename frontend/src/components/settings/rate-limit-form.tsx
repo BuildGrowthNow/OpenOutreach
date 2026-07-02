@@ -105,41 +105,41 @@ export default function RateLimitForm({ initialData, onSuccess }: RateLimitFormP
           <div className="space-y-4">
             <div className="p-4 border rounded-lg bg-gray-50">
               <h3 className="font-semibold mb-2">Safety Assessment</h3>
-              <div className="flex items-center space-x-2">
-                <span className={`px-3 py-1 rounded-full text-sm font-medium ${safety.bg} ${safety.color}`}>
-                  {safety.level}
-                </span>
-                 <span className="text-sm text-gray-600">
-                   Connection Limit: {connectLimit} - Follow-up Limit: {followUpLimit}
+               <div className="flex items-center space-x-2">
+                 <span className={`px-3 py-1 rounded-full text-sm font-medium dark:bg-zinc-800 dark:border dark:border-zinc-700 ${safety.color.replace('text-', 'text-')}`}>
+                   {safety.level}
                  </span>
-              </div>
-              <p className="text-xs text-gray-500 mt-2">
-                Based on LinkedIn recommended limits to avoid account restrictions
-              </p>
+                  <span className="text-sm text-zinc-400">
+                    Connection Limit: {connectLimit} - Follow-up Limit: {followUpLimit}
+                  </span>
+               </div>
+               <p className="text-xs text-zinc-500 mt-2">
+                 Based on LinkedIn recommended limits to avoid account restrictions
+               </p>
             </div>
           </div>
 
           <div className="space-y-4">
-            <div className="p-4 border rounded-lg bg-blue-50">
-              <h3 className="font-semibold mb-2 flex items-center">
-                <Icons.AlertTriangle className="h-4 w-4 text-blue-600 mr-2" />
-                LinkedIn Guidelines
-              </h3>
-              <ul className="text-sm space-y-1">
-                <li className="flex items-start">
-                  <Icons.CheckCircle className="h-3 w-3 text-green-500 mt-0.5 mr-2 flex-shrink-0" />
-                  <span>Recommended: 20-30 connections per day</span>
-                </li>
-                <li className="flex items-start">
-                  <Icons.CheckCircle className="h-3 w-3 text-green-500 mt-0.5 mr-2 flex-shrink-0" />
-                  <span>Weekly maximum: 70 connections</span>
-                </li>
-                <li className="flex items-start">
-                  <Icons.CheckCircle className="h-3 w-3 text-green-500 mt-0.5 mr-2 flex-shrink-0" />
-                  <span>Space out activities throughout the day</span>
-                </li>
-              </ul>
-            </div>
+             <div className="p-4 border border-zinc-800 rounded-lg bg-zinc-950/30 dark:bg-zinc-900/20">
+               <h3 className="font-semibold mb-2 flex items-center dark:text-zinc-200">
+                 <Icons.AlertTriangle className="h-4 w-4 text-blue-500 mr-2 dark:text-blue-500" />
+                 LinkedIn Guidelines
+               </h3>
+               <ul className="text-sm space-y-1 dark:text-zinc-400">
+                 <li className="flex items-start">
+                   <Icons.CheckCircle className="h-3 w-3 text-green-500/80 mt-0.5 mr-2 flex-shrink-0" />
+                   <span>Recommended: 20-30 connections per day</span>
+                 </li>
+                 <li className="flex items-start">
+                   <Icons.CheckCircle className="h-3 w-3 text-green-500/80 mt-0.5 mr-2 flex-shrink-0" />
+                   <span>Weekly maximum: 70 connections</span>
+                 </li>
+                 <li className="flex items-start">
+                   <Icons.CheckCircle className="h-3 w-3 text-green-500/80 mt-0.5 mr-2 flex-shrink-0" />
+                   <span>Space out activities throughout the day</span>
+                 </li>
+               </ul>
+             </div>
           </div>
         </div>
 

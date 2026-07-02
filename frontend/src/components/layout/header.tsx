@@ -399,16 +399,12 @@ const Header = ({ onMenuClick, className }: HeaderProps) => {
                 <span className="text-xs text-muted-foreground truncate">{userEmail}</span>
               </div>
             </div>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem className="gap-2" onClick={() => router.push('/settings/profile')}>
-              <User className="h-4 w-4" />
-              Profile
-            </DropdownMenuItem>
+            <DropdownMenuSeparator className="bg-zinc-200/20" />
             <DropdownMenuItem className="gap-2" onClick={() => router.push('/settings')}>
               <Settings className="h-4 w-4" />
               Settings
             </DropdownMenuItem>
-             <DropdownMenuSeparator />
+              <DropdownMenuSeparator className="bg-zinc-200/20" />
              <DropdownMenuItem className="gap-2 cursor-pointer" onClick={async () => {
                try {
                  await supabase.auth.signOut()

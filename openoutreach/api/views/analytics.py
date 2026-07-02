@@ -7,6 +7,7 @@ from rest_framework.permissions import IsAuthenticated
 
 from openoutreach.core.models import Campaign
 from openoutreach.crm.models import Deal
+from openoutreach.crm.models.deal import DealState
 from openoutreach.linkedin.models import ActionLog
 from django.utils import timezone
 from datetime import timedelta

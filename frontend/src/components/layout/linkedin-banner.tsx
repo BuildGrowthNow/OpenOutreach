@@ -108,21 +108,21 @@ export function LinkedinBanner({ alwaysShow = false, onConnect }: LinkedinBanner
                 Without LinkedIn credentials, you cannot run campaigns or connect with leads.
               </p>
               <div className="flex flex-wrap gap-2">
-                <Button 
-                  variant="secondary" 
-                  size="sm"
-                  onClick={handleConnect}
-                  className="bg-white text-amber-600 hover:bg-amber-50 border border-white/20"
+               <Button 
+                   variant="secondary" 
+                   size="sm"
+                   onClick={handleConnect}
+                   className="bg-white text-amber-600 hover:bg-amber-50 dark:bg-zinc-800 dark:text-amber-400 dark:hover:bg-zinc-700 border border-white/20 dark:border-zinc-700"
                   type="button"
                 >
                   <MapPin className="h-3.5 w-3.5 mr-1.5" />
                   Connect LinkedIn
                 </Button>
                 <Button 
-                  variant="ghost" 
-                  size="sm"
-                  onClick={handleDismiss}
-                  className="text-amber-100 hover:text-white hover:bg-white/10"
+                   variant="ghost" 
+                   size="sm"
+                   onClick={handleDismiss}
+                   className="text-amber-100 hover:text-white hover:bg-white/10 dark:text-amber-300 dark:hover:bg-zinc-800"
                   type="button"
                 >
                   <X className="h-3.5 w-3.5 mr-1" />

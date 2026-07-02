@@ -3,7 +3,10 @@
 from rest_framework import serializers
 from openoutreach.core.models import Campaign, CampaignTemplate
 from openoutreach.crm.models import Deal, Lead, TrackedLink
+from openoutreach.crm.models.deal import DealState
 from openoutreach.linkedin.models import ActionLog
+from django.utils import timezone
+from datetime import timedelta
 
 
 class TrackedLinkSerializer(serializers.ModelSerializer):
@@ -58,6 +61,81 @@ class TrackedLinkSerializer(serializers.ModelSerializer):
         return fields
 
 
+class CampaignStatsSerializer(serializers.ModelSerializer):
+    """Serializer for computed campaign statistics."""
+
+    class Meta:
+        model = Campaign
+        fields = []
+
+    def to_representation(self, instance):
+        """Compute and return statistics for the campaign."""
+        user = self.context.get("request").user if self.context and "request" in self.context else None
+        
+        # Get deals for this campaign
+        deals = instance.deals.all()
+        if user:
+            # Filter by user if available
+            deals = deals.filter(lead__id__in=Deal.objects.filter(campaign=instance).values_list('lead_id', flat=True))
+
+        # Count deals by state
+        total_leads = deals.count()
+        qualified = deals.filter(state=DealState.QUALIFIED).count()
+        ready_to_connect = deals.filter(state=DealState.READY_TO_CONNECT).count()
+        pending = deals.filter(state=DealState.PENDING).count()
+        connected = deals.filter(state=DealState.CONNECTED).count()
+        completed = deals.filter(state=DealState.COMPLETED).count()
+        failed = deals.filter(state=DealState.FAILED).count()
+        no_email = deals.filter(state=DealState.NO_EMAIL).count()
+
+        # Count connection actions (send connect requests)
+        connections_sent = ActionLog.objects.filter(
+            campaign=instance,
+            action_type=ActionLog.ActionType.CONNECT,
+        ).count()
+
+        # Count connections accepted (deals that became connected)
+        connections_accepted = connected
+
+        # Compute rates
+        connection_accept_rate = (
+            round((connections_accepted / connections_sent * 100), 2) if connections_sent > 0 else 0.0
+        )
+
+        # Count follow-up actions sent
+        messages_sent = ActionLog.objects.filter(
+            campaign=instance,
+            action_type=ActionLog.ActionType.FOLLOW_UP,
+        ).count()
+
+        # Count responders (deals with at least one incoming message)
+        messages_replied = deals.filter(messages__is_outgoing=False).distinct().count()
+
+        # Response rate based on connections accepted
+        response_rate = (
+            round((messages_replied / connections_accepted * 100), 2) if connections_accepted > 0 else 0.0
+        )
+
+        # Lead stats
+        leads = total_leads + ready_to_connect + pending
+
+        return {
+            "totalLeads": total_leads,
+            "connected": connected,
+            "messagesSent": messages_sent,
+            "messagesReplied": messages_replied,
+            "completed": completed,
+            "qualified": qualified,
+            "readyToConnect": ready_to_connect,
+            "pending": pending,
+            "failed": failed,
+            "noEmail": no_email,
+            "leads": leads,
+            "connectionAcceptRate": connection_accept_rate,
+            "responseRate": response_rate,
+        }
+
+
 class CampaignSerializer(serializers.ModelSerializer):
     """Serializer for Campaign model."""
 
@@ -73,6 +151,9 @@ class CampaignSerializer(serializers.ModelSerializer):
 
     # Links many-to-many field (read-only)
     links = serializers.SerializerMethodField()
+    
+    # Computed statistics
+    stats = serializers.SerializerMethodField()
 
     class Meta:  # type: ignore[misc]
         model = Campaign
@@ -98,38 +179,12 @@ class CampaignSerializer(serializers.ModelSerializer):
             "completed_deals",
             "failed_deals",
             "links",
+            "stats",
             "created_at",
             "updated_at",
             "status",
         ]
         read_only_fields = ["created_at", "updated_at", "status", "links"]
-
-    def validate_is_paused(self, value: bool) -> bool:
-        """Sync is_paused with status field for consistency."""
-        # When is_paused changes, update status accordingly
-        if "is_paused" in self.initial_data and self.instance is not None:
-            # If is_paused becomes True, status should be 'paused'
-            if value and self.instance.status != "paused":
-                self.instance.status = "paused"
-                self.instance.save(update_fields=["status"])
-            # If is_paused becomes False, status should be 'active' (only if it was 'paused')
-            elif not value and self.instance.status == "paused":
-                self.instance.status = "active"
-                self.instance.save(update_fields=["status"])
-        return value
-
-    def validate_status(self, value: str) -> str:
-        """Sync status with is_paused for consistency."""
-        if "status" in self.initial_data and self.instance is not None:
-            # If status becomes 'paused', is_paused should be True
-            if value == "paused" and not self.instance.is_paused:
-                self.instance.is_paused = True
-                self.instance.save(update_fields=["is_paused"])
-            # If status becomes 'active', is_paused should be False
-            elif value == "active" and self.instance.is_paused:
-                self.instance.is_paused = False
-                self.instance.save(update_fields=["is_paused"])
-        return value
 
     def get_user_count(self, obj):
         return obj.users.count()
@@ -152,6 +207,68 @@ class CampaignSerializer(serializers.ModelSerializer):
         """Get links associated with this campaign."""
         links = obj.tracked_links.all()
         return TrackedLinkSerializer(links, many=True, context=self.context).data
+
+    def get_stats(self, obj):
+        """Compute and return statistics for the campaign."""
+        # Get deals for this campaign
+        deals = obj.deals.all()
+        
+        # Count deals by state
+        total_leads = deals.count()
+        qualified = deals.filter(state=DealState.QUALIFIED).count()
+        ready_to_connect = deals.filter(state=DealState.READY_TO_CONNECT).count()
+        pending = deals.filter(state=DealState.PENDING).count()
+        connected = deals.filter(state=DealState.CONNECTED).count()
+        completed = deals.filter(state=DealState.COMPLETED).count()
+        failed = deals.filter(state=DealState.FAILED).count()
+        no_email = deals.filter(state=DealState.NO_EMAIL).count()
+
+        # Count connection actions (send connect requests)
+        connections_sent = ActionLog.objects.filter(
+            campaign=obj,
+            action_type=ActionLog.ActionType.CONNECT,
+        ).count()
+
+        # Count connections accepted (deals that became connected)
+        connections_accepted = connected
+
+        # Compute rates
+        connection_accept_rate = (
+            round((connections_accepted / connections_sent * 100), 2) if connections_sent > 0 else 0.0
+        )
+
+        # Count follow-up actions sent
+        messages_sent = ActionLog.objects.filter(
+            campaign=obj,
+            action_type=ActionLog.ActionType.FOLLOW_UP,
+        ).count()
+
+        # Count responders (deals with at least one incoming message)
+        messages_replied = deals.filter(messages__is_outgoing=False).distinct().count()
+
+        # Response rate based on connections accepted
+        response_rate = (
+            round((messages_replied / connections_accepted * 100), 2) if connections_accepted > 0 else 0.0
+        )
+
+        # Lead stats
+        leads = total_leads + ready_to_connect + pending
+
+        return {
+            "totalLeads": total_leads,
+            "connected": connected,
+            "messagesSent": messages_sent,
+            "messagesReplied": messages_replied,
+            "completed": completed,
+            "qualified": qualified,
+            "readyToConnect": ready_to_connect,
+            "pending": pending,
+            "failed": failed,
+            "noEmail": no_email,
+            "leads": leads,
+            "connectionAcceptRate": connection_accept_rate,
+            "responseRate": response_rate,
+        }
 
 
 class CampaignCreateSerializer(serializers.Serializer):

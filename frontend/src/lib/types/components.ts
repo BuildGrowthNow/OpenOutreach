@@ -284,10 +284,27 @@ export interface HealthStatus {
     engine?: string
     database?: string
     error?: string
+    latency_ms?: number
+    engine_type?: string
+  }
+  mongodb?: {
+    connected: boolean
+    latency_ms?: number
+    database?: string
+    error?: string
+  }
+  database_stats?: {
+    queries: number
+    success_rate: number
+    avg_latency_ms: number
+    errors: number
+    period?: string
+    error?: string
   }
   services: {
     database: string  // 'operational' | 'degraded'
     api: string       // 'operational' | 'degraded'
+    mongodb?: string  // 'operational' | 'degraded'
     linkedin: string  // 'operational' | 'degraded'
     overall?: string
   }

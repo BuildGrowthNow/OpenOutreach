@@ -52,7 +52,9 @@ const Dashboard = () => {
   // Fetch initial data
   useEffect(() => {
     fetchHealth()
-  }, [fetchHealth])
+    fetchCampaigns('active')
+    fetchLeads('QUALIFIED')
+  }, [fetchHealth, fetchCampaigns, fetchLeads])
   
   // Note: Campaigns, leads, and rate limits require authentication
   // They will be fetched in the useDashboard hook with proper error handling

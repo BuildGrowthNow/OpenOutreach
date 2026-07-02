@@ -1418,11 +1418,140 @@ class CampaignGhostModeActionView(APIView):
                 }
             )
 
+from datetime import timedelta
+from openoutreach.crm.models.deal import DealState
+from openoutreach.linkedin.models import ActionLog
+
+
+class AnalyticsOverviewView(APIView):
+    """
+    API view for retrieving aggregated analytics across all campaigns.
+
+    GET /api/analytics/overview - Get aggregated analytics with optional campaign and time range filters
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        """Get aggregated analytics across all campaigns for the current user."""
+        # Get campaigns accessible by the current user
+        campaigns = Campaign.objects.filter(users=request.user)
+        
+        # Filter by campaign if specified
+        campaign_id_param = request.query_params.get("campaign_id")
+        if campaign_id_param:
+            campaigns = campaigns.filter(id=campaign_id_param)
+        
+        # Calculate time range
+        period = request.query_params.get("period", "30d")
+        if period == "7d":
+            since = timezone.now() - timedelta(days=7)
+        elif period == "30d":
+            since = timezone.now() - timedelta(days=30)
+        elif period == "90d":
+            since = timezone.now() - timedelta(days=90)
         else:
-            return Response(
-                {"success": False, "error": 'Invalid action. Use "start" or "stop".'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            since = timezone.now() - timedelta(days=30)
+
+        # Initialize counters
+        total_connections_sent = 0
+        total_connections_accepted = 0
+        total_messages_sent = 0
+        total_messages_replied = 0
+        total_conversions = 0
+        total_leads = 0
+        total_qualified = 0
+        total_ready_to_connect = 0
+        total_connected = 0
+        total_pending = 0
+        total_failed = 0
+        total_no_email = 0
+
+        # Get all deals for these campaigns
+        deals = Deal.objects.filter(campaign__in=campaigns)
+        
+        # Count deals by state
+        total_leads = deals.count()
+        total_qualified = deals.filter(state=DealState.QUALIFIED).count()
+        total_ready_to_connect = deals.filter(state=DealState.READY_TO_CONNECT).count()
+        total_pending = deals.filter(state=DealState.PENDING).count()
+        total_connected = deals.filter(state=DealState.CONNECTED).count()
+        total_conversions = deals.filter(state=DealState.COMPLETED).count()
+        total_failed = deals.filter(state=DealState.FAILED).count()
+        total_no_email = deals.filter(state=DealState.NO_EMAIL).count()
+
+        # Connection metrics (send connect requests)
+        total_connections_sent = ActionLog.objects.filter(
+            campaign__in=campaigns,
+            action_type=ActionLog.ActionType.CONNECT,
+        ).count()
+
+        # Count accept rate based on connections sent vs accepted
+        total_connections_accepted = total_connected
+
+        # Compute connection accept rate
+        connection_accept_rate = (
+            round((total_connections_accepted / total_connections_sent * 100), 2) if total_connections_sent > 0 else 0.0
+        )
+
+        # Follow-up action metrics
+        total_messages_sent = ActionLog.objects.filter(
+            campaign__in=campaigns,
+            action_type=ActionLog.ActionType.FOLLOW_UP,
+        ).count()
+
+        # Count responders (deals with at least one incoming message)
+        total_messages_replied = deals.filter(messages__is_outgoing=False).distinct().count()
+
+        # Response rate based on connections accepted
+        response_rate = (
+            round((total_messages_replied / total_connections_accepted * 100), 2) if total_connections_accepted > 0 else 0.0
+        )
+
+        # Conversion rate based on qualified leads
+        conversion_rate = (
+            round((total_conversions / total_qualified * 100), 2) if total_qualified > 0 else 0.0
+        )
+
+        # Pipeline stats
+        pipeline = {
+            "qualified": total_qualified,
+            "ready_to_connect": total_ready_to_connect,
+            "pending": total_pending,
+            "connected": total_connected,
+            "completed": total_conversions,
+            "failed": total_failed,
+            "no_email": total_no_email,
+        }
+
+        return Response({
+            "data": {
+                "stats": {
+                    "connectionsSent": total_connections_sent,
+                    "connectionsAccepted": total_connections_accepted,
+                    "connectionAcceptRate": connection_accept_rate,
+                    "messagesSent": total_messages_sent,
+                    "messagesReplied": total_messages_replied,
+                    "responseRate": response_rate,
+                    "conversions": total_conversions,
+                    "conversionRate": conversion_rate,
+                },
+                "pipeline": pipeline,
+                "totals": {
+                    "leads": total_leads + total_ready_to_connect + total_pending,
+                    "qualified": total_qualified,
+                    "readyToConnect": total_ready_to_connect,
+                    "connected": total_connected,
+                    "pending": total_pending,
+                    "failed": total_failed,
+                    "noEmail": total_no_email,
+                    "connectionAcceptRate": connection_accept_rate,
+                    "responseRate": response_rate,
+                    "conversionRate": conversion_rate,
+                },
+            },
+            "period": period,
+        })
 
 
 # No legacy view needed -CampaignGhostModeSimulationListView is the primary view

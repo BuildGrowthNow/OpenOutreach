@@ -29,12 +29,23 @@ class LinksListView(APIView):
         """
         GET /api/links/
         Returns all tracked links available to the user.
+        Query params:
+        - campaign_id: Filter by campaign ID
         """
         from openoutreach.crm.models import TrackedLink
 
         # Get links from campaigns the user has access to
         user_campaigns = request.user.campaigns.all()
-        links = TrackedLink.objects.filter(campaign__in=user_campaigns).distinct()
+        
+        # Filter by campaign_id if provided
+        campaign_id = request.query_params.get("campaign_id")
+        if campaign_id:
+            links = TrackedLink.objects.filter(
+                campaign__in=user_campaigns,
+                campaign_id=campaign_id
+            ).distinct()
+        else:
+            links = TrackedLink.objects.filter(campaign__in=user_campaigns).distinct()
 
         data = [
             {
@@ -51,9 +62,13 @@ class LinksListView(APIView):
                 "short_code": link.short_code,
                 "is_active": link.is_active,
                 "total_clicks": link.total_clicks,
+                "unique_clicks": link.unique_clicks,
                 "utm_source": link.utm_source,
                 "utm_medium": link.utm_medium,
                 "utm_campaign": link.utm_campaign,
+                "utm_term": link.utm_term,
+                "utm_content": link.utm_content,
+                "last_clicked_at": link.last_clicked_at.isoformat() if link.last_clicked_at else None,
                 "created_at": link.created_at.isoformat(),
             }
             for link in links
@@ -61,9 +76,8 @@ class LinksListView(APIView):
 
         return Response(
             {
-                "status": "success",
+                "data": data,
                 "count": links.count(),
-                "results": data,
             },
             status=status.HTTP_200_OK,
         )

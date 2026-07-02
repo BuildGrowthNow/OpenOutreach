@@ -10,7 +10,7 @@ It handles:
 
 import logging
 from datetime import datetime
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Any, Optional, Tuple, cast
 from django.conf import settings
 from django.db import models
 
@@ -105,7 +105,7 @@ class MigrationManager:
         Returns:
             Dictionary with migration results
         """
-        results = {
+        results: Dict[str, Any] = {
             "status": "success",
             "migrated": 0,
             "errors": [],
@@ -134,7 +134,8 @@ class MigrationManager:
         for model_name, migration_func in model_migrations:
             try:
                 migrated_count = migration_func()
-                results["migrated"] += migrated_count
+                # Type ignore: mypy doesn't know results["migrated"] is an int
+                results["migrated"] += migrated_count  # type: ignore[operator]
                 results["details"][model_name] = migrated_count
             except Exception as e:
                 results["status"] = "error"
@@ -164,11 +165,12 @@ class MigrationManager:
         if db is not None:
             for collection in db.list_collection_names():
                 try:
-                    results["mongodb_counts"][collection] = db[
-                        collection
-                    ].count_documents({})
+                    # Type ignore: pymongo Collection indexing is dynamically typed
+                    collection_data = db[collection]  # type: ignore[index]
+                    # Type ignore: pymongo Collection type is dynamically typed
+                    results["mongodb_counts"][collection] = collection_data.count_documents({})  # type: ignore[index]
                 except Exception as e:
-                    results["mongodb_counts"][collection] = f"error: {e}"
+                    results["mongodb_counts"][collection] = f"error: {e}"  # type: ignore[index]
 
         comparisons = {
             "leads": "leads",

@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge'
 import { Icons } from '@/lib/types/components'
 import { getSettings, getLinkedInSetupStatus, type Settings } from '@/lib/api/dashboard'
 import { useDashboard } from '@/hooks/use-dashboard'
-import { HealthStatus } from '@/components/dashboard/health-status'
+// HealthStatus type is imported from '@/lib/types/components' (not from health-status.tsx)
 import { formatDistanceToNow } from 'date-fns'
 import { Activity, AlertCircle, RefreshCw } from 'lucide-react'
 import ProfileForm from '@/components/settings/profile-form'
@@ -23,7 +23,7 @@ export default function SettingsPage() {
   const [settings, setSettings] = useState<Settings | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'rate-limits' | 'profile' | 'linkedin-connection' | 'system' | 'status'>('rate-limits')
+  const [activeTab, setActiveTab] = useState<'linkedin-connection' | 'rate-limits' | 'profile' | 'system' | 'status'>('linkedin-connection')
   const { toast } = useToast()
 
   const loadSettings = useCallback(async () => {
@@ -97,8 +97,12 @@ export default function SettingsPage() {
         Refresh
       </Button>
 
-      <Tabs defaultValue="rate-limits" className="space-y-6">
+      <Tabs defaultValue="linkedin-connection" className="space-y-6">
         <TabsList>
+          <TabsTrigger value="linkedin-connection">
+            <Icons.Link className="h-4 w-4 mr-2" />
+            LinkedIn Connection
+          </TabsTrigger>
           <TabsTrigger value="rate-limits">
             <Icons.SlidersHorizontal className="h-4 w-4 mr-2" />
             Rate Limits
@@ -106,10 +110,6 @@ export default function SettingsPage() {
           <TabsTrigger value="profile">
             <Icons.User className="h-4 w-4 mr-2" />
             Profile
-          </TabsTrigger>
-          <TabsTrigger value="linkedin-connection">
-            <Icons.Link className="h-4 w-4 mr-2" />
-            LinkedIn Connection
           </TabsTrigger>
           <TabsTrigger value="system">
             <SettingsIcon className="h-4 w-4 mr-2" />
@@ -483,55 +483,112 @@ function SystemStatus() {
         </Card>
       </div>
 
-      {/* Database Connection */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Database Status</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="space-y-2">
-              <div className="text-sm text-muted-foreground">Database Type</div>
-              <div className="text-lg font-medium">MongoDB Atlas</div>
-            </div>
-            <div className="space-y-2">
-              <div className="text-sm text-muted-foreground">Connection Status</div>
-              <div className="flex items-center gap-2">
-                <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span className="text-lg font-medium">Connected</span>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <div className="text-sm text-muted-foreground">Last Query</div>
-              <div className="text-lg font-medium">5ms ago</div>
-            </div>
-          </div>
-          <div className="mt-6 p-4 bg-muted rounded-lg">
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-sm font-medium">Database Operations</div>
-              <div className="text-xs text-muted-foreground">Last 24 hours</div>
-            </div>
-            <div className="grid grid-cols-4 gap-4 text-center">
-              <div className="space-y-1">
-                <div className="text-lg font-bold">12,450</div>
-                <div className="text-xs text-muted-foreground">Queries</div>
-              </div>
-              <div className="space-y-1">
-                <div className="text-lg font-bold">99.9%</div>
-                <div className="text-xs text-muted-foreground">Success</div>
-              </div>
-              <div className="space-y-1">
-                <div className="text-lg font-bold">15ms</div>
-                <div className="text-xs text-muted-foreground">Avg Latency</div>
-              </div>
-              <div className="space-y-1">
-                <div className="text-lg font-bold">2</div>
-                <div className="text-xs text-muted-foreground">Errors</div>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+       {/* Database Status */}
+       <Card>
+         <CardHeader>
+           <CardTitle className="text-base">Database Status</CardTitle>
+         </CardHeader>
+         <CardContent>
+           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+             <div className="space-y-2">
+               <div className="text-sm text-muted-foreground">Database Type</div>
+               <div className="text-lg font-medium">
+                 {healthStatus?.database?.engine_type?.toUpperCase() || healthStatus?.database?.engine || 'Unknown'}
+               </div>
+             </div>
+             <div className="space-y-2">
+               <div className="text-sm text-muted-foreground">Connection Status</div>
+               <div className="flex items-center gap-2">
+                 <div className={`h-2 w-2 rounded-full ${healthStatus?.database?.connected ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`} />
+                 <span className={`text-lg font-medium ${healthStatus?.database?.connected ? 'text-emerald-600' : 'text-red-600'}`}>
+                   {healthStatus?.database?.connected ? 'Connected' : 'Disconnected'}
+                 </span>
+               </div>
+             </div>
+             <div className="space-y-2">
+               <div className="text-sm text-muted-foreground">Latency</div>
+               <div className="text-lg font-medium">
+                 {healthStatus?.database?.latency_ms !== undefined && healthStatus?.database?.latency_ms > 0 
+                   ? `${healthStatus.database.latency_ms}ms` : 'N/A'}
+               </div>
+             </div>
+           </div>
+           
+           {healthStatus?.database_stats && (
+             <div className="mt-6 p-4 bg-muted rounded-lg">
+               <div className="flex items-center justify-between mb-4">
+                 <div className="text-sm font-medium">Database Operations (Last 24 hours)</div>
+                 <Button size="sm" variant="ghost" onClick={fetchHealth}>
+                   <Icons.RefreshCw className="h-3 w-3 mr-1" />
+                   Refresh
+                 </Button>
+               </div>
+               <div className="grid grid-cols-4 gap-4 text-center">
+                 <div className="space-y-1">
+                   <div className="text-lg font-bold">{healthStatus.database_stats.queries.toLocaleString()}</div>
+                   <div className="text-xs text-muted-foreground">Queries</div>
+                 </div>
+                 <div className="space-y-1">
+                   <div className={`text-lg font-bold ${healthStatus.database_stats.success_rate >= 99 ? 'text-emerald-600' : 'text-amber-600'}`}>
+                     {healthStatus.database_stats.success_rate.toFixed(1)}%
+                   </div>
+                   <div className="text-xs text-muted-foreground">Success</div>
+                 </div>
+                 <div className="space-y-1">
+                   <div className="text-lg font-bold">{healthStatus.database_stats.avg_latency_ms}ms</div>
+                   <div className="text-xs text-muted-foreground">Avg Latency</div>
+                 </div>
+                 <div className="space-y-1">
+                   <div className={`text-lg font-bold ${healthStatus.database_stats.errors === 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                     {healthStatus.database_stats.errors}
+                   </div>
+                   <div className="text-xs text-muted-foreground">Errors</div>
+                 </div>
+               </div>
+             </div>
+           )}
+           
+           {!healthStatus?.database_stats && !healthLoading && (
+             <div className="mt-6 p-4 bg-muted rounded-lg text-center">
+               <Icons.RefreshCw className="h-8 w-8 mx-auto text-muted-foreground mb-2 animate-spin" />
+               <p className="text-sm text-muted-foreground">Loading database statistics...</p>
+             </div>
+           )}
+         </CardContent>
+       </Card>
+       
+       {/* MongoDB Status (if available) */}
+       {healthStatus?.mongodb && (
+         <Card>
+           <CardHeader>
+             <CardTitle className="text-base">MongoDB Status</CardTitle>
+           </CardHeader>
+           <CardContent>
+             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+               <div className="space-y-2">
+                 <div className="text-sm text-muted-foreground">Database</div>
+                 <div className="text-lg font-medium">MongoDB</div>
+               </div>
+               <div className="space-y-2">
+                 <div className="text-sm text-muted-foreground">Connection Status</div>
+                 <div className="flex items-center gap-2">
+                   <div className={`h-2 w-2 rounded-full ${healthStatus.mongodb.connected ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`} />
+                   <span className={`text-lg font-medium ${healthStatus.mongodb.connected ? 'text-emerald-600' : 'text-red-600'}`}>
+                     {healthStatus.mongodb.connected ? 'Connected' : 'Disconnected'}
+                   </span>
+                 </div>
+               </div>
+               <div className="space-y-2">
+                 <div className="text-sm text-muted-foreground">Latency</div>
+                 <div className="text-lg font-medium">
+                   {healthStatus.mongodb.latency_ms !== undefined && healthStatus.mongodb.latency_ms > 0 
+                     ? `${healthStatus.mongodb.latency_ms}ms` : 'N/A'}
+                 </div>
+               </div>
+             </div>
+           </CardContent>
+         </Card>
+       )}
     </div>
   )
 }

@@ -150,10 +150,10 @@ export default function LinkedInCredentialForm({ initialData, onSuccess, onCance
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>LinkedIn Email</FormLabel>
-                      <FormControl>
-                        <div className="flex">
-                          <div className="flex items-center justify-center px-3 border border-r-0 rounded-l-md bg-gray-50">
-                            <Icons.Mail className="h-4 w-4 text-gray-500" />
+                       <FormControl>
+                         <div className="flex">
+                           <div className="flex items-center justify-center px-3 border border-r-0 rounded-l-md bg-zinc-900 dark:bg-zinc-800">
+                             <Icons.Mail className="h-4 w-4 text-zinc-500 dark:text-zinc-400" />
                           </div>
                           <Input
                             placeholder="name@linkedin.com"
@@ -177,10 +177,10 @@ export default function LinkedInCredentialForm({ initialData, onSuccess, onCance
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Password</FormLabel>
-                      <FormControl>
-                        <div className="flex">
-                          <div className="flex items-center justify-center px-3 border border-r-0 rounded-l-md bg-gray-50">
-                            <Icons.Lock className="h-4 w-4 text-gray-500" />
+                       <FormControl>
+                         <div className="flex">
+                           <div className="flex items-center justify-center px-3 border border-r-0 rounded-l-md bg-zinc-900 dark:bg-zinc-800">
+                             <Icons.Lock className="h-4 w-4 text-zinc-500 dark:text-zinc-400" />
                           </div>
                           <Input
                             placeholder="••••••••"
@@ -204,10 +204,10 @@ export default function LinkedInCredentialForm({ initialData, onSuccess, onCance
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Display Username</FormLabel>
-                      <FormControl>
-                        <div className="flex">
-                          <div className="flex items-center justify-center px-3 border border-r-0 rounded-l-md bg-gray-50">
-                            <span className="text-gray-500">@</span>
+                       <FormControl>
+                         <div className="flex">
+                           <div className="flex items-center justify-center px-3 border border-r-0 rounded-l-md bg-zinc-900 dark:bg-zinc-800">
+                             <span className="text-zinc-500 dark:text-zinc-400">@</span>
                           </div>
                           <Input
                             placeholder="linkedin-username"
@@ -236,7 +236,7 @@ export default function LinkedInCredentialForm({ initialData, onSuccess, onCance
                              onValueChange={(value) => field.onChange(value)}
                              defaultValue={field.value}
                            >
-                             <SelectTrigger className="ring-1 ring-gray-200">
+                             <SelectTrigger className="ring-1 ring-zinc-800 dark:ring-zinc-700">
                                <SelectValue placeholder="Select a LinkedIn profile" />
                              </SelectTrigger>
                              <SelectContent>
@@ -328,24 +328,24 @@ export default function LinkedInCredentialForm({ initialData, onSuccess, onCance
                   <Icons.Lock className="h-4 w-4 text-blue-600 mr-2" />
                   Security Information
                 </h3>
-                <div className="space-y-3 text-sm">
-                  <div className="flex items-start">
-                    <Icons.CheckCircle className="h-3 w-3 text-green-500 mt-0.5 mr-2 flex-shrink-0" />
-                    <span className="text-gray-600">
+                 <div className="space-y-3 text-sm dark:text-zinc-400">
+                   <div className="flex items-start">
+                     <Icons.CheckCircle className="h-3 w-3 text-green-500/80 mt-0.5 mr-2 flex-shrink-0" />
+                     <span className="text-zinc-500 dark:text-zinc-400">
                       Passwords are encrypted with AES-256 at rest
                     </span>
                   </div>
-                  <div className="flex items-start">
-                    <Icons.CheckCircle className="h-3 w-3 text-green-500 mt-0.5 mr-2 flex-shrink-0" />
-                    <span className="text-gray-600">
-                      Your credentials are never logged
-                    </span>
-                  </div>
-                  <div className="flex items-start">
-                    <Icons.CheckCircle className="h-3 w-3 text-green-500 mt-0.5 mr-2 flex-shrink-0" />
-                    <span className="text-gray-600">
-                      Email is masked in display (e.g., j***@domain.com)
-                    </span>
+                   <div className="flex items-start">
+                     <Icons.CheckCircle className="h-3 w-3 text-green-500/80 mt-0.5 mr-2 flex-shrink-0" />
+                     <span className="text-zinc-500 dark:text-zinc-400">
+                       Your credentials are never logged
+                     </span>
+                   </div>
+                   <div className="flex items-start">
+                     <Icons.CheckCircle className="h-3 w-3 text-green-500/80 mt-0.5 mr-2 flex-shrink-0" />
+                     <span className="text-zinc-500 dark:text-zinc-400">
+                       Email is masked in display (e.g., j***@domain.com)
+                     </span>
                   </div>
                 </div>
               </div>
@@ -355,36 +355,36 @@ export default function LinkedInCredentialForm({ initialData, onSuccess, onCance
           <Card>
             <CardContent className="pt-6">
               <div className="space-y-3">
-                <h3 className="font-semibold flex items-center">
-                  <Icons.AlertCircle className="h-4 w-4 text-yellow-600 mr-2" />
-                  What to Know
-                </h3>
-                <ul className="text-sm space-y-2">
-                  <li className="flex items-start">
-                    <Icons.Info className="h-3 w-3 text-blue-500 mt-0.5 mr-2 flex-shrink-0" />
-                    <span className="text-gray-600">
-                      Use a dedicated LinkedIn account for outreach campaigns
-                    </span>
-                  </li>
-                  <li className="flex items-start">
-                    <Icons.Info className="h-3 w-3 text-blue-500 mt-0.5 mr-2 flex-shrink-0" />
-                    <span className="text-gray-600">
-                      Credentials are validated before first use
-                    </span>
-                  </li>
-                  <li className="flex items-start">
-                    <Icons.Info className="h-3 w-3 text-blue-500 mt-0.5 mr-2 flex-shrink-0" />
-                    <span className="text-gray-600">
-                      Rotate credentials regularly for security
-                    </span>
-                  </li>
-                  {!initialData && linkedinProfiles.length === 0 && (
-                    <li className="flex items-start">
-                      <Icons.AlertTriangle className="h-3 w-3 text-orange-500 mt-0.5 mr-2 flex-shrink-0" />
-                      <span className="text-gray-600">
-                        You need to create a LinkedIn profile first to use credentials
-                      </span>
-                    </li>
+                 <h3 className="font-semibold flex items-center dark:text-zinc-200">
+                   <Icons.AlertCircle className="h-4 w-4 text-yellow-500 mr-2 dark:text-yellow-500" />
+                   What to Know
+                 </h3>
+                 <ul className="text-sm space-y-2 dark:text-zinc-400">
+                   <li className="flex items-start">
+                     <Icons.Info className="h-3 w-3 text-blue-500/80 mt-0.5 mr-2 flex-shrink-0" />
+                     <span className="text-zinc-500 dark:text-zinc-400">
+                       Use a dedicated LinkedIn account for outreach campaigns
+                     </span>
+                   </li>
+                   <li className="flex items-start">
+                     <Icons.Info className="h-3 w-3 text-blue-500/80 mt-0.5 mr-2 flex-shrink-0" />
+                     <span className="text-zinc-500 dark:text-zinc-400">
+                       Credentials are validated before first use
+                     </span>
+                   </li>
+                   <li className="flex items-start">
+                     <Icons.Info className="h-3 w-3 text-blue-500/80 mt-0.5 mr-2 flex-shrink-0" />
+                     <span className="text-zinc-500 dark:text-zinc-400">
+                       Rotate credentials regularly for security
+                     </span>
+                   </li>
+                   {!initialData && linkedinProfiles.length === 0 && (
+                     <li className="flex items-start">
+                       <Icons.AlertTriangle className="h-3 w-3 text-orange-500/80 mt-0.5 mr-2 flex-shrink-0" />
+                       <span className="text-zinc-500 dark:text-zinc-400">
+                         You need to create a LinkedIn profile first to use credentials
+                       </span>
+                     </li>
                   )}
                 </ul>
               </div>

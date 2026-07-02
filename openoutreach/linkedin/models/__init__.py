@@ -151,6 +151,8 @@ class ActionLog(models.Model):
     # Status and error tracking (for action logs)
     status: models.CharField = models.CharField(max_length=20, blank=True)  # type: ignore[var-annotated]
     error_message: models.TextField = models.TextField(blank=True)  # type: ignore[var-annotated]
+    # Duration tracking (for latency metrics)
+    duration_ms: models.FloatField = models.FloatField(null=True, blank=True)  # type: ignore[var-annotated]
 
     # Type hints for Django's automatic fields
     id: models.AutoField  # type: ignore[assignment]

@@ -1,4 +1,4 @@
-from django.urls import path, re_path
+from django.urls import path, re_path, URLPattern
 from rest_framework.urlpatterns import format_suffix_patterns
 
 from .views import (
@@ -71,4 +71,6 @@ urlpatterns += [
     ),
 ]
 
-urlpatterns = format_suffix_patterns(urlpatterns)
+# Type ignore: format_suffix_patterns can return URLResolver | URLPattern,
+# but we only use path() which returns URLPattern
+urlpatterns = format_suffix_patterns(urlpatterns)  # type: ignore[assignment]

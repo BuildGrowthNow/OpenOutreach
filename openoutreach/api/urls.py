@@ -30,6 +30,7 @@ from .views.campaigns import (
     CampaignGhostModeSimulationView,
     CampaignGhostModeSimulationListView,
     CampaignGhostModeActionView,
+    AnalyticsOverviewView,
 )
 from .views.campaign_templates import (
     CampaignTemplateListView,
