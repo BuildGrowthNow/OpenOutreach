@@ -5,7 +5,7 @@ Development Django settings for OpenOutreach.
 
 from .base import *
 
-# SECURITY WARNING: don't run with debug turned on in production!
+# SECURITY WARNING: don't run debug turned on in production!
 DEBUG = True
 
 # SECURITY WARNING: keep the secret key used in production secret!
@@ -25,7 +25,6 @@ EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 # =============================================================================
 # MongoDB Configuration (Development)
 # =============================================================================
-# Read MongoDB settings from environment variables for development
 import os
 from openoutreach.mongodb.settings import get_mongodb_uri, get_mongodb_config
 
@@ -40,11 +39,11 @@ MONGODB_ATLAS_URI = os.environ.get("MONGODB_ATLAS_URI", "")
 DUAL_WRITE_ENABLED = os.environ.get("DUAL_WRITE_ENABLED", "false").lower() == "true"
 
 # =============================================================================
-# Logging (Development - verbose)
+# Logging (Development - still suppress noisy loggers)
 # =============================================================================
 LOGGING["root"]["level"] = "DEBUG"  # type: ignore[call-arg]
 LOGGING["loggers"]["openoutreach"]["level"] = "DEBUG"  # type: ignore[call-arg]
-LOGGING["loggers"]["openoutreach.mongodb"]["level"] = "DEBUG"  # type: ignore[call-arg]
+LOGGING["loggers"]["openoutreach.mongodb"]["level"] = "INFO"  # type: ignore[call-arg]
 
 # =============================================================================
 # Database (Development - SQLite)

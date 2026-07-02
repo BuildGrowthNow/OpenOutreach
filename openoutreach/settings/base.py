@@ -236,7 +236,7 @@ LOGGING: dict[str, Any] = {
     "disable_existing_loggers": False,
     "formatters": {
         "verbose": {
-            "format": "[{levelname}] {asctime} {name}:{module}:{lineno} - {message}",
+            "format": "[{levelname}] {name} - {message}",
             "style": "{",
         },
         "simple": {
@@ -288,7 +288,7 @@ LOGGING: dict[str, Any] = {
         },
         "openoutreach.mongodb": {
             "handlers": ["console", "file"],
-            "level": "DEBUG",
+            "level": "INFO",  # Suppress DEBUG for MongoDB operations
             "propagate": True,
         },
         "openoutreach.error": {
@@ -302,12 +302,69 @@ LOGGING: dict[str, Any] = {
             "propagate": False,
         },
         "django.db.backends": {
+            "level": "ERROR",  # Only show database errors
+        },
+        # MongoDB driver loggers - suppress DEBUG
+        "pymongo": {
+            "handlers": ["console"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+        "pymongo.command": {
+            "handlers": ["console"],
             "level": "ERROR",
+            "propagate": False,
+        },
+        "pymongo.monitor": {
+            "handlers": ["console"],
+            "level": "ERROR",
+            "propagate": False,
+        },
+        "pymongo.network": {
+            "handlers": ["console"],
+            "level": "ERROR",
+            "propagate": False,
+        },
+        "pymongo.topology": {
+            "handlers": ["console"],
+            "level": "ERROR",
+            "propagate": False,
+        },
+        "pymongo.server_selection": {
+            "handlers": ["console"],
+            "level": "ERROR",
+            "propagate": False,
+        },
+        "pymongo.client": {
+            "handlers": ["console"],
+            "level": "ERROR",
+            "propagate": False,
+        },
+        # Supabase auth loggers - suppress DEBUG
+        "urllib3": {
+            "handlers": ["console"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+        "httpx": {
+            "handlers": ["console"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+        "requests": {
+            "handlers": ["console"],
+            "level": "WARNING",
+            "propagate": False,
         },
         "django.request": {
             "handlers": ["error_file"],
             "level": "ERROR",
             "propagate": False,
+        },
+        "openoutreach.auth": {
+            "handlers": ["console", "file"],
+            "level": "INFO",  # Suppress DEBUG for auth middleware
+            "propagate": True,
         },
         # Sentry logger (optional - enabled in production.py via sentry-sdk)
     },
