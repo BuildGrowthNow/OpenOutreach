@@ -263,8 +263,10 @@ export default function AnalyticsOverviewPage() {
           </p>
         </div>
         
-        <div className="flex items-center space-x-4">
-          <Select value={selectedCampaign} onValueChange={setSelectedCampaign}>
+         <div className="flex items-center space-x-4">
+          <Select value={selectedCampaign} onValueChange={(value: string | null) => {
+            if (value) setSelectedCampaign(value)
+          }}>
             <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="Select Campaign" />
             </SelectTrigger>
@@ -278,7 +280,9 @@ export default function AnalyticsOverviewPage() {
             </SelectContent>
           </Select>
           
-          <Select value={timeRange} onValueChange={setTimeRange}>
+          <Select value={timeRange} onValueChange={(value: string | null) => {
+            if (value) setTimeRange(value)
+          }}>
             <SelectTrigger className="w-[120px]">
               <SelectValue placeholder="Time Range" />
             </SelectTrigger>

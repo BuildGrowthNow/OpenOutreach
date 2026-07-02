@@ -232,10 +232,12 @@ export default function LinkedInCredentialForm({ initialData, onSuccess, onCance
                        <FormItem>
                          <FormLabel>LinkedIn Profile</FormLabel>
                          <FormControl>
-                           <Select
-                             onValueChange={(value) => field.onChange(value)}
-                             defaultValue={field.value}
-                           >
+                            <Select
+                              onValueChange={(value: string | null) => {
+                                if (value) field.onChange(value)
+                              }}
+                              defaultValue={field.value}
+                            >
                              <SelectTrigger className="ring-1 ring-zinc-800 dark:ring-zinc-700">
                                <SelectValue placeholder="Select a LinkedIn profile" />
                              </SelectTrigger>

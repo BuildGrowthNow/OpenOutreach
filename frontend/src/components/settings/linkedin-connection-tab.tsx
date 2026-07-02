@@ -365,14 +365,15 @@ export function LinkedInConnectionTab({ onSetupComplete }: LinkedInConnectionTab
                   Your LinkedIn credentials are encrypted at rest using AES-256.
                   Each credential includes usage tracking, health monitoring, and automatic rotation alerts.
                 </p>
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center gap-2">
+                  <Button 
+                    variant="outline"
+                    onClick={() => setIsAddDialogOpen(true)}
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Credential
+                  </Button>
                   <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-                    <DialogTrigger asChild>
-                      <Button>
-                        <Plus className="h-4 w-4 mr-2" />
-                        Add Credential
-                      </Button>
-                    </DialogTrigger>
                     <DialogContent className="max-w-3xl">
                       <DialogHeader>
                         <DialogTitle>Add LinkedIn Credential</DialogTitle>
@@ -403,13 +404,14 @@ export function LinkedInConnectionTab({ onSetupComplete }: LinkedInConnectionTab
                   <p className="text-sm text-muted-foreground mb-6 max-w-md mx-auto">
                     Add your first LinkedIn account to start managing campaigns. Your credentials are securely encrypted and never shared.
                   </p>
+                   <Button 
+                    variant="outline"
+                    onClick={() => setIsAddDialogOpen(true)}
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Your First Credential
+                  </Button>
                   <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-                    <DialogTrigger asChild>
-                      <Button>
-                        <Plus className="h-4 w-4 mr-2" />
-                        Add Your First Credential
-                      </Button>
-                    </DialogTrigger>
                     <DialogContent className="max-w-3xl">
                       <DialogHeader>
                         <DialogTitle>Add LinkedIn Credential</DialogTitle>

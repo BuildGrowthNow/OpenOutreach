@@ -62,9 +62,11 @@ export function LeadTable({
     }
   }
 
-  const handleStatusChange = (status: string) => {
-    setSelectedStatus(status)
-    onStatusFilter(status)
+  const handleStatusChange = (status: string | null) => {
+    if (status) {
+      setSelectedStatus(status)
+      onStatusFilter(status)
+    }
   }
 
   const statusOptions = [

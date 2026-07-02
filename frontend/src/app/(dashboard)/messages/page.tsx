@@ -172,9 +172,11 @@ const MessagesPage = () => {
     }
   }
 
-  const handleCampaignChange = (value: string) => {
-    setCampaignFilter(value)
-    setCurrentPage(1)
+  const handleCampaignChange = (value: string | null) => {
+    if (value) {
+      setCampaignFilter(value)
+      setCurrentPage(1)
+    }
   }
 
   const handleSearch = (value: string) => {
@@ -395,10 +397,12 @@ const MessagesPage = () => {
                   </div>
                 </div>
 
-                {/* Date Range */}
-                <div className="space-y-2">
-                  <Label htmlFor="date-range">Date Range</Label>
-                  <Select value={dateRange} onValueChange={setDateRange}>
+                 {/* Date Range */}
+                 <div className="space-y-2">
+                   <Label htmlFor="date-range">Date Range</Label>
+                   <Select value={dateRange} onValueChange={(value: string | null) => {
+                     if (value) setDateRange(value)
+                   }}>
                     <SelectTrigger id="date-range">
                       <SelectValue placeholder="All Time" />
                     </SelectTrigger>
@@ -412,10 +416,12 @@ const MessagesPage = () => {
                   </Select>
                 </div>
 
-                {/* Has Response */}
-                <div className="space-y-2">
-                  <Label htmlFor="response-filter">Response Status</Label>
-                  <Select value={hasResponseFilter} onValueChange={setHasResponseFilter}>
+                 {/* Has Response */}
+                 <div className="space-y-2">
+                   <Label htmlFor="response-filter">Response Status</Label>
+                   <Select value={hasResponseFilter} onValueChange={(value: string | null) => {
+                     if (value) setHasResponseFilter(value)
+                   }}>
                     <SelectTrigger id="response-filter">
                       <SelectValue placeholder="All" />
                     </SelectTrigger>

@@ -252,7 +252,9 @@ export function LeadForm({
                 <Label htmlFor="state">Status</Label>
                 <Select
                   value={formData.state}
-                  onValueChange={(value) => handleChange('state', value as DealState)}
+                  onValueChange={(value: string | null) => {
+                    if (value) handleChange('state', value as DealState)
+                  }}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select status" />
@@ -292,7 +294,9 @@ export function LeadForm({
                 <Label htmlFor="outcome">Outcome (if known)</Label>
                 <Select
                   value={formData.outcome || ''}
-                  onValueChange={(value) => handleChange('outcome', value as DealOutcome)}
+                  onValueChange={(value: string | null) => {
+                    if (value) handleChange('outcome', value as DealOutcome)
+                  }}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select outcome" />

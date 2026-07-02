@@ -110,7 +110,9 @@ export function CampaignList({ leads, campaignId, className }: CampaignListProps
           />
         </div>
         <div className="flex gap-2">
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <Select value={statusFilter} onValueChange={(value: string | null) => {
+            if (value) setStatusFilter(value)
+          }}>
             <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="Filter by status" />
             </SelectTrigger>

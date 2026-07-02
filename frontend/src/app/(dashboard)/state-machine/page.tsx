@@ -212,13 +212,15 @@ const StateMachinePage = () => {
   }, [])
 
   // Handle campaign change
-  const handleCampaignChange = useCallback(async (value: string) => {
-    setSelectedCampaignId(value)
-    setValidationResult(null)
-    setSimulationResult(null)
-    setEditingNode(null)
-    setCanvasNodes([])
-    setCanvasEdges([])
+  const handleCampaignChange = useCallback((value: string | null) => {
+    if (value) {
+      setSelectedCampaignId(value)
+      setValidationResult(null)
+      setSimulationResult(null)
+      setEditingNode(null)
+      setCanvasNodes([])
+      setCanvasEdges([])
+    }
   }, [])
 
   // Handle node click
@@ -655,7 +657,7 @@ const StateMachinePage = () => {
             <CardTitle className="text-sm font-medium">Campaign</CardTitle>
           </CardHeader>
           <CardContent>
-            <Select value={selectedCampaignId} onValueChange={handleCampaignChange}>
+             <Select value={selectedCampaignId} onValueChange={handleCampaignChange}>
               <SelectTrigger>
                 <SelectValue placeholder="Select Campaign" />
               </SelectTrigger>
@@ -830,10 +832,12 @@ const StateMachinePage = () => {
             <CardContent className="space-y-6">
               <div className="space-y-2">
                 <Label htmlFor="simulation-deal">Select Lead</Label>
-                <Select 
-                  value={selectedSimulationDeal} 
-                  onValueChange={setSelectedSimulationDeal}
-                >
+                 <Select 
+                   value={selectedSimulationDeal} 
+                   onValueChange={(value: string | null) => {
+                     if (value) setSelectedSimulationDeal(value)
+                   }}
+                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select a lead to simulate" />
                   </SelectTrigger>
@@ -939,10 +943,12 @@ const StateMachinePage = () => {
             <CardContent className="space-y-6">
               <div className="space-y-2">
                 <Label htmlFor="execution-deal">Select Lead</Label>
-                <Select 
-                  value={selectedExecutionDeal} 
-                  onValueChange={setSelectedExecutionDeal}
-                >
+                 <Select 
+                   value={selectedExecutionDeal} 
+                   onValueChange={(value: string | null) => {
+                     if (value) setSelectedExecutionDeal(value)
+                   }}
+                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select a lead to execute" />
                   </SelectTrigger>
@@ -1059,7 +1065,7 @@ const StateMachinePage = () => {
                 <Label htmlFor="node-type">Type</Label>
                 <Select 
                   value={editingNode.type} 
-                  onValueChange={(type) => setEditingNode(prev => prev ? { ...prev, type: type as CanvasNode['type'] } : null)}
+                  onValueChange={(type: string | null) => setEditingNode(prev => prev && type ? { ...prev, type: type as CanvasNode['type'] } : null)}
                 >
                   <SelectTrigger>
                     <SelectValue />

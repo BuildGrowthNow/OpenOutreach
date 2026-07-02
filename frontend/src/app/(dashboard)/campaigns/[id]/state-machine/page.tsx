@@ -274,14 +274,17 @@ export default function StateMachinePage() {
               </>
             )}
           </Button>
-          <Dialog open={simulationDialogOpen} onOpenChange={setSimulationDialogOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline" size="sm">
-                <Icons.Play className="mr-2 h-4 w-4" />
-                Simulate
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[600px]">
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => setSimulationDialogOpen(true)}
+            >
+              <Icons.Play className="mr-2 h-4 w-4" />
+              Simulate
+            </Button>
+            <Dialog open={simulationDialogOpen} onOpenChange={setSimulationDialogOpen}>
+              <DialogContent className="sm:max-w-[600px]">
               <DialogHeader>
                 <DialogTitle>Simulate State Machine</DialogTitle>
                 <DialogDescription>
@@ -340,8 +343,9 @@ export default function StateMachinePage() {
                   )}
                 </Button>
               </DialogFooter>
-            </DialogContent>
-          </Dialog>
+              </DialogContent>
+            </Dialog>
+          </div>
           <Button variant="outline" size="sm" onClick={() => window.history.back()}>
             <Icons.ChevronLeft className="mr-2 h-4 w-4" />
             Back to Campaign

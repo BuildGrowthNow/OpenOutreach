@@ -211,7 +211,9 @@ export default function CampaignLeadsPage() {
               </div>
             </div>
             <div className="w-full md:w-48">
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <Select value={statusFilter} onValueChange={(value: string | null) => {
+                if (value) setStatusFilter(value)
+              }}>
                 <SelectTrigger>
                   <SelectValue placeholder="Filter by status" />
                 </SelectTrigger>

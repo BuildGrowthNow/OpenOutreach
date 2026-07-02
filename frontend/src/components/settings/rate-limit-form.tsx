@@ -158,7 +158,12 @@ export default function RateLimitForm({ initialData, onSuccess }: RateLimitFormP
                         max={100}
                         step={1}
                         value={[field.value]}
-                        onValueChange={(value) => field.onChange(value[0])}
+                        onValueChange={(value) => {
+                          // `value` is number | readonly number[], but when usingSlider with multiple handles
+                          // it returns an array. Since we use single value [field.value], we need to handle both cases
+                          const newValue = Array.isArray(value) ? value[0] : value
+                          field.onChange(newValue)
+                        }}
                         className="flex-1"
                       />
                     <div className="w-16">
@@ -201,7 +206,11 @@ export default function RateLimitForm({ initialData, onSuccess }: RateLimitFormP
                         max={100}
                         step={1}
                         value={[field.value]}
-                        onValueChange={(value) => field.onChange(value[0])}
+                        onValueChange={(value) => {
+                          // `value` is number | readonly number[], handling both cases
+                          const newValue = Array.isArray(value) ? value[0] : value
+                          field.onChange(newValue)
+                        }}
                         className="flex-1"
                       />
                       <div className="w-16">

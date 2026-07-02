@@ -695,62 +695,66 @@ export default function CampaignDetailsPage() {
                     <Icons.ListTodo className="mr-2 h-4 w-4" />
                     State Machine
                   </Button>
-                  {campaign.status !== 'completed' && (
-                    <Dialog open={showCompletionModal} onOpenChange={setShowCompletionModal}>
-                      <DialogTrigger asChild>
-                        <Button variant="default" className="w-full justify-start bg-emerald-600 hover:bg-emerald-700">
+                    {campaign.status !== 'completed' && (
+                      <>
+                        <Button 
+                          variant="default" 
+                          className="w-full justify-start bg-emerald-600 hover:bg-emerald-700"
+                          onClick={() => setShowCompletionModal(true)}
+                        >
                           <Icons.Check className="mr-2 h-4 w-4" />
                           Mark as Completed
                         </Button>
-                      </DialogTrigger>
-                      <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle>Complete Campaign</DialogTitle>
-                          <DialogDescription>
-                            Are you sure you want to mark this campaign as completed? This action cannot be undone.
-                          </DialogDescription>
-                        </DialogHeader>
-                        <div className="space-y-4 py-4">
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                              <div className="text-sm text-muted-foreground">Total Connections Sent</div>
-                              <div className="text-2xl font-bold">{stats.connections_sent}</div>
+                        <Dialog open={showCompletionModal} onOpenChange={setShowCompletionModal}>
+                          <DialogContent>
+                            <DialogHeader>
+                              <DialogTitle>Complete Campaign</DialogTitle>
+                              <DialogDescription>
+                                Are you sure you want to mark this campaign as completed? This action cannot be undone.
+                              </DialogDescription>
+                            </DialogHeader>
+                            <div className="space-y-4 py-4">
+                              <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                  <div className="text-sm text-muted-foreground">Total Connections Sent</div>
+                                  <div className="text-2xl font-bold">{stats.connections_sent}</div>
+                                </div>
+                                <div className="space-y-2">
+                                  <div className="text-sm text-muted-foreground">Connection Accept Rate</div>
+                                  <div className="text-2xl font-bold">{stats.connection_accept_rate >= 0 ? stats.connection_accept_rate.toFixed(1) : '0.0'}%</div>
+                                </div>
+                                <div className="space-y-2">
+                                  <div className="text-sm text-muted-foreground">Messages Sent</div>
+                                  <div className="text-2xl font-bold">{stats.messages_sent}</div>
+                                </div>
+                                <div className="space-y-2">
+                                  <div className="text-sm text-muted-foreground">Conversions</div>
+                                  <div className="text-2xl font-bold">{stats.conversions}</div>
+                                </div>
+                              </div>
+                              <div className="border-t pt-4">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-sm font-medium">Overall ROI Summary</span>
+                                  <span className="font-bold">
+                                    {stats.connection_accept_rate > 0 
+                                      ? `${stats.conversions} conversions from ${stats.connections_sent} connections`
+                                      : 'No connection data yet'}
+                                  </span>
+                                </div>
+                              </div>
                             </div>
-                            <div className="space-y-2">
-                              <div className="text-sm text-muted-foreground">Connection Accept Rate</div>
-                              <div className="text-2xl font-bold">{stats.connection_accept_rate >= 0 ? stats.connection_accept_rate.toFixed(1) : '0.0'}%</div>
-                            </div>
-                            <div className="space-y-2">
-                              <div className="text-sm text-muted-foreground">Messages Sent</div>
-                              <div className="text-2xl font-bold">{stats.messages_sent}</div>
-                            </div>
-                            <div className="space-y-2">
-                              <div className="text-sm text-muted-foreground">Conversions</div>
-                              <div className="text-2xl font-bold">{stats.conversions}</div>
-                            </div>
-                          </div>
-                          <div className="border-t pt-4">
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm font-medium">Overall ROI Summary</span>
-                              <span className="font-bold">
-                                {stats.connection_accept_rate > 0 
-                                  ? `${stats.conversions} conversions from ${stats.connections_sent} connections`
-                                  : 'No connection data yet'}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                        <DialogFooter>
-                          <Button variant="outline" onClick={() => setShowCompletionModal(false)}>
-                            Cancel
-                          </Button>
-                          <Button variant="destructive" onClick={handleMarkCompleted}>
-                            Yes, Complete Campaign
-                          </Button>
-                        </DialogFooter>
-                      </DialogContent>
-                    </Dialog>
-                  )}
+                            <DialogFooter>
+                              <Button variant="outline" onClick={() => setShowCompletionModal(false)}>
+                                Cancel
+                              </Button>
+                              <Button variant="destructive" onClick={handleMarkCompleted}>
+                                Yes, Complete Campaign
+                              </Button>
+                            </DialogFooter>
+                          </DialogContent>
+                        </Dialog>
+                      </>
+                    )}
                 </CardContent>
               </Card>
             </div>
@@ -765,62 +769,64 @@ export default function CampaignDetailsPage() {
                 <CardTitle>Campaign Leads</CardTitle>
                 <CardDescription>All leads associated with this campaign</CardDescription>
               </div>
-              <Dialog open={showUploadModal} onOpenChange={setShowUploadModal}>
-                <DialogTrigger asChild>
-                  <Button variant="outline" size="sm">
-                    <Icons.Download className="mr-2 h-4 w-4 rotate-180" />
-                    Import Connections (CSV)
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Import Connections (CSV)</DialogTitle>
-                    <DialogDescription>
-                      Upload a CSV file containing LinkedIn profiles or connection URLs to add as campaign leads.
-                      The CSV should have one profile URL or public identifier per line (or a header row starting with firstName/lastName).
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-4 py-4">
-                    <div className="flex flex-col gap-2">
-                      <label htmlFor="csv-file" className="text-sm font-medium">Select CSV File</label>
-                      <Input 
-                        id="csv-file"
-                        type="file" 
-                        accept=".csv"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0] || null;
-                          if (file && !file.name.toLowerCase().endsWith('.csv')) {
-                            setUploadStatus({ success: false, message: 'Please select a valid CSV file (.csv)' });
-                            setUploadFile(null);
-                          } else {
-                            setUploadFile(file);
-                            setUploadStatus(null);
-                          }
-                        }}
-                      />
-                      {uploadStatus && !uploadStatus.success && (
-                        <Alert variant="destructive">
-                          <AlertDescription>{uploadStatus.message}</AlertDescription>
-                        </Alert>
-                      )}
-                    </div>
-                    {uploadStatus && (
-                      <Alert variant={uploadStatus.success ? "default" : "destructive"}>
-                        <AlertTitle>{uploadStatus.success ? "Success" : "Error"}</AlertTitle>
-                        <AlertDescription>{uploadStatus.message}</AlertDescription>
-                      </Alert>
-                    )}
-                  </div>
-                  <DialogFooter>
-                    <Button variant="outline" onClick={() => { setShowUploadModal(false); setUploadStatus(null); setUploadFile(null); }}>
-                      Cancel
-                    </Button>
-                    <Button onClick={handleUploadCSV} disabled={!uploadFile || uploadLoading}>
-                      {uploadLoading ? "Importing..." : "Import"}
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
+               <Dialog open={showUploadModal} onOpenChange={setShowUploadModal}>
+                 <DialogContent>
+                   <div className="flex justify-center mb-4">
+                     <Button 
+                       variant="outline" 
+                       size="sm"
+                       onClick={() => setShowUploadModal(true)}
+                     >
+                       <Icons.Download className="mr-2 h-4 w-4 rotate-180" />
+                       Import Connections (CSV)
+                     </Button>
+                   </div>
+                   <DialogHeader>
+                     <DialogTitle>Import Connections (CSV)</DialogTitle>
+                     <DialogDescription>
+                       Upload a CSV file containing LinkedIn profiles or connection URLs to add as campaign leads.
+                       The CSV should have one profile URL or public identifier per line (or a header row starting with firstName/lastName).
+                     </DialogDescription>
+                   </DialogHeader>
+                   <div className="flex flex-col gap-2">
+                     <label htmlFor="csv-file" className="text-sm font-medium">Select CSV File</label>
+                     <Input 
+                       id="csv-file"
+                       type="file" 
+                       accept=".csv"
+                       onChange={(e) => {
+                         const file = e.target.files?.[0] || null;
+                         if (file && !file.name.toLowerCase().endsWith('.csv')) {
+                           setUploadStatus({ success: false, message: 'Please select a valid CSV file (.csv)' });
+                           setUploadFile(null);
+                         } else {
+                           setUploadFile(file);
+                           setUploadStatus(null);
+                         }
+                       }}
+                     />
+                     {uploadStatus && !uploadStatus.success && (
+                       <Alert variant="destructive">
+                         <AlertDescription>{uploadStatus.message}</AlertDescription>
+                       </Alert>
+                     )}
+                   </div>
+                   {uploadStatus && (
+                     <Alert variant={uploadStatus.success ? "default" : "destructive"}>
+                       <AlertTitle>{uploadStatus.success ? "Success" : "Error"}</AlertTitle>
+                       <AlertDescription>{uploadStatus.message}</AlertDescription>
+                     </Alert>
+                   )}
+                   <DialogFooter>
+                     <Button variant="outline" onClick={() => { setShowUploadModal(false); setUploadStatus(null); setUploadFile(null); }}>
+                       Cancel
+                     </Button>
+                     <Button onClick={handleUploadCSV} disabled={!uploadFile || uploadLoading}>
+                       {uploadLoading ? "Importing..." : "Import"}
+                     </Button>
+                   </DialogFooter>
+                 </DialogContent>
+               </Dialog>
             </CardHeader>
             <CardContent>
               {leads.length > 0 ? (

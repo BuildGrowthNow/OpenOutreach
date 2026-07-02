@@ -117,36 +117,40 @@ export default function LinkStats({ links }: LinkStatsProps) {
           </p>
         </div>
         
-        <div className="flex items-center space-x-4">
-          <Select value={campaignFilter} onValueChange={setCampaignFilter}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Filter by Campaign" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Campaigns</SelectItem>
-              {Array.from(new Set(linkMetrics.map(l => l.campaignId))).map(campaignId => {
-                const campaign = linkMetrics.find(l => l.campaignId === campaignId)
-                return (
-                  <SelectItem key={campaignId} value={campaignId}>
-                    {campaign?.campaignName || campaignId}
-                  </SelectItem>
-                )
-              })}
-            </SelectContent>
-          </Select>
-          
-          <Select value={timeRange} onValueChange={setTimeRange}>
-            <SelectTrigger className="w-[120px]">
-              <SelectValue placeholder="Time Range" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="7d">Last 7 days</SelectItem>
-              <SelectItem value="30d">Last 30 days</SelectItem>
-              <SelectItem value="90d">Last 90 days</SelectItem>
-              <SelectItem value="all">All time</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+         <div className="flex items-center space-x-4">
+           <Select value={campaignFilter} onValueChange={(value: string | null) => {
+             if (value) setCampaignFilter(value)
+           }}>
+             <SelectTrigger className="w-[180px]">
+               <SelectValue placeholder="Filter by Campaign" />
+             </SelectTrigger>
+             <SelectContent>
+               <SelectItem value="all">All Campaigns</SelectItem>
+               {Array.from(new Set(linkMetrics.map(l => l.campaignId))).map(campaignId => {
+                 const campaign = linkMetrics.find(l => l.campaignId === campaignId)
+                 return (
+                   <SelectItem key={campaignId} value={campaignId}>
+                     {campaign?.campaignName || campaignId}
+                   </SelectItem>
+                 )
+               })}
+             </SelectContent>
+           </Select>
+           
+           <Select value={timeRange} onValueChange={(value: string | null) => {
+             if (value) setTimeRange(value)
+           }}>
+             <SelectTrigger className="w-[120px]">
+               <SelectValue placeholder="Time Range" />
+             </SelectTrigger>
+             <SelectContent>
+               <SelectItem value="7d">Last 7 days</SelectItem>
+               <SelectItem value="30d">Last 30 days</SelectItem>
+               <SelectItem value="90d">Last 90 days</SelectItem>
+               <SelectItem value="all">All time</SelectItem>
+             </SelectContent>
+           </Select>
+         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
