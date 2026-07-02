@@ -1,4 +1,6 @@
 playwright>=1.59
+pytest>=8.0.0
+pytest-django>=4.9.0
 playwright-stealth
 pydantic
 pydantic-ai-slim[openai,anthropic,google,groq,mistral,cohere,bedrock]

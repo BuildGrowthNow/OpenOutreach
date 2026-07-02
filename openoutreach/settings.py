@@ -39,6 +39,9 @@ for noisy_logger in (
     "pymongo.monitor",
     "pymongo.network",
     "pymongo.topology",
+    "pymongo.server_selection",
+    "pymongo.connection",
+    "pymongo.client",
     "bson",
 ):
     logging.getLogger(noisy_logger).setLevel(logging.WARNING)
