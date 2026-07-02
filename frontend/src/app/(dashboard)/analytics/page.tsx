@@ -315,11 +315,6 @@ export default function AnalyticsOverviewPage() {
                 style={{ width: `${Math.min(totalStats.connectionAcceptRate, 100)}%` }} 
               />
             </div>
-            {campaigns.length === 0 && (
-              <p className="text-xs text-muted-foreground mt-1">
-                * No campaigns yet - data will update when campaigns are created
-              </p>
-            )}
           </CardContent>
         </Card>
         
@@ -339,11 +334,6 @@ export default function AnalyticsOverviewPage() {
                 style={{ width: `${Math.min(totalStats.responseRate, 100)}%` }} 
               />
             </div>
-            {campaigns.length === 0 && (
-              <p className="text-xs text-muted-foreground mt-1">
-                * No activity yet - data will update when messages are sent
-              </p>
-            )}
           </CardContent>
         </Card>
         
@@ -363,11 +353,6 @@ export default function AnalyticsOverviewPage() {
                 style={{ width: `${Math.min(totalStats.conversionRate, 100)}%` }} 
               />
             </div>
-            {campaigns.length === 0 && (
-              <p className="text-xs text-muted-foreground mt-1">
-                * No conversions yet - data will update when campaigns progress
-              </p>
-            )}
           </CardContent>
         </Card>
         
@@ -389,11 +374,6 @@ export default function AnalyticsOverviewPage() {
                 }} 
               />
             </div>
-            {campaigns.length === 0 && (
-              <p className="text-xs text-muted-foreground mt-1">
-                * No leads yet - data will update when leads are added
-              </p>
-            )}
           </CardContent>
         </Card>
       </div>

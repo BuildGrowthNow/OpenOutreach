@@ -299,11 +299,19 @@ export default function SettingsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {settings && (
+              {settings && settings.rate_limits ? (
                 <RateLimitForm 
                   initialData={settings.rate_limits}
                   onSuccess={handleSettingsUpdate}
                 />
+              ) : (
+                <div className="text-center py-12">
+                  <Icons.SlidersHorizontal className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                  <h3 className="text-lg font-medium mb-2">No Rate Limits Configured</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Configure your rate limits to manage your LinkedIn activity
+                  </p>
+                </div>
               )}
             </CardContent>
           </Card>
@@ -318,11 +326,19 @@ export default function SettingsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {settings && (
+              {settings && settings.linkedin_profile ? (
                 <ProfileForm 
                   initialData={settings.linkedin_profile}
                   onSuccess={handleSettingsUpdate}
                 />
+              ) : (
+                <div className="text-center py-12">
+                  <Icons.User className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                  <h3 className="text-lg font-medium mb-2">No LinkedIn Profile Set</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Configure your LinkedIn profile to get started with outreach campaigns
+                  </p>
+                </div>
               )}
             </CardContent>
           </Card>
@@ -432,42 +448,42 @@ export default function SettingsPage() {
                 Current system configuration and AI message settings
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              {settings && (
-                <>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+               <CardContent className="space-y-4">
+                {settings && settings.llm && settings.llm.provider && settings.rate_limits && settings.rate_limits.daily_connection_limit && settings.linkedin_profile && settings.linkedin_profile.username ? (
+                 <>
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                     <div>
+                       <h3 className="font-semibold mb-2">AI Message Generation</h3>
+                       <div className="space-y-2">
+                         <div className="flex justify-between">
+                           <span className="text-muted-foreground">Provider:</span>
+                           <span className="font-medium">{settings.llm.provider}</span>
+                         </div>
+                         <div className="flex justify-between">
+                           <span className="text-muted-foreground">Model:</span>
+                           <span className="font-medium">{settings.llm.model}</span>
+                         </div>
+                         <div className="flex justify-between">
+                           <span className="text-muted-foreground">API Endpoint:</span>
+                           <span className="font-medium truncate">{settings.llm.api_base}</span>
+                         </div>
+                       </div>
+                     </div>
+                    
                     <div>
-                      <h3 className="font-semibold mb-2">AI Message Generation</h3>
+                      <h3 className="font-semibold mb-2">LinkedIn Profile</h3>
                       <div className="space-y-2">
                         <div className="flex justify-between">
-                          <span className="text-muted-foreground">Provider:</span>
-                          <span className="font-medium">{settings.llm.provider}</span>
+                          <span className="text-muted-foreground">Username:</span>
+                          <span className="font-medium">@{settings.linkedin_profile.username}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-muted-foreground">Model:</span>
-                          <span className="font-medium">{settings.llm.model}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">API Endpoint:</span>
-                          <span className="font-medium truncate">{settings.llm.api_base}</span>
+                          <span className="text-muted-foreground">Campaign:</span>
+                          <span className="font-medium">{settings.linkedin_profile.campaign}</span>
                         </div>
                       </div>
                     </div>
-                   
-                   <div>
-                     <h3 className="font-semibold mb-2">LinkedIn Profile</h3>
-                     <div className="space-y-2">
-                       <div className="flex justify-between">
-                         <span className="text-muted-foreground">Username:</span>
-                         <span className="font-medium">@{settings.linkedin_profile.username}</span>
-                       </div>
-                       <div className="flex justify-between">
-                         <span className="text-muted-foreground">Campaign:</span>
-                         <span className="font-medium">{settings.linkedin_profile.campaign}</span>
-                       </div>
-                     </div>
-                   </div>
-                 </div>
+                  </div>
 
                  <div>
                    <h3 className="font-semibold mb-2">Current Rate Limits</h3>
@@ -514,11 +530,19 @@ export default function SettingsPage() {
                      </Card>
                    </div>
                  </div>
-               </>
-             )}
-           </CardContent>
-         </Card>
-       </TabsContent>
+                </>
+              ) : (
+                <div className="text-center py-12">
+                  <Icons.Settings className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                  <h3 className="text-lg font-medium mb-2">Incomplete Configuration</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Some settings are missing. Please wait while we load your configuration.
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
 
         <TabsContent value="status" className="space-y-6">
           <div className="flex items-center justify-between">

@@ -7,11 +7,17 @@ from django.db import connection
 import platform
 import psutil
 from typing import Any, Dict
+from rest_framework.decorators import authentication_classes, permission_classes
+from rest_framework.authentication import BasicAuthentication, SessionAuthentication
+from rest_framework.permissions import AllowAny
 
 
+@authentication_classes([])
+@permission_classes([AllowAny])
 class HealthView(APIView):
     """
     Health check endpoint to verify system status and database connectivity.
+    This endpoint is public and does not require authentication.
     """
 
     def get(self, request) -> Response:

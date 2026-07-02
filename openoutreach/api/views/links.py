@@ -4,6 +4,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, permissions
 from rest_framework_simplejwt.authentication import JWTAuthentication
+from openoutreach.api.authentication.supabase import SupabaseJWTAuthentication
 from rest_framework.decorators import api_view, permission_classes
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
@@ -21,7 +22,7 @@ class LinksListView(APIView):
     List all tracked links, or create a new link.
     """
 
-    authentication_classes = [JWTAuthentication]
+    authentication_classes = [SupabaseJWTAuthentication]
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, format=None):
@@ -174,7 +175,7 @@ class LinksDetailView(APIView):
     Retrieve, update, or delete a tracked link.
     """
 
-    authentication_classes = [JWTAuthentication]
+    authentication_classes = [SupabaseJWTAuthentication]
     permission_classes = [permissions.IsAuthenticated]
 
     def get_object(self, pk):
@@ -342,7 +343,7 @@ class LinkAnalyticsView(APIView):
     Returns device distribution, source distribution, and daily clicks.
     """
 
-    authentication_classes = [JWTAuthentication]
+    authentication_classes = [SupabaseJWTAuthentication]
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, pk, format=None):
