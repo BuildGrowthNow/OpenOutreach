@@ -9,18 +9,9 @@ import logging
 from pathlib import Path
 from datetime import timedelta
 
-# Django's runserver or gunicorn will call configure_logging() from core/logging.py
-# which handles all logging setup. We don't need basicConfig here.
-# Just ensure log level environment variable is respected for early config.
-log_level_name = os.environ.get("OPENOUTREACH_LOG_LEVEL", "INFO").upper()
-log_level = getattr(logging, log_level_name, logging.INFO)
-logging.basicConfig(
-    level=log_level,
-    format='%(message)s',  # Simplified format, use ColoredFormatter from core.logging
-    handlers=[
-        logging.StreamHandler(sys.stdout),
-    ],
-)
+# Get log level from environment variable (used by configure_logging later)
+# The actual logging configuration happens in openoutreach.core.logging.configure_logging()
+OPENOUTREACH_LOG_LEVEL = os.environ.get("OPENOUTREACH_LOG_LEVEL", "INFO").upper()
 
 # Use Django's default User model (from django.contrib.auth)
 # No custom user model needed - using default auth.User
@@ -268,6 +259,14 @@ SIMPLE_JWT = {
 # =============================================================================
 CORS_ALLOW_ALL_ORIGINS = DEBUG  # Allow all origins in development
 CORS_ALLOW_CREDENTIALS = True
+
+# =============================================================================
+# Logging Configuration
+# =============================================================================
+# Configure logging with our centralized configuration
+# This must be called AFTER settings are loaded to ensure proper handler setup
+from openoutreach.core.logging import configure_logging
+configure_logging()
 
 # Load CORS allowed origins from environment
 CORS_ALLOWED_ORIGINS_STR = os.environ.get("CORS_ALLOWED_ORIGINS", "")
