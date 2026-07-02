@@ -97,12 +97,29 @@ SILENCED_LOGGERS = (
     "filelock",
     "asyncio",
     "requests",
+    # MongoDB driver - heartbeats and topology discovery
     "pymongo",
     "pymongo.command",
     "pymongo.monitor",
     "pymongo.network",
     "pymongo.topology",
+    "pymongo.server",
+    "pymongo.connection",
+    "pymongo.client",
+    "pymongo.uri_parser",
+    "pymongo.events",
+    "pymongo.operations",
+    "pymongo.hello",
+    "pymongo.ismaster",
+    "pymongo.pool",
+    "pymongo.server_selection",
+    "pymongo.topology_description",
+    "pymongo.restricted",
+    "pymongo-driver",
     "bson",
+    # Supabase - verbose authentication logs (DEBUG level)
+    "openoutreach.api.authentication.supabase",
+    "openoutreach.api.authentication.supabase.SupabaseJWTAuthentication",
 )
 
 
@@ -124,3 +141,30 @@ def configure_logging(level: int | None = None) -> None:
 
     for name in SILENCED_LOGGERS:
         logging.getLogger(name).setLevel(logging.WARNING)
+
+    # MongoDB driver heartbeat/topology/logs are DEBUG level - set to CRITICAL to suppress
+    # Only ERROR and CRITICAL messages will be visible (for collection/index creation errors)
+    # The SILENCED_LOGGERS loop handles INFO level (shows INFO but hides DEBUG)
+    # This explicit loop handles DEBUG level MongoDB internal logs
+    for mongo_logger in (
+        "pymongo",
+        "pymongo.command",
+        "pymongo.monitor",
+        "pymongo.network",
+        "pymongo.topology",
+        "pymongo.server",
+        "pymongo.connection",
+        "pymongo.client",
+        "pymongo.uri_parser",
+        "pymongo.events",
+        "pymongo.operations",
+        "pymongo.hello",
+        "pymongo.ismaster",
+        "pymongo.pool",
+        "pymongo.server_selection",
+        "pymongo.topology_description",
+        "pymongo-driver",
+        "pymongo.server_connection",
+        "pymongo.server_selection_timeout",
+    ):
+        logging.getLogger(mongo_logger).setLevel(logging.CRITICAL)

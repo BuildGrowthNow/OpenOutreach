@@ -38,7 +38,7 @@ def get_supabase_jwks():
     """Fetch Supabase's public keys from JWKS endpoint."""
     supabase_url = getattr(settings, 'SUPABASE_URL', None)
     if not supabase_url:
-        logger.warning("[SupabaseAuth] SUPABASE_URL not configured")
+        logger.warning("Supabase URL not configured")
         return None
     # Supabase exposes JWKS at a few possible endpoints depending on project config.
     # Try them in order until one succeeds.
@@ -54,12 +54,14 @@ def get_supabase_jwks():
         try:
             response = requests.get(jwks_uri, timeout=5)
             response.raise_for_status()
-            logger.debug(f"[SupabaseAuth] Fetched JWKS from {jwks_uri}")
+            # Only log on successful fetch in debug (verbose, can be enabled if needed)
             return response.json()
-        except Exception as e:
-            logger.debug(f"[SupabaseAuth] JWKS fetch failed for {jwks_uri}: {e}")
+        except Exception:
+            # Suppress noise - silent failure on candidate endpoints
 
-    logger.error(f"[SupabaseAuth] Failed to fetch JWKS from any known Supabase endpoint for {supabase_url}")
+            pass
+
+    logger.error("Failed to fetch JWKS from any known Supabase endpoint")
     return None
 
 
@@ -88,7 +90,7 @@ def decode_jwk_key(key: Dict[str, Any]) -> Optional[Any]:
                 return HMACAlgorithm.from_jwk(jwk_json)
         return None
     except Exception as e:
-        logger.error(f"[SupabaseAuth] Failed to decode JWK key: {e}")
+        logger.error(f"Failed to decode JWK key: {e}")
         return None
 
 
@@ -109,14 +111,14 @@ def verify_token_with_jwks(token: str) -> Dict[str, Any]:
         header = jwt.get_unverified_header(token)
         alg = header.get('alg', 'HS256')
         kid = header.get('kid')
-        logger.debug(f"[SupabaseAuth] Token algorithm: {alg}, kid: {kid}")
+        # Skip verbose algorithm logging
     except Exception as e:
         raise InvalidTokenError(f"Failed to decode token header: {e}")
     
     # Decode payload without verification
     try:
         payload = jwt.decode(token, options={"verify_signature": False})
-        logger.debug("[SupabaseAuth] Token payload decoded successfully")
+        # Skip verbose payload logging
     except Exception as e:
         raise InvalidTokenError(f"Failed to decode token payload: {e}")
     
@@ -130,10 +132,9 @@ def verify_token_with_jwks(token: str) -> Dict[str, Any]:
                 algorithms=[alg],
                 options={"verify_aud": False},
             )
-            logger.debug(f"[SupabaseAuth] Token verified successfully with {alg} using SERVICE_KEY")
             return payload
-        except PyJWTError as e:
-            logger.warning(f"[SupabaseAuth] {alg} verification with SERVICE_KEY failed: {e}")
+        except PyJWTError:
+            logger.warning(f"HS{alg[-2:]} verification with SERVICE_KEY failed")
     
     # Try JWKS for RS256/ES256 or if SERVICE_KEY verification failed
     if alg.startswith('RS') or alg.startswith('ES'):
@@ -171,12 +172,11 @@ def verify_token_with_jwks(token: str) -> Dict[str, Any]:
                         algorithms=allowed_algorithms,  # type: ignore[arg-type]
                         options={"verify_aud": False},
                     )
-                    logger.debug(f"[SupabaseAuth] Token verified successfully with {alg} using JWKS")
                     return payload
                 except PyJWTError as e:
                     raise InvalidTokenError(f"{alg} verification failed: {e}")
             
-            logger.warning(f"[SupabaseAuth] No matching key found in JWKS for kid: {kid}")
+            logger.warning(f"No matching JWKS key found for kid: {kid}")
     
     raise InvalidTokenError("No suitable verification method found")
 
@@ -205,45 +205,30 @@ class SupabaseJWTAuthentication(BaseAuthentication):
         """
         # Get the Authorization header
         auth_header = request.META.get("HTTP_AUTHORIZATION", "")
-        logger.debug(f"[SupabaseJWTAuth] Checking auth header: '{auth_header[:50] if auth_header else '(empty)'}...'")
         
         if not auth_header:
-            logger.debug("[SupabaseJWTAuth] No Authorization header found, skipping auth")
             return None
 
         # Check if it's a Bearer token
         parts = auth_header.split()
         if len(parts) != 2 or parts[0].lower() != "bearer":
-            logger.debug(f"[SupabaseJWTAuth] Invalid Bearer format: '{auth_header}'")
             return None
 
         access_token = parts[1]
 
         if not access_token:
-            logger.debug("[SupabaseJWTAuth] Empty access token")
             return None
 
-        logger.debug(f"[SupabaseJWTAuth] Token prefix: {access_token[:30]}...")
-        logger.debug("[SupabaseJWTAuth] Attempting token verification")
-
         try:
-            # Log token header for debugging
-            try:
-                th = jwt.get_unverified_header(access_token)
-                logger.debug(f"[SupabaseJWTAuth] Token header: {th}")
-            except Exception as _e:
-                logger.debug(f"[SupabaseJWTAuth] Failed to get token header: {_e}")
-
             # Verify and decode the token using JWKS
             user = self._authenticate_token(access_token)
-            logger.debug(f"[SupabaseJWTAuth] Successfully authenticated user: {user.username if hasattr(user, 'username') else user}")
             return (user, access_token)
 
         except InvalidTokenError as e:
-            logger.error(f"[SupabaseJWTAuth] Invalid token error: {e}")
+            logger.error(f"Invalid token: {e}")
             raise AuthenticationFailed(str(e))
         except Exception as e:
-            logger.error(f"[SupabaseJWTAuth] Authentication error: {e}", exc_info=True)
+            logger.error(f"Authentication error: {e}", exc_info=True)
             raise AuthenticationFailed(f"Invalid token: {str(e)}")
 
     def _authenticate_token(self, token: str) -> Any:
@@ -296,7 +281,7 @@ class SupabaseJWTAuthentication(BaseAuthentication):
         try:
             # Use the new JWKS-based verification
             payload = verify_token_with_jwks(token)
-            logger.debug("[SupabaseJWTAuth] Signature verification successful")
+            # Signature verification logging removed - only show errors on failure
         except InvalidTokenError as e:
             raise
 

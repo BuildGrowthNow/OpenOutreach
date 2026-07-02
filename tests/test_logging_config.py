@@ -15,5 +15,8 @@ def test_configure_logging_silences_noisy_third_party_loggers() -> None:
     configure_logging(level=logging.INFO)
 
     assert root.level == logging.INFO
-    assert pymongo_logger.getEffectiveLevel() == logging.WARNING
-    assert topology_logger.getEffectiveLevel() == logging.WARNING
+    # MongoDB driver logs (heartbeats, topology, etc.) are set to CRITICAL
+    # to suppress DEBUG messages like "Server heartbeat started"
+    # Only ERROR and CRITICAL messages will be visible
+    assert pymongo_logger.getEffectiveLevel() == logging.CRITICAL
+    assert topology_logger.getEffectiveLevel() == logging.CRITICAL
