@@ -11,6 +11,19 @@
     @apply font-sans;
   }
 
+  /* Ensure all interactive elements have proper cursor */
+  button, [role="button"], input[type="button"], input[type="submit"], input[type="reset"] {
+    cursor: pointer;
+  }
+  
+  a[href], area[href], label[for] {
+    cursor: pointer;
+  }
+  
+  [tabindex]:not([tabindex="-1"]) {
+    cursor: pointer;
+  }
+
   * {
     border-color: hsl(240, 3.7%, 15.9%);
     @apply border-border outline-ring/50;
