@@ -4,7 +4,6 @@ import React from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { Separator } from '@/components/ui/separator'
 import { Icons } from '@/lib/types/components'
 import { supabase } from '@/lib/supabase/client'
 
@@ -53,45 +52,38 @@ const Sidebar = ({ items, isOpen, setIsOpen }: SidebarProps) => {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 overflow-y-auto py-2">
-          <div className="space-y-1 px-2">
+        <nav className="flex-1 overflow-y-auto py-4">
+          <div className="space-y-1 px-3">
             {items.map((item, index) => {
               const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`)
               return (
-                <React.Fragment key={item.href}>
-                  <div className="relative group">
-                    <Link href={item.href}>
-                      <Button
-                        variant={isActive ? 'secondary' : 'ghost'}
-                        size="sm"
-                        className="w-full justify-start gap-3 rounded-md px-2"
-                        data-active={isActive}
-                      >
-                        {React.createElement(Icons[item.icon], { className: "h-4 w-4 shrink-0" })}
-                        <span className="text-sm font-medium">{item.title}</span>
-                        {isActive && (
-                          <span className="ml-auto flex h-4 w-4 items-center justify-center">
-                            <span className="absolute h-2 w-2 rounded-full bg-current opacity-50"></span>
-                          </span>
-                        )}
-                      </Button>
-                    </Link>
-                  </div>
-                  {index < items.length - 1 && (
-                    <Separator className="mx-2" />
-                  )}
-                </React.Fragment>
+                <div key={item.href} className="relative group">
+                  <Link href={item.href}>
+                    <Button
+                      variant={isActive ? 'secondary' : 'ghost'}
+                      className="w-full justify-start gap-3.5 rounded-lg px-3 py-2.5 transition-all duration-200"
+                      data-active={isActive}
+                    >
+                      {React.createElement(Icons[item.icon], { className: "h-4 w-4 shrink-0" })}
+                      <span className="text-sm font-medium">{item.title}</span>
+                      {isActive && (
+                        <span className="ml-auto flex h-2 w-2 items-center justify-center">
+                          <span className="absolute h-2 w-2 rounded-full bg-current"></span>
+                        </span>
+                      )}
+                    </Button>
+                  </Link>
+                </div>
               )
             })}
           </div>
         </nav>
 
          {/* Footer - Logout */}
-         <div className="border-t p-2">
+         <div className="border-t p-3">
            <Button 
-             variant="outline" 
-             className="w-full justify-start gap-3 rounded-md px-2" 
-             size="sm"
+             variant="ghost" 
+             className="w-full justify-start gap-3.5 rounded-lg px-3 py-2.5 transition-all duration-200" 
              onClick={async () => {
                try {
                  await supabase.auth.signOut()
@@ -103,7 +95,7 @@ const Sidebar = ({ items, isOpen, setIsOpen }: SidebarProps) => {
              }}
            >
              {React.createElement(Icons.LogOut, { className: "h-4 w-4" })}
-             <span className="text-sm">Logout</span>
+             <span className="text-sm font-medium">Logout</span>
            </Button>
          </div>
       </aside>

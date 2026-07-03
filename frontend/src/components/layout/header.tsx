@@ -387,10 +387,10 @@ const Header = ({ onMenuClick, className }: HeaderProps) => {
               </div>
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
-            <div className="flex items-center gap-2 px-2 py-2">
-              <div className="h-9 w-9 overflow-hidden rounded-full bg-muted">
-                <span className="flex h-full w-full items-center justify-center font-medium text-xs">
+          <DropdownMenuContent align="end" className="w-64 p-2">
+            <div className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-accent">
+              <div className="h-10 w-10 overflow-hidden rounded-full bg-muted">
+                <span className="flex h-full w-full items-center justify-center font-medium text-sm">
                   {userName.charAt(0).toUpperCase()}
                 </span>
               </div>
@@ -399,13 +399,13 @@ const Header = ({ onMenuClick, className }: HeaderProps) => {
                 <span className="text-xs text-muted-foreground truncate">{userEmail}</span>
               </div>
             </div>
-            <DropdownMenuSeparator className="bg-zinc-200/20" />
-            <DropdownMenuItem className="gap-2" onClick={() => router.push('/settings')}>
+            <DropdownMenuSeparator className="bg-zinc-200/20 my-2" />
+            <DropdownMenuItem className="gap-2 rounded-md px-2 py-1.5 transition-colors" onClick={() => router.push('/settings')}>
               <Settings className="h-4 w-4" />
               Settings
             </DropdownMenuItem>
-              <DropdownMenuSeparator className="bg-zinc-200/20" />
-             <DropdownMenuItem className="gap-2 cursor-pointer" onClick={async () => {
+              <DropdownMenuSeparator className="bg-zinc-200/20 my-2" />
+             <DropdownMenuItem className="gap-2 rounded-md px-2 py-1.5 transition-colors cursor-pointer" onClick={async () => {
                try {
                  await supabase.auth.signOut()
                  window.location.href = '/'
