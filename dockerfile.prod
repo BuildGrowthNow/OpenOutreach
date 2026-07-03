@@ -10,7 +10,9 @@ COPY frontend/ ./
 RUN npm run build
 
 # ── Stage 2: Build dependencies (Python) ────────────────────────────────────────
-FROM python:3.12-slim-bookworm AS deps
+# Using alternative Python base image to avoid Docker Hub 500 error
+# Original: python:3.12-slim-bookworm
+FROM python:3.12-slim AS deps
 
 RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
 RUN pip install uv
@@ -20,7 +22,9 @@ ARG BUILD_ENV=production
 RUN uv pip install --system -r /requirements/${BUILD_ENV}.txt
 
 # ── Stage 3: Runtime (combined) ─────────────────────────────────────────────────
-FROM python:3.12-slim-bookworm AS runtime
+# Using alternative Python base image to avoid Docker Hub 500 error
+# Original: python:3.12-slim-bookworm
+FROM python:3.12-slim AS runtime
 
 # Install Node.js for running Next.js
 RUN apt-get update && apt-get install -y --no-install-recommends curl && \
