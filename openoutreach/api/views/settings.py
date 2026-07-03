@@ -11,6 +11,8 @@ from openoutreach.linkedin.services.smart_rate_limits import (
     SmartRateLimiter,
     smart_get_remaining,
 )
+from openoutreach.mongodb.models import UserProfile
+from openoutreach.mongodb.serializers import UserProfileSerializer
 
 
 class SettingsView(APIView):
@@ -24,8 +26,26 @@ class SettingsView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        """Get all system settings."""
+        """Get all system settings including user profile from MongoDB."""
         config = SiteConfig.load()
+        
+        # Get user profile from MongoDB
+        user_profile = UserProfile.get(str(request.user.id))
+        profile_data = {}
+        if user_profile:
+            # Convert to dict and remove private fields
+            profile_dict = user_profile.to_dict()
+            profile_data = {
+                "first_name": profile_dict.get("first_name", ""),
+                "last_name": profile_dict.get("last_name", ""),
+                "email": profile_dict.get("email", ""),
+                "phone": profile_dict.get("phone", ""),
+                "company": profile_dict.get("company", ""),
+                "position": profile_dict.get("position", ""),
+                "timezone": profile_dict.get("timezone", "UTC"),
+                "notification_preferences": profile_dict.get("notification_preferences", {}),
+                "ui_preferences": profile_dict.get("ui_preferences", {}),
+            }
 
         return Response(
             {
@@ -44,11 +64,12 @@ class SettingsView(APIView):
                     "username": config.linkedin_username,
                     "campaign": config.linkedin_campaign,
                 },
+                "profile": profile_data,
             }
         )
 
     def patch(self, request):
-        """Update system settings."""
+        """Update system settings and user profile."""
         config = SiteConfig.load()
 
         # Get data from request
@@ -82,6 +103,43 @@ class SettingsView(APIView):
             config.cooldown_minutes = rate_limits["cooldown_minutes"]
 
         config.save()
+        
+        # Update user profile in MongoDB if provided
+        profile_data = data.get("profile", {})
+        if profile_data:
+            user_profile = UserProfile.get(str(request.user.id))
+            if user_profile:
+                # Update existing profile
+                serializer = UserProfileSerializer(user_profile, data=profile_data, partial=True)
+            else:
+                # Create new profile
+                profile_data["user_id"] = str(request.user.id)
+                serializer = UserProfileSerializer(data=profile_data)
+                
+            if serializer.is_valid():
+                serializer.save()
+            else:
+                return Response(
+                    {"error": "Invalid profile data", "details": serializer.errors},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        # Return updated settings
+        user_profile = UserProfile.get(str(request.user.id))
+        profile_data_response = {}
+        if user_profile:
+            profile_dict = user_profile.to_dict()
+            profile_data_response = {
+                "first_name": profile_dict.get("first_name", ""),
+                "last_name": profile_dict.get("last_name", ""),
+                "email": profile_dict.get("email", ""),
+                "phone": profile_dict.get("phone", ""),
+                "company": profile_dict.get("company", ""),
+                "position": profile_dict.get("position", ""),
+                "timezone": profile_dict.get("timezone", "UTC"),
+                "notification_preferences": profile_dict.get("notification_preferences", {}),
+                "ui_preferences": profile_dict.get("ui_preferences", {}),
+            }
 
         return Response(
             {
@@ -100,6 +158,7 @@ class SettingsView(APIView):
                     "username": config.linkedin_username,
                     "campaign": config.linkedin_campaign,
                 },
+                "profile": profile_data_response,
             }
         )
 

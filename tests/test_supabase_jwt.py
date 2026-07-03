@@ -11,6 +11,7 @@ import jwt
 import json
 import requests
 from datetime import datetime
+from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey, RSAPrivateKey
 
 # Add project root to path
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -71,7 +72,17 @@ def verify_token_with_rs256(token, jwks_uri):
         rsa_key = None
         for key in jwks.get('keys', []):
             if key.get('kid') == kid:
-                rsa_key = jwt.algorithms.RSAAlgorithm.from_jwk(json.dumps(key))
+                # Import RSAAlgorithm directly
+                from jwt.algorithms import RSAAlgorithm
+                rsa_key = RSAAlgorithm.from_jwk(json.dumps(key))
+                # Ensure we have a public key for verification
+                if isinstance(rsa_key, RSAPrivateKey):
+                    # Convert private key to public key
+                    rsa_key = rsa_key.public_key()
+                elif not isinstance(rsa_key, RSAPublicKey):
+                    # If it's neither a private nor public key, try to get public key
+                    if hasattr(rsa_key, 'public_key'):
+                        rsa_key = rsa_key.public_key()
                 break
         
         if not rsa_key:

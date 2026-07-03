@@ -16,6 +16,7 @@ import { Activity, AlertCircle, RefreshCw } from 'lucide-react'
 import ProfileForm from '@/components/settings/profile-form'
 import RateLimitForm from '@/components/settings/rate-limit-form'
 import { LinkedInConnectionTab } from '@/components/settings/linkedin-connection-tab'
+import MongoDbProfileForm from '@/components/settings/mongodb-profile-form'
 import { Settings as SettingsIcon } from 'lucide-react'
 import { useToast } from '@/components/ui/use-toast'
 
@@ -110,6 +111,10 @@ export default function SettingsPage() {
           <TabsTrigger value="profile">
             <Icons.User className="h-4 w-4 mr-2" />
             Profile
+          </TabsTrigger>
+          <TabsTrigger value="mongodb-profile">
+            <Icons.Database className="h-4 w-4 mr-2" />
+            MongoDB Profile
           </TabsTrigger>
           <TabsTrigger value="system">
             <SettingsIcon className="h-4 w-4 mr-2" />
@@ -278,6 +283,20 @@ export default function SettingsPage() {
                   </p>
                 </div>
               )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="mongodb-profile" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>MongoDB Profile Settings</CardTitle>
+              <CardDescription>
+                Manage your profile data stored in MongoDB for faster access
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <MongoDbProfileForm />
             </CardContent>
           </Card>
         </TabsContent>

@@ -128,16 +128,20 @@ def configure_logging(level: int | None = None) -> None:
     if level is None:
         configured_level = os.environ.get("OPENOUTREACH_LOG_LEVEL", "INFO").upper()
         level = getattr(logging, configured_level, logging.INFO)
+    
+    # Ensure level is an integer for setLevel()
+    if isinstance(level, str):
+        level = getattr(logging, level.upper(), logging.INFO)
 
     root = logging.getLogger()
     root.handlers.clear()
 
     handler = logging.StreamHandler(sys.stdout)
     handler.setFormatter(ColoredFormatter("%(message)s"))
-    handler.setLevel(level)
-
-    root.addHandler(handler)
-    root.setLevel(level)
+    # Ensure level is not None before setting
+    if level is not None:
+        handler.setLevel(level)
+        root.setLevel(level)
 
     for name in SILENCED_LOGGERS:
         logging.getLogger(name).setLevel(logging.WARNING)

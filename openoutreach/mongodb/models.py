@@ -963,6 +963,245 @@ class Deal:
         return DealManager()
 
 
+class UserProfile:
+    """
+    MongoDB UserProfile model.
+    
+    Stores extended user profile settings that complement the Django User model.
+    Uses pymongo directly for data operations.
+    """
+    
+    def __init__(
+        self,
+        _id: Optional[str] = None,
+        user_id: str = "",  # Reference to Django User ID
+        first_name: str = "",
+        last_name: str = "",
+        email: str = "",
+        phone: str = "",
+        company: str = "",
+        position: str = "",
+        timezone: str = "UTC",
+        notification_preferences: Optional[Dict[str, bool]] = None,
+        ui_preferences: Optional[Dict[str, Any]] = None,
+        created_at: Optional[datetime] = None,
+        updated_at: Optional[datetime] = None,
+    ):
+        self._id = _id or str(uuid4())
+        self.user_id = user_id
+        self.first_name = first_name
+        self.last_name = last_name
+        self.email = email
+        self.phone = phone
+        self.company = company
+        self.position = position
+        self.timezone = timezone
+        self.notification_preferences = notification_preferences or {
+            "email_notifications": True,
+            "sms_notifications": False,
+            "push_notifications": True,
+            "marketing_emails": False
+        }
+        self.ui_preferences = ui_preferences or {
+            "theme": "light",
+            "language": "en",
+            "sidebar_collapsed": False
+        }
+        self.created_at = created_at or datetime.utcnow()
+        self.updated_at = updated_at or datetime.utcnow()
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert model instance to dictionary for MongoDB storage."""
+        data = {
+            "_id": self._id,
+            "user_id": self.user_id,
+            "first_name": self.first_name,
+            "last_name": self.last_name,
+            "email": self.email,
+            "phone": self.phone,
+            "company": self.company,
+            "position": self.position,
+            "timezone": self.timezone,
+            "notification_preferences": self.notification_preferences,
+            "ui_preferences": self.ui_preferences,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+        }
+        return data
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "UserProfile":
+        """Create UserProfile instance from MongoDB document."""
+        return cls(
+            _id=str(data.get("_id")),
+            user_id=data.get("user_id", ""),
+            first_name=data.get("first_name", ""),
+            last_name=data.get("last_name", ""),
+            email=data.get("email", ""),
+            phone=data.get("phone", ""),
+            company=data.get("company", ""),
+            position=data.get("position", ""),
+            timezone=data.get("timezone", "UTC"),
+            notification_preferences=data.get("notification_preferences"),
+            ui_preferences=data.get("ui_preferences"),
+            created_at=data.get("created_at"),
+            updated_at=data.get("updated_at"),
+        )
+    
+    def save(self) -> str:
+        """Save the user profile to MongoDB."""
+        collection = get_mongodb_collection("user_profiles")
+        if collection is None:
+            raise RuntimeError("MongoDB collection 'user_profiles' not available")
+        
+        # Update the updated_at timestamp
+        self.updated_at = datetime.utcnow()
+        doc = self.to_dict()
+        
+        # Remove _id from the document when updating to avoid immutable field error
+        doc.pop("_id", None)
+        
+        result = collection.update_one(
+            {"user_id": self.user_id}, 
+            {"$set": doc}, 
+            upsert=True
+        )
+        return str(result.upserted_id or self._id)
+    
+    @classmethod
+    def get(cls, user_id: str) -> Optional["UserProfile"]:
+        """Get a user profile by user ID."""
+        collection = get_mongodb_collection("user_profiles")
+        if collection is None:
+            return None
+        
+        try:
+            data = collection.find_one({"user_id": user_id})
+            if data:
+                return cls.from_dict(data)
+            return None
+        except Exception as e:
+            logger.error(f"Failed to get user profile for user '{user_id}': {e}")
+            return None
+    
+    @classmethod
+    def delete(cls, user_id: str) -> bool:
+        """Delete a user profile by user ID."""
+        collection = get_mongodb_collection("user_profiles")
+        if collection is None:
+            return False
+        
+        try:
+            result = collection.delete_one({"user_id": user_id})
+            return result.deleted_count > 0
+        except Exception as e:
+            logger.error(f"Failed to delete user profile for user '{user_id}': {e}")
+            return False
+    
+    def __str__(self):
+        return f"UserProfile#{self._id[:8]} ({self.first_name} {self.last_name})"
+    
+    @property
+    def pk(self):
+        """Get the primary key."""
+        return self._id
+    
+    @pk.setter
+    def pk(self, value):
+        """Set the primary key."""
+        self._id = value
+    
+    @classmethod
+    def objects(cls) -> "UserProfileManager":
+        """Get the UserProfileManager for querying user profiles."""
+        return UserProfileManager()
+
+
+class UserProfileManager:
+    """Manager for UserProfile queries."""
+    
+    def __init__(self):
+        self.collection = None
+    
+    def _get_collection(self) -> Optional[Collection]:
+        if self.collection is None:
+            self.collection = get_mongodb_collection("user_profiles")
+        return self.collection
+    
+    def all(self) -> List[UserProfile]:
+        """Get all user profiles."""
+        collection = self._get_collection()
+        if collection is None:
+            return []
+        
+        try:
+            profiles = []
+            for data in collection.find():
+                profiles.append(UserProfile.from_dict(data))
+            return profiles
+        except Exception as e:
+            logger.error(f"Failed to get all user profiles: {e}")
+            return []
+    
+    def filter(self, **kwargs) -> List[UserProfile]:
+        """Filter user profiles by criteria."""
+        collection = self._get_collection()
+        if collection is None:
+            return []
+        
+        try:
+            profiles = []
+            for data in collection.find(kwargs):
+                profiles.append(UserProfile.from_dict(data))
+            return profiles
+        except Exception as e:
+            logger.error(f"Failed to filter user profiles: {e}")
+            return []
+    
+    def count(self) -> int:
+        """Count total user profiles."""
+        collection = self._get_collection()
+        if collection is None:
+            return 0
+        
+        try:
+            return collection.count_documents({})
+        except Exception as e:
+            logger.error(f"Failed to count user profiles: {e}")
+            return 0
+    
+    def get(self, **kwargs) -> Optional[UserProfile]:
+        """Get a single user profile by criteria."""
+        collection = self._get_collection()
+        if collection is None:
+            return None
+        
+        try:
+            data = collection.find_one(kwargs)
+            if data:
+                return UserProfile.from_dict(data)
+            return None
+        except Exception as e:
+            logger.error(f"Failed to get user profile: {e}")
+            return None
+    
+    def get_or_create(
+        self, defaults: Optional[Dict[str, Any]] = None, **kwargs
+    ) -> tuple["UserProfile", bool]:
+        """Get existing user profile or create new one."""
+        existing = self.get(**kwargs)
+        if existing:
+            return existing, False
+        
+        data = kwargs.copy()
+        if defaults:
+            data.update(defaults)
+        
+        profile = UserProfile(**data)
+        profile.save()
+        return profile, True
+
+
 class Message:
     """
     MongoDB Message model.
@@ -3673,6 +3912,15 @@ def ensure_mongodb_indexes():
                 ("task_type", {"name": "task_type_idx"}),
                 ("created_at", {"name": "created_at_idx"}),
                 ("user_id", {"name": "user_id_idx"}),
+            ],
+        ),
+        # User Profile indexes
+        (
+            "user_profiles",
+            [
+                ("user_id", {"name": "user_id_idx", "unique": True}),
+                ("email", {"name": "email_idx"}),
+                ("created_at", {"name": "created_at_idx"}),
             ],
         ),
     ]

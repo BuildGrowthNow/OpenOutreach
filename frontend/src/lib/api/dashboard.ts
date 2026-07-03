@@ -1010,6 +1010,30 @@ export async function createCampaignFromTemplate(
   return post(`/api/campaign-templates/${id}/create-campaign`, data)
 }
 
+// MongoDB Profile API
+export interface MongoUserProfile {
+  id?: string;
+  username: string;
+  campaign: string;
+  email?: string;
+  first_name?: string;
+  last_name?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export async function getMongoUserProfile(): Promise<ApiResponse<MongoUserProfile>> {
+  return get('/api/mongodb/profile/')
+}
+
+export async function updateMongoUserProfile(data: Partial<MongoUserProfile>): Promise<ApiResponse<MongoUserProfile>> {
+  return post('/api/mongodb/profile/', data)
+}
+
+export async function patchMongoUserProfile(data: Partial<MongoUserProfile>): Promise<ApiResponse<MongoUserProfile>> {
+  return patch('/api/mongodb/profile/update/', data)
+}
+
 // Re-export AddToCampaignModal types for convenience
 export interface AddToCampaignParams {
   leadId: string
