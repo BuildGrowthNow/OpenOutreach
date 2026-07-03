@@ -3534,7 +3534,7 @@ class DealManager:
 
 
 def ensure_mongodb_indexes():
-    """Create required indexes for MongoDB collections."""
+    """Create required indexes for MongoDB collections, only if they don't already exist."""
     if not check_mongodb_connection():
         logger.warning("MongoDB not connected, skipping index creation")
         return
@@ -3680,13 +3680,27 @@ def ensure_mongodb_indexes():
     for collection_name, collection_indexes in indexes:
         try:
             collection = db[collection_name]
+            # Get existing indexes for this collection
+            existing_indexes = []
+            try:
+                existing_indexes = [idx["name"] for idx in collection.list_indexes()]
+            except Exception as e:
+                logger.debug(f"Could not list indexes for '{collection_name}': {e}")
+            
             for field_name, options in collection_indexes:
-                try:
-                    collection.create_index(field_name, name=options["name"])
-                    logger.info(
-                        f"Created index '{options['name']}' on '{collection_name}'"
+                index_name = options["name"]
+                # Only create index if it doesn't already exist
+                if index_name not in existing_indexes:
+                    try:
+                        collection.create_index(field_name, name=index_name)
+                        logger.info(
+                            f"Created index '{index_name}' on '{collection_name}'"
+                        )
+                    except Exception as e:
+                        logger.error(f"Failed to create index '{index_name}': {e}")
+                else:
+                    logger.debug(
+                        f"Index '{index_name}' already exists on '{collection_name}', skipping"
                     )
-                except Exception as e:
-                    logger.error(f"Failed to create index '{options['name']}': {e}")
         except Exception as e:
             logger.error(f"Failed to process indexes for '{collection_name}': {e}")
