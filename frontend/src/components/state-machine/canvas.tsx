@@ -1,41 +1,57 @@
-'use client'
+"use client";
 
-import { useState, useCallback, useRef, useEffect } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Icons } from '@/lib/types/components'
-import { cn } from '@/lib/utils'
+import { useState, useCallback, useRef, useEffect } from "react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Icons } from "@/lib/types/components";
+import { cn } from "@/lib/utils";
 
 export interface Node {
-  id: string
-  type: 'state' | 'start' | 'end' | 'wait' | 'message' | 'gate' | 'decision' | 'branch'
-  name: string
-  description?: string
-  x: number
-  y: number
-  width: number
-  height: number
+  id: string;
+  type:
+    | "state"
+    | "start"
+    | "end"
+    | "wait"
+    | "message"
+    | "gate"
+    | "decision"
+    | "branch";
+  name: string;
+  description?: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
 }
 
 export interface Edge {
-  id: string
-  sourceId: string
-  targetId: string
-  trigger: string
-  description?: string
+  id: string;
+  sourceId: string;
+  targetId: string;
+  trigger: string;
+  description?: string;
 }
 
 interface CanvasProps {
-  nodes: Node[]
-  edges: Edge[]
-  selectedNodeId?: string
-  onNodeClick?: (nodeId: string) => void
-  onAddNode?: (type: Node['type'], x: number, y: number) => void
-  onAddEdge?: (from: string, to: string) => void
-  onDeleteNode?: (nodeId: string) => void
-  onDeleteEdge?: (edgeId: string) => void
-  onMoveNode?: (nodeId: string, x: number, y: number) => void
-  readOnly?: boolean
+  nodes: Node[];
+  edges: Edge[];
+  selectedNodeId?: string;
+  onNodeClick?: (nodeId: string) => void;
+  onAddNode?: (type: Node["type"], x: number, y: number) => void;
+  onAddEdge?: (from: string, to: string) => void;
+  onDeleteNode?: (nodeId: string) => void;
+  onDeleteEdge?: (edgeId: string) => void;
+  onMoveNode?: (nodeId: string, x: number, y: number) => void;
+  /** Optional save handler: canvas shows a Save affordance when provided */
+  onSave?: () => void;
+  readOnly?: boolean;
 }
 
 export function Canvas({
@@ -48,203 +64,271 @@ export function Canvas({
   onDeleteNode,
   onDeleteEdge,
   onMoveNode,
-  readOnly = false
+  onSave,
+  readOnly = false,
 }: CanvasProps) {
-  const canvasRef = useRef<HTMLDivElement>(null)
-  const [isDragging, setIsDragging] = useState(false)
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
-  const [scale, setScale] = useState(1)
-  const [offset, setOffset] = useState({ x: 0, y: 0 })
-  const [draggedNodeId, setDraggedNodeId] = useState<string | null>(null)
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; nodeId?: string; edgeId?: string } | null>(null)
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [scale, setScale] = useState(1);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [draggedNodeId, setDraggedNodeId] = useState<string | null>(null);
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    nodeId?: string;
+    edgeId?: string;
+  } | null>(null);
+  const [snapToGrid, setSnapToGrid] = useState(false);
+  const GRID_SIZE = 20; // pixels
 
-  const getNodeColor = (type: Node['type']) => {
+  const snap = (v: number) => Math.round(v / GRID_SIZE) * GRID_SIZE;
+
+  const getNodeColor = (type: Node["type"]) => {
     switch (type) {
-      case 'start':
-        return 'border-emerald-500 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-      case 'end':
-        return 'border-red-500 bg-red-500/10 text-red-600 dark:text-red-400'
-      case 'wait':
-        return 'border-yellow-500 bg-yellow-500/10 text-yellow-600 dark:text-yellow-400'
-      case 'message':
-        return 'border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-400'
-      case 'gate':
-        return 'border-purple-500 bg-purple-500/10 text-purple-600 dark:text-purple-400'
-      case 'decision':
-        return 'border-orange-500 bg-orange-500/10 text-orange-600 dark:text-orange-400'
-      case 'branch':
-        return 'border-cyan-500 bg-cyan-500/10 text-cyan-600 dark:text-cyan-400'
+      case "start":
+        return "border-emerald-500 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400";
+      case "end":
+        return "border-red-500 bg-red-500/10 text-red-600 dark:text-red-400";
+      case "wait":
+        return "border-yellow-500 bg-yellow-500/10 text-yellow-600 dark:text-yellow-400";
+      case "message":
+        return "border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-400";
+      case "gate":
+        return "border-purple-500 bg-purple-500/10 text-purple-600 dark:text-purple-400";
+      case "decision":
+        return "border-orange-500 bg-orange-500/10 text-orange-600 dark:text-orange-400";
+      case "branch":
+        return "border-cyan-500 bg-cyan-500/10 text-cyan-600 dark:text-cyan-400";
       default:
-        return 'border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-400'
+        return "border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-400";
     }
-  }
+  };
 
   const getEdgeColor = () => {
-    return 'stroke-blue-400'
-  }
+    return "stroke-blue-400";
+  };
 
-  const handleCanvasClick = useCallback((e: React.MouseEvent) => {
-    const rect = canvasRef.current?.getBoundingClientRect()
-    if (!rect) return
+  const handleCanvasClick = useCallback(
+    (e: React.MouseEvent) => {
+      const rect = canvasRef.current?.getBoundingClientRect();
+      if (!rect) return;
 
-    const x = (e.clientX - rect.left - offset.x) / scale
-    const y = (e.clientY - rect.top - offset.y) / scale
+      const x = (e.clientX - rect.left - offset.x) / scale;
+      const y = (e.clientY - rect.top - offset.y) / scale;
 
-    // Check if clicking on a node
-    for (const node of nodes) {
-      if (
-        x >= node.x && x <= node.x + node.width &&
-        y >= node.y && y <= node.y + node.height
-      ) {
-        if (onNodeClick) {
-          onNodeClick(node.id)
+      // Check if clicking on a node
+      for (const node of nodes) {
+        if (
+          x >= node.x &&
+          x <= node.x + node.width &&
+          y >= node.y &&
+          y <= node.y + node.height
+        ) {
+          if (onNodeClick) {
+            onNodeClick(node.id);
+          }
+          return;
         }
-        return
       }
-    }
 
-    // Clear selection if clicking empty space
-    if (onNodeClick && selectedNodeId) {
-      onNodeClick('')
-    }
-  }, [nodes, offset, scale, selectedNodeId, onNodeClick])
+      // Clear selection if clicking empty space
+      if (onNodeClick && selectedNodeId) {
+        onNodeClick("");
+      }
+    },
+    [nodes, offset, scale, selectedNodeId, onNodeClick],
+  );
 
-  const handleMouseDown = useCallback((e: React.MouseEvent, nodeId: string) => {
-    if (readOnly) return
-    setIsDragging(true)
-    setDragStart({ x: e.clientX, y: e.clientY })
-    setDraggedNodeId(nodeId)
-  }, [readOnly])
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent, nodeId: string) => {
+      if (readOnly) return;
+      setIsDragging(true);
+      setDragStart({ x: e.clientX, y: e.clientY });
+      setDraggedNodeId(nodeId);
+    },
+    [readOnly],
+  );
 
-  const handleMouseMove = useCallback((e: MouseEvent) => {
-    if (!isDragging || !draggedNodeId || !onMoveNode) return
+  const handleMouseMove = useCallback(
+    (e: MouseEvent) => {
+      if (!isDragging || !draggedNodeId || !onMoveNode) return;
 
-    const rect = canvasRef.current?.getBoundingClientRect()
-    if (!rect) return
+      const rect = canvasRef.current?.getBoundingClientRect();
+      if (!rect) return;
 
-    const deltaX = (e.clientX - dragStart.x) / scale
-    const deltaY = (e.clientY - dragStart.y) / scale
+      const deltaX = (e.clientX - dragStart.x) / scale;
+      const deltaY = (e.clientY - dragStart.y) / scale;
 
-    const node = nodes.find(n => n.id === draggedNodeId)
-    if (node) {
-      const newX = Math.max(0, node.x + deltaX)
-      const newY = Math.max(0, node.y + deltaY)
-      onMoveNode(draggedNodeId, newX, newY)
-    }
+      const node = nodes.find((n) => n.id === draggedNodeId);
+      if (node) {
+        let newX = Math.max(0, node.x + deltaX);
+        let newY = Math.max(0, node.y + deltaY);
+        if (snapToGrid) {
+          newX = snap(newX);
+          newY = snap(newY);
+        }
+        onMoveNode(draggedNodeId, newX, newY);
+      }
 
-    setDragStart({ x: e.clientX, y: e.clientY })
-  }, [isDragging, draggedNodeId, dragStart, scale, nodes, onMoveNode])
+      setDragStart({ x: e.clientX, y: e.clientY });
+    },
+    [
+      isDragging,
+      draggedNodeId,
+      dragStart,
+      scale,
+      nodes,
+      onMoveNode,
+      snapToGrid,
+    ],
+  );
 
   const handleMouseUp = useCallback(() => {
-    setIsDragging(false)
-    setDraggedNodeId(null)
-  }, [])
+    setIsDragging(false);
+    setDraggedNodeId(null);
+  }, []);
 
   useEffect(() => {
     if (isDragging) {
-      document.addEventListener('mousemove', handleMouseMove)
-      document.addEventListener('mouseup', handleMouseUp)
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("mouseup", handleMouseUp);
       return () => {
-        document.removeEventListener('mousemove', handleMouseMove)
-        document.removeEventListener('mouseup', handleMouseUp)
-      }
+        document.removeEventListener("mousemove", handleMouseMove);
+        document.removeEventListener("mouseup", handleMouseUp);
+      };
     }
-  }, [isDragging, handleMouseMove, handleMouseUp])
+  }, [isDragging, handleMouseMove, handleMouseUp]);
 
-  const handleContextMenu = useCallback((e: React.MouseEvent, nodeId?: string, edgeId?: string) => {
-    e.preventDefault()
-    setContextMenu({
-      x: e.clientX,
-      y: e.clientY,
-      nodeId,
-      edgeId
-    })
-  }, [])
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent, nodeId?: string, edgeId?: string) => {
+      e.preventDefault();
+      setContextMenu({
+        x: e.clientX,
+        y: e.clientY,
+        nodeId,
+        edgeId,
+      });
+    },
+    [],
+  );
 
   const handleZoomIn = () => {
-    setScale(prev => Math.min(prev + 0.1, 2))
-  }
+    setScale((prev) => Math.min(prev + 0.1, 2));
+  };
 
   const handleZoomOut = () => {
-    setScale(prev => Math.max(prev - 0.1, 0.5))
-  }
+    setScale((prev) => Math.max(prev - 0.1, 0.5));
+  };
 
   const handleResetView = () => {
-    setScale(1)
-    setOffset({ x: 0, y: 0 })
-  }
+    setScale(1);
+    setOffset({ x: 0, y: 0 });
+  };
 
   const handleAddStartNode = () => {
-    if (!onAddNode) return
-    const rect = canvasRef.current?.getBoundingClientRect()
-    if (!rect) return
-    const x = Math.random() * rect.width * 0.7
-    const y = Math.random() * rect.height * 0.7
-    onAddNode('start', x, y)
-  }
+    if (!onAddNode) return;
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    let x = Math.random() * rect.width * 0.7;
+    let y = Math.random() * rect.height * 0.7;
+    if (snapToGrid) {
+      x = snap(x);
+      y = snap(y);
+    }
+    onAddNode("start", x, y);
+  };
 
   const handleAddStateNode = () => {
-    if (!onAddNode) return
-    const rect = canvasRef.current?.getBoundingClientRect()
-    if (!rect) return
-    const x = Math.random() * rect.width * 0.7
-    const y = Math.random() * rect.height * 0.7
-    onAddNode('state', x, y)
-  }
+    if (!onAddNode) return;
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    let x = Math.random() * rect.width * 0.7;
+    let y = Math.random() * rect.height * 0.7;
+    if (snapToGrid) {
+      x = snap(x);
+      y = snap(y);
+    }
+    onAddNode("state", x, y);
+  };
 
   const handleAddWaitNode = () => {
-    if (!onAddNode) return
-    const rect = canvasRef.current?.getBoundingClientRect()
-    if (!rect) return
-    const x = Math.random() * rect.width * 0.7
-    const y = Math.random() * rect.height * 0.7
-    onAddNode('wait', x, y)
-  }
+    if (!onAddNode) return;
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    let x = Math.random() * rect.width * 0.7;
+    let y = Math.random() * rect.height * 0.7;
+    if (snapToGrid) {
+      x = snap(x);
+      y = snap(y);
+    }
+    onAddNode("wait", x, y);
+  };
 
   const handleAddMessageNode = () => {
-    if (!onAddNode) return
-    const rect = canvasRef.current?.getBoundingClientRect()
-    if (!rect) return
-    const x = Math.random() * rect.width * 0.7
-    const y = Math.random() * rect.height * 0.7
-    onAddNode('message', x, y)
-  }
+    if (!onAddNode) return;
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    let x = Math.random() * rect.width * 0.7;
+    let y = Math.random() * rect.height * 0.7;
+    if (snapToGrid) {
+      x = snap(x);
+      y = snap(y);
+    }
+    onAddNode("message", x, y);
+  };
 
   const handleAddGateNode = () => {
-    if (!onAddNode) return
-    const rect = canvasRef.current?.getBoundingClientRect()
-    if (!rect) return
-    const x = Math.random() * rect.width * 0.7
-    const y = Math.random() * rect.height * 0.7
-    onAddNode('gate', x, y)
-  }
+    if (!onAddNode) return;
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    let x = Math.random() * rect.width * 0.7;
+    let y = Math.random() * rect.height * 0.7;
+    if (snapToGrid) {
+      x = snap(x);
+      y = snap(y);
+    }
+    onAddNode("gate", x, y);
+  };
 
   const handleAddDecisionNode = () => {
-    if (!onAddNode) return
-    const rect = canvasRef.current?.getBoundingClientRect()
-    if (!rect) return
-    const x = Math.random() * rect.width * 0.7
-    const y = Math.random() * rect.height * 0.7
-    onAddNode('decision', x, y)
-  }
+    if (!onAddNode) return;
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    let x = Math.random() * rect.width * 0.7;
+    let y = Math.random() * rect.height * 0.7;
+    if (snapToGrid) {
+      x = snap(x);
+      y = snap(y);
+    }
+    onAddNode("decision", x, y);
+  };
 
   const handleAddBranchNode = () => {
-    if (!onAddNode) return
-    const rect = canvasRef.current?.getBoundingClientRect()
-    if (!rect) return
-    const x = Math.random() * rect.width * 0.7
-    const y = Math.random() * rect.height * 0.7
-    onAddNode('branch', x, y)
-  }
+    if (!onAddNode) return;
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    let x = Math.random() * rect.width * 0.7;
+    let y = Math.random() * rect.height * 0.7;
+    if (snapToGrid) {
+      x = snap(x);
+      y = snap(y);
+    }
+    onAddNode("branch", x, y);
+  };
 
   const handleAddEndNode = () => {
-    if (!onAddNode) return
-    const rect = canvasRef.current?.getBoundingClientRect()
-    if (!rect) return
-    const x = Math.random() * rect.width * 0.7
-    const y = Math.random() * rect.height * 0.7
-    onAddNode('end', x, y)
-  }
+    if (!onAddNode) return;
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    let x = Math.random() * rect.width * 0.7;
+    let y = Math.random() * rect.height * 0.7;
+    if (snapToGrid) {
+      x = snap(x);
+      y = snap(y);
+    }
+    onAddNode("end", x, y);
+  };
 
   return (
     <div className="relative w-full h-full">
@@ -275,7 +359,34 @@ export function Canvas({
           >
             <Icons.Home className="h-4 w-4" />
           </Button>
+
           <div className="w-px bg-gray-200 dark:bg-gray-700 mx-2" />
+
+          {/* Snap toggle */}
+          <Button
+            variant={snapToGrid ? "default" : "ghost"}
+            size="icon"
+            onClick={() => setSnapToGrid((prev) => !prev)}
+            title={snapToGrid ? "Snap to grid: ON" : "Snap to grid: OFF"}
+            aria-pressed={snapToGrid}
+          >
+            <Icons.Hash className="h-4 w-4" />
+          </Button>
+
+          {/* Save affordance if handler provided */}
+          {typeof onSave === "function" && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => onSave && onSave()}
+              title="Save"
+            >
+              <Icons.Save className="h-4 w-4" />
+            </Button>
+          )}
+
+          <div className="w-px bg-gray-200 dark:bg-gray-700 mx-2" />
+
           <Button
             variant="ghost"
             size="icon"
@@ -292,54 +403,54 @@ export function Canvas({
           >
             <Icons.Circle className="h-4 w-4 text-blue-500" />
           </Button>
-           <Button
-             variant="ghost"
-             size="icon"
-             onClick={handleAddWaitNode}
-             title="Add Wait Node"
-           >
-             <Icons.Clock className="h-4 w-4 text-yellow-500" />
-           </Button>
-           <Button
-             variant="ghost"
-             size="icon"
-             onClick={handleAddMessageNode}
-             title="Add Message Node"
-           >
-             <Icons.MessageSquare className="h-4 w-4 text-blue-500" />
-           </Button>
-           <Button
-             variant="ghost"
-             size="icon"
-             onClick={handleAddGateNode}
-             title="Add Gate Node"
-           >
-             <Icons.Lock className="h-4 w-4 text-purple-500" />
-           </Button>
-           <Button
-             variant="ghost"
-             size="icon"
-             onClick={handleAddDecisionNode}
-             title="Add Decision Node"
-           >
-             <Icons.SlidersHorizontal className="h-4 w-4 text-orange-500" />
-           </Button>
-           <Button
-             variant="ghost"
-             size="icon"
-             onClick={handleAddBranchNode}
-             title="Add Branch Node"
-           >
-             <Icons.Network className="h-4 w-4 text-cyan-500" />
-           </Button>
-           <Button
-             variant="ghost"
-             size="icon"
-             onClick={handleAddEndNode}
-             title="Add End Node"
-           >
-             <Icons.StopCircle className="h-4 w-4 text-red-500" />
-           </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleAddWaitNode}
+            title="Add Wait Node"
+          >
+            <Icons.Clock className="h-4 w-4 text-yellow-500" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleAddMessageNode}
+            title="Add Message Node"
+          >
+            <Icons.MessageSquare className="h-4 w-4 text-blue-500" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleAddGateNode}
+            title="Add Gate Node"
+          >
+            <Icons.Lock className="h-4 w-4 text-purple-500" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleAddDecisionNode}
+            title="Add Decision Node"
+          >
+            <Icons.SlidersHorizontal className="h-4 w-4 text-orange-500" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleAddBranchNode}
+            title="Add Branch Node"
+          >
+            <Icons.Network className="h-4 w-4 text-cyan-500" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleAddEndNode}
+            title="Add End Node"
+          >
+            <Icons.StopCircle className="h-4 w-4 text-red-500" />
+          </Button>
         </div>
       )}
 
@@ -354,8 +465,19 @@ export function Canvas({
         <div className="absolute inset-0 opacity-20">
           <svg className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
             <defs>
-              <pattern id="grid" width="50" height="50" patternUnits="userSpaceOnUse">
-                <path d="M 50 0 L 0 0 0 50" fill="none" stroke="currentColor" strokeWidth="1" opacity="0.3" />
+              <pattern
+                id="grid"
+                width="50"
+                height="50"
+                patternUnits="userSpaceOnUse"
+              >
+                <path
+                  d="M 50 0 L 0 0 0 50"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1"
+                  opacity="0.3"
+                />
               </pattern>
             </defs>
             <rect width="100%" height="100%" fill="url(#grid)" />
@@ -367,23 +489,23 @@ export function Canvas({
           className="absolute"
           style={{
             transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})`,
-            transformOrigin: '0 0',
-            width: '100%',
-            height: '100%'
+            transformOrigin: "0 0",
+            width: "100%",
+            height: "100%",
           }}
         >
           {/* Edges */}
           <svg className="absolute inset-0 pointer-events-none">
-            {edges.map(edge => {
-              const sourceNode = nodes.find(n => n.id === edge.sourceId)
-              const targetNode = nodes.find(n => n.id === edge.targetId)
-              
-              if (!sourceNode || !targetNode) return null
+            {edges.map((edge) => {
+              const sourceNode = nodes.find((n) => n.id === edge.sourceId);
+              const targetNode = nodes.find((n) => n.id === edge.targetId);
 
-              const startX = sourceNode.x + sourceNode.width / 2
-              const startY = sourceNode.y + sourceNode.height / 2
-              const endX = targetNode.x + targetNode.width / 2
-              const endY = targetNode.y + targetNode.height / 2
+              if (!sourceNode || !targetNode) return null;
+
+              const startX = sourceNode.x + sourceNode.width / 2;
+              const startY = sourceNode.y + sourceNode.height / 2;
+              const endX = targetNode.x + targetNode.width / 2;
+              const endY = targetNode.y + targetNode.height / 2;
 
               return (
                 <g key={edge.id}>
@@ -398,7 +520,9 @@ export function Canvas({
                   />
                   {/* Edge label */}
                   {edge.trigger && (
-                    <g transform={`translate(${(startX + endX) / 2}, ${(startY + endY) / 2})`}>
+                    <g
+                      transform={`translate(${(startX + endX) / 2}, ${(startY + endY) / 2})`}
+                    >
                       <rect
                         x="-20"
                         y="-12"
@@ -417,7 +541,7 @@ export function Canvas({
                     </g>
                   )}
                 </g>
-              )
+              );
             })}
             <defs>
               <marker
@@ -428,24 +552,22 @@ export function Canvas({
                 refY="3.5"
                 orient="auto"
               >
-                <polygon
-                  points="0 0, 10 3.5, 0 7"
-                  className="fill-blue-400"
-                />
+                <polygon points="0 0, 10 3.5, 0 7" className="fill-blue-400" />
               </marker>
             </defs>
           </svg>
 
           {/* Nodes */}
-          {nodes.map(node => (
+          {nodes.map((node) => (
             <div
               key={node.id}
               className={cn(
-                'absolute border-2 rounded-lg p-3 shadow-lg cursor-move',
+                "absolute border-2 rounded-lg p-3 shadow-lg cursor-move",
                 getNodeColor(node.type),
-                selectedNodeId === node.id && 'ring-2 ring-offset-2 ring-blue-500',
-                node.type === 'start' && 'border-emerald-500',
-                node.type === 'end' && 'border-red-500'
+                selectedNodeId === node.id &&
+                  "ring-2 ring-offset-2 ring-blue-500",
+                node.type === "start" && "border-emerald-500",
+                node.type === "end" && "border-red-500",
               )}
               style={{
                 left: `${node.x}px`,
@@ -454,9 +576,9 @@ export function Canvas({
                 height: `${node.height}px`,
               }}
               onClick={(e) => {
-                e.stopPropagation()
+                e.stopPropagation();
                 if (onNodeClick) {
-                  onNodeClick(node.id)
+                  onNodeClick(node.id);
                 }
               }}
               onMouseDown={(e) => handleMouseDown(e, node.id)}
@@ -464,13 +586,13 @@ export function Canvas({
             >
               <div className="flex flex-col items-center justify-center h-full">
                 <div className="flex items-center gap-2 mb-2">
-                  {node.type === 'start' && (
+                  {node.type === "start" && (
                     <Icons.Play className="h-4 w-4 text-emerald-500" />
                   )}
-                  {node.type === 'end' && (
+                  {node.type === "end" && (
                     <Icons.StopCircle className="h-4 w-4 text-red-500" />
                   )}
-                  {node.type === 'state' && (
+                  {node.type === "state" && (
                     <Icons.Circle className="h-4 w-4 text-blue-500" />
                   )}
                   <span className="font-semibold truncate">{node.name}</span>
@@ -536,9 +658,9 @@ export function Canvas({
                     className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
                     onClick={() => {
                       if (onDeleteNode && contextMenu.nodeId) {
-                        onDeleteNode(contextMenu.nodeId)
+                        onDeleteNode(contextMenu.nodeId);
                       }
-                      setContextMenu(null)
+                      setContextMenu(null);
                     }}
                   >
                     <Icons.Trash2 className="h-4 w-4" />
@@ -564,9 +686,9 @@ export function Canvas({
                 className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
                 onClick={() => {
                   if (onDeleteEdge && contextMenu.edgeId) {
-                    onDeleteEdge(contextMenu.edgeId)
+                    onDeleteEdge(contextMenu.edgeId);
                   }
-                  setContextMenu(null)
+                  setContextMenu(null);
                 }}
               >
                 <Icons.Trash2 className="h-4 w-4" />
@@ -585,5 +707,5 @@ export function Canvas({
         </div>
       )}
     </div>
-  )
+  );
 }

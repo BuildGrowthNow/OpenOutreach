@@ -1,176 +1,224 @@
-'use client'
+"use client";
 
-import { useState, useEffect, useCallback, useRef } from 'react'
-import { useRouter, useParams } from 'next/navigation'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Skeleton } from '@/components/ui/skeleton'
-import { Icons } from '@/lib/types/components'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { getCampaigns, getStateMachine, updateStateMachine, validateStateMachine, simulateStateMachine, executeStateMachine } from '@/lib/api/dashboard'
-import { Canvas } from '@/components/state-machine'
+import { useState, useEffect, useCallback, useRef } from "react";
+import { useRouter, useParams, useSearchParams } from "next/navigation";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Icons } from "@/lib/types/components";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  getCampaigns,
+  getStateMachine,
+  updateStateMachine,
+  validateStateMachine,
+  simulateStateMachine,
+  executeStateMachine,
+} from "@/lib/api/dashboard";
+import { Canvas } from "@/components/state-machine";
 
-import type { Node as CanvasNode, Edge as CanvasEdge } from '@/components/state-machine/canvas'
+import type {
+  Node as CanvasNode,
+  Edge as CanvasEdge,
+} from "@/components/state-machine/canvas";
 
 interface StateMachineData {
-  id: string | null
-  campaign_id: string
-  name: string
-  description: string
-  is_active: boolean
-  is_valid: boolean
-  validation_errors: string[]
-  nodes: (CanvasNode & { id: string; type: string; config?: Record<string, unknown> })[]
-  transitions: { id: string; source_node: string; target_node: string; label?: string; condition_type?: string }[]
+  id: string | null;
+  campaign_id: string;
+  name: string;
+  description: string;
+  is_active: boolean;
+  is_valid: boolean;
+  validation_errors: string[];
+  nodes: (CanvasNode & {
+    id: string;
+    type: string;
+    config?: Record<string, unknown>;
+  })[];
+  transitions: {
+    id: string;
+    source_node: string;
+    target_node: string;
+    label?: string;
+    condition_type?: string;
+  }[];
 }
 
 interface Campaign {
-  id: string
-  name: string
+  id: string;
+  name: string;
 }
 
 interface Lead {
-  id: string
-  name?: string
-  email?: string
+  id: string;
+  name?: string;
+  email?: string;
 }
 
 const StateMachinePage = () => {
-  const router = useRouter()
-  const params = useParams()
-  const campaignId = params.id as string
+  const router = useRouter();
+  const params = useParams();
+  const searchParams = useSearchParams();
+  const campaignId = params.id as string;
 
-  const [campaigns, setCampaigns] = useState<Campaign[]>([])
-  const [campaignsLoading, setCampaignsLoading] = useState(false)
-  
-  const [selectedCampaignId, setSelectedCampaignId] = useState<string>(campaignId || '')
-  const [stateMachine, setStateMachine] = useState<StateMachineData | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [campaignsLoading, setCampaignsLoading] = useState(false);
+
+  // Allow selecting campaign via route params or query param (?campaignId=...)
+  const [selectedCampaignId, setSelectedCampaignId] = useState<string>(
+    campaignId || (searchParams ? searchParams.get("campaignId") || "" : ""),
+  );
+  const [stateMachine, setStateMachine] = useState<StateMachineData | null>(
+    null,
+  );
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   // Validation
   const [validationResult, setValidationResult] = useState<{
-    is_valid: boolean
-    errors: string[]
-    warnings: string[]
-  } | null>(null)
-  const [validating, setValidating] = useState(false)
+    is_valid: boolean;
+    errors: string[];
+    warnings: string[];
+  } | null>(null);
+  const [validating, setValidating] = useState(false);
 
   // Simulation
   const [simulationResult, setSimulationResult] = useState<{
-    success: boolean
+    success: boolean;
     simulation: {
       path: Array<{
-        node: string
-        name: string
-        type: string
-      }>
-      nodes_visited: number
-      transitions_used: number
-      final_status: string
-      messages_sent: string[]
-      completed: boolean
-      steps: number
-      error: string | null
-    }
-  } | null>(null)
-  const [simulating, setSimulating] = useState(false)
-  const [simulationDeals, setSimulationDeals] = useState<string[]>([])
-  const [selectedSimulationDeal, setSelectedSimulationDeal] = useState<string>('')
+        node: string;
+        name: string;
+        type: string;
+      }>;
+      nodes_visited: number;
+      transitions_used: number;
+      final_status: string;
+      messages_sent: string[];
+      completed: boolean;
+      steps: number;
+      error: string | null;
+    };
+  } | null>(null);
+  const [simulating, setSimulating] = useState(false);
+  const [simulationDeals, setSimulationDeals] = useState<string[]>([]);
+  const [selectedSimulationDeal, setSelectedSimulationDeal] =
+    useState<string>("");
 
   // Execution
   const [executionResult, setExecutionResult] = useState<{
-    success: boolean
+    success: boolean;
     execution: {
-      state_machine_id: number
-      current_node_id: number | null
-      current_node_name: string | null
-      status: string
-      steps_executed: number
+      state_machine_id: number;
+      current_node_id: number | null;
+      current_node_name: string | null;
+      status: string;
+      steps_executed: number;
       logs: Array<{
-        id: number
-        node_id: number | null
-        node_name: string | null
-        action: string
-        result: Record<string, unknown>
-        timestamp: string
-      }>
-      error: string | null
-    }
-  } | null>(null)
-  const [executing, setExecuting] = useState(false)
-  const [executionDeals, setExecutionDeals] = useState<string[]>([])
-  const [selectedExecutionDeal, setSelectedExecutionDeal] = useState<string>('')
+        id: number;
+        node_id: number | null;
+        node_name: string | null;
+        action: string;
+        result: Record<string, unknown>;
+        timestamp: string;
+      }>;
+      error: string | null;
+    };
+  } | null>(null);
+  const [executing, setExecuting] = useState(false);
+  const [executionDeals, setExecutionDeals] = useState<string[]>([]);
+  const [selectedExecutionDeal, setSelectedExecutionDeal] =
+    useState<string>("");
 
   // Node editing
-  const [editingNode, setEditingNode] = useState<CanvasNode | null>(null)
-  const [nodeEditorOpen, setNodeEditorOpen] = useState(false)
+  const [editingNode, setEditingNode] = useState<CanvasNode | null>(null);
+  const [nodeEditorOpen, setNodeEditorOpen] = useState(false);
 
   // New node creation
-  const [newNodeOpen, setNewNodeOpen] = useState(false)
-  const [newNodeType, setNewNodeType] = useState<CanvasNode['type']>('state')
+  const [newNodeOpen, setNewNodeOpen] = useState(false);
+  const [newNodeType, setNewNodeType] = useState<CanvasNode["type"]>("state");
 
   // Canvas state
-  const [canvasNodes, setCanvasNodes] = useState<CanvasNode[]>([])
-  const [canvasEdges, setCanvasEdges] = useState<CanvasEdge[]>([])
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
+  const [canvasNodes, setCanvasNodes] = useState<CanvasNode[]>([]);
+  const [canvasEdges, setCanvasEdges] = useState<CanvasEdge[]>([]);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
 
   // Fetch campaigns
   const fetchCampaigns = useCallback(async () => {
     try {
-      setCampaignsLoading(true)
-      const response = await getCampaigns()
+      setCampaignsLoading(true);
+      const response = await getCampaigns();
       if (response.data) {
-        const campaigns = response.data.data || []
-        setCampaigns(campaigns)
+        const campaigns = response.data.data || [];
+        setCampaigns(campaigns);
         // Only auto-select if we don't have a selectedCampaignId yet
         if (!selectedCampaignId && campaigns.length > 0) {
-          setSelectedCampaignId(campaigns[0].id)
+          setSelectedCampaignId(campaigns[0].id);
         }
       }
     } catch (err) {
-      console.error('Error fetching campaigns:', err)
+      console.error("Error fetching campaigns:", err);
     } finally {
-      setCampaignsLoading(false)
+      setCampaignsLoading(false);
     }
-  }, [selectedCampaignId])
+  }, [selectedCampaignId]);
 
   // Fetch state machine
   const fetchStateMachine = useCallback(async (id: string) => {
     try {
-      setLoading(true)
-      setError(null)
-      const response = await getStateMachine(id)
-      
+      setLoading(true);
+      setError(null);
+      const response = await getStateMachine(id);
+
       if (response.data) {
         // Map to canvas format first
-        const nodes: CanvasNode[] = (response.data.nodes || []).map(n => ({
+        const nodes: CanvasNode[] = (response.data.nodes || []).map((n) => ({
           id: n.id,
-          type: n.type as CanvasNode['type'] || 'state',
+          type: (n.type as CanvasNode["type"]) || "state",
           name: n.name,
           description: n.description,
           x: n.x || 100,
           y: n.y || 100,
           width: 220,
-          height: 80
-        }))
-        
-        const edges: CanvasEdge[] = (response.data.transitions || []).map(t => ({
-          id: t.id,
-          sourceId: t.source_node,
-          targetId: t.target_node,
-          trigger: t.label || ''
-        }))
-        
-        setCanvasNodes(nodes)
-        setCanvasEdges(edges)
-        
+          height: 80,
+        }));
+
+        const edges: CanvasEdge[] = (response.data.transitions || []).map(
+          (t) => ({
+            id: t.id,
+            sourceId: t.source_node,
+            targetId: t.target_node,
+            trigger: t.label || "",
+          }),
+        );
+
+        setCanvasNodes(nodes);
+        setCanvasEdges(edges);
+
         // Create StateMachineData from response
         const stateMachineData: StateMachineData = {
           id: response.data.id,
@@ -180,7 +228,7 @@ const StateMachinePage = () => {
           is_active: response.data.is_active,
           is_valid: response.data.is_valid,
           validation_errors: response.data.validation_errors,
-          nodes: nodes.map(n => ({
+          nodes: nodes.map((n) => ({
             id: n.id,
             type: n.type,
             name: n.name,
@@ -189,197 +237,226 @@ const StateMachinePage = () => {
             y: n.y,
             config: {},
             width: n.width,
-            height: n.height
+            height: n.height,
           })),
-          transitions: (response.data.transitions || []).map(t => ({
+          transitions: (response.data.transitions || []).map((t) => ({
             id: t.id,
             source_node: t.source_node,
             target_node: t.target_node,
             label: t.label,
-            condition_type: t.condition_type
-          }))
-        }
-        
-        setStateMachine(stateMachineData)
+            condition_type: t.condition_type,
+          })),
+        };
+
+        setStateMachine(stateMachineData);
       } else {
-        setError(response.error || 'Failed to fetch state machine')
+        setError(response.error || "Failed to fetch state machine");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch state machine')
+      setError(
+        err instanceof Error ? err.message : "Failed to fetch state machine",
+      );
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }, [])
+  }, []);
 
   // Handle campaign change
   const handleCampaignChange = useCallback((value: string | null) => {
     if (value) {
-      setSelectedCampaignId(value)
-      setValidationResult(null)
-      setSimulationResult(null)
-      setEditingNode(null)
-      setCanvasNodes([])
-      setCanvasEdges([])
+      setSelectedCampaignId(value);
+      setValidationResult(null);
+      setSimulationResult(null);
+      setEditingNode(null);
+      setCanvasNodes([]);
+      setCanvasEdges([]);
     }
-  }, [])
+  }, []);
 
   // Handle node click
-  const handleNodeClick = useCallback((nodeId: string) => {
-    if (!stateMachine?.nodes) return
-    const node = stateMachine.nodes.find(n => n.id === nodeId)
-    if (node) {
-      setEditingNode(node)
-      setNodeEditorOpen(true)
-    }
-    setSelectedNodeId(nodeId)
-  }, [stateMachine])
+  const handleNodeClick = useCallback(
+    (nodeId: string) => {
+      if (!stateMachine?.nodes) return;
+      const node = stateMachine.nodes.find((n) => n.id === nodeId);
+      if (node) {
+        setEditingNode(node);
+        setNodeEditorOpen(true);
+      }
+      setSelectedNodeId(nodeId);
+    },
+    [stateMachine],
+  );
 
   // Handle add node
-  const handleAddNode = useCallback((type: CanvasNode['type'], x: number, y: number) => {
-    const newNode: CanvasNode & { id: string; type: string; config?: Record<string, unknown>; description?: string } = {
-      id: `node-${Date.now()}`,
-      name: type.charAt(0).toUpperCase() + type.slice(1),
-      type,
-      x,
-      y,
-      width: 220,
-      height: 80,
-      config: {},
-      description: ''
-    }
-    
-    setStateMachine(prev => {
-      if (!prev) return null
-      return {
+  const handleAddNode = useCallback(
+    (type: CanvasNode["type"], x: number, y: number) => {
+      const newNode: CanvasNode & {
+        id: string;
+        type: string;
+        config?: Record<string, unknown>;
+        description?: string;
+      } = {
+        id: `node-${Date.now()}`,
+        name: type.charAt(0).toUpperCase() + type.slice(1),
+        type,
+        x,
+        y,
+        width: 220,
+        height: 80,
+        config: {},
+        description: "",
+      };
+
+      setStateMachine((prev) => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          nodes: [...(prev.nodes || []), newNode],
+        };
+      });
+
+      setCanvasNodes((prev) => [
         ...prev,
-        nodes: [...(prev.nodes || []), newNode]
-      }
-    })
-    
-    setCanvasNodes(prev => [...prev, {
-      id: newNode.id,
-      type,
-      name: newNode.name,
-      description: newNode.description,
-      x,
-      y,
-      width: 220,
-      height: 80
-    }])
-    
-    setCanvasEdges(prev => {
-      const startNode = (prev.map(e => e.sourceId) as string[]).find(s => 
-        stateMachine?.nodes?.find(n => n.type === 'start' && n.id === s)
-      )
-      
-      if (type === 'start' || !startNode) return prev
-      return [...prev, {
-        id: `edge-${Date.now()}`,
-        sourceId: startNode,
-        targetId: newNode.id,
-        trigger: ''
-      }]
-    })
-  }, [stateMachine])
+        {
+          id: newNode.id,
+          type,
+          name: newNode.name,
+          description: newNode.description,
+          x,
+          y,
+          width: 220,
+          height: 80,
+        },
+      ]);
+
+      setCanvasEdges((prev) => {
+        const startNode = (prev.map((e) => e.sourceId) as string[]).find((s) =>
+          stateMachine?.nodes?.find((n) => n.type === "start" && n.id === s),
+        );
+
+        if (type === "start" || !startNode) return prev;
+        return [
+          ...prev,
+          {
+            id: `edge-${Date.now()}`,
+            sourceId: startNode,
+            targetId: newNode.id,
+            trigger: "",
+          },
+        ];
+      });
+    },
+    [stateMachine],
+  );
 
   // Handle add edge
   const handleAddEdge = useCallback((from: string, to: string) => {
-    setCanvasEdges(prev => [...prev, {
-      id: `edge-${Date.now()}`,
-      sourceId: from,
-      targetId: to,
-      trigger: ''
-    }])
-  }, [])
+    setCanvasEdges((prev) => [
+      ...prev,
+      {
+        id: `edge-${Date.now()}`,
+        sourceId: from,
+        targetId: to,
+        trigger: "",
+      },
+    ]);
+  }, []);
 
   // Handle delete node
-  const handleDeleteNode = useCallback((nodeId: string) => {
-    setStateMachine(prev => {
-      if (!prev) return null
-      return {
-        ...prev,
-        nodes: prev.nodes.filter(n => n.id !== nodeId),
-        transitions: prev.transitions.filter(t => t.source_node !== nodeId && t.target_node !== nodeId)
+  const handleDeleteNode = useCallback(
+    (nodeId: string) => {
+      setStateMachine((prev) => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          nodes: prev.nodes.filter((n) => n.id !== nodeId),
+          transitions: prev.transitions.filter(
+            (t) => t.source_node !== nodeId && t.target_node !== nodeId,
+          ),
+        };
+      });
+
+      setCanvasNodes((prev) => prev.filter((n) => n.id !== nodeId));
+      setCanvasEdges((prev) =>
+        prev.filter((e) => e.sourceId !== nodeId && e.targetId !== nodeId),
+      );
+
+      if (selectedNodeId === nodeId) {
+        setSelectedNodeId(null);
+        setEditingNode(null);
       }
-    })
-    
-    setCanvasNodes(prev => prev.filter(n => n.id !== nodeId))
-    setCanvasEdges(prev => prev.filter(e => e.sourceId !== nodeId && e.targetId !== nodeId))
-    
-    if (selectedNodeId === nodeId) {
-      setSelectedNodeId(null)
-      setEditingNode(null)
-    }
-  }, [selectedNodeId])
+    },
+    [selectedNodeId],
+  );
 
   // Handle delete edge
   const handleDeleteEdge = useCallback((edgeId: string) => {
-    setCanvasEdges(prev => prev.filter(e => e.id !== edgeId))
-    
-    setStateMachine(prev => {
-      if (!prev) return null
+    setCanvasEdges((prev) => prev.filter((e) => e.id !== edgeId));
+
+    setStateMachine((prev) => {
+      if (!prev) return null;
       return {
         ...prev,
-        transitions: prev.transitions.filter(t => t.id !== edgeId)
-      }
-    })
-  }, [])
+        transitions: prev.transitions.filter((t) => t.id !== edgeId),
+      };
+    });
+  }, []);
 
   // Handle move node
   const handleMoveNode = useCallback((nodeId: string, x: number, y: number) => {
-    setStateMachine(prev => {
-      if (!prev) return null
+    setStateMachine((prev) => {
+      if (!prev) return null;
       return {
         ...prev,
-        nodes: prev.nodes.map(n => 
-          n.id === nodeId ? { ...n, x, y } : n
-        )
-      }
-    })
-    
-    setCanvasNodes(prev => prev.map(n => 
-      n.id === nodeId ? { ...n, x, y } : n
-    ))
-  }, [])
+        nodes: prev.nodes.map((n) => (n.id === nodeId ? { ...n, x, y } : n)),
+      };
+    });
+
+    setCanvasNodes((prev) =>
+      prev.map((n) => (n.id === nodeId ? { ...n, x, y } : n)),
+    );
+  }, []);
 
   // Save state machine
   const handleSave = useCallback(async () => {
-    if (!selectedCampaignId || !stateMachine) return
-    
+    if (!selectedCampaignId || !stateMachine) return;
+
     try {
-      setLoading(true)
+      setLoading(true);
       const graphData = {
         nodes: stateMachine.nodes,
-        transitions: stateMachine.transitions
-      }
-      
+        transitions: stateMachine.transitions,
+      };
+
       const response = await updateStateMachine(selectedCampaignId, {
         name: stateMachine.name,
         description: stateMachine.description,
-        graph_data: graphData
-      })
-      
+        graph_data: graphData,
+      });
+
       if (response.data) {
         // Map to canvas format first
-        const nodes: CanvasNode[] = (response.data.nodes || []).map(n => ({
+        const nodes: CanvasNode[] = (response.data.nodes || []).map((n) => ({
           id: n.id,
-          type: n.type as CanvasNode['type'] || 'state',
+          type: (n.type as CanvasNode["type"]) || "state",
           name: n.name,
           description: n.description,
           x: n.x || 100,
           y: n.y || 100,
           width: 220,
-          height: 80
-        }))
-        
-        setCanvasNodes(nodes)
-        setCanvasEdges((response.data.transitions || []).map(t => ({
-          id: t.id,
-          sourceId: t.source_node,
-          targetId: t.target_node,
-          trigger: t.label || ''
-        })))
-        
+          height: 80,
+        }));
+
+        setCanvasNodes(nodes);
+        setCanvasEdges(
+          (response.data.transitions || []).map((t) => ({
+            id: t.id,
+            sourceId: t.source_node,
+            targetId: t.target_node,
+            trigger: t.label || "",
+          })),
+        );
+
         // Create StateMachineData from response
         const stateMachineData: StateMachineData = {
           id: response.data.id,
@@ -389,7 +466,7 @@ const StateMachinePage = () => {
           is_active: response.data.is_active,
           is_valid: response.data.is_valid,
           validation_errors: response.data.validation_errors,
-          nodes: nodes.map(n => ({
+          nodes: nodes.map((n) => ({
             id: n.id,
             type: n.type,
             name: n.name,
@@ -398,35 +475,35 @@ const StateMachinePage = () => {
             y: n.y,
             config: {},
             width: n.width,
-            height: n.height
+            height: n.height,
           })),
-          transitions: (response.data.transitions || []).map(t => ({
+          transitions: (response.data.transitions || []).map((t) => ({
             id: t.id,
             source_node: t.source_node,
             target_node: t.target_node,
             label: t.label,
-            condition_type: t.condition_type
-          }))
-        }
-        
-        setStateMachine(stateMachineData)
-        setError(null)
+            condition_type: t.condition_type,
+          })),
+        };
+
+        setStateMachine(stateMachineData);
+        setError(null);
       } else {
-        setError(response.error || 'Failed to save')
+        setError(response.error || "Failed to save");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save')
+      setError(err instanceof Error ? err.message : "Failed to save");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }, [selectedCampaignId, stateMachine])
+  }, [selectedCampaignId, stateMachine]);
 
   // Validate state machine
   const handleValidate = useCallback(async () => {
-    if (!selectedCampaignId || !stateMachine || !stateMachine.id) return
-    
+    if (!selectedCampaignId || !stateMachine || !stateMachine.id) return;
+
     try {
-      setValidating(true)
+      setValidating(true);
       const response = await validateStateMachine(selectedCampaignId, {
         id: stateMachine.id,
         campaign_id: selectedCampaignId,
@@ -436,173 +513,211 @@ const StateMachinePage = () => {
         is_valid: stateMachine.is_valid ?? false,
         validation_errors: stateMachine.validation_errors || [],
         nodes: stateMachine.nodes,
-        transitions: stateMachine.transitions
-      })
-      
+        transitions: stateMachine.transitions,
+      });
+
       if (response.data) {
         setValidationResult({
           is_valid: response.data.is_valid,
           errors: response.data.errors || [],
-          warnings: response.data.warnings?.map((w: { message: string }) => w.message) || []
-        })
-        
+          warnings:
+            response.data.warnings?.map(
+              (w: { message: string }) => w.message,
+            ) || [],
+        });
+
         if (response.data.is_valid) {
           // Auto-save if valid
-          await handleSave()
+          await handleSave();
         }
       } else {
-        setError(response.error || 'Validation failed')
+        setError(response.error || "Validation failed");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Validation failed')
+      setError(err instanceof Error ? err.message : "Validation failed");
     } finally {
-      setValidating(false)
+      setValidating(false);
     }
-  }, [selectedCampaignId, stateMachine, handleSave])
+  }, [selectedCampaignId, stateMachine, handleSave]);
 
   // Simulate state machine
   const handleSimulate = useCallback(async () => {
-    if (!selectedCampaignId || !selectedSimulationDeal) return
-    
+    if (!selectedCampaignId || !selectedSimulationDeal) return;
+
     try {
-      setSimulating(true)
-      const response = await simulateStateMachine(selectedCampaignId, selectedSimulationDeal)
-      
+      setSimulating(true);
+      const response = await simulateStateMachine(
+        selectedCampaignId,
+        selectedSimulationDeal,
+      );
+
       if (response.data) {
-        setSimulationResult(response.data)
+        setSimulationResult(response.data);
       } else {
-        setError(response.error || 'Simulation failed')
+        setError(response.error || "Simulation failed");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Simulation failed')
+      setError(err instanceof Error ? err.message : "Simulation failed");
     } finally {
-      setSimulating(false)
+      setSimulating(false);
     }
-  }, [selectedCampaignId, selectedSimulationDeal])
+  }, [selectedCampaignId, selectedSimulationDeal]);
 
   // Execute state machine
   const handleExecute = useCallback(async () => {
-    if (!selectedCampaignId || !selectedExecutionDeal) return
-    
+    if (!selectedCampaignId || !selectedExecutionDeal) return;
+
     try {
-      setExecuting(true)
-      const response = await executeStateMachine(selectedCampaignId, selectedExecutionDeal)
-      
+      setExecuting(true);
+      const response = await executeStateMachine(
+        selectedCampaignId,
+        selectedExecutionDeal,
+      );
+
       if (response.data) {
-        setExecutionResult(response.data)
+        setExecutionResult(response.data);
       } else {
-        setError(response.error || 'Execution failed')
+        setError(response.error || "Execution failed");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Execution failed')
+      setError(err instanceof Error ? err.message : "Execution failed");
     } finally {
-      setExecuting(false)
+      setExecuting(false);
     }
-  }, [selectedCampaignId, selectedExecutionDeal])
+  }, [selectedCampaignId, selectedExecutionDeal]);
 
   // Fetch deals for simulation/execution
   const fetchDeals = useCallback(async () => {
-    if (!selectedCampaignId) return
-    
+    if (!selectedCampaignId) return;
+
     try {
-      const response = await fetch(`/api/campaigns/${selectedCampaignId}/leads`, {
-        headers: {
-          'Content-Type': 'application/json',
+      const response = await fetch(
+        `/api/campaigns/${selectedCampaignId}/leads`,
+        {
+          headers: {
+            "Content-Type": "application/json",
+          },
         },
-      })
-      
+      );
+
       if (response.ok) {
-        const data = await response.json()
-        const leads = data.data?.data || []
-        setSimulationDeals(leads.map((lead: Lead) => `${lead.id} - ${lead.name || lead.email || 'Unknown'}`))
-        setExecutionDeals(leads.map((lead: Lead) => `${lead.id} - ${lead.name || lead.email || 'Unknown'}`))
+        const data = await response.json();
+        const leads = data.data?.data || [];
+        setSimulationDeals(
+          leads.map(
+            (lead: Lead) =>
+              `${lead.id} - ${lead.name || lead.email || "Unknown"}`,
+          ),
+        );
+        setExecutionDeals(
+          leads.map(
+            (lead: Lead) =>
+              `${lead.id} - ${lead.name || lead.email || "Unknown"}`,
+          ),
+        );
       }
     } catch (err) {
-      console.error('Error fetching deals:', err)
+      console.error("Error fetching deals:", err);
     }
-  }, [selectedCampaignId])
+  }, [selectedCampaignId]);
 
   // Sync canvas nodes and edges with stateMachine when it changes
   // This helps keep the visual editor in sync with the state machine data
   // Using useRef to track previous values to avoid unnecessary updates
-  const previousStateMachineRef = useRef<StateMachineData | null>(null)
-  
+  const previousStateMachineRef = useRef<StateMachineData | null>(null);
+
   useEffect(() => {
-    if (!stateMachine) return
-    
+    if (!stateMachine) return;
+
     // Check if nodes or transitions have actually changed to avoid unnecessary updates
-    const nodesChanged = !previousStateMachineRef.current || 
-      JSON.stringify(stateMachine.nodes) !== JSON.stringify(previousStateMachineRef.current.nodes)
-    const edgesChanged = !previousStateMachineRef.current || 
-      JSON.stringify(stateMachine.transitions) !== JSON.stringify(previousStateMachineRef.current.transitions)
-    
+    const nodesChanged =
+      !previousStateMachineRef.current ||
+      JSON.stringify(stateMachine.nodes) !==
+        JSON.stringify(previousStateMachineRef.current.nodes);
+    const edgesChanged =
+      !previousStateMachineRef.current ||
+      JSON.stringify(stateMachine.transitions) !==
+        JSON.stringify(previousStateMachineRef.current.transitions);
+
     if (nodesChanged) {
-      setCanvasNodes(stateMachine.nodes.map(n => ({
-        id: n.id,
-        type: n.type as CanvasNode['type'],
-        name: n.name,
-        description: n.description,
-        x: n.x || 100,
-        y: n.y || 100,
-        width: 220,
-        height: 80
-      })))
+      setCanvasNodes(
+        stateMachine.nodes.map((n) => ({
+          id: n.id,
+          type: n.type as CanvasNode["type"],
+          name: n.name,
+          description: n.description,
+          x: n.x || 100,
+          y: n.y || 100,
+          width: 220,
+          height: 80,
+        })),
+      );
     }
-    
+
     if (edgesChanged) {
-      setCanvasEdges(stateMachine.transitions.map(t => ({
-        id: t.id,
-        sourceId: t.source_node,
-        targetId: t.target_node,
-        trigger: t.label || ''
-      })))
+      setCanvasEdges(
+        stateMachine.transitions.map((t) => ({
+          id: t.id,
+          sourceId: t.source_node,
+          targetId: t.target_node,
+          trigger: t.label || "",
+        })),
+      );
     }
-    
-    previousStateMachineRef.current = stateMachine
-  }, [stateMachine])
+
+    previousStateMachineRef.current = stateMachine;
+  }, [stateMachine]);
 
   // Load initial campaigns on mount
   useEffect(() => {
     void (async () => {
+      // If campaignId is available from route params or query params, prefer it
       if (campaignId) {
-        setSelectedCampaignId(campaignId)
+        setSelectedCampaignId(campaignId);
+      } else if (searchParams) {
+        const q = searchParams.get("campaignId");
+        if (q) setSelectedCampaignId(q);
       }
-      await fetchCampaigns()
-    })()
+      await fetchCampaigns();
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [campaignId])
+  }, [campaignId, searchParams]);
 
   // Fetch deals when campaign changes
   useEffect(() => {
-    void fetchDeals()
-  }, [fetchDeals])
+    void fetchDeals();
+  }, [fetchDeals]);
 
   // Fetch state machine when campaign changes
   useEffect(() => {
     if (selectedCampaignId) {
       void (async () => {
-        await fetchStateMachine(selectedCampaignId)
-      })
+        await fetchStateMachine(selectedCampaignId);
+      });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedCampaignId])
+  }, [selectedCampaignId]);
 
   // Get node type color
   const getNodeColor = (type: string) => {
     switch (type) {
-      case 'start': return 'border-emerald-500 bg-emerald-500/10'
-      case 'end': return 'border-red-500 bg-red-500/10'
-      case 'wait': return 'border-yellow-500 bg-yellow-500/10'
-      default: return 'border-blue-500 bg-blue-500/10'
+      case "start":
+        return "border-emerald-500 bg-emerald-500/10";
+      case "end":
+        return "border-red-500 bg-red-500/10";
+      case "wait":
+        return "border-yellow-500 bg-yellow-500/10";
+      default:
+        return "border-blue-500 bg-blue-500/10";
     }
-  }
+  };
 
   if (loading && campaignsLoading) {
     return (
       <div className="space-y-6">
         <Skeleton className="h-8 w-64" />
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {[1, 2, 3, 4].map(i => (
+          {[1, 2, 3, 4].map((i) => (
             <Card key={i}>
               <CardHeader className="pb-2">
                 <Skeleton className="h-4 w-24" />
@@ -614,7 +729,7 @@ const StateMachinePage = () => {
           ))}
         </div>
       </div>
-    )
+    );
   }
 
   return (
@@ -628,7 +743,11 @@ const StateMachinePage = () => {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={handleValidate} disabled={validating || !stateMachine}>
+          <Button
+            variant="outline"
+            onClick={handleValidate}
+            disabled={validating || !stateMachine}
+          >
             {validating ? (
               <Icons.RefreshCw className="mr-2 h-4 w-4 animate-spin" />
             ) : (
@@ -657,17 +776,24 @@ const StateMachinePage = () => {
             <CardTitle className="text-sm font-medium">Campaign</CardTitle>
           </CardHeader>
           <CardContent>
-             <Select value={selectedCampaignId} onValueChange={handleCampaignChange}>
+            <Select
+              value={selectedCampaignId}
+              onValueChange={handleCampaignChange}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Select Campaign" />
               </SelectTrigger>
               <SelectContent>
                 {campaignsLoading ? (
-                  <SelectItem value="loading" disabled>Loading...</SelectItem>
+                  <SelectItem value="loading" disabled>
+                    Loading...
+                  </SelectItem>
                 ) : campaigns.length === 0 ? (
-                  <SelectItem value="no-campaigns" disabled>No campaigns available</SelectItem>
+                  <SelectItem value="no-campaigns" disabled>
+                    No campaigns available
+                  </SelectItem>
                 ) : (
-                  campaigns.map(campaign => (
+                  campaigns.map((campaign) => (
                     <SelectItem key={campaign.id} value={campaign.id}>
                       {campaign.name}
                     </SelectItem>
@@ -683,8 +809,12 @@ const StateMachinePage = () => {
             <CardTitle className="text-sm font-medium">Nodes</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stateMachine?.nodes?.length || 0}</div>
-            <div className="text-xs text-muted-foreground">Total nodes in graph</div>
+            <div className="text-2xl font-bold">
+              {stateMachine?.nodes?.length || 0}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              Total nodes in graph
+            </div>
           </CardContent>
         </Card>
 
@@ -693,8 +823,12 @@ const StateMachinePage = () => {
             <CardTitle className="text-sm font-medium">Transitions</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stateMachine?.transitions?.length || 0}</div>
-            <div className="text-xs text-muted-foreground">Total connections</div>
+            <div className="text-2xl font-bold">
+              {stateMachine?.transitions?.length || 0}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              Total connections
+            </div>
           </CardContent>
         </Card>
 
@@ -708,12 +842,15 @@ const StateMachinePage = () => {
                 Valid
               </Badge>
             ) : (
-              <Badge variant="outline" className="border-yellow-500 text-yellow-600 dark:text-yellow-400">
+              <Badge
+                variant="outline"
+                className="border-yellow-500 text-yellow-600 dark:text-yellow-400"
+              >
                 Needs Validation
               </Badge>
             )}
             <div className="text-xs text-muted-foreground mt-1">
-              {stateMachine?.is_active ? 'Active' : 'Inactive'}
+              {stateMachine?.is_active ? "Active" : "Inactive"}
             </div>
           </CardContent>
         </Card>
@@ -741,11 +878,13 @@ const StateMachinePage = () => {
               {campaigns.length === 0 ? (
                 <div className="text-center py-12">
                   <Icons.Workflow className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">No Campaigns Available</h3>
+                  <h3 className="text-lg font-semibold mb-2">
+                    No Campaigns Available
+                  </h3>
                   <p className="text-sm text-muted-foreground mb-4">
                     Create a campaign first to set up a state machine.
                   </p>
-                  <Button onClick={() => router.push('/campaigns')} size="sm">
+                  <Button onClick={() => router.push("/campaigns")} size="sm">
                     <Icons.ChevronRight className="mr-2 h-4 w-4" />
                     Go to Campaigns
                   </Button>
@@ -761,6 +900,7 @@ const StateMachinePage = () => {
                   onDeleteNode={handleDeleteNode}
                   onDeleteEdge={handleDeleteEdge}
                   onMoveNode={handleMoveNode}
+                  onSave={handleSave}
                 />
               )}
             </CardContent>
@@ -775,7 +915,9 @@ const StateMachinePage = () => {
                 <CardTitle>Validation Results</CardTitle>
                 <CardDescription>
                   {validationResult.is_valid ? (
-                    <Badge variant="default" className="bg-emerald-500">Validation Passed</Badge>
+                    <Badge variant="default" className="bg-emerald-500">
+                      Validation Passed
+                    </Badge>
                   ) : (
                     <Badge variant="destructive">Validation Failed</Badge>
                   )}
@@ -785,7 +927,9 @@ const StateMachinePage = () => {
                 {validationResult.is_valid ? (
                   <div className="text-center py-8">
                     <Icons.CheckCircle className="h-16 w-16 mx-auto text-emerald-500 mb-4" />
-                    <h3 className="text-xl font-semibold mb-2">State Machine is Valid</h3>
+                    <h3 className="text-xl font-semibold mb-2">
+                      State Machine is Valid
+                    </h3>
                     <p className="text-muted-foreground">
                       Your workflow is ready to use
                     </p>
@@ -832,20 +976,22 @@ const StateMachinePage = () => {
             <CardContent className="space-y-6">
               <div className="space-y-2">
                 <Label htmlFor="simulation-deal">Select Lead</Label>
-                 <Select 
-                   value={selectedSimulationDeal} 
-                   onValueChange={(value: string | null) => {
-                     if (value) setSelectedSimulationDeal(value)
-                   }}
-                 >
+                <Select
+                  value={selectedSimulationDeal}
+                  onValueChange={(value: string | null) => {
+                    if (value) setSelectedSimulationDeal(value);
+                  }}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Select a lead to simulate" />
                   </SelectTrigger>
                   <SelectContent>
                     {simulationDeals.length === 0 ? (
-                      <SelectItem value="no-deals" disabled>No simulation data available</SelectItem>
+                      <SelectItem value="no-deals" disabled>
+                        No simulation data available
+                      </SelectItem>
                     ) : (
-                      simulationDeals.map(deal => (
+                      simulationDeals.map((deal) => (
                         <SelectItem key={deal} value={deal}>
                           {deal}
                         </SelectItem>
@@ -855,8 +1001,8 @@ const StateMachinePage = () => {
                 </Select>
               </div>
 
-              <Button 
-                onClick={handleSimulate} 
+              <Button
+                onClick={handleSimulate}
                 disabled={simulating || !selectedSimulationDeal}
                 className="w-full"
               >
@@ -876,31 +1022,54 @@ const StateMachinePage = () => {
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <div className="flex items-center justify-between">
-                        <span className="text-sm text-muted-foreground">Status:</span>
-                        <Badge variant={simulationResult.simulation.completed ? 'default' : 'outline'}>
-                          {simulationResult.simulation.completed ? 'Completed' : 'Incomplete'}
+                        <span className="text-sm text-muted-foreground">
+                          Status:
+                        </span>
+                        <Badge
+                          variant={
+                            simulationResult.simulation.completed
+                              ? "default"
+                              : "outline"
+                          }
+                        >
+                          {simulationResult.simulation.completed
+                            ? "Completed"
+                            : "Incomplete"}
                         </Badge>
                       </div>
-                      
+
                       <div className="flex items-center justify-between">
-                        <span className="text-sm text-muted-foreground">Steps:</span>
-                        <span className="font-medium">{simulationResult.simulation.steps}</span>
+                        <span className="text-sm text-muted-foreground">
+                          Steps:
+                        </span>
+                        <span className="font-medium">
+                          {simulationResult.simulation.steps}
+                        </span>
                       </div>
-                      
+
                       <div className="flex items-center justify-between">
-                        <span className="text-sm text-muted-foreground">Nodes Visited:</span>
-                        <span className="font-medium">{simulationResult.simulation.nodes_visited}</span>
+                        <span className="text-sm text-muted-foreground">
+                          Nodes Visited:
+                        </span>
+                        <span className="font-medium">
+                          {simulationResult.simulation.nodes_visited}
+                        </span>
                       </div>
 
                       <div className="space-y-2">
                         <h4 className="font-medium">Simulation Path</h4>
                         <div className="space-y-2">
                           {simulationResult.simulation.path.map((step, i) => (
-                            <div key={i} className="flex items-center gap-2 text-sm">
+                            <div
+                              key={i}
+                              className="flex items-center gap-2 text-sm"
+                            >
                               <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-medium">
                                 {i + 1}
                               </span>
-                              <span className="flex-1 truncate">{step.name} ({step.type})</span>
+                              <span className="flex-1 truncate">
+                                {step.name} ({step.type})
+                              </span>
                             </div>
                           ))}
                         </div>
@@ -910,9 +1079,13 @@ const StateMachinePage = () => {
                         <div className="space-y-2">
                           <h4 className="font-medium">Messages Sent</h4>
                           <ul className="list-disc list-inside space-y-1 text-sm">
-                            {simulationResult.simulation.messages_sent.map((msg, i) => (
-                              <li key={i} className="text-muted-foreground">{msg}</li>
-                            ))}
+                            {simulationResult.simulation.messages_sent.map(
+                              (msg, i) => (
+                                <li key={i} className="text-muted-foreground">
+                                  {msg}
+                                </li>
+                              ),
+                            )}
                           </ul>
                         </div>
                       )}
@@ -920,7 +1093,9 @@ const StateMachinePage = () => {
                       {simulationResult.simulation.error && (
                         <Alert variant="destructive">
                           <Icons.AlertCircle className="h-4 w-4" />
-                          <AlertDescription>{simulationResult.simulation.error}</AlertDescription>
+                          <AlertDescription>
+                            {simulationResult.simulation.error}
+                          </AlertDescription>
                         </Alert>
                       )}
                     </CardContent>
@@ -943,20 +1118,22 @@ const StateMachinePage = () => {
             <CardContent className="space-y-6">
               <div className="space-y-2">
                 <Label htmlFor="execution-deal">Select Lead</Label>
-                 <Select 
-                   value={selectedExecutionDeal} 
-                   onValueChange={(value: string | null) => {
-                     if (value) setSelectedExecutionDeal(value)
-                   }}
-                 >
+                <Select
+                  value={selectedExecutionDeal}
+                  onValueChange={(value: string | null) => {
+                    if (value) setSelectedExecutionDeal(value);
+                  }}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Select a lead to execute" />
                   </SelectTrigger>
                   <SelectContent>
                     {executionDeals.length === 0 ? (
-                      <SelectItem value="no-deals" disabled>No execution data available</SelectItem>
+                      <SelectItem value="no-deals" disabled>
+                        No execution data available
+                      </SelectItem>
                     ) : (
-                      executionDeals.map(deal => (
+                      executionDeals.map((deal) => (
                         <SelectItem key={deal} value={deal}>
                           {deal}
                         </SelectItem>
@@ -966,8 +1143,8 @@ const StateMachinePage = () => {
                 </Select>
               </div>
 
-              <Button 
-                onClick={handleExecute} 
+              <Button
+                onClick={handleExecute}
                 disabled={executing || !selectedExecutionDeal}
                 className="w-full"
               >
@@ -987,20 +1164,36 @@ const StateMachinePage = () => {
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <div className="flex items-center justify-between">
-                        <span className="text-sm text-muted-foreground">Status:</span>
-                        <Badge variant={executionResult.execution.status === 'completed' ? 'default' : 'outline'}>
+                        <span className="text-sm text-muted-foreground">
+                          Status:
+                        </span>
+                        <Badge
+                          variant={
+                            executionResult.execution.status === "completed"
+                              ? "default"
+                              : "outline"
+                          }
+                        >
                           {executionResult.execution.status}
                         </Badge>
                       </div>
-                      
+
                       <div className="flex items-center justify-between">
-                        <span className="text-sm text-muted-foreground">Steps Executed:</span>
-                        <span className="font-medium">{executionResult.execution.steps_executed}</span>
+                        <span className="text-sm text-muted-foreground">
+                          Steps Executed:
+                        </span>
+                        <span className="font-medium">
+                          {executionResult.execution.steps_executed}
+                        </span>
                       </div>
-                      
+
                       <div className="flex items-center justify-between">
-                        <span className="text-sm text-muted-foreground">Current Node:</span>
-                        <span className="font-medium">{executionResult.execution.current_node_name || 'N/A'}</span>
+                        <span className="text-sm text-muted-foreground">
+                          Current Node:
+                        </span>
+                        <span className="font-medium">
+                          {executionResult.execution.current_node_name || "N/A"}
+                        </span>
                       </div>
 
                       {executionResult.execution.logs.length > 0 && (
@@ -1008,16 +1201,27 @@ const StateMachinePage = () => {
                           <h4 className="font-medium">Execution Logs</h4>
                           <div className="space-y-2">
                             {executionResult.execution.logs.map((log, i) => (
-                              <div key={log.id} className="flex items-start gap-2 text-sm bg-muted p-2 rounded">
+                              <div
+                                key={log.id}
+                                className="flex items-start gap-2 text-sm bg-muted p-2 rounded"
+                              >
                                 <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-medium mt-0.5">
                                   {i + 1}
                                 </span>
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center justify-between">
-                                    <span className="font-medium truncate">{log.action}</span>
-                                    <span className="text-xs text-muted-foreground">{log.timestamp}</span>
+                                    <span className="font-medium truncate">
+                                      {log.action}
+                                    </span>
+                                    <span className="text-xs text-muted-foreground">
+                                      {log.timestamp}
+                                    </span>
                                   </div>
-                                  <div className="text-muted-foreground mt-1 truncate">{log.result ? JSON.stringify(log.result) : ''}</div>
+                                  <div className="text-muted-foreground mt-1 truncate">
+                                    {log.result
+                                      ? JSON.stringify(log.result)
+                                      : ""}
+                                  </div>
                                 </div>
                               </div>
                             ))}
@@ -1028,7 +1232,9 @@ const StateMachinePage = () => {
                       {executionResult.execution.error && (
                         <Alert variant="destructive">
                           <Icons.AlertCircle className="h-4 w-4" />
-                          <AlertDescription>{executionResult.execution.error}</AlertDescription>
+                          <AlertDescription>
+                            {executionResult.execution.error}
+                          </AlertDescription>
                         </Alert>
                       )}
                     </CardContent>
@@ -1046,26 +1252,34 @@ const StateMachinePage = () => {
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Edit Node: {editingNode.name}</DialogTitle>
-              <DialogDescription>
-                Configure node properties
-              </DialogDescription>
+              <DialogDescription>Configure node properties</DialogDescription>
             </DialogHeader>
-            
+
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="node-name">Name</Label>
                 <Input
                   id="node-name"
                   value={editingNode.name}
-                  onChange={(e) => setEditingNode(prev => prev ? { ...prev, name: e.target.value } : null)}
+                  onChange={(e) =>
+                    setEditingNode((prev) =>
+                      prev ? { ...prev, name: e.target.value } : null,
+                    )
+                  }
                 />
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="node-type">Type</Label>
-                <Select 
-                  value={editingNode.type} 
-                  onValueChange={(type: string | null) => setEditingNode(prev => prev && type ? { ...prev, type: type as CanvasNode['type'] } : null)}
+                <Select
+                  value={editingNode.type}
+                  onValueChange={(type: string | null) =>
+                    setEditingNode((prev) =>
+                      prev && type
+                        ? { ...prev, type: type as CanvasNode["type"] }
+                        : null,
+                    )
+                  }
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -1089,22 +1303,26 @@ const StateMachinePage = () => {
                   id="node-desc"
                   className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                   value={editingNode.description}
-                  onChange={(e) => setEditingNode(prev => prev ? { ...prev, description: e.target.value } : null)}
+                  onChange={(e) =>
+                    setEditingNode((prev) =>
+                      prev ? { ...prev, description: e.target.value } : null,
+                    )
+                  }
                   placeholder="Node description..."
                 />
               </div>
             </div>
 
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               className="w-full"
               onClick={() => {
-                if (!stateMachine) return
-                const updatedNodes = stateMachine.nodes.map(n => 
-                  n.id === editingNode.id ? { ...n, ...editingNode } : n
-                )
-                setStateMachine({ ...stateMachine, nodes: updatedNodes })
-                setNodeEditorOpen(false)
+                if (!stateMachine) return;
+                const updatedNodes = stateMachine.nodes.map((n) =>
+                  n.id === editingNode.id ? { ...n, ...editingNode } : n,
+                );
+                setStateMachine({ ...stateMachine, nodes: updatedNodes });
+                setNodeEditorOpen(false);
               }}
             >
               Save Changes
@@ -1113,7 +1331,7 @@ const StateMachinePage = () => {
         </Dialog>
       )}
     </div>
-  )
-}
+  );
+};
 
-export default StateMachinePage
+export default StateMachinePage;
