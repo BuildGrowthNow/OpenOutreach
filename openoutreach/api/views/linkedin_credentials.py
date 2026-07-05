@@ -1,13 +1,23 @@
 # openoutreach/api/views/linkedin_credentials.py
 """LinkedIn Credentials Management API Views."""
 
+import logging
+
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from openoutreach.crm.models import LinkedInCredentialLog, LinkedInCredentials
+try:
+    from openoutreach.crm.models import LinkedInCredentialLog, LinkedInCredentials
+except Exception as _exc:  # pragma: no cover - import-time resilience
+    LinkedInCredentialLog = None
+    LinkedInCredentials = None
+    logging.getLogger(__name__).exception(
+        "Failed to import LinkedIn credential models: %s", _exc
+    )
+
 from openoutreach.linkedin.browser.session import AccountSession
 from openoutreach.linkedin.models import LinkedInProfile
 
@@ -26,11 +36,18 @@ class LinkedInCredentialsView(APIView):
 
     def get_queryset(self):
         """Get credentials accessible by the current user."""
+        if LinkedInCredentials is None:
+            raise RuntimeError("LinkedInCredentials model not available")
         # For now, return all credentials - can be scoped by user/profile later
         return LinkedInCredentials.objects.all()
 
     def get(self, request):
         """Get all LinkedIn credentials for the authenticated user."""
+        if LinkedInCredentials is None:
+            return Response(
+                {"error": "LinkedIn credentials support unavailable"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
         credentials = self.get_queryset()
 
         # If user has a linkedin_profile, only show credentials for that profile
@@ -71,6 +88,11 @@ class LinkedInCredentialsView(APIView):
 
     def post(self, request):
         """Create new LinkedIn credentials."""
+        if LinkedInCredentials is None or LinkedInCredentialLog is None:
+            return Response(
+                {"error": "LinkedIn credentials support unavailable"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
         data = request.data
 
         # Validate required fields
@@ -151,6 +173,11 @@ class LinkedInCredentialsView(APIView):
 
     def patch(self, request, pk=None):
         """Update LinkedIn credentials."""
+        if LinkedInCredentials is None or LinkedInCredentialLog is None:
+            return Response(
+                {"error": "LinkedIn credentials support unavailable"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
         if not pk:
             raise ValidationError({"detail": "Credential ID required"})
 
@@ -206,6 +233,11 @@ class LinkedInCredentialsView(APIView):
 
     def delete(self, request, pk=None):
         """Deactivate/delete LinkedIn credentials."""
+        if LinkedInCredentials is None or LinkedInCredentialLog is None:
+            return Response(
+                {"error": "LinkedIn credentials support unavailable"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
         if not pk:
             raise ValidationError({"detail": "Credential ID required"})
 

@@ -2,10 +2,11 @@
 """LinkedIn Profile Health API View."""
 
 from typing import TYPE_CHECKING
+
 from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated
 
 from openoutreach.linkedin.models import LinkedInProfile
 
@@ -24,7 +25,13 @@ class LinkedInProfileHealthView(APIView):
 
     def get(self, request):
         """Get LinkedIn profile health status for authenticated user."""
-        from openoutreach.crm.models import LinkedInCredentialLog
+        import logging
+
+        try:
+            from openoutreach.crm.models import LinkedInCredentialLog
+        except Exception:
+            LinkedInCredentialLog = None
+            logging.getLogger(__name__).exception("LinkedInCredentialLog import failed")
 
         # Get profiles based on user's campaign or user's own profile
         profiles = LinkedInProfile.objects.all()
@@ -79,7 +86,9 @@ class LinkedInProfileHealthView(APIView):
                     last_error = None
 
                 # Get last verification timestamp
-                last_verification = cred.last_verified.isoformat() if cred.last_verified else None  # type: ignore[attr-defined]
+                last_verification = (
+                    cred.last_verified.isoformat() if cred.last_verified else None
+                )  # type: ignore[attr-defined]
 
             profile_health_data.append(
                 {
