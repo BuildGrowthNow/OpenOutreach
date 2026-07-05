@@ -25,6 +25,52 @@ from openoutreach.linkedin.models import LinkedInProfile
 from .linkedin_common import schema_error_response, user_primary_profile
 
 
+def _sync_profile_login(*, profile: LinkedInProfile, email: str, password: str) -> None:
+    """Keep the daemon-owned LinkedInProfile login fields in sync with credentials."""
+    update_fields = []
+    if profile.linkedin_username != email:
+        profile.linkedin_username = email
+        update_fields.append("linkedin_username")
+    if profile.linkedin_password != password:
+        profile.linkedin_password = password
+        update_fields.append("linkedin_password")
+    if update_fields:
+        profile.save(update_fields=update_fields)
+
+
+def _ensure_profile_for_credential(
+    *,
+    user,
+    cred,
+    email: str | None = None,
+    password: str | None = None,
+) -> LinkedInProfile:
+    """Attach credentials to the user's LinkedInProfile, creating one when needed."""
+    login_email = email or cred.get_email()
+    login_password = password or cred.get_password()
+    profile = cred.linkedin_profile or user_primary_profile(user)
+
+    if profile is None:
+        profile = LinkedInProfile.objects.create(
+            user=user,
+            linkedin_username=login_email,
+            linkedin_password=login_password,
+            active=False,
+        )
+    else:
+        _sync_profile_login(
+            profile=profile,
+            email=login_email,
+            password=login_password,
+        )
+
+    if getattr(cred, "linkedin_profile_id", None) != profile.pk:
+        cred.linkedin_profile = profile
+        cred.save(update_fields=["linkedin_profile"])
+
+    return profile
+
+
 class LinkedInCredentialsView(APIView):
     """
     API view for managing LinkedIn credentials.
@@ -146,6 +192,18 @@ class LinkedInCredentialsView(APIView):
             cred.set_password(password)
             cred.save()
 
+            try:
+                _ensure_profile_for_credential(
+                    user=request.user,
+                    cred=cred,
+                    email=email,
+                    password=password,
+                )
+            except DatabaseError as exc:
+                return schema_error_response(
+                    endpoint="linkedin-credentials:create", exc=exc
+                )
+
             # Create audit log entry
             LinkedInCredentialLog.objects.create(
                 credentials=cred,
@@ -163,7 +221,9 @@ class LinkedInCredentialsView(APIView):
                         "username": cred.username,
                         "public_email": cred.get_public_email(),
                         "status": cred.status,
-                        "linkedin_profile_id": linkedin_profile_id,
+                        "linkedin_profile_id": getattr(
+                            cred, "linkedin_profile_id", None
+                        ),
                     },
                 },
                 status=status.HTTP_201_CREATED,
@@ -217,6 +277,13 @@ class LinkedInCredentialsView(APIView):
 
         cred.save()
 
+        try:
+            _ensure_profile_for_credential(user=request.user, cred=cred)
+        except DatabaseError as exc:
+            return schema_error_response(
+                endpoint="linkedin-credentials:update", exc=exc
+            )
+
         # Create audit log entry
         LinkedInCredentialLog.objects.create(
             credentials=cred,
@@ -234,6 +301,7 @@ class LinkedInCredentialsView(APIView):
                     "username": cred.username,
                     "public_email": cred.get_public_email(),
                     "status": cred.status,
+                    "linkedin_profile_id": getattr(cred, "linkedin_profile_id", None),
                 },
             }
         )
@@ -307,42 +375,14 @@ class LinkedInCredentialsVerifyView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        # Ensure credential is associated with a LinkedInProfile.
-        # If not associated, try to attach it to the current user's LinkedInProfile
-        # or create a new profile for the user so verification can run.
-        created_profile = None
-        if not cred.linkedin_profile:
-            try:
-                existing_profile = user_primary_profile(request.user)
-            except DatabaseError as exc:
-                return schema_error_response(
-                    endpoint="linkedin-credentials:verify", exc=exc
-                )
-
-            # If the user already has a LinkedInProfile, attach to it
-            if existing_profile is not None:
-                cred.linkedin_profile = existing_profile
-                cred.save(update_fields=["linkedin_profile"])  # attach
-            else:
-                # Create a lightweight LinkedInProfile for this user so AccountSession can be created
-                from openoutreach.linkedin.models import LinkedInProfile
-
-                username_guess = cred.username or (
-                    cred.get_email().split("@")[0] if cred.get_email() else ""
-                )
-                try:
-                    created_profile = LinkedInProfile.objects.create(
-                        user=request.user,
-                        linkedin_username=username_guess,
-                        linkedin_password=cred.get_password(),
-                        active=False,
-                    )
-                except DatabaseError as exc:
-                    return schema_error_response(
-                        endpoint="linkedin-credentials:verify", exc=exc
-                    )
-                cred.linkedin_profile = created_profile
-                cred.save(update_fields=["linkedin_profile"])
+        # Ensure the credential is attached to a LinkedInProfile and the daemon
+        # login fields stay in sync with the stored credential values.
+        try:
+            _ensure_profile_for_credential(user=request.user, cred=cred)
+        except DatabaseError as exc:
+            return schema_error_response(
+                endpoint="linkedin-credentials:verify", exc=exc
+            )
 
         # Create session for verification
         try:
@@ -365,6 +405,7 @@ class LinkedInCredentialsVerifyView(APIView):
                         cred.last_verified.isoformat() if cred.last_verified else None
                     ),
                     "verification_failures": cred.verification_failures,
+                    "linkedin_profile_id": getattr(cred, "linkedin_profile_id", None),
                 },
                 "details": {
                     "verified_at": details.get("verified_at"),
@@ -391,6 +432,9 @@ class LinkedInCredentialsVerifyView(APIView):
                     "credentials": {
                         "id": cred.pk,
                         "status": cred.status,
+                        "linkedin_profile_id": getattr(
+                            cred, "linkedin_profile_id", None
+                        ),
                     },
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,

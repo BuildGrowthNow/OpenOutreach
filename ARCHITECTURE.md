@@ -44,7 +44,7 @@ Startup sequence:
 
 Docker `start` script handles Xvfb/VNC + Next.js startup and now fails fast on migration errors. In `SKIP_DAEMON=true` mode it runs `python manage.py migrate --no-input` before `python manage.py runserver`; otherwise it `exec`s `python manage.py rundaemon "$@"`.
 
-LinkedIn settings endpoints (`/api/linkedin-profile-health`, `/api/linkedin-credentials`, `/api/linkedin-profiles`) intentionally query `LinkedInProfile` with a minimal column set so unrelated schema additions do not break the settings UI, and they return JSON `503` responses with a migration hint when the DB schema is out of sync.
+LinkedIn settings endpoints (`/api/linkedin-profile-health`, `/api/linkedin-credentials`, `/api/linkedin-profiles`) intentionally query `LinkedInProfile` with a minimal column set so unrelated schema additions do not break the settings UI, and they return JSON `503` responses with a migration hint when the DB schema is out of sync. The settings credential modal now collects only LinkedIn email, password, and an optional cookie; backend create/update/verify auto-attach or create the user's `LinkedInProfile` and keep its daemon login fields (`linkedin_username`, `linkedin_password`) synced from the saved credential, so manual profile selection/display-username entry is no longer part of the settings flow.
 
 ### Other management commands
 

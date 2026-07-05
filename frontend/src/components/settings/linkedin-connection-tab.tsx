@@ -517,11 +517,13 @@ export function LinkedInConnectionTab({
                 Add Credential
               </Button>
               <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-                <DialogContent className="max-w-3xl">
-                  <DialogHeader>
+                <DialogContent className="max-w-4xl border border-zinc-800 bg-zinc-950 text-zinc-100 shadow-2xl">
+                  <DialogHeader className="border-b border-zinc-800/80 pb-4">
                     <DialogTitle>Add LinkedIn Credential</DialogTitle>
                     <DialogDescription>
-                      Add a new LinkedIn account for your outreach campaigns
+                      Add your LinkedIn email, password, and an optional session
+                      cookie. Your LinkedIn profile is detected automatically
+                      after login.
                     </DialogDescription>
                   </DialogHeader>
                   <LinkedInCredentialForm
@@ -561,11 +563,13 @@ export function LinkedInConnectionTab({
                 Add Your First Credential
               </Button>
               <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-                <DialogContent className="max-w-3xl">
-                  <DialogHeader>
+                <DialogContent className="max-w-4xl border border-zinc-800 bg-zinc-950 text-zinc-100 shadow-2xl">
+                  <DialogHeader className="border-b border-zinc-800/80 pb-4">
                     <DialogTitle>Add LinkedIn Credential</DialogTitle>
                     <DialogDescription>
-                      Add a new LinkedIn account for your outreach campaigns
+                      Add your LinkedIn email, password, and an optional session
+                      cookie. Your LinkedIn profile is detected automatically
+                      after login.
                     </DialogDescription>
                   </DialogHeader>
                   <LinkedInCredentialForm
@@ -603,7 +607,7 @@ export function LinkedInConnectionTab({
         open={showCookieInstructions}
         onOpenChange={setShowCookieInstructions}
       >
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-h-[80vh] max-w-2xl overflow-y-auto border border-zinc-800 bg-zinc-950 text-zinc-100 shadow-2xl">
           <DialogHeader>
             <DialogTitle>How to Get LinkedIn Session Cookies</DialogTitle>
             <DialogDescription>
@@ -635,7 +639,7 @@ export function LinkedInConnectionTab({
 
               {instructions.instructions.alternative_method && (
                 <>
-                  <Separator />
+                  <Separator className="bg-zinc-800/80" />
                   <div className="space-y-2">
                     <h4 className="font-medium flex items-center">
                       <Icons.Globe className="mr-2 h-4 w-4" />

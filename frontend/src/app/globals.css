@@ -43,11 +43,11 @@
   }
 }
 
- @layer base {
-    .border-input {
-      border-color: hsl(240 2% 10%);
-    }
+@layer base {
+  .border-input {
+    border-color: hsl(240 5% 20%); /* Zinc dark */
   }
+}
 
 @layer properties {
   @property --button-shadow-opacity {
