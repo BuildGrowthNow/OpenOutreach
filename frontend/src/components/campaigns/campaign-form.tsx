@@ -38,8 +38,8 @@ import { Icons } from "@/lib/types/components";
 import {
   Campaign,
   CampaignTemplate,
-  LinkedInSetupStatus,
 } from "@/lib/types/components";
+import type { LinkedInSetupStatus } from "@/lib/api/dashboard";
 import {
   getLinkedInSetupStatus,
   getCampaignTemplates,
@@ -241,7 +241,7 @@ export function CampaignForm({
   if (
     !isEditing &&
     !campaign &&
-    !linkedinSetupStatus?.status.linkedin_credentials?.count
+    !linkedinSetupStatus?.status.linkedinCredentials?.count
   ) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>

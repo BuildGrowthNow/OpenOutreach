@@ -45,7 +45,7 @@ export default function LoginPage() {
           setCheckingLinkedIn(true)
           const response = await getLinkedInSetupStatus()
           
-          if (response.data && !response.data.status.setup_complete) {
+          if (response.data && !response.data.status.setupComplete) {
             // LinkedIn is NOT configured - show modal
             sessionStorage.setItem('openoutreach_linkedin_setup_pending', 'true')
             router.push('/settings')
@@ -68,7 +68,7 @@ export default function LoginPage() {
         try {
           const response = await getLinkedInSetupStatus()
           
-          if (response.data && !response.data.status.setup_complete) {
+          if (response.data && !response.data.status.setupComplete) {
             // LinkedIn is NOT configured - show modal
             sessionStorage.setItem('openoutreach_linkedin_setup_pending', 'true')
             router.push('/settings')

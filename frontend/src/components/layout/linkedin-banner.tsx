@@ -25,7 +25,7 @@ export function LinkedinBanner({ alwaysShow = false, onConnect }: LinkedinBanner
       setLoading(true)
       const response = await getLinkedInSetupStatus()
       if (response.data) {
-        const isSetupComplete = response.data.status.setup_complete
+        const isSetupComplete = response.data.status.setupComplete
         setIsLinkedInSetup(isSetupComplete)
         // Show banner only if LinkedIn is NOT set up
         setIsVisible(!isSetupComplete || alwaysShow)

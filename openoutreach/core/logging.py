@@ -172,3 +172,4 @@ def configure_logging(level: int | None = None) -> None:
         "pymongo.server_selection_timeout",
     ):
         logging.getLogger(mongo_logger).setLevel(logging.CRITICAL)
+

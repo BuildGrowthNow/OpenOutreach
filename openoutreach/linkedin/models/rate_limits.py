@@ -3,10 +3,13 @@
 
 from __future__ import annotations
 
-from django.db import models
-from django.utils import timezone
 from datetime import datetime, time
 from enum import Enum
+
+from django.db import models
+from django.utils import timezone
+
+from openoutreach.crm.models import Deal
 
 
 class EngagementLevel(Enum):
@@ -107,12 +110,11 @@ class SmartRateLimitContext(models.Model):
         """
         if self.detectability_score <= 30:
             return 1.0
-        elif self.detectability_score <= 60:
+        if self.detectability_score <= 60:
             return 0.7
-        elif self.detectability_score <= 80:
+        if self.detectability_score <= 80:
             return 0.4
-        else:
-            return 0.1
+        return 0.1
 
     def record_action(self, action_type: str):
         """Record an action and update context."""
@@ -172,7 +174,6 @@ class SmartRateLimitContext(models.Model):
 
     def get_engagement_level(self, lead) -> EngagementLevel:
         """Determine engagement level for a specific lead."""
-        from openoutreach.crm.models import Deal
 
         deal = Deal.objects.filter(lead=lead).first()
         if not deal:
@@ -225,3 +226,4 @@ class RateLimitWarning(models.Model):
 
     class Meta:
         ordering = ["-at_time"]
+
