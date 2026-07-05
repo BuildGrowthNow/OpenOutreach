@@ -42,7 +42,9 @@ Startup sequence:
 6. **Newsletter** — GDPR override + `ensure_newsletter_subscription()` (marker-guarded, runs once).
 7. **Run** — `run_daemon(session)`.
 
-Docker `start` script handles only Xvfb/VNC setup, then `exec python manage.py rundaemon "$@"`.
+Docker `start` script handles Xvfb/VNC + Next.js startup and now fails fast on migration errors. In `SKIP_DAEMON=true` mode it runs `python manage.py migrate --no-input` before `python manage.py runserver`; otherwise it `exec`s `python manage.py rundaemon "$@"`.
+
+LinkedIn settings endpoints (`/api/linkedin-profile-health`, `/api/linkedin-credentials`, `/api/linkedin-profiles`) intentionally query `LinkedInProfile` with a minimal column set so unrelated schema additions do not break the settings UI, and they return JSON `503` responses with a migration hint when the DB schema is out of sync.
 
 ### Other management commands
 

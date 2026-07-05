@@ -1,17 +1,14 @@
 # openoutreach/api/views/linkedin_profile_health.py
 """LinkedIn Profile Health API View."""
 
-from typing import TYPE_CHECKING
+import logging
 
-from rest_framework import status
+from django.db import DatabaseError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from openoutreach.linkedin.models import LinkedInProfile
-
-if TYPE_CHECKING:
-    from openoutreach.crm.models.linkedin_credentials import LinkedInCredentials
+from .linkedin_common import schema_error_response, user_profiles_queryset
 
 
 class LinkedInProfileHealthView(APIView):
@@ -25,20 +22,19 @@ class LinkedInProfileHealthView(APIView):
 
     def get(self, request):
         """Get LinkedIn profile health status for authenticated user."""
-        import logging
+        logger = logging.getLogger(__name__)
 
         try:
             from openoutreach.crm.models import LinkedInCredentialLog
         except Exception:
             LinkedInCredentialLog = None
-            logging.getLogger(__name__).exception("LinkedInCredentialLog import failed")
+            logger.exception("LinkedInCredentialLog import failed")
 
-        # Get profiles based on user's campaign or user's own profile
-        profiles = LinkedInProfile.objects.all()
-
-        # Filter by user's own profile if user has one
-        if hasattr(request.user, "linkedin_profile"):
-            profiles = profiles.filter(user=request.user)
+        try:
+            profiles = user_profiles_queryset(request.user)
+            total_profiles = profiles.count()
+        except DatabaseError as exc:
+            return schema_error_response(endpoint="linkedin-profile-health", exc=exc)
 
         profile_health_data = []
         for profile in profiles:
@@ -66,24 +62,25 @@ class LinkedInProfileHealthView(APIView):
                     health_score = 100
 
                 # Get last verification error if available
-                try:
-                    last_error_log = (
-                        LinkedInCredentialLog.objects.filter(
-                            credentials=cred  # type: ignore[attr-defined]
+                if LinkedInCredentialLog is not None:
+                    try:
+                        last_error_log = (
+                            LinkedInCredentialLog.objects.filter(
+                                credentials=cred  # type: ignore[attr-defined]
+                            )
+                            .exclude(action="verified")
+                            .exclude(action="usage")
+                            .last()
                         )
-                        .exclude(action="verified")
-                        .exclude(action="usage")
-                        .last()
-                    )
 
-                    if last_error_log:
-                        last_error = last_error_log.details.get(
-                            "error_message"
-                        ) or last_error_log.details.get("message")
-                        if not last_error and "reason" in last_error_log.details:
-                            last_error = last_error_log.details.get("reason")
-                except Exception:
-                    last_error = None
+                        if last_error_log:
+                            last_error = last_error_log.details.get(
+                                "error_message"
+                            ) or last_error_log.details.get("message")
+                            if not last_error and "reason" in last_error_log.details:
+                                last_error = last_error_log.details.get("reason")
+                    except Exception:
+                        last_error = None
 
                 # Get last verification timestamp
                 last_verification = (
@@ -111,7 +108,7 @@ class LinkedInProfileHealthView(APIView):
             {
                 "profiles": profile_health_data,
                 "count": len(profile_health_data),
-                "total_profiles": profiles.count(),
+                "total_profiles": total_profiles,
                 "needs_attention_count": sum(
                     1 for p in profile_health_data if p["needs_attention"]
                 ),

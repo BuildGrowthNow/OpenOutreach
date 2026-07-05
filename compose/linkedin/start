@@ -1,9 +1,7 @@
 #!/bin/bash
 # compose/start - Start Next.js and Django (no container nginx)
 
-# Don't use errexit - let the script continue even if individual commands fail
-set -o pipefail
-set -o nounset
+set -euo pipefail
 
 # Virtual display (always needed — Playwright launches headed mode)
 rm -f /tmp/.X99-lock
@@ -28,7 +26,7 @@ if [ -d /app/frontend ]; then
     ps -p $NEXTJS_PID
     echo "Next.js started with PID $NEXTJS_PID"
     cd /app
-    
+
     # Wait for Next.js to be ready (up to 30 seconds)
     echo "Waiting for Next.js to be ready..."
     for i in $(seq 1 30); do
@@ -60,17 +58,21 @@ sleep 2
 # If SKIP_DAEMON is set, run migrations and Django in background
 if [ "${SKIP_DAEMON:-false}" = "true" ]; then
     echo "SKIP_DAEMON=true - Starting Django admin without daemon..."
+    echo "Running Django migrations before starting the API server..."
     gosu ubuntu python manage.py migrate --no-input
+
     gosu ubuntu python manage.py runserver 0.0.0.0:8000 &
     DJANGO_PID=$!
     echo "Django started with PID $DJANGO_PID"
-    # Keep running as long as Next.js is alive
-    while kill -0 $NEXTJS_PID 2>/dev/null; do
-        sleep 5
-    done
-    echo "Next.js stopped, shutting down Django..."
+
+    wait -n $NEXTJS_PID $DJANGO_PID
+    EXIT_CODE=$?
+    echo "A server process exited with status $EXIT_CODE, shutting down..."
+    kill $NEXTJS_PID 2>/dev/null || true
     kill $DJANGO_PID 2>/dev/null || true
-    exit 0
+    wait $NEXTJS_PID 2>/dev/null || true
+    wait $DJANGO_PID 2>/dev/null || true
+    exit $EXIT_CODE
 fi
 
 # Run the daemon (migrate + onboard + task queue).

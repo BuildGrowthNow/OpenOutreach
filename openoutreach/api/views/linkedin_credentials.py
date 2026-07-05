@@ -3,6 +3,7 @@
 
 import logging
 
+from django.db import DatabaseError
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
@@ -21,6 +22,8 @@ except Exception as _exc:  # pragma: no cover - import-time resilience
 from openoutreach.linkedin.browser.session import AccountSession
 from openoutreach.linkedin.models import LinkedInProfile
 
+from .linkedin_common import schema_error_response, user_primary_profile
+
 
 class LinkedInCredentialsView(APIView):
     """
@@ -38,7 +41,6 @@ class LinkedInCredentialsView(APIView):
         """Get credentials accessible by the current user."""
         if LinkedInCredentials is None:
             raise RuntimeError("LinkedInCredentials model not available")
-        # For now, return all credentials - can be scoped by user/profile later
         return LinkedInCredentials.objects.all()
 
     def get(self, request):
@@ -48,13 +50,12 @@ class LinkedInCredentialsView(APIView):
                 {"error": "LinkedIn credentials support unavailable"},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
-        credentials = self.get_queryset()
-
-        # If user has a linkedin_profile, only show credentials for that profile
-        if hasattr(request.user, "linkedin_profile"):
-            credentials = credentials.filter(
-                linkedin_profile=request.user.linkedin_profile
+        try:
+            credentials = self.get_queryset().filter(
+                linkedin_profile__user=request.user
             )
+        except DatabaseError as exc:
+            return schema_error_response(endpoint="linkedin-credentials", exc=exc)
 
         return Response(
             {
@@ -113,7 +114,9 @@ class LinkedInCredentialsView(APIView):
         linkedin_profile = None
         if linkedin_profile_id:
             try:
-                linkedin_profile = LinkedInProfile.objects.get(id=linkedin_profile_id)
+                linkedin_profile = LinkedInProfile.objects.only("id", "user_id").get(
+                    id=linkedin_profile_id
+                )
                 # Verify the profile belongs to the current user or user has permission
                 # Allow access if: user owns the profile OR user has change permission
                 if linkedin_profile.user != request.user and not request.user.has_perm(
@@ -127,6 +130,10 @@ class LinkedInCredentialsView(APIView):
             except LinkedInProfile.DoesNotExist:
                 raise ValidationError(
                     {"linkedin_profile_id": "LinkedIn profile not found"}
+                )
+            except DatabaseError as exc:
+                return schema_error_response(
+                    endpoint="linkedin-credentials:create", exc=exc
                 )
 
         try:
@@ -281,6 +288,11 @@ class LinkedInCredentialsVerifyView(APIView):
 
     def post(self, request, pk=None):
         """Verify LinkedIn credentials using real LinkedIn browser automation."""
+        if LinkedInCredentials is None:
+            return Response(
+                {"error": "LinkedIn credentials support unavailable"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
         if not pk:
             raise ValidationError({"detail": "Credential ID required"})
 
@@ -300,12 +312,16 @@ class LinkedInCredentialsVerifyView(APIView):
         # or create a new profile for the user so verification can run.
         created_profile = None
         if not cred.linkedin_profile:
+            try:
+                existing_profile = user_primary_profile(request.user)
+            except DatabaseError as exc:
+                return schema_error_response(
+                    endpoint="linkedin-credentials:verify", exc=exc
+                )
+
             # If the user already has a LinkedInProfile, attach to it
-            if (
-                hasattr(request.user, "linkedin_profile")
-                and request.user.linkedin_profile
-            ):
-                cred.linkedin_profile = request.user.linkedin_profile
+            if existing_profile is not None:
+                cred.linkedin_profile = existing_profile
                 cred.save(update_fields=["linkedin_profile"])  # attach
             else:
                 # Create a lightweight LinkedInProfile for this user so AccountSession can be created
@@ -314,12 +330,17 @@ class LinkedInCredentialsVerifyView(APIView):
                 username_guess = cred.username or (
                     cred.get_email().split("@")[0] if cred.get_email() else ""
                 )
-                created_profile = LinkedInProfile.objects.create(
-                    user=request.user,
-                    linkedin_username=username_guess,
-                    linkedin_password=cred.get_password(),
-                    active=False,
-                )
+                try:
+                    created_profile = LinkedInProfile.objects.create(
+                        user=request.user,
+                        linkedin_username=username_guess,
+                        linkedin_password=cred.get_password(),
+                        active=False,
+                    )
+                except DatabaseError as exc:
+                    return schema_error_response(
+                        endpoint="linkedin-credentials:verify", exc=exc
+                    )
                 cred.linkedin_profile = created_profile
                 cred.save(update_fields=["linkedin_profile"])
 
@@ -387,6 +408,11 @@ class LinkedInCredentialsRotationView(APIView):
 
     def post(self, request, pk=None):
         """Rotate LinkedIn credentials."""
+        if LinkedInCredentials is None or LinkedInCredentialLog is None:
+            return Response(
+                {"error": "LinkedIn credentials support unavailable"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
         if not pk:
             raise ValidationError({"detail": "Credential ID required"})
 
@@ -458,6 +484,11 @@ class LinkedInCredentialsHealthView(APIView):
 
     def get(self, request, pk=None):
         """Get LinkedIn credentials health status."""
+        if LinkedInCredentials is None:
+            return Response(
+                {"error": "LinkedIn credentials support unavailable"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
         if not pk:
             raise ValidationError({"detail": "Credential ID required"})
 
@@ -494,6 +525,11 @@ class LinkedInCredentialsLogsView(APIView):
 
     def get(self, request, pk=None):
         """Get LinkedIn credentials audit logs."""
+        if LinkedInCredentials is None:
+            return Response(
+                {"error": "LinkedIn credentials support unavailable"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
         if not pk:
             raise ValidationError({"detail": "Credential ID required"})
 

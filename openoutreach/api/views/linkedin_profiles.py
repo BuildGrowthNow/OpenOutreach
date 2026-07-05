@@ -1,12 +1,15 @@
 # openoutreach/api/views/linkedin_profiles.py
 """LinkedIn Profiles API Views."""
 
+from django.db import DatabaseError
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from openoutreach.linkedin.models import LinkedInProfile
+
+from .linkedin_common import schema_error_response, user_profiles_queryset
 
 
 class LinkedInProfilesListView(APIView):
@@ -20,12 +23,10 @@ class LinkedInProfilesListView(APIView):
 
     def get(self, request):
         """Get LinkedIn profiles accessible by the current user."""
-        # Get profiles based on user's campaign or user's own profile
-        profiles = LinkedInProfile.objects.all()
-
-        # Filter by user's own profile if user has one
-        if hasattr(request.user, "linkedin_profile"):
-            profiles = profiles.filter(user=request.user)
+        try:
+            profiles = user_profiles_queryset(request.user)
+        except DatabaseError as exc:
+            return schema_error_response(endpoint="linkedin-profiles", exc=exc)
 
         return Response(
             {
@@ -70,6 +71,8 @@ class LinkedInProfileCookieView(APIView):
             return Response(
                 {"error": "Profile not found"}, status=status.HTTP_404_NOT_FOUND
             )
+        except DatabaseError as exc:
+            return schema_error_response(endpoint="linkedin-profiles:cookies", exc=exc)
 
         # Permission: owner or has change permission
         if profile.user != request.user and not request.user.has_perm(

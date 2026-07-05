@@ -88,6 +88,7 @@ export function LinkedInConnectionTab({
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [loadWarning, setLoadWarning] = useState<string | null>(null);
   const [showCookieInstructions, setShowCookieInstructions] = useState(false);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [editingCredential, setEditingCredential] =
@@ -99,19 +100,65 @@ export function LinkedInConnectionTab({
     void (async () => {
       try {
         setLoading(true);
+        setError(null);
+        setLoadWarning(null);
+
         const [guideRes, statusRes, instructionsRes, credsRes] =
-          await Promise.all([
+          await Promise.allSettled([
             getLinkedInSetupGuide(),
             getLinkedInSetupStatus(),
             getLinkedInCookieInstructions(),
             getLinkedInCredentials(),
           ]);
 
-        if (guideRes.data) setGuide(guideRes.data);
-        if (statusRes.data) setStatusData(statusRes.data);
-        if (instructionsRes.data) setInstructions(instructionsRes.data);
-        if (credsRes.data)
-          setLinkedinCredentials(credsRes.data.credentials || []);
+        if (guideRes.status === "fulfilled" && guideRes.value.data) {
+          setGuide(guideRes.value.data);
+        }
+        if (statusRes.status === "fulfilled" && statusRes.value.data) {
+          setStatusData(statusRes.value.data);
+        }
+        if (
+          instructionsRes.status === "fulfilled" &&
+          instructionsRes.value.data
+        ) {
+          setInstructions(instructionsRes.value.data);
+        }
+        if (credsRes.status === "fulfilled" && credsRes.value.data) {
+          setLinkedinCredentials(credsRes.value.data.credentials || []);
+        }
+
+        const failures = [
+          guideRes,
+          statusRes,
+          instructionsRes,
+          credsRes,
+        ].filter(
+          (result): result is PromiseRejectedResult =>
+            result.status === "rejected",
+        );
+
+        const essentialFailures = [guideRes, statusRes, instructionsRes].filter(
+          (result): result is PromiseRejectedResult =>
+            result.status === "rejected",
+        );
+
+        if (essentialFailures.length === 3) {
+          setError(
+            essentialFailures[0].reason instanceof Error
+              ? essentialFailures[0].reason.message
+              : "Failed to load LinkedIn connection data",
+          );
+        } else if (failures.length > 0) {
+          setLoadWarning(
+            failures
+              .map((result) =>
+                result.reason instanceof Error
+                  ? result.reason.message
+                  : "Failed to load some LinkedIn connection data",
+              )
+              .join(" "),
+          );
+        }
       } catch (err) {
         setError(
           err instanceof Error
@@ -336,6 +383,13 @@ export function LinkedInConnectionTab({
 
   return (
     <div className="flex-1 space-y-6 p-4 md:p-6 lg:p-8">
+      {loadWarning ? (
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Some LinkedIn data could not be loaded</AlertTitle>
+          <AlertDescription>{loadWarning}</AlertDescription>
+        </Alert>
+      ) : null}
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
