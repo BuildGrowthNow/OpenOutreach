@@ -150,14 +150,14 @@ export default function SettingsPage() {
             <CardDescription>Daily sending profile</CardDescription>
             <CardTitle className="flex items-center gap-2">
               <Icons.Shield className="h-4 w-4 text-blue-500" />
-              {settings.rate_limits.daily_connection_limit} connect /{" "}
-              {settings.rate_limits.daily_follow_up_limit} follow-up
+              {(settings.rate_limits?.daily_connection_limit ?? 0)} connect /{" "}
+              {(settings.rate_limits?.daily_follow_up_limit ?? 0)} follow-up
             </CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">
-              Velocity {settings.rate_limits.velocity}/day, cooldown{" "}
-              {settings.rate_limits.cooldown_minutes} min
+              Velocity {(settings.rate_limits?.velocity ?? 0)}/day, cooldown{" "}
+              {(settings.rate_limits?.cooldown_minutes ?? 0)} min
             </p>
           </CardContent>
         </Card>

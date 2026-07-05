@@ -80,10 +80,10 @@ export default function RateLimitForm({
   const form = useForm<RateLimitFormValues>({
     resolver: zodResolver(rateLimitSchema),
     defaultValues: {
-      dailyConnectionLimit: initialData?.daily_connection_limit || 20,
-      dailyFollowUpLimit: initialData?.daily_follow_up_limit || 25,
-      velocity: initialData?.velocity || 20,
-      cooldownMinutes: initialData?.cooldown_minutes || 0,
+      dailyConnectionLimit: initialData?.daily_connection_limit ?? 20,
+      dailyFollowUpLimit: initialData?.daily_follow_up_limit ?? 25,
+      velocity: initialData?.velocity ?? 20,
+      cooldownMinutes: initialData?.cooldown_minutes ?? 0,
     },
   });
 
