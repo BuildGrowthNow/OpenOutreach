@@ -623,6 +623,9 @@ export interface Settings {
     provider: string;
     model: string;
     api_base: string;
+    writing_style: string;
+    say_rules: string;
+    avoid_rules: string;
   };
   rate_limits: {
     daily_connection_limit: number;

@@ -198,6 +198,10 @@ def _render_system_prompt(session, deal, recent_messages: list) -> str:
         or session.django_user.username
     )
 
+    from openoutreach.core.models import SiteConfig
+
+    config = SiteConfig.load()
+
     # Get persona context if available
     persona = get_lead_persona(deal)
 
@@ -215,6 +219,9 @@ def _render_system_prompt(session, deal, recent_messages: list) -> str:
         today=now.strftime("%Y-%m-%d"),
         days_since_last_outgoing=_days_since_last_outgoing(recent_messages, now),
         unanswered_outgoing=_count_unanswered_outgoing(recent_messages),
+        ai_writing_style=config.ai_writing_style,
+        ai_say_rules=config.ai_say_rules,
+        ai_avoid_rules=config.ai_avoid_rules,
     )
 
 
@@ -251,10 +258,10 @@ def run_follow_up_agent(session, deal) -> FollowUpDecision:
 
 
 if __name__ == "__main__":
-    from openoutreach.crm.models import Deal
-    from openoutreach.linkedin.browser.registry import cli_parser, cli_session
     from openoutreach.core.db.summaries import materialize_profile_summary_if_missing
     from openoutreach.core.models import Task
+    from openoutreach.crm.models import Deal
+    from openoutreach.linkedin.browser.registry import cli_parser, cli_session
 
     parser = cli_parser("Run the follow-up agent for a profile")
     group = parser.add_mutually_exclusive_group(required=True)

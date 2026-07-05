@@ -1,15 +1,15 @@
 # openoutreach/core/models.py
 from __future__ import annotations
+
 from typing import TYPE_CHECKING
 
 from django.contrib.auth.models import User
 from django.db import models
 from django.utils import timezone
-from django.utils.text import slugify
 
 if TYPE_CHECKING:
-    from openoutreach.linkedin.models import CampaignStateGraph
     from openoutreach.crm.models import Deal
+    from openoutreach.linkedin.models import CampaignStateGraph
 
 
 class SiteConfig(models.Model):
@@ -29,20 +29,39 @@ class SiteConfig(models.Model):
         choices=LLMProvider.choices,
         default=LLMProvider.OPENAI,
     )
-    llm_api_key: models.CharField = models.CharField(max_length=500, blank=True, default="")  # type: ignore[var-annotated]
-    ai_model: models.CharField = models.CharField(max_length=200, blank=True, default="")  # type: ignore[var-annotated]
-    llm_api_base: models.CharField = models.CharField(max_length=500, blank=True, default="")  # type: ignore[var-annotated]
+    llm_api_key: models.CharField = models.CharField(
+        max_length=500, blank=True, default=""
+    )  # type: ignore[var-annotated]
+    ai_model: models.CharField = models.CharField(
+        max_length=200, blank=True, default=""
+    )  # type: ignore[var-annotated]
+    llm_api_base: models.CharField = models.CharField(
+        max_length=500, blank=True, default=""
+    )  # type: ignore[var-annotated]
+    ai_writing_style: models.TextField = models.TextField(blank=True, default="")  # type: ignore[var-annotated]
+    ai_say_rules: models.TextField = models.TextField(blank=True, default="")  # type: ignore[var-annotated]
+    ai_avoid_rules: models.TextField = models.TextField(blank=True, default="")  # type: ignore[var-annotated]
 
     # BetterContact email-finder key; blank disables enrichment (see emails/bettercontact.py).
-    finder_api_key: models.CharField = models.CharField(max_length=500, blank=True, default="")  # type: ignore[var-annotated]
+    finder_api_key: models.CharField = models.CharField(
+        max_length=500, blank=True, default=""
+    )  # type: ignore[var-annotated]
 
     # LinkedIn profile settings
-    linkedin_username: models.CharField = models.CharField(max_length=50, blank=True, default="")  # type: ignore[var-annotated]
-    linkedin_campaign: models.CharField = models.CharField(max_length=100, blank=True, default="")  # type: ignore[var-annotated]
+    linkedin_username: models.CharField = models.CharField(
+        max_length=50, blank=True, default=""
+    )  # type: ignore[var-annotated]
+    linkedin_campaign: models.CharField = models.CharField(
+        max_length=100, blank=True, default=""
+    )  # type: ignore[var-annotated]
 
     # Rate limit configuration
-    daily_connection_limit: models.PositiveIntegerField = models.PositiveIntegerField(default=20)  # type: ignore[var-annotated]
-    daily_follow_up_limit: models.PositiveIntegerField = models.PositiveIntegerField(default=25)  # type: ignore[var-annotated]
+    daily_connection_limit: models.PositiveIntegerField = models.PositiveIntegerField(
+        default=20
+    )  # type: ignore[var-annotated]
+    daily_follow_up_limit: models.PositiveIntegerField = models.PositiveIntegerField(
+        default=25
+    )  # type: ignore[var-annotated]
     velocity: models.PositiveIntegerField = models.PositiveIntegerField(
         default=20
     )  # max actions per time period  # type: ignore[var-annotated]
@@ -86,11 +105,15 @@ class CampaignTemplate(models.Model):
     campaign_objective: models.TextField = models.TextField(blank=True)  # type: ignore[var-annotated]
     ghost_mode_enabled: models.BooleanField = models.BooleanField(default=False)  # type: ignore[var-annotated]
     velocity: models.PositiveIntegerField = models.PositiveIntegerField(default=20)  # type: ignore[var-annotated]
-    cooldown_minutes: models.PositiveIntegerField = models.PositiveIntegerField(default=0)  # type: ignore[var-annotated]
+    cooldown_minutes: models.PositiveIntegerField = models.PositiveIntegerField(
+        default=0
+    )  # type: ignore[var-annotated]
 
     # Template sharing
     is_public: models.BooleanField = models.BooleanField(default=False)  # type: ignore[var-annotated]
-    created_by: models.ForeignKey = models.ForeignKey(User, on_delete=models.CASCADE, related_name="campaign_templates")  # type: ignore[var-annotated]
+    created_by: models.ForeignKey = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="campaign_templates"
+    )  # type: ignore[var-annotated]
 
     # Timestamps
     created_at: models.DateTimeField = models.DateTimeField(auto_now_add=True)  # type: ignore[var-annotated]
@@ -114,7 +137,9 @@ class Campaign(models.Model):
 
     name: models.CharField = models.CharField(max_length=200, unique=True)  # type: ignore[var-annotated]
     description: models.TextField = models.TextField(blank=True)  # type: ignore[var-annotated]
-    users: models.ManyToManyField = models.ManyToManyField(User, blank=True, related_name="campaigns")  # type: ignore[var-annotated]
+    users: models.ManyToManyField = models.ManyToManyField(
+        User, blank=True, related_name="campaigns"
+    )  # type: ignore[var-annotated]
     product_docs: models.TextField = models.TextField(blank=True)  # type: ignore[var-annotated]
     campaign_objective: models.TextField = models.TextField(blank=True)  # type: ignore[var-annotated]
     booking_link: models.URLField = models.URLField(max_length=500, blank=True)  # type: ignore[var-annotated]
@@ -194,8 +219,12 @@ class Task(models.Model):
         COMPLETED = "completed"
         FAILED = "failed"
 
-    task_type: models.CharField = models.CharField(max_length=20, choices=TaskType.choices)  # type: ignore[var-annotated]
-    status: models.CharField = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)  # type: ignore[var-annotated]
+    task_type: models.CharField = models.CharField(
+        max_length=20, choices=TaskType.choices
+    )  # type: ignore[var-annotated]
+    status: models.CharField = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.PENDING
+    )  # type: ignore[var-annotated]
     scheduled_at: models.DateTimeField = models.DateTimeField()  # type: ignore[var-annotated]
     payload: models.JSONField = models.JSONField(default=dict)  # type: ignore[var-annotated]
     created_at: models.DateTimeField = models.DateTimeField(auto_now_add=True)  # type: ignore[var-annotated]

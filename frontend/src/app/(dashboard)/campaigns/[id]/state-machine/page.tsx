@@ -24,6 +24,15 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  zincDialogContentClassName,
+  zincDialogFooterClassName,
+  zincDialogHeaderClassName,
+  zincInputClassName,
+  zincSelectContentClassName,
+  zincSelectTriggerClassName,
+  zincTextareaClassName,
+} from "@/lib/modal-styles";
 import { Icons } from "@/lib/types/components";
 import {
   getCampaign,
@@ -381,8 +390,10 @@ export default function StateMachinePage() {
               open={simulationDialogOpen}
               onOpenChange={setSimulationDialogOpen}
             >
-              <DialogContent className="sm:max-w-[600px]">
-                <DialogHeader>
+              <DialogContent
+                className={`${zincDialogContentClassName} sm:max-w-[600px]`}
+              >
+                <DialogHeader className={zincDialogHeaderClassName}>
                   <DialogTitle>Simulate State Machine</DialogTitle>
                   <DialogDescription>
                     Test how leads will move through your campaign workflow
@@ -394,7 +405,7 @@ export default function StateMachinePage() {
                       Simulation Input
                     </label>
                     <textarea
-                      className="w-full mt-2 p-2 border rounded-md"
+                      className={`${zincTextareaClassName} mt-2 w-full rounded-lg p-2`}
                       rows={3}
                       placeholder="Enter simulation data (e.g., lead profile, response patterns)..."
                       value={simulationInput}
@@ -404,7 +415,7 @@ export default function StateMachinePage() {
                   <div>
                     <label className="text-sm font-medium">Start State</label>
                     <select
-                      className="w-full mt-2 p-2 border rounded-md"
+                      className={`${zincSelectTriggerClassName} mt-2 rounded-lg p-2`}
                       value={
                         simulationStartState ||
                         stateMachine?.startState ||
@@ -420,17 +431,18 @@ export default function StateMachinePage() {
                     </select>
                   </div>
                   {simulationResult && (
-                    <div className="mt-4 p-4 bg-muted rounded-lg">
+                    <div className="mt-4 rounded-xl border border-zinc-800/80 bg-zinc-900/50 p-4">
                       <h4 className="font-medium mb-2">Simulation Result</h4>
-                      <pre className="text-sm overflow-auto max-h-40">
+                      <pre className="max-h-40 overflow-auto text-sm text-zinc-300">
                         {JSON.stringify(simulationResult, null, 2)}
                       </pre>
                     </div>
                   )}
                 </div>
-                <DialogFooter>
+                <DialogFooter className={zincDialogFooterClassName}>
                   <Button
                     variant="outline"
+                    className="border-zinc-800 bg-zinc-900 text-zinc-100 hover:bg-zinc-800"
                     onClick={() => setSimulationDialogOpen(false)}
                   >
                     Cancel

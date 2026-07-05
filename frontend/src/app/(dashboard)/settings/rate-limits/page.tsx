@@ -1,44 +1,54 @@
-'use client'
+"use client";
 
-import { useState, useEffect, useCallback } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Skeleton } from '@/components/ui/skeleton'
-import { Icons } from '@/lib/types/components'
-import { getRateLimits, type Settings } from '@/lib/api/dashboard'
-import RateLimitForm from '@/components/settings/rate-limit-form'
+import { useState, useEffect, useCallback } from "react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Icons } from "@/lib/types/components";
+import { getRateLimits, type Settings } from "@/lib/api/dashboard";
+import RateLimitForm from "@/components/settings/rate-limit-form";
 
 export default function RateLimitsPage() {
-  const [rateLimits, setRateLimits] = useState<Settings['rate_limits'] | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [rateLimits, setRateLimits] = useState<Settings["rate_limits"] | null>(
+    null,
+  );
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const loadRateLimits = useCallback(async () => {
     try {
-      setLoading(true)
-      const response = await getRateLimits()
+      setLoading(true);
+      const response = await getRateLimits();
       if (response.data) {
-        setRateLimits(response.data)
+        setRateLimits(response.data);
       } else {
-        setError('Failed to load rate limits')
+        setError("Failed to load rate limits");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An unexpected error occurred')
+      setError(
+        err instanceof Error ? err.message : "An unexpected error occurred",
+      );
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }, [])
+  }, []);
 
   useEffect(() => {
     void (async () => {
-      await loadRateLimits()
-    })()
-  }, [loadRateLimits])
+      await loadRateLimits();
+    })();
+  }, [loadRateLimits]);
 
   const handleRateLimitsUpdate = () => {
-    loadRateLimits()
-  }
+    loadRateLimits();
+  };
 
   if (loading) {
     return (
@@ -52,7 +62,7 @@ export default function RateLimitsPage() {
         </div>
         <Skeleton className="h-96 w-full" />
       </div>
-    )
+    );
   }
 
   if (error) {
@@ -66,7 +76,7 @@ export default function RateLimitsPage() {
           </Button>
         </AlertDescription>
       </Alert>
-    )
+    );
   }
 
   return (
@@ -75,7 +85,8 @@ export default function RateLimitsPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Rate Limits</h1>
           <p className="text-muted-foreground">
-            Configure daily limits for connection requests and follow-up messages
+            Configure daily limits and pacing for connection requests and
+            follow-up messages
           </p>
         </div>
         <Button variant="outline" onClick={loadRateLimits}>
@@ -86,14 +97,15 @@ export default function RateLimitsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Daily Rate Limits</CardTitle>
+          <CardTitle>Rate Limit Settings</CardTitle>
           <CardDescription>
-            Manage your connection and follow-up message limits to stay within LinkedIn recommended guidelines
+            Manage daily limits, velocity, and cooldown settings to stay within
+            LinkedIn recommended guidelines
           </CardDescription>
         </CardHeader>
         <CardContent>
           {rateLimits && (
-            <RateLimitForm 
+            <RateLimitForm
               initialData={rateLimits}
               onSuccess={handleRateLimitsUpdate}
             />
@@ -101,5 +113,5 @@ export default function RateLimitsPage() {
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }

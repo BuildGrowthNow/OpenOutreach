@@ -25,6 +25,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  zincDialogContentClassName,
+  zincDialogHeaderClassName,
+  zincInputClassName,
+  zincSelectContentClassName,
+  zincSelectTriggerClassName,
+  zincTextareaClassName,
+} from "@/lib/modal-styles";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -1249,8 +1257,10 @@ const StateMachinePage = () => {
       {/* Node Editor Dialog */}
       {editingNode && (
         <Dialog open={nodeEditorOpen} onOpenChange={setNodeEditorOpen}>
-          <DialogContent>
-            <DialogHeader>
+          <DialogContent
+            className={`${zincDialogContentClassName} sm:max-w-[640px]`}
+          >
+            <DialogHeader className={zincDialogHeaderClassName}>
               <DialogTitle>Edit Node: {editingNode.name}</DialogTitle>
               <DialogDescription>Configure node properties</DialogDescription>
             </DialogHeader>
@@ -1259,6 +1269,7 @@ const StateMachinePage = () => {
               <div className="space-y-2">
                 <Label htmlFor="node-name">Name</Label>
                 <Input
+                  className={zincInputClassName}
                   id="node-name"
                   value={editingNode.name}
                   onChange={(e) =>
@@ -1281,10 +1292,10 @@ const StateMachinePage = () => {
                     )
                   }
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className={zincSelectTriggerClassName}>
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className={zincSelectContentClassName}>
                     <SelectItem value="start">Start</SelectItem>
                     <SelectItem value="state">State</SelectItem>
                     <SelectItem value="wait">Wait</SelectItem>
@@ -1301,7 +1312,7 @@ const StateMachinePage = () => {
                 <Label htmlFor="node-desc">Description</Label>
                 <textarea
                   id="node-desc"
-                  className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  className={`${zincTextareaClassName} min-h-[80px] w-full px-3 py-2 text-sm`}
                   value={editingNode.description}
                   onChange={(e) =>
                     setEditingNode((prev) =>
@@ -1315,7 +1326,7 @@ const StateMachinePage = () => {
 
             <Button
               variant="outline"
-              className="w-full"
+              className="w-full border-zinc-800 bg-zinc-900 text-zinc-100 hover:bg-zinc-800"
               onClick={() => {
                 if (!stateMachine) return;
                 const updatedNodes = stateMachine.nodes.map((n) =>

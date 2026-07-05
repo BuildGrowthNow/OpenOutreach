@@ -1,16 +1,13 @@
 # Settings API Views
 
 from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated
 
 from openoutreach.core.models import SiteConfig
 from openoutreach.linkedin.models import LinkedInProfile
-from openoutreach.linkedin.services.smart_rate_limits import (
-    SmartRateLimiter,
-    smart_get_remaining,
-)
+from openoutreach.linkedin.services.smart_rate_limits import SmartRateLimiter
 from openoutreach.mongodb.models import UserProfile
 from openoutreach.mongodb.serializers import UserProfileSerializer
 
@@ -28,7 +25,7 @@ class SettingsView(APIView):
     def get(self, request):
         """Get all system settings including user profile from MongoDB."""
         config = SiteConfig.load()
-        
+
         # Get user profile from MongoDB
         user_profile = UserProfile.get(str(request.user.id))
         profile_data = {}
@@ -43,7 +40,9 @@ class SettingsView(APIView):
                 "company": profile_dict.get("company", ""),
                 "position": profile_dict.get("position", ""),
                 "timezone": profile_dict.get("timezone", "UTC"),
-                "notification_preferences": profile_dict.get("notification_preferences", {}),
+                "notification_preferences": profile_dict.get(
+                    "notification_preferences", {}
+                ),
                 "ui_preferences": profile_dict.get("ui_preferences", {}),
             }
 
@@ -53,6 +52,9 @@ class SettingsView(APIView):
                     "provider": config.llm_provider,
                     "model": config.ai_model,
                     "api_base": config.llm_api_base,
+                    "writing_style": config.ai_writing_style,
+                    "say_rules": config.ai_say_rules,
+                    "avoid_rules": config.ai_avoid_rules,
                 },
                 "rate_limits": {
                     "daily_connection_limit": config.daily_connection_limit,
@@ -83,6 +85,12 @@ class SettingsView(APIView):
             config.ai_model = llm_config["model"]
         if "api_base" in llm_config:
             config.llm_api_base = llm_config["api_base"]
+        if "writing_style" in llm_config:
+            config.ai_writing_style = llm_config["writing_style"]
+        if "say_rules" in llm_config:
+            config.ai_say_rules = llm_config["say_rules"]
+        if "avoid_rules" in llm_config:
+            config.ai_avoid_rules = llm_config["avoid_rules"]
 
         # Update LinkedIn profile if provided
         linkedin_profile = data.get("linkedin_profile", {})
@@ -103,25 +111,27 @@ class SettingsView(APIView):
             config.cooldown_minutes = rate_limits["cooldown_minutes"]
 
         config.save()
-        
+
         # Update user profile in MongoDB if provided
         profile_data = data.get("profile", {})
         if profile_data:
             user_profile = UserProfile.get(str(request.user.id))
             if user_profile:
                 # Update existing profile
-                serializer = UserProfileSerializer(user_profile, data=profile_data, partial=True)
+                serializer = UserProfileSerializer(
+                    user_profile, data=profile_data, partial=True
+                )
             else:
                 # Create new profile
                 profile_data["user_id"] = str(request.user.id)
                 serializer = UserProfileSerializer(data=profile_data)
-                
+
             if serializer.is_valid():
                 serializer.save()
             else:
                 return Response(
                     {"error": "Invalid profile data", "details": serializer.errors},
-                    status=status.HTTP_400_BAD_REQUEST
+                    status=status.HTTP_400_BAD_REQUEST,
                 )
 
         # Return updated settings
@@ -137,7 +147,9 @@ class SettingsView(APIView):
                 "company": profile_dict.get("company", ""),
                 "position": profile_dict.get("position", ""),
                 "timezone": profile_dict.get("timezone", "UTC"),
-                "notification_preferences": profile_dict.get("notification_preferences", {}),
+                "notification_preferences": profile_dict.get(
+                    "notification_preferences", {}
+                ),
                 "ui_preferences": profile_dict.get("ui_preferences", {}),
             }
 
@@ -147,6 +159,9 @@ class SettingsView(APIView):
                     "provider": config.llm_provider,
                     "model": config.ai_model,
                     "api_base": config.llm_api_base,
+                    "writing_style": config.ai_writing_style,
+                    "say_rules": config.ai_say_rules,
+                    "avoid_rules": config.ai_avoid_rules,
                 },
                 "rate_limits": {
                     "daily_connection_limit": config.daily_connection_limit,
@@ -174,9 +189,9 @@ class DailyUsageView(APIView):
 
     def get(self, request):
         """Get daily usage statistics with effective rate limits."""
-        from openoutreach.linkedin.models import ActionLog
         from django.utils import timezone
-        from datetime import date
+
+        from openoutreach.linkedin.models import ActionLog
 
         today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
 

@@ -35,15 +35,24 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Icons } from "@/lib/types/components";
-import {
-  Campaign,
-  CampaignTemplate,
-} from "@/lib/types/components";
+import { Campaign, CampaignTemplate } from "@/lib/types/components";
 import type { LinkedInSetupStatus } from "@/lib/api/dashboard";
 import {
   getLinkedInSetupStatus,
   getCampaignTemplates,
 } from "@/lib/api/dashboard";
+import {
+  zincDialogContentClassName,
+  zincDialogFooterClassName,
+  zincDialogHeaderClassName,
+  zincInputClassName,
+  zincSectionClassName,
+  zincSelectContentClassName,
+  zincSelectTriggerClassName,
+  zincTabsListClassName,
+  zincTabsTriggerClassName,
+  zincTextareaClassName,
+} from "@/lib/modal-styles";
 
 const formSchema = z.object({
   name: z
@@ -219,18 +228,18 @@ export function CampaignForm({
   if (checkingLinkedin) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
+        <DialogContent
+          className={`${zincDialogContentClassName} sm:max-w-[600px]`}
+        >
+          <DialogHeader className={zincDialogHeaderClassName}>
             <DialogTitle>Checking Setup Status</DialogTitle>
             <DialogDescription>
               Verifying your LinkedIn configuration before creating a campaign.
             </DialogDescription>
           </DialogHeader>
-          <div className="flex items-center justify-center py-12 space-x-4">
-            <Icons.RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
-            <span className="text-muted-foreground">
-              Checking setup status...
-            </span>
+          <div className="flex items-center justify-center gap-4 py-12 text-zinc-400">
+            <Icons.RefreshCw className="h-8 w-8 animate-spin text-zinc-400" />
+            <span>Checking setup status...</span>
           </div>
         </DialogContent>
       </Dialog>
@@ -245,22 +254,25 @@ export function CampaignForm({
   ) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
+        <DialogContent
+          className={`${zincDialogContentClassName} sm:max-w-[520px]`}
+        >
+          <DialogHeader className={zincDialogHeaderClassName}>
             <DialogTitle>LinkedIn Not Configured</DialogTitle>
             <DialogDescription>
               You must set up LinkedIn credentials before creating a campaign.
             </DialogDescription>
           </DialogHeader>
-          <div className="flex flex-col items-center justify-center py-8 text-center space-y-4">
-            <div className="w-16 h-16 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
-              <Icons.AlertCircle className="h-8 w-8 text-red-600" />
+          <div className="flex flex-col items-center justify-center space-y-4 py-8 text-center">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full border border-red-500/30 bg-red-500/10">
+              <Icons.AlertCircle className="h-8 w-8 text-red-400" />
             </div>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-zinc-400">
               You must set up LinkedIn credentials before creating a campaign.
             </p>
             <Button
-              variant="secondary"
+              variant="outline"
+              className="border-zinc-800 bg-zinc-900 text-zinc-100 hover:bg-zinc-800"
               onClick={() => {
                 window.location.href = "/settings?tab=linkedin-credentials";
                 onOpenChange(false);
@@ -277,8 +289,12 @@ export function CampaignForm({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px]">
-        <DialogHeader>
+      <DialogContent
+        className={`${zincDialogContentClassName} max-h-[90vh] overflow-hidden p-0 sm:max-w-[860px]`}
+      >
+        <DialogHeader
+          className={`${zincDialogHeaderClassName} px-6 pt-6 sm:px-8 sm:pt-8`}
+        >
           <DialogTitle>
             {isEditing ? "Edit Campaign" : "Create New Campaign"}
           </DialogTitle>
@@ -292,129 +308,58 @@ export function CampaignForm({
         <Form {...form}>
           <form
             onSubmit={form.handleSubmit(handleSubmit)}
-            className="space-y-6"
+            className="flex max-h-[calc(90vh-92px)] flex-col"
           >
-            <Tabs defaultValue="basic" className="w-full">
-              <TabsList className="grid w-full grid-cols-4">
-                <TabsTrigger value="basic">Basic Info</TabsTrigger>
-                <TabsTrigger value="settings">Settings</TabsTrigger>
-                <TabsTrigger value="advanced">Advanced</TabsTrigger>
-                <TabsTrigger value="templates">Templates</TabsTrigger>
+            <Tabs
+              defaultValue="basic"
+              className="flex-1 overflow-hidden px-6 py-6 sm:px-8 sm:py-8"
+            >
+              <TabsList
+                className={`${zincTabsListClassName} grid grid-cols-2 gap-1 md:grid-cols-4`}
+              >
+                <TabsTrigger className={zincTabsTriggerClassName} value="basic">
+                  Basic Info
+                </TabsTrigger>
+                <TabsTrigger
+                  className={zincTabsTriggerClassName}
+                  value="settings"
+                >
+                  Settings
+                </TabsTrigger>
+                <TabsTrigger
+                  className={zincTabsTriggerClassName}
+                  value="advanced"
+                >
+                  Advanced
+                </TabsTrigger>
+                <TabsTrigger
+                  className={zincTabsTriggerClassName}
+                  value="templates"
+                >
+                  Templates
+                </TabsTrigger>
               </TabsList>
 
-              <TabsContent value="basic" className="space-y-4">
-                <FormField
-                  control={form.control}
-                  name="name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Campaign Name</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Enter campaign name" {...field} />
-                      </FormControl>
-                      <FormDescription>
-                        A descriptive name for your campaign
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="description"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Description</FormLabel>
-                      <FormControl>
-                        <Textarea
-                          placeholder="Describe what this campaign is about..."
-                          className="resize-none"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        Optional: Brief description of the campaign
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="campaignObjective"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Campaign Objective</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="What are you trying to achieve?"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        The primary goal of this campaign
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </TabsContent>
-
-              <TabsContent value="settings" className="space-y-4">
-                <FormField
-                  control={form.control}
-                  name="status"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Status</FormLabel>
-                      <Select
-                        onValueChange={(value: string | null) => {
-                          if (value) field.onChange(value);
-                        }}
-                        defaultValue={field.value}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select status" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="draft">Draft</SelectItem>
-                          <SelectItem value="active">Active</SelectItem>
-                          <SelectItem value="paused">Paused</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormDescription>Set campaign status</FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <div className="grid grid-cols-2 gap-4">
+              <div className="mt-6 max-h-[calc(90vh-260px)] overflow-y-auto pr-1">
+                <TabsContent
+                  value="basic"
+                  className={`${zincSectionClassName} space-y-4`}
+                >
                   <FormField
                     control={form.control}
-                    name="velocity"
+                    name="name"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Daily Connection Limit</FormLabel>
+                        <FormLabel>Campaign Name</FormLabel>
                         <FormControl>
                           <Input
-                            type="number"
-                            min="1"
-                            max="100"
-                            placeholder="10"
-                            value={field.value}
-                            onChange={(e) =>
-                              field.onChange(Number(e.target.value))
-                            }
-                            onBlur={field.onBlur}
-                            ref={field.ref}
+                            className={zincInputClassName}
+                            placeholder="Enter campaign name"
+                            {...field}
                           />
                         </FormControl>
                         <FormDescription>
-                          Maximum number of connections to send per day
+                          A descriptive name for your campaign
                         </FormDescription>
                         <FormMessage />
                       </FormItem>
@@ -423,217 +368,344 @@ export function CampaignForm({
 
                   <FormField
                     control={form.control}
-                    name="cooldownMinutes"
+                    name="description"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Cooldown (minutes)</FormLabel>
+                        <FormLabel>Description</FormLabel>
                         <FormControl>
-                          <Input
-                            type="number"
-                            min="1"
-                            max="1440"
-                            placeholder="60"
-                            value={field.value}
-                            onChange={(e) =>
-                              field.onChange(Number(e.target.value))
-                            }
-                            onBlur={field.onBlur}
-                            ref={field.ref}
+                          <Textarea
+                            placeholder="Describe what this campaign is about..."
+                            className={`${zincTextareaClassName} resize-none`}
+                            {...field}
                           />
                         </FormControl>
-                        <FormDescription>Between actions</FormDescription>
+                        <FormDescription>
+                          Optional: Brief description of the campaign
+                        </FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                </div>
 
-                <FormField
-                  control={form.control}
-                  name="isFreemium"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                      <div className="space-y-0.5">
-                        <FormLabel className="text-base">
-                          Freemium Model
-                        </FormLabel>
+                  <FormField
+                    control={form.control}
+                    name="campaignObjective"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Campaign Objective</FormLabel>
+                        <FormControl>
+                          <Input
+                            className={zincInputClassName}
+                            placeholder="What are you trying to achieve?"
+                            {...field}
+                          />
+                        </FormControl>
                         <FormDescription>
-                          Offers free trial/product
+                          The primary goal of this campaign
                         </FormDescription>
-                      </div>
-                      <FormControl>
-                        <Switch
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                        />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </TabsContent>
 
-                <FormField
-                  control={form.control}
-                  name="ghostModeEnabled"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                      <div className="space-y-0.5">
-                        <FormLabel className="text-base">Ghost Mode</FormLabel>
-                        <FormDescription>
-                          Enable ghost mode to test campaign without sending
-                          real LinkedIn actions
-                        </FormDescription>
-                      </div>
-                      <FormControl>
-                        <Switch
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                        />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-              </TabsContent>
+                <TabsContent
+                  value="settings"
+                  className={`${zincSectionClassName} space-y-4`}
+                >
+                  <FormField
+                    control={form.control}
+                    name="status"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Status</FormLabel>
+                        <Select
+                          onValueChange={(value: string | null) => {
+                            if (value) field.onChange(value);
+                          }}
+                          defaultValue={field.value}
+                        >
+                          <FormControl>
+                            <SelectTrigger
+                              className={zincSelectTriggerClassName}
+                            >
+                              <SelectValue placeholder="Select status" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent className={zincSelectContentClassName}>
+                            <SelectItem value="draft">Draft</SelectItem>
+                            <SelectItem value="active">Active</SelectItem>
+                            <SelectItem value="paused">Paused</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormDescription>Set campaign status</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
-              <TabsContent value="advanced" className="space-y-4">
-                <FormField
-                  control={form.control}
-                  name="productDocs"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Product Documentation URL</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="https://example.com/docs"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        Link to product documentation
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="velocity"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Daily Connection Limit</FormLabel>
+                          <FormControl>
+                            <Input
+                              className={zincInputClassName}
+                              type="number"
+                              min="1"
+                              max="100"
+                              placeholder="10"
+                              value={field.value}
+                              onChange={(e) =>
+                                field.onChange(Number(e.target.value))
+                              }
+                              onBlur={field.onBlur}
+                              ref={field.ref}
+                            />
+                          </FormControl>
+                          <FormDescription>
+                            Maximum number of connections to send per day
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-                <FormField
-                  control={form.control}
-                  name="bookingLink"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Booking Link</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="https://calendly.com/your-link"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormDescription>Meeting booking link</FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </TabsContent>
-
-              <TabsContent value="templates" className="space-y-4">
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-1">
-                      <h4 className="font-medium">Use Template</h4>
-                      <p className="text-sm text-muted-foreground">
-                        Select a campaign template to clone its configuration
-                      </p>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setShowTemplateList(!showTemplateList)}
-                    >
-                      Browse Templates
-                    </Button>
+                    <FormField
+                      control={form.control}
+                      name="cooldownMinutes"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Cooldown (minutes)</FormLabel>
+                          <FormControl>
+                            <Input
+                              className={zincInputClassName}
+                              type="number"
+                              min="1"
+                              max="1440"
+                              placeholder="60"
+                              value={field.value}
+                              onChange={(e) =>
+                                field.onChange(Number(e.target.value))
+                              }
+                              onBlur={field.onBlur}
+                              ref={field.ref}
+                            />
+                          </FormControl>
+                          <FormDescription>Between actions</FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                   </div>
 
-                  {showTemplateList && (
-                    <div className="rounded-lg border border-dashed p-6 bg-muted/30">
-                      {templateLoading ? (
-                        <div className="text-center py-4">
-                          <Icons.RefreshCw className="h-8 w-8 animate-spin mx-auto text-muted-foreground" />
-                          <p className="text-sm text-muted-foreground mt-2">
-                            Loading templates...
-                          </p>
+                  <FormField
+                    control={form.control}
+                    name="isFreemium"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-center justify-between rounded-xl border border-zinc-800/80 bg-zinc-900/50 p-4">
+                        <div className="space-y-0.5">
+                          <FormLabel className="text-base">
+                            Freemium Model
+                          </FormLabel>
+                          <FormDescription>
+                            Offers free trial/product
+                          </FormDescription>
                         </div>
-                      ) : templates.length === 0 ? (
-                        <div className="text-center py-6">
-                          <p className="text-sm text-muted-foreground">
-                            No templates found
-                          </p>
+                        <FormControl>
+                          <Switch
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="ghostModeEnabled"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-center justify-between rounded-xl border border-zinc-800/80 bg-zinc-900/50 p-4">
+                        <div className="space-y-0.5">
+                          <FormLabel className="text-base">
+                            Ghost Mode
+                          </FormLabel>
+                          <FormDescription>
+                            Enable ghost mode to test campaign without sending
+                            real LinkedIn actions
+                          </FormDescription>
+                        </div>
+                        <FormControl>
+                          <Switch
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                </TabsContent>
+
+                <TabsContent
+                  value="advanced"
+                  className={`${zincSectionClassName} space-y-4`}
+                >
+                  <FormField
+                    control={form.control}
+                    name="productDocs"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Product Documentation URL</FormLabel>
+                        <FormControl>
+                          <Input
+                            className={zincInputClassName}
+                            placeholder="https://example.com/docs"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          Link to product documentation
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="bookingLink"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Booking Link</FormLabel>
+                        <FormControl>
+                          <Input
+                            className={zincInputClassName}
+                            placeholder="https://calendly.com/your-link"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormDescription>Meeting booking link</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </TabsContent>
+
+                <TabsContent
+                  value="templates"
+                  className={`${zincSectionClassName} space-y-4`}
+                >
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-1">
+                        <h4 className="font-medium text-zinc-100">
+                          Use Template
+                        </h4>
+                        <p className="text-sm text-zinc-400">
+                          Select a campaign template to clone its configuration
+                        </p>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-zinc-800 bg-zinc-900 text-zinc-100 hover:bg-zinc-800"
+                        onClick={() => setShowTemplateList(!showTemplateList)}
+                      >
+                        Browse Templates
+                      </Button>
+                    </div>
+
+                    {showTemplateList && (
+                      <div className="rounded-xl border border-dashed border-zinc-800 bg-zinc-950/40 p-6">
+                        {templateLoading ? (
+                          <div className="py-4 text-center">
+                            <Icons.RefreshCw className="mx-auto h-8 w-8 animate-spin text-zinc-400" />
+                            <p className="mt-2 text-sm text-zinc-400">
+                              Loading templates...
+                            </p>
+                          </div>
+                        ) : templates.length === 0 ? (
+                          <div className="py-6 text-center">
+                            <p className="text-sm text-zinc-400">
+                              No templates found
+                            </p>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="mt-2 border-zinc-800 bg-zinc-900 text-zinc-100 hover:bg-zinc-800"
+                              onClick={() =>
+                                router.push("/campaigns/templates")
+                              }
+                            >
+                              Create Template
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="space-y-2 max-h-60 overflow-y-auto">
+                            {templates.map((template) => (
+                              <div
+                                key={template.id}
+                                className={`flex cursor-pointer items-center justify-between rounded-xl border p-3 transition-colors ${
+                                  selectedTemplate?.id === template.id
+                                    ? "border-zinc-600 bg-zinc-900"
+                                    : "border-zinc-800 bg-zinc-950/60 hover:bg-zinc-900/70"
+                                }`}
+                                onClick={() => setSelectedTemplate(template)}
+                              >
+                                <div className="space-y-1">
+                                  <div className="font-medium text-zinc-100">
+                                    {template.name}
+                                  </div>
+                                  <div className="line-clamp-1 text-xs text-zinc-400">
+                                    {template.description || "No description"}
+                                  </div>
+                                </div>
+                                {selectedTemplate?.id === template.id && (
+                                  <Icons.CheckCircle className="h-5 w-5 text-zinc-100" />
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {selectedTemplate && (
+                      <div className="rounded-xl border border-zinc-700 bg-zinc-900/70 p-4">
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-1">
+                            <p className="text-sm font-medium text-zinc-100">
+                              Template Selected: {selectedTemplate.name}
+                            </p>
+                            <p className="text-xs text-zinc-400">
+                              Click "Create Campaign" to apply template settings
+                            </p>
+                          </div>
                           <Button
                             size="sm"
-                            variant="outline"
-                            className="mt-2"
-                            onClick={() => router.push("/campaigns/templates")}
+                            variant="ghost"
+                            className="text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"
+                            onClick={() => setSelectedTemplate(null)}
                           >
-                            Create Template
+                            Remove
                           </Button>
                         </div>
-                      ) : (
-                        <div className="space-y-2 max-h-60 overflow-y-auto">
-                          {templates.map((template) => (
-                            <div
-                              key={template.id}
-                              className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-colors ${
-                                selectedTemplate?.id === template.id
-                                  ? "bg-primary/10 border-primary"
-                                  : "hover:bg-muted/50"
-                              }`}
-                              onClick={() => setSelectedTemplate(template)}
-                            >
-                              <div className="space-y-1">
-                                <div className="font-medium">
-                                  {template.name}
-                                </div>
-                                <div className="text-xs text-muted-foreground line-clamp-1">
-                                  {template.description || "No description"}
-                                </div>
-                              </div>
-                              {selectedTemplate?.id === template.id && (
-                                <Icons.CheckCircle className="h-5 w-5 text-primary" />
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {selectedTemplate && (
-                    <div className="rounded-lg bg-blue-500/5 border border-blue-500/20 p-4">
-                      <div className="flex items-center justify-between">
-                        <div className="space-y-1">
-                          <p className="text-sm font-medium text-blue-600 dark:text-blue-400">
-                            Template Selected: {selectedTemplate.name}
-                          </p>
-                          <p className="text-xs text-blue-600/80 dark:text-blue-400/80">
-                            Click "Create Campaign" to apply template settings
-                          </p>
-                        </div>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => setSelectedTemplate(null)}
-                        >
-                          Remove
-                        </Button>
                       </div>
-                    </div>
-                  )}
-                </div>
-              </TabsContent>
+                    )}
+                  </div>
+                </TabsContent>
+              </div>
             </Tabs>
 
-            <DialogFooter>
+            <DialogFooter className={zincDialogFooterClassName}>
               <Button
                 type="button"
                 variant="outline"
+                className="border-zinc-800 bg-zinc-900 text-zinc-100 hover:bg-zinc-800"
                 onClick={() => onOpenChange(false)}
                 disabled={loading}
               >
