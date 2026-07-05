@@ -9,14 +9,13 @@ Django-free ``linkedin_cli.browser`` library and are called from here.
 
 from __future__ import annotations
 
-from typing import Any
 import logging
-
-from termcolor import colored
+from typing import Any
 
 from linkedin_cli.auth import authenticate
 from linkedin_cli.browser.login import dismiss_comply_gate, launch_browser
 from linkedin_cli.browser.nav import goto_page
+from termcolor import colored
 
 logger = logging.getLogger(__name__)
 
@@ -27,13 +26,13 @@ def _save_cookies(session: Any) -> None:
     """Persist Playwright storage state (cookies) to the DB."""
     state = session.context.storage_state()
     session.linkedin_profile.cookie_data = state
-    session.linkedin_profile.save(update_fields=["cookie_data"])
+    session.linkedin_profile.save(update_fields=["cookie_data_encrypted"])
 
 
 def start_browser_session(session: Any) -> None:
     logger.debug("Configuring browser for %s", session)
 
-    session.linkedin_profile.refresh_from_db(fields=["cookie_data"])
+    session.linkedin_profile.refresh_from_db(fields=["cookie_data_encrypted"])
     cookie_data = session.linkedin_profile.cookie_data
 
     storage_state = cookie_data if cookie_data else None

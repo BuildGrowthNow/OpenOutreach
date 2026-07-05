@@ -7,7 +7,7 @@ import time
 from functools import cached_property
 from typing import Any, Optional
 
-from openoutreach.core.conf import MIN_DELAY, MAX_DELAY
+from openoutreach.core.conf import MAX_DELAY, MIN_DELAY
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +63,7 @@ class AccountSession:
         (the disqualified ``self_lead``) is layered on in ``register_self_lead``.
         """
         from linkedin_cli.setup.self_profile import discover_self_profile
+
         from openoutreach.linkedin.db.leads import register_self_lead
 
         profile = discover_self_profile(self)
@@ -81,14 +82,14 @@ class AccountSession:
         logger.warning("Re-authenticating %s — clearing saved session", self)
         self.close()
         self.linkedin_profile.cookie_data = None
-        self.linkedin_profile.save(update_fields=["cookie_data"])
+        self.linkedin_profile.save(update_fields=["cookie_data_encrypted"])
         start_browser_session(session=self)
 
     def _maybe_refresh_cookies(self):
         """Re-login if the li_at auth cookie in the saved DB state is expired."""
         from openoutreach.linkedin.browser.launch import start_browser_session
 
-        self.linkedin_profile.refresh_from_db(fields=["cookie_data"])
+        self.linkedin_profile.refresh_from_db(fields=["cookie_data_encrypted"])
         cookie_data = self.linkedin_profile.cookie_data
         if not cookie_data:
             return

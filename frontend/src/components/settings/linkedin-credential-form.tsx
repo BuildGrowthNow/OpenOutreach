@@ -54,6 +54,7 @@ export default function LinkedInCredentialForm({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showOptionalCookie, setShowOptionalCookie] = useState(false);
   const { toast } = useToast();
 
   const form = useForm<CredentialFormValues>({
@@ -307,12 +308,30 @@ export default function LinkedInCredentialForm({
                             <div className="flex items-center justify-center rounded-l-md border border-r-0 border-zinc-800 bg-zinc-900 px-3">
                               <Icons.Lock className="h-4 w-4 text-zinc-400" />
                             </div>
-                            <Input
-                              placeholder="••••••••"
-                              type={showPassword ? "text" : "password"}
-                              {...field}
-                              className="rounded-l-none border-zinc-800 bg-zinc-950/70"
-                            />
+                            <div className="relative flex-1">
+                              <Input
+                                placeholder="••••••••"
+                                type={showPassword ? "text" : "password"}
+                                {...field}
+                                className="rounded-l-none border-zinc-800 bg-zinc-950/70 pr-11"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setShowPassword(!showPassword)}
+                                className="absolute inset-y-0 right-0 flex items-center px-3 text-zinc-400 transition hover:text-zinc-100"
+                                aria-label={
+                                  showPassword
+                                    ? "Hide password"
+                                    : "Show password"
+                                }
+                              >
+                                {showPassword ? (
+                                  <Icons.EyeOff className="h-4 w-4" />
+                                ) : (
+                                  <Icons.Eye className="h-4 w-4" />
+                                )}
+                              </button>
+                            </div>
                           </div>
                         </FormControl>
                         <FormDescription>
@@ -323,68 +342,144 @@ export default function LinkedInCredentialForm({
                     )}
                   />
 
-                  <div className="rounded-xl border border-zinc-800/80 bg-zinc-900/40 p-4">
-                    <div className="mb-4 space-y-1">
-                      <div className="flex items-center gap-2 text-sm font-medium text-zinc-100">
-                        <Icons.Info className="h-4 w-4 text-zinc-400" />
-                        Optional session cookie
+                  <div className="rounded-xl border border-zinc-800/80 bg-zinc-900/40 p-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowOptionalCookie((open) => !open)}
+                      className="flex w-full items-center justify-between rounded-lg px-3 py-3 text-left transition hover:bg-zinc-800/40"
+                    >
+                      <div className="space-y-1 pr-4">
+                        <div className="flex items-center gap-2 text-sm font-medium text-zinc-100">
+                          <Icons.Info className="h-4 w-4 text-zinc-400" />
+                          Optional session cookie
+                        </div>
+                        <p className="text-sm text-zinc-400">
+                          Optional fallback if normal email/password login has
+                          trouble, or if you want to reuse a session that is
+                          already logged in.
+                        </p>
                       </div>
-                      <p className="text-sm text-zinc-400">
-                        Paste an `li_at` cookie or a full Playwright
-                        `storage_state` JSON blob if you want to seed an already
-                        authenticated session.
-                      </p>
-                    </div>
+                      <Icons.ChevronDown
+                        className={`h-4 w-4 shrink-0 text-zinc-400 transition-transform ${showOptionalCookie ? "rotate-180" : "rotate-0"}`}
+                      />
+                    </button>
 
-                    <FormField
-                      control={form.control}
-                      name="cookie_data"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Optional Cookie</FormLabel>
-                          <FormControl>
-                            <Textarea
-                              placeholder="Paste li_at cookie value or full Playwright storage_state JSON"
-                              {...field}
-                              rows={5}
-                              className="border-zinc-800 bg-zinc-950/70"
-                            />
-                          </FormControl>
-                          <FormDescription>
-                            If provided, the cookie is stored encrypted after
-                            the credential is linked to your LinkedIn profile.
-                          </FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                    {showOptionalCookie ? (
+                      <div className="mt-2 border-t border-zinc-800/80 px-3 pb-3 pt-4">
+                        <div className="max-h-104 space-y-4 overflow-y-auto pr-2">
+                          <div className="rounded-lg border border-zinc-800/80 bg-zinc-950/60 p-4">
+                            <p className="text-sm font-medium text-zinc-100">
+                              You can leave this empty
+                            </p>
+                            <p className="mt-1 text-sm text-zinc-400">
+                              Most users should start with only LinkedIn email
+                              and password. Use a cookie only if LinkedIn blocks
+                              the normal login flow, asks for repeated
+                              challenges, or you want to reuse an existing
+                              logged-in browser session.
+                            </p>
+                          </div>
+
+                          <div className="space-y-3 rounded-lg border border-zinc-800/80 bg-zinc-950/60 p-4">
+                            <div>
+                              <h4 className="text-sm font-medium text-zinc-100">
+                                Recommended method: browser DevTools
+                              </h4>
+                              <p className="mt-1 text-sm text-zinc-400">
+                                No extension is required. This is the safest
+                                manual path.
+                              </p>
+                            </div>
+                            <ol className="list-decimal space-y-2 pl-5 text-sm text-zinc-300">
+                              <li>
+                                Log into LinkedIn in the same browser you
+                                normally use.
+                              </li>
+                              <li>
+                                Open LinkedIn feed or any logged-in LinkedIn
+                                page.
+                              </li>
+                              <li>
+                                Open browser developer tools:
+                                <span className="text-zinc-400">
+                                  {" "}
+                                  Chrome/Edge: `F12` or `Ctrl+Shift+I`. Firefox:
+                                  `F12` or `Ctrl+Shift+I`.
+                                </span>
+                              </li>
+                              <li>
+                                Go to the storage view for cookies:
+                                <span className="text-zinc-400">
+                                  {" "}
+                                  Chrome/Edge: `Application` → `Storage` →
+                                  `Cookies` → `https://www.linkedin.com`.
+                                  Firefox: `Storage` → `Cookies` →
+                                  `https://www.linkedin.com`.
+                                </span>
+                              </li>
+                              <li>Find the cookie named `li_at`.</li>
+                              <li>
+                                Copy only the cookie value and paste it here.
+                              </li>
+                            </ol>
+                          </div>
+
+                          <div className="space-y-3 rounded-lg border border-zinc-800/80 bg-zinc-950/60 p-4">
+                            <h4 className="text-sm font-medium text-zinc-100">
+                              About the browser console
+                            </h4>
+                            <p className="text-sm text-zinc-400">
+                              The LinkedIn `li_at` cookie is `HttpOnly`, so it
+                              is not reliably available through
+                              `document.cookie` in the browser console. Use
+                              DevTools cookies instead.
+                            </p>
+                          </div>
+
+                          <div className="space-y-3 rounded-lg border border-zinc-800/80 bg-zinc-950/60 p-4">
+                            <h4 className="text-sm font-medium text-zinc-100">
+                              About extensions
+                            </h4>
+                            <p className="text-sm text-zinc-400">
+                              You do not need an extension. If you choose to use
+                              one, only use a tool you fully trust because
+                              browser extensions can access sensitive session
+                              data.
+                            </p>
+                          </div>
+
+                          <FormField
+                            control={form.control}
+                            name="cookie_data"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Optional Cookie</FormLabel>
+                                <FormControl>
+                                  <Textarea
+                                    placeholder="Paste li_at cookie value or full Playwright storage_state JSON"
+                                    {...field}
+                                    rows={5}
+                                    className="border-zinc-800 bg-zinc-950/70"
+                                  />
+                                </FormControl>
+                                <FormDescription>
+                                  You can paste either the raw `li_at` value or
+                                  a full Playwright `storage_state` JSON blob.
+                                  If provided, it is stored encrypted after the
+                                  credential is linked to your LinkedIn profile.
+                                </FormDescription>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
                 </CardContent>
               </Card>
 
-              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-zinc-800/80 pt-6">
-                <div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => setShowPassword(!showPassword)}
-                    disabled={isSubmitting || isTesting}
-                    className="text-zinc-300 hover:bg-zinc-900 hover:text-zinc-100"
-                  >
-                    {showPassword ? (
-                      <>
-                        <Icons.EyeOff className="mr-2 h-4 w-4" />
-                        Hide Password
-                      </>
-                    ) : (
-                      <>
-                        <Icons.Eye className="mr-2 h-4 w-4" />
-                        Show Password
-                      </>
-                    )}
-                  </Button>
-                </div>
-
+              <div className="flex flex-wrap items-center justify-end gap-3 border-t border-zinc-800/80 pt-6">
                 <div className="flex flex-wrap items-center gap-3">
                   {onCancel ? (
                     <Button
