@@ -60,7 +60,7 @@ export default function LinkedInCredentialForm({
   const form = useForm<CredentialFormValues>({
     resolver: zodResolver(credentialSchema),
     defaultValues: {
-      email: initialData?.public_email.replace(/\*\*\*/g, "") || "",
+      email: initialData?.publicEmail.replace(/\*\*\*/g, "") || "",
       password: "",
       cookie_data: "",
     },
@@ -111,7 +111,7 @@ export default function LinkedInCredentialForm({
       );
     }
 
-    return verifyData.credentials.linkedin_profile_id ?? null;
+    return verifyData.credentials.linkedinProfileId ?? null;
   };
 
   const submitCredential = async (
@@ -128,7 +128,7 @@ export default function LinkedInCredentialForm({
     };
 
     let credentialId = initialData?.id ?? null;
-    let profileId = initialData?.linkedin_profile_id ?? null;
+    let profileId = initialData?.linkedinProfileId ?? null;
     let response;
 
     if (initialData) {
@@ -142,7 +142,7 @@ export default function LinkedInCredentialForm({
     }
 
     credentialId = response.data.id;
-    profileId = response.data.credentials.linkedin_profile_id ?? profileId;
+    profileId = response.data.credentials.linkedinProfileId ?? profileId;
 
     if (!initialData) {
       onCreated?.(credentialId);

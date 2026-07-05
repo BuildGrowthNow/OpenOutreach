@@ -51,19 +51,19 @@ import {
 } from "lucide-react";
 
 interface LinkedInSetupStatusData {
-  linkedin_profile: {
+  linkedinProfile: {
     exists: boolean;
     count: number;
-    requires_attention?: boolean;
+    requiresAttention?: boolean;
   };
-  linkedin_credentials: {
+  linkedinCredentials: {
     exists: boolean;
     count: number;
-    active_count?: number;
-    requires_attention?: boolean;
+    activeCount?: number;
+    requiresAttention?: boolean;
   };
-  setup_complete: boolean;
-  setup_progress: {
+  setupComplete: boolean;
+  setupProgress: {
     current: number;
     total: number;
   };
@@ -87,6 +87,7 @@ export function LinkedInConnectionTab({
   >([]);
 
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loadWarning, setLoadWarning] = useState<string | null>(null);
   const [showCookieInstructions, setShowCookieInstructions] = useState(false);
@@ -96,92 +97,90 @@ export function LinkedInConnectionTab({
 
   const { toast } = useToast();
 
-  useEffect(() => {
-    void (async () => {
-      try {
+  const loadLinkedInConnectionData = async ({
+    showSpinner = false,
+  }: { showSpinner?: boolean } = {}) => {
+    try {
+      if (showSpinner) {
         setLoading(true);
-        setError(null);
-        setLoadWarning(null);
+      } else {
+        setIsRefreshing(true);
+      }
+      setError(null);
+      setLoadWarning(null);
 
-        const [guideRes, statusRes, instructionsRes, credsRes] =
-          await Promise.allSettled([
-            getLinkedInSetupGuide(),
-            getLinkedInSetupStatus(),
-            getLinkedInCookieInstructions(),
-            getLinkedInCredentials(),
-          ]);
+      const [guideRes, statusRes, instructionsRes, credsRes] =
+        await Promise.allSettled([
+          getLinkedInSetupGuide(),
+          getLinkedInSetupStatus(),
+          getLinkedInCookieInstructions(),
+          getLinkedInCredentials(),
+        ]);
 
-        if (guideRes.status === "fulfilled" && guideRes.value.data) {
-          setGuide(guideRes.value.data);
-        }
-        if (statusRes.status === "fulfilled" && statusRes.value.data) {
-          setStatusData(statusRes.value.data);
-        }
-        if (
-          instructionsRes.status === "fulfilled" &&
-          instructionsRes.value.data
-        ) {
-          setInstructions(instructionsRes.value.data);
-        }
-        if (credsRes.status === "fulfilled" && credsRes.value.data) {
-          setLinkedinCredentials(credsRes.value.data.credentials || []);
-        }
+      if (guideRes.status === "fulfilled" && guideRes.value.data) {
+        setGuide(guideRes.value.data);
+      }
+      if (statusRes.status === "fulfilled" && statusRes.value.data) {
+        setStatusData(statusRes.value.data);
+      }
+      if (
+        instructionsRes.status === "fulfilled" &&
+        instructionsRes.value.data
+      ) {
+        setInstructions(instructionsRes.value.data);
+      }
+      if (credsRes.status === "fulfilled" && credsRes.value.data) {
+        setLinkedinCredentials(credsRes.value.data.credentials || []);
+      }
 
-        const failures = [
-          guideRes,
-          statusRes,
-          instructionsRes,
-          credsRes,
-        ].filter(
-          (result): result is PromiseRejectedResult =>
-            result.status === "rejected",
-        );
+      const failures = [guideRes, statusRes, instructionsRes, credsRes].filter(
+        (result): result is PromiseRejectedResult =>
+          result.status === "rejected",
+      );
 
-        const essentialFailures = [guideRes, statusRes, instructionsRes].filter(
-          (result): result is PromiseRejectedResult =>
-            result.status === "rejected",
-        );
+      const essentialFailures = [guideRes, statusRes, instructionsRes].filter(
+        (result): result is PromiseRejectedResult =>
+          result.status === "rejected",
+      );
 
-        if (essentialFailures.length === 3) {
-          setError(
-            essentialFailures[0].reason instanceof Error
-              ? essentialFailures[0].reason.message
-              : "Failed to load LinkedIn connection data",
-          );
-        } else if (failures.length > 0) {
-          setLoadWarning(
-            failures
-              .map((result) =>
-                result.reason instanceof Error
-                  ? result.reason.message
-                  : "Failed to load some LinkedIn connection data",
-              )
-              .join(" "),
-          );
-        }
-      } catch (err) {
+      if (essentialFailures.length === 3) {
         setError(
-          err instanceof Error
-            ? err.message
+          essentialFailures[0].reason instanceof Error
+            ? essentialFailures[0].reason.message
             : "Failed to load LinkedIn connection data",
         );
-      } finally {
-        setLoading(false);
+      } else if (failures.length > 0) {
+        setLoadWarning(
+          failures
+            .map((result) =>
+              result.reason instanceof Error
+                ? result.reason.message
+                : "Failed to load some LinkedIn connection data",
+            )
+            .join(" "),
+        );
       }
-    })();
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to load LinkedIn connection data",
+      );
+    } finally {
+      if (showSpinner) {
+        setLoading(false);
+      } else {
+        setIsRefreshing(false);
+      }
+    }
+  };
+
+  useEffect(() => {
+    void loadLinkedInConnectionData({ showSpinner: true });
   }, []);
 
   const handleLinkedInCredentialsUpdate = () => {
-    void (async () => {
-      try {
-        const response = await getLinkedInCredentials();
-        if (response.data) {
-          setLinkedinCredentials(response.data.credentials || []);
-        }
-      } catch (err) {
-        console.debug("Failed to load LinkedIn credentials:", err);
-      }
-    })();
+    void loadLinkedInConnectionData();
   };
 
   const handleAddCredential = async (
@@ -354,15 +353,15 @@ export function LinkedInConnectionTab({
     );
   };
 
-  const linkedinProfile = (statusData?.status?.linkedin_profile ??
-    {}) as LinkedInSetupStatusData["linkedin_profile"];
-  const linkedinCredentialsData = (statusData?.status?.linkedin_credentials ??
-    {}) as LinkedInSetupStatusData["linkedin_credentials"];
-  const setupComplete = Boolean(statusData?.status?.setup_complete ?? false);
-  const setupProgress = (statusData?.status?.setup_progress ?? {
+  const linkedinProfile = (statusData?.status?.linkedinProfile ??
+    {}) as LinkedInSetupStatusData["linkedinProfile"];
+  const linkedinCredentialsData = (statusData?.status?.linkedinCredentials ??
+    {}) as LinkedInSetupStatusData["linkedinCredentials"];
+  const setupComplete = Boolean(statusData?.status?.setupComplete ?? false);
+  const setupProgress = (statusData?.status?.setupProgress ?? {
     current: 0,
     total: 0,
-  }) as LinkedInSetupStatusData["setup_progress"];
+  }) as LinkedInSetupStatusData["setupProgress"];
 
   const getProperty = (
     obj: Record<string, unknown>,
@@ -418,9 +417,15 @@ export function LinkedInConnectionTab({
               Setup Required
             </Badge>
           )}
-          <Button variant="outline" onClick={handleLinkedInCredentialsUpdate}>
-            <Icons.RefreshCw className="mr-2 h-4 w-4" />
-            Refresh Status
+          <Button
+            variant="outline"
+            onClick={handleLinkedInCredentialsUpdate}
+            disabled={isRefreshing}
+          >
+            <Icons.RefreshCw
+              className={`mr-2 h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`}
+            />
+            {isRefreshing ? "Refreshing..." : "Refresh Status"}
           </Button>
         </div>
       </div>

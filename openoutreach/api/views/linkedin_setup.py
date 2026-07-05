@@ -1,11 +1,9 @@
 # openoutreach/api/views/linkedin_setup.py
 """LinkedIn OAuth and Cookie Setup API Views."""
 
-from django.http import HttpRequest, JsonResponse
-from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated
 
 
 class LinkedInCookieInstructionsView(APIView):
@@ -193,20 +191,24 @@ class LinkedInSetupStatusView(APIView):
 
     def get(self, request):
         """Get the current LinkedIn setup status."""
-        from openoutreach.linkedin.models import LinkedInProfile
         from openoutreach.crm.models import LinkedInCredentials
+        from openoutreach.linkedin.models import LinkedInProfile
 
         # Count profiles and credentials
         profile_count = LinkedInProfile.objects.filter(user=request.user).count()
         credential_count = LinkedInCredentials.objects.filter(
             linkedin_profile__user=request.user
         ).count()
-
-        # Check for any active credentials
-        has_active_credentials = LinkedInCredentials.objects.filter(
+        active_credential_count = LinkedInCredentials.objects.filter(
             linkedin_profile__user=request.user,
             status=LinkedInCredentials.STATUS_ACTIVE,
-        ).exists()
+        ).count()
+
+        progress_current = 0
+        if profile_count > 0:
+            progress_current += 1
+        if credential_count > 0:
+            progress_current += 1
 
         return Response(
             {
@@ -220,14 +222,12 @@ class LinkedInSetupStatusView(APIView):
                     "linkedin_credentials": {
                         "exists": credential_count > 0,
                         "count": credential_count,
-                        "active_count": (
-                            credential_count if has_active_credentials else 0
-                        ),
+                        "active_count": active_credential_count,
                         "requires_attention": credential_count == 0,
                     },
-                    "setup_complete": credential_count > 0 and has_active_credentials,
+                    "setup_complete": profile_count > 0 and active_credential_count > 0,
                     "setup_progress": {
-                        "current": 2 if credential_count > 0 else 1,
+                        "current": progress_current,
                         "total": 2,
                     },
                 },

@@ -1,19 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Icons } from "@/lib/types/components";
 import { AlertCircle } from "lucide-react";
 import {
-  LinkedInCredentials,
+  type LinkedInCredentials,
   verifyLinkedInCredentials,
   deleteLinkedInCredentials,
-  rotateLinkedInCredentials,
   getLinkedInCredentialsHealth,
   getLinkedInCredentialsLogs,
-  LinkedInCredentialsLogsResponse,
+  type LinkedInCredentialsHealth,
+  type LinkedInCredentialsLogsResponse,
 } from "@/lib/api/dashboard";
 import { useToast } from "@/components/ui/use-toast";
 import LinkedInCredentialForm from "./linkedin-credential-form";
@@ -24,11 +23,84 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import type { LinkedInCredentialsHealth } from "@/lib/api/dashboard";
 
 interface LinkedInCredentialCardProps {
   credential: LinkedInCredentials;
   onRefresh: () => void;
+}
+
+interface HealthStatusWithDetails {
+  errorDetails?: { message?: string; code?: string };
+  details?: { errorMessage?: string; reason?: string };
+  healthScore?: number;
+  daysUntilExpiry?: number | null;
+  daysSinceRotation?: number;
+  verificationFailures?: number;
+  lastVerified?: string | null;
+  lastUsed?: string | null;
+}
+
+function formatTimestamp(value?: string | null): string | null {
+  if (!value) {
+    return null;
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return date.toLocaleString();
+}
+
+function getDisplayUsername(username?: string | null): string {
+  const trimmed = username?.trim();
+  if (!trimmed) {
+    return "Profile not available";
+  }
+  return trimmed.startsWith("@") ? trimmed : `@${trimmed}`;
+}
+
+function getStatusColor(status: LinkedInCredentials["status"]): string {
+  switch (status) {
+    case "active":
+      return "bg-emerald-500";
+    case "stored":
+      return "bg-sky-500";
+    case "tested":
+      return "bg-blue-500";
+    case "invalid":
+      return "bg-red-500";
+    case "expired":
+      return "bg-amber-500";
+    case "locked":
+      return "bg-zinc-500";
+    case "backup":
+      return "bg-violet-500";
+    default:
+      return "bg-zinc-500";
+  }
+}
+
+function getStatusLabel(status: LinkedInCredentials["status"]): string {
+  switch (status) {
+    case "stored":
+      return "Stored";
+    case "tested":
+      return "Tested";
+    case "active":
+      return "Active";
+    case "invalid":
+      return "Invalid";
+    case "expired":
+      return "Expired";
+    case "locked":
+      return "Locked";
+    case "backup":
+      return "Backup";
+    default:
+      return status;
+  }
 }
 
 export default function LinkedInCredentialCard({
@@ -37,10 +109,9 @@ export default function LinkedInCredentialCard({
 }: LinkedInCredentialCardProps) {
   const [isVerifying, setIsVerifying] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [isRotating, setIsRotating] = useState(false);
   const [showHealthDetails, setShowHealthDetails] = useState(false);
   const [healthData, setHealthData] = useState<
-    LinkedInCredentialsHealth["health_status"] | null
+    LinkedInCredentialsHealth["healthStatus"] | null
   >(null);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showLogsDialog, setShowLogsDialog] = useState(false);
@@ -48,7 +119,19 @@ export default function LinkedInCredentialCard({
     LinkedInCredentialsLogsResponse["logs"] | null
   >(null);
   const [isLoadingLogs, setIsLoadingLogs] = useState(false);
+  const [isLoadingHealth, setIsLoadingHealth] = useState(false);
   const { toast } = useToast();
+
+  const healthStatus: HealthStatusWithDetails =
+    credential.healthStatus && typeof credential.healthStatus === "object"
+      ? (credential.healthStatus as HealthStatusWithDetails)
+      : {};
+
+  const errorMessage =
+    healthStatus.errorDetails?.message ||
+    healthStatus.details?.errorMessage ||
+    healthStatus.details?.reason ||
+    null;
 
   const handleVerify = async () => {
     try {
@@ -61,6 +144,8 @@ export default function LinkedInCredentialCard({
           description: "Credentials verified successfully",
         });
         onRefresh();
+        setHealthData(null);
+        setShowHealthDetails(false);
       } else {
         toast({
           title: "Error",
@@ -80,41 +165,10 @@ export default function LinkedInCredentialCard({
     }
   };
 
-  const handleRotate = async () => {
-    try {
-      setIsRotating(true);
-      const response = await rotateLinkedInCredentials(credential.id);
-
-      if (response.data) {
-        toast({
-          title: "Success",
-          description:
-            "Credentials rotated successfully. A backup has been created.",
-        });
-        onRefresh();
-      } else {
-        toast({
-          title: "Error",
-          description: response.error || "Failed to rotate credentials",
-          variant: "destructive",
-        });
-      }
-    } catch (err) {
-      toast({
-        title: "Error",
-        description:
-          err instanceof Error ? err.message : "An unexpected error occurred",
-        variant: "destructive",
-      });
-    } finally {
-      setIsRotating(false);
-    }
-  };
-
   const handleDelete = async () => {
     if (
       !confirm(
-        `Are you sure you want to deactivate this credential? This will prevent it from being used in campaigns.`,
+        "Are you sure you want to delete this credential? This will remove the saved LinkedIn login from this profile.",
       )
     ) {
       return;
@@ -127,13 +181,13 @@ export default function LinkedInCredentialCard({
       if (response.data) {
         toast({
           title: "Success",
-          description: "Credential deactivated successfully",
+          description: "Credential deleted successfully",
         });
         onRefresh();
       } else {
         toast({
           title: "Error",
-          description: response.error || "Failed to deactivate credential",
+          description: response.error || "Failed to delete credential",
           variant: "destructive",
         });
       }
@@ -149,12 +203,29 @@ export default function LinkedInCredentialCard({
     }
   };
 
-  const handleLoadHealth = async () => {
+  const handleToggleHealth = async () => {
+    if (showHealthDetails) {
+      setShowHealthDetails(false);
+      return;
+    }
+
+    if (healthData) {
+      setShowHealthDetails(true);
+      return;
+    }
+
     try {
+      setIsLoadingHealth(true);
       const response = await getLinkedInCredentialsHealth(credential.id);
       if (response.data) {
-        setHealthData(response.data.health_status);
+        setHealthData(response.data.healthStatus);
         setShowHealthDetails(true);
+      } else {
+        toast({
+          title: "Error",
+          description: response.error || "Failed to load health details",
+          variant: "destructive",
+        });
       }
     } catch (err) {
       toast({
@@ -163,6 +234,8 @@ export default function LinkedInCredentialCard({
           err instanceof Error ? err.message : "Failed to load health details",
         variant: "destructive",
       });
+    } finally {
+      setIsLoadingHealth(false);
     }
   };
 
@@ -191,186 +264,135 @@ export default function LinkedInCredentialCard({
     }
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "active":
-        return "bg-green-500";
-      case "invalid":
-        return "bg-red-500";
-      case "expired":
-        return "bg-yellow-500";
-      case "locked":
-        return "bg-gray-500";
-      case "backup":
-        return "bg-blue-500";
-      default:
-        return "bg-gray-500";
-    }
-  };
-
-  // Define interface for health_status with optional error details
-  interface HealthStatusWithDetails {
-    error_details?: { message?: string; code?: string };
-    details?: { error_message?: string; reason?: string };
-    health_score?: number;
-    days_until_expiry?: number | null;
-    days_since_rotation?: number;
-    verification_failures?: number;
-    last_verified?: string | null;
-    last_used?: string | null;
-  }
-
-  const healthStatus: HealthStatusWithDetails =
-    credential.health_status && typeof credential.health_status === "object"
-      ? (credential.health_status as HealthStatusWithDetails)
-      : {};
-
-  // Get error message from credential health status if available
-  const getErrorMessage = () => {
-    if (healthStatus.error_details?.message) {
-      return healthStatus.error_details.message;
-    }
-    if (healthStatus.details && typeof healthStatus.details === "object") {
-      if (healthStatus.details.error_message) {
-        return healthStatus.details.error_message;
-      }
-      if (healthStatus.details.reason) {
-        return healthStatus.details.reason;
-      }
-    }
-    return null;
-  };
+  const displayUsername = getDisplayUsername(credential.username);
+  const displayEmail = credential.publicEmail?.trim() || "Email not available";
+  const lastVerified = formatTimestamp(
+    healthData?.lastVerified ?? credential.lastVerified,
+  );
+  const lastUsed = formatTimestamp(healthData?.lastUsed ?? credential.lastUsed);
+  const statusLabel = getStatusLabel(credential.status);
 
   return (
-    <Card>
+    <Card className="border-zinc-800/80 bg-zinc-950/40 shadow-none">
       <CardContent className="pt-6">
         <div className="flex flex-col space-y-4">
-          <div className="flex items-start justify-between">
-            <div className="flex items-center space-x-4">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="flex items-start space-x-4">
               <div
-                className={`w-12 h-12 rounded-full flex items-center justify-center ${credential.is_primary ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground"}`}
+                className={`flex h-12 w-12 items-center justify-center rounded-full ${credential.isPrimary ? "bg-primary text-primary-foreground" : "bg-zinc-800 text-zinc-100"}`}
               >
                 <Icons.User className="h-6 w-6" />
               </div>
-              <div>
-                <div className="flex items-center space-x-2 mb-1">
-                  <span className="font-medium">@{credential.username}</span>
-                  {credential.is_primary && (
-                    <span className="text-xs bg-primary text-primary-foreground px-2 py-0.5 rounded-full">
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-medium text-zinc-100">
+                    {displayUsername}
+                  </span>
+                  {credential.isPrimary ? (
+                    <span className="rounded-full bg-primary px-2 py-0.5 text-xs text-primary-foreground">
                       Primary
                     </span>
-                  )}
-                  {credential.is_backup && (
-                    <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
+                  ) : null}
+                  {credential.isBackup ? (
+                    <span className="rounded-full bg-violet-500/15 px-2 py-0.5 text-xs text-violet-300 border border-violet-500/30">
                       Backup
                     </span>
-                  )}
+                  ) : null}
                 </div>
-                <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-                  <Icons.Mail className="h-3 w-3" />
-                  <span>{credential.public_email}</span>
-                  <span className="px-2">•</span>
+                <div className="flex flex-wrap items-center gap-2 text-sm text-zinc-400">
+                  <Icons.Mail className="h-3.5 w-3.5" />
+                  <span>{displayEmail}</span>
+                  <span className="text-zinc-600">•</span>
                   <span
-                    className={`w-2 h-2 rounded-full ${getStatusColor(credential.status)}`}
+                    className={`h-2 w-2 rounded-full ${getStatusColor(credential.status)}`}
                   />
-                  <span className="capitalize">{credential.status}</span>
+                  <span className="text-zinc-300">{statusLabel}</span>
                 </div>
               </div>
             </div>
-            <div className="text-right">
-              <div className="text-sm font-medium">
-                {healthStatus.health_score ?? "—"}/100 Health Score
+            <div className="text-left lg:text-right">
+              <div className="text-sm font-medium text-zinc-100">
+                {healthStatus.healthScore ?? "—"}/100 Health Score
               </div>
-              <div className="text-xs text-muted-foreground mt-1">
-                {credential.usage_count} actions used
+              <div className="mt-1 text-xs text-zinc-400">
+                {credential.usageCount} actions used
               </div>
             </div>
           </div>
 
-          {showHealthDetails && healthData && (
-            <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">
-                  Days Until Expiry:
-                </span>
-                <span>
-                  {healthData.days_until_expiry !== null
-                    ? healthData.days_until_expiry
+          {showHealthDetails && healthData ? (
+            <div className="rounded-xl border border-zinc-800 bg-zinc-950/70 p-4 space-y-3 text-sm">
+              <div className="flex items-center justify-between gap-4">
+                <span className="text-zinc-400">Days Until Expiry</span>
+                <span className="text-zinc-100">
+                  {healthData.daysUntilExpiry !== null
+                    ? healthData.daysUntilExpiry
                     : "Unknown"}
                 </span>
               </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">
-                  Days Since Rotation:
+              <div className="flex items-center justify-between gap-4">
+                <span className="text-zinc-400">Days Since Rotation</span>
+                <span className="text-zinc-100">
+                  {healthData.daysSinceRotation}
                 </span>
-                <span>{healthData.days_since_rotation}</span>
               </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">
-                  Verification Failures:
-                </span>
+              <div className="flex items-center justify-between gap-4">
+                <span className="text-zinc-400">Verification Failures</span>
                 <span
                   className={
-                    healthData.verification_failures > 0
-                      ? "text-red-600"
-                      : "text-green-600"
+                    (healthData.verificationFailures ?? 0) > 0
+                      ? "text-red-400"
+                      : "text-emerald-400"
                   }
                 >
-                  {healthData.verification_failures}
+                  {healthData.verificationFailures}
                 </span>
               </div>
-              {healthData.last_verified && (
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Last Verified:</span>
-                  <span>
-                    {new Date(healthData.last_verified).toLocaleDateString()}
-                  </span>
-                </div>
-              )}
-              {healthData.last_used && (
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Last Used:</span>
-                  <span>
-                    {new Date(healthData.last_used).toLocaleDateString()}
-                  </span>
-                </div>
-              )}
+              <div className="flex items-center justify-between gap-4">
+                <span className="text-zinc-400">Last Verified</span>
+                <span className="text-zinc-100">
+                  {lastVerified ?? "Not available"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <span className="text-zinc-400">Last Used</span>
+                <span className="text-zinc-100">
+                  {lastUsed ?? "Not available"}
+                </span>
+              </div>
             </div>
-          )}
+          ) : null}
 
-          {/* Error Details Section */}
           {credential.status === "invalid" ||
           credential.status === "locked" ||
           credential.status === "expired" ? (
-            <Alert
-              variant="destructive"
-              className="bg-red-500/10 border-red-200"
-            >
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription className="space-y-2">
-                <div className="font-semibold text-red-700">
-                  Connection Issue Detected
-                </div>
-                <div className="text-sm text-red-600">
-                  Status:{" "}
-                  <span className="font-medium capitalize">
-                    {credential.status}
-                  </span>
-                </div>
-                {getErrorMessage() && (
-                  <div className="text-sm text-red-600 bg-red-100/50 rounded p-2">
-                    Error: {getErrorMessage()}
+            <div className="rounded-xl border border-zinc-700/80 bg-zinc-950/80 p-4">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="mt-0.5 h-4 w-4 text-red-400" />
+                <div className="min-w-0 space-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="text-sm font-semibold text-zinc-100">
+                      Credential needs attention
+                    </div>
+                    <span className="rounded-full border border-red-500/30 bg-red-500/10 px-2 py-0.5 text-xs text-red-300">
+                      {statusLabel}
+                    </span>
                   </div>
-                )}
-                <p className="text-xs text-red-500/80 mt-2">
-                  You can try verifying these credentials or use a different
-                  account for your campaigns.
-                </p>
-              </AlertDescription>
-            </Alert>
+                  <p className="text-sm text-zinc-300">
+                    This LinkedIn login is not currently usable. You can
+                    re-verify it, edit it, or delete it.
+                  </p>
+                  {errorMessage ? (
+                    <div className="rounded-lg border border-zinc-700/80 bg-zinc-900/80 p-3 text-sm text-zinc-200">
+                      {errorMessage}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            </div>
           ) : null}
 
-          <div className="flex flex-wrap gap-2 mt-2">
+          <div className="mt-2 flex flex-wrap gap-2">
             <Button
               variant="outline"
               size="sm"
@@ -379,12 +401,12 @@ export default function LinkedInCredentialCard({
             >
               {credential.status === "active" ? (
                 <>
-                  <Icons.Check className="h-3 w-3 mr-2" />
+                  <Icons.Check className="mr-2 h-3 w-3" />
                   Verified
                 </>
               ) : (
                 <>
-                  <Icons.RefreshCw className="h-3 w-3 mr-2" />
+                  <Icons.RefreshCw className="mr-2 h-3 w-3" />
                   Verify
                 </>
               )}
@@ -393,40 +415,34 @@ export default function LinkedInCredentialCard({
             <Button
               variant="outline"
               size="sm"
-              onClick={handleRotate}
-              disabled={isRotating}
-            >
-              <Icons.RefreshCw className="h-3 w-3 mr-2" />
-              Rotate
-            </Button>
-
-            <Button
-              variant="outline"
-              size="sm"
               onClick={() => setShowEditDialog(true)}
-              disabled={isRotating || isVerifying || isDeleting}
+              disabled={isVerifying || isDeleting}
             >
-              <Icons.Edit className="h-3 w-3 mr-2" />
+              <Icons.Edit className="mr-2 h-3 w-3" />
               Edit
             </Button>
 
             <Button
               variant="outline"
               size="sm"
-              onClick={handleLoadHealth}
-              disabled={isRotating}
+              onClick={handleToggleHealth}
+              disabled={isLoadingHealth}
             >
-              <Icons.Activity className="h-3 w-3 mr-2" />
-              {showHealthDetails ? "Hide Details" : "View Details"}
+              <Icons.Activity className="mr-2 h-3 w-3" />
+              {isLoadingHealth
+                ? "Loading..."
+                : showHealthDetails
+                  ? "Hide Details"
+                  : "View Details"}
             </Button>
 
             <Button
               variant="outline"
               size="sm"
               onClick={handleLoadLogs}
-              disabled={isLoadingLogs || isRotating}
+              disabled={isLoadingLogs}
             >
-              <Icons.FileText className="h-3 w-3 mr-2" />
+              <Icons.FileText className="mr-2 h-3 w-3" />
               {isLoadingLogs ? "Loading..." : "View Logs"}
             </Button>
 
@@ -436,18 +452,18 @@ export default function LinkedInCredentialCard({
               onClick={handleDelete}
               disabled={isDeleting}
             >
-              <Icons.Trash2 className="h-3 w-3 mr-2" />
-              Deactivate
+              <Icons.Trash2 className="mr-2 h-3 w-3" />
+              Delete
             </Button>
           </div>
         </div>
 
         <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
-          <DialogContent className="max-w-3xl">
+          <DialogContent className="max-w-3xl border border-zinc-800 bg-zinc-950 text-zinc-100 shadow-2xl">
             <DialogHeader>
               <DialogTitle>Edit LinkedIn Credential</DialogTitle>
               <DialogDescription>
-                Update your LinkedIn account credentials
+                Update your LinkedIn account credentials.
               </DialogDescription>
             </DialogHeader>
             <LinkedInCredentialForm
@@ -466,42 +482,45 @@ export default function LinkedInCredentialCard({
         </Dialog>
 
         <Dialog open={showLogsDialog} onOpenChange={setShowLogsDialog}>
-          <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogContent className="max-h-[80vh] max-w-3xl overflow-y-auto border border-zinc-800 bg-zinc-950 text-zinc-100 shadow-2xl">
             <DialogHeader>
               <DialogTitle>Credential Audit Logs</DialogTitle>
               <DialogDescription>
-                History of actions performed on this credential
+                History of actions performed on this credential.
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
+            <div className="max-h-[60vh] space-y-4 overflow-y-auto pr-2">
               {logsData && logsData.length > 0 ? (
                 logsData.map((log) => (
-                  <div key={log.id} className="border rounded-lg p-4 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="font-medium capitalize">
-                        {log.action.replace("_", " ")}
+                  <div
+                    key={log.id}
+                    className="space-y-3 rounded-xl border border-zinc-800 bg-zinc-950/70 p-4"
+                  >
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="font-medium capitalize text-zinc-100">
+                        {log.action.replaceAll("_", " ")}
                       </div>
-                      <span className="text-xs text-muted-foreground">
-                        {new Date(log.created_at).toLocaleString()}
+                      <span className="text-xs text-zinc-400">
+                        {formatTimestamp(log.createdAt) ?? "Date not available"}
                       </span>
                     </div>
-                    {log.details && Object.keys(log.details).length > 0 && (
-                      <div className="bg-muted/50 rounded p-2 text-xs font-mono">
-                        <pre className="whitespace-pre-wrap text-muted-foreground">
+                    {log.details && Object.keys(log.details).length > 0 ? (
+                      <div className="rounded-lg border border-zinc-800 bg-zinc-900/80 p-3 text-xs font-mono text-zinc-100">
+                        <pre className="whitespace-pre-wrap break-words text-zinc-100">
                           {JSON.stringify(log.details, null, 2)}
                         </pre>
                       </div>
-                    )}
-                    {log.ip_address && (
-                      <div className="text-xs text-muted-foreground">
-                        IP: {log.ip_address}
+                    ) : null}
+                    {log.ipAddress ? (
+                      <div className="text-xs text-zinc-400">
+                        IP: {log.ipAddress}
                       </div>
-                    )}
+                    ) : null}
                   </div>
                 ))
               ) : (
-                <div className="text-center text-muted-foreground py-8">
-                  <Icons.FileText className="h-10 w-10 mx-auto mb-2 opacity-20" />
+                <div className="py-8 text-center text-zinc-400">
+                  <Icons.FileText className="mx-auto mb-2 h-10 w-10 opacity-20" />
                   <p>No logs found for this credential</p>
                 </div>
               )}

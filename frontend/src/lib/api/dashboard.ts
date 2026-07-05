@@ -860,17 +860,24 @@ export interface LinkedInCredentialsInternal {
   username: string;
   email: string;
   password: string;
-  public_email: string;
-  status: "active" | "invalid" | "expired" | "locked" | "backup";
-  is_primary: boolean;
-  is_backup: boolean;
-  usage_count: number;
-  last_verified: string | null;
-  last_used: string | null;
-  health_status: {
-    health_score: number;
-    days_until_expiry: number | null;
-    verification_failures: number;
+  publicEmail: string;
+  status:
+    | "stored"
+    | "tested"
+    | "active"
+    | "invalid"
+    | "expired"
+    | "locked"
+    | "backup";
+  isPrimary: boolean;
+  isBackup: boolean;
+  usageCount: number;
+  lastVerified: string | null;
+  lastUsed: string | null;
+  healthStatus: {
+    healthScore: number;
+    daysUntilExpiry: number | null;
+    verificationFailures: number;
   };
 }
 
@@ -878,40 +885,56 @@ export interface LinkedInCredentialsInternal {
 export interface LinkedInCredentials {
   id: number;
   username: string;
-  public_email: string;
-  status: "active" | "invalid" | "expired" | "locked" | "backup";
-  is_primary: boolean;
-  is_backup: boolean;
-  usage_count: number;
-  last_verified?: string | null;
-  last_used?: string | null;
-  health_status: {
-    health_score: number;
-    days_until_expiry: number | null;
-    verification_failures: number;
+  publicEmail: string;
+  status:
+    | "stored"
+    | "tested"
+    | "active"
+    | "invalid"
+    | "expired"
+    | "locked"
+    | "backup";
+  isPrimary: boolean;
+  isBackup: boolean;
+  usageCount: number;
+  lastVerified?: string | null;
+  lastUsed?: string | null;
+  healthStatus?: {
+    healthScore?: number;
+    daysUntilExpiry?: number | null;
+    verificationFailures?: number;
+    errorDetails?: {
+      message?: string;
+      errorType?: string;
+      details?: Record<string, unknown>;
+    };
+    details?: {
+      errorMessage?: string;
+      reason?: string;
+    };
   };
-  linkedin_profile_id?: number | null;
+  linkedinProfileId?: number | null;
 }
 
 export interface LinkedInCredentialsHealth {
-  credentials_id: number;
-  health_status: {
+  credentialsId: number;
+  healthStatus: {
     id: number;
     username: string;
-    public_email: string;
+    publicEmail: string;
     status: string;
-    is_primary: boolean;
-    is_backup: boolean;
-    usage_count: number;
-    days_since_rotation: number;
-    days_until_expiry: number | null;
-    verification_failures: number;
-    last_verified: string | null;
-    last_used: string | null;
-    health_score: number;
-    error_details?: {
+    isPrimary: boolean;
+    isBackup: boolean;
+    usageCount: number;
+    daysSinceRotation: number;
+    daysUntilExpiry: number | null;
+    verificationFailures: number;
+    lastVerified: string | null;
+    lastUsed: string | null;
+    healthScore: number;
+    errorDetails?: {
       message?: string;
-      error_type?: string;
+      errorType?: string;
       details?: Record<string, unknown>;
     };
   };
@@ -921,13 +944,13 @@ export interface LinkedInCredentialLog {
   id: number;
   action: string;
   details: Record<string, unknown>;
-  ip_address: string | null;
-  created_at: string;
+  ipAddress: string | null;
+  createdAt: string;
 }
 
 export interface LinkedInCredentialsLogsResponse {
   success: boolean;
-  credentials_id: number;
+  credentialsId: number;
   logs: LinkedInCredentialLog[];
   count: number;
 }
@@ -990,9 +1013,7 @@ export async function deleteLinkedInCredentials(
   return del(`/api/linkedin-credentials/${id}`);
 }
 
-export async function verifyLinkedInCredentials(
-  id: number,
-): Promise<
+export async function verifyLinkedInCredentials(id: number): Promise<
   ApiResponse<{
     success: boolean;
     message: string;
@@ -1009,8 +1030,8 @@ export async function rotateLinkedInCredentials(
   ApiResponse<{
     success: boolean;
     message: string;
-    new_credentials: LinkedInCredentials;
-    backup_credentials: LinkedInCredentials;
+    newCredentials: LinkedInCredentials;
+    backupCredentials: LinkedInCredentials;
   }>
 > {
   return post(`/api/linkedin-credentials/${id}/rotate`, data || {});
@@ -1137,19 +1158,19 @@ export async function getLinkedInSetupGuide(): Promise<
 export interface LinkedInSetupStatus {
   success: boolean;
   status: {
-    linkedin_profile: {
+    linkedinProfile: {
       exists: boolean;
       count: number;
-      requires_attention: boolean;
+      requiresAttention: boolean;
     };
-    linkedin_credentials: {
+    linkedinCredentials: {
       exists: boolean;
       count: number;
-      active_count: number;
-      requires_attention: boolean;
+      activeCount: number;
+      requiresAttention: boolean;
     };
-    setup_complete: boolean;
-    setup_progress: {
+    setupComplete: boolean;
+    setupProgress: {
       current: number;
       total: number;
     };

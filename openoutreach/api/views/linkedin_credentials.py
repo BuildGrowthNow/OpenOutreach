@@ -38,6 +38,25 @@ def _sync_profile_login(*, profile: LinkedInProfile, email: str, password: str) 
         profile.save(update_fields=update_fields)
 
 
+def _clear_profile_login(profile: LinkedInProfile) -> None:
+    """Remove login material from a LinkedInProfile after credential deletion."""
+    update_fields = []
+    if profile.linkedin_username != "":
+        profile.linkedin_username = ""
+        update_fields.append("linkedin_username")
+    if profile.linkedin_password != "":
+        profile.linkedin_password = ""
+        update_fields.append("linkedin_password")
+    if profile.cookie_data_encrypted is not None:
+        profile.cookie_data_encrypted = None
+        update_fields.append("cookie_data_encrypted")
+    if profile.active:
+        profile.active = False
+        update_fields.append("active")
+    if update_fields:
+        profile.save(update_fields=update_fields)
+
+
 def _ensure_profile_for_credential(
     *,
     user,
@@ -307,7 +326,7 @@ class LinkedInCredentialsView(APIView):
         )
 
     def delete(self, request, pk=None):
-        """Deactivate/delete LinkedIn credentials."""
+        """Delete LinkedIn credentials and clear the linked profile login state."""
         if LinkedInCredentials is None or LinkedInCredentialLog is None:
             return Response(
                 {"error": "LinkedIn credentials support unavailable"},
@@ -327,20 +346,19 @@ class LinkedInCredentialsView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        # Soft delete - mark as inactive instead of hard deleting
-        cred.status = LinkedInCredentials.STATUS_INVALID
-        cred.save(update_fields=["status"])
+        profile = cred.linkedin_profile
+        credential_id = cred.pk
 
-        LinkedInCredentialLog.objects.create(
-            credentials=cred,
-            action=LinkedInCredentialLog.ACTION_FAILED,
-            details={"deleted_by": request.user.username},
-        )
+        if profile is not None:
+            _clear_profile_login(profile)
+
+        cred.delete()
 
         return Response(
             {
                 "success": True,
-                "message": "Credential deactivated successfully",
+                "message": "Credential deleted successfully",
+                "id": credential_id,
             }
         )
 
