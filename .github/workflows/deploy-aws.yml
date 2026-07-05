@@ -58,6 +58,19 @@ jobs:
             docker compose up -d --build
           "
 
+      - name: Run Django Migrations
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+        run: |
+          echo "Running Django migrations..."
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o IdentitiesOnly=yes "${EC2_USER}@${EC2_HOST}" "
+            set -e
+            cd ~/OpenOutreach
+            # Run migrations in the Django container
+            docker compose exec openoutreach python manage.py migrate --no-input
+          "
+
       - name: Wait for services to start
         run: |
           echo "Waiting 15 seconds for services to initialize..."
