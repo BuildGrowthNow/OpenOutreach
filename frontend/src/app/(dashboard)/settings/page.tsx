@@ -195,7 +195,7 @@ export default function SettingsPage() {
       </div>
 
       <Tabs defaultValue="linkedin" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2 h-auto gap-2 rounded-xl bg-muted/60 p-1 lg:grid-cols-4">
+        <TabsList className="grid w-full grid-cols-2 gap-2 rounded-xl bg-muted p-1 sm:grid-cols-4">
           <TabsTrigger value="linkedin" className="py-2">
             <Icons.Link className="h-4 w-4" />
             LinkedIn Connection

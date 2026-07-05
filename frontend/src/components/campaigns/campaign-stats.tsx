@@ -28,21 +28,21 @@ export function CampaignStats({ stats, className }: CampaignStatsProps) {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <StatCard
           title="Connection Rate"
-          value={`${stats.connection_accept_rate.toFixed(1)}%`}
+          value={`${(stats.connection_accept_rate ?? 0).toFixed(1)}%`}
           subtitle={`${stats.connections_accepted}/${stats.connections_sent} accepted`}
           icon={<Icons.CheckCircle className="h-4 w-4 text-emerald-500" />}
           color="emerald"
         />
         <StatCard
           title="Response Rate"
-          value={`${stats.response_rate.toFixed(1)}%`}
+          value={`${(stats.response_rate ?? 0).toFixed(1)}%`}
           subtitle={`${stats.messages_replied}/${stats.messages_sent} replied`}
           icon={<Icons.MessageSquare className="h-4 w-4 text-blue-500" />}
           color="blue"
         />
         <StatCard
           title="Conversion Rate"
-          value={`${stats.conversion_rate.toFixed(1)}%`}
+          value={`${(stats.conversion_rate ?? 0).toFixed(1)}%`}
           subtitle={`${stats.conversions} conversions`}
           icon={<Icons.TrendingUp className="h-4 w-4 text-purple-500" />}
           color="purple"
@@ -60,25 +60,25 @@ export function CampaignStats({ stats, className }: CampaignStatsProps) {
         <div>
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-medium">Connection Success</span>
-            <span className="text-sm font-medium">{stats.connection_accept_rate.toFixed(1)}%</span>
+            <span className="text-sm font-medium">{(stats.connection_accept_rate ?? 0).toFixed(1)}%</span>
           </div>
-          <Progress value={stats.connection_accept_rate} className="h-2" />
+          <Progress value={stats.connection_accept_rate ?? 0} className="h-2" />
         </div>
 
         <div>
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-medium">Response Rate</span>
-            <span className="text-sm font-medium">{stats.response_rate.toFixed(1)}%</span>
+            <span className="text-sm font-medium">{(stats.response_rate ?? 0).toFixed(1)}%</span>
           </div>
-          <Progress value={stats.response_rate} className="h-2" />
+          <Progress value={stats.response_rate ?? 0} className="h-2" />
         </div>
 
         <div>
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-medium">Conversion Rate</span>
-            <span className="text-sm font-medium">{stats.conversion_rate.toFixed(1)}%</span>
+            <span className="text-sm font-medium">{(stats.conversion_rate ?? 0).toFixed(1)}%</span>
           </div>
-          <Progress value={stats.conversion_rate} className="h-2" />
+          <Progress value={stats.conversion_rate ?? 0} className="h-2" />
         </div>
       </div>
     </div>
