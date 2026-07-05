@@ -2,12 +2,12 @@
 """LinkedIn Credentials Management API Views."""
 
 from rest_framework import status
+from rest_framework.exceptions import ValidationError
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated
-from rest_framework.exceptions import ValidationError
 
-from openoutreach.crm.models import LinkedInCredentials, LinkedInCredentialLog
+from openoutreach.crm.models import LinkedInCredentialLog, LinkedInCredentials
 from openoutreach.linkedin.browser.session import AccountSession
 from openoutreach.linkedin.models import LinkedInProfile
 
@@ -263,15 +263,33 @@ class LinkedInCredentialsVerifyView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        # Check for linkedin_profile relationship
+        # Ensure credential is associated with a LinkedInProfile.
+        # If not associated, try to attach it to the current user's LinkedInProfile
+        # or create a new profile for the user so verification can run.
+        created_profile = None
         if not cred.linkedin_profile:
-            return Response(
-                {
-                    "success": False,
-                    "error": "Credential not associated with a LinkedIn profile. Please create a LinkedIn profile first.",
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            # If the user already has a LinkedInProfile, attach to it
+            if (
+                hasattr(request.user, "linkedin_profile")
+                and request.user.linkedin_profile
+            ):
+                cred.linkedin_profile = request.user.linkedin_profile
+                cred.save(update_fields=["linkedin_profile"])  # attach
+            else:
+                # Create a lightweight LinkedInProfile for this user so AccountSession can be created
+                from openoutreach.linkedin.models import LinkedInProfile
+
+                username_guess = cred.username or (
+                    cred.get_email().split("@")[0] if cred.get_email() else ""
+                )
+                created_profile = LinkedInProfile.objects.create(
+                    user=request.user,
+                    linkedin_username=username_guess,
+                    linkedin_password=cred.get_password(),
+                    active=False,
+                )
+                cred.linkedin_profile = created_profile
+                cred.save(update_fields=["linkedin_profile"])
 
         # Create session for verification
         try:

@@ -3,21 +3,6 @@
 
 from __future__ import annotations
 
-from .health import CampaignHealthMetric, HealthAlert, RecoveryAction
-from .state_machine import (
-    CampaignStateGraph,
-    StateNode,
-    StateTransition,
-    CampaignState,
-    CampaignExecutionLog,
-)
-from .rate_limits import (
-    SmartRateLimitContext,
-    RateLimitWarning,
-    EngagementLevel,
-    LinkedInDetectability,
-)
-
 import logging
 from datetime import date
 
@@ -26,6 +11,21 @@ from django.db import models
 from django.utils import timezone
 
 from openoutreach.core.models import Campaign
+
+from .health import CampaignHealthMetric, HealthAlert, RecoveryAction
+from .rate_limits import (
+    EngagementLevel,
+    LinkedInDetectability,
+    RateLimitWarning,
+    SmartRateLimitContext,
+)
+from .state_machine import (
+    CampaignExecutionLog,
+    CampaignState,
+    CampaignStateGraph,
+    StateNode,
+    StateTransition,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +56,45 @@ class LinkedInProfile(models.Model):
     connect_daily_limit = models.PositiveIntegerField(default=20)
     follow_up_daily_limit = models.PositiveIntegerField(default=25)
     legal_accepted = models.BooleanField(default=False)
-    cookie_data = models.JSONField(null=True, blank=True)
+    # Encrypted cookie storage (base64-encoded encrypted JSON)
+    cookie_data_encrypted = models.TextField(null=True, blank=True)
+
+    @property
+    def cookie_data(self) -> dict | None:
+        """Transparent getter for cookie data. Decrypts the stored blob and returns a dict.
+
+        Returns None when no cookie is stored.
+        """
+        if not self.cookie_data_encrypted:
+            return None
+        try:
+            import json
+
+            from openoutreach.core.crypto import decrypt_text
+
+            decrypted = decrypt_text(self.cookie_data_encrypted)
+            return json.loads(decrypted)
+        except Exception:
+            # If decryption fails, surface None instead of raising to avoid breaking callers
+            return None
+
+    @cookie_data.setter
+    def cookie_data(self, value: dict | None) -> None:
+        """Encrypt and store cookie JSON. Setting to None clears the stored value."""
+        if value is None:
+            self.cookie_data_encrypted = None
+            return
+        try:
+            import json
+
+            from openoutreach.core.crypto import encrypt_text
+
+            text = json.dumps(value)
+            self.cookie_data_encrypted = encrypt_text(text)
+        except Exception:
+            # Fall back to clearing the field on error
+            self.cookie_data_encrypted = None
+
     newsletter_processed = models.BooleanField(default=False)
     campaign = models.ForeignKey(
         "core.Campaign",

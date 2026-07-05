@@ -22,5 +22,6 @@ questionary
 pytz
 linkedin-agent-cli
 psutil
+cryptography>=39.0.0
 # API Dependencies
 -r api.txt

@@ -2,9 +2,9 @@
 """LinkedIn Profiles API Views."""
 
 from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated
 
 from openoutreach.linkedin.models import LinkedInProfile
 
@@ -42,3 +42,170 @@ class LinkedInProfilesListView(APIView):
                 "count": profiles.count(),
             }
         )
+
+
+class LinkedInProfileCookieView(APIView):
+    """API view to upload and verify a Playwright storage_state cookie blob for a LinkedInProfile.
+
+    POST /api/linkedin-profiles/{id}/cookies/ - Accepts either:
+      - Full Playwright storage_state JSON (object with "cookies" array)
+      - A single li_at cookie string (will be wrapped into minimal storage_state)
+
+    The view will validate permissions (owner or change permission), perform a short verification
+    using the AccountSession (short timeout), store the encrypted cookie blob on success, and
+    return a summary.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk=None):
+        if not pk:
+            return Response(
+                {"error": "Profile ID required"}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            profile = LinkedInProfile.objects.get(pk=pk)
+        except LinkedInProfile.DoesNotExist:
+            return Response(
+                {"error": "Profile not found"}, status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Permission: owner or has change permission
+        if profile.user != request.user and not request.user.has_perm(
+            "linkedin.change_linkedinprofile"
+        ):
+            return Response({"error": "Not allowed"}, status=status.HTTP_403_FORBIDDEN)
+
+        data = request.data
+        cookie_payload = data.get("cookie_data")
+
+        if not cookie_payload:
+            return Response(
+                {"error": "cookie_data payload required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Normalize payload into a storage_state dict
+        storage_state = None
+        import json
+
+        try:
+            if isinstance(cookie_payload, str):
+                # Try to parse JSON first
+                try:
+                    parsed = json.loads(cookie_payload)
+                    if isinstance(parsed, dict) and "cookies" in parsed:
+                        storage_state = parsed
+                except Exception:
+                    # Treat as li_at value
+                    li_at = cookie_payload.strip()
+                    if not li_at:
+                        raise ValueError("Empty cookie string")
+                    storage_state = {
+                        "cookies": [
+                            {
+                                "name": "li_at",
+                                "value": li_at,
+                                "domain": ".linkedin.com",
+                                "path": "/",
+                                "expires": 0,
+                            }
+                        ]
+                    }
+            elif isinstance(cookie_payload, dict):
+                if "cookies" in cookie_payload:
+                    storage_state = cookie_payload
+        except ValueError as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not storage_state:
+            return Response(
+                {"error": "Invalid cookie_data format"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Basic validation: ensure li_at cookie exists
+        li_at_present = any(
+            c.get("name") == "li_at" for c in storage_state.get("cookies", [])
+        )
+        if not li_at_present:
+            return Response(
+                {"error": "li_at cookie missing"}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Optionally perform a short validation using AccountSession – configurable via settings
+        from django.conf import settings as _dj_settings
+
+        verify_on_upload = getattr(
+            _dj_settings, "LINKEDIN_VERIFY_COOKIE_ON_UPLOAD", True
+        )
+
+        if not verify_on_upload:
+            # Just save the cookie storage without launching a browser (useful for CI/tests)
+            try:
+                profile.cookie_data = storage_state
+                profile.save(
+                    update_fields=["cookie_data_encrypted"]
+                )  # property will set encrypted field
+                return Response(
+                    {"success": True, "message": "Cookie saved"},
+                    status=status.HTTP_200_OK,
+                )
+            except Exception as exc:
+                return Response(
+                    {"success": False, "error": str(exc)},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
+
+        try:
+            # Launch browser with provided storage_state for a quick check
+            # The linkedin_cli's launch_browser accepts storage_state – reuse start_browser_session logic
+            from linkedin_cli.browser.login import launch_browser
+
+            page, context, browser, playwright = launch_browser(
+                storage_state=storage_state
+            )
+            page, context, browser, playwright = launch_browser(
+                storage_state=storage_state
+            )
+            try:
+                # Navigate to feed to validate session
+                page.goto("https://www.linkedin.com/feed/", timeout=8000)
+                # If we land on feed or no exception, treat as success
+                verified = True
+                message = "Cookie valid"
+            except Exception as exc:
+                verified = False
+                message = f"Verification navigation failed: {exc}"
+            finally:
+                try:
+                    context.close()
+                    if browser:
+                        browser.close()
+                    if playwright:
+                        playwright.stop()
+                except Exception:
+                    pass
+
+            if not verified:
+                return Response(
+                    {"success": False, "message": message},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            # Save encrypted cookie storage using model property
+            profile.cookie_data = storage_state
+            profile.save(
+                update_fields=["cookie_data_encrypted"]
+            )  # property will set encrypted field
+
+            return Response(
+                {"success": True, "message": "Cookie saved and verified"},
+                status=status.HTTP_200_OK,
+            )
+        except Exception as exc:
+            return Response(
+                {"success": False, "error": str(exc)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )

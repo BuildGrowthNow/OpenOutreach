@@ -10,7 +10,7 @@ from channels.routing import ProtocolTypeRouter, URLRouter
 from django.core.asgi import get_asgi_application
 from django.urls import path
 
-from notifications import consumers
+from openoutreach.notifications import consumers
 
 # Type ignore for ASGI application types ( Channels uses dynamic typing)
 application: Any = ProtocolTypeRouter(

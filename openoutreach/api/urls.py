@@ -7,64 +7,64 @@ from rest_framework_simplejwt.views import (
     TokenVerifyView,
 )
 
-from .views.health import HealthView
+from .views.analytics import AnalyticsView
 from .views.auth import (
-    CustomTokenObtainPairView,
     AuthView,
-    PasswordResetRequestView,
-    PasswordResetConfirmView,
-    UpdatePasswordView,
+    CustomTokenObtainPairView,
     LinkSupabaseUserView,
+    PasswordResetConfirmView,
+    PasswordResetRequestView,
     SupabaseUserInfoView,
     SupabaseVerifyTokenView,
-)
-from .views.campaigns import (
-    CampaignListView,
-    CampaignDetailView,
-    CampaignLeadsView,
-    CampaignLeadsUploadView,
-    CampaignMessagesView,
-    CampaignAnalyticsView,
-    CampaignStateMachineView,
-    CampaignStatusView,
-    CampaignGhostModeSimulationView,
-    CampaignGhostModeSimulationListView,
-    CampaignGhostModeActionView,
-    AnalyticsOverviewView,
+    UpdatePasswordView,
 )
 from .views.campaign_templates import (
-    CampaignTemplateListView,
-    CampaignTemplateDetailView,
-    CampaignTemplateCloneView,
     CampaignCreateFromTemplateView,
+    CampaignTemplateCloneView,
+    CampaignTemplateDetailView,
+    CampaignTemplateListView,
 )
+from .views.campaigns import (
+    AnalyticsOverviewView,
+    CampaignAnalyticsView,
+    CampaignDetailView,
+    CampaignGhostModeActionView,
+    CampaignGhostModeSimulationListView,
+    CampaignGhostModeSimulationView,
+    CampaignLeadsUploadView,
+    CampaignLeadsView,
+    CampaignListView,
+    CampaignMessagesView,
+    CampaignStateMachineView,
+    CampaignStatusView,
+)
+from .views.health import HealthView
 from .views.leads import (
-    LeadListView,
+    LeadAddToCampaignView,
     LeadDetailView,
-    LeadProfileView,
+    LeadListView,
     LeadMessagesView,
     LeadNotesView,
-    LeadAddToCampaignView,
+    LeadProfileView,
 )
-from .views.settings import SettingsView, RateLimitsView, DailyUsageView
-from .views.analytics import AnalyticsView
-from .views.links import LinksListView, LinksDetailView, LinkAnalyticsView
-from .views.state_machine import StateMachineExecutionView, StateMachineSimulationView
-from .views.messages import MessagesView, MessagesDetailView
 from .views.linkedin_credentials import (
-    LinkedInCredentialsView,
-    LinkedInCredentialsVerifyView,
-    LinkedInCredentialsRotationView,
     LinkedInCredentialsHealthView,
     LinkedInCredentialsLogsView,
+    LinkedInCredentialsRotationView,
+    LinkedInCredentialsVerifyView,
+    LinkedInCredentialsView,
 )
+from .views.linkedin_profile_health import LinkedInProfileHealthView
+from .views.linkedin_profiles import LinkedInProfileCookieView, LinkedInProfilesListView
 from .views.linkedin_setup import (
     LinkedInCookieInstructionsView,
     LinkedInSetupGuideView,
     LinkedInSetupStatusView,
 )
-from .views.linkedin_profiles import LinkedInProfilesListView
-from .views.linkedin_profile_health import LinkedInProfileHealthView
+from .views.links import LinkAnalyticsView, LinksDetailView, LinksListView
+from .views.messages import MessagesDetailView, MessagesView
+from .views.settings import DailyUsageView, RateLimitsView, SettingsView
+from .views.state_machine import StateMachineExecutionView, StateMachineSimulationView
 
 # API URL Patterns (no version prefix for frontend compatibility)
 urlpatterns = [
@@ -257,6 +257,12 @@ urlpatterns = [
         "linkedin-profiles/",
         LinkedInProfilesListView.as_view(),
         name="linkedin-profiles-list",
+    ),
+    # LinkedIn profile cookie upload/verify endpoint
+    path(
+        "linkedin-profiles/<int:pk>/cookies/",
+        LinkedInProfileCookieView.as_view(),
+        name="linkedin-profile-cookies",
     ),
     path(
         "linkedin-profile-health/",
@@ -477,6 +483,11 @@ urlpatterns += [
         r"^linkedin-profiles$",
         LinkedInProfilesListView.as_view(),
         name="linkedin-profiles-list-no-slash",
+    ),
+    re_path(
+        r"^linkedin-profiles/(?P<pk>[0-9]+)/cookies$",
+        LinkedInProfileCookieView.as_view(),
+        name="linkedin-profile-cookies-no-slash",
     ),
     re_path(
         r"^linkedin-profile-health$",

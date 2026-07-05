@@ -28,4 +28,9 @@ disable = [
     "W0718",  # broad-exception-caught (necessary in some cases)
     "W1203",  # logging-fstring-interpolation (f-string logging)
     "W1309",  # f-string-without-interpolation
+    "E1101",  # no-member (Django model objects attribute)
 ]
+load-plugins = [
+    "pylint_django",
+]
+django-settings-module = "openoutreach.settings"

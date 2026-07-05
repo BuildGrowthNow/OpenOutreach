@@ -88,8 +88,7 @@ export default function CampaignsPage() {
         // Redirect to the newly created campaign detail page so users can continue setup
         // (state-machine editor and other quick actions are available there)
         try {
-          // response.data.id may be number or string; ensure string
-          const id = String((response.data as any).id);
+          const id = response.data?.id || '';
           router.push(`/campaigns/${id}`);
         } catch (e) {
           // Fallback: refresh the list if navigation fails

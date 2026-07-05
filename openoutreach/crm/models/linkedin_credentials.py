@@ -312,7 +312,7 @@ class LinkedInCredentials(models.Model):
         """
         from openoutreach.linkedin.browser.launch import start_browser_session
         from linkedin_cli.browser.login import dismiss_comply_gate, goto_page
-        from linkedin_cli.browser.nav import wait_for_element  # type: ignore[import-untyped]
+        from linkedin_cli.browser.nav import resolve_locator  # type: ignore[import-untyped]
 
         logger.info(
             "Starting LinkedIn credential verification for %s", self.get_public_email()
@@ -326,11 +326,11 @@ class LinkedInCredentials(models.Model):
             session.page.goto("https://www.linkedin.com/login")
 
             # Enter credentials
-            email_input = wait_for_element(
-                session.page, "input#username", timeout=10000
+            email_input = resolve_locator(
+                session.page, ["input#username"], timeout_per_ms=10000
             )
-            password_input = wait_for_element(
-                session.page, "input#password", timeout=10000
+            password_input = resolve_locator(
+                session.page, ["input#password"], timeout_per_ms=10000
             )
 
             # Clear and fill email
@@ -342,8 +342,8 @@ class LinkedInCredentials(models.Model):
             password_input.type(self.get_password())
 
             # Click login button
-            login_button = wait_for_element(
-                session.page, "button[type='submit']", timeout=10000
+            login_button = resolve_locator(
+                session.page, ["button[type='submit']"], timeout_per_ms=10000
             )
             login_button.click()
 

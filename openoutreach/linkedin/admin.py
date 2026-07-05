@@ -15,11 +15,11 @@ from openoutreach.linkedin.models.health import (
     RecoveryAction,
 )
 from openoutreach.linkedin.models.state_machine import (
+    CampaignExecutionLog,
+    CampaignState,
     CampaignStateGraph,
     StateNode,
     StateTransition,
-    CampaignState,
-    CampaignExecutionLog,
 )
 
 
@@ -28,6 +28,20 @@ class LinkedInProfileAdmin(admin.ModelAdmin):
     list_display = ("user", "linkedin_username", "active", "legal_accepted")
     list_filter = ("active",)
     raw_id_fields = ("user", "self_lead")
+    actions = ["revoke_session"]
+
+    @admin.action(description="Revoke saved browser session (clear cookies)")
+    def revoke_session(self, request, queryset):
+        """Admin action to clear stored cookies for selected profiles."""
+        for profile in queryset:
+            # Clear via model property
+            try:
+                profile.cookie_data = None
+                profile.save(update_fields=["cookie_data_encrypted"])
+            except Exception:
+                # Best-effort; continue
+                continue
+        self.message_user(request, "Selected profiles' sessions revoked")
 
 
 @admin.register(SearchKeyword)
