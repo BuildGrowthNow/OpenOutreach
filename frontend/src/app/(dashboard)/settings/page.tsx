@@ -133,14 +133,14 @@ export default function SettingsPage() {
         <Card>
           <CardHeader>
             <CardDescription>LinkedIn profile</CardDescription>
-            <CardTitle className="flex items-center gap-2">
-              <Icons.User className="h-4 w-4 text-blue-500" />@
-              {settings.linkedin_profile.username || "not set"}
-            </CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <Icons.User className="h-4 w-4 text-blue-500" />@
+                {settings.linkedin_profile?.username || "not set"}
+              </CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">
-              Campaign: {settings.linkedin_profile.campaign || "Not configured"}
+              Campaign: {settings.linkedin_profile?.campaign || "Not configured"}
             </p>
           </CardContent>
         </Card>
@@ -247,13 +247,13 @@ export default function SettingsPage() {
                 <div>
                   <p className="text-sm font-medium">LinkedIn username</p>
                   <p className="text-sm text-muted-foreground">
-                    @{settings.linkedin_profile.username || "not set"}
+                    @{settings.linkedin_profile?.username || "not set"}
                   </p>
                 </div>
                 <div>
                   <p className="text-sm font-medium">Campaign name</p>
                   <p className="text-sm text-muted-foreground">
-                    {settings.linkedin_profile.campaign || "Not configured"}
+                    {settings.linkedin_profile?.campaign || "Not configured"}
                   </p>
                 </div>
                 <div className="rounded-lg border p-4 text-sm text-muted-foreground">
