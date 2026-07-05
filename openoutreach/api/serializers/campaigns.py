@@ -1,12 +1,11 @@
 # Campaign serializers
 
 from rest_framework import serializers
+
 from openoutreach.core.models import Campaign, CampaignTemplate
-from openoutreach.crm.models import Deal, Lead, TrackedLink
+from openoutreach.crm.models import TrackedLink
 from openoutreach.crm.models.deal import DealState
 from openoutreach.linkedin.models import ActionLog
-from django.utils import timezone
-from datetime import timedelta
 
 
 class TrackedLinkSerializer(serializers.ModelSerializer):
@@ -66,9 +65,6 @@ class CampaignStatsSerializer(serializers.Serializer):
 
     def to_representation(self, instance):
         """Compute and return statistics for the campaign."""
-        request = self.context.get("request") if self.context else None
-        user = request.user if request and hasattr(request, "user") else None
-        
         # Get deals for this campaign
         deals = instance.deals.all()
 
@@ -93,7 +89,9 @@ class CampaignStatsSerializer(serializers.Serializer):
 
         # Compute rates
         connection_accept_rate = (
-            round((connections_accepted / connections_sent * 100), 2) if connections_sent > 0 else 0.0
+            round((connections_accepted / connections_sent * 100), 2)
+            if connections_sent > 0
+            else 0.0
         )
 
         # Count follow-up actions sent
@@ -105,28 +103,35 @@ class CampaignStatsSerializer(serializers.Serializer):
         # Count responders (deals with at least one incoming message)
         messages_replied = deals.filter(messages__is_outgoing=False).distinct().count()
 
-        # Response rate based on connections accepted
+        # Response rate based on follow-up messages sent
         response_rate = (
-            round((messages_replied / connections_accepted * 100), 2) if connections_accepted > 0 else 0.0
+            round((messages_replied / messages_sent * 100), 2)
+            if messages_sent > 0
+            else 0.0
         )
-
-        # Lead stats
-        leads = total_leads + ready_to_connect + pending
+        conversion_rate = (
+            round((completed / qualified * 100), 2) if qualified > 0 else 0.0
+        )
+        active_leads = qualified + ready_to_connect + pending + connected
 
         return {
             "totalLeads": total_leads,
+            "activeLeads": active_leads,
+            "connectionsSent": connections_sent,
+            "connectionsAccepted": connections_accepted,
             "connected": connected,
             "messagesSent": messages_sent,
             "messagesReplied": messages_replied,
+            "responses": messages_replied,
             "completed": completed,
             "qualified": qualified,
             "readyToConnect": ready_to_connect,
             "pending": pending,
             "failed": failed,
             "noEmail": no_email,
-            "leads": leads,
             "connectionAcceptRate": connection_accept_rate,
             "responseRate": response_rate,
+            "conversionRate": conversion_rate,
         }
 
 
@@ -141,11 +146,11 @@ class CampaignSerializer(serializers.ModelSerializer):
     failed_deals = serializers.SerializerMethodField()
     ghost_mode_enabled = serializers.BooleanField()
     # Sync status with is_paused for frontend compatibility
-    is_paused = serializers.BooleanField(source="is_paused", read_only=False)
+    is_paused = serializers.BooleanField(read_only=False)
 
     # Links many-to-many field (read-only)
     links = serializers.SerializerMethodField()
-    
+
     # Computed statistics
     stats = serializers.SerializerMethodField()
 
@@ -188,14 +193,19 @@ class CampaignSerializer(serializers.ModelSerializer):
 
     def get_active_deals(self, obj):
         return obj.deals.filter(
-            state__in=["QUALIFIED", "READY_TO_CONNECT", "PENDING", "CONNECTED"]
+            state__in=[
+                DealState.QUALIFIED,
+                DealState.READY_TO_CONNECT,
+                DealState.PENDING,
+                DealState.CONNECTED,
+            ]
         ).count()
 
     def get_completed_deals(self, obj):
-        return obj.deals.filter(state="COMPLETED").count()
+        return obj.deals.filter(state=DealState.COMPLETED).count()
 
     def get_failed_deals(self, obj):
-        return obj.deals.filter(state="FAILED").count()
+        return obj.deals.filter(state=DealState.FAILED).count()
 
     def get_links(self, obj):
         """Get links associated with this campaign."""
@@ -206,7 +216,7 @@ class CampaignSerializer(serializers.ModelSerializer):
         """Compute and return statistics for the campaign."""
         # Get deals for this campaign
         deals = obj.deals.all()
-        
+
         # Count deals by state
         total_leads = deals.count()
         qualified = deals.filter(state=DealState.QUALIFIED).count()
@@ -228,7 +238,9 @@ class CampaignSerializer(serializers.ModelSerializer):
 
         # Compute rates
         connection_accept_rate = (
-            round((connections_accepted / connections_sent * 100), 2) if connections_sent > 0 else 0.0
+            round((connections_accepted / connections_sent * 100), 2)
+            if connections_sent > 0
+            else 0.0
         )
 
         # Count follow-up actions sent
@@ -240,28 +252,35 @@ class CampaignSerializer(serializers.ModelSerializer):
         # Count responders (deals with at least one incoming message)
         messages_replied = deals.filter(messages__is_outgoing=False).distinct().count()
 
-        # Response rate based on connections accepted
+        # Response rate based on follow-up messages sent
         response_rate = (
-            round((messages_replied / connections_accepted * 100), 2) if connections_accepted > 0 else 0.0
+            round((messages_replied / messages_sent * 100), 2)
+            if messages_sent > 0
+            else 0.0
         )
-
-        # Lead stats
-        leads = total_leads + ready_to_connect + pending
+        conversion_rate = (
+            round((completed / qualified * 100), 2) if qualified > 0 else 0.0
+        )
+        active_leads = qualified + ready_to_connect + pending + connected
 
         return {
             "totalLeads": total_leads,
+            "activeLeads": active_leads,
+            "connectionsSent": connections_sent,
+            "connectionsAccepted": connections_accepted,
             "connected": connected,
             "messagesSent": messages_sent,
             "messagesReplied": messages_replied,
+            "responses": messages_replied,
             "completed": completed,
             "qualified": qualified,
             "readyToConnect": ready_to_connect,
             "pending": pending,
             "failed": failed,
             "noEmail": no_email,
-            "leads": leads,
             "connectionAcceptRate": connection_accept_rate,
             "responseRate": response_rate,
+            "conversionRate": conversion_rate,
         }
 
 

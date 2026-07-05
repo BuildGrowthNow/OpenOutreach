@@ -1,4 +1,4 @@
-'use client'
+"use client";
 
 import {
   LayoutDashboard,
@@ -49,14 +49,14 @@ import {
   Network,
   Workflow,
   ArrowRight,
-   Zap,
-   Check,
-   Handshake,
-   Trophy,
-   Ghost,
-   Shield,
-   Copy,
-   Clipboard,
+  Zap,
+  Check,
+  Handshake,
+  Trophy,
+  Ghost,
+  Shield,
+  Copy,
+  Clipboard,
   Calendar,
   Briefcase,
   TrendingDown,
@@ -80,10 +80,10 @@ import {
   Info,
   Save,
   Terminal,
-  Bell
-} from 'lucide-react'
+  Bell,
+} from "lucide-react";
 
-export type Icon = React.FC<React.SVGProps<SVGSVGElement>>
+export type Icon = React.FC<React.SVGProps<SVGSVGElement>>;
 
 export const Icons = {
   Menu,
@@ -135,15 +135,15 @@ export const Icons = {
   Network,
   Workflow,
   ArrowRight,
-   Zap,
-   Check,
-   Handshake,
-   Trophy,
-   Ghost,
-   Shield,
-   Copy,
-   Clipboard,
-   Calendar,
+  Zap,
+  Check,
+  Handshake,
+  Trophy,
+  Ghost,
+  Shield,
+  Copy,
+  Clipboard,
+  Calendar,
   Briefcase,
   TrendingDown,
   ListTodo,
@@ -165,161 +165,166 @@ export const Icons = {
   EyeOff,
   Info,
   Save,
-  Terminal
-}
+  Terminal,
+};
 
 // Campaign status variants
-export type CampaignStatus = 'active' | 'paused' | 'draft'
+export type CampaignStatus = "active" | "paused" | "draft";
 
 // Deal state variants
-export type DealState = 
-  | 'QUALIFIED'
-  | 'READY_TO_CONNECT'
-  | 'PENDING'
-  | 'CONNECTED'
-  | 'COMPLETED'
-  | 'FAILED'
-  | 'NO_EMAIL'
+export type DealState =
+  | "QUALIFIED"
+  | "READY_TO_CONNECT"
+  | "PENDING"
+  | "CONNECTED"
+  | "COMPLETED"
+  | "FAILED"
+  | "NO_EMAIL";
 
 // Deal outcome variants
-export type DealOutcome = 
-  | 'not_interested'
-  | 'interested'
-  | 'scheduled'
-  | 'wrong_person'
-  | 'no_response'
-  | 'other'
+export type DealOutcome =
+  | "not_interested"
+  | "interested"
+  | "scheduled"
+  | "wrong_person"
+  | "no_response"
+  | "other";
 
 // API response types
 export interface Pagination {
-  page: number
-  limit: number
-  total: number
-  total_pages: number
+  page: number;
+  limit: number;
+  total: number;
+  total_pages: number;
 }
 
 export interface CampaignStats {
-  totalLeads: number
-  qualified: number
-  readyToConnect: number
-  pending: number
-  connected: number
-  completed: number
-  failed: number
-  noEmail: number
-  messagesSent: number
-  messagesReplied: number
-  connectionAcceptRate: number
-  responseRate: number
+  totalLeads: number;
+  activeLeads: number;
+  qualified: number;
+  readyToConnect: number;
+  pending: number;
+  connected: number;
+  completed: number;
+  failed: number;
+  noEmail: number;
+  connectionsSent: number;
+  connectionsAccepted: number;
+  messagesSent: number;
+  messagesReplied: number;
+  responses: number;
+  connectionAcceptRate: number;
+  responseRate: number;
+  conversionRate: number;
 }
 
 export interface Lead {
-  id: string
-  publicIdentifier: string
-  linkedinUrl: string
-  name?: string
-  company?: string
-  title?: string
-  state: DealState
-  outcome?: DealOutcome
-  nextCheckPendingAt?: string
-  creationDate: string
-  updateDate: string
+  id: string;
+  publicIdentifier: string;
+  linkedinUrl: string;
+  name?: string;
+  company?: string;
+  title?: string;
+  state: DealState;
+  outcome?: DealOutcome;
+  nextCheckPendingAt?: string;
+  creationDate: string;
+  updateDate: string;
   contactInfo?: {
-    email?: string
-    phoneNumbers?: string[]
-  }
-  messagesCount?: number
-  lastMessageAt?: string
-  notes?: string
-  notesCount?: number
-  lastNotes?: Array<{ id: string; content: string }>
-  campaignId?: string
-  campaignName?: string
-  disqualified?: boolean
+    email?: string;
+    phoneNumbers?: string[];
+  };
+  messagesCount?: number;
+  lastMessageAt?: string;
+  notes?: string;
+  notesCount?: number;
+  lastNotes?: Array<{ id: string; content: string }>;
+  campaignId?: string;
+  campaignName?: string;
+  disqualified?: boolean;
 }
 
 export interface Campaign {
-  id: string
-  name: string
-  description: string
-  productDocs?: string
-  campaignObjective?: string
-  bookingLink?: string
-  isFreemium: boolean
-  ghostModeEnabled: boolean
-  velocity: number
-  cooldownMinutes: number
-  status: string
-  isPaused: boolean
-  createdAt: string
-  updatedAt: string
-  stats?: CampaignStats
+  id: string;
+  name: string;
+  description: string;
+  productDocs?: string;
+  campaignObjective?: string;
+  bookingLink?: string;
+  isFreemium: boolean;
+  ghostModeEnabled: boolean;
+  velocity: number;
+  cooldownMinutes: number;
+  status: string;
+  isPaused: boolean;
+  createdAt: string;
+  updatedAt: string;
+  stats?: CampaignStats;
 }
 
 export interface Message {
-  id: string
-  dealId: string
-  dealUrn: string
-  content: string
-  isOutgoing: boolean
-  sender: 'me' | 'them'
-  creationDate: string
-  recipientName: string
-  recipientUrl: string
+  id: string;
+  dealId: string;
+  dealUrn: string;
+  content: string;
+  isOutgoing: boolean;
+  sender: "me" | "them";
+  creationDate: string;
+  recipientName: string;
+  recipientUrl: string;
 }
 
 export interface HealthStatus {
-  status: 'operational' | 'degraded' | 'unhealthy'
-  message: string
+  status: "operational" | "degraded" | "unhealthy";
+  message: string;
   system: {
-    timestamp: string
-    python_version: string
-    platform: string
-    cpu_percent: number
-    memory_percent: number
-  }
+    timestamp: string;
+    python_version: string;
+    platform: string;
+    cpu_percent: number;
+    memory_percent: number;
+  };
   database: {
-    connected: boolean
-    engine?: string
-    database?: string
-    error?: string
-    latency_ms?: number
-    engine_type?: string
-  }
+    connected: boolean;
+    engine?: string;
+    database?: string;
+    error?: string;
+    latency_ms?: number;
+    engine_type?: string;
+  };
   mongodb?: {
-    connected: boolean
-    latency_ms?: number
-    database?: string
-    error?: string
-  }
+    connected: boolean;
+    latency_ms?: number;
+    database?: string;
+    error?: string;
+  };
   database_stats?: {
-    queries: number
-    success_rate: number
-    avg_latency_ms: number
-    errors: number
-    period?: string
-    error?: string
-  }
+    queries: number;
+    success_rate: number;
+    avg_latency_ms: number;
+    errors: number;
+    period?: string;
+    error?: string;
+  };
   services: {
-    database: string  // 'operational' | 'degraded'
-    api: string       // 'operational' | 'degraded'
-    mongodb?: string  // 'operational' | 'degraded'
-    linkedin: string  // 'operational' | 'degraded'
-    overall?: string
-  }
+    database: string; // 'operational' | 'degraded'
+    api: string; // 'operational' | 'degraded'
+    mongodb?: string; // 'operational' | 'degraded'
+    linkedin: string; // 'operational' | 'degraded'
+    overall?: string;
+  };
 }
 
 export interface LinkMetrics {
-  id: string
-  url: string
-  shortUrl: string
-  campaignId: string
-  campaignName: string
-  clicks: number
-  uniqueVisitors: number
-  lastClickAt: string
-  createdAt: string
+  id: string;
+  url: string;
+  shortUrl: string;
+  campaignId: string;
+  campaignName: string;
+  clicks: number;
+  uniqueVisitors: number;
+  lastClickAt: string;
+  createdAt: string;
 }
 
 // RateLimits interface retained for backward compatibility with legacy code
@@ -327,80 +332,80 @@ export interface LinkMetrics {
 
 // Daily Usage Response type for API
 export interface DailyUsageResponse {
-  daily_connections_sent: number
-  daily_messages_sent: number
-  daily_limit: number
-  last_reset: string
-  reset_frequency: string
+  daily_connections_sent: number;
+  daily_messages_sent: number;
+  daily_limit: number;
+  last_reset: string;
+  reset_frequency: string;
 }
 
 // LinkedIn Profile Health Status interfaces
 export interface LinkedInProfileHealth {
-  id: number
-  linkedin_username: string
-  status: boolean
-  credentials_status: string
-  health_score: number
-  health_status: string
-  needs_attention: boolean
-  last_error?: string | null
-  last_verification?: string | null
+  id: number;
+  linkedin_username: string;
+  status: boolean;
+  credentials_status: string;
+  health_score: number;
+  health_status: string;
+  needs_attention: boolean;
+  last_error?: string | null;
+  last_verification?: string | null;
 }
 
 export interface LinkedInProfileHealthResponse {
-  profiles: LinkedInProfileHealth[]
-  count: number
-  total_profiles: number
-  needs_attention_count: number
+  profiles: LinkedInProfileHealth[];
+  count: number;
+  total_profiles: number;
+  needs_attention_count: number;
 }
 
 // Campaign Template types
 export interface CampaignTemplate {
-  id: number
-  name: string
-  description?: string
-  campaign_objective?: string
-  ghost_mode_enabled: boolean
-  velocity: number
-  cooldown_minutes: number
-  is_public: boolean
+  id: number;
+  name: string;
+  description?: string;
+  campaign_objective?: string;
+  ghost_mode_enabled: boolean;
+  velocity: number;
+  cooldown_minutes: number;
+  is_public: boolean;
   created_by: {
-    id: number
-    username: string
-  }
-  created_at: string
-  updated_at: string
+    id: number;
+    username: string;
+  };
+  created_at: string;
+  updated_at: string;
 }
 
 export interface CampaignTemplateCreateData {
-  name: string
-  description?: string
-  campaign_objective?: string
-  ghost_mode_enabled?: boolean
-  velocity?: number
-  cooldown_minutes?: number
-  is_public?: boolean
+  name: string;
+  description?: string;
+  campaign_objective?: string;
+  ghost_mode_enabled?: boolean;
+  velocity?: number;
+  cooldown_minutes?: number;
+  is_public?: boolean;
 }
 
 // LinkedIn Setup Status types
 export interface LinkedInSetupStatus {
-  success: boolean
+  success: boolean;
   status: {
     linkedin_profile: {
-      exists: boolean
-      count: number
-      requires_attention: boolean
-    }
+      exists: boolean;
+      count: number;
+      requires_attention: boolean;
+    };
     linkedin_credentials: {
-      exists: boolean
-      count: number
-      active_count: number
-      requires_attention: boolean
-    }
-    setup_complete: boolean
+      exists: boolean;
+      count: number;
+      active_count: number;
+      requires_attention: boolean;
+    };
+    setup_complete: boolean;
     setup_progress: {
-      current: number
-      total: number
-    }
-  }
+      current: number;
+      total: number;
+    };
+  };
 }

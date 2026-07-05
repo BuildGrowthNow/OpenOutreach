@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import logging
+from collections import Counter
 from datetime import timedelta
 from typing import Optional
 
@@ -40,7 +41,7 @@ class CampaignHealthMonitor:
 
     def run_health_check(self) -> list[HealthAlert]:
         """Run comprehensive health check and return alerts."""
-        alerts = []
+        alerts: list[HealthAlert] = []
 
         # Run individual checks
         checks = [
@@ -62,20 +63,15 @@ class CampaignHealthMonitor:
 
         return alerts
 
-    def check_connection_accept_rate(self) -> list[HealthAlert]:
-        """Check connection accept rate and warn if too low."""
-        alerts = []
-
-        # Get metrics for last 24 hours
-        since = timezone.now() - timedelta(hours=24)
-
+    def _get_connection_metrics(self, since):
+        """Get connection metrics for the campaign."""
         # Get all LinkedIn profiles for this campaign
         linkedin_profiles = LinkedInProfile.objects.filter(
             campaign=self.campaign
         ).values_list("id", flat=True)
 
         if not linkedin_profiles:
-            return alerts
+            return 0, 0
 
         # Count connections sent
         connections_sent = ActionLog.objects.filter(
@@ -90,6 +86,20 @@ class CampaignHealthMonitor:
             state=DealState.CONNECTED,
             creation_date__gte=since,
         ).count()
+
+        return connections_sent, connections_accepted
+
+    def check_connection_accept_rate(self) -> list[HealthAlert]:
+        """Check connection accept rate and warn if too low."""
+        alerts: list[HealthAlert] = []
+
+        # Get metrics for last 24 hours
+        since = timezone.now() - timedelta(hours=24)
+
+        connections_sent, connections_accepted = self._get_connection_metrics(since)
+
+        if not connections_sent:
+            return alerts
 
         # Calculate accept rate
         accept_rate = (
@@ -106,7 +116,10 @@ class CampaignHealthMonitor:
                     campaign=self.campaign,
                     alert_type=HealthAlert.TYPE_CONNECTION_RATE,
                     severity=HealthAlert.SEVERITY_MEDIUM,
-                    message=f"Connection accept rate ({accept_rate:.1%}) is below threshold ({self.CONNECTION_ACCEPT_RATE_THRESHOLD:.0%})",
+                    message=(
+                        f"Connection accept rate ({accept_rate:.1%}) is below "
+                        f"threshold ({self.CONNECTION_ACCEPT_RATE_THRESHOLD:.0%})"
+                    ),
                     details={
                         "connections_sent": connections_sent,
                         "connections_accepted": connections_accepted,
@@ -120,7 +133,7 @@ class CampaignHealthMonitor:
 
     def check_response_rate(self) -> list[HealthAlert]:
         """Check follow-up response rate."""
-        alerts = []
+        alerts: list[HealthAlert] = []
 
         # Get metrics for last 48 hours
         since = timezone.now() - timedelta(hours=48)
@@ -158,7 +171,10 @@ class CampaignHealthMonitor:
                     campaign=self.campaign,
                     alert_type=HealthAlert.TYPE_RESPONSE_RATE,
                     severity=HealthAlert.SEVERITY_MEDIUM,
-                    message=f"Response rate ({response_rate:.1%}) is below threshold ({self.RESPONSE_RATE_THRESHOLD:.0%})",
+                    message=(
+                        f"Response rate ({response_rate:.1%}) is below "
+                        f"threshold ({self.RESPONSE_RATE_THRESHOLD:.0%})"
+                    ),
                     details={
                         "connected_deals": connected_deals,
                         "deals_with_responses": deals_with_responses,
@@ -172,7 +188,7 @@ class CampaignHealthMonitor:
 
     def check_rate_limit_warnings(self) -> list[HealthAlert]:
         """Check for rate limit warnings."""
-        alerts = []
+        alerts: list[HealthAlert] = []
 
         # Check detectability for each LinkedIn profile
         linkedin_profiles = LinkedInProfile.objects.filter(campaign=self.campaign)
@@ -194,7 +210,10 @@ class CampaignHealthMonitor:
                         campaign=self.campaign,
                         alert_type=HealthAlert.TYPE_DETECTION,
                         severity=severity,
-                        message=f"LinkedIn detectability is high ({detectability_score}/100) for {profile.linkedin_username}",
+                        message=(
+                            f"LinkedIn detectability is high ({detectability_score}/100) "
+                            f"for {profile.linkedin_username}"
+                        ),
                         details={
                             "linkedin_profile": profile.linkedin_username,
                             "detectability_score": detectability_score,
@@ -214,15 +233,8 @@ class CampaignHealthMonitor:
         # Try to get the detectability score from SmartRateLimitContext first
         try:
             context = SmartRateLimitContext.objects.get(linkedin_profile=profile)
-            # Apply detectability multiplier to get the raw score
-            # This inverts the multiplier logic: score = raw_score * multiplier
-            # We'll use the raw score from context.detectability_score
-            raw_score = context.detectability_score
-            multiplier = context._detectability_multiplier()
-            if multiplier > 0:
-                # Invert to get raw score
-                raw_score = int(raw_score / multiplier)
-            return min(100, max(0, raw_score))
+            # Return the detectability score directly from the context
+            return min(100, max(0, context.detectability_score))
         except SmartRateLimitContext.DoesNotExist:
             pass  # Fall back to manual calculation if context doesn't exist
 
@@ -248,11 +260,9 @@ class CampaignHealthMonitor:
             detectability_score += 10
 
         # 2. Consecutive same-type actions (suspicious pattern)
-        from collections import Counter
-
         action_types = [a.action_type for a in actions]
         if action_types:
-            most_common, count = Counter(action_types).most_common(1)[0]
+            _, count = Counter(action_types).most_common(1)[0]
             if count / action_count > 0.8:  # 80% same type
                 detectability_score += 15
 
@@ -276,7 +286,7 @@ class CampaignHealthMonitor:
 
     def check_error_patterns(self) -> list[HealthAlert]:
         """Check for error spikes."""
-        alerts = []
+        alerts: list[HealthAlert] = []
 
         # Get metrics for last 24 hours
         since = timezone.now() - timedelta(hours=24)
@@ -302,9 +312,6 @@ class CampaignHealthMonitor:
         if total_actions < 20:
             return alerts
 
-        # Count errors from CampaignHealthMetrics
-        from openoutreach.linkedin.models.health import CampaignHealthMetric
-
         latest_metric: Optional[CampaignHealthMetric] = None
         error_rate = 0.0
 
@@ -326,7 +333,10 @@ class CampaignHealthMonitor:
                     campaign=self.campaign,
                     alert_type=HealthAlert.TYPE_ERROR_SPIKE,
                     severity=HealthAlert.SEVERITY_HIGH,
-                    message=f"Error rate ({error_rate:.1%}) exceeds threshold ({self.ERROR_RATE_THRESHOLD:.0%})",
+                    message=(
+                        f"Error rate ({error_rate:.1%}) exceeds threshold "
+                        f"({self.ERROR_RATE_THRESHOLD:.0%})"
+                    ),
                     details={
                         "errors": latest_metric.errors_total,
                         "total_actions": total_actions,
@@ -339,7 +349,7 @@ class CampaignHealthMonitor:
 
     def check_detectability(self) -> list[HealthAlert]:
         """Check detectability score over time."""
-        alerts = []
+        alerts: list[HealthAlert] = []
 
         # Get latest health metric
         try:

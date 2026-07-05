@@ -216,23 +216,26 @@ export default function LinkedInCredentialCard({
     days_until_expiry?: number | null;
     days_since_rotation?: number;
     verification_failures?: number;
-    last_verified?: string;
-    last_used?: string;
+    last_verified?: string | null;
+    last_used?: string | null;
   }
+
+  const healthStatus: HealthStatusWithDetails =
+    credential.health_status && typeof credential.health_status === "object"
+      ? (credential.health_status as HealthStatusWithDetails)
+      : {};
 
   // Get error message from credential health status if available
   const getErrorMessage = () => {
-    // Check health_status for error details - these may or may not exist
-    const details = credential.health_status as HealthStatusWithDetails;
-    if (details.error_details?.message) {
-      return details.error_details.message;
+    if (healthStatus.error_details?.message) {
+      return healthStatus.error_details.message;
     }
-    if (details.details && typeof details.details === "object") {
-      if (details.details.error_message) {
-        return details.details.error_message;
+    if (healthStatus.details && typeof healthStatus.details === "object") {
+      if (healthStatus.details.error_message) {
+        return healthStatus.details.error_message;
       }
-      if (details.details.reason) {
-        return details.details.reason;
+      if (healthStatus.details.reason) {
+        return healthStatus.details.reason;
       }
     }
     return null;
@@ -276,7 +279,7 @@ export default function LinkedInCredentialCard({
             </div>
             <div className="text-right">
               <div className="text-sm font-medium">
-                {credential.health_status?.health_score ?? "—"}/100 Health Score
+                {healthStatus.health_score ?? "—"}/100 Health Score
               </div>
               <div className="text-xs text-muted-foreground mt-1">
                 {credential.usage_count} actions used

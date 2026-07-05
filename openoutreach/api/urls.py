@@ -1,13 +1,8 @@
 # API URL Configuration
 
 from django.urls import path, re_path
-from rest_framework_simplejwt.views import (
-    TokenObtainPairView,
-    TokenRefreshView,
-    TokenVerifyView,
-)
+from rest_framework_simplejwt.views import TokenRefreshView, TokenVerifyView
 
-from .views.analytics import AnalyticsView
 from .views.auth import (
     AuthView,
     CustomTokenObtainPairView,
@@ -30,7 +25,6 @@ from .views.campaigns import (
     CampaignDetailView,
     CampaignGhostModeActionView,
     CampaignGhostModeSimulationListView,
-    CampaignGhostModeSimulationView,
     CampaignLeadsUploadView,
     CampaignLeadsView,
     CampaignListView,
@@ -201,7 +195,11 @@ urlpatterns = [
     path("messages/", MessagesView.as_view(), name="messages-list"),
     path("messages/<int:pk>/", MessagesDetailView.as_view(), name="messages-detail"),
     # Analytics endpoints
-    path("analytics/overview/", AnalyticsView.as_view(), name="analytics-overview"),
+    path(
+        "analytics/overview/",
+        AnalyticsOverviewView.as_view(),
+        name="analytics-overview",
+    ),
     # Links endpoints
     path("links/", LinksListView.as_view(), name="links-list"),
     path("links/<int:pk>/", LinksDetailView.as_view(), name="link-detail"),
@@ -419,7 +417,7 @@ urlpatterns += [
     # Analytics endpoints (no trailing slash)
     re_path(
         r"^analytics/overview$",
-        AnalyticsView.as_view(),
+        AnalyticsOverviewView.as_view(),
         name="analytics-overview-no-slash",
     ),
     # Links endpoints (no trailing slash)

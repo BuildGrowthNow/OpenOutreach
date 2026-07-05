@@ -1,16 +1,16 @@
 # Analytics API View
 
-from rest_framework import status
+from datetime import timedelta
+
+from django.utils import timezone
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated
 
 from openoutreach.core.models import Campaign
 from openoutreach.crm.models import Deal
 from openoutreach.crm.models.deal import DealState
 from openoutreach.linkedin.models import ActionLog
-from django.utils import timezone
-from datetime import timedelta
 
 
 class AnalyticsView(APIView):
@@ -37,29 +37,37 @@ class AnalyticsView(APIView):
         else:
             since = timezone.now() - timedelta(days=30)
 
+        accessible_deals = Deal.objects.filter(campaign__users=request.user)
+
         # Overall statistics (only count campaigns user has access to)
         total_campaigns = Campaign.objects.filter(users=request.user).count()
-        total_leads = Deal.objects.filter(campaign__users=request.user).count()
+        total_leads = accessible_deals.count()
 
         # Active deals (in funnel)
-        active_deals = Deal.objects.filter(
-            state__in=["QUALIFIED", "READY_TO_CONNECT", "PENDING", "CONNECTED"]
+        active_deals = accessible_deals.filter(
+            state__in=[
+                DealState.QUALIFIED,
+                DealState.READY_TO_CONNECT,
+                DealState.PENDING,
+                DealState.CONNECTED,
+            ]
         ).count()
 
         # Completed deals
-        completed_deals = Deal.objects.filter(state="COMPLETED").count()
+        completed_deals = accessible_deals.filter(state=DealState.COMPLETED).count()
 
         # Failed deals
-        failed_deals = Deal.objects.filter(state="FAILED").count()
+        failed_deals = accessible_deals.filter(state=DealState.FAILED).count()
 
         # Connection metrics
         connections_sent = ActionLog.objects.filter(
+            campaign__users=request.user,
             action_type=ActionLog.ActionType.CONNECT,
             created_at__gte=since,
         ).count()
 
-        connections_accepted = Deal.objects.filter(
-            state="CONNECTED",
+        connections_accepted = accessible_deals.filter(
+            state=DealState.CONNECTED,
             creation_date__gte=since,
         ).count()
 
@@ -69,21 +77,23 @@ class AnalyticsView(APIView):
 
         # Response metrics
         response_deals = (
-            Deal.objects.filter(
+            accessible_deals.filter(
                 messages__is_outgoing=False,
-                creation_date__gte=since,
+                messages__creation_date__gte=since,
             )
             .distinct()
             .count()
         )
 
         response_rate = (
-            response_deals / connections_sent * 100 if connections_sent > 0 else 0
+            response_deals / connections_accepted * 100
+            if connections_accepted > 0
+            else 0
         )
 
         # Conversion metrics
-        conversions = Deal.objects.filter(
-            state="COMPLETED",
+        conversions = accessible_deals.filter(
+            state=DealState.COMPLETED,
             creation_date__gte=since,
         ).count()
 
@@ -93,13 +103,15 @@ class AnalyticsView(APIView):
 
         # Pipeline by stage
         pipeline = {
-            "qualified": Deal.objects.filter(state="QUALIFIED").count(),
-            "ready_to_connect": Deal.objects.filter(state="READY_TO_CONNECT").count(),
-            "pending": Deal.objects.filter(state="PENDING").count(),
-            "connected": Deal.objects.filter(state="CONNECTED").count(),
-            "completed": Deal.objects.filter(state="COMPLETED").count(),
-            "failed": Deal.objects.filter(state="FAILED").count(),
-            "no_email": Deal.objects.filter(state="NO_EMAIL").count(),
+            "qualified": accessible_deals.filter(state=DealState.QUALIFIED).count(),
+            "ready_to_connect": accessible_deals.filter(
+                state=DealState.READY_TO_CONNECT
+            ).count(),
+            "pending": accessible_deals.filter(state=DealState.PENDING).count(),
+            "connected": accessible_deals.filter(state=DealState.CONNECTED).count(),
+            "completed": accessible_deals.filter(state=DealState.COMPLETED).count(),
+            "failed": accessible_deals.filter(state=DealState.FAILED).count(),
+            "no_email": accessible_deals.filter(state=DealState.NO_EMAIL).count(),
         }
 
         # Cross-campaign comparison
@@ -113,7 +125,7 @@ class AnalyticsView(APIView):
 
             campaign_accepted = Deal.objects.filter(
                 campaign=campaign,
-                state="CONNECTED",
+                state=DealState.CONNECTED,
                 creation_date__gte=since,
             ).count()
 
@@ -131,10 +143,10 @@ class AnalyticsView(APIView):
                     "deals": campaign.deals.count(),
                     "active_deals": campaign.deals.filter(
                         state__in=[
-                            "QUALIFIED",
-                            "READY_TO_CONNECT",
-                            "PENDING",
-                            "CONNECTED",
+                            DealState.QUALIFIED,
+                            DealState.READY_TO_CONNECT,
+                            DealState.PENDING,
+                            DealState.CONNECTED,
                         ]
                     ).count(),
                 }

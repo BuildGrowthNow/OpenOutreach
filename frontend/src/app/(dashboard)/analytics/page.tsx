@@ -1,74 +1,155 @@
-'use client'
+"use client";
 
-import { useState, useEffect, useCallback } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Skeleton } from '@/components/ui/skeleton'
-import { Icons } from '@/lib/types/components'
-import { getCampaigns } from '@/lib/api/dashboard'
-import { Breadcrumb } from '@/components/layout/breadcrumb'
-import { Campaign } from '@/lib/types/components'
+import { useCallback, useEffect, useState } from "react";
+import { Breadcrumb } from "@/components/layout/breadcrumb";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  getAnalyticsOverview,
+  getCampaigns,
+  type AnalyticsOverviewResponse,
+} from "@/lib/api/dashboard";
+import { Icons } from "@/lib/types/components";
+import { Campaign } from "@/lib/types/components";
 
-// Fallback constants for analytics - clearly labeled as such
-const FALLBACK_CONNECTION_ACCEPT_RATE = 25
-const FALLBACK_RESPONSE_RATE = 20
-const FALLBACK_CONVERSION_RATE = 12
+const EMPTY_OVERVIEW: AnalyticsOverviewResponse = {
+  period: "30d",
+  stats: {
+    connectionsSent: 0,
+    connectionsAccepted: 0,
+    connectionAcceptRate: 0,
+    messagesSent: 0,
+    messagesReplied: 0,
+    responseRate: 0,
+    conversions: 0,
+    conversionRate: 0,
+  },
+  totals: {
+    leads: 0,
+    qualified: 0,
+    readyToConnect: 0,
+    connected: 0,
+    pending: 0,
+    failed: 0,
+    noEmail: 0,
+    connectionAcceptRate: 0,
+    responseRate: 0,
+    conversionRate: 0,
+  },
+  pipeline: {
+    qualified: 0,
+    ready_to_connect: 0,
+    pending: 0,
+    connected: 0,
+    completed: 0,
+    failed: 0,
+    no_email: 0,
+  },
+  campaigns: [],
+};
 
-// Type for computed analytics stats
-interface ComputedStats {
-  connectionsSent: number;
-  connectionsAccepted: number;
-  messagesSent: number;
-  messagesReplied: number;
-  conversions: number;
-  qualified: number;
-  readyToConnect: number;
-  connected: number;
-  pending: number;
-  failed: number;
-  noEmail: number;
+function roundTo1Decimal(value: number): number {
+  return Math.round(value * 10) / 10;
 }
 
 export default function AnalyticsOverviewPage() {
-  const [campaigns, setCampaigns] = useState<Campaign[]>([])
-  const [selectedCampaign, setSelectedCampaign] = useState<string>('all')
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [timeRange, setTimeRange] = useState<string>('30d')
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [overview, setOverview] =
+    useState<AnalyticsOverviewResponse>(EMPTY_OVERVIEW);
+  const [selectedCampaign, setSelectedCampaign] = useState<string>("all");
+  const [timeRange, setTimeRange] = useState<string>("30d");
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Load campaigns from backend
-  const loadCampaigns = useCallback(async () => {
-    try {
-      setLoading(true)
-      const response = await getCampaigns()
-      if (response.data && response.data.data) {
-        setCampaigns(response.data.data)
-      } else {
-        setError('Failed to load campaigns')
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An unexpected error occurred')
-    } finally {
-      setLoading(false)
+  const loadCampaignOptions = useCallback(async () => {
+    const response = await getCampaigns();
+    if (response.data?.data) {
+      setCampaigns(response.data.data);
+      return;
     }
-  }, [])
+
+    throw new Error(
+      response.error || response.message || "Failed to load campaigns",
+    );
+  }, []);
+
+  const loadOverview = useCallback(
+    async (campaignId: string, period: string) => {
+      const response = await getAnalyticsOverview(campaignId, period);
+      if (response.data) {
+        setOverview(response.data);
+        return;
+      }
+
+      throw new Error(
+        response.error ||
+          response.message ||
+          "Failed to load analytics overview",
+      );
+    },
+    [],
+  );
+
+  const refreshAll = useCallback(async () => {
+    try {
+      setError(null);
+      setRefreshing(true);
+      await Promise.all([
+        loadCampaignOptions(),
+        loadOverview(selectedCampaign, timeRange),
+      ]);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "An unexpected error occurred",
+      );
+    } finally {
+      setRefreshing(false);
+    }
+  }, [loadCampaignOptions, loadOverview, selectedCampaign, timeRange]);
 
   useEffect(() => {
     void (async () => {
-      await loadCampaigns()
-    })()
-  }, [loadCampaigns])
+      try {
+        setLoading(true);
+        setError(null);
+        await Promise.all([
+          loadCampaignOptions(),
+          loadOverview(selectedCampaign, timeRange),
+        ]);
+      } catch (err) {
+        setError(
+          err instanceof Error ? err.message : "An unexpected error occurred",
+        );
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [loadCampaignOptions, loadOverview, selectedCampaign, timeRange]);
 
   if (loading) {
     return (
       <div className="space-y-6">
-        <Breadcrumb 
+        <Breadcrumb
           items={[
-            { label: 'Dashboard', href: '/dashboard' },
-            { label: 'Analytics', href: '/analytics', isActive: true }
+            { label: "Dashboard", href: "/dashboard" },
+            { label: "Analytics", href: "/analytics", isActive: true },
           ]}
         />
         <div className="flex items-center justify-between">
@@ -76,313 +157,187 @@ export default function AnalyticsOverviewPage() {
             <Skeleton className="h-8 w-48" />
             <Skeleton className="h-4 w-64 mt-2" />
           </div>
-          <Skeleton className="h-10 w-32" />
+          <div className="flex gap-4">
+            <Skeleton className="h-10 w-44" />
+            <Skeleton className="h-10 w-32" />
+            <Skeleton className="h-10 w-28" />
+          </div>
         </div>
-        
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <Skeleton className="h-32" />
           <Skeleton className="h-32" />
           <Skeleton className="h-32" />
           <Skeleton className="h-32" />
         </div>
-        
         <Skeleton className="h-96 w-full" />
       </div>
-    )
+    );
   }
 
-  if (error) {
-    return (
-      <>
-        <Breadcrumb 
-          items={[
-            { label: 'Dashboard', href: '/dashboard' },
-            { label: 'Analytics', href: '/analytics', isActive: true }
-          ]}
-        />
-        <Alert variant="destructive">
-          <Icons.AlertCircle className="h-4 w-4" />
-          <AlertDescription>
-            Failed to load analytics: {error}
-            <Button variant="outline" className="ml-4" onClick={loadCampaigns}>
-              Retry
-            </Button>
-          </AlertDescription>
-        </Alert>
-      </>
-    )
-  }
-
-  // Calculate totals from real campaign data
-  const filteredCampaigns = selectedCampaign === 'all' 
-    ? campaigns 
-    : campaigns.filter(campaign => campaign.id === selectedCampaign)
-
-  // Calculate actual totals from campaign stats (when available)
-  function reduceCampaignStats(acc: ComputedStats, campaign: Campaign): ComputedStats {
-    const stats = campaign.stats || {
-      totalLeads: 0,
-      connected: 0,
-      messagesSent: 0,
-      messagesReplied: 0,
-      completed: 0,
-      qualified: 0,
-      readyToConnect: 0,
-      pending: 0,
-      failed: 0,
-      noEmail: 0,
-    }
-    return {
-      connectionsSent: acc.connectionsSent + (stats.totalLeads || 0),
-      connectionsAccepted: acc.connectionsAccepted + (stats.connected || 0),
-      messagesSent: acc.messagesSent + (stats.messagesSent || 0),
-      messagesReplied: acc.messagesReplied + (stats.messagesReplied || 0),
-      conversions: acc.conversions + (stats.completed || 0),
-      qualified: acc.qualified + (stats.qualified || 0),
-      readyToConnect: acc.readyToConnect + (stats.readyToConnect || 0),
-      connected: acc.connected + (stats.connected || 0),
-      pending: acc.pending,
-      failed: acc.failed,
-      noEmail: acc.noEmail,
-    }
-  }
-
-  const initialStats: ComputedStats = {
-    connectionsSent: 0,
-    connectionsAccepted: 0,
-    messagesSent: 0,
-    messagesReplied: 0,
-    conversions: 0,
-    qualified: 0,
-    readyToConnect: 0,
-    connected: 0,
-    pending: 0,
-    failed: 0,
-    noEmail: 0,
-  }
-  
-  const computedStats: ComputedStats = filteredCampaigns.reduce(reduceCampaignStats, initialStats)
-
-  const connectionAcceptRate = computedStats.connectionsSent > 0
-    ? (computedStats.connectionsAccepted / computedStats.connectionsSent) * 100
-    : FALLBACK_CONNECTION_ACCEPT_RATE
-
-  const responseRate = computedStats.messagesSent > 0
-    ? (computedStats.messagesReplied / computedStats.messagesSent) * 100
-    : FALLBACK_RESPONSE_RATE
-
-  const conversionRate = computedStats.qualified > 0
-    ? (computedStats.conversions / computedStats.qualified) * 100
-    : FALLBACK_CONVERSION_RATE
-
-  const totalStats = {
-    connectionsSent: computedStats.connectionsSent,
-    connectionsAccepted: computedStats.connectionsAccepted,
-    connectionAcceptRate: roundTo1Decimal(connectionAcceptRate),
-    messagesSent: computedStats.messagesSent,
-    messagesReplied: computedStats.messagesReplied,
-    responseRate: roundTo1Decimal(responseRate),
-    conversions: computedStats.conversions,
-    conversionRate: roundTo1Decimal(conversionRate),
-    leads: computedStats.connectionsSent + computedStats.readyToConnect + computedStats.pending,
-    qualified: computedStats.qualified,
-    readyToConnect: computedStats.readyToConnect,
-    connected: computedStats.connected,
-    pending: filteredCampaigns.reduce((sum, campaign) => {
-      const stats = campaign.stats || {
-        totalLeads: 0,
-        qualified: 0,
-        readyToConnect: 0,
-        pending: 0,
-        connected: 0,
-        completed: 0,
-        failed: 0,
-        noEmail: 0,
-        messagesSent: 0,
-        messagesReplied: 0,
-        connectionAcceptRate: 0,
-        responseRate: 0,
-      }
-      return sum + (stats.pending || 0)
-    }, 0),
-    failed: filteredCampaigns.reduce((sum, campaign) => {
-      const stats = campaign.stats || {
-        totalLeads: 0,
-        qualified: 0,
-        readyToConnect: 0,
-        pending: 0,
-        connected: 0,
-        completed: 0,
-        failed: 0,
-        noEmail: 0,
-        messagesSent: 0,
-        messagesReplied: 0,
-        connectionAcceptRate: 0,
-        responseRate: 0,
-      }
-      return sum + (stats.failed || 0)
-    }, 0),
-    noEmail: filteredCampaigns.reduce((sum, campaign) => {
-      const stats = campaign.stats || {
-        totalLeads: 0,
-        qualified: 0,
-        readyToConnect: 0,
-        pending: 0,
-        connected: 0,
-        completed: 0,
-        failed: 0,
-        noEmail: 0,
-        messagesSent: 0,
-        messagesReplied: 0,
-        connectionAcceptRate: 0,
-        responseRate: 0,
-      }
-      return sum + (stats.noEmail || 0)
-    }, 0),
-  }
-
-  // Helper to round to 1 decimal place
-  function roundTo1Decimal(value: number): number {
-    return Math.round(value * 10) / 10
-  }
+  const stats = overview.stats;
+  const totals = overview.totals;
+  const pipeline = overview.pipeline;
+  const visibleCampaigns = overview.campaigns;
 
   return (
     <div className="space-y-6">
-      <Breadcrumb 
+      <Breadcrumb
         items={[
-          { label: 'Dashboard', href: '/dashboard' },
-          { label: 'Analytics', href: '/analytics', isActive: true }
+          { label: "Dashboard", href: "/dashboard" },
+          { label: "Analytics", href: "/analytics", isActive: true },
         ]}
       />
 
-      <div className="flex items-center justify-between">
+      {error && (
+        <Alert variant="destructive">
+          <Icons.AlertCircle className="h-4 w-4" />
+          <AlertDescription>Failed to load analytics: {error}</AlertDescription>
+        </Alert>
+      )}
+
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Analytics Overview</h1>
+          <h1 className="text-3xl font-bold tracking-tight">
+            Analytics Overview
+          </h1>
           <p className="text-muted-foreground">
-            Performance metrics across all campaigns and activities
+            Live performance metrics across your campaigns
           </p>
         </div>
-        
-         <div className="flex items-center space-x-4">
-          <Select value={selectedCampaign} onValueChange={(value: string | null) => {
-            if (value) setSelectedCampaign(value)
-          }}>
-            <SelectTrigger className="w-[180px]">
+
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <Select
+            value={selectedCampaign}
+            onValueChange={(value) => {
+              if (value) setSelectedCampaign(value);
+            }}
+          >
+            <SelectTrigger className="w-full sm:w-45">
               <SelectValue placeholder="Select Campaign" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Campaigns</SelectItem>
-              {campaigns.map(campaign => (
+              {campaigns.map((campaign) => (
                 <SelectItem key={campaign.id} value={campaign.id}>
                   {campaign.name}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
-          
-          <Select value={timeRange} onValueChange={(value: string | null) => {
-            if (value) setTimeRange(value)
-          }}>
-            <SelectTrigger className="w-[120px]">
+
+          <Select
+            value={timeRange}
+            onValueChange={(value) => {
+              if (value) setTimeRange(value);
+            }}
+          >
+            <SelectTrigger className="w-full sm:w-32">
               <SelectValue placeholder="Time Range" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="7d">Last 7 days</SelectItem>
               <SelectItem value="30d">Last 30 days</SelectItem>
               <SelectItem value="90d">Last 90 days</SelectItem>
-              <SelectItem value="ytd">Year to date</SelectItem>
             </SelectContent>
           </Select>
-          
-          <Button variant="outline" onClick={loadCampaigns}>
-            <Icons.RefreshCw className="h-4 w-4 mr-2" />
+
+          <Button variant="outline" onClick={refreshAll} disabled={refreshing}>
+            <Icons.RefreshCw
+              className={`h-4 w-4 mr-2 ${refreshing ? "animate-spin" : ""}`}
+            />
             Refresh
           </Button>
         </div>
       </div>
 
-      {/* Statistics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Connection Accept Rate */}
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Connection Accept Rate</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              Connection Accept Rate
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalStats.connectionAcceptRate}%</div>
+            <div className="text-2xl font-bold">
+              {roundTo1Decimal(stats.connectionAcceptRate)}%
+            </div>
             <p className="text-xs text-muted-foreground">
-              {totalStats.connectionsAccepted} / {totalStats.connectionsSent} accepted
+              {stats.connectionsAccepted} / {stats.connectionsSent} accepted
             </p>
             <div className="mt-2 h-2 bg-gray-100 rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-green-500" 
-                style={{ width: `${Math.min(totalStats.connectionAcceptRate, 100)}%` }} 
+              <div
+                className="h-full bg-green-500"
+                style={{
+                  width: `${Math.min(stats.connectionAcceptRate, 100)}%`,
+                }}
               />
             </div>
           </CardContent>
         </Card>
-        
-        {/* Response Rate */}
+
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Response Rate</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalStats.responseRate}%</div>
+            <div className="text-2xl font-bold">
+              {roundTo1Decimal(stats.responseRate)}%
+            </div>
             <p className="text-xs text-muted-foreground">
-              {totalStats.messagesReplied} / {totalStats.messagesSent} replied
+              {stats.messagesReplied} / {stats.messagesSent} replied
             </p>
             <div className="mt-2 h-2 bg-gray-100 rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-blue-500" 
-                style={{ width: `${Math.min(totalStats.responseRate, 100)}%` }} 
+              <div
+                className="h-full bg-blue-500"
+                style={{ width: `${Math.min(stats.responseRate, 100)}%` }}
               />
             </div>
           </CardContent>
         </Card>
-        
-        {/* Conversion Rate */}
+
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Conversion Rate</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              Conversion Rate
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalStats.conversionRate}%</div>
+            <div className="text-2xl font-bold">
+              {roundTo1Decimal(stats.conversionRate)}%
+            </div>
             <p className="text-xs text-muted-foreground">
-              {totalStats.conversions} conversions from {totalStats.qualified} qualified
+              {stats.conversions} conversions from {totals.qualified} qualified
             </p>
             <div className="mt-2 h-2 bg-gray-100 rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-purple-500" 
-                style={{ width: `${Math.min(totalStats.conversionRate, 100)}%` }} 
+              <div
+                className="h-full bg-purple-500"
+                style={{ width: `${Math.min(stats.conversionRate, 100)}%` }}
               />
             </div>
           </CardContent>
         </Card>
-        
-        {/* Active Leads */}
+
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Active Leads</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalStats.leads}</div>
+            <div className="text-2xl font-bold">{totals.leads}</div>
             <p className="text-xs text-muted-foreground">
-              {totalStats.qualified} qualified • {totalStats.readyToConnect} ready
+              {totals.qualified} qualified • {totals.readyToConnect} ready
             </p>
             <div className="mt-2 h-2 bg-gray-100 rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-yellow-500" 
-                style={{ 
-                  width: `${totalStats.leads > 0 ? (totalStats.readyToConnect / totalStats.leads) * 100 : 0}%` 
-                }} 
+              <div
+                className="h-full bg-yellow-500"
+                style={{
+                  width: `${totals.leads > 0 ? (totals.readyToConnect / totals.leads) * 100 : 0}%`,
+                }}
               />
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Tabs */}
       <Tabs defaultValue="overview" className="space-y-6">
         <TabsList>
           <TabsTrigger value="overview">
@@ -393,39 +348,38 @@ export default function AnalyticsOverviewPage() {
             <Icons.Users className="h-4 w-4 mr-2" />
             By Campaign
           </TabsTrigger>
-          <TabsTrigger value="trends">
-            <Icons.TrendingUp className="h-4 w-4 mr-2" />
-            Trends
-          </TabsTrigger>
-          <TabsTrigger value="export">
-            <Icons.Download className="h-4 w-4 mr-2" />
-            Export
-          </TabsTrigger>
         </TabsList>
 
-        {/* Overview Tab */}
         <TabsContent value="overview" className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card>
               <CardHeader>
                 <CardTitle>Campaign Performance</CardTitle>
                 <CardDescription>
-                  Performance metrics by campaign
+                  Live metrics for the selected scope
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                {campaigns.length > 0 ? (
+                {visibleCampaigns.length > 0 ? (
                   <div className="space-y-4">
-                    {filteredCampaigns.map(campaign => (
-                      <div key={campaign.id} className="flex items-center justify-between p-3 border rounded-lg">
+                    {visibleCampaigns.map((campaign) => (
+                      <div
+                        key={campaign.id}
+                        className="flex items-center justify-between p-3 border rounded-lg"
+                      >
                         <div>
                           <h4 className="font-medium">{campaign.name}</h4>
-                          <p className="text-sm text-muted-foreground">{campaign.description}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {campaign.description || "No description"}
+                          </p>
                         </div>
                         <div className="text-right">
-                          <div className="font-bold">{campaign.stats?.totalLeads || 0} leads</div>
+                          <div className="font-bold">
+                            {campaign.stats?.totalLeads || 0} leads
+                          </div>
                           <div className="text-sm text-muted-foreground">
-                            {campaign.stats?.connectionAcceptRate || 0}% accept rate
+                            {campaign.stats?.connectionAcceptRate || 0}% accept
+                            rate
                           </div>
                         </div>
                       </div>
@@ -433,7 +387,9 @@ export default function AnalyticsOverviewPage() {
                   </div>
                 ) : (
                   <div className="text-center py-8">
-                    <p className="text-muted-foreground">No campaigns yet. Create a campaign to see analytics.</p>
+                    <p className="text-muted-foreground">
+                      No campaigns match the current filter.
+                    </p>
                   </div>
                 )}
               </CardContent>
@@ -447,46 +403,75 @@ export default function AnalyticsOverviewPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                {campaigns.length > 0 ? (
+                {totals.leads > 0 ||
+                pipeline.completed > 0 ||
+                pipeline.failed > 0 ||
+                pipeline.no_email > 0 ? (
                   <div className="space-y-4">
                     {[
-                      { stage: 'Qualified', count: totalStats.qualified, color: 'bg-blue-500' },
-                      { stage: 'Ready to Connect', count: totalStats.readyToConnect, color: 'bg-yellow-500' },
-                      { stage: 'Connected', count: totalStats.connected, color: 'bg-green-500' },
-                      { stage: 'Completed', count: totalStats.conversions, color: 'bg-purple-500' }
-                    ].filter(item => item.count > 0).length > 0 ? (
-                      <>
-                        {[
-                          { stage: 'Qualified', count: totalStats.qualified, color: 'bg-blue-500' },
-                          { stage: 'Ready to Connect', count: totalStats.readyToConnect, color: 'bg-yellow-500' },
-                          { stage: 'Connected', count: totalStats.connected, color: 'bg-green-500' },
-                          { stage: 'Completed', count: totalStats.conversions, color: 'bg-purple-500' }
-                        ].map((item, index) => (
-                          <div key={index} className="space-y-2">
-                            <div className="flex justify-between">
-                              <span className="text-sm font-medium">{item.stage}</span>
-                              <span className="text-sm font-bold">{item.count}</span>
-                            </div>
-                            <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                              <div 
-                                className={`h-full ${item.color}`}
-                                style={{ 
-                                  width: `${totalStats.leads > 0 ? (item.count / totalStats.leads) * 100 : 0}%` 
-                                }} 
-                              />
-                            </div>
+                      {
+                        stage: "Qualified",
+                        count: pipeline.qualified,
+                        color: "bg-blue-500",
+                      },
+                      {
+                        stage: "Ready to Connect",
+                        count: pipeline.ready_to_connect,
+                        color: "bg-yellow-500",
+                      },
+                      {
+                        stage: "Pending",
+                        count: pipeline.pending,
+                        color: "bg-orange-500",
+                      },
+                      {
+                        stage: "Connected",
+                        count: pipeline.connected,
+                        color: "bg-green-500",
+                      },
+                      {
+                        stage: "Completed",
+                        count: pipeline.completed,
+                        color: "bg-purple-500",
+                      },
+                      {
+                        stage: "Failed",
+                        count: pipeline.failed,
+                        color: "bg-red-500",
+                      },
+                      {
+                        stage: "No Email",
+                        count: pipeline.no_email,
+                        color: "bg-gray-500",
+                      },
+                    ]
+                      .filter((item) => item.count > 0)
+                      .map((item) => (
+                        <div key={item.stage} className="space-y-2">
+                          <div className="flex justify-between">
+                            <span className="text-sm font-medium">
+                              {item.stage}
+                            </span>
+                            <span className="text-sm font-bold">
+                              {item.count}
+                            </span>
                           </div>
-                        ))}
-                      </>
-                    ) : (
-                      <div className="text-center py-4">
-                        <p className="text-sm text-muted-foreground">No pipeline data available yet</p>
-                      </div>
-                    )}
+                          <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full ${item.color}`}
+                              style={{
+                                width: `${totals.leads > 0 ? (item.count / Math.max(totals.leads, item.count)) * 100 : 100}%`,
+                              }}
+                            />
+                          </div>
+                        </div>
+                      ))}
                   </div>
                 ) : (
                   <div className="text-center py-8">
-                    <p className="text-muted-foreground">No leads yet. Data will appear when leads are added.</p>
+                    <p className="text-muted-foreground">
+                      No pipeline data available yet.
+                    </p>
                   </div>
                 )}
               </CardContent>
@@ -494,17 +479,16 @@ export default function AnalyticsOverviewPage() {
           </div>
         </TabsContent>
 
-        {/* Campaigns Tab */}
         <TabsContent value="campaigns" className="space-y-6">
           <Card>
             <CardHeader>
               <CardTitle>Campaign Comparison</CardTitle>
               <CardDescription>
-                Detailed performance comparison across campaigns
+                Real metrics for the selected time range
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {campaigns.length > 0 ? (
+              {visibleCampaigns.length > 0 ? (
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
@@ -518,29 +502,39 @@ export default function AnalyticsOverviewPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {campaigns.map(campaign => (
-                        <tr key={campaign.id} className="border-b hover:bg-gray-50">
+                      {visibleCampaigns.map((campaign) => (
+                        <tr
+                          key={campaign.id}
+                          className="border-b hover:bg-gray-50"
+                        >
                           <td className="py-3 px-4">
                             <div className="font-medium">{campaign.name}</div>
                             <div className="text-sm text-muted-foreground truncate max-w-xs">
-                              {campaign.description}
+                              {campaign.description || "No description"}
                             </div>
                           </td>
-                          <td className="py-3 px-4">{campaign.stats?.totalLeads || 0}</td>
-                          <td className="py-3 px-4">{campaign.stats?.connectionAcceptRate || 0}%</td>
-                          <td className="py-3 px-4">{campaign.stats?.responseRate || 0}%</td>
                           <td className="py-3 px-4">
-                            {campaign.stats?.totalLeads && campaign.stats.totalLeads > 0 ? 
-                              `${((campaign.stats.completed || 0) / campaign.stats.totalLeads * 100).toFixed(1)}%` : 
-                              '0%'
-                            }
+                            {campaign.stats?.totalLeads || 0}
                           </td>
                           <td className="py-3 px-4">
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                              campaign.status === 'active' ? 'bg-green-100 text-green-800' :
-                              campaign.status === 'paused' ? 'bg-yellow-100 text-yellow-800' :
-                              'bg-gray-100 text-gray-800'
-                            }`}>
+                            {campaign.stats?.connectionAcceptRate || 0}%
+                          </td>
+                          <td className="py-3 px-4">
+                            {campaign.stats?.responseRate || 0}%
+                          </td>
+                          <td className="py-3 px-4">
+                            {campaign.stats?.conversionRate || 0}%
+                          </td>
+                          <td className="py-3 px-4">
+                            <span
+                              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                campaign.status === "active"
+                                  ? "bg-green-100 text-green-800"
+                                  : campaign.status === "paused"
+                                    ? "bg-yellow-100 text-yellow-800"
+                                    : "bg-gray-100 text-gray-800"
+                              }`}
+                            >
                               {campaign.status}
                             </span>
                           </td>
@@ -551,90 +545,15 @@ export default function AnalyticsOverviewPage() {
                 </div>
               ) : (
                 <div className="text-center py-8">
-                  <p className="text-muted-foreground">No campaigns yet. Create a campaign to see comparisons.</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Trends Tab */}
-        <TabsContent value="trends" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Performance Trends</CardTitle>
-              <CardDescription>
-                Performance metrics over time
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {campaigns.length > 0 ? (
-                <div className="text-center py-8">
                   <p className="text-muted-foreground">
-                    Trend visualization is coming soon. Current analytics reflect real data from your campaigns.
+                    No campaign data available for this filter.
                   </p>
-                  <p className="text-sm text-muted-foreground mt-2">
-                    Note: Historical trend charts require a charting library integration.
-                  </p>
-                </div>
-              ) : (
-                <div className="text-center py-8">
-                  <p className="text-muted-foreground">No campaign data available for trends yet.</p>
                 </div>
               )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Export Tab */}
-        <TabsContent value="export" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Export Analytics</CardTitle>
-              <CardDescription>
-                Export detailed analytics reports for analysis
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Card>
-                    <CardContent className="pt-6">
-                      <div className="text-center space-y-4">
-                        <Icons.Download className="h-12 w-12 text-blue-500 mx-auto" />
-                        <h3 className="font-semibold">CSV Export</h3>
-                        <p className="text-sm text-muted-foreground">
-                          Export raw data as CSV for spreadsheet analysis
-                        </p>
-                        <Button className="w-full">
-                          <Icons.Download className="h-4 w-4 mr-2" />
-                          Download CSV
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                  
-                  <Card>
-                    <CardContent className="pt-6">
-                      <div className="text-center space-y-4">
-                        <Icons.FileText className="h-12 w-12 text-green-500 mx-auto" />
-                        <h3 className="font-semibold">PDF Report</h3>
-                        <p className="text-sm text-muted-foreground">
-                          Generate detailed PDF reports with charts and insights
-                        </p>
-                        <Button variant="outline" className="w-full">
-                          <Icons.FileText className="h-4 w-4 mr-2" />
-                          Generate PDF
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-              </div>
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
     </div>
-  )
+  );
 }

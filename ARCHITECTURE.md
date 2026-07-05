@@ -161,6 +161,7 @@ Paths below are relative to `openoutreach/`.
 - **`linkedin/setup/seeds.py`** — User-provided seed profiles: parse URLs, create Leads + QUALIFIED Deals.
 - **`core/management/setup_crm.py`** — Idempotent CRM bootstrap (Site creation).
 - **`admin.py`** (per app) — Django Admin: `core/admin.py` (SiteConfig, Campaign, Task), `linkedin/admin.py` (LinkedInProfile, SearchKeyword, ActionLog), `chat/admin.py` (ChatMessage).
+- **Analytics surfaces** — `api/serializers/campaigns.py` computes campaign-card/list stats from live `ActionLog`, `ChatMessage`, and current `DealState` counts and exposes real sent/accepted/replied counters plus zero-safe rates (no UI placeholder percentages). `api/views/campaigns.py:AnalyticsOverviewView` serves `/api/analytics/overview` with real `campaign_id` + `period` filtering, live overview totals, and per-campaign metrics for the selected time window; `frontend/src/app/(dashboard)/analytics/page.tsx` consumes that endpoint directly and no longer shows placeholder trend/export tabs. `api/views/campaigns.py:CampaignAnalyticsView` serves the per-campaign analytics page, uses `ChatMessage.creation_date` for reply-period filters, returns real 7/30-day aggregates, and falls back to `N/A` in the UI (`frontend/src/app/(dashboard)/campaigns/[id]/analytics/page.tsx`) for metrics the backend does not yet track instead of inventing zeros.
 - **`settings.py`** — Django settings (SQLite at `data/db.sqlite3`). Apps: crm, chat, core, linkedin, emails.
 
 

@@ -1,128 +1,140 @@
-'use client'
+"use client";
 
-import { useState, useEffect, useCallback } from 'react'
-import { useParams } from 'next/navigation'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { Skeleton } from '@/components/ui/skeleton'
-import { Button } from '@/components/ui/button'
-import { Icons } from '@/lib/types/components'
-import { getCampaignAnalytics } from '@/lib/api/dashboard'
-import { cn } from '@/lib/utils'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { useState, useEffect, useCallback } from "react";
+import { useParams } from "next/navigation";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
+import { Icons } from "@/lib/types/components";
+import { getCampaignAnalytics } from "@/lib/api/dashboard";
+import { cn } from "@/lib/utils";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface CampaignAnalyticsResponse {
-  period: string
-  campaign_id: string
+  period: string;
+  campaign_id: string;
   stats: {
-    connections_sent: number
-    connections_accepted: number
-    connection_accept_rate: number
-    messages_sent: number
-    messages_replied: number
-    response_rate: number
-    responses: number
-    daily_connections?: number
-    daily_messages?: number
+    connections_sent: number;
+    connections_accepted: number;
+    connection_accept_rate: number;
+    messages_sent: number;
+    messages_replied: number;
+    response_rate: number;
+    responses: number;
+    daily_connections?: number;
+    daily_messages?: number;
     last_7_days?: {
-      connections_sent?: number
-      connections_accepted?: number
-    }
+      connections_sent?: number;
+      connections_accepted?: number;
+    };
     last_30_days?: {
-      connections_accepted?: number
-      conversions?: number
-    }
-    conversions: number
-    conversion_rate: number
-    connection_success_rate?: number
-    errors: number
-    rate_limit_warnings: number
-    avg_time_to_accept?: string
-    total_connection_attempts?: number
-    failed_connections?: number
-    avg_response_time?: string
-    message_open_rate?: number
-    total_messages_sent?: number
-    positive_responses?: number
-    avg_conversion_time?: string
-    qualified_leads?: number
-    hot_leads?: number
-    deals_closed?: number
-    profile_views?: number
-    link_clicks?: number
-    document_downloads?: number
-    meeting_bookings?: number
-    responses_under_1h?: number
-    responses_1_24h?: number
-    responses_1_7d?: number
-    responses_over_7d?: number
-    peak_day?: string
-    peak_hour?: string
-    timezone_optimization?: string
-    high_quality_conversions?: number
-    medium_quality_conversions?: number
-    low_quality_conversions?: number
-    best_performing_source?: string
-    best_roi_source?: string
-    avg_cost_per_conversion?: number
-    best_performing_time?: string
-    best_performing_day?: string
-  }
+      connections_accepted?: number;
+      conversions?: number;
+    };
+    conversions: number;
+    conversion_rate: number;
+    connection_success_rate?: number;
+    errors: number;
+    rate_limit_warnings: number;
+    avg_time_to_accept?: string;
+    total_connection_attempts?: number;
+    failed_connections?: number;
+    avg_response_time?: string;
+    message_open_rate?: number;
+    total_messages_sent?: number;
+    positive_responses?: number;
+    avg_conversion_time?: string;
+    qualified_leads?: number;
+    hot_leads?: number;
+    deals_closed?: number;
+    profile_views?: number;
+    link_clicks?: number;
+    document_downloads?: number;
+    meeting_bookings?: number;
+    responses_under_1h?: number;
+    responses_1_24h?: number;
+    responses_1_7d?: number;
+    responses_over_7d?: number;
+    peak_day?: string;
+    peak_hour?: string;
+    timezone_optimization?: string;
+    high_quality_conversions?: number;
+    medium_quality_conversions?: number;
+    low_quality_conversions?: number;
+    best_performing_source?: string;
+    best_roi_source?: string;
+    avg_cost_per_conversion?: number;
+    best_performing_time?: string;
+    best_performing_day?: string;
+  };
   daily_breakdown: Array<{
-    date: string
-    connections_sent: number
-    connections_accepted: number
-    messages_sent: number
-    messages_replied: number
-  }>
+    date: string;
+    connections_sent: number;
+    connections_accepted: number;
+    messages_sent: number;
+    messages_replied: number;
+  }>;
   pipeline: {
-    qualified: number
-    ready_to_connect: number
-    pending: number
-    connected: number
-    completed: number
-    failed: number
-    no_email: number
-  }
+    qualified: number;
+    ready_to_connect: number;
+    pending: number;
+    connected: number;
+    completed: number;
+    failed: number;
+    no_email: number;
+  };
 }
 
 export default function CampaignAnalyticsPage() {
-  const params = useParams()
-  const campaignId = params.id as string
+  const params = useParams();
+  const campaignId = params.id as string;
 
-  const [analytics, setAnalytics] = useState<CampaignAnalyticsResponse | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState('overview')
+  const [analytics, setAnalytics] = useState<CampaignAnalyticsResponse | null>(
+    null,
+  );
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState("overview");
 
   const fetchAnalytics = useCallback(async () => {
     try {
-      setLoading(true)
-      setError(null)
+      setLoading(true);
+      setError(null);
 
-      const response = await getCampaignAnalytics(campaignId)
+      const response = await getCampaignAnalytics(campaignId);
       if (response.data) {
-        setAnalytics(response.data)
+        setAnalytics(response.data);
       } else {
-        setError(response.error || response.message || 'Failed to fetch campaign analytics')
+        setError(
+          response.error ||
+            response.message ||
+            "Failed to fetch campaign analytics",
+        );
       }
     } catch (err) {
-      setError('An error occurred while fetching campaign analytics')
-      console.error('Error fetching campaign analytics:', err)
+      setError("An error occurred while fetching campaign analytics");
+      console.error("Error fetching campaign analytics:", err);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }, [campaignId])
+  }, [campaignId]);
 
   useEffect(() => {
     void (async () => {
-      await fetchAnalytics()
-    })()
-  }, [fetchAnalytics])
+      await fetchAnalytics();
+    })();
+  }, [fetchAnalytics]);
 
   const refreshAnalytics = async () => {
-    await fetchAnalytics()
-  }
+    await fetchAnalytics();
+  };
 
   if (loading) {
     return (
@@ -144,7 +156,7 @@ export default function CampaignAnalyticsPage() {
           </div>
         </div>
       </div>
-    )
+    );
   }
 
   if (!analytics) {
@@ -153,23 +165,62 @@ export default function CampaignAnalyticsPage() {
         <Alert variant="destructive">
           <AlertTitle>Analytics Not Available</AlertTitle>
           <AlertDescription>
-            {error || 'No analytics data is available for this campaign yet.'}
+            {error || "No analytics data is available for this campaign yet."}
           </AlertDescription>
         </Alert>
         <Button variant="outline" onClick={() => window.history.back()}>
           Back to Campaign
         </Button>
       </div>
-    )
+    );
   }
 
-  const stats = analytics.stats || {}
+  const stats = analytics.stats || {};
+
+  const percentage = (numerator?: number, denominator?: number) => {
+    if (!denominator || denominator <= 0) {
+      return 0;
+    }
+
+    return Math.round(((numerator || 0) / denominator) * 100);
+  };
+
+  const connectionRate = percentage(
+    stats.connections_accepted,
+    stats.connections_sent,
+  );
+  const messageResponseRate = percentage(stats.responses, stats.messages_sent);
+  const acceptedConversionRate = percentage(
+    stats.conversions,
+    stats.connections_accepted,
+  );
+  const responseFromAcceptedRate = percentage(
+    stats.responses,
+    stats.connections_accepted,
+  );
+  const conversionFromResponsesRate = percentage(
+    stats.conversions,
+    stats.responses,
+  );
+  const overallConversionRate = percentage(
+    stats.conversions,
+    stats.connections_sent,
+  );
+
+  const formatOptionalCount = (value?: number) =>
+    value === undefined || value === null ? "N/A" : value;
+  const formatOptionalRate = (value?: number) =>
+    value === undefined || value === null ? "N/A" : `${value}%`;
+  const formatOptionalCurrency = (value?: number) =>
+    value === undefined || value === null ? "N/A" : `$${value}`;
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="space-y-1">
-          <h1 className="text-3xl font-bold tracking-tight">Campaign Analytics</h1>
+          <h1 className="text-3xl font-bold tracking-tight">
+            Campaign Analytics
+          </h1>
           <p className="text-muted-foreground">
             Performance metrics and insights for your campaign
           </p>
@@ -193,7 +244,11 @@ export default function CampaignAnalyticsPage() {
               </>
             )}
           </Button>
-          <Button variant="outline" size="sm" onClick={() => window.history.back()}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => window.history.back()}
+          >
             Back to Campaign
           </Button>
         </div>
@@ -210,29 +265,45 @@ export default function CampaignAnalyticsPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card>
           <CardContent className="pt-6">
-            <div className="text-3xl font-bold text-center">{stats.connections_sent || 0}</div>
-            <div className="text-sm text-muted-foreground text-center mt-2">Connections Sent</div>
+            <div className="text-3xl font-bold text-center">
+              {stats.connections_sent || 0}
+            </div>
+            <div className="text-sm text-muted-foreground text-center mt-2">
+              Connections Sent
+            </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardContent className="pt-6">
-            <div className="text-3xl font-bold text-center">{stats.connections_accepted || 0}</div>
-            <div className="text-sm text-muted-foreground text-center mt-2">Connections Accepted</div>
+            <div className="text-3xl font-bold text-center">
+              {stats.connections_accepted || 0}
+            </div>
+            <div className="text-sm text-muted-foreground text-center mt-2">
+              Connections Accepted
+            </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardContent className="pt-6">
-            <div className="text-3xl font-bold text-center">{stats.messages_sent || 0}</div>
-            <div className="text-sm text-muted-foreground text-center mt-2">Messages Sent</div>
+            <div className="text-3xl font-bold text-center">
+              {stats.messages_sent || 0}
+            </div>
+            <div className="text-sm text-muted-foreground text-center mt-2">
+              Messages Sent
+            </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardContent className="pt-6">
-            <div className="text-3xl font-bold text-center">{stats.conversions || 0}</div>
-            <div className="text-sm text-muted-foreground text-center mt-2">Conversions</div>
+            <div className="text-3xl font-bold text-center">
+              {stats.conversions || 0}
+            </div>
+            <div className="text-sm text-muted-foreground text-center mt-2">
+              Conversions
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -251,7 +322,9 @@ export default function CampaignAnalyticsPage() {
           <Card>
             <CardHeader>
               <CardTitle>Campaign Performance Overview</CardTitle>
-              <CardDescription>Key metrics and performance trends</CardDescription>
+              <CardDescription>
+                Key metrics and performance trends
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -262,15 +335,14 @@ export default function CampaignAnalyticsPage() {
                       <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-4 mr-4">
                         <div
                           className="bg-emerald-500 h-4 rounded-full"
-                          style={{ width: `${Math.min(100, Math.round(((stats.connections_accepted || 0) / (stats.connections_sent || 1)) * 100))}%` }}
+                          style={{ width: `${Math.min(100, connectionRate)}%` }}
                         />
                       </div>
-                      <span className="font-medium">
-                        {Math.round(((stats.connections_accepted || 0) / (stats.connections_sent || 1)) * 100)}%
-                      </span>
+                      <span className="font-medium">{connectionRate}%</span>
                     </div>
                     <p className="text-sm text-muted-foreground mt-2">
-                      {stats.connections_accepted || 0} accepted out of {stats.connections_sent || 0} sent
+                      {stats.connections_accepted || 0} accepted out of{" "}
+                      {stats.connections_sent || 0} sent
                     </p>
                   </div>
 
@@ -280,15 +352,18 @@ export default function CampaignAnalyticsPage() {
                       <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-4 mr-4">
                         <div
                           className="bg-blue-500 h-4 rounded-full"
-                          style={{ width: `${Math.min(100, Math.round(((stats.responses || 0) / (stats.messages_sent || 1)) * 100))}%` }}
+                          style={{
+                            width: `${Math.min(100, messageResponseRate)}%`,
+                          }}
                         />
                       </div>
                       <span className="font-medium">
-                        {Math.round(((stats.responses || 0) / (stats.messages_sent || 1)) * 100)}%
+                        {messageResponseRate}%
                       </span>
                     </div>
                     <p className="text-sm text-muted-foreground mt-2">
-                      {stats.responses || 0} responses to {stats.messages_sent || 0} messages
+                      {stats.responses || 0} responses to{" "}
+                      {stats.messages_sent || 0} messages
                     </p>
                   </div>
                 </div>
@@ -300,15 +375,18 @@ export default function CampaignAnalyticsPage() {
                       <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-4 mr-4">
                         <div
                           className="bg-purple-500 h-4 rounded-full"
-                          style={{ width: `${Math.min(100, Math.round(((stats.conversions || 0) / (stats.connections_accepted || 1)) * 100))}%` }}
+                          style={{
+                            width: `${Math.min(100, acceptedConversionRate)}%`,
+                          }}
                         />
                       </div>
                       <span className="font-medium">
-                        {Math.round(((stats.conversions || 0) / (stats.connections_accepted || 1)) * 100)}%
+                        {acceptedConversionRate}%
                       </span>
                     </div>
                     <p className="text-sm text-muted-foreground mt-2">
-                      {stats.conversions || 0} conversions from {stats.connections_accepted || 0} accepted connections
+                      {stats.conversions || 0} conversions from{" "}
+                      {stats.connections_accepted || 0} accepted connections
                     </p>
                   </div>
 
@@ -329,21 +407,35 @@ export default function CampaignAnalyticsPage() {
           <Card>
             <CardHeader>
               <CardTitle>Time Period Summary</CardTitle>
-              <CardDescription>Activity breakdown by time period</CardDescription>
+              <CardDescription>
+                Activity breakdown by time period
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="text-center">
-                  <div className="text-2xl font-bold">{stats.last_7_days?.connections_sent || 0}</div>
-                  <div className="text-sm text-muted-foreground">Connections Last 7 Days</div>
+                  <div className="text-2xl font-bold">
+                    {stats.last_7_days?.connections_sent || 0}
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    Connections Last 7 Days
+                  </div>
                 </div>
                 <div className="text-center">
-                  <div className="text-2xl font-bold">{stats.last_30_days?.connections_accepted || 0}</div>
-                  <div className="text-sm text-muted-foreground">Accepted Last 30 Days</div>
+                  <div className="text-2xl font-bold">
+                    {stats.last_30_days?.connections_accepted || 0}
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    Accepted Last 30 Days
+                  </div>
                 </div>
                 <div className="text-center">
-                  <div className="text-2xl font-bold">{stats.last_30_days?.conversions || 0}</div>
-                  <div className="text-sm text-muted-foreground">Conversions Last 30 Days</div>
+                  <div className="text-2xl font-bold">
+                    {stats.last_30_days?.conversions || 0}
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    Conversions Last 30 Days
+                  </div>
                 </div>
               </div>
             </CardContent>
@@ -364,20 +456,36 @@ export default function CampaignAnalyticsPage() {
                   <h4 className="font-medium mb-3">Connection Performance</h4>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div className="text-center">
-                      <div className="text-xl font-semibold">{stats.connection_success_rate || 0}%</div>
-                      <div className="text-sm text-muted-foreground">Success Rate</div>
+                      <div className="text-xl font-semibold">
+                        {stats.connection_success_rate || 0}%
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        Success Rate
+                      </div>
                     </div>
                     <div className="text-center">
-                      <div className="text-xl font-semibold">{stats.avg_time_to_accept || 'N/A'}</div>
-                      <div className="text-sm text-muted-foreground">Avg Accept Time</div>
+                      <div className="text-xl font-semibold">
+                        {stats.avg_time_to_accept || "N/A"}
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        Avg Accept Time
+                      </div>
                     </div>
                     <div className="text-center">
-                      <div className="text-xl font-semibold">{stats.total_connection_attempts || 0}</div>
-                      <div className="text-sm text-muted-foreground">Total Attempts</div>
+                      <div className="text-xl font-semibold">
+                        {formatOptionalCount(stats.total_connection_attempts)}
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        Total Attempts
+                      </div>
                     </div>
                     <div className="text-center">
-                      <div className="text-xl font-semibold">{stats.failed_connections || 0}</div>
-                      <div className="text-sm text-muted-foreground">Failed</div>
+                      <div className="text-xl font-semibold">
+                        {formatOptionalCount(stats.failed_connections)}
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        Failed
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -387,20 +495,36 @@ export default function CampaignAnalyticsPage() {
                   <h4 className="font-medium mb-3">Message Performance</h4>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div className="text-center">
-                      <div className="text-xl font-semibold">{stats.avg_response_time || 'N/A'}</div>
-                      <div className="text-sm text-muted-foreground">Avg Response Time</div>
+                      <div className="text-xl font-semibold">
+                        {stats.avg_response_time || "N/A"}
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        Avg Response Time
+                      </div>
                     </div>
                     <div className="text-center">
-                      <div className="text-xl font-semibold">{stats.message_open_rate || 0}%</div>
-                      <div className="text-sm text-muted-foreground">Open Rate</div>
+                      <div className="text-xl font-semibold">
+                        {formatOptionalRate(stats.message_open_rate)}
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        Open Rate
+                      </div>
                     </div>
                     <div className="text-center">
-                      <div className="text-xl font-semibold">{stats.total_messages_sent || 0}</div>
-                      <div className="text-sm text-muted-foreground">Total Sent</div>
+                      <div className="text-xl font-semibold">
+                        {stats.total_messages_sent || 0}
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        Total Sent
+                      </div>
                     </div>
                     <div className="text-center">
-                      <div className="text-xl font-semibold">{stats.positive_responses || 0}</div>
-                      <div className="text-sm text-muted-foreground">Positive Responses</div>
+                      <div className="text-xl font-semibold">
+                        {formatOptionalCount(stats.positive_responses)}
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        Positive Responses
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -410,20 +534,36 @@ export default function CampaignAnalyticsPage() {
                   <h4 className="font-medium mb-3">Conversion Performance</h4>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div className="text-center">
-                      <div className="text-xl font-semibold">{stats.avg_conversion_time || 'N/A'}</div>
-                      <div className="text-sm text-muted-foreground">Avg Conversion Time</div>
+                      <div className="text-xl font-semibold">
+                        {stats.avg_conversion_time || "N/A"}
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        Avg Conversion Time
+                      </div>
                     </div>
                     <div className="text-center">
-                      <div className="text-xl font-semibold">{stats.qualified_leads || 0}</div>
-                      <div className="text-sm text-muted-foreground">Qualified Leads</div>
+                      <div className="text-xl font-semibold">
+                        {stats.qualified_leads || 0}
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        Qualified Leads
+                      </div>
                     </div>
                     <div className="text-center">
-                      <div className="text-xl font-semibold">{stats.hot_leads || 0}</div>
-                      <div className="text-sm text-muted-foreground">Hot Leads</div>
+                      <div className="text-xl font-semibold">
+                        {formatOptionalCount(stats.hot_leads)}
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        Hot Leads
+                      </div>
                     </div>
                     <div className="text-center">
-                      <div className="text-xl font-semibold">{stats.deals_closed || 0}</div>
-                      <div className="text-sm text-muted-foreground">Deals Closed</div>
+                      <div className="text-xl font-semibold">
+                        {stats.deals_closed || 0}
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        Deals Closed
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -437,7 +577,9 @@ export default function CampaignAnalyticsPage() {
           <Card>
             <CardHeader>
               <CardTitle>Engagement Metrics</CardTitle>
-              <CardDescription>How leads are engaging with your campaign</CardDescription>
+              <CardDescription>
+                How leads are engaging with your campaign
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-6">
@@ -448,19 +590,27 @@ export default function CampaignAnalyticsPage() {
                     <div className="space-y-3">
                       <div className="flex justify-between">
                         <span className="text-sm">Profile Views</span>
-                        <span className="font-medium">{stats.profile_views || 0}</span>
+                        <span className="font-medium">
+                          {formatOptionalCount(stats.profile_views)}
+                        </span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-sm">Link Clicks</span>
-                        <span className="font-medium">{stats.link_clicks || 0}</span>
+                        <span className="font-medium">
+                          {formatOptionalCount(stats.link_clicks)}
+                        </span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-sm">Document Downloads</span>
-                        <span className="font-medium">{stats.document_downloads || 0}</span>
+                        <span className="font-medium">
+                          {formatOptionalCount(stats.document_downloads)}
+                        </span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-sm">Meeting Bookings</span>
-                        <span className="font-medium">{stats.meeting_bookings || 0}</span>
+                        <span className="font-medium">
+                          {formatOptionalCount(stats.meeting_bookings)}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -471,19 +621,27 @@ export default function CampaignAnalyticsPage() {
                     <div className="space-y-3">
                       <div className="flex justify-between">
                         <span className="text-sm">Under 1 Hour</span>
-                        <span className="font-medium">{stats.responses_under_1h || 0}</span>
+                        <span className="font-medium">
+                          {formatOptionalCount(stats.responses_under_1h)}
+                        </span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-sm">1-24 Hours</span>
-                        <span className="font-medium">{stats.responses_1_24h || 0}</span>
+                        <span className="font-medium">
+                          {formatOptionalCount(stats.responses_1_24h)}
+                        </span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-sm">1-7 Days</span>
-                        <span className="font-medium">{stats.responses_1_7d || 0}</span>
+                        <span className="font-medium">
+                          {formatOptionalCount(stats.responses_1_7d)}
+                        </span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-sm">Over 7 Days</span>
-                        <span className="font-medium">{stats.responses_over_7d || 0}</span>
+                        <span className="font-medium">
+                          {formatOptionalCount(stats.responses_over_7d)}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -496,21 +654,31 @@ export default function CampaignAnalyticsPage() {
           <Card>
             <CardHeader>
               <CardTitle>Peak Activity Times</CardTitle>
-              <CardDescription>When your audience is most active</CardDescription>
+              <CardDescription>
+                When your audience is most active
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-3 gap-4">
                 <div className="text-center">
-                  <div className="text-xl font-semibold">{stats.peak_day || 'Weekdays'}</div>
+                  <div className="text-xl font-semibold">
+                    {stats.peak_day || "N/A"}
+                  </div>
                   <div className="text-sm text-muted-foreground">Best Day</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-xl font-semibold">{stats.peak_hour || '10am-2pm'}</div>
+                  <div className="text-xl font-semibold">
+                    {stats.peak_hour || "N/A"}
+                  </div>
                   <div className="text-sm text-muted-foreground">Best Time</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-xl font-semibold">{stats.timezone_optimization || 'Auto'}</div>
-                  <div className="text-sm text-muted-foreground">Timezone Opt</div>
+                  <div className="text-xl font-semibold">
+                    {stats.timezone_optimization || "N/A"}
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    Timezone Opt
+                  </div>
                 </div>
               </div>
             </CardContent>
@@ -522,7 +690,9 @@ export default function CampaignAnalyticsPage() {
           <Card>
             <CardHeader>
               <CardTitle>Conversion Funnel</CardTitle>
-              <CardDescription>Lead progression through your campaign</CardDescription>
+              <CardDescription>
+                Lead progression through your campaign
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-8">
@@ -530,54 +700,78 @@ export default function CampaignAnalyticsPage() {
                 <div className="relative">
                   {/* Connection Stage */}
                   <div className="mb-8 text-center">
-                    <div className="text-lg font-semibold mb-2">Connection Sent</div>
-                    <div className="text-3xl font-bold mb-1">{stats.connections_sent || 0}</div>
+                    <div className="text-lg font-semibold mb-2">
+                      Connection Sent
+                    </div>
+                    <div className="text-3xl font-bold mb-1">
+                      {stats.connections_sent || 0}
+                    </div>
                     <div className="w-full h-4 bg-blue-200 dark:bg-blue-900 rounded-lg mx-auto max-w-md"></div>
                   </div>
 
                   {/* Connection Accepted Stage */}
                   <div className="mb-8 text-center">
-                    <div className="text-lg font-semibold mb-2">Connection Accepted</div>
-                    <div className="text-3xl font-bold mb-1">{stats.connections_accepted || 0}</div>
-                    <div className="w-full h-4 bg-green-200 dark:bg-green-900 rounded-lg mx-auto max-w-md"
-                      style={{ width: `${Math.min(100, ((stats.connections_accepted || 0) / (stats.connections_sent || 1)) * 100)}%` }}>
+                    <div className="text-lg font-semibold mb-2">
+                      Connection Accepted
                     </div>
+                    <div className="text-3xl font-bold mb-1">
+                      {stats.connections_accepted || 0}
+                    </div>
+                    <div
+                      className="w-full h-4 bg-green-200 dark:bg-green-900 rounded-lg mx-auto max-w-md"
+                      style={{ width: `${Math.min(100, connectionRate)}%` }}
+                    ></div>
                     <div className="text-sm text-muted-foreground mt-1">
-                      {Math.round(((stats.connections_accepted || 0) / (stats.connections_sent || 1)) * 100)}% acceptance rate
+                      {connectionRate}% acceptance rate
                     </div>
                   </div>
 
                   {/* Response Stage */}
                   <div className="mb-8 text-center">
-                    <div className="text-lg font-semibold mb-2">Messages / Responses</div>
-                    <div className="text-3xl font-bold mb-1">{stats.responses || 0}</div>
-                    <div className="w-full h-4 bg-purple-200 dark:bg-purple-900 rounded-lg mx-auto max-w-md"
-                      style={{ width: `${Math.min(100, ((stats.responses || 0) / (stats.connections_accepted || 1)) * 100)}%` }}>
+                    <div className="text-lg font-semibold mb-2">
+                      Messages / Responses
                     </div>
+                    <div className="text-3xl font-bold mb-1">
+                      {stats.responses || 0}
+                    </div>
+                    <div
+                      className="w-full h-4 bg-purple-200 dark:bg-purple-900 rounded-lg mx-auto max-w-md"
+                      style={{
+                        width: `${Math.min(100, responseFromAcceptedRate)}%`,
+                      }}
+                    ></div>
                     <div className="text-sm text-muted-foreground mt-1">
-                      {Math.round(((stats.responses || 0) / (stats.connections_accepted || 1)) * 100)}% response rate
+                      {responseFromAcceptedRate}% response rate
                     </div>
                   </div>
 
                   {/* Conversion Stage */}
                   <div className="mb-8 text-center">
-                    <div className="text-lg font-semibold mb-2">Conversions</div>
-                    <div className="text-3xl font-bold mb-1">{stats.conversions || 0}</div>
-                    <div className="w-full h-4 bg-orange-200 dark:bg-orange-900 rounded-lg mx-auto max-w-md"
-                      style={{ width: `${Math.min(100, ((stats.conversions || 0) / (stats.responses || 1)) * 100)}%` }}>
+                    <div className="text-lg font-semibold mb-2">
+                      Conversions
                     </div>
+                    <div className="text-3xl font-bold mb-1">
+                      {stats.conversions || 0}
+                    </div>
+                    <div
+                      className="w-full h-4 bg-orange-200 dark:bg-orange-900 rounded-lg mx-auto max-w-md"
+                      style={{
+                        width: `${Math.min(100, conversionFromResponsesRate)}%`,
+                      }}
+                    ></div>
                     <div className="text-sm text-muted-foreground mt-1">
-                      {Math.round(((stats.conversions || 0) / (stats.responses || 1)) * 100)}% conversion rate
+                      {conversionFromResponsesRate}% conversion rate
                     </div>
                   </div>
 
                   {/* Overall Conversion Rate */}
                   <div className="text-center p-4 bg-muted rounded-lg">
                     <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
-                      Overall Conversion Rate: {Math.round(((stats.conversions || 0) / (stats.connections_sent || 1)) * 100)}%
+                      Overall Conversion Rate: {overallConversionRate}%
                     </div>
                     <p className="text-sm text-muted-foreground mt-2">
-                      {stats.conversions || 0} conversions from {stats.connections_sent || 0} initial connections
+                      {stats.conversions || 0} conversions from{" "}
+                      {stats.connections_sent || 0} initial connections
                     </p>
                   </div>
                 </div>
@@ -589,7 +783,9 @@ export default function CampaignAnalyticsPage() {
           <Card>
             <CardHeader>
               <CardTitle>Lead Quality Analysis</CardTitle>
-              <CardDescription>Conversion quality by lead source and type</CardDescription>
+              <CardDescription>
+                Conversion quality by lead source and type
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -598,33 +794,49 @@ export default function CampaignAnalyticsPage() {
                   <div className="space-y-3">
                     <div className="flex justify-between">
                       <span className="text-sm">High Quality Conversions</span>
-                      <span className="font-medium">{stats.high_quality_conversions || 0}</span>
+                      <span className="font-medium">
+                        {formatOptionalCount(stats.high_quality_conversions)}
+                      </span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-sm">Medium Quality Conversions</span>
-                      <span className="font-medium">{stats.medium_quality_conversions || 0}</span>
+                      <span className="text-sm">
+                        Medium Quality Conversions
+                      </span>
+                      <span className="font-medium">
+                        {formatOptionalCount(stats.medium_quality_conversions)}
+                      </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-sm">Low Quality Conversions</span>
-                      <span className="font-medium">{stats.low_quality_conversions || 0}</span>
+                      <span className="font-medium">
+                        {formatOptionalCount(stats.low_quality_conversions)}
+                      </span>
                     </div>
                   </div>
                 </div>
 
                 <div>
-                  <h4 className="font-medium mb-3">Lead Source Effectiveness</h4>
+                  <h4 className="font-medium mb-3">
+                    Lead Source Effectiveness
+                  </h4>
                   <div className="space-y-3">
                     <div className="flex justify-between">
                       <span className="text-sm">Best Performing Source</span>
-                      <span className="font-medium">{stats.best_performing_source || 'LinkedIn'}</span>
+                      <span className="font-medium">
+                        {stats.best_performing_source || "N/A"}
+                      </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-sm">Source with Best ROI</span>
-                      <span className="font-medium">{stats.best_roi_source || 'LinkedIn'}</span>
+                      <span className="font-medium">
+                        {stats.best_roi_source || "N/A"}
+                      </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-sm">Avg Cost per Conversion</span>
-                      <span className="font-medium">${stats.avg_cost_per_conversion || 0}</span>
+                      <span className="font-medium">
+                        {formatOptionalCurrency(stats.avg_cost_per_conversion)}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -638,54 +850,84 @@ export default function CampaignAnalyticsPage() {
       <Card>
         <CardHeader>
           <CardTitle>Recommendations</CardTitle>
-          <CardDescription>Actionable insights to improve campaign performance</CardDescription>
+          <CardDescription>
+            Actionable insights to improve campaign performance
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
             {(stats.connection_success_rate || 0) < 20 && (
-              <div className={cn('p-3 rounded-lg border', 'border-blue-500/20 bg-blue-500/5')}>
+              <div
+                className={cn(
+                  "p-3 rounded-lg border",
+                  "border-blue-500/20 bg-blue-500/5",
+                )}
+              >
                 <h4 className="font-medium flex items-center gap-2">
                   <Icons.AlertCircle className="h-4 w-4 text-blue-500" />
                   Improve Connection Success Rate
                 </h4>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Your connection success rate is lower than average. Consider reviewing your connection message templates and targeting criteria.
+                  Your connection success rate is lower than average. Consider
+                  reviewing your connection message templates and targeting
+                  criteria.
                 </p>
               </div>
             )}
 
             {(stats.response_rate || 0) < 10 && (
-              <div className={cn('p-3 rounded-lg border', 'border-amber-500/20 bg-amber-500/5')}>
+              <div
+                className={cn(
+                  "p-3 rounded-lg border",
+                  "border-amber-500/20 bg-amber-500/5",
+                )}
+              >
                 <h4 className="font-medium flex items-center gap-2">
                   <Icons.AlertCircle className="h-4 w-4 text-amber-500" />
                   Increase Response Rate
                 </h4>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Response rate could be improved. Try personalizing messages more, following up at optimal times, or segmenting your audience better.
+                  Response rate could be improved. Try personalizing messages
+                  more, following up at optimal times, or segmenting your
+                  audience better.
                 </p>
               </div>
             )}
 
-            {(stats.conversions || 0) < (stats.connections_accepted || 0) * 0.1 && (
-              <div className={cn('p-3 rounded-lg border', 'border-emerald-500/20 bg-emerald-500/5')}>
+            {(stats.conversions || 0) <
+              (stats.connections_accepted || 0) * 0.1 && (
+              <div
+                className={cn(
+                  "p-3 rounded-lg border",
+                  "border-emerald-500/20 bg-emerald-500/5",
+                )}
+              >
                 <h4 className="font-medium flex items-center gap-2">
                   <Icons.AlertCircle className="h-4 w-4 text-emerald-500" />
                   Optimize Conversion Funnel
                 </h4>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Consider creating a more defined conversion path with clear calls-to-action, better qualification criteria, and more targeted follow-ups.
+                  Consider creating a more defined conversion path with clear
+                  calls-to-action, better qualification criteria, and more
+                  targeted follow-ups.
                 </p>
               </div>
             )}
 
             {(!stats.best_performing_time || !stats.best_performing_day) && (
-              <div className={cn('p-3 rounded-lg border', 'border-purple-500/20 bg-purple-500/5')}>
+              <div
+                className={cn(
+                  "p-3 rounded-lg border",
+                  "border-purple-500/20 bg-purple-500/5",
+                )}
+              >
                 <h4 className="font-medium flex items-center gap-2">
                   <Icons.AlertCircle className="h-4 w-4 text-purple-500" />
                   Analyze Timing Patterns
                 </h4>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Enable timing analytics to discover when your audience is most responsive and optimize your send times.
+                  Enable timing analytics to discover when your audience is most
+                  responsive and optimize your send times.
                 </p>
               </div>
             )}
@@ -693,5 +935,5 @@ export default function CampaignAnalyticsPage() {
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }

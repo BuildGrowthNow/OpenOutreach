@@ -1,21 +1,24 @@
 # Campaign API Views
 
-from rest_framework import status
-from rest_framework.response import Response
-from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated
+from datetime import timedelta
+
 from django.http import Http404, HttpResponse
 from django.utils import timezone
+from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
-from openoutreach.core.models import Campaign
-from openoutreach.crm.models import Deal
 from openoutreach.api.serializers.campaigns import (
-    CampaignSerializer,
     CampaignCreateSerializer,
+    CampaignSerializer,
     CampaignUpdateSerializer,
 )
+from openoutreach.core.models import Campaign
+from openoutreach.crm.models import Deal
+from openoutreach.crm.models.deal import DealState
+from openoutreach.linkedin.models import ActionLog
 from openoutreach.linkedin.models.ghost_mode import GhostCampaign, GhostSimulationLog
-from openoutreach.api.utils import create_pagination_response
 
 
 class CampaignListView(APIView):
@@ -156,10 +159,17 @@ class CampaignDetailView(APIView):
                 "user_count": campaign.users.count(),
                 "deal_count": campaign.deals.count(),
                 "active_deals": campaign.deals.filter(
-                    state__in=["QUALIFIED", "READY_TO_CONNECT", "PENDING", "CONNECTED"]
+                    state__in=[
+                        DealState.QUALIFIED,
+                        DealState.READY_TO_CONNECT,
+                        DealState.PENDING,
+                        DealState.CONNECTED,
+                    ]
                 ).count(),
-                "completed_deals": campaign.deals.filter(state="COMPLETED").count(),
-                "failed_deals": campaign.deals.filter(state="FAILED").count(),
+                "completed_deals": campaign.deals.filter(
+                    state=DealState.COMPLETED
+                ).count(),
+                "failed_deals": campaign.deals.filter(state=DealState.FAILED).count(),
                 "created_at": (
                     campaign.created_at.isoformat() if campaign.created_at else None
                 ),
@@ -327,7 +337,7 @@ class CampaignLeadsView(APIView):
 
         # Serialize leads
         leads_data = []
-        from openoutreach.api.views.leads import _extract_lead_name, _extract_lead_info
+        from openoutreach.api.views.leads import _extract_lead_info, _extract_lead_name
 
         for deal in leads:
             name = _extract_lead_name(deal.lead)
@@ -403,11 +413,13 @@ class CampaignLeadsUploadView(APIView):
 
         file_obj = request.FILES["file"]
 
+        import csv
+        import io
+
+        from linkedin_cli.url_utils import public_id_to_url, url_to_public_id
+
         from openoutreach.crm.models import Deal, Lead
         from openoutreach.crm.models.deal import DealState
-        from linkedin_cli.url_utils import url_to_public_id, public_id_to_url
-        import io
-        import csv
 
         try:
             decoded_file = file_obj.read().decode("utf-8")
@@ -603,19 +615,17 @@ class CampaignAnalyticsView(APIView):
 
         period = request.query_params.get("period", "30d")
 
-        from openoutreach.linkedin.models import ActionLog
-        from django.utils import timezone
-        from datetime import timedelta
-
         # Calculate date range
         if period == "7d":
-            since = timezone.now() - timedelta(days=7)
+            period_days = 7
         elif period == "30d":
-            since = timezone.now() - timedelta(days=30)
+            period_days = 30
         elif period == "90d":
-            since = timezone.now() - timedelta(days=90)
+            period_days = 90
         else:
-            since = timezone.now() - timedelta(days=30)
+            period_days = 30
+
+        since = timezone.now() - timedelta(days=period_days)
 
         # Connection metrics
         connections_sent = ActionLog.objects.filter(
@@ -626,7 +636,7 @@ class CampaignAnalyticsView(APIView):
 
         connections_accepted = Deal.objects.filter(
             campaign=campaign,
-            state="CONNECTED",
+            state=DealState.CONNECTED,
             creation_date__gte=since,
         ).count()
 
@@ -645,25 +655,25 @@ class CampaignAnalyticsView(APIView):
             Deal.objects.filter(
                 campaign=campaign,
                 messages__is_outgoing=False,
-                creation_date__gte=since,
+                messages__creation_date__gte=since,
             )
             .distinct()
             .count()
         )
 
         response_rate = (
-            messages_replied / connections_sent * 100 if connections_sent > 0 else 0
+            messages_replied / messages_sent * 100 if messages_sent > 0 else 0
         )
 
         # Conversion metrics
         conversions = Deal.objects.filter(
             campaign=campaign,
-            state="COMPLETED",
+            state=DealState.COMPLETED,
             creation_date__gte=since,
         ).count()
 
         conversion_rate = (
-            conversions / connections_sent * 100 if connections_sent > 0 else 0
+            conversions / connections_accepted * 100 if connections_accepted > 0 else 0
         )
 
         # Error metrics
@@ -674,49 +684,46 @@ class CampaignAnalyticsView(APIView):
             created_at__gte=since,
         ).count()
 
-        rate_limit_warnings = ActionLog.objects.filter(
-            campaign=campaign,
-            warning_message__isnull=False,
-            warning_message__gt="",
-            created_at__gte=since,
-        ).count()
+        # ActionLog does not currently persist structured rate-limit warnings.
+        rate_limit_warnings = 0
 
         # Pipeline statistics
         pipeline = {
             "qualified": Deal.objects.filter(
                 campaign=campaign,
-                state="QUALIFIED",
+                state=DealState.QUALIFIED,
             ).count(),
             "ready_to_connect": Deal.objects.filter(
                 campaign=campaign,
-                state="READY_TO_CONNECT",
+                state=DealState.READY_TO_CONNECT,
             ).count(),
             "pending": Deal.objects.filter(
                 campaign=campaign,
-                state="PENDING",
+                state=DealState.PENDING,
             ).count(),
             "connected": Deal.objects.filter(
                 campaign=campaign,
-                state="CONNECTED",
+                state=DealState.CONNECTED,
             ).count(),
             "completed": Deal.objects.filter(
                 campaign=campaign,
-                state="COMPLETED",
+                state=DealState.COMPLETED,
             ).count(),
             "failed": Deal.objects.filter(
                 campaign=campaign,
-                state="FAILED",
+                state=DealState.FAILED,
             ).count(),
             "no_email": Deal.objects.filter(
                 campaign=campaign,
-                state="NO_EMAIL",
+                state=DealState.NO_EMAIL,
             ).count(),
         }
 
         # Daily breakdown (last 7 days)
         daily_breakdown = []
+        breakdown_start = timezone.now() - timedelta(days=6)
         for i in range(7):
-            day_start = since + timedelta(days=i)
+            day_start = breakdown_start + timedelta(days=i)
             day_end = day_start + timedelta(days=1)
 
             day_connections_sent = ActionLog.objects.filter(
@@ -728,7 +735,7 @@ class CampaignAnalyticsView(APIView):
 
             day_connections_accepted = Deal.objects.filter(
                 campaign=campaign,
-                state="CONNECTED",
+                state=DealState.CONNECTED,
                 creation_date__gte=day_start,
                 creation_date__lt=day_end,
             ).count()
@@ -744,8 +751,8 @@ class CampaignAnalyticsView(APIView):
                 Deal.objects.filter(
                     campaign=campaign,
                     messages__is_outgoing=False,
-                    creation_date__gte=day_start,
-                    creation_date__lt=day_end,
+                    messages__creation_date__gte=day_start,
+                    messages__creation_date__lt=day_end,
                 )
                 .distinct()
                 .count()
@@ -762,38 +769,72 @@ class CampaignAnalyticsView(APIView):
                 }
             )
 
+        last_7_days = {
+            "connections_sent": ActionLog.objects.filter(
+                campaign=campaign,
+                action_type=ActionLog.ActionType.CONNECT,
+                created_at__gte=timezone.now() - timedelta(days=7),
+            ).count(),
+            "connections_accepted": Deal.objects.filter(
+                campaign=campaign,
+                state=DealState.CONNECTED,
+                creation_date__gte=timezone.now() - timedelta(days=7),
+            ).count(),
+            "conversions": Deal.objects.filter(
+                campaign=campaign,
+                state=DealState.COMPLETED,
+                creation_date__gte=timezone.now() - timedelta(days=7),
+            ).count(),
+        }
+        last_30_days = {
+            "connections_sent": ActionLog.objects.filter(
+                campaign=campaign,
+                action_type=ActionLog.ActionType.CONNECT,
+                created_at__gte=timezone.now() - timedelta(days=30),
+            ).count(),
+            "connections_accepted": Deal.objects.filter(
+                campaign=campaign,
+                state=DealState.CONNECTED,
+                creation_date__gte=timezone.now() - timedelta(days=30),
+            ).count(),
+            "conversions": Deal.objects.filter(
+                campaign=campaign,
+                state=DealState.COMPLETED,
+                creation_date__gte=timezone.now() - timedelta(days=30),
+            ).count(),
+        }
+
+        stats = {
+            "connections_sent": connections_sent,
+            "connections_accepted": connections_accepted,
+            "connection_accept_rate": round(connection_accept_rate, 2),
+            "connection_success_rate": round(connection_accept_rate, 2),
+            "messages_sent": messages_sent,
+            "messages_replied": messages_replied,
+            "responses": messages_replied,  # Alias for frontend compatibility
+            "response_rate": round(response_rate, 2),
+            "conversions": conversions,
+            "conversion_rate": round(conversion_rate, 2),
+            "daily_connections": round(connections_sent / period_days, 1),
+            "daily_messages": round(messages_sent / period_days, 1),
+            "last_7_days": last_7_days,
+            "last_30_days": last_30_days,
+            "total_connection_attempts": connections_sent,
+            "total_messages_sent": messages_sent,
+            "qualified_leads": pipeline["qualified"],
+            "deals_closed": conversions,
+            "errors": errors,
+            "rate_limit_warnings": rate_limit_warnings,
+        }
+
         return Response(
             {
                 "data": {
-                    "stats": {
-                        "connections_sent": connections_sent,
-                        "connections_accepted": connections_accepted,
-                        "connection_accept_rate": round(connection_accept_rate, 2),
-                        "messages_sent": messages_sent,
-                        "messages_replied": messages_replied,
-                        "responses": messages_replied,  # Alias for frontend compatibility
-                        "response_rate": round(response_rate, 2),
-                        "conversions": conversions,
-                        "conversion_rate": round(conversion_rate, 2),
-                        "errors": errors,
-                        "rate_limit_warnings": rate_limit_warnings,
-                    },
+                    "stats": stats,
                     "daily_breakdown": daily_breakdown,
                     "pipeline": pipeline,
                 },
-                "stats": {
-                    "connections_sent": connections_sent,
-                    "connections_accepted": connections_accepted,
-                    "connection_accept_rate": round(connection_accept_rate, 2),
-                    "messages_sent": messages_sent,
-                    "messages_replied": messages_replied,
-                    "responses": messages_replied,  # Alias for frontend compatibility
-                    "response_rate": round(response_rate, 2),
-                    "conversions": conversions,
-                    "conversion_rate": round(conversion_rate, 2),
-                    "errors": errors,
-                    "rate_limit_warnings": rate_limit_warnings,
-                },
+                "stats": stats,
                 "period": period,
                 "campaign_id": pk,
                 "daily_breakdown": daily_breakdown,
@@ -1202,7 +1243,6 @@ class CampaignGhostModeSimulationView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        from django.http import HttpResponse
         import csv
 
         response = HttpResponse(
@@ -1418,10 +1458,6 @@ class CampaignGhostModeActionView(APIView):
                 }
             )
 
-from datetime import timedelta
-from openoutreach.crm.models.deal import DealState
-from openoutreach.linkedin.models import ActionLog
-
 
 class AnalyticsOverviewView(APIView):
     """
@@ -1434,124 +1470,212 @@ class AnalyticsOverviewView(APIView):
 
     def get(self, request):
         """Get aggregated analytics across all campaigns for the current user."""
-        # Get campaigns accessible by the current user
-        campaigns = Campaign.objects.filter(users=request.user)
-        
-        # Filter by campaign if specified
+        campaigns = Campaign.objects.filter(users=request.user).order_by("name")
+
         campaign_id_param = request.query_params.get("campaign_id")
         if campaign_id_param:
             campaigns = campaigns.filter(id=campaign_id_param)
-        
-        # Calculate time range
+
         period = request.query_params.get("period", "30d")
         if period == "7d":
-            since = timezone.now() - timedelta(days=7)
+            period_days = 7
         elif period == "30d":
-            since = timezone.now() - timedelta(days=30)
+            period_days = 30
         elif period == "90d":
-            since = timezone.now() - timedelta(days=90)
+            period_days = 90
         else:
-            since = timezone.now() - timedelta(days=30)
+            period_days = 30
+        since = timezone.now() - timedelta(days=period_days)
 
-        # Initialize counters
-        total_connections_sent = 0
-        total_connections_accepted = 0
-        total_messages_sent = 0
-        total_messages_replied = 0
-        total_conversions = 0
-        total_leads = 0
-        total_qualified = 0
-        total_ready_to_connect = 0
-        total_connected = 0
-        total_pending = 0
-        total_failed = 0
-        total_no_email = 0
-
-        # Get all deals for these campaigns
         deals = Deal.objects.filter(campaign__in=campaigns)
-        
-        # Count deals by state
-        total_leads = deals.count()
+
         total_qualified = deals.filter(state=DealState.QUALIFIED).count()
         total_ready_to_connect = deals.filter(state=DealState.READY_TO_CONNECT).count()
         total_pending = deals.filter(state=DealState.PENDING).count()
         total_connected = deals.filter(state=DealState.CONNECTED).count()
-        total_conversions = deals.filter(state=DealState.COMPLETED).count()
+        total_completed = deals.filter(state=DealState.COMPLETED).count()
         total_failed = deals.filter(state=DealState.FAILED).count()
         total_no_email = deals.filter(state=DealState.NO_EMAIL).count()
 
-        # Connection metrics (send connect requests)
         total_connections_sent = ActionLog.objects.filter(
             campaign__in=campaigns,
             action_type=ActionLog.ActionType.CONNECT,
+            created_at__gte=since,
         ).count()
-
-        # Count accept rate based on connections sent vs accepted
-        total_connections_accepted = total_connected
-
-        # Compute connection accept rate
-        connection_accept_rate = (
-            round((total_connections_accepted / total_connections_sent * 100), 2) if total_connections_sent > 0 else 0.0
-        )
-
-        # Follow-up action metrics
+        total_connections_accepted = Deal.objects.filter(
+            campaign__in=campaigns,
+            state=DealState.CONNECTED,
+            creation_date__gte=since,
+        ).count()
         total_messages_sent = ActionLog.objects.filter(
             campaign__in=campaigns,
             action_type=ActionLog.ActionType.FOLLOW_UP,
+            created_at__gte=since,
+        ).count()
+        total_messages_replied = (
+            deals.filter(
+                messages__is_outgoing=False,
+                messages__creation_date__gte=since,
+            )
+            .distinct()
+            .count()
+        )
+        total_conversions = Deal.objects.filter(
+            campaign__in=campaigns,
+            state=DealState.COMPLETED,
+            creation_date__gte=since,
         ).count()
 
-        # Count responders (deals with at least one incoming message)
-        total_messages_replied = deals.filter(messages__is_outgoing=False).distinct().count()
-
-        # Response rate based on connections accepted
+        connection_accept_rate = (
+            round((total_connections_accepted / total_connections_sent * 100), 2)
+            if total_connections_sent > 0
+            else 0.0
+        )
         response_rate = (
-            round((total_messages_replied / total_connections_accepted * 100), 2) if total_connections_accepted > 0 else 0.0
+            round((total_messages_replied / total_messages_sent * 100), 2)
+            if total_messages_sent > 0
+            else 0.0
         )
-
-        # Conversion rate based on qualified leads
         conversion_rate = (
-            round((total_conversions / total_qualified * 100), 2) if total_qualified > 0 else 0.0
+            round((total_conversions / total_qualified * 100), 2)
+            if total_qualified > 0
+            else 0.0
         )
 
-        # Pipeline stats
+        campaigns_data = []
+        for campaign in campaigns:
+            campaign_deals = campaign.deals.all()
+            qualified = campaign_deals.filter(state=DealState.QUALIFIED).count()
+            ready_to_connect = campaign_deals.filter(
+                state=DealState.READY_TO_CONNECT
+            ).count()
+            pending = campaign_deals.filter(state=DealState.PENDING).count()
+            connected_current = campaign_deals.filter(state=DealState.CONNECTED).count()
+            completed_current = campaign_deals.filter(state=DealState.COMPLETED).count()
+            failed = campaign_deals.filter(state=DealState.FAILED).count()
+            no_email = campaign_deals.filter(state=DealState.NO_EMAIL).count()
+
+            connections_sent = ActionLog.objects.filter(
+                campaign=campaign,
+                action_type=ActionLog.ActionType.CONNECT,
+                created_at__gte=since,
+            ).count()
+            connections_accepted = Deal.objects.filter(
+                campaign=campaign,
+                state=DealState.CONNECTED,
+                creation_date__gte=since,
+            ).count()
+            messages_sent = ActionLog.objects.filter(
+                campaign=campaign,
+                action_type=ActionLog.ActionType.FOLLOW_UP,
+                created_at__gte=since,
+            ).count()
+            messages_replied = (
+                campaign_deals.filter(
+                    messages__is_outgoing=False,
+                    messages__creation_date__gte=since,
+                )
+                .distinct()
+                .count()
+            )
+            conversions = Deal.objects.filter(
+                campaign=campaign,
+                state=DealState.COMPLETED,
+                creation_date__gte=since,
+            ).count()
+
+            campaigns_data.append(
+                {
+                    "id": str(campaign.id),
+                    "name": campaign.name,
+                    "description": campaign.description,
+                    "status": campaign.status,
+                    "stats": {
+                        "totalLeads": campaign_deals.count(),
+                        "activeLeads": qualified
+                        + ready_to_connect
+                        + pending
+                        + connected_current,
+                        "qualified": qualified,
+                        "readyToConnect": ready_to_connect,
+                        "pending": pending,
+                        "connected": connected_current,
+                        "completed": completed_current,
+                        "failed": failed,
+                        "noEmail": no_email,
+                        "connectionsSent": connections_sent,
+                        "connectionsAccepted": connections_accepted,
+                        "messagesSent": messages_sent,
+                        "messagesReplied": messages_replied,
+                        "responses": messages_replied,
+                        "connectionAcceptRate": round(
+                            (connections_accepted / connections_sent * 100), 2
+                        )
+                        if connections_sent > 0
+                        else 0.0,
+                        "responseRate": round(
+                            (messages_replied / messages_sent * 100), 2
+                        )
+                        if messages_sent > 0
+                        else 0.0,
+                        "conversionRate": round((conversions / qualified * 100), 2)
+                        if qualified > 0
+                        else 0.0,
+                    },
+                }
+            )
+
         pipeline = {
             "qualified": total_qualified,
             "ready_to_connect": total_ready_to_connect,
             "pending": total_pending,
             "connected": total_connected,
-            "completed": total_conversions,
+            "completed": total_completed,
             "failed": total_failed,
             "no_email": total_no_email,
         }
+        totals = {
+            "leads": total_qualified
+            + total_ready_to_connect
+            + total_pending
+            + total_connected,
+            "qualified": total_qualified,
+            "readyToConnect": total_ready_to_connect,
+            "connected": total_connected,
+            "pending": total_pending,
+            "failed": total_failed,
+            "noEmail": total_no_email,
+            "connectionAcceptRate": connection_accept_rate,
+            "responseRate": response_rate,
+            "conversionRate": conversion_rate,
+        }
+        stats = {
+            "connectionsSent": total_connections_sent,
+            "connectionsAccepted": total_connections_accepted,
+            "connectionAcceptRate": connection_accept_rate,
+            "messagesSent": total_messages_sent,
+            "messagesReplied": total_messages_replied,
+            "responseRate": response_rate,
+            "conversions": total_conversions,
+            "conversionRate": conversion_rate,
+        }
 
-        return Response({
-            "data": {
-                "stats": {
-                    "connectionsSent": total_connections_sent,
-                    "connectionsAccepted": total_connections_accepted,
-                    "connectionAcceptRate": connection_accept_rate,
-                    "messagesSent": total_messages_sent,
-                    "messagesReplied": total_messages_replied,
-                    "responseRate": response_rate,
-                    "conversions": total_conversions,
-                    "conversionRate": conversion_rate,
+        return Response(
+            {
+                "data": {
+                    "period": period,
+                    "stats": stats,
+                    "pipeline": pipeline,
+                    "totals": totals,
+                    "campaigns": campaigns_data,
                 },
+                "period": period,
+                "stats": stats,
                 "pipeline": pipeline,
-                "totals": {
-                    "leads": total_leads + total_ready_to_connect + total_pending,
-                    "qualified": total_qualified,
-                    "readyToConnect": total_ready_to_connect,
-                    "connected": total_connected,
-                    "pending": total_pending,
-                    "failed": total_failed,
-                    "noEmail": total_no_email,
-                    "connectionAcceptRate": connection_accept_rate,
-                    "responseRate": response_rate,
-                    "conversionRate": conversion_rate,
-                },
-            },
-            "period": period,
-        })
+                "totals": totals,
+                "campaigns": campaigns_data,
+            }
+        )
 
 
 # No legacy view needed -CampaignGhostModeSimulationListView is the primary view

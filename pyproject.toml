@@ -29,6 +29,7 @@ disable = [
     "W1203",  # logging-fstring-interpolation (f-string logging)
     "W1309",  # f-string-without-interpolation
     "E1101",  # no-member (Django model objects attribute)
+    "E5142",  # imported-auth-user (Django user model import)
 ]
 load-plugins = [
     "pylint_django",
