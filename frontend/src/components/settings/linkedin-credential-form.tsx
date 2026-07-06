@@ -83,7 +83,15 @@ export default function LinkedInCredentialForm({
       return fallbackProfileId;
     }
 
-    const verifyResp = await verifyLinkedInCredentials(credentialId);
+    // Set a 60-second timeout for verification
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("Verification timed out after 60 seconds")), 60000)
+    );
+
+    const verifyResp = await Promise.race([
+      verifyLinkedInCredentials(credentialId),
+      timeoutPromise
+    ]);
     const verifyData = verifyResp.data as
       | {
           success?: boolean;

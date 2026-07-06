@@ -118,7 +118,7 @@ class LinkedInCredentials(models.Model):
     status: models.CharField = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
-        default=STATUS_ACTIVE,
+        default=STATUS_STORED,
         help_text=_("Credential status and validity"),
     )  # type: ignore[var-annotated]
 
@@ -319,11 +319,17 @@ class LinkedInCredentials(models.Model):
         )
 
         try:
-            # Ensure we have a fresh browser session for verification
-            session.ensure_browser()
+            # Launch browser without going through authenticate() to avoid checkpoint polling
+            from openoutreach.linkedin.browser.launch import _launch_playwright
+
+            if not session.page:
+                browser, context, page = _launch_playwright(session.profile)
+                session.browser = browser
+                session.context = context
+                session.page = page
 
             # Navigate to LinkedIn login page
-            session.page.goto("https://www.linkedin.com/login")
+            session.page.goto("https://www.linkedin.com/login", timeout=30000)
 
             # Enter credentials
             email_input = resolve_locator(
@@ -352,6 +358,38 @@ class LinkedInCredentials(models.Model):
 
             # Check for checkpoint/challenge/2FA flows
             current_url = session.page.url
+
+            # Check for checkpoint URLs immediately
+            checkpoint_patterns = [
+                "/checkpoint/",
+                "/challenge/",
+                "/uas/login-verification",
+            ]
+            if any(pattern in current_url for pattern in checkpoint_patterns):
+                logger.warning(
+                    f"LinkedIn checkpoint/challenge detected for {self.get_public_email()} at {current_url}"
+                )
+
+                LinkedInCredentialLog.objects.create(
+                    credentials=self,
+                    action="locked",
+                    details={
+                        "error_type": "checkpoint_detected",
+                        "message": "LinkedIn checkpoint/challenge detected",
+                        "checkpoint_url": current_url,
+                        "ip_address": None,
+                    },
+                )
+
+                self.mark_as_locked(reason=f"Checkpoint detected at {current_url}")
+                return False, {
+                    "verified_at": None,
+                    "failures": self.verification_failures + 1,
+                    "status": self.STATUS_LOCKED,
+                    "message": "LinkedIn checkpoint or challenge detected. Please complete the verification in the browser viewer.",
+                    "error_type": "checkpoint_detected",
+                    "checkpoint_url": current_url,
+                }
 
             # Check if we're still on login page (failed auth)
             if "linkedin.com/login" in current_url:
@@ -495,15 +533,19 @@ class LinkedInCredentials(models.Model):
 
         except Exception as e:
             error_msg = str(e)[:500]  # Limit error message length
+
+            # Check if this is a timeout error
+            is_timeout = "timeout" in error_msg.lower() or "timed out" in error_msg.lower()
+
             logger.error(
-                f"Credential verification failed for {self.get_public_email()}: {error_msg}"
+                f"Credential verification {'timed out' if is_timeout else 'failed'} for {self.get_public_email()}: {error_msg}"
             )
 
             LinkedInCredentialLog.objects.create(
                 credentials=self,
                 action="failed",
                 details={
-                    "error_type": "verification_error",
+                    "error_type": "timeout" if is_timeout else "verification_error",
                     "error_message": error_msg,
                     "ip_address": None,
                 },
@@ -518,8 +560,8 @@ class LinkedInCredentials(models.Model):
                 "verified_at": None,
                 "failures": self.verification_failures,
                 "status": self.status,
-                "message": f"Verification error: {error_msg}",
-                "error_type": "verification_error",
+                "message": f"Verification {'timed out' if is_timeout else 'error'}: {error_msg}",
+                "error_type": "timeout" if is_timeout else "verification_error",
             }
 
     def check_checkpoint_challenge(self, session) -> tuple[bool, str]:

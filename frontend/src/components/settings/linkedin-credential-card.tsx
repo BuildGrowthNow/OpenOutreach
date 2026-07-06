@@ -138,7 +138,16 @@ export default function LinkedInCredentialCard({
   const handleVerify = async () => {
     try {
       setIsVerifying(true);
-      const response = await verifyLinkedInCredentials(credential.id);
+
+      // Set a 60-second timeout for verification
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("Verification timed out after 60 seconds")), 60000)
+      );
+
+      const response = await Promise.race([
+        verifyLinkedInCredentials(credential.id),
+        timeoutPromise
+      ]);
 
       if (response.data) {
         toast({
