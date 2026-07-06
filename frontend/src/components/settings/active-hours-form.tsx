@@ -159,7 +159,7 @@ export default function ActiveHoursForm({ settings, onUpdate }: ActiveHoursFormP
                 </Label>
                 <Select
                   value={startHour.toString()}
-                  onValueChange={(v) => setStartHour(parseInt(v))}
+                  onValueChange={(v) => v && setStartHour(parseInt(v))}
                   disabled={!enabled}
                 >
                   <SelectTrigger id="start-hour" className="bg-zinc-900 border-zinc-800">
@@ -183,7 +183,7 @@ export default function ActiveHoursForm({ settings, onUpdate }: ActiveHoursFormP
                 </Label>
                 <Select
                   value={endHour.toString()}
-                  onValueChange={(v) => setEndHour(parseInt(v))}
+                  onValueChange={(v) => v && setEndHour(parseInt(v))}
                   disabled={!enabled}
                 >
                   <SelectTrigger id="end-hour" className="bg-zinc-900 border-zinc-800">
@@ -209,7 +209,7 @@ export default function ActiveHoursForm({ settings, onUpdate }: ActiveHoursFormP
               </Label>
               <Select
                 value={timezone}
-                onValueChange={setTimezone}
+                onValueChange={(v) => v && setTimezone(v)}
                 disabled={!enabled}
               >
                 <SelectTrigger id="timezone" className="bg-zinc-900 border-zinc-800">
