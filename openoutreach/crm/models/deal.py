@@ -57,7 +57,7 @@ class Deal(models.Model):
             ),
         ]
 
-    lead: models.ForeignKey = models.ForeignKey("Lead", on_delete=models.CASCADE)  # type: ignore[var-annotated,assignment]
+    lead: models.ForeignKey = models.ForeignKey("Lead", on_delete=models.CASCADE, related_name="deals")  # type: ignore[var-annotated,assignment]
     campaign: models.ForeignKey = models.ForeignKey(  # type: ignore[var-annotated,assignment]
         "core.Campaign",
         on_delete=models.CASCADE,

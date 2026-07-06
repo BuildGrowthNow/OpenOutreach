@@ -138,12 +138,18 @@ class LeadListView(APIView):
                 deals_by_lead[deal.lead_id] = []
             deals_by_lead[deal.lead_id].append(deal)
 
+        # Collect actual deal PKs (not lead PKs) for note/message queries
+        actual_deal_ids: list[int] = [
+            d.id
+            for deal_list in deals_by_lead.values()
+            for d in deal_list
+        ]
+
         # Get notes for all these deals
-        deal_ids = list(deals_by_lead.keys())
         notes_count_by_deal: dict[int, int] = {}
         last_notes_by_deal: dict[int, Note] = {}
-        if deal_ids:
-            notes = Note.objects.filter(deal_id__in=deal_ids).select_related("deal")
+        if actual_deal_ids:
+            notes = Note.objects.filter(deal_id__in=actual_deal_ids).select_related("deal")
 
             # Count notes per deal
             from collections import defaultdict
@@ -152,8 +158,8 @@ class LeadListView(APIView):
             for note in notes:
                 notes_count_by_deal[note.deal_id] += 1
 
-            # Get last 2 notes per deal
-            for deal_id in deal_ids:
+            # Get last note per deal
+            for deal_id in actual_deal_ids:
                 deal_notes = Note.objects.filter(deal_id=deal_id).order_by(
                     "-created_at"
                 )[:2]
@@ -164,8 +170,8 @@ class LeadListView(APIView):
         from openoutreach.crm.models import Message
 
         messages_by_deal: dict[int, list[Message]] = {}
-        if deal_ids:
-            msgs = Message.objects.filter(deal_id__in=deal_ids).select_related("deal")
+        if actual_deal_ids:
+            msgs = Message.objects.filter(deal_id__in=actual_deal_ids).select_related("deal")
             for msg in msgs:
                 if msg.deal_id not in messages_by_deal:
                     messages_by_deal[msg.deal_id] = []
@@ -369,8 +375,8 @@ class LeadDetailView(APIView):
             deals_data.append(
                 {
                     "id": deal.id,
-                    "campaignId": deal.campaign.id,
-                    "campaignName": deal.campaign.name,
+                    "campaignId": deal.campaign.id if deal.campaign else None,
+                    "campaignName": deal.campaign.name if deal.campaign else None,
                     "state": deal.state,
                     "outcome": deal.outcome,
                     "creationDate": (
@@ -922,16 +928,15 @@ class LeadNotesView(APIView):
             )
 
         # Get or create a deal for this lead
+        # Use the first existing deal if present; otherwise require a campaign
         first_deal = lead.deals.first()
-        campaign = first_deal.campaign if first_deal else None
-        deal, created = Deal.objects.get_or_create(
-            lead=lead,
-            campaign=campaign,
-            defaults={
-                "state": DealState.QUALIFIED,
-                "outcome": "",
-            },
-        )
+        if first_deal:
+            deal = first_deal
+        else:
+            return Response(
+                {"success": False, "error": "Lead has no campaign deal to attach a note to"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         from openoutreach.crm.models import Note
 
