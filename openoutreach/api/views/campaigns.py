@@ -108,32 +108,9 @@ class CampaignListView(APIView):
                         keyword=keyword.strip()
                     )
 
-            return Response(
-                {
-                    "id": campaign.id,
-                    "name": campaign.name,
-                    "description": campaign.description,
-                    "product_pitch": campaign.product_pitch,
-                    "icp_titles": campaign.icp_titles,
-                    "follow_up_strategy": campaign.follow_up_strategy,
-                    "campaign_objective": campaign.campaign_objective,
-                    "booking_link": campaign.booking_link,
-                    "is_freemium": campaign.is_freemium,
-                    "ghost_mode_enabled": campaign.ghost_mode_enabled,
-                    "action_fraction": campaign.action_fraction,
-                    "velocity": campaign.velocity,
-                    "cooldown_minutes": campaign.cooldown_minutes,
-                    "is_paused": campaign.is_paused,
-                    "status": campaign.status,
-                    "created_at": (
-                        campaign.created_at.isoformat() if campaign.created_at else None
-                    ),
-                    "updated_at": (
-                        campaign.updated_at.isoformat() if campaign.updated_at else None
-                    ),
-                },
-                status=status.HTTP_201_CREATED,
-            )
+            # Use serializer to return consistent response format
+            response_serializer = CampaignSerializer(campaign)
+            return Response(response_serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -158,47 +135,9 @@ class CampaignDetailView(APIView):
         """Get campaign details."""
         campaign = self.get_object(pk)
 
-        # Get additional campaign data
-        return Response(
-            {
-                "id": campaign.id,
-                "name": campaign.name,
-                "description": campaign.description,
-                "product_pitch": campaign.product_pitch,
-                    "icp_titles": campaign.icp_titles,
-                    "follow_up_strategy": campaign.follow_up_strategy,
-                "campaign_objective": campaign.campaign_objective,
-                "booking_link": campaign.booking_link,
-                "is_freemium": campaign.is_freemium,
-                "ghost_mode_enabled": campaign.ghost_mode_enabled,
-                "action_fraction": campaign.action_fraction,
-                "velocity": campaign.velocity,
-                "cooldown_minutes": campaign.cooldown_minutes,
-                "is_paused": campaign.is_paused,
-                "status": campaign.status,
-                "users": list(campaign.users.values_list("id", flat=True)),
-                "user_count": campaign.users.count(),
-                "deal_count": campaign.deals.count(),
-                "active_deals": campaign.deals.filter(
-                    state__in=[
-                        DealState.QUALIFIED,
-                        DealState.READY_TO_CONNECT,
-                        DealState.PENDING,
-                        DealState.CONNECTED,
-                    ]
-                ).count(),
-                "completed_deals": campaign.deals.filter(
-                    state=DealState.COMPLETED
-                ).count(),
-                "failed_deals": campaign.deals.filter(state=DealState.FAILED).count(),
-                "created_at": (
-                    campaign.created_at.isoformat() if campaign.created_at else None
-                ),
-                "updated_at": (
-                    campaign.updated_at.isoformat() if campaign.updated_at else None
-                ),
-            }
-        )
+        # Use the serializer to get full campaign data including search_keywords
+        serializer = CampaignSerializer(campaign)
+        return Response(serializer.data)
 
     def patch(self, request, pk):
         """Update campaign."""

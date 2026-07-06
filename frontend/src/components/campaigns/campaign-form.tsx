@@ -337,10 +337,10 @@ export function CampaignForm({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className={`${zincDialogContentClassName} max-h-[90vh] overflow-hidden p-0 sm:max-w-[860px]`}
+        className={`${zincDialogContentClassName} flex max-h-[90vh] flex-col overflow-hidden p-0 sm:max-w-[860px]`}
       >
         <DialogHeader
-          className={`${zincDialogHeaderClassName} px-6 pt-6 sm:px-8 sm:pt-8`}
+          className={`${zincDialogHeaderClassName} flex-shrink-0 px-6 pt-6 sm:px-8 sm:pt-8`}
         >
           <DialogTitle>
             {isEditing ? "Edit Campaign" : "Create New Campaign"}
@@ -355,14 +355,14 @@ export function CampaignForm({
         <Form {...form}>
           <form
             onSubmit={form.handleSubmit(handleSubmit)}
-            className="flex max-h-[calc(90vh-92px)] flex-col"
+            className="flex flex-1 flex-col overflow-hidden"
           >
             <Tabs
               defaultValue="basic"
-              className="flex-1 overflow-hidden px-6 py-6 sm:px-8 sm:py-8"
+              className="flex flex-1 flex-col overflow-hidden px-6 sm:px-8"
             >
               <TabsList
-                className={`${zincTabsListClassName} grid grid-cols-2 gap-1 md:grid-cols-5`}
+                className={`${zincTabsListClassName} mb-4 grid flex-shrink-0 grid-cols-2 gap-1 md:grid-cols-5`}
               >
                 <TabsTrigger className={zincTabsTriggerClassName} value="basic">
                   Campaign Info
@@ -393,7 +393,7 @@ export function CampaignForm({
                 </TabsTrigger>
               </TabsList>
 
-              <div className="mt-6 max-h-[calc(90vh-260px)] overflow-y-auto pr-1">
+              <div className="flex-1 overflow-y-auto pr-2 pb-4">
                 <TabsContent
                   value="basic"
                   className={`${zincSectionClassName} space-y-4`}
@@ -851,7 +851,7 @@ export function CampaignForm({
               </div>
             </Tabs>
 
-            <DialogFooter className={zincDialogFooterClassName}>
+            <DialogFooter className={`${zincDialogFooterClassName} flex-shrink-0`}>
               <Button
                 type="button"
                 variant="outline"
