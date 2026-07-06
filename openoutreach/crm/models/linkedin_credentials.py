@@ -310,23 +310,16 @@ class LinkedInCredentials(models.Model):
             Tuple of (success: bool, details: dict)
             details contains: verified_at, failures, status, message, error_type
         """
-        from openoutreach.linkedin.browser.launch import start_browser_session
-        from linkedin_cli.browser.login import dismiss_comply_gate, goto_page
         from linkedin_cli.browser.nav import resolve_locator  # type: ignore[import-untyped]
+        from linkedin_cli.browser.launch import launch_browser  # type: ignore[import-untyped]
 
         logger.info(
             "Starting LinkedIn credential verification for %s", self.get_public_email()
         )
 
         try:
-            # Launch browser without going through authenticate() to avoid checkpoint polling
-            from openoutreach.linkedin.browser.launch import _launch_playwright
-
-            if not session.page:
-                browser, context, page = _launch_playwright(session.profile)
-                session.browser = browser
-                session.context = context
-                session.page = page
+            # Launch browser directly without authentication to avoid checkpoint polling
+            session.page, session.context, session.browser, session.playwright = launch_browser()
 
             # Navigate to LinkedIn login page
             session.page.goto("https://www.linkedin.com/login", timeout=30000)
@@ -571,7 +564,6 @@ class LinkedInCredentials(models.Model):
         Returns:
             Tuple of (is_checkpoint: bool, description: str)
         """
-        from linkedin_cli.browser.login import dismiss_comply_gate
 
         try:
             current_url = session.page.url
