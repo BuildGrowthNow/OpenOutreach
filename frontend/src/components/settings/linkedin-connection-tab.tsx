@@ -27,6 +27,7 @@ import {
 } from "@/lib/api/dashboard";
 import LinkedInCredentialForm from "@/components/settings/linkedin-credential-form";
 import LinkedInCredentialCard from "@/components/settings/linkedin-credential-card";
+import VncViewer from "@/components/settings/vnc-viewer";
 import {
   Dialog,
   DialogContent,
@@ -606,6 +607,9 @@ export function LinkedInConnectionTab({
           )}
         </CardContent>
       </Card>
+
+      {/* VNC Browser Viewer */}
+      <VncViewer />
 
       {/* Cookie Instructions Dialog */}
       <Dialog

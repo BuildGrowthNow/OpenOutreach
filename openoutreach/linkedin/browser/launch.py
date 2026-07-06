@@ -63,7 +63,14 @@ def _mark_credential_verified(session) -> None:
 
 
 def _save_cookies(session: Any) -> None:
-    """Persist Playwright storage state (cookies) to the DB."""
+    """Persist Playwright storage state (cookies) to the DB.
+
+    Called after initial login and after each successful task to keep
+    the session warm and reduce re-authentication frequency.
+    """
+    if not session.context:
+        logger.debug("No browser context to save cookies from")
+        return
     state = session.context.storage_state()
     session.linkedin_profile.cookie_data = state
     session.linkedin_profile.save(update_fields=["cookie_data_encrypted"])

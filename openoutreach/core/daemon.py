@@ -460,6 +460,14 @@ def run_daemon(session):
             task.payload.get("campaign_id", "unknown"),
         )
 
+        # Refresh cookies after every successful task to keep session warm
+        try:
+            from openoutreach.linkedin.browser.launch import _save_cookies
+            _save_cookies(session)
+            logger.debug("Refreshed session cookies after task completion")
+        except Exception as e:
+            logger.debug("Failed to refresh cookies: %s", e)
+
         # Health check: run every HEALTH_CHECK_INTERVAL seconds
         if hasattr(session, "_last_health_check"):
             if time.monotonic() - session._last_health_check >= HEALTH_CHECK_INTERVAL:
