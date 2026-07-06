@@ -84,6 +84,10 @@ def _ensure_profile_for_credential(
         )
 
     if getattr(cred, "linkedin_profile_id", None) != profile.pk:
+        # Clear any stale credential that still holds a UNIQUE FK to this profile
+        LinkedInCredentials.objects.filter(linkedin_profile=profile).exclude(
+            pk=cred.pk
+        ).update(linkedin_profile=None)
         cred.linkedin_profile = profile
         cred.save(update_fields=["linkedin_profile"])
 

@@ -137,74 +137,14 @@ class LinkedInProfileCookieView(APIView):
                 {"error": "li_at cookie missing"}, status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Optionally perform a short validation using AccountSession – configurable via settings
-        from django.conf import settings as _dj_settings
-
-        verify_on_upload = getattr(
-            _dj_settings, "LINKEDIN_VERIFY_COOKIE_ON_UPLOAD", True
-        )
-
-        if not verify_on_upload:
-            # Just save the cookie storage without launching a browser (useful for CI/tests)
-            try:
-                profile.cookie_data = storage_state
-                profile.save(
-                    update_fields=["cookie_data_encrypted"]
-                )  # property will set encrypted field
-                return Response(
-                    {"success": True, "message": "Cookie saved"},
-                    status=status.HTTP_200_OK,
-                )
-            except Exception as exc:
-                return Response(
-                    {"success": False, "error": str(exc)},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                )
-
+        # Save the cookie directly — the daemon validates it when it picks it up.
+        # Browser verification from the API server conflicts with the event loop
+        # and the daemon already handles invalid cookies gracefully.
         try:
-            # Launch browser with provided storage_state for a quick check
-            # The linkedin_cli's launch_browser accepts storage_state – reuse start_browser_session logic
-            from linkedin_cli.browser.login import launch_browser
-
-            page, context, browser, playwright = launch_browser(
-                storage_state=storage_state
-            )
-            page, context, browser, playwright = launch_browser(
-                storage_state=storage_state
-            )
-            try:
-                # Navigate to feed to validate session
-                page.goto("https://www.linkedin.com/feed/", timeout=8000)
-                # If we land on feed or no exception, treat as success
-                verified = True
-                message = "Cookie valid"
-            except Exception as exc:
-                verified = False
-                message = f"Verification navigation failed: {exc}"
-            finally:
-                try:
-                    context.close()
-                    if browser:
-                        browser.close()
-                    if playwright:
-                        playwright.stop()
-                except Exception:
-                    pass
-
-            if not verified:
-                return Response(
-                    {"success": False, "message": message},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-            # Save encrypted cookie storage using model property
             profile.cookie_data = storage_state
-            profile.save(
-                update_fields=["cookie_data_encrypted"]
-            )  # property will set encrypted field
-
+            profile.save(update_fields=["cookie_data_encrypted"])
             return Response(
-                {"success": True, "message": "Cookie saved and verified"},
+                {"success": True, "message": "Cookie saved — daemon will verify on next cycle"},
                 status=status.HTTP_200_OK,
             )
         except Exception as exc:
