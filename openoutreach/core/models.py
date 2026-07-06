@@ -9,7 +9,7 @@ from django.utils import timezone
 
 if TYPE_CHECKING:
     from openoutreach.crm.models import Deal
-    from openoutreach.linkedin.models import CampaignStateGraph
+    from openoutreach.linkedin.models import CampaignStateGraph, SearchKeyword
 
 
 class SiteConfig(models.Model):
@@ -188,6 +188,7 @@ class Campaign(models.Model):
     # Type hints for reverse relations (from other apps)
     state_graph: "CampaignStateGraph"
     deals: "models.Manager[Deal]"
+    search_keywords: "models.Manager[SearchKeyword]"
 
     def __str__(self) -> str:
         return self.name
