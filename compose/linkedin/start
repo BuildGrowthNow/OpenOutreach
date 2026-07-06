@@ -61,7 +61,7 @@ if [ "${SKIP_DAEMON:-false}" = "true" ]; then
     echo "Running Django migrations before starting the API server..."
     gosu ubuntu python manage.py migrate --no-input
 
-    gosu ubuntu python manage.py runserver 0.0.0.0:8000 &
+    gosu ubuntu gunicorn openoutreach.wsgi:application --bind 0.0.0.0:8000 --workers 2 --timeout 120 &
     DJANGO_PID=$!
     echo "Django started with PID $DJANGO_PID"
 
@@ -76,7 +76,8 @@ if [ "${SKIP_DAEMON:-false}" = "true" ]; then
 fi
 
 # Start Django API server in background (needed for frontend → API communication)
-gosu ubuntu python manage.py runserver 0.0.0.0:8000 &
+# Use gunicorn in production to avoid auto-reloader restart loops
+gosu ubuntu gunicorn openoutreach.wsgi:application --bind 0.0.0.0:8000 --workers 2 --timeout 120 &
 DJANGO_PID=$!
 echo "Django API started with PID $DJANGO_PID"
 
