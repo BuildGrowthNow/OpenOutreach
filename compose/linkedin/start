@@ -75,6 +75,25 @@ if [ "${SKIP_DAEMON:-false}" = "true" ]; then
     exit $EXIT_CODE
 fi
 
+# Start Django API server in background (needed for frontend → API communication)
+gosu ubuntu python manage.py runserver 0.0.0.0:8000 &
+DJANGO_PID=$!
+echo "Django API started with PID $DJANGO_PID"
+
 # Run the daemon (migrate + onboard + task queue).
 # Forward any arguments, e.g. --onboard <file>.
-exec gosu ubuntu python manage.py rundaemon "$@"
+gosu ubuntu python manage.py rundaemon "$@" &
+DAEMON_PID=$!
+echo "Daemon started with PID $DAEMON_PID"
+
+# Wait for any process to exit
+wait -n $NEXTJS_PID $DJANGO_PID $DAEMON_PID
+EXIT_CODE=$?
+echo "A process exited with status $EXIT_CODE, shutting down..."
+kill $NEXTJS_PID 2>/dev/null || true
+kill $DJANGO_PID 2>/dev/null || true
+kill $DAEMON_PID 2>/dev/null || true
+wait $NEXTJS_PID 2>/dev/null || true
+wait $DJANGO_PID 2>/dev/null || true
+wait $DAEMON_PID 2>/dev/null || true
+exit $EXIT_CODE

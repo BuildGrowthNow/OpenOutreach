@@ -8,7 +8,7 @@ from django.core.management.base import BaseCommand
 
 logger = logging.getLogger(__name__)
 
-AUTH_RETRY_DELAYS = [30, 60, 120, 300, 600]  # escalating retry delays in seconds
+AUTH_POLL_INTERVAL = 30  # seconds between cookie checks
 
 
 class Command(BaseCommand):
@@ -27,46 +27,56 @@ class Command(BaseCommand):
         run_daemon(session)
 
     def _ensure_authenticated(self, session):
-        """Ensure the browser session is authenticated, retrying on failure."""
+        """Ensure the browser session is authenticated.
+
+        If saved cookies exist, uses them directly (no password login).
+        If no cookies, notifies the user and polls until a cookie is uploaded
+        via the frontend, rather than attempting password login from the server.
+        """
         from linkedin_cli.exceptions import AuthenticationError, CheckpointChallengeError
 
-        for attempt, delay in enumerate(AUTH_RETRY_DELAYS, 1):
+        session.linkedin_profile.refresh_from_db(fields=["cookie_data_encrypted"])
+
+        if session.linkedin_profile.cookie_data:
             try:
                 session.ensure_browser()
                 return
-            except CheckpointChallengeError as exc:
-                logger.error(
-                    "LinkedIn requires a security checkpoint: %s\n"
-                    "Resolve it manually via VNC or upload a fresh li_at cookie.",
-                    exc.url,
-                )
-                self._notify_auth_failure(
-                    "LinkedIn security checkpoint required. "
-                    "Please verify your account or upload a session cookie."
-                )
-                sys.exit(1)
-            except AuthenticationError as exc:
-                logger.error(
-                    "LinkedIn authentication failed (attempt %d/%d): %s",
-                    attempt, len(AUTH_RETRY_DELAYS), exc,
-                )
-                if attempt == 1:
-                    self._notify_auth_failure(
-                        "LinkedIn login failed — credentials may be incorrect or "
-                        "LinkedIn is blocking login from this server. "
-                        "Upload a session cookie (li_at) from Settings → LinkedIn Connection."
-                    )
-                if attempt < len(AUTH_RETRY_DELAYS):
-                    logger.info("Retrying in %ds...", delay)
+            except (AuthenticationError, CheckpointChallengeError):
+                logger.warning("Saved cookie is invalid or expired — clearing it")
+                session.close()
+                session.linkedin_profile.cookie_data = None
+                session.linkedin_profile.save(update_fields=["cookie_data_encrypted"])
+
+        logger.error(
+            "No valid LinkedIn session cookie found. "
+            "Upload an li_at cookie via Settings → LinkedIn Connection."
+        )
+        self._notify_auth_failure(
+            "LinkedIn session cookie required. "
+            "Go to Settings → LinkedIn Connection and upload your li_at cookie "
+            "to start the daemon."
+        )
+
+        logger.info("Waiting for cookie upload (checking every %ds)...", AUTH_POLL_INTERVAL)
+        while True:
+            time.sleep(AUTH_POLL_INTERVAL)
+            session.linkedin_profile.refresh_from_db(fields=["cookie_data_encrypted"])
+            if session.linkedin_profile.cookie_data:
+                logger.info("Cookie detected — attempting to connect...")
+                try:
+                    session.ensure_browser()
+                    logger.info("LinkedIn session established successfully")
+                    return
+                except (AuthenticationError, CheckpointChallengeError) as exc:
+                    logger.error("Uploaded cookie is invalid: %s", exc)
                     session.close()
-                    time.sleep(delay)
-                else:
-                    logger.error(
-                        "All authentication attempts exhausted. "
-                        "Upload a valid li_at cookie via Settings → LinkedIn Connection, "
-                        "then restart the daemon."
+                    session.linkedin_profile.cookie_data = None
+                    session.linkedin_profile.save(update_fields=["cookie_data_encrypted"])
+                    self._notify_auth_failure(
+                        "The uploaded cookie is invalid or expired. "
+                        "Please upload a fresh li_at cookie."
                     )
-                    sys.exit(1)
+                    logger.info("Waiting for a valid cookie...")
 
     def _notify_auth_failure(self, message: str):
         """Create a user-visible notification for authentication failure."""
@@ -79,7 +89,7 @@ class Command(BaseCommand):
                 Notification.create_notification(
                     recipient=user,
                     notification_type=Notification.TYPE_CAMPAIGN_ERROR,
-                    title="LinkedIn Authentication Failed",
+                    title="LinkedIn Authentication Required",
                     message=message,
                 )
         except Exception:
