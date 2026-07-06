@@ -20,7 +20,11 @@ class Command(BaseCommand):
         self._ensure_onboarded()
         session = self._create_session()
         self._ensure_authenticated(session)
-        self._ensure_newsletter(session)
+
+        try:
+            self._ensure_newsletter(session)
+        except Exception as exc:
+            logger.warning("Newsletter setup skipped: %s", exc)
 
         from openoutreach.core.daemon import run_daemon
 

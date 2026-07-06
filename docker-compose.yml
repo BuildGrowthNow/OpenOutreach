@@ -18,6 +18,7 @@ services:
       - DJANGO_DEBUG=${DJANGO_DEBUG:-false}
       - OPENOUTREACH_LOG_LEVEL=${OPENOUTREACH_LOG_LEVEL:-INFO}
       - DOCKER_ENV=true
+      - DJANGO_ALLOW_ASYNC_UNSAFE=true
       - SKIP_DAEMON=${SKIP_DAEMON:-false}
       - NEXT_PUBLIC_API_URL=https://linkedin-api.lengrowth.com
       - NEXT_PUBLIC_APP_URL=https://linkedin.lengrowth.com
