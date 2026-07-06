@@ -365,18 +365,27 @@ class SupabaseJWTAuthentication(BaseAuthentication):
                     f"Created SupabaseUser record for Django user {django_user_id}"
                 )
             else:
-                # Update existing SupabaseUser record
-                supabase_user.django_user_id = str(django_user_id)
-                supabase_user.email = token_data.get("email", "")
-                supabase_user.full_name = token_data.get("user_metadata", {}).get(
-                    "full_name", ""
+                # Update existing SupabaseUser record only if values changed
+                email = token_data.get("email", "")
+                full_name = token_data.get("user_metadata", {}).get("full_name", "")
+
+                # Check if any meaningful fields changed (skip last_login for comparison)
+                needs_update = (
+                    str(django_user_id) != supabase_user.django_user_id
+                    or email != supabase_user.email
+                    or full_name != supabase_user.full_name
                 )
-                supabase_user.token_data = token_data
-                supabase_user.last_login = datetime.utcnow()
-                supabase_user.save()
-                logger.info(
-                    f"Updated SupabaseUser record for Django user {django_user_id}"
-                )
+
+                if needs_update:
+                    supabase_user.django_user_id = str(django_user_id)
+                    supabase_user.email = email
+                    supabase_user.full_name = full_name
+                    supabase_user.token_data = token_data
+                    supabase_user.last_login = datetime.utcnow()
+                    supabase_user.save()
+                    logger.debug(
+                        f"Updated SupabaseUser record for Django user {django_user_id}"
+                    )
         except Exception as e:
             logger.warning(
                 f"MongoDB unavailable or write failed; skipping Supabase user link: {e}"
