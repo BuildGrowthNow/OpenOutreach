@@ -2,8 +2,7 @@
 """LinkedIn Credentials Management API Views."""
 
 import logging
-
-logger = logging.getLogger(__name__)
+from typing import Any, cast
 
 from django.db import DatabaseError
 from rest_framework import status
@@ -13,16 +12,20 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 try:
-    from openoutreach.crm.models import LinkedInCredentialLog, LinkedInCredentials
+    from openoutreach.crm.models import (
+        LinkedInCredentialLog,
+        LinkedInCredentials,
+    )
+    from openoutreach.linkedin.browser.session import AccountSession
+    from openoutreach.linkedin.models import LinkedInProfile
 except Exception as _exc:  # pragma: no cover - import-time resilience
     LinkedInCredentialLog = None
     LinkedInCredentials = None
+    AccountSession = None  # type: ignore[assignment]
+    LinkedInProfile = None  # type: ignore[assignment]
     logging.getLogger(__name__).exception(
         "Failed to import LinkedIn credential models: %s", _exc
     )
-
-from openoutreach.linkedin.browser.session import AccountSession
-from openoutreach.linkedin.models import LinkedInProfile
 
 from .linkedin_common import schema_error_response, user_primary_profile
 
@@ -59,14 +62,32 @@ def _clear_profile_login(profile: LinkedInProfile) -> None:
         profile.save(update_fields=update_fields)
 
 
+# Type alias for optional LinkedInCredentials (can be None if import fails)
+LinkedInCredentialsType = Any
+
 def _ensure_profile_for_credential(
     *,
     user,
     cred,
     email: str | None = None,
     password: str | None = None,
-) -> LinkedInProfile:
+) -> LinkedInProfile | None:
     """Attach credentials to the user's LinkedInProfile, creating one when needed."""
+    if LinkedInCredentials is None:
+        logging.getLogger(__name__).warning(
+            "LinkedInCredentials model not available, skipping profile sync"
+        )
+        return None
+    if LinkedInProfile is None:
+        logging.getLogger(__name__).warning(
+            "LinkedInProfile model not available, skipping profile sync"
+        )
+        return None
+    if AccountSession is None:
+        logging.getLogger(__name__).warning(
+            "AccountSession not available, skipping profile sync"
+        )
+
     login_email = email or cred.get_email()
     login_password = password or cred.get_password()
     profile = cred.linkedin_profile or user_primary_profile(user)
@@ -236,28 +257,15 @@ class LinkedInCredentialsView(APIView):
                 details={"created_by": request.user.username},
             )
 
-            # Automatically verify credentials after creation
-            try:
-                session = AccountSession(cred.linkedin_profile)
-                success, details = cred.verify_credentials(
-                    session=session,
-                    mark_as_active=True,
-                    mark_as_stored=True,
-                )
-                logger.info(
-                    "Auto-verification after creation: success=%s, status=%s",
-                    success,
-                    cred.status,
-                )
-            except Exception as e:
-                logger.warning("Auto-verification failed: %s", e)
-                # Don't fail the creation if verification fails
+            # Note: We don't auto-verify here because verification can block for several
+            # minutes if LinkedIn presents a checkpoint/challenge. Users should explicitly
+            # click "Test Credentials" or "Verify" to trigger verification.
 
             return Response(
                 {
                     "success": True,
                     "id": cred.pk,
-                    "message": "Credentials created successfully",
+                    "message": "Credentials created successfully. Click 'Verify' to test the connection.",
                     "credentials": {
                         "id": cred.pk,
                         "username": cred.username,
@@ -333,28 +341,19 @@ class LinkedInCredentialsView(APIView):
             details={"updated_by": request.user.username},
         )
 
-        # Automatically verify credentials if email or password changed
+        # Note: We don't auto-verify here because verification can block for several
+        # minutes if LinkedIn presents a checkpoint/challenge. Users should explicitly
+        # click "Verify" to test the updated credentials.
+
+        message = "Credentials updated successfully"
         if "email" in data or "password" in data:
-            try:
-                session = AccountSession(cred.linkedin_profile)
-                success, details = cred.verify_credentials(
-                    session=session,
-                    mark_as_active=True,
-                    mark_as_stored=True,
-                )
-                logger.info(
-                    "Auto-verification after update: success=%s, status=%s",
-                    success,
-                    cred.status,
-                )
-            except Exception as e:
-                logger.warning("Auto-verification failed: %s", e)
+            message += ". Click 'Verify' to test the connection."
 
         return Response(
             {
                 "success": True,
                 "id": cred.pk,
-                "message": "Credentials updated successfully",
+                "message": message,
                 "credentials": {
                     "id": cred.pk,
                     "username": cred.username,
@@ -473,7 +472,17 @@ class LinkedInCredentialsVerifyView(APIView):
             }
 
             if not success:
-                response_data["error"] = details.get("message", "Verification failed")
+                error_message = details.get("message", "Verification failed")
+                error_type = details.get("error_type")
+
+                # If this is a checkpoint/challenge, include that in the error
+                if error_type == "checkpoint_detected":
+                    response_data["error"] = (
+                        "LinkedIn checkpoint or challenge detected. "
+                        "Please complete the verification in the browser viewer."
+                    )
+                else:
+                    response_data["error"] = error_message
 
             return Response(response_data, status=status.HTTP_200_OK)
 

@@ -167,6 +167,13 @@ export default function LinkedInCredentialForm({
 
       await submitCredential(values, { verifyAfterSave: false });
 
+      toast({
+        title: initialData ? "Credentials updated" : "Credentials saved",
+        description: initialData
+          ? "Successfully updated. Click 'Verify' on the credential card to test the connection."
+          : "Successfully saved. Click 'Verify' on the credential card to test the connection.",
+      });
+
       setSuccess(true);
       if (onSuccess) onSuccess();
     } catch (err) {
@@ -202,17 +209,30 @@ export default function LinkedInCredentialForm({
       if (onSuccess) onSuccess();
     } catch (err) {
       const message = err instanceof Error ? err.message : "Test failed";
-      toast({
-        title: "Verification failed",
-        description: message,
-        variant: "destructive",
-      });
 
-      if (createdCredentialId) {
-        try {
-          await deleteLinkedInCredentials(createdCredentialId);
-        } catch {
-          // Ignore cleanup failures.
+      // Check if this is a checkpoint error
+      if (message.includes("checkpoint") || message.includes("challenge") || message.includes("additional verification")) {
+        toast({
+          title: "LinkedIn Challenge Detected",
+          description: "Please complete the LinkedIn verification challenge. Check the Setup Status section to open the browser viewer.",
+          variant: "default",
+        });
+
+        // Still call onSuccess to refresh and show the credential with locked status
+        if (onSuccess) onSuccess();
+      } else {
+        toast({
+          title: "Verification failed",
+          description: message,
+          variant: "destructive",
+        });
+
+        if (createdCredentialId) {
+          try {
+            await deleteLinkedInCredentials(createdCredentialId);
+          } catch {
+            // Ignore cleanup failures.
+          }
         }
       }
     } finally {
@@ -230,12 +250,12 @@ export default function LinkedInCredentialForm({
       ) : null}
 
       {success ? (
-        <Alert className="border-zinc-800/80 bg-zinc-950/70 text-zinc-100">
-          <Icons.CheckCircle className="h-4 w-4" />
+        <Alert className="border-emerald-800/80 bg-emerald-950/70 text-emerald-100">
+          <Icons.CheckCircle className="h-4 w-4 text-emerald-400" />
           <AlertDescription>
             {initialData
-              ? "Credentials updated successfully."
-              : "Credentials created successfully."}
+              ? "Credentials updated successfully. The modal will close automatically."
+              : "Credentials saved successfully. The modal will close automatically."}
           </AlertDescription>
         </Alert>
       ) : null}
@@ -504,12 +524,12 @@ export default function LinkedInCredentialForm({
                       {isTesting ? (
                         <>
                           <Icons.RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                          Testing...
+                          Testing & Saving...
                         </>
                       ) : (
                         <>
                           <Icons.Activity className="mr-2 h-4 w-4" />
-                          Test Credentials
+                          Test & Add
                         </>
                       )}
                     </Button>
@@ -523,13 +543,13 @@ export default function LinkedInCredentialForm({
                       </>
                     ) : initialData ? (
                       <>
-                        <Icons.CheckCircle className="mr-2 h-4 w-4" />
-                        Update Credentials
+                        <Icons.Save className="mr-2 h-4 w-4" />
+                        Save Changes
                       </>
                     ) : (
                       <>
                         <Icons.Save className="mr-2 h-4 w-4" />
-                        Add Credentials
+                        Save Without Testing
                       </>
                     )}
                   </Button>

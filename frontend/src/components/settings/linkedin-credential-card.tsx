@@ -149,19 +149,51 @@ export default function LinkedInCredentialCard({
         setHealthData(null);
         setShowHealthDetails(false);
       } else {
+        const errorMessage = response.error || "Failed to verify credentials";
+
+        // Check if this is a checkpoint/challenge error
+        if (
+          errorMessage.includes("checkpoint") ||
+          errorMessage.includes("challenge") ||
+          errorMessage.includes("additional verification")
+        ) {
+          toast({
+            title: "LinkedIn Challenge Required",
+            description: "Please complete the verification challenge in the browser viewer",
+          });
+          setShowChallengeModal(true);
+          onRefresh(); // Refresh to show locked status
+        } else {
+          toast({
+            title: "Error",
+            description: errorMessage,
+            variant: "destructive",
+          });
+        }
+      }
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "An unexpected error occurred";
+
+      // Check if this is a checkpoint/challenge error
+      if (
+        message.includes("checkpoint") ||
+        message.includes("challenge") ||
+        message.includes("additional verification")
+      ) {
+        toast({
+          title: "LinkedIn Challenge Required",
+          description: "Please complete the verification challenge in the browser viewer",
+        });
+        setShowChallengeModal(true);
+        onRefresh(); // Refresh to show locked status
+      } else {
         toast({
           title: "Error",
-          description: response.error || "Failed to verify credentials",
+          description: message,
           variant: "destructive",
         });
       }
-    } catch (err) {
-      toast({
-        title: "Error",
-        description:
-          err instanceof Error ? err.message : "An unexpected error occurred",
-        variant: "destructive",
-      });
     } finally {
       setIsVerifying(false);
     }
@@ -543,35 +575,57 @@ export default function LinkedInCredentialCard({
         </Dialog>
 
         <Dialog open={showChallengeModal} onOpenChange={setShowChallengeModal}>
-          <DialogContent className="max-w-[95vw] h-[90vh] border border-zinc-800 bg-zinc-950 text-zinc-100 shadow-2xl p-0">
+          <DialogContent className="max-w-[95vw] h-[90vh] border border-zinc-800 bg-zinc-950 text-zinc-100 shadow-2xl flex flex-col p-0">
             <DialogHeader className="p-6 pb-4 border-b border-zinc-800">
               <DialogTitle className="flex items-center gap-2">
                 <Shield className="h-5 w-5 text-amber-500" />
                 Complete LinkedIn Challenge
               </DialogTitle>
-              <DialogDescription>
-                LinkedIn requires additional verification. Complete the challenge below, then click Verify to confirm your credentials.
+              <DialogDescription className="space-y-2">
+                <p>LinkedIn requires additional verification. Follow these steps:</p>
+                <ol className="list-decimal list-inside space-y-1 text-sm">
+                  <li>Complete the CAPTCHA or security challenge in the browser viewer below</li>
+                  <li>Wait for LinkedIn to redirect you to the feed page</li>
+                  <li>Click "Confirm Login" to verify your credentials</li>
+                </ol>
               </DialogDescription>
             </DialogHeader>
-            <div className="flex-1 overflow-hidden">
+            <div className="flex-1 overflow-hidden min-h-0">
               <VncViewer vncUrl={`${window.location.protocol}//${window.location.hostname}:6080`} />
             </div>
-            <div className="flex justify-end gap-2 p-4 border-t border-zinc-800">
-              <Button
-                variant="outline"
-                onClick={() => setShowChallengeModal(false)}
-              >
-                Close
-              </Button>
-              <Button
-                onClick={async () => {
-                  setShowChallengeModal(false);
-                  await handleVerify();
-                }}
-                disabled={isVerifying}
-              >
-                {isVerifying ? "Verifying..." : "Verify After Challenge"}
-              </Button>
+            <div className="flex items-center justify-between gap-2 p-4 border-t border-zinc-800 bg-zinc-950/80">
+              <p className="text-sm text-zinc-400">
+                Complete the challenge, then confirm your login
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowChallengeModal(false)}
+                  className="border-zinc-700 hover:bg-zinc-900"
+                >
+                  Close
+                </Button>
+                <Button
+                  onClick={async () => {
+                    setShowChallengeModal(false);
+                    await handleVerify();
+                  }}
+                  disabled={isVerifying}
+                  className="bg-emerald-600 hover:bg-emerald-700"
+                >
+                  {isVerifying ? (
+                    <>
+                      <Icons.RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                      Verifying...
+                    </>
+                  ) : (
+                    <>
+                      <Icons.CheckCircle className="mr-2 h-4 w-4" />
+                      Confirm Login
+                    </>
+                  )}
+                </Button>
+              </div>
             </div>
           </DialogContent>
         </Dialog>
