@@ -222,7 +222,6 @@ class CampaignDetailView(APIView):
                 setattr(campaign, field, value)
 
             campaign.save()
-
             # Update SearchKeyword instances if provided
             if search_keywords is not None:
                 # Clear existing keywords
