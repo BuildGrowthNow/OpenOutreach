@@ -93,6 +93,40 @@ class LinkedInProfileCookieView(APIView):
         storage_state = None
         import json
 
+        def normalize_cookie(cookie):
+            """Transform EditThisCookie/Cookie-Editor format to Playwright format."""
+            normalized = {
+                "name": cookie.get("name"),
+                "value": cookie.get("value"),
+                "domain": cookie.get("domain", ".linkedin.com"),
+                "path": cookie.get("path", "/"),
+            }
+
+            # Transform expirationDate (Unix timestamp) to expires (Unix timestamp or -1)
+            if "expires" in cookie:
+                normalized["expires"] = cookie["expires"]
+            elif "expirationDate" in cookie:
+                normalized["expires"] = int(cookie["expirationDate"])
+            else:
+                normalized["expires"] = -1
+
+            # Transform sameSite
+            same_site = cookie.get("sameSite")
+            if same_site == "no_restriction":
+                normalized["sameSite"] = "None"
+            elif same_site in ["Lax", "Strict", "None"]:
+                normalized["sameSite"] = same_site
+            else:
+                normalized["sameSite"] = "Lax"
+
+            # Copy other fields
+            if "httpOnly" in cookie:
+                normalized["httpOnly"] = cookie["httpOnly"]
+            if "secure" in cookie:
+                normalized["secure"] = cookie["secure"]
+
+            return normalized
+
         try:
             if isinstance(cookie_payload, str):
                 # Try to parse JSON first
@@ -100,10 +134,10 @@ class LinkedInProfileCookieView(APIView):
                     parsed = json.loads(cookie_payload)
                     if isinstance(parsed, dict) and "cookies" in parsed:
                         # Playwright storage_state format: {"cookies": [...]}
-                        storage_state = parsed
+                        storage_state = {"cookies": [normalize_cookie(c) for c in parsed["cookies"]]}
                     elif isinstance(parsed, list):
                         # EditThisCookie/Cookie-Editor format: [{...}, {...}]
-                        storage_state = {"cookies": parsed}
+                        storage_state = {"cookies": [normalize_cookie(c) for c in parsed]}
                 except Exception:
                     # Treat as li_at value
                     li_at = cookie_payload.strip()
@@ -116,16 +150,19 @@ class LinkedInProfileCookieView(APIView):
                                 "value": li_at,
                                 "domain": ".linkedin.com",
                                 "path": "/",
-                                "expires": 0,
+                                "expires": -1,
+                                "httpOnly": True,
+                                "secure": True,
+                                "sameSite": "None",
                             }
                         ]
                     }
             elif isinstance(cookie_payload, dict):
                 if "cookies" in cookie_payload:
-                    storage_state = cookie_payload
+                    storage_state = {"cookies": [normalize_cookie(c) for c in cookie_payload["cookies"]]}
             elif isinstance(cookie_payload, list):
                 # EditThisCookie/Cookie-Editor format sent directly as array
-                storage_state = {"cookies": cookie_payload}
+                storage_state = {"cookies": [normalize_cookie(c) for c in cookie_payload]}
         except ValueError as exc:
             return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
