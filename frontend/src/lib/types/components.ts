@@ -251,6 +251,7 @@ export interface Campaign {
   productPitch?: string;
   campaignObjective?: string;
   bookingLink?: string;
+  searchKeywords?: string[];
   icpTitles?: string[];
   followUpStrategy?: string;
   isFreemium: boolean;
@@ -369,6 +370,7 @@ export interface CampaignTemplate {
   product_pitch?: string;
   campaign_objective?: string;
   booking_link?: string;
+  search_keywords?: string[];
   icp_titles?: string[];
   follow_up_strategy?: string;
   ghost_mode_enabled: boolean;
@@ -389,6 +391,7 @@ export interface CampaignTemplateCreateData {
   product_pitch?: string;
   campaign_objective?: string;
   booking_link?: string;
+  search_keywords?: string[];
   icp_titles?: string[];
   follow_up_strategy?: string;
   ghost_mode_enabled?: boolean;

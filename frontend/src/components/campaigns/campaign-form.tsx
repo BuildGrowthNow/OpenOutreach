@@ -72,6 +72,7 @@ const formSchema = z.object({
     .url("Must be a valid URL")
     .optional()
     .or(z.literal("")),
+  searchKeywords: z.string().optional(),
   icpTitles: z.string().optional(),
   followUpStrategy: z.string().optional(),
   isFreemium: z.boolean(),
@@ -104,6 +105,19 @@ function formatIcpTitles(titles: string[] | undefined): string {
   return titles.join(", ");
 }
 
+function parseSearchKeywords(raw: string | undefined): string[] {
+  if (!raw) return [];
+  return raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function formatSearchKeywords(keywords: string[] | undefined): string {
+  if (!keywords || keywords.length === 0) return "";
+  return keywords.join(", ");
+}
+
 export function CampaignForm({
   open,
   onOpenChange,
@@ -130,6 +144,7 @@ export function CampaignForm({
       productPitch: undefined,
       campaignObjective: undefined,
       bookingLink: undefined,
+      searchKeywords: undefined,
       icpTitles: undefined,
       followUpStrategy: undefined,
       isFreemium: false,
@@ -187,6 +202,7 @@ export function CampaignForm({
         productPitch: selectedTemplate.product_pitch || undefined,
         campaignObjective: selectedTemplate.campaign_objective || undefined,
         bookingLink: selectedTemplate.booking_link || undefined,
+        searchKeywords: formatSearchKeywords(selectedTemplate.search_keywords),
         icpTitles: formatIcpTitles(selectedTemplate.icp_titles),
         followUpStrategy: selectedTemplate.follow_up_strategy || undefined,
         ghostModeEnabled: selectedTemplate.ghost_mode_enabled,
@@ -206,6 +222,7 @@ export function CampaignForm({
         productPitch: campaign.productPitch || undefined,
         campaignObjective: campaign.campaignObjective || undefined,
         bookingLink: campaign.bookingLink || undefined,
+        searchKeywords: formatSearchKeywords(campaign.searchKeywords),
         icpTitles: formatIcpTitles(campaign.icpTitles),
         followUpStrategy: campaign.followUpStrategy || undefined,
         isFreemium: campaign.isFreemium,
@@ -221,6 +238,7 @@ export function CampaignForm({
         productPitch: undefined,
         campaignObjective: undefined,
         bookingLink: undefined,
+        searchKeywords: undefined,
         icpTitles: undefined,
         followUpStrategy: undefined,
         isFreemium: false,
@@ -235,8 +253,9 @@ export function CampaignForm({
   const handleSubmit = async (values: FormValues) => {
     setLoading(true);
     try {
-      const payload: Partial<Campaign> & { icpTitles?: string[] } = {
+      const payload: Partial<Campaign> & { icpTitles?: string[]; searchKeywords?: string[] } = {
         ...values,
+        searchKeywords: parseSearchKeywords(values.searchKeywords),
         icpTitles: parseIcpTitles(values.icpTitles),
       };
       await onSubmit(payload);
@@ -469,6 +488,32 @@ export function CampaignForm({
                 >
                   <FormField
                     control={form.control}
+                    name="searchKeywords"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>LinkedIn Search Keywords</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            className={`${zincTextareaClassName} min-h-[100px] resize-y`}
+                            placeholder="growth hacker, startup founder, B2B marketing, SaaS CEO..."
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          Comma-separated LinkedIn search terms used to discover leads. These are the actual queries the daemon uses to search LinkedIn.
+                          {field.value && (
+                            <span className="ml-1 text-zinc-300">
+                              ({parseSearchKeywords(field.value).length} keywords)
+                            </span>
+                          )}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
                     name="icpTitles"
                     render={({ field }) => (
                       <FormItem>
@@ -481,9 +526,8 @@ export function CampaignForm({
                           />
                         </FormControl>
                         <FormDescription>
-                          Comma-separated list of target job titles and roles.
-                          The agent uses these to find and qualify leads on
-                          LinkedIn.
+                          Comma-separated list of target job titles and roles for qualification.
+                          The AI uses these to filter and qualify the leads found by search keywords.
                           {field.value && (
                             <span className="ml-1 text-zinc-300">
                               ({parseIcpTitles(field.value).length} titles)
