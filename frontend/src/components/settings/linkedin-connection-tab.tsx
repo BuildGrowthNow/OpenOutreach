@@ -522,7 +522,7 @@ export function LinkedInConnectionTab({
                 Add Credential
               </Button>
               <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-                <DialogContent className="max-w-4xl border border-zinc-800 bg-zinc-950 text-zinc-100 shadow-2xl">
+                <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto border border-zinc-800 bg-zinc-950 text-zinc-100 shadow-2xl">
                   <DialogHeader className="border-b border-zinc-800/80 pb-4">
                     <DialogTitle>Add LinkedIn Credential</DialogTitle>
                     <DialogDescription>
@@ -568,7 +568,7 @@ export function LinkedInConnectionTab({
                 Add Your First Credential
               </Button>
               <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-                <DialogContent className="max-w-4xl border border-zinc-800 bg-zinc-950 text-zinc-100 shadow-2xl">
+                <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto border border-zinc-800 bg-zinc-950 text-zinc-100 shadow-2xl">
                   <DialogHeader className="border-b border-zinc-800/80 pb-4">
                     <DialogTitle>Add LinkedIn Credential</DialogTitle>
                     <DialogDescription>

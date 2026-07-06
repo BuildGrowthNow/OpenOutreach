@@ -21,6 +21,7 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/use-toast";
 import { Icons } from "@/lib/types/components";
+import { post } from "@/lib/api";
 import {
   createLinkedInCredentials,
   deleteLinkedInCredentials,
@@ -67,23 +68,11 @@ export default function LinkedInCredentialForm({
   });
 
   const uploadCookie = async (profileId: number, cookieData: string) => {
-    const resp = await fetch(`/api/linkedin-profiles/${profileId}/cookies/`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ cookie_data: cookieData }),
-    });
-
-    const data = (await resp.json()) as {
-      success?: boolean;
-      message?: string;
-      error?: string;
-    };
-
-    if (!resp.ok || !data.success) {
-      throw new Error(data.error || data.message || "Failed to save cookie");
-    }
-
-    return data.message || "Cookie saved";
+    const data = await post<{ success?: boolean; message?: string }>(
+      `/api/linkedin-profiles/${profileId}/cookies/`,
+      { cookieData },
+    );
+    return data.data?.message || "Cookie saved";
   };
 
   const ensureProfileId = async (
@@ -366,7 +355,7 @@ export default function LinkedInCredentialForm({
 
                     {showOptionalCookie ? (
                       <div className="mt-2 border-t border-zinc-800/80 px-3 pb-3 pt-4">
-                        <div className="max-h-104 space-y-4 overflow-y-auto pr-2">
+                        <div className="max-h-64 space-y-4 overflow-y-auto pr-2">
                           <div className="rounded-lg border border-zinc-800/80 bg-zinc-950/60 p-4">
                             <p className="text-sm font-medium text-zinc-100">
                               You can leave this empty
