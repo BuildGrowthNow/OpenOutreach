@@ -633,6 +633,13 @@ export interface Settings {
     velocity: number;
     cooldown_minutes: number;
   };
+  active_hours: {
+    enable_active_hours: boolean;
+    active_start_hour: number;
+    active_end_hour: number;
+    active_timezone: string;
+    active_days: string;
+  };
   linkedin_profile: {
     username: string;
     campaign: string;
@@ -647,6 +654,7 @@ export async function updateSettings(
   data: Partial<{
     llm?: Partial<Settings["llm"]>;
     rate_limits?: Partial<Settings["rate_limits"]>;
+    active_hours?: Partial<Settings["active_hours"]>;
     linkedin_profile?: Partial<Settings["linkedin_profile"]>;
   }>,
 ): Promise<ApiResponse<Settings>> {

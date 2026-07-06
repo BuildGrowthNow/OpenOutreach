@@ -24,6 +24,7 @@ import { LinkedInConnectionTab } from "@/components/settings/linkedin-connection
 import ProfileForm from "@/components/settings/profile-form";
 import RateLimitForm from "@/components/settings/rate-limit-form";
 import LlmSettingsForm from "@/components/settings/llm-settings-form";
+import ActiveHoursForm from "@/components/settings/active-hours-form";
 
 function SettingsLoadingSkeleton() {
   return (
@@ -195,7 +196,7 @@ export default function SettingsPage() {
       </div>
 
       <Tabs defaultValue="linkedin" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2 gap-2 rounded-xl bg-muted p-1 sm:grid-cols-4">
+        <TabsList className="grid w-full grid-cols-2 gap-2 rounded-xl bg-muted p-1 sm:grid-cols-5">
           <TabsTrigger value="linkedin" className="py-2">
             <Icons.Link className="h-4 w-4" />
             LinkedIn Connection
@@ -211,6 +212,10 @@ export default function SettingsPage() {
           <TabsTrigger value="llm" className="py-2">
             <Icons.Sparkles className="h-4 w-4" />
             LLM / AI Settings
+          </TabsTrigger>
+          <TabsTrigger value="active-hours" className="py-2">
+            <Icons.Clock className="h-4 w-4" />
+            Active Hours
           </TabsTrigger>
         </TabsList>
 
@@ -344,6 +349,10 @@ export default function SettingsPage() {
               />
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="active-hours" className="space-y-6">
+          <ActiveHoursForm settings={settings} onUpdate={handleSettingsUpdate} />
         </TabsContent>
       </Tabs>
     </div>
