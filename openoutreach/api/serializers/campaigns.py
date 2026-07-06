@@ -153,6 +153,8 @@ class CampaignSerializer(serializers.ModelSerializer):
 
     # Search keywords (read from related SearchKeyword model)
     search_keywords = serializers.SerializerMethodField()
+    # Alias for frontend compatibility (camelCase)
+    searchKeywords = serializers.SerializerMethodField()
 
     # Computed statistics
     stats = serializers.SerializerMethodField()
@@ -167,6 +169,7 @@ class CampaignSerializer(serializers.ModelSerializer):
             "campaign_objective",
             "booking_link",
             "search_keywords",
+            "searchKeywords",
             "icp_titles",
             "follow_up_strategy",
             "is_freemium",
@@ -189,7 +192,7 @@ class CampaignSerializer(serializers.ModelSerializer):
             "updated_at",
             "status",
         ]
-        read_only_fields = ["created_at", "updated_at", "status", "links", "search_keywords"]
+        read_only_fields = ["created_at", "updated_at", "status", "links", "search_keywords", "searchKeywords"]
 
     def get_user_count(self, obj):
         return obj.users.count()
@@ -221,6 +224,10 @@ class CampaignSerializer(serializers.ModelSerializer):
     def get_search_keywords(self, obj):
         """Get search keywords associated with this campaign."""
         return list(obj.search_keywords.values_list('keyword', flat=True))
+
+    def get_searchKeywords(self, obj):
+        """Alias for search_keywords (camelCase for frontend)."""
+        return self.get_search_keywords(obj)
 
     def get_stats(self, obj):
         """Compute and return statistics for the campaign."""

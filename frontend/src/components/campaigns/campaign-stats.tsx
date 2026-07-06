@@ -23,34 +23,64 @@ interface CampaignStatsProps {
 }
 
 export function CampaignStats({ stats, className }: CampaignStatsProps) {
+  const formatConnectionStats = () => {
+    if (!stats.connections_sent || stats.connections_sent === 0) {
+      return "No connections sent";
+    }
+    return `${stats.connections_accepted ?? 0}/${stats.connections_sent} accepted`;
+  };
+
+  const formatResponseStats = () => {
+    if (!stats.messages_sent || stats.messages_sent === 0) {
+      return "No messages sent";
+    }
+    return `${stats.messages_replied ?? 0}/${stats.messages_sent} replied`;
+  };
+
+  const formatConversionStats = () => {
+    const count = stats.conversions ?? 0;
+    if (count === 0) {
+      return "No conversions yet";
+    }
+    return `${count} conversion${count !== 1 ? 's' : ''}`;
+  };
+
+  const formatErrorStats = () => {
+    const warnings = stats.rate_limit_warnings ?? 0;
+    if (warnings === 0) {
+      return "No warnings";
+    }
+    return `${warnings} warning${warnings !== 1 ? 's' : ''}`;
+  };
+
   return (
     <div className={cn('space-y-6', className)}>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <StatCard
           title="Connection Rate"
           value={`${(stats.connection_accept_rate ?? 0).toFixed(1)}%`}
-          subtitle={`${stats.connections_accepted}/${stats.connections_sent} accepted`}
+          subtitle={formatConnectionStats()}
           icon={<Icons.CheckCircle className="h-4 w-4 text-emerald-500" />}
           color="emerald"
         />
         <StatCard
           title="Response Rate"
           value={`${(stats.response_rate ?? 0).toFixed(1)}%`}
-          subtitle={`${stats.messages_replied}/${stats.messages_sent} replied`}
+          subtitle={formatResponseStats()}
           icon={<Icons.MessageSquare className="h-4 w-4 text-blue-500" />}
           color="blue"
         />
         <StatCard
           title="Conversion Rate"
           value={`${(stats.conversion_rate ?? 0).toFixed(1)}%`}
-          subtitle={`${stats.conversions} conversions`}
+          subtitle={formatConversionStats()}
           icon={<Icons.TrendingUp className="h-4 w-4 text-purple-500" />}
           color="purple"
         />
         <StatCard
           title="Error Rate"
-          value={`${stats.errors}`}
-          subtitle={`${stats.rate_limit_warnings} warnings`}
+          value={`${stats.errors ?? 0}`}
+          subtitle={formatErrorStats()}
           icon={<Icons.AlertTriangle className="h-4 w-4 text-amber-500" />}
           color="amber"
         />

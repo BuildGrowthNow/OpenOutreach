@@ -253,11 +253,14 @@ export function CampaignForm({
   const handleSubmit = async (values: FormValues) => {
     setLoading(true);
     try {
-      const payload: Partial<Campaign> & { icpTitles?: string[]; searchKeywords?: string[] } = {
+      const payload: any = {
         ...values,
-        searchKeywords: parseSearchKeywords(values.searchKeywords),
+        search_keywords: parseSearchKeywords(values.searchKeywords),
         icpTitles: parseIcpTitles(values.icpTitles),
       };
+      // Remove camelCase version to avoid sending both
+      delete payload.searchKeywords;
+
       await onSubmit(payload);
       form.reset();
       onOpenChange(false);

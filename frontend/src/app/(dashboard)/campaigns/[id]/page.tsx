@@ -569,7 +569,7 @@ export default function CampaignDetailsPage() {
                 campaign.status.slice(1)}
             </Badge>
           </div>
-          <p className="text-muted-foreground">
+          <p className="text-muted-foreground line-clamp-1">
             {campaign.description || (
               <span className="text-muted-foreground italic">
                 No description
