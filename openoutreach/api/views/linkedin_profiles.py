@@ -99,7 +99,11 @@ class LinkedInProfileCookieView(APIView):
                 try:
                     parsed = json.loads(cookie_payload)
                     if isinstance(parsed, dict) and "cookies" in parsed:
+                        # Playwright storage_state format: {"cookies": [...]}
                         storage_state = parsed
+                    elif isinstance(parsed, list):
+                        # EditThisCookie/Cookie-Editor format: [{...}, {...}]
+                        storage_state = {"cookies": parsed}
                 except Exception:
                     # Treat as li_at value
                     li_at = cookie_payload.strip()
@@ -119,6 +123,9 @@ class LinkedInProfileCookieView(APIView):
             elif isinstance(cookie_payload, dict):
                 if "cookies" in cookie_payload:
                     storage_state = cookie_payload
+            elif isinstance(cookie_payload, list):
+                # EditThisCookie/Cookie-Editor format sent directly as array
+                storage_state = {"cookies": cookie_payload}
         except ValueError as exc:
             return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 

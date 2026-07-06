@@ -358,11 +358,11 @@ export default function LinkedInCredentialForm({
                         <div className="max-h-64 space-y-4 overflow-y-auto pr-2">
                           <div className="rounded-lg border border-amber-800/80 bg-amber-950/60 p-4">
                             <p className="text-sm font-medium text-amber-100">
-                              ⚠️ Important: Upload ALL cookies, not just li_at
+                              ⚠️ Important: Export ALL cookies with a browser extension
                             </p>
                             <p className="mt-1 text-sm text-amber-200/80">
-                              LinkedIn's Voyager API requires the full cookie set (including JSESSIONID, CSRF tokens, etc.).
-                              Uploading only <code className="rounded bg-amber-900/40 px-1 py-0.5">li_at</code> will let the browser load pages but API calls will return 401 Unauthorized.
+                              LinkedIn's Voyager API requires the full cookie set including the HttpOnly <code className="rounded bg-amber-900/40 px-1 py-0.5">li_at</code> cookie.
+                              Browser extensions can export HttpOnly cookies; browser console scripts cannot.
                             </p>
                           </div>
 
@@ -382,15 +382,15 @@ export default function LinkedInCredentialForm({
                           <div className="space-y-3 rounded-lg border border-zinc-800/80 bg-zinc-950/60 p-4">
                             <div>
                               <h4 className="text-sm font-medium text-zinc-100">
-                                Method 1: Browser Extension (Recommended)
+                                How to Export Cookies
                               </h4>
                               <p className="mt-1 text-sm text-zinc-400">
-                                Use a trusted cookie exporter to get ALL LinkedIn cookies as JSON.
+                                Use a browser extension to export ALL LinkedIn cookies including HttpOnly cookies.
                               </p>
                             </div>
                             <ol className="list-decimal space-y-2 pl-5 text-sm text-zinc-300">
                               <li>
-                                Install one of these Chrome extensions:
+                                Install a cookie exporter extension:
                                 <ul className="ml-4 mt-1 list-disc space-y-1 text-zinc-400">
                                   <li>
                                     <a
@@ -400,7 +400,7 @@ export default function LinkedInCredentialForm({
                                       className="underline hover:text-zinc-200"
                                     >
                                       EditThisCookie
-                                    </a> (most popular, 3M+ users)
+                                    </a> (Chrome/Edge - 3M+ users)
                                   </li>
                                   <li>
                                     <a
@@ -410,7 +410,7 @@ export default function LinkedInCredentialForm({
                                       className="underline hover:text-zinc-200"
                                     >
                                       Cookie-Editor
-                                    </a> (open source)
+                                    </a> (Chrome/Edge/Firefox - open source)
                                   </li>
                                 </ul>
                               </li>
@@ -429,68 +429,15 @@ export default function LinkedInCredentialForm({
                                 Click the extension icon in your browser toolbar
                               </li>
                               <li>
-                                Click "Export" → "JSON" (or similar button depending on extension)
+                                Click "Export" → "JSON" (EditThisCookie) or the export icon (Cookie-Editor)
                               </li>
                               <li>
-                                Paste the exported JSON below
+                                Verify the exported JSON includes <code className="rounded bg-zinc-800 px-1 py-0.5 text-xs">li_at</code> cookie
+                              </li>
+                              <li>
+                                Paste the full JSON array below (starts with <code className="rounded bg-zinc-800 px-1 py-0.5 text-xs">[</code>)
                               </li>
                             </ol>
-                          </div>
-
-                          <div className="space-y-3 rounded-lg border border-zinc-800/80 bg-zinc-950/60 p-4">
-                            <div>
-                              <h4 className="text-sm font-medium text-zinc-100">
-                                Method 2: Browser Console Script
-                              </h4>
-                              <p className="mt-1 text-sm text-zinc-400">
-                                No extension needed, but limited to non-HttpOnly cookies.
-                              </p>
-                            </div>
-                            <ol className="list-decimal space-y-2 pl-5 text-sm text-zinc-300">
-                              <li>
-                                Log into LinkedIn at{" "}
-                                <a
-                                  href="https://www.linkedin.com/feed/"
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="underline hover:text-zinc-200"
-                                >
-                                  linkedin.com/feed/
-                                </a>
-                              </li>
-                              <li>
-                                Open DevTools (F12) → Console tab
-                              </li>
-                              <li>
-                                Paste this script and press Enter:
-                                <div className="mt-2 rounded border border-zinc-700 bg-zinc-900 p-3">
-                                  <code className="block whitespace-pre text-xs text-zinc-300">
-{`copy(JSON.stringify({
-  cookies: document.cookie.split('; ').map(c => {
-    const [name, value] = c.split('=');
-    return {
-      name,
-      value,
-      domain: '.linkedin.com',
-      path: '/',
-      expires: -1,
-      httpOnly: false,
-      secure: true,
-      sameSite: 'Lax'
-    };
-  })
-}, null, 2));
-console.log('✓ Copied to clipboard!');`}
-                                  </code>
-                                </div>
-                              </li>
-                              <li>
-                                The JSON is now in your clipboard — paste it below
-                              </li>
-                            </ol>
-                            <p className="mt-2 text-xs text-zinc-500">
-                              Note: This misses HttpOnly cookies. Use Method 1 for the most complete export.
-                            </p>
                           </div>
 
                           <div className="space-y-3 rounded-lg border border-zinc-800/80 bg-zinc-950/60 p-4">
@@ -499,7 +446,7 @@ console.log('✓ Copied to clipboard!');`}
                             </h4>
                             <p className="text-sm text-zinc-400">
                               Browser extensions can access all site data. Only install extensions from trusted publishers with good reviews.
-                              Both recommended extensions are well-established (millions of users / open source).
+                              Both recommended extensions are well-established with millions of users or open source code.
                             </p>
                           </div>
 
@@ -508,18 +455,18 @@ console.log('✓ Copied to clipboard!');`}
                             name="cookie_data"
                             render={({ field }) => (
                               <FormItem>
-                                <FormLabel>Full Cookie JSON</FormLabel>
+                                <FormLabel>Cookie JSON Array</FormLabel>
                                 <FormControl>
                                   <Textarea
-                                    placeholder='Paste the full cookie JSON here, e.g.: {"cookies": [{"name": "li_at", "value": "...", ...}, {...}]}'
+                                    placeholder='Paste the JSON array from EditThisCookie/Cookie-Editor: [{"name":"li_at","value":"...","domain":".linkedin.com",...},{...}]'
                                     {...field}
                                     rows={6}
                                     className="border-zinc-800 bg-zinc-950/70 font-mono text-xs"
                                   />
                                 </FormControl>
                                 <FormDescription>
-                                  Paste the complete JSON export from a browser extension or the console script above.
-                                  It will be stored encrypted and used to authenticate API calls.
+                                  Must include the <code className="rounded bg-zinc-800 px-1 py-0.5 text-xs">li_at</code> cookie. Paste the complete JSON array from your extension (starts with <code className="rounded bg-zinc-800 px-1 py-0.5 text-xs">[</code>).
+                                  Stored encrypted and used for API authentication.
                                 </FormDescription>
                                 <FormMessage />
                               </FormItem>
