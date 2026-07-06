@@ -80,8 +80,14 @@ class CampaignTemplateListView(APIView):
             template = CampaignTemplate.objects.create(
                 name=serializer.validated_data["name"],
                 description=serializer.validated_data.get("description", ""),
+                product_pitch=serializer.validated_data.get("product_pitch", ""),
                 campaign_objective=serializer.validated_data.get(
                     "campaign_objective", ""
+                ),
+                booking_link=serializer.validated_data.get("booking_link", ""),
+                icp_titles=serializer.validated_data.get("icp_titles", []),
+                follow_up_strategy=serializer.validated_data.get(
+                    "follow_up_strategy", ""
                 ),
                 ghost_mode_enabled=serializer.validated_data.get(
                     "ghost_mode_enabled", False
@@ -255,7 +261,11 @@ class CampaignTemplateCloneView(APIView):
         cloned_template = CampaignTemplate.objects.create(
             name=new_name,
             description=template.description,
+            product_pitch=template.product_pitch,
             campaign_objective=template.campaign_objective,
+            booking_link=template.booking_link,
+            icp_titles=template.icp_titles,
+            follow_up_strategy=template.follow_up_strategy,
             ghost_mode_enabled=template.ghost_mode_enabled,
             velocity=template.velocity,
             cooldown_minutes=template.cooldown_minutes,
@@ -324,7 +334,11 @@ class CampaignCreateFromTemplateView(APIView):
         campaign = Campaign.objects.create(
             name=campaign_name,
             description=description or template.description,
+            product_pitch=template.product_pitch,
             campaign_objective=template.campaign_objective,
+            booking_link=template.booking_link,
+            icp_titles=template.icp_titles,
+            follow_up_strategy=template.follow_up_strategy,
             ghost_mode_enabled=template.ghost_mode_enabled,
             velocity=template.velocity,
             cooldown_minutes=template.cooldown_minutes,

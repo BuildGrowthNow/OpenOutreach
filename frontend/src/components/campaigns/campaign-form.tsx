@@ -59,18 +59,21 @@ const formSchema = z.object({
     .string()
     .min(3, "Name must be at least 3 characters")
     .max(100, "Name is too long"),
-  description: z.string().max(500, "Description is too long").optional(),
-  productDocs: z
+  description: z.string().optional(),
+  productPitch: z
     .string()
-    .url("Must be a valid URL")
     .optional()
-    .or(z.literal("")),
-  campaignObjective: z.string().max(200, "Objective is too long").optional(),
+    .refine((v) => !v || v.length >= 300, {
+      message: "Product pitch must be at least 300 characters",
+    }),
+  campaignObjective: z.string().optional(),
   bookingLink: z
     .string()
     .url("Must be a valid URL")
     .optional()
     .or(z.literal("")),
+  icpTitles: z.string().optional(),
+  followUpStrategy: z.string().optional(),
   isFreemium: z.boolean(),
   ghostModeEnabled: z.boolean(),
   velocity: z.number().min(1).max(100),
@@ -86,6 +89,19 @@ interface CampaignFormProps {
   campaign?: Campaign | null;
   onSubmit: (data: Partial<Campaign>) => void;
   isEditing?: boolean;
+}
+
+function parseIcpTitles(raw: string | undefined): string[] {
+  if (!raw) return [];
+  return raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function formatIcpTitles(titles: string[] | undefined): string {
+  if (!titles || titles.length === 0) return "";
+  return titles.join(", ");
 }
 
 export function CampaignForm({
@@ -111,9 +127,11 @@ export function CampaignForm({
     defaultValues: {
       name: "",
       description: undefined,
-      productDocs: undefined,
+      productPitch: undefined,
       campaignObjective: undefined,
       bookingLink: undefined,
+      icpTitles: undefined,
+      followUpStrategy: undefined,
       isFreemium: false,
       ghostModeEnabled: false,
       velocity: 10,
@@ -122,7 +140,6 @@ export function CampaignForm({
     },
   });
 
-  // Check LinkedIn setup status when form opens (for new campaigns)
   useEffect(() => {
     if (open && !isEditing && !campaign) {
       void (async () => {
@@ -144,7 +161,6 @@ export function CampaignForm({
     }
   }, [open, isEditing, campaign]);
 
-  // Fetch templates when opening the form for a new campaign
   useEffect(() => {
     if (!isEditing && !campaign && !templates.length) {
       void (async () => {
@@ -163,20 +179,21 @@ export function CampaignForm({
     }
   }, [isEditing, campaign, templates.length]);
 
-  // Clone template when selected
   useEffect(() => {
     if (selectedTemplate && !campaign) {
       form.reset({
         name: selectedTemplate.name,
         description: selectedTemplate.description || undefined,
+        productPitch: selectedTemplate.product_pitch || undefined,
         campaignObjective: selectedTemplate.campaign_objective || undefined,
+        bookingLink: selectedTemplate.booking_link || undefined,
+        icpTitles: formatIcpTitles(selectedTemplate.icp_titles),
+        followUpStrategy: selectedTemplate.follow_up_strategy || undefined,
         ghostModeEnabled: selectedTemplate.ghost_mode_enabled,
         velocity: selectedTemplate.velocity,
         cooldownMinutes: selectedTemplate.cooldown_minutes,
         status: "draft",
         isFreemium: false,
-        productDocs: undefined,
-        bookingLink: undefined,
       });
     }
   }, [selectedTemplate, campaign, form]);
@@ -186,9 +203,11 @@ export function CampaignForm({
       form.reset({
         name: campaign.name,
         description: campaign.description || undefined,
-        productDocs: campaign.productDocs || undefined,
+        productPitch: campaign.productPitch || undefined,
         campaignObjective: campaign.campaignObjective || undefined,
         bookingLink: campaign.bookingLink || undefined,
+        icpTitles: formatIcpTitles(campaign.icpTitles),
+        followUpStrategy: campaign.followUpStrategy || undefined,
         isFreemium: campaign.isFreemium,
         ghostModeEnabled: campaign.ghostModeEnabled || false,
         velocity: campaign.velocity,
@@ -199,9 +218,11 @@ export function CampaignForm({
       form.reset({
         name: "",
         description: undefined,
-        productDocs: undefined,
+        productPitch: undefined,
         campaignObjective: undefined,
         bookingLink: undefined,
+        icpTitles: undefined,
+        followUpStrategy: undefined,
         isFreemium: false,
         ghostModeEnabled: false,
         velocity: 10,
@@ -214,7 +235,11 @@ export function CampaignForm({
   const handleSubmit = async (values: FormValues) => {
     setLoading(true);
     try {
-      await onSubmit(values);
+      const payload: Partial<Campaign> & { icpTitles?: string[] } = {
+        ...values,
+        icpTitles: parseIcpTitles(values.icpTitles),
+      };
+      await onSubmit(payload);
       form.reset();
       onOpenChange(false);
     } catch (error) {
@@ -224,7 +249,6 @@ export function CampaignForm({
     }
   };
 
-  // Check if LinkedIn is configured before allowing campaign creation
   if (checkingLinkedin) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -246,7 +270,6 @@ export function CampaignForm({
     );
   }
 
-  // If LinkedIn is not configured (no credentials or count is 0), show an informative message
   if (
     !isEditing &&
     !campaign &&
@@ -287,6 +310,8 @@ export function CampaignForm({
     );
   }
 
+  const productPitchValue = form.watch("productPitch") || "";
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
@@ -315,22 +340,28 @@ export function CampaignForm({
               className="flex-1 overflow-hidden px-6 py-6 sm:px-8 sm:py-8"
             >
               <TabsList
-                className={`${zincTabsListClassName} grid grid-cols-2 gap-1 md:grid-cols-4`}
+                className={`${zincTabsListClassName} grid grid-cols-2 gap-1 md:grid-cols-5`}
               >
                 <TabsTrigger className={zincTabsTriggerClassName} value="basic">
-                  Basic Info
+                  Campaign Info
+                </TabsTrigger>
+                <TabsTrigger
+                  className={zincTabsTriggerClassName}
+                  value="targeting"
+                >
+                  Targeting
+                </TabsTrigger>
+                <TabsTrigger
+                  className={zincTabsTriggerClassName}
+                  value="strategy"
+                >
+                  Follow-Up
                 </TabsTrigger>
                 <TabsTrigger
                   className={zincTabsTriggerClassName}
                   value="settings"
                 >
                   Settings
-                </TabsTrigger>
-                <TabsTrigger
-                  className={zincTabsTriggerClassName}
-                  value="advanced"
-                >
-                  Advanced
                 </TabsTrigger>
                 <TabsTrigger
                   className={zincTabsTriggerClassName}
@@ -374,13 +405,14 @@ export function CampaignForm({
                         <FormLabel>Description</FormLabel>
                         <FormControl>
                           <Textarea
-                            placeholder="Describe what this campaign is about..."
-                            className={`${zincTextareaClassName} resize-none`}
+                            placeholder="Describe what this campaign is about, your target market, goals..."
+                            className={`${zincTextareaClassName} min-h-[120px] resize-y`}
                             {...field}
                           />
                         </FormControl>
                         <FormDescription>
-                          Optional: Brief description of the campaign
+                          Detailed description of the campaign (no character
+                          limit)
                         </FormDescription>
                         <FormMessage />
                       </FormItem>
@@ -394,14 +426,130 @@ export function CampaignForm({
                       <FormItem>
                         <FormLabel>Campaign Objective</FormLabel>
                         <FormControl>
-                          <Input
-                            className={zincInputClassName}
-                            placeholder="What are you trying to achieve?"
+                          <Textarea
+                            className={`${zincTextareaClassName} min-h-[80px] resize-y`}
+                            placeholder="What are you trying to achieve? e.g., Book demos for LenGrowth by demonstrating value as a growth operating system"
                             {...field}
                           />
                         </FormControl>
                         <FormDescription>
                           The primary goal of this campaign
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="bookingLink"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Booking Link</FormLabel>
+                        <FormControl>
+                          <Input
+                            className={zincInputClassName}
+                            placeholder="https://calendly.com/your-link"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          Meeting booking link (shared by the agent when
+                          appropriate)
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </TabsContent>
+
+                <TabsContent
+                  value="targeting"
+                  className={`${zincSectionClassName} space-y-4`}
+                >
+                  <FormField
+                    control={form.control}
+                    name="icpTitles"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>ICP - Job Titles & Roles</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            className={`${zincTextareaClassName} min-h-[100px] resize-y`}
+                            placeholder="Founder, CEO, Head of Growth, Marketing Manager, Growth Strategist, CTO..."
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          Comma-separated list of target job titles and roles.
+                          The agent uses these to find and qualify leads on
+                          LinkedIn.
+                          {field.value && (
+                            <span className="ml-1 text-zinc-300">
+                              ({parseIcpTitles(field.value).length} titles)
+                            </span>
+                          )}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="productPitch"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Product Pitch</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            className={`${zincTextareaClassName} min-h-[160px] resize-y`}
+                            placeholder={`Describe your product/service: what it does, who it's for, and why it matters.\n\nExample:\nLenGrowth is a growth operating system that helps teams turn ideas into actual progress. It gets the context of your business, shows you what really matters today, and gives you the path to growth with the best wins first.\n\nWe help with: figuring out what to do next for your growth, turning good ideas into tasks people actually finish, keeping work visible so it does not get lost...`}
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          <span
+                            className={
+                              productPitchValue.length > 0 &&
+                              productPitchValue.length < 300
+                                ? "text-red-400"
+                                : ""
+                            }
+                          >
+                            {productPitchValue.length}/300 min characters
+                          </span>
+                          {" - "}
+                          This is what the agent uses to understand your product
+                          and talk about it with leads.
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </TabsContent>
+
+                <TabsContent
+                  value="strategy"
+                  className={`${zincSectionClassName} space-y-4`}
+                >
+                  <FormField
+                    control={form.control}
+                    name="followUpStrategy"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Follow-Up Strategy</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            className={`${zincTextareaClassName} min-h-[200px] resize-y`}
+                            placeholder={`Describe how the agent should approach follow-up conversations.\n\nExample:\n1. Discovery Mode (Default):\n   - Ask about their current growth process\n   - Understand their biggest growth challenges\n   - Learn about their current tools and systems\n\n2. Pitch Mode (When signal detected):\n   - Connect their specific challenges to our capabilities\n   - Focus on strategic alignment and execution\n   - Suggest a demo or strategy session using the booking link\n\n3. Key Differentiators:\n   - Full stack platform (not just analytics)\n   - Hybrid execution with AI AND human options\n   - Designed for both founders and teams`}
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          Instructions for how the agent should behave in
+                          follow-up conversations. Include discovery questions,
+                          when to pitch, and key differentiators.
                         </FormDescription>
                         <FormMessage />
                       </FormItem>
@@ -467,7 +615,7 @@ export function CampaignForm({
                             />
                           </FormControl>
                           <FormDescription>
-                            Maximum number of connections to send per day
+                            Maximum connections per day
                           </FormDescription>
                           <FormMessage />
                         </FormItem>
@@ -535,8 +683,7 @@ export function CampaignForm({
                             Ghost Mode
                           </FormLabel>
                           <FormDescription>
-                            Enable ghost mode to test campaign without sending
-                            real LinkedIn actions
+                            Test campaign without sending real LinkedIn actions
                           </FormDescription>
                         </div>
                         <FormControl>
@@ -545,51 +692,6 @@ export function CampaignForm({
                             onCheckedChange={field.onChange}
                           />
                         </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                </TabsContent>
-
-                <TabsContent
-                  value="advanced"
-                  className={`${zincSectionClassName} space-y-4`}
-                >
-                  <FormField
-                    control={form.control}
-                    name="productDocs"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Product Documentation URL</FormLabel>
-                        <FormControl>
-                          <Input
-                            className={zincInputClassName}
-                            placeholder="https://example.com/docs"
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormDescription>
-                          Link to product documentation
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="bookingLink"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Booking Link</FormLabel>
-                        <FormControl>
-                          <Input
-                            className={zincInputClassName}
-                            placeholder="https://calendly.com/your-link"
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormDescription>Meeting booking link</FormDescription>
-                        <FormMessage />
                       </FormItem>
                     )}
                   />
@@ -682,7 +784,8 @@ export function CampaignForm({
                               Template Selected: {selectedTemplate.name}
                             </p>
                             <p className="text-xs text-zinc-400">
-                              Click "Create Campaign" to apply template settings
+                              Click &quot;Create Campaign&quot; to apply template
+                              settings
                             </p>
                           </div>
                           <Button

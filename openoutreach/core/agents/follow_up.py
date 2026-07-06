@@ -209,9 +209,10 @@ def _render_system_prompt(session, deal, recent_messages: list) -> str:
     return template.render(
         self_name=self_name,
         contact_email=session.linkedin_profile.linkedin_username,
-        product_docs=campaign.product_docs or "",
+        product_pitch=campaign.product_pitch or "",
         campaign_objective=campaign.campaign_objective or "",
         booking_link=campaign.booking_link or "",
+        follow_up_strategy=campaign.follow_up_strategy or "",
         profile_summary=_format_facts(deal.profile_summary),
         chat_summary=_format_facts(deal.chat_summary),
         persona=_format_persona(persona),

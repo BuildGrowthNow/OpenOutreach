@@ -160,9 +160,11 @@ class CampaignSerializer(serializers.ModelSerializer):
             "id",
             "name",
             "description",
-            "product_docs",
+            "product_pitch",
             "campaign_objective",
             "booking_link",
+            "icp_titles",
+            "follow_up_strategy",
             "is_freemium",
             "ghost_mode_enabled",
             "action_fraction",
@@ -289,9 +291,13 @@ class CampaignCreateSerializer(serializers.Serializer):
 
     name = serializers.CharField(max_length=200, required=True)
     description = serializers.CharField(required=False, allow_blank=True)
-    product_docs = serializers.CharField(required=False, allow_blank=True)
+    product_pitch = serializers.CharField(required=False, allow_blank=True)
     campaign_objective = serializers.CharField(required=False, allow_blank=True)
     booking_link = serializers.URLField(required=False, allow_blank=True)
+    icp_titles = serializers.ListField(
+        child=serializers.CharField(), required=False, default=list
+    )
+    follow_up_strategy = serializers.CharField(required=False, allow_blank=True)
     is_freemium = serializers.BooleanField(required=False, default=False)
     ghost_mode_enabled = serializers.BooleanField(required=False, default=False)
     action_fraction = serializers.FloatField(
@@ -309,9 +315,13 @@ class CampaignUpdateSerializer(serializers.Serializer):
 
     name = serializers.CharField(max_length=200, required=False)
     description = serializers.CharField(required=False, allow_blank=True)
-    product_docs = serializers.CharField(required=False, allow_blank=True)
+    product_pitch = serializers.CharField(required=False, allow_blank=True)
     campaign_objective = serializers.CharField(required=False, allow_blank=True)
     booking_link = serializers.URLField(required=False, allow_blank=True)
+    icp_titles = serializers.ListField(
+        child=serializers.CharField(), required=False
+    )
+    follow_up_strategy = serializers.CharField(required=False, allow_blank=True)
     is_freemium = serializers.BooleanField(required=False)
     ghost_mode_enabled = serializers.BooleanField(required=False)
     action_fraction = serializers.FloatField(required=False, min_value=0, max_value=1)
@@ -344,7 +354,11 @@ class CampaignTemplateSerializer(serializers.ModelSerializer):
             "id",
             "name",
             "description",
+            "product_pitch",
             "campaign_objective",
+            "booking_link",
+            "icp_titles",
+            "follow_up_strategy",
             "ghost_mode_enabled",
             "velocity",
             "cooldown_minutes",
@@ -371,7 +385,13 @@ class CampaignTemplateCreateSerializer(serializers.Serializer):
 
     name = serializers.CharField(max_length=200, required=True)
     description = serializers.CharField(required=False, allow_blank=True)
+    product_pitch = serializers.CharField(required=False, allow_blank=True)
     campaign_objective = serializers.CharField(required=False, allow_blank=True)
+    booking_link = serializers.URLField(required=False, allow_blank=True)
+    icp_titles = serializers.ListField(
+        child=serializers.CharField(), required=False, default=list
+    )
+    follow_up_strategy = serializers.CharField(required=False, allow_blank=True)
     ghost_mode_enabled = serializers.BooleanField(required=False, default=False)
     velocity = serializers.IntegerField(
         required=False, default=20, min_value=1, max_value=100

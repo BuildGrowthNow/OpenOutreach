@@ -20,8 +20,9 @@ class SearchKeywords(BaseModel):
 
 
 def generate_search_keywords(
-    product_docs: str,
+    product_pitch: str,
     campaign_objective: str,
+    icp_titles: list[str] | None = None,
     n_keywords: int = 10,
     exclude_keywords: list[str] | None = None,
 ) -> list[str]:
@@ -37,8 +38,9 @@ def generate_search_keywords(
     template = env.get_template("search_keywords.j2")
 
     prompt = template.render(
-        product_docs=product_docs,
+        product_pitch=product_pitch,
         campaign_objective=campaign_objective,
+        icp_titles=", ".join(icp_titles) if icp_titles else "",
         n_keywords=n_keywords,
         exclude_keywords=exclude_keywords or [],
     )

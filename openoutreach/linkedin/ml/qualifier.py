@@ -50,7 +50,10 @@ class QualificationDecision(BaseModel):
 
 
 def qualify_with_llm(
-    profile_text: str, product_docs: str, campaign_objective: str
+    profile_text: str,
+    product_pitch: str,
+    campaign_objective: str,
+    icp_titles: list[str] | None = None,
 ) -> tuple[int, str]:
     """Call LLM to qualify a profile. Returns (label, reason).
 
@@ -64,8 +67,9 @@ def qualify_with_llm(
     template = env.get_template("qualify_lead.j2")
 
     prompt = template.render(
-        product_docs=product_docs,
+        product_pitch=product_pitch,
         campaign_objective=campaign_objective,
+        icp_titles=", ".join(icp_titles) if icp_titles else "",
         profile_text=profile_text,
     )
 

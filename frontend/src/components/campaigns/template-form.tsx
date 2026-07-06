@@ -47,8 +47,21 @@ const formSchema = z.object({
     .string()
     .min(3, "Name must be at least 3 characters")
     .max(100, "Name is too long"),
-  description: z.string().max(500, "Description is too long").optional(),
-  campaign_objective: z.string().max(200, "Objective is too long").optional(),
+  description: z.string().optional(),
+  product_pitch: z
+    .string()
+    .optional()
+    .refine((v) => !v || v.length >= 300, {
+      message: "Product pitch must be at least 300 characters",
+    }),
+  campaign_objective: z.string().optional(),
+  booking_link: z
+    .string()
+    .url("Must be a valid URL")
+    .optional()
+    .or(z.literal("")),
+  icp_titles: z.string().optional(),
+  follow_up_strategy: z.string().optional(),
   ghost_mode_enabled: z.boolean(),
   velocity: z.number().min(1).max(100),
   cooldown_minutes: z.number().min(1).max(1440),
@@ -65,6 +78,19 @@ interface TemplateFormProps {
   isEditing?: boolean;
 }
 
+function parseIcpTitles(raw: string | undefined): string[] {
+  if (!raw) return [];
+  return raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function formatIcpTitles(titles: string[] | undefined): string {
+  if (!titles || titles.length === 0) return "";
+  return titles.join(", ");
+}
+
 export function TemplateForm({
   open,
   onOpenChange,
@@ -79,7 +105,11 @@ export function TemplateForm({
     defaultValues: {
       name: "",
       description: undefined,
+      product_pitch: undefined,
       campaign_objective: undefined,
+      booking_link: undefined,
+      icp_titles: undefined,
+      follow_up_strategy: undefined,
       ghost_mode_enabled: false,
       velocity: 20,
       cooldown_minutes: 0,
@@ -92,7 +122,11 @@ export function TemplateForm({
       form.reset({
         name: template.name,
         description: template.description || undefined,
+        product_pitch: template.product_pitch || undefined,
         campaign_objective: template.campaign_objective || undefined,
+        booking_link: template.booking_link || undefined,
+        icp_titles: formatIcpTitles(template.icp_titles),
+        follow_up_strategy: template.follow_up_strategy || undefined,
         ghost_mode_enabled: template.ghost_mode_enabled,
         velocity: template.velocity,
         cooldown_minutes: template.cooldown_minutes,
@@ -102,7 +136,11 @@ export function TemplateForm({
       form.reset({
         name: "",
         description: undefined,
+        product_pitch: undefined,
         campaign_objective: undefined,
+        booking_link: undefined,
+        icp_titles: undefined,
+        follow_up_strategy: undefined,
         ghost_mode_enabled: false,
         velocity: 20,
         cooldown_minutes: 0,
@@ -114,7 +152,11 @@ export function TemplateForm({
   const handleSubmit = async (values: FormValues) => {
     setLoading(true);
     try {
-      await onSubmit(values as CampaignTemplateCreateData);
+      const payload: CampaignTemplateCreateData = {
+        ...values,
+        icp_titles: parseIcpTitles(values.icp_titles),
+      };
+      await onSubmit(payload);
       form.reset();
       onOpenChange(false);
     } catch (error) {
@@ -124,10 +166,12 @@ export function TemplateForm({
     }
   };
 
+  const productPitchValue = form.watch("product_pitch") || "";
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className={`${zincDialogContentClassName} max-h-[90vh] overflow-hidden p-0 sm:max-w-[780px]`}
+        className={`${zincDialogContentClassName} max-h-[90vh] overflow-hidden p-0 sm:max-w-[860px]`}
       >
         <DialogHeader
           className={`${zincDialogHeaderClassName} px-6 pt-6 sm:px-8 sm:pt-8`}
@@ -152,10 +196,22 @@ export function TemplateForm({
               className="flex-1 overflow-hidden px-6 py-6 sm:px-8 sm:py-8"
             >
               <TabsList
-                className={`${zincTabsListClassName} grid grid-cols-1 gap-1 md:grid-cols-3`}
+                className={`${zincTabsListClassName} grid grid-cols-2 gap-1 md:grid-cols-5`}
               >
                 <TabsTrigger className={zincTabsTriggerClassName} value="basic">
                   Basic Info
+                </TabsTrigger>
+                <TabsTrigger
+                  className={zincTabsTriggerClassName}
+                  value="targeting"
+                >
+                  Targeting
+                </TabsTrigger>
+                <TabsTrigger
+                  className={zincTabsTriggerClassName}
+                  value="strategy"
+                >
+                  Follow-Up
                 </TabsTrigger>
                 <TabsTrigger
                   className={zincTabsTriggerClassName}
@@ -206,12 +262,12 @@ export function TemplateForm({
                         <FormControl>
                           <Textarea
                             placeholder="Describe what this template is for..."
-                            className={`${zincTextareaClassName} resize-none`}
+                            className={`${zincTextareaClassName} min-h-[100px] resize-y`}
                             {...field}
                           />
                         </FormControl>
                         <FormDescription>
-                          Optional: Brief description of the template
+                          Description of the template (no character limit)
                         </FormDescription>
                         <FormMessage />
                       </FormItem>
@@ -225,14 +281,124 @@ export function TemplateForm({
                       <FormItem>
                         <FormLabel>Campaign Objective</FormLabel>
                         <FormControl>
-                          <Input
-                            className={zincInputClassName}
+                          <Textarea
+                            className={`${zincTextareaClassName} min-h-[80px] resize-y`}
                             placeholder="What are you trying to achieve?"
                             {...field}
                           />
                         </FormControl>
                         <FormDescription>
                           The primary goal for campaigns using this template
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="booking_link"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Booking Link</FormLabel>
+                        <FormControl>
+                          <Input
+                            className={zincInputClassName}
+                            placeholder="https://calendly.com/your-link"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormDescription>Meeting booking link</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </TabsContent>
+
+                <TabsContent
+                  value="targeting"
+                  className={`${zincSectionClassName} space-y-4`}
+                >
+                  <FormField
+                    control={form.control}
+                    name="icp_titles"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>ICP - Job Titles & Roles</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            className={`${zincTextareaClassName} min-h-[100px] resize-y`}
+                            placeholder="Founder, CEO, Head of Growth, Marketing Manager, Growth Strategist, CTO..."
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          Comma-separated list of target job titles and roles.
+                          {field.value && (
+                            <span className="ml-1 text-zinc-300">
+                              ({parseIcpTitles(field.value).length} titles)
+                            </span>
+                          )}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="product_pitch"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Product Pitch</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            className={`${zincTextareaClassName} min-h-[160px] resize-y`}
+                            placeholder="Describe your product/service: what it does, who it's for, and why it matters..."
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          <span
+                            className={
+                              productPitchValue.length > 0 &&
+                              productPitchValue.length < 300
+                                ? "text-red-400"
+                                : ""
+                            }
+                          >
+                            {productPitchValue.length}/300 min characters
+                          </span>
+                          {" - "}
+                          What the agent uses to understand and pitch your
+                          product.
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </TabsContent>
+
+                <TabsContent
+                  value="strategy"
+                  className={`${zincSectionClassName} space-y-4`}
+                >
+                  <FormField
+                    control={form.control}
+                    name="follow_up_strategy"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Follow-Up Strategy</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            className={`${zincTextareaClassName} min-h-[200px] resize-y`}
+                            placeholder={`Describe how the agent should approach follow-up conversations.\n\nExample:\n1. Discovery Mode (Default): Ask about their current process\n2. Pitch Mode (When signal detected): Connect challenges to capabilities\n3. Key Differentiators: List what makes your product unique`}
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          Instructions for the agent&apos;s follow-up
+                          conversation behavior.
                         </FormDescription>
                         <FormMessage />
                       </FormItem>

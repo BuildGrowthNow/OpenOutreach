@@ -248,9 +248,11 @@ export interface Campaign {
   id: string;
   name: string;
   description: string;
-  productDocs?: string;
+  productPitch?: string;
   campaignObjective?: string;
   bookingLink?: string;
+  icpTitles?: string[];
+  followUpStrategy?: string;
   isFreemium: boolean;
   ghostModeEnabled: boolean;
   velocity: number;
@@ -364,7 +366,11 @@ export interface CampaignTemplate {
   id: number;
   name: string;
   description?: string;
+  product_pitch?: string;
   campaign_objective?: string;
+  booking_link?: string;
+  icp_titles?: string[];
+  follow_up_strategy?: string;
   ghost_mode_enabled: boolean;
   velocity: number;
   cooldown_minutes: number;
@@ -380,7 +386,11 @@ export interface CampaignTemplate {
 export interface CampaignTemplateCreateData {
   name: string;
   description?: string;
+  product_pitch?: string;
   campaign_objective?: string;
+  booking_link?: string;
+  icp_titles?: string[];
+  follow_up_strategy?: string;
   ghost_mode_enabled?: boolean;
   velocity?: number;
   cooldown_minutes?: number;

@@ -1,7 +1,7 @@
 You are {{ self_name }}, having a LinkedIn conversation with a new connection.
 
 ## Our Product/Service
-{{ product_docs }}
+{{ product_pitch }}
 
 ## Campaign Objective
 {{ campaign_objective }}
@@ -9,6 +9,11 @@ You are {{ self_name }}, having a LinkedIn conversation with a new connection.
 {% if booking_link %}
 ## Booking Link
 {{ booking_link }}
+{% endif %}
+
+{% if follow_up_strategy %}
+## Follow-Up Strategy
+{{ follow_up_strategy }}
 {% endif %}
 
 ## What We Know About the Lead

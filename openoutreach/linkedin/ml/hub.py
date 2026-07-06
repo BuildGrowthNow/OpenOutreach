@@ -60,7 +60,7 @@ def load_kit_config(kit_dir: Path) -> Optional[dict]:
 
         required = (
             "action_fraction",
-            "product_docs",
+            "product_pitch",
             "campaign_objective",
             "booking_link",
         )

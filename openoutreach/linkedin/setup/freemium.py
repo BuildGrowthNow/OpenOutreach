@@ -22,7 +22,7 @@ def import_freemium_campaign(kit_config: dict):
     campaign, _ = Campaign.objects.update_or_create(
         name=campaign_name,
         defaults={
-            "product_docs": kit_config["product_docs"],
+            "product_pitch": kit_config["product_pitch"],
             "campaign_objective": kit_config["campaign_objective"],
             "booking_link": kit_config["booking_link"],
             "is_freemium": True,

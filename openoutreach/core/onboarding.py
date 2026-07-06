@@ -153,14 +153,14 @@ def _read_default_file(path) -> str:
 
 
 def _create_campaign(
-    name: str, product_docs: str, objective: str, booking_link: str = ""
+    name: str, product_pitch: str, objective: str, booking_link: str = ""
 ):
     """Create a Campaign record and return it."""
     from openoutreach.core.models import Campaign
 
     campaign = Campaign.objects.create(
         name=name,
-        product_docs=product_docs,
+        product_pitch=product_pitch,
         campaign_objective=objective,
         booking_link=booking_link,
     )
@@ -234,7 +234,7 @@ def apply(config: OnboardConfig) -> None:
     if campaign is None and config.campaign_name:
         campaign = _create_campaign(
             name=config.campaign_name or DEFAULT_CAMPAIGN_NAME,
-            product_docs=config.product_description
+            product_pitch=config.product_description
             or _read_default_file(DEFAULT_PRODUCT_DOCS),
             objective=config.campaign_objective
             or _read_default_file(DEFAULT_CAMPAIGN_OBJECTIVE),

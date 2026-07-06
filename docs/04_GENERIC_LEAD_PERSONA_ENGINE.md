@@ -112,7 +112,7 @@ def generate_lead_persona(session, deal) -> LeadPersonaOutput | None:
     # Build context from profile data
     context = {
         "profile": profile,
-        "product_docs": campaign.product_docs,
+        "product_pitch": campaign.product_pitch,
         "campaign_objective": campaign.campaign_objective,
     }
     
@@ -193,7 +193,7 @@ Generate a detailed lead persona based on the following information.
 {{ campaign_objective }}
 
 ## PRODUCT/SERVICE
-{{ product_docs }}
+{{ product_pitch }}
 
 ## LEAD PROFILE
 {{ profile_text }}

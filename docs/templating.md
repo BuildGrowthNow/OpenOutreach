@@ -23,7 +23,7 @@ objective, booking link) and lead profile data.
 Follow-up behavior is controlled by:
 
 - **Campaign fields** (via Django Admin or onboarding):
-  - `product_docs` — product/service description, used as context for the agent.
+  - `product_pitch` — product/service description, used as context for the agent.
   - `campaign_objective` — campaign goal, used as context for the agent.
   - `booking_link` — included naturally in messages when suggesting a meeting.
 

@@ -158,8 +158,8 @@ def materialize_profile_summary_if_missing(deal, session) -> None:
     campaign = deal.campaign
     if getattr(campaign, "campaign_objective", None):
         context_parts.append(f"Campaign objective: {campaign.campaign_objective}")
-    if getattr(campaign, "product_docs", None):
-        context_parts.append(f"Product context: {campaign.product_docs}")
+    if getattr(campaign, "product_pitch", None):
+        context_parts.append(f"Product context: {campaign.product_pitch}")
     context = "\n\n".join(context_parts)
 
     facts = extract_facts(

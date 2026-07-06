@@ -1368,17 +1368,15 @@ export default function CampaignDetailsPage() {
                         "No booking link"
                       )}
                       <br />
-                      {campaign.productDocs ? (
-                        <a
-                          href={campaign.productDocs}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-500 hover:underline"
-                        >
-                          Product Docs
-                        </a>
+                      {campaign.productPitch ? (
+                        <span className="text-zinc-300">
+                          Product Pitch:{" "}
+                          {campaign.productPitch.length > 100
+                            ? campaign.productPitch.slice(0, 100) + "..."
+                            : campaign.productPitch}
+                        </span>
                       ) : (
-                        "No product docs"
+                        "No product pitch"
                       )}
                     </p>
                   </div>

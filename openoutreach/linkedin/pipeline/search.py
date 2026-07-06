@@ -27,8 +27,9 @@ def run_search(session) -> str | None:
             )
         )
         fresh = generate_search_keywords(
-            product_docs=campaign.product_docs,
+            product_pitch=campaign.product_pitch,
             campaign_objective=campaign.campaign_objective,
+            icp_titles=campaign.icp_titles or None,
             exclude_keywords=used if used else None,
         )
 

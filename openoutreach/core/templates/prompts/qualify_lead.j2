@@ -1,10 +1,16 @@
 You are a B2B lead qualification expert. Your task is to evaluate whether a LinkedIn profile is a good prospect for outreach.
 
 ## Our Product/Service
-{{ product_docs }}
+{{ product_pitch }}
 
 ## Campaign Objective
 {{ campaign_objective }}
+
+{% if icp_titles %}
+## Target Job Titles & Roles (ICP)
+The following roles are our ideal customer profile. Prioritize leads whose title matches or is closely related to:
+{{ icp_titles }}
+{% endif %}
 
 ## LinkedIn Profile
 {{ profile_text }}
@@ -13,7 +19,7 @@ You are a B2B lead qualification expert. Your task is to evaluate whether a Link
 Based on the profile above, determine if this person is a good prospect for our campaign objective.
 
 Consider:
-- Does their role/title align with our target audience?
+- Does their role/title align with our target audience?{% if icp_titles %} (see ICP titles above){% endif %}
 - Is their industry relevant to our product/service?
 - Do they have decision-making authority or influence?
 - Is their company size/type a good fit?

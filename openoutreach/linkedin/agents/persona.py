@@ -84,7 +84,7 @@ def generate_lead_persona(session, deal: "Deal") -> LeadPersonaOutput | None:
     # Build context from profile data
     context = {
         "profile": profile,
-        "product_docs": campaign.product_docs,
+        "product_pitch": campaign.product_pitch,
         "campaign_objective": campaign.campaign_objective,
     }
 

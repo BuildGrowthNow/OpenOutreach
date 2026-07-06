@@ -158,7 +158,7 @@ class TestCampaignModel:
         """Test creating a new campaign in MongoDB."""
         campaign = Campaign(
             name="Test Campaign",
-            product_docs="# Product Docs\nSome content",
+            product_pitch="# Product Docs\nSome content",
             campaign_objective="Generate leads",
             velocity=20,
         )

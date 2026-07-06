@@ -225,7 +225,7 @@ class MigrationManager:
             for campaign in LinkedInCampaign.objects.all():
                 mongodb_campaign = Campaign(
                     name=getattr(campaign, "name", ""),
-                    product_docs=getattr(campaign, "product_docs", ""),
+                    product_pitch=getattr(campaign, "product_pitch", ""),
                     campaign_objective=getattr(campaign, "campaign_objective", ""),
                     booking_link=getattr(campaign, "booking_link", ""),
                     is_freemium=getattr(campaign, "is_freemium", False),

@@ -274,7 +274,7 @@ Enter your booking/demo link (e.g., Calendly, Lengrowth demo page, etc.)
 ### Key Settings in Django Admin
 
 - **Campaign**:
-  - Edit `product_docs` with updated product description
+  - Edit `product_pitch` with updated product description
   - Edit `campaign_objective` with new campaign goals
   - Set or update `booking_link`
 

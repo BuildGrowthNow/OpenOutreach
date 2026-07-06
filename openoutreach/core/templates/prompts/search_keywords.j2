@@ -1,10 +1,15 @@
 You are a B2B sales research expert. Your task is to generate LinkedIn People search queries that will find prospects matching our campaign.
 
 ## Our Product/Service
-{{ product_docs }}
+{{ product_pitch }}
 
 ## Campaign Objective
 {{ campaign_objective }}
+
+{% if icp_titles %}
+## Target Job Titles & Roles (ICP)
+{{ icp_titles }}
+{% endif %}
 
 ## Instructions
 Generate exactly {{ n_keywords }} LinkedIn People search queries. Each query should be a short phrase (2-5 words) that someone would type into LinkedIn's People search bar to find relevant prospects.

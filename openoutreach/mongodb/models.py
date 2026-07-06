@@ -534,7 +534,7 @@ class Campaign:
         self,
         _id: Optional[str] = None,
         name: str = "",
-        product_docs: str = "",
+        product_pitch: str = "",
         campaign_objective: str = "",
         booking_link: str = "",
         is_freemium: bool = False,
@@ -548,7 +548,7 @@ class Campaign:
     ):
         self._id = _id or str(uuid4())
         self.name = name
-        self.product_docs = product_docs
+        self.product_pitch = product_pitch
         self.campaign_objective = campaign_objective
         self.booking_link = booking_link
         self.is_freemium = is_freemium
@@ -565,7 +565,7 @@ class Campaign:
         data = {
             "_id": self._id,
             "name": self.name,
-            "product_docs": self.product_docs,
+            "product_pitch": self.product_pitch,
             "campaign_objective": self.campaign_objective,
             "booking_link": self.booking_link,
             "is_freemium": self.is_freemium,
@@ -586,7 +586,7 @@ class Campaign:
         return cls(
             _id=str(data.get("_id")),
             name=data.get("name", ""),
-            product_docs=data.get("product_docs", ""),
+            product_pitch=data.get("product_pitch", ""),
             campaign_objective=data.get("campaign_objective", ""),
             booking_link=data.get("booking_link", ""),
             is_freemium=data.get("is_freemium", False),

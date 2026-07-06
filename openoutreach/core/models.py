@@ -102,7 +102,11 @@ class CampaignTemplate(models.Model):
 
     name: models.CharField = models.CharField(max_length=200)  # type: ignore[var-annotated]
     description: models.TextField = models.TextField(blank=True)  # type: ignore[var-annotated]
+    product_pitch: models.TextField = models.TextField(blank=True)  # type: ignore[var-annotated]
     campaign_objective: models.TextField = models.TextField(blank=True)  # type: ignore[var-annotated]
+    booking_link: models.URLField = models.URLField(max_length=500, blank=True)  # type: ignore[var-annotated]
+    icp_titles: models.JSONField = models.JSONField(default=list, blank=True)  # type: ignore[var-annotated]
+    follow_up_strategy: models.TextField = models.TextField(blank=True)  # type: ignore[var-annotated]
     ghost_mode_enabled: models.BooleanField = models.BooleanField(default=False)  # type: ignore[var-annotated]
     velocity: models.PositiveIntegerField = models.PositiveIntegerField(default=20)  # type: ignore[var-annotated]
     cooldown_minutes: models.PositiveIntegerField = models.PositiveIntegerField(
@@ -140,9 +144,11 @@ class Campaign(models.Model):
     users: models.ManyToManyField = models.ManyToManyField(
         User, blank=True, related_name="campaigns"
     )  # type: ignore[var-annotated]
-    product_docs: models.TextField = models.TextField(blank=True)  # type: ignore[var-annotated]
+    product_pitch: models.TextField = models.TextField(blank=True)  # type: ignore[var-annotated]
     campaign_objective: models.TextField = models.TextField(blank=True)  # type: ignore[var-annotated]
     booking_link: models.URLField = models.URLField(max_length=500, blank=True)  # type: ignore[var-annotated]
+    icp_titles: models.JSONField = models.JSONField(default=list, blank=True)  # type: ignore[var-annotated]
+    follow_up_strategy: models.TextField = models.TextField(blank=True)  # type: ignore[var-annotated]
     is_freemium: models.BooleanField = models.BooleanField(default=False)  # type: ignore[var-annotated]
     ghost_mode_enabled: models.BooleanField = models.BooleanField(default=False)  # type: ignore[var-annotated]
     action_fraction: models.FloatField = models.FloatField(default=0.2)  # type: ignore[var-annotated]

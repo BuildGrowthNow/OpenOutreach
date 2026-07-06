@@ -74,11 +74,15 @@ class CampaignListView(APIView):
             campaign = Campaign.objects.create(
                 name=serializer.validated_data["name"],
                 description=serializer.validated_data.get("description", ""),
-                product_docs=serializer.validated_data.get("product_docs", ""),
+                product_pitch=serializer.validated_data.get("product_pitch", ""),
                 campaign_objective=serializer.validated_data.get(
                     "campaign_objective", ""
                 ),
                 booking_link=serializer.validated_data.get("booking_link", ""),
+                icp_titles=serializer.validated_data.get("icp_titles", []),
+                follow_up_strategy=serializer.validated_data.get(
+                    "follow_up_strategy", ""
+                ),
                 is_freemium=serializer.validated_data.get("is_freemium", False),
                 ghost_mode_enabled=serializer.validated_data.get(
                     "ghost_mode_enabled", False
@@ -96,7 +100,9 @@ class CampaignListView(APIView):
                     "id": campaign.id,
                     "name": campaign.name,
                     "description": campaign.description,
-                    "product_docs": campaign.product_docs,
+                    "product_pitch": campaign.product_pitch,
+                    "icp_titles": campaign.icp_titles,
+                    "follow_up_strategy": campaign.follow_up_strategy,
                     "campaign_objective": campaign.campaign_objective,
                     "booking_link": campaign.booking_link,
                     "is_freemium": campaign.is_freemium,
@@ -145,7 +151,9 @@ class CampaignDetailView(APIView):
                 "id": campaign.id,
                 "name": campaign.name,
                 "description": campaign.description,
-                "product_docs": campaign.product_docs,
+                "product_pitch": campaign.product_pitch,
+                    "icp_titles": campaign.icp_titles,
+                    "follow_up_strategy": campaign.follow_up_strategy,
                 "campaign_objective": campaign.campaign_objective,
                 "booking_link": campaign.booking_link,
                 "is_freemium": campaign.is_freemium,
@@ -205,7 +213,9 @@ class CampaignDetailView(APIView):
                     "id": campaign.id,
                     "name": campaign.name,
                     "description": campaign.description,
-                    "product_docs": campaign.product_docs,
+                    "product_pitch": campaign.product_pitch,
+                    "icp_titles": campaign.icp_titles,
+                    "follow_up_strategy": campaign.follow_up_strategy,
                     "campaign_objective": campaign.campaign_objective,
                     "booking_link": campaign.booking_link,
                     "is_freemium": campaign.is_freemium,

@@ -120,8 +120,9 @@ def run_qualification(session, qualifier: BayesianQualifier) -> str | None:
     campaign = session.campaign
     label, reason = qualify_with_llm(
         profile_text,
-        product_docs=campaign.product_docs,
+        product_pitch=campaign.product_pitch,
         campaign_objective=campaign.campaign_objective,
+        icp_titles=campaign.icp_titles or None,
     )
     _save_qualification_result(
         session, qualifier, lead_id, public_id, embedding, label, reason
