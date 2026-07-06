@@ -3,6 +3,8 @@
 
 import logging
 
+logger = logging.getLogger(__name__)
+
 from django.db import DatabaseError
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
@@ -230,9 +232,26 @@ class LinkedInCredentialsView(APIView):
             # Create audit log entry
             LinkedInCredentialLog.objects.create(
                 credentials=cred,
-                action=LinkedInCredentialLog.ACTION_VERIFIED,
+                action="created",
                 details={"created_by": request.user.username},
             )
+
+            # Automatically verify credentials after creation
+            try:
+                session = AccountSession(cred.linkedin_profile)
+                success, details = cred.verify_credentials(
+                    session=session,
+                    mark_as_active=True,
+                    mark_as_stored=True,
+                )
+                logger.info(
+                    "Auto-verification after creation: success=%s, status=%s",
+                    success,
+                    cred.status,
+                )
+            except Exception as e:
+                logger.warning("Auto-verification failed: %s", e)
+                # Don't fail the creation if verification fails
 
             return Response(
                 {
@@ -310,9 +329,26 @@ class LinkedInCredentialsView(APIView):
         # Create audit log entry
         LinkedInCredentialLog.objects.create(
             credentials=cred,
-            action=LinkedInCredentialLog.ACTION_VERIFIED,
+            action="updated",
             details={"updated_by": request.user.username},
         )
+
+        # Automatically verify credentials if email or password changed
+        if "email" in data or "password" in data:
+            try:
+                session = AccountSession(cred.linkedin_profile)
+                success, details = cred.verify_credentials(
+                    session=session,
+                    mark_as_active=True,
+                    mark_as_stored=True,
+                )
+                logger.info(
+                    "Auto-verification after update: success=%s, status=%s",
+                    success,
+                    cred.status,
+                )
+            except Exception as e:
+                logger.warning("Auto-verification failed: %s", e)
 
         return Response(
             {
