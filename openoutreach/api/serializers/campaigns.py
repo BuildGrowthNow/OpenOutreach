@@ -151,6 +151,9 @@ class CampaignSerializer(serializers.ModelSerializer):
     # Links many-to-many field (read-only)
     links = serializers.SerializerMethodField()
 
+    # Search keywords (read from related SearchKeyword model)
+    search_keywords = serializers.SerializerMethodField()
+
     # Computed statistics
     stats = serializers.SerializerMethodField()
 
@@ -163,6 +166,7 @@ class CampaignSerializer(serializers.ModelSerializer):
             "product_pitch",
             "campaign_objective",
             "booking_link",
+            "search_keywords",
             "icp_titles",
             "follow_up_strategy",
             "is_freemium",
@@ -185,7 +189,7 @@ class CampaignSerializer(serializers.ModelSerializer):
             "updated_at",
             "status",
         ]
-        read_only_fields = ["created_at", "updated_at", "status", "links"]
+        read_only_fields = ["created_at", "updated_at", "status", "links", "search_keywords"]
 
     def get_user_count(self, obj):
         return obj.users.count()
@@ -213,6 +217,10 @@ class CampaignSerializer(serializers.ModelSerializer):
         """Get links associated with this campaign."""
         links = obj.tracked_links.all()
         return TrackedLinkSerializer(links, many=True, context=self.context).data
+
+    def get_search_keywords(self, obj):
+        """Get search keywords associated with this campaign."""
+        return list(obj.search_keywords.values_list('keyword', flat=True))
 
     def get_stats(self, obj):
         """Compute and return statistics for the campaign."""
@@ -294,6 +302,9 @@ class CampaignCreateSerializer(serializers.Serializer):
     product_pitch = serializers.CharField(required=False, allow_blank=True)
     campaign_objective = serializers.CharField(required=False, allow_blank=True)
     booking_link = serializers.URLField(required=False, allow_blank=True)
+    search_keywords = serializers.ListField(
+        child=serializers.CharField(), required=False, default=list
+    )
     icp_titles = serializers.ListField(
         child=serializers.CharField(), required=False, default=list
     )
@@ -318,6 +329,9 @@ class CampaignUpdateSerializer(serializers.Serializer):
     product_pitch = serializers.CharField(required=False, allow_blank=True)
     campaign_objective = serializers.CharField(required=False, allow_blank=True)
     booking_link = serializers.URLField(required=False, allow_blank=True)
+    search_keywords = serializers.ListField(
+        child=serializers.CharField(), required=False
+    )
     icp_titles = serializers.ListField(
         child=serializers.CharField(), required=False
     )

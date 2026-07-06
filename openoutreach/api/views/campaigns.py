@@ -69,8 +69,13 @@ class CampaignListView(APIView):
 
     def post(self, request):
         """Create a new campaign."""
+        from openoutreach.linkedin.models import SearchKeyword
+
         serializer = CampaignCreateSerializer(data=request.data)
         if serializer.is_valid():
+            # Extract search_keywords before creating campaign
+            search_keywords = serializer.validated_data.get("search_keywords", [])
+
             campaign = Campaign.objects.create(
                 name=serializer.validated_data["name"],
                 description=serializer.validated_data.get("description", ""),
@@ -94,6 +99,14 @@ class CampaignListView(APIView):
                 status=serializer.validated_data.get("status", "active"),
             )
             campaign.users.add(request.user)
+
+            # Create SearchKeyword instances
+            for keyword in search_keywords:
+                if keyword.strip():  # Skip empty strings
+                    SearchKeyword.objects.get_or_create(
+                        campaign=campaign,
+                        keyword=keyword.strip()
+                    )
 
             return Response(
                 {
@@ -189,6 +202,8 @@ class CampaignDetailView(APIView):
 
     def patch(self, request, pk):
         """Update campaign."""
+        from openoutreach.linkedin.models import SearchKeyword
+
         campaign = self.get_object(pk)
 
         # Store old values for comparison
@@ -197,6 +212,9 @@ class CampaignDetailView(APIView):
 
         serializer = CampaignUpdateSerializer(data=request.data, partial=True)
         if serializer.is_valid():
+            # Extract search_keywords if provided
+            search_keywords = serializer.validated_data.pop("search_keywords", None)
+
             # Update fields if provided
             for field, value in serializer.validated_data.items():
                 if field == "users":
@@ -204,6 +222,18 @@ class CampaignDetailView(APIView):
                 setattr(campaign, field, value)
 
             campaign.save()
+
+            # Update SearchKeyword instances if provided
+            if search_keywords is not None:
+                # Clear existing keywords
+                campaign.search_keywords.all().delete()
+                # Create new ones
+                for keyword in search_keywords:
+                    if keyword.strip():  # Skip empty strings
+                        SearchKeyword.objects.create(
+                            campaign=campaign,
+                            keyword=keyword.strip()
+                        )
 
             # Emit real-time notifications for status changes
             self._emit_status_change_notifications(campaign, old_is_paused, old_status)
