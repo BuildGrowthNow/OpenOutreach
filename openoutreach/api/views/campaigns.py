@@ -238,31 +238,9 @@ class CampaignDetailView(APIView):
             # Emit real-time notifications for status changes
             self._emit_status_change_notifications(campaign, old_is_paused, old_status)
 
-            return Response(
-                {
-                    "id": campaign.id,
-                    "name": campaign.name,
-                    "description": campaign.description,
-                    "product_pitch": campaign.product_pitch,
-                    "icp_titles": campaign.icp_titles,
-                    "follow_up_strategy": campaign.follow_up_strategy,
-                    "campaign_objective": campaign.campaign_objective,
-                    "booking_link": campaign.booking_link,
-                    "is_freemium": campaign.is_freemium,
-                    "ghost_mode_enabled": campaign.ghost_mode_enabled,
-                    "action_fraction": campaign.action_fraction,
-                    "velocity": campaign.velocity,
-                    "cooldown_minutes": campaign.cooldown_minutes,
-                    "is_paused": campaign.is_paused,
-                    "status": campaign.status,
-                    "created_at": (
-                        campaign.created_at.isoformat() if campaign.created_at else None
-                    ),
-                    "updated_at": (
-                        campaign.updated_at.isoformat() if campaign.updated_at else None
-                    ),
-                }
-            )
+            # Use the serializer to return the full campaign data including search_keywords
+            response_serializer = CampaignSerializer(campaign)
+            return Response(response_serializer.data)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
