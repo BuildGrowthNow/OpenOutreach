@@ -19,13 +19,9 @@ class Command(BaseCommand):
         self._ensure_db()
         self._ensure_onboarded()
         session = self._create_session()
-        self._ensure_authenticated(session)
-        self._sync_credential_profile(session)
 
-        try:
-            self._ensure_newsletter(session)
-        except Exception as exc:
-            logger.warning("Newsletter setup skipped: %s", exc)
+        # Daemon starts idle — no auth required until first task is claimed
+        logger.info("Daemon starting in lazy-auth mode (auth on first task)")
 
         from openoutreach.core.daemon import run_daemon
 

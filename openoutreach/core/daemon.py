@@ -38,6 +38,43 @@ _HANDLERS = {
     Task.TaskType.SEND_MANUAL_MESSAGE: handle_send_manual_message,
 }
 
+
+def _notify_auth_required(session, reason: str) -> None:
+    """Create a user notification for authentication required."""
+    try:
+        from django.contrib.auth.models import User
+        from openoutreach.notifications.models import Notification
+
+        user = session.linkedin_profile.user
+        if user:
+            Notification.create_notification(
+                recipient=user,
+                notification_type=Notification.TYPE_CAMPAIGN_ERROR,
+                title="LinkedIn Authentication Required",
+                message=f"Authentication failed: {reason}. Please add valid LinkedIn credentials in Settings → LinkedIn Connection.",
+            )
+    except Exception as e:
+        logger.debug("Could not create auth notification: %s", e)
+
+
+def _notify_checkpoint_challenge(session, url: str) -> None:
+    """Create a user notification for checkpoint challenge."""
+    try:
+        from django.contrib.auth.models import User
+        from openoutreach.notifications.models import Notification
+
+        user = session.linkedin_profile.user
+        if user:
+            Notification.create_notification(
+                recipient=user,
+                notification_type=Notification.TYPE_CAMPAIGN_ERROR,
+                title="LinkedIn Challenge Required",
+                message=f"LinkedIn requires additional verification. Complete the challenge at: {url}",
+                metadata={"challenge_url": url, "requires_action": True},
+            )
+    except Exception as e:
+        logger.debug("Could not create checkpoint notification: %s", e)
+
 HEARTBEAT_INTERVAL = 300  # 5 minutes
 HEARTBEAT_SLICE = 60  # wake every minute during long sleeps
 HEALTH_CHECK_INTERVAL = 3600  # Run health check every hour
@@ -286,25 +323,26 @@ def seconds_until_active() -> float:
 # ------------------------------------------------------------------
 
 
-def _exit_on_checkpoint(session, task, url: str) -> None:
-    """Log loudly, mark the task failed, close the session, and exit(1).
+def _handle_checkpoint(session, task, url: str) -> None:
+    """Handle checkpoint challenge by notifying user and marking task failed.
 
     Called when LinkedIn flags the account with a security checkpoint.
     We do NOT retry or reauthenticate — every retry hardens the block.
-    The user clears the challenge in a real browser, then restarts the daemon.
+    The user clears the challenge via the frontend modal, then daemon continues.
     """
-    logger.error(
+    logger.warning(
         colored(
-            f"ACCOUNT CHECKPOINTED — {session.linkedin_profile.linkedin_username}",
-            "red",
+            f"CHECKPOINT CHALLENGE — {session.linkedin_profile.linkedin_username}",
+            "yellow",
             attrs=["bold"],
         )
     )
-    logger.error("Clear the challenge in a real browser: %s", url)
-    logger.error("Then restart the daemon.")
-    task.mark_failed()
+    logger.warning("Challenge URL: %s", url)
+    logger.warning("User must complete challenge via frontend before tasks resume")
+
+    _notify_checkpoint_challenge(session, url)
+    task.mark_failed(error_message=f"Checkpoint challenge required: {url}")
     session.close()
-    sys.exit(1)
 
 
 # ------------------------------------------------------------------
@@ -318,6 +356,9 @@ def run_daemon(session):
     from openoutreach.core.models import Campaign
 
     cfg = CAMPAIGN_CONFIG
+
+    # Track whether session has been authenticated
+    _authenticated = False
 
     # Load kit model for freemium campaigns
     kit = fetch_kit()
@@ -344,7 +385,7 @@ def run_daemon(session):
     else:
         logger.info(
             colored("Daemon started", "green", attrs=["bold"])
-            + " — %d campaigns, task queue worker",
+            + " — %d campaigns, task queue worker (lazy auth)",
             len(campaigns),
         )
 
@@ -400,6 +441,49 @@ def run_daemon(session):
             task.mark_failed(error_message=error_msg)
             continue
 
+        # Lazy auth: authenticate session on first task claim
+        if not _authenticated:
+            logger.info("First task claimed — authenticating session")
+            try:
+                session.ensure_browser()
+                _authenticated = True
+                logger.info("Session authenticated successfully")
+
+                # Sync credential profile after successful auth
+                try:
+                    profile_data = session.self_profile
+                    public_id = profile_data.get("public_identifier", "")
+                    if public_id:
+                        from openoutreach.crm.models import LinkedInCredentials
+                        cred = LinkedInCredentials.objects.filter(
+                            linkedin_profile=session.linkedin_profile
+                        ).first()
+                        if cred and cred.username != public_id:
+                            cred.username = public_id
+                            cred.save(update_fields=["username"])
+                            logger.info("Synced credential username: %s", public_id)
+                except Exception as exc:
+                    logger.debug("Could not sync credential profile: %s", exc)
+
+            except CheckpointChallengeError as exc:
+                # Notify user about challenge, but don't exit - just skip tasks
+                logger.warning(
+                    "LinkedIn checkpoint detected at %s — notifying user", exc.url
+                )
+                _notify_checkpoint_challenge(session, exc.url)
+                task.mark_failed(error_message=f"Checkpoint challenge required: {exc.url}")
+                # Don't set _authenticated = True, so we retry auth on next task
+                continue
+            except AuthenticationError as exc:
+                logger.error("Authentication failed: %s — notifying user", exc)
+                _notify_auth_required(session, str(exc))
+                task.mark_failed(error_message=f"Authentication required: {exc}")
+                continue
+            except Exception as exc:
+                logger.error("Unexpected error during authentication: %s", exc)
+                task.mark_failed(error_message=f"Auth error: {exc}")
+                continue
+
         session.campaign = campaign
         task.mark_running()
 
@@ -414,13 +498,17 @@ def run_daemon(session):
             with failure_diagnostics(session):
                 handler(task, session, qualifiers)
         except CheckpointChallengeError as exc:
-            _exit_on_checkpoint(session, task, exc.url)
+            _handle_checkpoint(session, task, exc.url)
+            _authenticated = False  # Reset auth flag to retry on next task
+            continue
         except AuthenticationError:
             logger.warning("Session expired during %s — re-authenticating", task)
             try:
                 session.reauthenticate()
             except CheckpointChallengeError as exc:
-                _exit_on_checkpoint(session, task, exc.url)
+                _handle_checkpoint(session, task, exc.url)
+                _authenticated = False  # Reset auth flag to retry on next task
+                continue
             except Exception:
                 logger.exception("Re-authentication failed for %s", task)
             # Either way, mark this task FAILED; reconcile will re-create a
