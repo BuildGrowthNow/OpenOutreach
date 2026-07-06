@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Icons } from "@/lib/types/components";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, Shield } from "lucide-react";
 import {
   type LinkedInCredentials,
   verifyLinkedInCredentials,
@@ -16,6 +16,7 @@ import {
 } from "@/lib/api/dashboard";
 import { useToast } from "@/components/ui/use-toast";
 import LinkedInCredentialForm from "./linkedin-credential-form";
+import VncViewer from "./vnc-viewer";
 import {
   Dialog,
   DialogContent,
@@ -120,6 +121,7 @@ export default function LinkedInCredentialCard({
   >(null);
   const [isLoadingLogs, setIsLoadingLogs] = useState(false);
   const [isLoadingHealth, setIsLoadingHealth] = useState(false);
+  const [showChallengeModal, setShowChallengeModal] = useState(false);
   const { toast } = useToast();
 
   const healthStatus: HealthStatusWithDetails =
@@ -393,24 +395,36 @@ export default function LinkedInCredentialCard({
           ) : null}
 
           <div className="mt-2 flex flex-wrap gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleVerify}
-              disabled={isVerifying || credential.status === "active"}
-            >
-              {credential.status === "active" ? (
-                <>
-                  <Icons.Check className="mr-2 h-3 w-3" />
-                  Verified
-                </>
-              ) : (
-                <>
-                  <Icons.RefreshCw className="mr-2 h-3 w-3" />
-                  Verify
-                </>
-              )}
-            </Button>
+            {credential.status === "locked" ? (
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => setShowChallengeModal(true)}
+                className="bg-amber-500 hover:bg-amber-600 text-zinc-900"
+              >
+                <Shield className="mr-2 h-3 w-3" />
+                Complete Challenge
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleVerify}
+                disabled={isVerifying}
+              >
+                {isVerifying ? (
+                  <>
+                    <Icons.RefreshCw className="mr-2 h-3 w-3 animate-spin" />
+                    Verifying...
+                  </>
+                ) : (
+                  <>
+                    <Icons.RefreshCw className="mr-2 h-3 w-3" />
+                    Verify
+                  </>
+                )}
+              </Button>
+            )}
 
             <Button
               variant="outline"
@@ -524,6 +538,40 @@ export default function LinkedInCredentialCard({
                   <p>No logs found for this credential</p>
                 </div>
               )}
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={showChallengeModal} onOpenChange={setShowChallengeModal}>
+          <DialogContent className="max-w-[95vw] h-[90vh] border border-zinc-800 bg-zinc-950 text-zinc-100 shadow-2xl p-0">
+            <DialogHeader className="p-6 pb-4 border-b border-zinc-800">
+              <DialogTitle className="flex items-center gap-2">
+                <Shield className="h-5 w-5 text-amber-500" />
+                Complete LinkedIn Challenge
+              </DialogTitle>
+              <DialogDescription>
+                LinkedIn requires additional verification. Complete the challenge below, then click Verify to confirm your credentials.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex-1 overflow-hidden">
+              <VncViewer vncUrl={`${window.location.protocol}//${window.location.hostname}:6080`} />
+            </div>
+            <div className="flex justify-end gap-2 p-4 border-t border-zinc-800">
+              <Button
+                variant="outline"
+                onClick={() => setShowChallengeModal(false)}
+              >
+                Close
+              </Button>
+              <Button
+                onClick={async () => {
+                  setShowChallengeModal(false);
+                  await handleVerify();
+                }}
+                disabled={isVerifying}
+              >
+                {isVerifying ? "Verifying..." : "Verify After Challenge"}
+              </Button>
             </div>
           </DialogContent>
         </Dialog>

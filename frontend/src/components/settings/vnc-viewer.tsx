@@ -19,7 +19,7 @@ interface VncViewerProps {
 
 export function VncViewer({ vncUrl }: VncViewerProps) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const [showViewer, setShowViewer] = useState(false);
+  const [showViewer, setShowViewer] = useState(true); // Auto-show when used in modal
   const [error, setError] = useState<string | null>(null);
 
   // Use the same hostname as the current page (works for localhost and production)
