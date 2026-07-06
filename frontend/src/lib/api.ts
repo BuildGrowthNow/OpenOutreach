@@ -249,6 +249,10 @@ export async function del<T>(path: string): Promise<ApiResponse<T>> {
   if (!response.ok) {
     throw new ApiError(response.status, await readErrorMessage(response));
   }
+  // Handle 204 No Content - no response body
+  if (response.status === 204) {
+    return handleResponse<T>({} as T);
+  }
   const data = await response.json();
   return handleResponse<T>(keysToCamelDeep(data));
 }

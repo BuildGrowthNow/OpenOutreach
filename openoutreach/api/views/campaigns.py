@@ -276,7 +276,7 @@ class CampaignDetailView(APIView):
         """Delete campaign."""
         campaign = self.get_object(pk)
         campaign.delete()
-        return Response({"success": True}, status=status.HTTP_204_NO_CONTENT)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class CampaignStatusView(APIView):

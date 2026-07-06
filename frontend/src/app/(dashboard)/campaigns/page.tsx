@@ -110,8 +110,13 @@ export default function CampaignsPage() {
       setError(null);
       const response = await updateCampaign(id, data);
       if (response.data) {
+        // Update the local campaigns list immediately
+        setCampaigns((prev) =>
+          prev.map((c) => (c.id === id ? response.data! : c))
+        );
         setEditingCampaign(null);
-        fetchCampaigns(); // Refresh list
+        // Also refresh to ensure consistency
+        fetchCampaigns();
       } else {
         setError(
           response.error || response.message || "Failed to update campaign",
@@ -126,14 +131,9 @@ export default function CampaignsPage() {
   const handleDeleteCampaign = async (campaign: Campaign) => {
     try {
       setError(null);
-      const response = await deleteCampaign(campaign.id);
-      if (response.data) {
-        fetchCampaigns(); // Refresh list
-      } else {
-        setError(
-          response.error || response.message || "Failed to delete campaign",
-        );
-      }
+      await deleteCampaign(campaign.id);
+      // Deletion successful (204 No Content) - refresh list
+      fetchCampaigns();
     } catch (error) {
       console.error("Error deleting campaign:", error);
       setError("An error occurred while deleting the campaign");
