@@ -13,13 +13,7 @@ from pydantic_ai.exceptions import ModelHTTPError
 
 from termcolor import colored
 
-from openoutreach.core.conf import (
-    ACTIVE_END_HOUR,
-    ACTIVE_START_HOUR,
-    ACTIVE_TIMEZONE,
-    CAMPAIGN_CONFIG,
-    ENABLE_ACTIVE_HOURS,
-)
+from openoutreach.core.conf import CAMPAIGN_CONFIG
 from openoutreach.linkedin.diagnostics import failure_diagnostics
 from linkedin_cli.exceptions import AuthenticationError, CheckpointChallengeError
 from openoutreach.linkedin.ml.qualifier import BayesianQualifier, KitQualifier
@@ -297,24 +291,94 @@ def _build_qualifiers(campaigns, cfg, kit_model=None):
 def seconds_until_active() -> float:
     """Return seconds to wait before the next active window, or 0 if active now.
 
-    Single contiguous daily window — no weekend skip.
+    Reads configuration from SiteConfig (enable_active_hours, active_start_hour,
+    active_end_hour, active_timezone, active_days). Active days filter by weekday.
     """
-    if not ENABLE_ACTIVE_HOURS:
+    from openoutreach.core.models import SiteConfig
+
+    config = SiteConfig.load()
+    if not config.enable_active_hours:
         return 0.0
-    tz = ZoneInfo(ACTIVE_TIMEZONE)
+
+    tz = ZoneInfo(config.active_timezone)
     now = timezone.localtime(timezone=tz)
 
-    if ACTIVE_START_HOUR <= now.hour < ACTIVE_END_HOUR:
+    # Parse active days (comma-separated: 1=Monday, 7=Sunday)
+    try:
+        active_days = set(int(d.strip()) for d in config.active_days.split(",") if d.strip())
+    except (ValueError, AttributeError):
+        active_days = {1, 2, 3, 4, 5}  # Default to weekdays
+
+    # Check if today is an active day (Python: 0=Monday, 6=Sunday; our format: 1=Monday, 7=Sunday)
+    current_weekday = now.weekday() + 1  # Convert to 1-7 format
+    if current_weekday not in active_days:
+        # Find next active day
+        days_ahead = 1
+        while days_ahead <= 7:
+            next_day = (current_weekday + days_ahead - 1) % 7 + 1
+            if next_day in active_days:
+                # Jump to start of next active day
+                candidate = timezone.make_aware(
+                    now.replace(
+                        hour=config.active_start_hour,
+                        minute=0,
+                        second=0,
+                        microsecond=0,
+                        tzinfo=None,
+                    )
+                    + timedelta(days=days_ahead),
+                    timezone=tz,
+                )
+                return (candidate - now).total_seconds()
+            days_ahead += 1
+        # All days inactive (shouldn't happen, but fallback to tomorrow)
+        candidate = timezone.make_aware(
+            now.replace(
+                hour=config.active_start_hour,
+                minute=0,
+                second=0,
+                microsecond=0,
+                tzinfo=None,
+            )
+            + timedelta(days=1),
+            timezone=tz,
+        )
+        return (candidate - now).total_seconds()
+
+    # Today is active - check if we're within hours
+    if config.active_start_hour <= now.hour < config.active_end_hour:
         return 0.0
 
+    # Outside active hours today - wait until start hour
     candidate = timezone.make_aware(
         now.replace(
-            hour=ACTIVE_START_HOUR, minute=0, second=0, microsecond=0, tzinfo=None
+            hour=config.active_start_hour,
+            minute=0,
+            second=0,
+            microsecond=0,
+            tzinfo=None,
         ),
         timezone=tz,
     )
     if candidate <= now:
-        candidate += timedelta(days=1)
+        # Past today's window - jump to next active day
+        days_ahead = 1
+        while days_ahead <= 7:
+            next_day = (current_weekday + days_ahead - 1) % 7 + 1
+            if next_day in active_days:
+                candidate = timezone.make_aware(
+                    now.replace(
+                        hour=config.active_start_hour,
+                        minute=0,
+                        second=0,
+                        microsecond=0,
+                        tzinfo=None,
+                    )
+                    + timedelta(days=days_ahead),
+                    timezone=tz,
+                )
+                break
+            days_ahead += 1
     return (candidate - now).total_seconds()
 
 

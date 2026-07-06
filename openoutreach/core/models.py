@@ -78,6 +78,23 @@ class SiteConfig(models.Model):
     contacts_api_token = models.CharField(max_length=500, blank=True, default="")
     contacts_api_url = models.CharField(max_length=500, blank=True, default="")
 
+    # Active hours configuration (when daemon executes tasks)
+    enable_active_hours: models.BooleanField = models.BooleanField(default=True)  # type: ignore[var-annotated]
+    active_start_hour: models.PositiveSmallIntegerField = models.PositiveSmallIntegerField(
+        default=9, help_text="Start hour (0-23, inclusive)"
+    )  # type: ignore[var-annotated]
+    active_end_hour: models.PositiveSmallIntegerField = models.PositiveSmallIntegerField(
+        default=19, help_text="End hour (0-23, exclusive)"
+    )  # type: ignore[var-annotated]
+    active_timezone: models.CharField = models.CharField(
+        max_length=100, default="UTC", help_text="IANA timezone (e.g., America/New_York)"
+    )  # type: ignore[var-annotated]
+    active_days: models.CharField = models.CharField(
+        max_length=50,
+        default="1,2,3,4,5",
+        help_text="Active weekdays as comma-separated integers (1=Monday, 7=Sunday)",
+    )  # type: ignore[var-annotated]
+
     class Meta:
         verbose_name = "Site Configuration"
         verbose_name_plural = "Site Configuration"

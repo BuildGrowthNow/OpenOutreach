@@ -62,6 +62,13 @@ class SettingsView(APIView):
                     "velocity": config.velocity,
                     "cooldown_minutes": config.cooldown_minutes,
                 },
+                "active_hours": {
+                    "enable_active_hours": config.enable_active_hours,
+                    "active_start_hour": config.active_start_hour,
+                    "active_end_hour": config.active_end_hour,
+                    "active_timezone": config.active_timezone,
+                    "active_days": config.active_days,
+                },
                 "linkedin_profile": {
                     "username": config.linkedin_username,
                     "campaign": config.linkedin_campaign,
@@ -109,6 +116,24 @@ class SettingsView(APIView):
             config.velocity = rate_limits["velocity"]
         if "cooldown_minutes" in rate_limits:
             config.cooldown_minutes = rate_limits["cooldown_minutes"]
+
+        # Update active hours if provided
+        active_hours = data.get("active_hours", {})
+        if "enable_active_hours" in active_hours:
+            config.enable_active_hours = active_hours["enable_active_hours"]
+        if "active_start_hour" in active_hours:
+            config.active_start_hour = active_hours["active_start_hour"]
+        if "active_end_hour" in active_hours:
+            config.active_end_hour = active_hours["active_end_hour"]
+        if "active_timezone" in active_hours:
+            config.active_timezone = active_hours["active_timezone"]
+        if "active_days" in active_hours:
+            # Accept either array or comma-separated string
+            days = active_hours["active_days"]
+            if isinstance(days, list):
+                config.active_days = ",".join(str(d) for d in days)
+            else:
+                config.active_days = str(days)
 
         config.save()
 
@@ -168,6 +193,13 @@ class SettingsView(APIView):
                     "daily_follow_up_limit": config.daily_follow_up_limit,
                     "velocity": config.velocity,
                     "cooldown_minutes": config.cooldown_minutes,
+                },
+                "active_hours": {
+                    "enable_active_hours": config.enable_active_hours,
+                    "active_start_hour": config.active_start_hour,
+                    "active_end_hour": config.active_end_hour,
+                    "active_timezone": config.active_timezone,
+                    "active_days": config.active_days,
                 },
                 "linkedin_profile": {
                     "username": config.linkedin_username,
