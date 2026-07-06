@@ -44,12 +44,22 @@ const WEEKDAYS = [
 
 export default function ActiveHoursForm({ settings, onUpdate }: ActiveHoursFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [enabled, setEnabled] = useState(settings.active_hours.enable_active_hours);
-  const [startHour, setStartHour] = useState(settings.active_hours.active_start_hour);
-  const [endHour, setEndHour] = useState(settings.active_hours.active_end_hour);
-  const [timezone, setTimezone] = useState(settings.active_hours.active_timezone);
+  
+  // Provide default values if active_hours is undefined
+  const activeHours = settings.active_hours || {
+    enable_active_hours: false,
+    active_start_hour: 9,
+    active_end_hour: 17,
+    active_timezone: "UTC",
+    active_days: "1,2,3,4,5",
+  };
+  
+  const [enabled, setEnabled] = useState(activeHours.enable_active_hours);
+  const [startHour, setStartHour] = useState(activeHours.active_start_hour);
+  const [endHour, setEndHour] = useState(activeHours.active_end_hour);
+  const [timezone, setTimezone] = useState(activeHours.active_timezone);
   const [activeDays, setActiveDays] = useState<number[]>(
-    settings.active_hours.active_days.split(",").map((d) => parseInt(d.trim())).filter((d) => !isNaN(d))
+    activeHours.active_days.split(",").map((d) => parseInt(d.trim())).filter((d) => !isNaN(d))
   );
   const { toast } = useToast();
 

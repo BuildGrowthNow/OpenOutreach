@@ -633,7 +633,7 @@ export interface Settings {
     velocity: number;
     cooldown_minutes: number;
   };
-  active_hours: {
+  active_hours?: {
     enable_active_hours: boolean;
     active_start_hour: number;
     active_end_hour: number;

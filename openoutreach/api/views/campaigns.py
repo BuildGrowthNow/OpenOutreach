@@ -38,8 +38,8 @@ class CampaignListView(APIView):
         # Apply filters
         status_param = request.query_params.get("status")
         if status_param:
-            # Filter by deal status
-            campaigns = campaigns.filter(deals__state=status_param).distinct()
+            # Filter by campaign status (not deal state)
+            campaigns = campaigns.filter(status=status_param)
 
         page = request.query_params.get("page")
         limit = request.query_params.get("limit")

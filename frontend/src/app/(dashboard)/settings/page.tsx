@@ -21,7 +21,6 @@ import {
   type Settings,
 } from "@/lib/api/dashboard";
 import { LinkedInConnectionTab } from "@/components/settings/linkedin-connection-tab";
-import ProfileForm from "@/components/settings/profile-form";
 import RateLimitForm from "@/components/settings/rate-limit-form";
 import LlmSettingsForm from "@/components/settings/llm-settings-form";
 import ActiveHoursForm from "@/components/settings/active-hours-form";
@@ -196,14 +195,10 @@ export default function SettingsPage() {
       </div>
 
       <Tabs defaultValue="linkedin" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2 gap-2 rounded-xl bg-muted p-1 sm:grid-cols-5">
+        <TabsList className="grid w-full grid-cols-2 gap-2 rounded-xl bg-muted p-1 sm:grid-cols-4">
           <TabsTrigger value="linkedin" className="py-2">
             <Icons.Link className="h-4 w-4" />
             LinkedIn Connection
-          </TabsTrigger>
-          <TabsTrigger value="profile" className="py-2">
-            <Icons.User className="h-4 w-4" />
-            Profile
           </TabsTrigger>
           <TabsTrigger value="rate-limits" className="py-2">
             <Icons.Shield className="h-4 w-4" />
@@ -221,54 +216,6 @@ export default function SettingsPage() {
 
         <TabsContent value="linkedin" className="space-y-6">
           <LinkedInConnectionTab onSetupComplete={handleSettingsUpdate} />
-        </TabsContent>
-
-        <TabsContent value="profile" className="space-y-6">
-          <div className="grid gap-6 lg:grid-cols-3">
-            <Card className="lg:col-span-2">
-              <CardHeader>
-                <CardTitle>Profile settings</CardTitle>
-                <CardDescription>
-                  Set the default LinkedIn username and campaign label used by
-                  the app.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ProfileForm
-                  initialData={settings.linkedin_profile}
-                  onSuccess={handleSettingsUpdate}
-                />
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Current defaults</CardTitle>
-                <CardDescription>
-                  What the app will show and reuse in profile-aware settings.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <p className="text-sm font-medium">LinkedIn username</p>
-                  <p className="text-sm text-muted-foreground">
-                    @{settings.linkedin_profile?.username || "not set"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium">Campaign name</p>
-                  <p className="text-sm text-muted-foreground">
-                    {settings.linkedin_profile?.campaign || "Not configured"}
-                  </p>
-                </div>
-                <div className="rounded-lg border p-4 text-sm text-muted-foreground">
-                  Keep these defaults aligned with your real sender identity so
-                  AI-generated follow-ups stay grounded in the right account
-                  context.
-                </div>
-              </CardContent>
-            </Card>
-          </div>
         </TabsContent>
 
         <TabsContent value="rate-limits" className="space-y-6">
