@@ -339,14 +339,14 @@ def run_daemon(session):
 
     campaigns = session.campaigns
     if not campaigns:
-        logger.error("No campaigns found — cannot start daemon")
-        return
-
-    logger.info(
-        colored("Daemon started", "green", attrs=["bold"])
-        + " — %d campaigns, task queue worker",
-        len(campaigns),
-    )
+        logger.warning("No campaigns found — daemon will idle until a campaign is created")
+        # Continue running in idle mode - campaigns can be created via frontend
+    else:
+        logger.info(
+            colored("Daemon started", "green", attrs=["bold"])
+            + " — %d campaigns, task queue worker",
+            len(campaigns),
+        )
 
     # cloud_promo = _CloudPromoRotator(interval=60)  # tmp disabled — see below
     heartbeat = Heartbeat()

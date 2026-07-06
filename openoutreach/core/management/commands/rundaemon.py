@@ -214,16 +214,18 @@ class Command(BaseCommand):
         session = get_or_create_session(profile)
 
         if not session.campaigns:
-            logger.error("No campaigns found for this user.")
-            sys.exit(1)
-        campaign = (
-            next(
-                (c for c in session.campaigns if not c.is_freemium),
-                None,
+            logger.warning("No campaigns found for this user. Daemon will idle until a campaign is created.")
+            # Don't exit - let the daemon start and wait for campaigns to be created via frontend
+            session.campaign = None
+        else:
+            campaign = (
+                next(
+                    (c for c in session.campaigns if not c.is_freemium),
+                    None,
+                )
+                or session.campaigns[0]
             )
-            or session.campaigns[0]
-        )
-        session.campaign = campaign
+            session.campaign = campaign
 
         return session
 
