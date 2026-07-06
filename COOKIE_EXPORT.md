@@ -1,14 +1,31 @@
 # How to Export LinkedIn Cookies for OpenOutreach
 
-The daemon needs the **full cookie set** from an authenticated LinkedIn session to work with the Voyager API, not just the `li_at` cookie.
+⚠️ **Important**: The daemon needs the **full cookie set** from an authenticated LinkedIn session to work with the Voyager API, not just the `li_at` cookie.
 
-## Option 1: Browser Console (Recommended)
+LinkedIn's Voyager API requires multiple cookies including `li_at`, `JSESSIONID`, CSRF tokens, and tracking cookies. Uploading only `li_at` allows the browser to load pages but API calls return **401 Unauthorized**.
 
-1. Log into LinkedIn in your browser
-2. Navigate to https://www.linkedin.com/feed/
-3. Open DevTools (F12)
-4. Go to the Console tab
-5. Paste this script and press Enter:
+## Option 1: Browser Extension (Recommended)
+
+Use a trusted cookie exporter to get ALL LinkedIn cookies as JSON:
+
+1. Install one of these Chrome extensions:
+   - [**EditThisCookie**](https://chromewebstore.google.com/detail/editthiscookie/fngmhnnpilhplaeedifhccceomclgfbg) (most popular, 3M+ users)
+   - [**Cookie-Editor**](https://chromewebstore.google.com/detail/cookie-editor/hlkenndednhfkekhgcdicdfddnkalmdm) (open source)
+
+2. Log into LinkedIn at https://www.linkedin.com/feed/
+3. Click the extension icon in your browser toolbar
+4. Click "Export" → "JSON" (or similar button depending on extension)
+5. Go to Settings → LinkedIn Connection in OpenOutreach
+6. Paste the exported JSON into the "Full Cookie JSON" field
+7. Click "Add Credentials"
+
+## Option 2: Browser Console Script
+
+No extension needed, but limited to non-HttpOnly cookies:
+
+1. Log into LinkedIn at https://www.linkedin.com/feed/
+2. Open DevTools (F12) → Console tab
+3. Paste this script and press Enter:
 
 ```javascript
 copy(JSON.stringify({
@@ -26,28 +43,16 @@ copy(JSON.stringify({
     };
   })
 }, null, 2));
-console.log('Copied! Paste this JSON into the cookie field in Settings → LinkedIn Connection');
+console.log('✓ Copied to clipboard! Paste this into the cookie field in Settings → LinkedIn Connection');
 ```
 
-6. The full cookie JSON is now in your clipboard
-7. Go to Settings → LinkedIn Connection in OpenOutreach
-8. Paste the entire JSON into the "Optional Cookie" field
-9. Click "Add Credentials"
+4. The JSON is now in your clipboard
+5. Go to Settings → LinkedIn Connection in OpenOutreach
+6. Paste the JSON into the "Full Cookie JSON" field
+7. Click "Add Credentials"
 
-## Option 2: Browser Extension
+**Note**: This method misses HttpOnly cookies. Use Option 1 (browser extension) for the most complete export.
 
-Use a cookie export extension like:
-- **EditThisCookie** (Chrome/Edge): Export cookies for linkedin.com as JSON
-- **Cookie-Editor** (Firefox): Export all cookies for linkedin.com
+## Security Note
 
-Then paste the exported JSON into the OpenOutreach cookie field.
-
-## Why Just `li_at` Doesn't Work
-
-LinkedIn's Voyager API requires multiple cookies including:
-- `li_at` (authentication)
-- `JSESSIONID` (session management)
-- CSRF tokens
-- Tracking cookies
-
-Uploading only `li_at` allows the browser to load pages but API calls return 401 Unauthorized.
+Browser extensions can access all site data. Only install extensions from trusted publishers with good reviews. Both recommended extensions are well-established (millions of users / open source).

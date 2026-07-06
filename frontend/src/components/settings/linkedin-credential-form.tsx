@@ -70,7 +70,7 @@ export default function LinkedInCredentialForm({
   const uploadCookie = async (profileId: number, cookieData: string) => {
     const data = await post<{ success?: boolean; message?: string }>(
       `/api/linkedin-profiles/${profileId}/cookies/`,
-      { cookieData },
+      { cookie_data: cookieData },
     );
     return data.data?.message || "Cookie saved";
   };
@@ -356,13 +356,23 @@ export default function LinkedInCredentialForm({
                     {showOptionalCookie ? (
                       <div className="mt-2 border-t border-zinc-800/80 px-3 pb-3 pt-4">
                         <div className="max-h-64 space-y-4 overflow-y-auto pr-2">
+                          <div className="rounded-lg border border-amber-800/80 bg-amber-950/60 p-4">
+                            <p className="text-sm font-medium text-amber-100">
+                              ⚠️ Important: Upload ALL cookies, not just li_at
+                            </p>
+                            <p className="mt-1 text-sm text-amber-200/80">
+                              LinkedIn's Voyager API requires the full cookie set (including JSESSIONID, CSRF tokens, etc.).
+                              Uploading only <code className="rounded bg-amber-900/40 px-1 py-0.5">li_at</code> will let the browser load pages but API calls will return 401 Unauthorized.
+                            </p>
+                          </div>
+
                           <div className="rounded-lg border border-zinc-800/80 bg-zinc-950/60 p-4">
                             <p className="text-sm font-medium text-zinc-100">
-                              You can leave this empty
+                              When to use cookies
                             </p>
                             <p className="mt-1 text-sm text-zinc-400">
                               Most users should start with only LinkedIn email
-                              and password. Use a cookie only if LinkedIn blocks
+                              and password. Use cookies only if LinkedIn blocks
                               the normal login flow, asks for repeated
                               challenges, or you want to reuse an existing
                               logged-in browser session.
@@ -372,68 +382,124 @@ export default function LinkedInCredentialForm({
                           <div className="space-y-3 rounded-lg border border-zinc-800/80 bg-zinc-950/60 p-4">
                             <div>
                               <h4 className="text-sm font-medium text-zinc-100">
-                                Recommended method: browser DevTools
+                                Method 1: Browser Extension (Recommended)
                               </h4>
                               <p className="mt-1 text-sm text-zinc-400">
-                                No extension is required. This is the safest
-                                manual path.
+                                Use a trusted cookie exporter to get ALL LinkedIn cookies as JSON.
                               </p>
                             </div>
                             <ol className="list-decimal space-y-2 pl-5 text-sm text-zinc-300">
                               <li>
-                                Log into LinkedIn in the same browser you
-                                normally use.
+                                Install one of these Chrome extensions:
+                                <ul className="ml-4 mt-1 list-disc space-y-1 text-zinc-400">
+                                  <li>
+                                    <a
+                                      href="https://chromewebstore.google.com/detail/editthiscookie/fngmhnnpilhplaeedifhccceomclgfbg"
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="underline hover:text-zinc-200"
+                                    >
+                                      EditThisCookie
+                                    </a> (most popular, 3M+ users)
+                                  </li>
+                                  <li>
+                                    <a
+                                      href="https://chromewebstore.google.com/detail/cookie-editor/hlkenndednhfkekhgcdicdfddnkalmdm"
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="underline hover:text-zinc-200"
+                                    >
+                                      Cookie-Editor
+                                    </a> (open source)
+                                  </li>
+                                </ul>
                               </li>
                               <li>
-                                Open LinkedIn feed or any logged-in LinkedIn
-                                page.
+                                Log into LinkedIn at{" "}
+                                <a
+                                  href="https://www.linkedin.com/feed/"
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="underline hover:text-zinc-200"
+                                >
+                                  linkedin.com/feed/
+                                </a>
                               </li>
                               <li>
-                                Open browser developer tools:
-                                <span className="text-zinc-400">
-                                  {" "}
-                                  Chrome/Edge: `F12` or `Ctrl+Shift+I`. Firefox:
-                                  `F12` or `Ctrl+Shift+I`.
-                                </span>
+                                Click the extension icon in your browser toolbar
                               </li>
                               <li>
-                                Go to the storage view for cookies:
-                                <span className="text-zinc-400">
-                                  {" "}
-                                  Chrome/Edge: `Application` → `Storage` →
-                                  `Cookies` → `https://www.linkedin.com`.
-                                  Firefox: `Storage` → `Cookies` →
-                                  `https://www.linkedin.com`.
-                                </span>
+                                Click "Export" → "JSON" (or similar button depending on extension)
                               </li>
-                              <li>Find the cookie named `li_at`.</li>
                               <li>
-                                Copy only the cookie value and paste it here.
+                                Paste the exported JSON below
                               </li>
                             </ol>
                           </div>
 
                           <div className="space-y-3 rounded-lg border border-zinc-800/80 bg-zinc-950/60 p-4">
-                            <h4 className="text-sm font-medium text-zinc-100">
-                              About the browser console
-                            </h4>
-                            <p className="text-sm text-zinc-400">
-                              The LinkedIn `li_at` cookie is `HttpOnly`, so it
-                              is not reliably available through
-                              `document.cookie` in the browser console. Use
-                              DevTools cookies instead.
+                            <div>
+                              <h4 className="text-sm font-medium text-zinc-100">
+                                Method 2: Browser Console Script
+                              </h4>
+                              <p className="mt-1 text-sm text-zinc-400">
+                                No extension needed, but limited to non-HttpOnly cookies.
+                              </p>
+                            </div>
+                            <ol className="list-decimal space-y-2 pl-5 text-sm text-zinc-300">
+                              <li>
+                                Log into LinkedIn at{" "}
+                                <a
+                                  href="https://www.linkedin.com/feed/"
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="underline hover:text-zinc-200"
+                                >
+                                  linkedin.com/feed/
+                                </a>
+                              </li>
+                              <li>
+                                Open DevTools (F12) → Console tab
+                              </li>
+                              <li>
+                                Paste this script and press Enter:
+                                <div className="mt-2 rounded border border-zinc-700 bg-zinc-900 p-3">
+                                  <code className="block whitespace-pre text-xs text-zinc-300">
+{`copy(JSON.stringify({
+  cookies: document.cookie.split('; ').map(c => {
+    const [name, value] = c.split('=');
+    return {
+      name,
+      value,
+      domain: '.linkedin.com',
+      path: '/',
+      expires: -1,
+      httpOnly: false,
+      secure: true,
+      sameSite: 'Lax'
+    };
+  })
+}, null, 2));
+console.log('✓ Copied to clipboard!');`}
+                                  </code>
+                                </div>
+                              </li>
+                              <li>
+                                The JSON is now in your clipboard — paste it below
+                              </li>
+                            </ol>
+                            <p className="mt-2 text-xs text-zinc-500">
+                              Note: This misses HttpOnly cookies. Use Method 1 for the most complete export.
                             </p>
                           </div>
 
                           <div className="space-y-3 rounded-lg border border-zinc-800/80 bg-zinc-950/60 p-4">
                             <h4 className="text-sm font-medium text-zinc-100">
-                              About extensions
+                              ⚠️ Security Note
                             </h4>
                             <p className="text-sm text-zinc-400">
-                              You do not need an extension. If you choose to use
-                              one, only use a tool you fully trust because
-                              browser extensions can access sensitive session
-                              data.
+                              Browser extensions can access all site data. Only install extensions from trusted publishers with good reviews.
+                              Both recommended extensions are well-established (millions of users / open source).
                             </p>
                           </div>
 
@@ -442,20 +508,18 @@ export default function LinkedInCredentialForm({
                             name="cookie_data"
                             render={({ field }) => (
                               <FormItem>
-                                <FormLabel>Optional Cookie</FormLabel>
+                                <FormLabel>Full Cookie JSON</FormLabel>
                                 <FormControl>
                                   <Textarea
-                                    placeholder="Paste li_at cookie value or full Playwright storage_state JSON"
+                                    placeholder='Paste the full cookie JSON here, e.g.: {"cookies": [{"name": "li_at", "value": "...", ...}, {...}]}'
                                     {...field}
-                                    rows={5}
-                                    className="border-zinc-800 bg-zinc-950/70"
+                                    rows={6}
+                                    className="border-zinc-800 bg-zinc-950/70 font-mono text-xs"
                                   />
                                 </FormControl>
                                 <FormDescription>
-                                  You can paste either the raw `li_at` value or
-                                  a full Playwright `storage_state` JSON blob.
-                                  If provided, it is stored encrypted after the
-                                  credential is linked to your LinkedIn profile.
+                                  Paste the complete JSON export from a browser extension or the console script above.
+                                  It will be stored encrypted and used to authenticate API calls.
                                 </FormDescription>
                                 <FormMessage />
                               </FormItem>
@@ -574,10 +638,15 @@ export default function LinkedInCredentialForm({
                       </span>
                     </li>
                     <li className="flex items-start">
+                      <Icons.AlertCircle className="mr-2 mt-0.5 h-3 w-3 text-amber-400/80" />
+                      <span>
+                        If uploading cookies, export <strong>ALL</strong> cookies (not just li_at) — the Voyager API needs the full set.
+                      </span>
+                    </li>
+                    <li className="flex items-start">
                       <Icons.Info className="mr-2 mt-0.5 h-3 w-3 text-blue-400/80" />
                       <span>
-                        Add a cookie only if you already have a valid LinkedIn
-                        session to reuse.
+                        Recommended: use EditThisCookie or Cookie-Editor extension for the most complete export.
                       </span>
                     </li>
                   </ul>
