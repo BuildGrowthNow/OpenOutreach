@@ -144,7 +144,7 @@ class LinkedInProfileCookieView(APIView):
             profile.cookie_data = storage_state
             profile.save(update_fields=["cookie_data_encrypted"])
             return Response(
-                {"success": True, "message": "Cookie saved — daemon will verify on next cycle"},
+                {"success": True, "message": "Cookie saved successfully. The session will activate within 30 seconds."},
                 status=status.HTTP_200_OK,
             )
         except Exception as exc:

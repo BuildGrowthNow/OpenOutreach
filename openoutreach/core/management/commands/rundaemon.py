@@ -20,6 +20,7 @@ class Command(BaseCommand):
         self._ensure_onboarded()
         session = self._create_session()
         self._ensure_authenticated(session)
+        self._sync_credential_profile(session)
 
         try:
             self._ensure_newsletter(session)
@@ -29,6 +30,26 @@ class Command(BaseCommand):
         from openoutreach.core.daemon import run_daemon
 
         run_daemon(session)
+
+    def _sync_credential_profile(self, session):
+        """Discover the LinkedIn username and sync it to the credential card."""
+        try:
+            profile_data = session.self_profile
+            public_id = profile_data.get("public_identifier", "")
+            if not public_id:
+                return
+
+            from openoutreach.crm.models import LinkedInCredentials
+
+            cred = LinkedInCredentials.objects.filter(
+                linkedin_profile=session.linkedin_profile
+            ).first()
+            if cred and cred.username != public_id:
+                cred.username = public_id
+                cred.save(update_fields=["username"])
+                logger.info("Synced credential username: %s", public_id)
+        except Exception as exc:
+            logger.debug("Could not sync credential profile: %s", exc)
 
     def _ensure_authenticated(self, session):
         """Ensure the browser session is authenticated.

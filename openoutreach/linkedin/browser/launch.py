@@ -22,6 +22,46 @@ logger = logging.getLogger(__name__)
 LINKEDIN_FEED_URL = "https://www.linkedin.com/feed/"
 
 
+def _mark_credential_verified(session) -> None:
+    """Update the linked credential after successful browser session start."""
+    try:
+        from django.utils import timezone
+
+        profile = session.linkedin_profile
+        cred = getattr(profile, "credentials", None)
+        if cred is None:
+            try:
+                from openoutreach.crm.models import LinkedInCredentials
+                cred = LinkedInCredentials.objects.filter(linkedin_profile=profile).first()
+            except Exception:
+                return
+
+        if cred is None:
+            return
+
+        update_fields = []
+        cred.last_verified = timezone.now()
+        update_fields.append("last_verified")
+
+        if cred.status != "active":
+            cred.status = "active"
+            update_fields.append("status")
+
+        cred.save(update_fields=update_fields)
+
+        try:
+            from openoutreach.crm.models import LinkedInCredentialLog
+            LinkedInCredentialLog.objects.create(
+                credentials=cred,
+                action=LinkedInCredentialLog.ACTION_VERIFIED,
+                details={"verified_by": "daemon", "method": "cookie_session"},
+            )
+        except Exception:
+            pass
+    except Exception:
+        pass
+
+
 def _save_cookies(session: Any) -> None:
     """Persist Playwright storage state (cookies) to the DB."""
     state = session.context.storage_state()
@@ -67,3 +107,4 @@ def start_browser_session(session: Any) -> None:
     # hanging the daemon for the duration of the browser timeout.
     session.page.wait_for_load_state("domcontentloaded")
     logger.info(colored("Browser ready", "green", attrs=["bold"]))
+    _mark_credential_verified(session)
