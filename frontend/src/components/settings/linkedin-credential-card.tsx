@@ -144,7 +144,7 @@ export default function LinkedInCredentialCard({
       const data = response.data as {
         success?: boolean;
         error?: string;
-        details?: { error_type?: string; message?: string };
+        details?: { errorType?: string; message?: string };
       } | undefined;
 
       if (data?.success) {
@@ -155,7 +155,7 @@ export default function LinkedInCredentialCard({
         onRefresh();
         setHealthData(null);
         setShowHealthDetails(false);
-      } else if (data?.details?.error_type === "awaiting_challenge") {
+      } else if (data?.details?.errorType === "awaiting_challenge") {
         setShowChallengeModal(true);
       } else {
         toast({
@@ -586,12 +586,12 @@ export default function LinkedInCredentialCard({
                     setIsVerifying(true);
                     try {
                       const resp = await confirmLinkedInCredentials(credential.id);
-                      const data = resp.data as { success?: boolean; error?: string; details?: { error_type?: string } } | undefined;
+                      const data = resp.data as { success?: boolean; error?: string; details?: { errorType?: string } } | undefined;
                       if (data?.success) {
                         setShowChallengeModal(false);
                         toast({ title: "Success", description: "Credentials verified successfully" });
                         onRefresh();
-                      } else if (data?.details?.error_type === "challenge_incomplete") {
+                      } else if (data?.details?.errorType === "challenge_incomplete") {
                         toast({ title: "Not done yet", description: "Complete the challenge first, then click Confirm again." });
                       } else {
                         setShowChallengeModal(false);

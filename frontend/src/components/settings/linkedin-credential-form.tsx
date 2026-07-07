@@ -108,7 +108,7 @@ export default function LinkedInCredentialForm({
       const verifyData = verifyResp.data as {
         success?: boolean;
         error?: string;
-        details?: { error_type?: string; message?: string };
+        details?: { errorType?: string; message?: string };
         credentials?: LinkedInCredentials;
       } | undefined;
 
@@ -123,7 +123,7 @@ export default function LinkedInCredentialForm({
       }
 
       // 3. Check if challenge — open VNC modal
-      const errorType = verifyData?.details?.error_type;
+      const errorType = verifyData?.details?.errorType;
       if (errorType === "awaiting_challenge") {
         setChallengeCredentialId(credentialId);
         setShowChallengeModal(true);
@@ -168,7 +168,7 @@ export default function LinkedInCredentialForm({
       const data = resp.data as {
         success?: boolean;
         error?: string;
-        details?: { error_type?: string; message?: string };
+        details?: { errorType?: string; message?: string };
       } | undefined;
 
       if (data?.success) {
@@ -180,7 +180,7 @@ export default function LinkedInCredentialForm({
         setSuccess(true);
         if (onSuccess) onSuccess();
       } else {
-        const errType = data?.details?.error_type;
+        const errType = data?.details?.errorType;
         if (errType === "challenge_incomplete") {
           toast({
             title: "Not done yet",
