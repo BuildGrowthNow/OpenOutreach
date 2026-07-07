@@ -22,12 +22,12 @@ def lead_exists(url: str) -> bool:
 
 
 def create_enriched_lead(session, url: str, profile: Dict[str, Any]) -> Optional[int]:
-    """Create Lead with full profile data and embedding.
+    """Create Lead with full profile data and embedding, and link to campaign.
 
     Returns lead PK or None if exists.
-    Does NOT create Deal — that comes at qualification.
+    Creates a Deal to link the lead to the campaign immediately upon discovery.
     """
-    from openoutreach.crm.models import Lead
+    from openoutreach.crm.models import Lead, Deal, DealState
 
     # Use canonical public_identifier from Voyager response when available.
     canonical_pid = profile.get("public_identifier")
@@ -39,8 +39,22 @@ def create_enriched_lead(session, url: str, profile: Dict[str, Any]) -> Optional
     urn = profile.get("urn") or None
 
     with transaction.atomic():
-        if Lead.objects.filter(public_identifier=public_id).exists():
-            return None
+        # Check if lead exists for this campaign
+        existing_lead = Lead.objects.filter(public_identifier=public_id).first()
+        if existing_lead:
+            # Lead exists - check if already linked to this campaign
+            if Deal.objects.filter(lead=existing_lead, campaign=session.campaign).exists():
+                return None  # Already discovered by this campaign
+            # Lead exists but not in this campaign - create deal to link them
+            Deal.objects.create(
+                lead=existing_lead,
+                campaign=session.campaign,
+                state=DealState.QUALIFIED,  # Start as QUALIFIED, awaiting LLM decision
+                reason="Discovered via search"
+            )
+            logger.debug("Linked existing lead %s to campaign %s", public_id, session.campaign)
+            return existing_lead.pk
+
         if urn and Lead.objects.filter(urn=urn).exists():
             logger.info(
                 "Lead with URN %s already exists — skipping duplicate %s",
@@ -48,8 +62,18 @@ def create_enriched_lead(session, url: str, profile: Dict[str, Any]) -> Optional
                 public_id,
             )
             return None
+
+        # Create new lead
         lead = Lead.objects.create(linkedin_url=clean_url, public_identifier=public_id)
         _cache_urn_from_profile(lead, profile)
+
+        # Create Deal to link lead to campaign immediately
+        Deal.objects.create(
+            lead=lead,
+            campaign=session.campaign,
+            state=DealState.QUALIFIED,  # Start as QUALIFIED, awaiting LLM decision
+            reason="Discovered via search"
+        )
 
     lead.embed_from_profile(profile)
 
@@ -74,22 +98,31 @@ def create_enriched_lead(session, url: str, profile: Dict[str, Any]) -> Optional
 
 @transaction.atomic
 def promote_lead_to_deal(session, public_id: str, reason: str = ""):
-    """Create a QUALIFIED Deal for a Lead.
+    """Update or create a QUALIFIED Deal for a Lead after LLM approval.
 
+    If a Deal already exists from discovery, it's updated with the qualification reason.
     Returns the Deal.
     """
-    from openoutreach.crm.models import Lead, Deal
+    from openoutreach.crm.models import Lead, Deal, DealState
 
     lead = Lead.objects.filter(public_identifier=public_id).first()
     if not lead:
         raise ValueError(f"No Lead for {public_id}")
 
-    deal = Deal.objects.create(
-        lead=lead,
-        campaign=session.campaign,
-        state=DealState.QUALIFIED,
-        reason=reason,
-    )
+    # Check if deal already exists from discovery
+    deal = Deal.objects.filter(lead=lead, campaign=session.campaign).first()
+    if deal:
+        # Update existing deal with qualification reason
+        deal.reason = reason
+        deal.save(update_fields=["reason", "update_date"])
+    else:
+        # Create new deal (shouldn't happen if discovery creates them, but keep as fallback)
+        deal = Deal.objects.create(
+            lead=lead,
+            campaign=session.campaign,
+            state=DealState.QUALIFIED,
+            reason=reason,
+        )
 
     from termcolor import colored
 
@@ -100,16 +133,25 @@ def promote_lead_to_deal(session, public_id: str, reason: str = ""):
 def get_leads_for_qualification(session) -> list:
     """Leads eligible for qualification in the current campaign.
 
-    Returns profile dicts for leads that are not permanently disqualified
-    and have no Deal in this campaign.
+    Returns profile dicts for leads that:
+    - Are not permanently disqualified
+    - Have a Deal in this campaign (created at discovery)
+    - But haven't been evaluated yet (reason is still "Discovered via search")
     """
-    from openoutreach.crm.models import Lead
+    from openoutreach.crm.models import Lead, Deal
 
-    leads = Lead.objects.filter(
-        disqualified=False,
-    ).exclude(
-        deals__campaign=session.campaign,
-    )
+    # Get Deals that were discovered but not yet qualified by LLM
+    unevaluated_deals = Deal.objects.filter(
+        campaign=session.campaign,
+        state=DealState.QUALIFIED,
+        reason="Discovered via search"
+    ).select_related("lead")
+
+    # Get the leads from those deals, filtering out disqualified ones
+    leads = []
+    for deal in unevaluated_deals:
+        if not deal.lead.disqualified:
+            leads.append(deal.lead)
 
     return [lead.to_profile_dict() for lead in leads]
 
