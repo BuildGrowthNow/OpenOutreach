@@ -303,68 +303,56 @@ class LinkedInCredentials(models.Model):
             When error_type is ``"awaiting_challenge"`` the browser is still
             running and the session is usable for ``confirm_challenge``.
         """
-        from linkedin_cli.browser.login import launch_browser  # type: ignore[import-untyped]
+        from linkedin_cli.browser.login import launch_browser, submit_login_form  # type: ignore[import-untyped]
+        from linkedin_cli.page_state import classify_page, PageState  # type: ignore[import-untyped]
 
         logger.info(
             "Starting LinkedIn credential verification for %s", self.get_public_email()
         )
 
         try:
-            # Launch browser and navigate to login
+            # Launch browser
             session.page, session.context, session.browser, session.playwright = launch_browser()
-            session.page.goto("https://www.linkedin.com/login", timeout=30000)
 
-            # Enter credentials
-            email_input = session.page.locator("input#username")
-            email_input.wait_for(state="visible", timeout=10000)
-            email_input.fill(self.get_email())
+            # Stamp credentials on session so submit_login_form can read them
+            session.username = self.get_email()
+            session.password = self.get_password()
 
-            password_input = session.page.locator("input#password")
-            password_input.wait_for(state="visible", timeout=10000)
-            password_input.fill(self.get_password())
+            # Use linkedin_cli's login form handler (handles goto, stealth typing, etc.)
+            submit_login_form(session, session.username, session.password)
 
-            login_button = session.page.locator("button[type='submit']")
-            login_button.wait_for(state="visible", timeout=10000)
-            login_button.click()
-            session.page.wait_for_load_state("domcontentloaded", timeout=15000)
+            # Check where we ended up
+            page_state = classify_page(session.page)
+            logger.info("Post-login page state: %s (%s)", page_state, session.page.url)
 
-            current_url = session.page.url
-
-            # --- SUCCESS: landed on feed ---
-            if "/feed" in current_url:
+            if page_state == PageState.FEED:
                 return self._mark_verified(session, mark_as_active)
 
-            # --- CHECKPOINT: keep browser alive for user to resolve via VNC ---
-            checkpoint_patterns = [
-                "/checkpoint/", "/challenge/", "/uas/login-verification",
-            ]
-            if any(p in current_url for p in checkpoint_patterns) or "/login" in current_url:
-                logger.warning(
-                    "Challenge detected for %s at %s — browser kept alive for VNC",
-                    self.get_public_email(), current_url,
-                )
-                LinkedInCredentialLog.objects.create(
-                    credentials=self,
-                    action="locked",
-                    details={
-                        "error_type": "awaiting_challenge",
-                        "checkpoint_url": current_url,
-                    },
-                )
-                self.status = self.STATUS_LOCKED
-                self.save(update_fields=["status"])
-
-                # NOTE: browser intentionally NOT closed — VNC exposes it
-                return False, {
-                    "verified_at": None,
-                    "failures": self.verification_failures,
-                    "status": self.STATUS_LOCKED,
-                    "message": "LinkedIn requires verification. Complete the challenge in the browser viewer, then confirm.",
+            # Checkpoint/challenge or still on login — keep browser alive for VNC
+            logger.warning(
+                "Challenge detected for %s (state=%s, url=%s) — browser kept alive for VNC",
+                self.get_public_email(), page_state, session.page.url,
+            )
+            LinkedInCredentialLog.objects.create(
+                credentials=self,
+                action="locked",
+                details={
                     "error_type": "awaiting_challenge",
-                }
+                    "page_state": str(page_state),
+                    "checkpoint_url": session.page.url,
+                },
+            )
+            self.status = self.STATUS_LOCKED
+            self.save(update_fields=["status"])
 
-            # Unexpected URL but past login — treat as success
-            return self._mark_verified(session, mark_as_active)
+            # Browser intentionally NOT closed — VNC exposes it
+            return False, {
+                "verified_at": None,
+                "failures": self.verification_failures,
+                "status": self.STATUS_LOCKED,
+                "message": "LinkedIn requires verification. Complete the challenge in the browser viewer, then confirm.",
+                "error_type": "awaiting_challenge",
+            }
 
         except Exception as e:
             error_msg = str(e)[:500]
@@ -400,6 +388,8 @@ class LinkedInCredentials(models.Model):
         The browser must still be open on the session (VNC interaction happened
         in the same X display).
         """
+        from linkedin_cli.page_state import classify_page, PageState  # type: ignore[import-untyped]
+
         if not session.page or session.page.is_closed():
             return False, {
                 "verified_at": None,
@@ -409,14 +399,12 @@ class LinkedInCredentials(models.Model):
             }
 
         try:
-            # Re-read current state after user interacted via VNC
             session.page.wait_for_load_state("domcontentloaded", timeout=10000)
-            current_url = session.page.url
+            page_state = classify_page(session.page)
 
-            if "/feed" in current_url:
+            if page_state == PageState.FEED:
                 return self._mark_verified(session, mark_as_active=True)
 
-            # Still on checkpoint — user hasn't finished yet
             return False, {
                 "verified_at": None,
                 "status": self.STATUS_LOCKED,
