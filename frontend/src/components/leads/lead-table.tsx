@@ -174,6 +174,7 @@ export function LeadTable({
                 <TableHead className="w-[200px]">Name</TableHead>
                 <TableHead>Company & Title</TableHead>
                 <TableHead>Contact</TableHead>
+                <TableHead>Campaign</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Last Updated</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
@@ -226,6 +227,15 @@ export function LeadTable({
                     </div>
                   </TableCell>
                   <TableCell>
+                    {lead.campaignName ? (
+                      <Badge variant="outline" className="text-xs">
+                        {lead.campaignName}
+                      </Badge>
+                    ) : (
+                      <span className="text-xs text-muted-foreground italic">No campaign</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
                     <LeadStatusBadge state={lead.state} outcome={lead.outcome} />
                   </TableCell>
                   <TableCell>
@@ -241,7 +251,7 @@ export function LeadTable({
                     </div>
                   </TableCell>
                    <TableCell className="text-right">
-                     <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                     <div className="flex justify-end gap-2 text-muted-foreground group-hover:text-foreground transition-colors">
                        <Button
                          size="sm"
                          variant="ghost"
