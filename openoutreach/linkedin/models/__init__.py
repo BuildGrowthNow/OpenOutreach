@@ -171,7 +171,9 @@ class SearchKeyword(models.Model):
 class ActionLog(models.Model):
     class ActionType(models.TextChoices):
         CONNECT = "connect", "Connect"
+        CHECK_PENDING = "check_pending", "Check Pending"
         FOLLOW_UP = "follow_up", "Follow Up"
+        SEND_MANUAL_MESSAGE = "send_manual_message", "Send Manual Message"
 
     linkedin_profile = models.ForeignKey(
         LinkedInProfile,
