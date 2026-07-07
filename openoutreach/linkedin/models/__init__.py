@@ -126,12 +126,13 @@ class LinkedInProfile(models.Model):
 
         return True
 
-    def record_action(self, action_type: str, campaign: Campaign) -> None:
-        """Persist a rate-limited action."""
+    def record_action(self, action_type: str, campaign: Campaign, details: dict | None = None) -> None:
+        """Persist a rate-limited action with optional descriptive details."""
         ActionLog.objects.create(
             linkedin_profile=self,
             campaign=campaign,
             action_type=action_type,
+            details=details or {},
         )
 
     def mark_exhausted(self, action_type: str) -> None:
@@ -176,6 +177,9 @@ class ActionLog(models.Model):
         SEND_MANUAL_MESSAGE = "send_manual_message", "Send Manual Message"
         CAMPAIGN_PAUSED = "campaign_paused", "Campaign Paused"
         CAMPAIGN_STARTED = "campaign_started", "Campaign Started"
+        LEAD_DISCOVERED = "lead_discovered", "Lead Discovered"
+        LEAD_QUALIFIED = "lead_qualified", "Lead Qualified"
+        LEAD_DISQUALIFIED = "lead_disqualified", "Lead Disqualified"
 
     linkedin_profile = models.ForeignKey(
         LinkedInProfile,
@@ -191,6 +195,9 @@ class ActionLog(models.Model):
     )
     action_type = models.CharField(max_length=20, choices=ActionType.choices)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    # Descriptive details for activity feed (JSON: lead_name, lead_url, message_preview, etc.)
+    details: models.JSONField = models.JSONField(default=dict, blank=True)  # type: ignore[var-annotated]
 
     # Status and error tracking (for action logs)
     status: models.CharField = models.CharField(max_length=20, blank=True)  # type: ignore[var-annotated]

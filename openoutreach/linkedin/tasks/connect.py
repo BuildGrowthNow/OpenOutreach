@@ -192,10 +192,31 @@ def handle_connect(task, session, qualifiers):
             smart_record_action(
                 session.linkedin_profile, ActionLog.ActionType.CONNECT, campaign
             )
-            # Also record in ActionLog for backward compatibility
+            # Also record in ActionLog with details
+            from openoutreach.crm.models import Lead
+            lead = Lead.objects.filter(public_identifier=public_id).first()
+            lead_name = ""
+            if lead:
+                try:
+                    prof = lead.get_profile(session)
+                    if prof and "profile" in prof:
+                        first = prof["profile"].get("firstName", "")
+                        last = prof["profile"].get("lastName", "")
+                        lead_name = f"{first} {last}".strip()
+                except Exception:
+                    pass
+            if not lead_name:
+                lead_name = profile.get("profile", {}).get("firstName", "") + " " + profile.get("profile", {}).get("lastName", "")
+                lead_name = lead_name.strip() or public_id
+
             session.linkedin_profile.record_action(
                 ActionLog.ActionType.CONNECT,
                 session.campaign,
+                details={
+                    "lead_name": lead_name,
+                    "public_identifier": public_id,
+                    "state": new_state.value,
+                },
             )
 
     except ReachedConnectionLimit as e:

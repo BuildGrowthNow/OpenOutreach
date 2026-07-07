@@ -54,6 +54,21 @@ def create_enriched_lead(session, url: str, profile: Dict[str, Any]) -> Optional
     lead.embed_from_profile(profile)
 
     logger.debug("Created enriched lead for %s (pk=%d)", public_id, lead.pk)
+
+    # Log discovery to activity feed
+    from openoutreach.linkedin.models import ActionLog
+    ActionLog.objects.create(
+        linkedin_profile=session.linkedin_profile,
+        campaign=session.campaign,
+        action_type=ActionLog.ActionType.LEAD_DISCOVERED,
+        details={
+            "lead_name": profile.get("profile", {}).get("firstName", "") + " " + profile.get("profile", {}).get("lastName", ""),
+            "lead_url": clean_url,
+            "public_identifier": public_id,
+            "headline": profile.get("profile", {}).get("headline", ""),
+        },
+    )
+
     return lead.pk
 
 

@@ -152,6 +152,7 @@ def _save_qualification_result(
         except ValueError as e:
             logger.warning("Cannot promote %s: %s \u2014 disqualifying", public_id, e)
             create_disqualified_deal(session, public_id, reason=str(e))
+            _log_qualification_action(session, lead_id, public_id, False, str(e))
             return
         logger.info(
             "%s %s: %s",
@@ -159,6 +160,7 @@ def _save_qualification_result(
             colored("QUALIFIED", "green", attrs=["bold"]),
             reason,
         )
+        _log_qualification_action(session, lead_id, public_id, True, reason)
         # Enrich at the QUALIFIED gate (only qualified leads ever reach here).
         # Tri-state: True = hit (proceed QUALIFIED), False = genuine miss (park
         # in NO_EMAIL, out of the connect pool), None = finder off/unreachable
@@ -175,6 +177,36 @@ def _save_qualification_result(
             )
     else:
         create_disqualified_deal(session, public_id, reason=reason)
+        _log_qualification_action(session, lead_id, public_id, False, reason)
+
+
+def _log_qualification_action(session, lead_id: int, public_id: str, qualified: bool, reason: str):
+    """Log qualification decision to activity feed."""
+    from openoutreach.crm.models import Lead
+    from openoutreach.linkedin.models import ActionLog
+
+    lead = Lead.objects.filter(pk=lead_id).first()
+    lead_name = public_id
+    if lead:
+        try:
+            prof = lead.get_profile(session)
+            if prof and "profile" in prof:
+                first = prof["profile"].get("firstName", "")
+                last = prof["profile"].get("lastName", "")
+                lead_name = f"{first} {last}".strip() or public_id
+        except Exception:
+            pass
+
+    ActionLog.objects.create(
+        linkedin_profile=session.linkedin_profile,
+        campaign=session.campaign,
+        action_type=ActionLog.ActionType.LEAD_QUALIFIED if qualified else ActionLog.ActionType.LEAD_DISQUALIFIED,
+        details={
+            "lead_name": lead_name,
+            "public_identifier": public_id,
+            "reason": reason,
+        },
+    )
 
 
 def _fetch_profile_text(session, lead_id: int, public_id: str) -> str | None:

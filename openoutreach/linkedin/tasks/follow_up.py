@@ -161,10 +161,27 @@ def handle_follow_up(task, session, qualifiers):
         smart_record_action(
             session.linkedin_profile, ActionLog.ActionType.FOLLOW_UP, campaign
         )
-        # Also record in ActionLog for backward compatibility
+        # Also record in ActionLog with details
+        lead_name = ""
+        try:
+            prof = deal.lead.get_profile(session)
+            if prof and "profile" in prof:
+                first = prof["profile"].get("firstName", "")
+                last = prof["profile"].get("lastName", "")
+                lead_name = f"{first} {last}".strip()
+        except Exception:
+            pass
+        if not lead_name:
+            lead_name = deal.lead.public_identifier
+
         session.linkedin_profile.record_action(
             ActionLog.ActionType.FOLLOW_UP,
             session.campaign,
+            details={
+                "lead_name": lead_name,
+                "public_identifier": public_id,
+                "message_preview": message[:100] if message else "",
+            },
         )
         # Persist the outgoing message locally and bump update_date so the
         # next slot's eligibility query respects the cooldown and moves
