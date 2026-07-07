@@ -8,6 +8,13 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Form,
   FormControl,
   FormDescription,
@@ -21,6 +28,8 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/use-toast";
 import { Icons } from "@/lib/types/components";
+import { Shield } from "lucide-react";
+import VncViewer from "./vnc-viewer";
 import { post } from "@/lib/api";
 import {
   createLinkedInCredentials,
@@ -52,6 +61,8 @@ export default function LinkedInCredentialForm({
 }: CredentialFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showChallengeModal, setShowChallengeModal] = useState(false);
+  const [challengeCredentialId, setChallengeCredentialId] = useState<number | null>(null);
   const [success, setSuccess] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showOptionalCookie, setShowOptionalCookie] = useState(false);
@@ -185,16 +196,10 @@ export default function LinkedInCredentialForm({
     } catch (err) {
       const message = err instanceof Error ? err.message : "Verification failed";
 
-      // Check if this is a checkpoint error
+      // Check if this is a checkpoint error — open VNC modal for user to complete challenge
       if (message.includes("checkpoint") || message.includes("challenge") || message.includes("additional verification")) {
-        toast({
-          title: "LinkedIn Challenge Detected",
-          description: "Please complete the LinkedIn verification challenge. Check the Setup Status section to open the browser viewer.",
-          variant: "default",
-        });
-
-        // Still call onSuccess to refresh and show the credential with locked status
-        if (onSuccess) onSuccess();
+        setChallengeCredentialId(createdCredentialId ?? initialData?.id ?? null);
+        setShowChallengeModal(true);
       } else {
         toast({
           title: "Verification failed",
@@ -571,6 +576,81 @@ export default function LinkedInCredentialForm({
           </div>
         </form>
       </Form>
+
+      <Dialog open={showChallengeModal} onOpenChange={setShowChallengeModal}>
+        <DialogContent className="max-w-[95vw] h-[90vh] border border-zinc-800 bg-zinc-950 text-zinc-100 shadow-2xl flex flex-col p-0">
+          <DialogHeader className="p-6 pb-4 border-b border-zinc-800">
+            <DialogTitle className="flex items-center gap-2">
+              <Shield className="h-5 w-5 text-amber-500" />
+              Complete LinkedIn Challenge
+            </DialogTitle>
+            <DialogDescription className="space-y-2">
+              <p>LinkedIn requires additional verification. Follow these steps:</p>
+              <ol className="list-decimal list-inside space-y-1 text-sm">
+                <li>Enter the verification code sent to your email in the browser below</li>
+                <li>Wait for LinkedIn to redirect you to the feed page</li>
+                <li>Click &quot;Confirm Login&quot; to verify your credentials</li>
+              </ol>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-hidden min-h-0">
+            <VncViewer vncUrl={`${window.location.protocol}//${window.location.hostname}:6080`} />
+          </div>
+          <div className="flex items-center justify-between gap-2 p-4 border-t border-zinc-800 bg-zinc-950/80">
+            <p className="text-sm text-zinc-400">
+              Complete the challenge, then confirm your login
+            </p>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setShowChallengeModal(false)}
+                className="border-zinc-700 hover:bg-zinc-900"
+              >
+                Close
+              </Button>
+              <Button
+                onClick={async () => {
+                  if (!challengeCredentialId) return;
+                  setShowChallengeModal(false);
+                  setIsSubmitting(true);
+                  try {
+                    const resp = await verifyLinkedInCredentials(challengeCredentialId);
+                    const data = resp.data as { success?: boolean; error?: string } | undefined;
+                    if (data?.success) {
+                      toast({
+                        title: "Credentials verified",
+                        description: "LinkedIn credentials are valid and active",
+                      });
+                      setSuccess(true);
+                      if (onSuccess) onSuccess();
+                    } else {
+                      setError(data?.error || resp.error || "Verification failed after challenge");
+                    }
+                  } catch (err) {
+                    setError(err instanceof Error ? err.message : "Verification failed");
+                  } finally {
+                    setIsSubmitting(false);
+                  }
+                }}
+                disabled={isSubmitting}
+                className="bg-emerald-600 hover:bg-emerald-700"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Icons.RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                    Verifying...
+                  </>
+                ) : (
+                  <>
+                    <Icons.CheckCircle className="mr-2 h-4 w-4" />
+                    Confirm Login
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

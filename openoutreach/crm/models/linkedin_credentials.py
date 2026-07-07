@@ -311,7 +311,7 @@ class LinkedInCredentials(models.Model):
             details contains: verified_at, failures, status, message, error_type
         """
         from linkedin_cli.browser.nav import resolve_locator  # type: ignore[import-untyped]
-        from linkedin_cli.browser.launch import launch_browser  # type: ignore[import-untyped]
+        from linkedin_cli.browser.login import launch_browser  # type: ignore[import-untyped]
 
         logger.info(
             "Starting LinkedIn credential verification for %s", self.get_public_email()
