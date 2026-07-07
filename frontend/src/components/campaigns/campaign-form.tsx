@@ -253,7 +253,6 @@ export function CampaignForm({
   const handleSubmit = async (values: FormValues) => {
     setLoading(true);
     try {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { searchKeywords, icpTitles, ...rest } = values;
       const payload: Partial<Campaign> = {
         ...rest,

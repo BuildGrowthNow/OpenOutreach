@@ -13,6 +13,7 @@ import { LeadNotes } from '@/components/leads/lead-notes'
 import { MessageThread } from '@/components/messages/message-thread'
 import { LeadForm } from '@/components/leads/lead-form'
 import { AddToCampaignModal } from '@/components/modals/add-to-campaign-modal'
+import { useToast } from '@/components/ui/use-toast'
 import {
   getLead,
   updateLead,
@@ -52,7 +53,8 @@ const LeadDetailsPage = () => {
   const router = useRouter()
   const params = useParams()
   const leadId = params.id as string
-  
+  const { toast } = useToast()
+
   const [lead, setLead] = useState<Lead | null>(null)
   const [profile, setProfile] = useState<LeadProfile | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
@@ -73,6 +75,8 @@ const LeadDetailsPage = () => {
   const [savingNote, setSavingNote] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [showAddToCampaign, setShowAddToCampaign] = useState(false)
+  const [scraping, setScraping] = useState(false)
+  const [scrapeCountdown, setScrapeCountdown] = useState(60)
 
 
   const fetchLeadDetails = useCallback(async () => {
@@ -119,7 +123,17 @@ const LeadDetailsPage = () => {
   }, [leadId, fetchLeadDetails, fetchCampaigns])
 
   const handleReScrape = async () => {
-    if (!lead) return
+    if (!lead || scraping) return
+
+    setScraping(true)
+    setScrapeCountdown(60)
+
+    // Show initial toast
+    toast({
+      title: 'Scraping Profile',
+      description: 'Fetching latest profile data from LinkedIn...',
+      variant: 'default',
+    })
 
     try {
       const response = await reScrapeLeadProfile(lead.id)
@@ -127,28 +141,67 @@ const LeadDetailsPage = () => {
         if (response.data.profile) {
           setProfile(response.data.profile)
         }
-        alert('Profile re-scraped successfully!')
+        toast({
+          title: 'Profile Saved',
+          description: 'Profile data has been updated successfully.',
+          variant: 'default',
+        })
       } else {
-        alert(`Failed to re-scrape profile: ${response.data?.error || response.error || 'Unknown error'}`)
+        toast({
+          title: 'Scrape Failed',
+          description: response.data?.error || response.error || 'Could not fetch profile data.',
+          variant: 'destructive',
+        })
       }
     } catch (err) {
-      alert(`Failed to re-scrape profile: ${err instanceof Error ? err.message : 'Unknown error'}`)
+      toast({
+        title: 'Scrape Failed',
+        description: err instanceof Error ? err.message : 'An unexpected error occurred.',
+        variant: 'destructive',
+      })
+    } finally {
+      setScraping(false)
+      setScrapeCountdown(60)
     }
   }
 
+  // Countdown timer effect for scraping button
+  useEffect(() => {
+    if (!scraping) return
+
+    const interval = setInterval(() => {
+      setScrapeCountdown((prev) => {
+        if (prev <= 1) {
+          return 60
+        }
+        return prev - 1
+      })
+    }, 1000)
+
+    return () => clearInterval(interval)
+  }, [scraping])
+
   const handleDisqualify = async () => {
     if (!lead) return
-    
+
     if (!confirm(`Are you sure you want to disqualify ${lead.name || 'this lead'}?`)) {
       return
     }
 
     try {
       await updateLead(lead.id, { disqualified: true })
-      alert('Lead disqualified successfully!')
+      toast({
+        title: 'Lead Disqualified',
+        description: 'The lead has been disqualified successfully.',
+        variant: 'default',
+      })
       router.push('/leads')
     } catch (err) {
-      alert(`Failed to disqualify lead: ${err instanceof Error ? err.message : 'Unknown error'}`)
+      toast({
+        title: 'Disqualification Failed',
+        description: err instanceof Error ? err.message : 'Unknown error',
+        variant: 'destructive',
+      })
     }
   }
 
@@ -162,13 +215,25 @@ const LeadDetailsPage = () => {
 
       if (response.data) {
         setLead(response.data)
-        alert('Lead updated successfully!')
+        toast({
+          title: 'Lead Updated',
+          description: 'Lead information has been updated successfully.',
+          variant: 'default',
+        })
       } else {
-        alert(`Failed to update lead: ${response.error || 'Unknown error'}`)
+        toast({
+          title: 'Update Failed',
+          description: response.error || 'Unknown error',
+          variant: 'destructive',
+        })
       }
     } catch (err) {
       console.error('Failed to update lead:', err)
-      alert('Failed to update lead. Please try again.')
+      toast({
+        title: 'Update Failed',
+        description: 'Failed to update lead. Please try again.',
+        variant: 'destructive',
+      })
     } finally {
       setLoading(false)
     }
@@ -176,7 +241,7 @@ const LeadDetailsPage = () => {
 
   const handleAddToCampaign = async (campaignId: string) => {
     if (!lead) return
-    
+
     try {
       const response = await fetch(`/api/leads/${lead.id}/add-to-campaign/`, {
         method: 'POST',
@@ -187,18 +252,30 @@ const LeadDetailsPage = () => {
       })
 
       const data = await response.json()
-      
+
       if (response.ok && data.success) {
-        alert('Lead added to campaign successfully!')
+        toast({
+          title: 'Added to Campaign',
+          description: 'Lead has been added to the campaign successfully.',
+          variant: 'default',
+        })
         setShowAddToCampaign(false)
         await fetchLeadDetails()
         await fetchCampaigns()
       } else {
-        alert(`Failed to add to campaign: ${data.error || 'Unknown error'}`)
+        toast({
+          title: 'Failed to Add',
+          description: data.error || 'Unknown error',
+          variant: 'destructive',
+        })
       }
     } catch (err) {
       console.error('Failed to add to campaign:', err)
-      alert('Failed to add to campaign. Please try again.')
+      toast({
+        title: 'Failed to Add',
+        description: 'Failed to add to campaign. Please try again.',
+        variant: 'destructive',
+      })
     }
   }
 
@@ -268,21 +345,33 @@ const LeadDetailsPage = () => {
 
   const handleSendMessage = async (content: string) => {
     if (!lead) return
-    
+
     try {
       setSendingMessage(true)
       const response = await sendMessageToLead(lead.id, content)
-      
+
       if (response.data?.success && response.data?.message) {
         // Add the sent message to the list
         setMessages(prev => [...prev, response.data!.message])
-        alert('Message sent successfully!')
+        toast({
+          title: 'Message Sent',
+          description: 'Your message has been sent successfully.',
+          variant: 'default',
+        })
       } else {
-        alert(`Failed to send message: ${response.error || 'Unknown error'}`)
+        toast({
+          title: 'Failed to Send',
+          description: response.error || 'Unknown error',
+          variant: 'destructive',
+        })
       }
     } catch (error) {
       console.error('Failed to send message:', error)
-      alert('Failed to send message. Please try again.')
+      toast({
+        title: 'Failed to Send',
+        description: 'Failed to send message. Please try again.',
+        variant: 'destructive',
+      })
     } finally {
       setSendingMessage(false)
     }
@@ -293,7 +382,7 @@ const LeadDetailsPage = () => {
     try {
       setSavingNote(true)
       const response = await createLeadNote(leadId, content)
-      
+
       if (response.data) {
         // Transform and add the new note to the list
         const newNote = {
@@ -303,15 +392,27 @@ const LeadDetailsPage = () => {
           createdAt: response.data.created_at,
           updatedAt: response.data.updated_at
         }
-        
+
         setNotes(prev => [...prev, newNote])
-        alert('Note added successfully!')
+        toast({
+          title: 'Note Added',
+          description: 'Your note has been saved successfully.',
+          variant: 'default',
+        })
       } else {
-        alert(`Failed to add note: ${response.error || 'Unknown error'}`)
+        toast({
+          title: 'Failed to Add Note',
+          description: response.error || 'Unknown error',
+          variant: 'destructive',
+        })
       }
     } catch (error) {
       console.error('Failed to add note:', error)
-      alert('Failed to add note. Please try again.')
+      toast({
+        title: 'Failed to Add Note',
+        description: 'Failed to add note. Please try again.',
+        variant: 'destructive',
+      })
     } finally {
       setSavingNote(false)
     }
@@ -321,25 +422,37 @@ const LeadDetailsPage = () => {
     try {
       setSavingNote(true)
       const response = await updateLeadNote(leadId, noteId, content)
-      
+
       if (response.data) {
         // Update the note in the list
-        setNotes(prev => prev.map(note => 
-          note.id === noteId 
-            ? { 
-                ...note, 
+        setNotes(prev => prev.map(note =>
+          note.id === noteId
+            ? {
+                ...note,
                 content: response.data!.content,
                 updatedAt: response.data!.updated_at || response.data!.created_at
               }
             : note
         ))
-        alert('Note updated successfully!')
+        toast({
+          title: 'Note Updated',
+          description: 'Your note has been updated successfully.',
+          variant: 'default',
+        })
       } else {
-        alert(`Failed to update note: ${response.error || 'Unknown error'}`)
+        toast({
+          title: 'Failed to Update Note',
+          description: response.error || 'Unknown error',
+          variant: 'destructive',
+        })
       }
     } catch (error) {
       console.error('Failed to update note:', error)
-      alert('Failed to update note. Please try again.')
+      toast({
+        title: 'Failed to Update Note',
+        description: 'Failed to update note. Please try again.',
+        variant: 'destructive',
+      })
     } finally {
       setSavingNote(false)
     }
@@ -349,17 +462,29 @@ const LeadDetailsPage = () => {
     try {
       setSavingNote(true)
       const response = await deleteLeadNote(leadId, noteId)
-      
+
       if (response.data?.success) {
         // Remove the note from the list
         setNotes(prev => prev.filter(note => note.id !== noteId))
-        alert('Note deleted successfully!')
+        toast({
+          title: 'Note Deleted',
+          description: 'Your note has been deleted successfully.',
+          variant: 'default',
+        })
       } else {
-        alert(`Failed to delete note: ${response.error || 'Unknown error'}`)
+        toast({
+          title: 'Failed to Delete Note',
+          description: response.error || 'Unknown error',
+          variant: 'destructive',
+        })
       }
     } catch (error) {
       console.error('Failed to delete note:', error)
-      alert('Failed to delete note. Please try again.')
+      toast({
+        title: 'Failed to Delete Note',
+        description: 'Failed to delete note. Please try again.',
+        variant: 'destructive',
+      })
     } finally {
       setSavingNote(false)
     }
@@ -429,9 +554,9 @@ const LeadDetailsPage = () => {
             <Icons.Globe className="mr-2 h-3.5 w-3.5" />
             {lead.publicIdentifier}
           </Badge>
-          <Button variant="outline" onClick={handleReScrape}>
-            <Icons.RefreshCw className="mr-2 h-4 w-4" />
-            Re-scrape Profile
+          <Button variant="outline" onClick={handleReScrape} disabled={scraping}>
+            <Icons.RefreshCw className={`mr-2 h-4 w-4 ${scraping ? 'animate-spin' : ''}`} />
+            {scraping ? `Scraping ${scrapeCountdown}s...` : 'Re-scrape Profile'}
           </Button>
           <Button variant="destructive" onClick={handleDisqualify}>
             <Icons.Trash2 className="mr-2 h-4 w-4" />
@@ -644,9 +769,9 @@ const LeadDetailsPage = () => {
                     <div className="text-center py-8">
                       <Icons.AlertCircle className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
                       <div className="text-muted-foreground">Profile information not available</div>
-                      <Button onClick={() => handleReScrape()} className="mt-4">
-                        <Icons.RefreshCw className="mr-2 h-4 w-4" />
-                        Re-scrape Profile
+                      <Button onClick={() => handleReScrape()} className="mt-4" disabled={scraping}>
+                        <Icons.RefreshCw className={`mr-2 h-4 w-4 ${scraping ? 'animate-spin' : ''}`} />
+                        {scraping ? `Scraping ${scrapeCountdown}s...` : 'Re-scrape Profile'}
                       </Button>
                     </div>
                   )}
@@ -721,9 +846,9 @@ const LeadDetailsPage = () => {
               <CardTitle className="text-base">Quick Actions</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <Button variant="outline" className="w-full justify-start" onClick={handleReScrape}>
-                <Icons.RefreshCw className="mr-2 h-4 w-4" />
-                Re-scrape Profile
+              <Button variant="outline" className="w-full justify-start" onClick={handleReScrape} disabled={scraping}>
+                <Icons.RefreshCw className={`mr-2 h-4 w-4 ${scraping ? 'animate-spin' : ''}`} />
+                {scraping ? `Scraping ${scrapeCountdown}s...` : 'Re-scrape Profile'}
               </Button>
               <Button variant="outline" className="w-full justify-start" onClick={() => setShowEditModal(true)}>
                 <Icons.Edit className="mr-2 h-4 w-4" />
