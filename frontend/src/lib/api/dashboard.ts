@@ -348,14 +348,14 @@ export async function getCampaignLeads(
   if (page) params.page = page.toString();
   if (limit) params.limit = limit.toString();
   
-  const response = await get(`/api/campaigns/${id}/leads`, params);
+  const response = await get<{ data: Lead[]; pagination: Pagination; filters: LeadFilters }>(`/api/campaigns/${id}/leads`, params);
   
   // Normalize state and outcome values
   if (response.data?.data) {
     response.data.data = response.data.data.map((lead: Lead) => ({
       ...lead,
-      state: normalizeState(lead.state as string) as any,
-      outcome: normalizeOutcome(lead.outcome as string) as any,
+      state: normalizeState(lead.state as string) as Lead["state"],
+      outcome: normalizeOutcome(lead.outcome as string) as Lead["outcome"],
     }));
   }
   
@@ -389,14 +389,14 @@ export async function getLeads(
   if (page) params.page = page.toString();
   if (limit) params.limit = limit.toString();
   
-  const response = await get("/api/leads", params as Record<string, string>);
+  const response = await get<{ data: Lead[]; pagination: Pagination }>("/api/leads", params as Record<string, string>);
   
   // Normalize state and outcome values from backend format to frontend format
   if (response.data?.data) {
     response.data.data = response.data.data.map((lead: Lead) => ({
       ...lead,
-      state: normalizeState(lead.state as string) as any,
-      outcome: normalizeOutcome(lead.outcome as string) as any,
+      state: normalizeState(lead.state as string) as Lead["state"],
+      outcome: normalizeOutcome(lead.outcome as string) as Lead["outcome"],
     }));
   }
   
@@ -404,12 +404,12 @@ export async function getLeads(
 }
 
 export async function getLead(id: string): Promise<ApiResponse<Lead>> {
-  const response = await get(`/api/leads/${id}`);
+  const response = await get<Lead>(`/api/leads/${id}`);
   
   // Normalize state and outcome values
   if (response.data) {
-    response.data.state = normalizeState(response.data.state as string) as any;
-    response.data.outcome = normalizeOutcome(response.data.outcome as string) as any;
+    response.data.state = normalizeState(response.data.state as string) as Lead["state"];
+    response.data.outcome = normalizeOutcome(response.data.outcome as string) as Lead["outcome"];
   }
   
   return response;

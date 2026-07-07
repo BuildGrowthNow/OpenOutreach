@@ -253,13 +253,13 @@ export function CampaignForm({
   const handleSubmit = async (values: FormValues) => {
     setLoading(true);
     try {
-      const payload: any = {
-        ...values,
-        search_keywords: parseSearchKeywords(values.searchKeywords),
-        icpTitles: parseIcpTitles(values.icpTitles),
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { searchKeywords, icpTitles, ...rest } = values;
+      const payload: Partial<Campaign> = {
+        ...rest,
+        searchKeywords: parseSearchKeywords(searchKeywords),
+        icpTitles: parseIcpTitles(icpTitles),
       };
-      // Remove camelCase version to avoid sending both
-      delete payload.searchKeywords;
 
       await onSubmit(payload);
       form.reset();
