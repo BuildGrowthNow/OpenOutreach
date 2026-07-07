@@ -291,24 +291,17 @@ class LinkedInCredentials(models.Model):
     def verify_credentials(
         self, session, mark_as_active: bool = True, mark_as_stored: bool = False
     ) -> tuple[bool, dict]:
-        """
-        Verify credentials by attempting a LinkedIn login using browser automation.
+        """Verify credentials via browser automation.
 
-        This method performs a safe, real LinkedIn login verification using the
-        existing browser session infrastructure. It handles:
-        - Successful authentication (status -> active)
-        - Checkpoint/challenge/2FA flows (status -> locked)
-        - Invalid credentials (status -> invalid)
-        - Other errors (status -> stored or invalid depending on mark_as_stored)
-
-        Args:
-            session: AccountSession for browser automation
-            mark_as_active: If True, mark as active on success
-            mark_as_stored: If True, mark as stored on failure instead of invalid
+        On checkpoint/challenge, the browser is kept alive (visible via VNC)
+        so the user can complete the challenge interactively.  The caller
+        should then invoke ``confirm_challenge(session)`` once the user
+        signals completion from the frontend.
 
         Returns:
-            Tuple of (success: bool, details: dict)
-            details contains: verified_at, failures, status, message, error_type
+            (success, details) — details always contains ``error_type``.
+            When error_type is ``"awaiting_challenge"`` the browser is still
+            running and the session is usable for ``confirm_challenge``.
         """
         from linkedin_cli.browser.nav import resolve_locator  # type: ignore[import-untyped]
         from linkedin_cli.browser.login import launch_browser  # type: ignore[import-untyped]
@@ -318,64 +311,8 @@ class LinkedInCredentials(models.Model):
         )
 
         try:
-            # Fast path: try cookie-based session first
-            profile = self.linkedin_profile
-            cookie_data = None
-            if profile:
-                profile.refresh_from_db(fields=["cookie_data_encrypted"])
-                cookie_data = profile.cookie_data
-
-            if cookie_data:
-                logger.info("Attempting cookie-based verification for %s", self.get_public_email())
-                session.page, session.context, session.browser, session.playwright = launch_browser(
-                    storage_state=cookie_data
-                )
-                session.page.goto("https://www.linkedin.com/feed/", timeout=30000)
-                session.page.wait_for_load_state("domcontentloaded", timeout=15000)
-                current_url = session.page.url
-
-                if "linkedin.com/feed" in current_url:
-                    logger.info("Cookie-based verification successful for %s", self.get_public_email())
-
-                    # Discover username from the profile link
-                    self._discover_username(session)
-
-                    self.last_verified = timezone.now()
-                    self.verification_failures = 0
-                    self.status = self.STATUS_ACTIVE if mark_as_active else self.STATUS_TESTED
-                    self.save(update_fields=["last_verified", "verification_failures", "status", "username"])
-
-                    LinkedInCredentialLog.objects.create(
-                        credentials=self,
-                        action="verified",
-                        details={"verified_by": "cookie_session", "status": self.status},
-                    )
-
-                    return True, {
-                        "verified_at": self.last_verified.isoformat(),
-                        "failures": 0,
-                        "status": self.status,
-                        "message": "LinkedIn credentials verified successfully (cookie session)",
-                        "error_type": None,
-                    }
-
-                # Cookie session didn't land on feed — close and fall through to login
-                logger.info("Cookie session invalid for %s, falling back to login", self.get_public_email())
-                try:
-                    if session.context:
-                        session.context.close()
-                    if session.browser:
-                        session.browser.close()
-                    if session.playwright:
-                        session.playwright.stop()
-                except Exception:
-                    pass
-                session.page = session.context = session.browser = session.playwright = None
-
-            # Full login flow
+            # Launch browser and navigate to login
             session.page, session.context, session.browser, session.playwright = launch_browser()
-
-            # Navigate to LinkedIn login page
             session.page.goto("https://www.linkedin.com/login", timeout=30000)
 
             # Enter credentials
@@ -385,214 +322,59 @@ class LinkedInCredentials(models.Model):
             password_input = resolve_locator(
                 session.page, ["input#password"], timeout_per_ms=10000
             )
-
-            # Clear and fill email
             email_input.fill("")
             email_input.type(self.get_email())
-
-            # Clear and fill password
             password_input.fill("")
             password_input.type(self.get_password())
 
-            # Click login button
             login_button = resolve_locator(
                 session.page, ["button[type='submit']"], timeout_per_ms=10000
             )
             login_button.click()
-
-            # Wait for page to load
             session.page.wait_for_load_state("domcontentloaded", timeout=15000)
 
-            # Check for checkpoint/challenge/2FA flows
             current_url = session.page.url
 
-            # Check for checkpoint URLs immediately
+            # --- SUCCESS: landed on feed ---
+            if "/feed" in current_url:
+                return self._mark_verified(session, mark_as_active)
+
+            # --- CHECKPOINT: keep browser alive for user to resolve via VNC ---
             checkpoint_patterns = [
-                "/checkpoint/",
-                "/challenge/",
-                "/uas/login-verification",
+                "/checkpoint/", "/challenge/", "/uas/login-verification",
             ]
-            if any(pattern in current_url for pattern in checkpoint_patterns):
+            if any(p in current_url for p in checkpoint_patterns) or "/login" in current_url:
                 logger.warning(
-                    f"LinkedIn checkpoint/challenge detected for {self.get_public_email()} at {current_url}"
+                    "Challenge detected for %s at %s — browser kept alive for VNC",
+                    self.get_public_email(), current_url,
                 )
-
                 LinkedInCredentialLog.objects.create(
                     credentials=self,
                     action="locked",
                     details={
-                        "error_type": "checkpoint_detected",
-                        "message": "LinkedIn checkpoint/challenge detected",
+                        "error_type": "awaiting_challenge",
                         "checkpoint_url": current_url,
-                        "ip_address": None,
                     },
                 )
+                self.status = self.STATUS_LOCKED
+                self.save(update_fields=["status"])
 
-                self.mark_as_locked(reason=f"Checkpoint detected at {current_url}")
+                # NOTE: browser intentionally NOT closed — VNC exposes it
                 return False, {
                     "verified_at": None,
-                    "failures": self.verification_failures + 1,
+                    "failures": self.verification_failures,
                     "status": self.STATUS_LOCKED,
-                    "message": "LinkedIn checkpoint or challenge detected. Please complete the verification in the browser viewer.",
-                    "error_type": "checkpoint_detected",
-                    "checkpoint_url": current_url,
+                    "message": "LinkedIn requires verification. Complete the challenge in the browser viewer, then confirm.",
+                    "error_type": "awaiting_challenge",
                 }
 
-            # Check if we're still on login page (failed auth)
-            if "linkedin.com/login" in current_url:
-                # Check for specific error messages
-                error_selectors = [
-                    "div.err-msg",
-                    "div.error",
-                    "div.login__error",
-                    "[class*='error']",
-                ]
-
-                for selector in error_selectors:
-                    error_elements = session.page.query_selector_all(selector)
-                    if error_elements:
-                        error_texts = [el.inner_text() for el in error_elements]
-                        error_msg = "; ".join(error_texts[:3])  # Limit to 3 errors
-                        logger.warning(
-                            f"LinkedIn credential verification failed for {self.get_public_email()}: {error_msg}"
-                        )
-
-                        # Update verification log
-                        LinkedInCredentialLog.objects.create(
-                            credentials=self,
-                            action="failed",
-                            details={
-                                "error_type": "invalid_credentials",
-                                "error_message": error_msg,
-                                "ip_address": None,
-                            },
-                        )
-
-                        self.mark_as_invalid(reason=error_msg)
-                        return False, {
-                            "verified_at": None,
-                            "failures": self.verification_failures,
-                            "status": self.STATUS_INVALID,
-                            "message": "Invalid LinkedIn credentials",
-                            "error_type": "invalid_credentials",
-                        }
-
-                # No specific error found - probably still waiting for 2FA
-                logger.warning(
-                    f"LinkedIn credential verification paused for {self.get_public_email()} - likely 2FA required"
-                )
-
-                LinkedInCredentialLog.objects.create(
-                    credentials=self,
-                    action="locked",
-                    details={
-                        "error_type": "checkpoint_detected",
-                        "message": "LinkedIn checkpoint/challenge detected (2FA or security check)",
-                        "ip_address": None,
-                    },
-                )
-
-                self.mark_as_locked(reason="Checkpoint/challenge detected")
-                return False, {
-                    "verified_at": None,
-                    "failures": self.verification_failures + 1,
-                    "status": self.STATUS_LOCKED,
-                    "message": "LinkedIn checkpoint/challenge detected. Account requires additional verification.",
-                    "error_type": "checkpoint_detected",
-                }
-
-            # Check if we're on feed (successful login)
-            if "linkedin.com/feed" in current_url or "linkedin.com" in current_url:
-                # Check for profile access
-                try:
-                    profile_link = session.page.query_selector("[href='/me']")
-                    if profile_link:
-                        logger.info(
-                            f"LinkedIn credential verification successful for {self.get_public_email()}"
-                        )
-
-                        self._discover_username(session)
-
-                        self.last_verified = timezone.now()
-                        self.verification_failures = 0
-                        self.status = (
-                            self.STATUS_ACTIVE if mark_as_active else self.STATUS_TESTED
-                        )
-                        self.save(
-                            update_fields=[
-                                "last_verified",
-                                "verification_failures",
-                                "status",
-                                "username",
-                            ]
-                        )
-
-                        LinkedInCredentialLog.objects.create(
-                            credentials=self,
-                            action="verified",
-                            details={
-                                "verified_by": "browser_automation",
-                                "status": self.status,
-                                "ip_address": None,
-                            },
-                        )
-
-                        return True, {
-                            "verified_at": self.last_verified.isoformat(),
-                            "failures": 0,
-                            "status": self.status,
-                            "message": "LinkedIn credentials verified successfully",
-                            "error_type": None,
-                        }
-                except Exception:
-                    pass  # Continue with basic success
-
-            # Basic success if we got past login
-            logger.info(
-                f"LinkedIn credential verification successful for {self.get_public_email()}"
-            )
-
-            self._discover_username(session)
-
-            self.last_verified = timezone.now()
-            self.verification_failures = 0
-            self.status = self.STATUS_ACTIVE if mark_as_active else self.STATUS_TESTED
-            self.save(
-                update_fields=[
-                    "last_verified",
-                    "verification_failures",
-                    "status",
-                    "username",
-                ]
-            )
-
-            LinkedInCredentialLog.objects.create(
-                credentials=self,
-                action="verified",
-                details={
-                    "verified_by": "browser_automation",
-                    "status": self.status,
-                    "ip_address": None,
-                },
-            )
-
-            return True, {
-                "verified_at": self.last_verified.isoformat(),
-                "failures": 0,
-                "status": self.status,
-                "message": "LinkedIn credentials verified successfully",
-                "error_type": None,
-            }
+            # Unexpected URL but past login — treat as success
+            return self._mark_verified(session, mark_as_active)
 
         except Exception as e:
-            error_msg = str(e)[:500]  # Limit error message length
-
-            # Check if this is a timeout error
-            is_timeout = "timeout" in error_msg.lower() or "timed out" in error_msg.lower()
-
-            logger.error(
-                f"Credential verification {'timed out' if is_timeout else 'failed'} for {self.get_public_email()}: {error_msg}"
-            )
+            error_msg = str(e)[:500]
+            is_timeout = "timeout" in error_msg.lower()
+            logger.error("Credential verification failed for %s: %s", self.get_public_email(), error_msg)
 
             LinkedInCredentialLog.objects.create(
                 credentials=self,
@@ -600,12 +382,11 @@ class LinkedInCredentials(models.Model):
                 details={
                     "error_type": "timeout" if is_timeout else "verification_error",
                     "error_message": error_msg,
-                    "ip_address": None,
                 },
             )
-
             if mark_as_stored:
                 self.status = self.STATUS_STORED
+                self.save(update_fields=["status"])
             else:
                 self.mark_as_invalid(reason=error_msg)
 
@@ -616,6 +397,71 @@ class LinkedInCredentials(models.Model):
                 "message": f"Verification {'timed out' if is_timeout else 'error'}: {error_msg}",
                 "error_type": "timeout" if is_timeout else "verification_error",
             }
+
+    def confirm_challenge(self, session) -> tuple[bool, dict]:
+        """Check if the user resolved the challenge in VNC and finalize auth.
+
+        Call this after ``verify_credentials`` returned ``awaiting_challenge``.
+        The browser must still be open on the session (VNC interaction happened
+        in the same X display).
+        """
+        if not session.page or session.page.is_closed():
+            return False, {
+                "verified_at": None,
+                "status": self.status,
+                "message": "Browser session expired. Please try again.",
+                "error_type": "session_expired",
+            }
+
+        try:
+            # Re-read current state after user interacted via VNC
+            session.page.wait_for_load_state("domcontentloaded", timeout=10000)
+            current_url = session.page.url
+
+            if "/feed" in current_url:
+                return self._mark_verified(session, mark_as_active=True)
+
+            # Still on checkpoint — user hasn't finished yet
+            return False, {
+                "verified_at": None,
+                "status": self.STATUS_LOCKED,
+                "message": "Challenge not yet completed. Finish the verification in the browser viewer and try again.",
+                "error_type": "challenge_incomplete",
+            }
+        except Exception as e:
+            return False, {
+                "verified_at": None,
+                "status": self.status,
+                "message": f"Error checking challenge status: {str(e)[:200]}",
+                "error_type": "verification_error",
+            }
+
+    def _mark_verified(self, session, mark_as_active: bool) -> tuple[bool, dict]:
+        """Common path: mark credential active, save cookies, discover username."""
+        from openoutreach.linkedin.browser.launch import _save_cookies
+
+        self._discover_username(session)
+        _save_cookies(session)
+
+        self.last_verified = timezone.now()
+        self.verification_failures = 0
+        self.status = self.STATUS_ACTIVE if mark_as_active else self.STATUS_TESTED
+        self.save(update_fields=["last_verified", "verification_failures", "status", "username"])
+
+        LinkedInCredentialLog.objects.create(
+            credentials=self,
+            action="verified",
+            details={"verified_by": "browser_automation", "status": self.status},
+        )
+        logger.info("Credential verified successfully for %s", self.get_public_email())
+
+        return True, {
+            "verified_at": self.last_verified.isoformat(),
+            "failures": 0,
+            "status": self.status,
+            "message": "LinkedIn credentials verified successfully",
+            "error_type": None,
+        }
 
     def _discover_username(self, session) -> None:
         """Extract the LinkedIn username from the current authenticated page."""

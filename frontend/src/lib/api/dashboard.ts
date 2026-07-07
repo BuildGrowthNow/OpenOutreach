@@ -1034,6 +1034,16 @@ export async function verifyLinkedInCredentials(id: number): Promise<
   return post(`/api/linkedin-credentials/${id}/verify`, {});
 }
 
+export async function confirmLinkedInCredentials(id: number): Promise<
+  ApiResponse<{
+    success: boolean;
+    message: string;
+    credentials: LinkedInCredentials;
+  }>
+> {
+  return post(`/api/linkedin-credentials/${id}/confirm`, {});
+}
+
 export async function rotateLinkedInCredentials(
   id: number,
   data?: { email?: string; password?: string },

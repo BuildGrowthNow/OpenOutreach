@@ -7,6 +7,7 @@ import { Icons } from "@/lib/types/components";
 import { AlertCircle, Shield } from "lucide-react";
 import {
   type LinkedInCredentials,
+  confirmLinkedInCredentials,
   verifyLinkedInCredentials,
   deleteLinkedInCredentials,
   getLinkedInCredentialsHealth,
@@ -139,17 +140,14 @@ export default function LinkedInCredentialCard({
     try {
       setIsVerifying(true);
 
-      // Set a 60-second timeout for verification
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("Verification timed out after 60 seconds")), 60000)
-      );
+      const response = await verifyLinkedInCredentials(credential.id);
+      const data = response.data as {
+        success?: boolean;
+        error?: string;
+        details?: { error_type?: string; message?: string };
+      } | undefined;
 
-      const response = await Promise.race([
-        verifyLinkedInCredentials(credential.id),
-        timeoutPromise
-      ]);
-
-      if (response.data) {
+      if (data?.success) {
         toast({
           title: "Success",
           description: "Credentials verified successfully",
@@ -157,52 +155,21 @@ export default function LinkedInCredentialCard({
         onRefresh();
         setHealthData(null);
         setShowHealthDetails(false);
-      } else {
-        const errorMessage = response.error || "Failed to verify credentials";
-
-        // Check if this is a checkpoint/challenge error
-        if (
-          errorMessage.includes("checkpoint") ||
-          errorMessage.includes("challenge") ||
-          errorMessage.includes("additional verification")
-        ) {
-          toast({
-            title: "LinkedIn Challenge Required",
-            description: "Please complete the verification challenge in the browser viewer",
-          });
-          setShowChallengeModal(true);
-          onRefresh(); // Refresh to show locked status
-        } else {
-          toast({
-            title: "Error",
-            description: errorMessage,
-            variant: "destructive",
-          });
-        }
-      }
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "An unexpected error occurred";
-
-      // Check if this is a checkpoint/challenge error
-      if (
-        message.includes("checkpoint") ||
-        message.includes("challenge") ||
-        message.includes("additional verification")
-      ) {
-        toast({
-          title: "LinkedIn Challenge Required",
-          description: "Please complete the verification challenge in the browser viewer",
-        });
+      } else if (data?.details?.error_type === "awaiting_challenge") {
         setShowChallengeModal(true);
-        onRefresh(); // Refresh to show locked status
       } else {
         toast({
           title: "Error",
-          description: message,
+          description: data?.error || response.error || "Failed to verify credentials",
           variant: "destructive",
         });
       }
+    } catch (err) {
+      toast({
+        title: "Error",
+        description: err instanceof Error ? err.message : "An unexpected error occurred",
+        variant: "destructive",
+      });
     } finally {
       setIsVerifying(false);
     }
@@ -616,8 +583,26 @@ export default function LinkedInCredentialCard({
                 </Button>
                 <Button
                   onClick={async () => {
-                    setShowChallengeModal(false);
-                    await handleVerify();
+                    setIsVerifying(true);
+                    try {
+                      const resp = await confirmLinkedInCredentials(credential.id);
+                      const data = resp.data as { success?: boolean; error?: string; details?: { error_type?: string } } | undefined;
+                      if (data?.success) {
+                        setShowChallengeModal(false);
+                        toast({ title: "Success", description: "Credentials verified successfully" });
+                        onRefresh();
+                      } else if (data?.details?.error_type === "challenge_incomplete") {
+                        toast({ title: "Not done yet", description: "Complete the challenge first, then click Confirm again." });
+                      } else {
+                        setShowChallengeModal(false);
+                        toast({ title: "Error", description: data?.error || "Confirmation failed", variant: "destructive" });
+                      }
+                    } catch (err) {
+                      setShowChallengeModal(false);
+                      toast({ title: "Error", description: err instanceof Error ? err.message : "Confirmation failed", variant: "destructive" });
+                    } finally {
+                      setIsVerifying(false);
+                    }
                   }}
                   disabled={isVerifying}
                   className="bg-emerald-600 hover:bg-emerald-700"
@@ -625,7 +610,7 @@ export default function LinkedInCredentialCard({
                   {isVerifying ? (
                     <>
                       <Icons.RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                      Verifying...
+                      Checking...
                     </>
                   ) : (
                     <>

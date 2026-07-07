@@ -415,6 +415,10 @@ class LinkedInCredentialsVerifyView(APIView):
 
     permission_classes = [IsAuthenticated]
 
+    # Module-level dict to hold sessions awaiting challenge resolution.
+    # Keyed by credential PK. The session's browser stays open so VNC works.
+    _pending_sessions: dict = {}
+
     def post(self, request, pk=None):
         """Verify LinkedIn credentials using real LinkedIn browser automation."""
         if LinkedInCredentials is None:
@@ -429,15 +433,10 @@ class LinkedInCredentialsVerifyView(APIView):
             cred = LinkedInCredentials.objects.get(pk=pk)
         except LinkedInCredentials.DoesNotExist:
             return Response(
-                {
-                    "success": False,
-                    "error": "Credential not found",
-                },
+                {"success": False, "error": "Credential not found"},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        # Ensure the credential is attached to a LinkedInProfile and the daemon
-        # login fields stay in sync with the stored credential values.
         try:
             _ensure_profile_for_credential(user=request.user, cred=cred)
         except DatabaseError as exc:
@@ -445,18 +444,29 @@ class LinkedInCredentialsVerifyView(APIView):
                 endpoint="linkedin-credentials:verify", exc=exc
             )
 
-        # Create session for verification
+        # Close any stale pending session for this credential
+        old_session = self.__class__._pending_sessions.pop(pk, None)
+        if old_session:
+            try:
+                old_session.close()
+            except Exception:
+                pass
+
         try:
             session = AccountSession(cred.linkedin_profile)  # type: ignore[arg-type]
 
-            # Perform verification with browser automation
             success, details = cred.verify_credentials(
                 session=session,
                 mark_as_active=True,
-                mark_as_stored=True,  # Keep as stored if verification errors
+                mark_as_stored=True,
             )
 
-            # Build detailed response
+            error_type = details.get("error_type")
+
+            # If challenge detected, park the session so /confirm can use it
+            if error_type == "awaiting_challenge":
+                self.__class__._pending_sessions[pk] = session
+
             response_data = {
                 "success": success,
                 "credentials": {
@@ -471,31 +481,19 @@ class LinkedInCredentialsVerifyView(APIView):
                 "details": {
                     "verified_at": details.get("verified_at"),
                     "message": details.get("message"),
-                    "error_type": details.get("error_type"),
+                    "error_type": error_type,
                 },
             }
-
             if not success:
-                error_message = details.get("message", "Verification failed")
-                error_type = details.get("error_type")
-
-                # If this is a checkpoint/challenge, include that in the error
-                if error_type == "checkpoint_detected":
-                    response_data["error"] = (
-                        "LinkedIn checkpoint or challenge detected. "
-                        "Please complete the verification in the browser viewer."
-                    )
-                else:
-                    response_data["error"] = error_message
+                response_data["error"] = details.get("message", "Verification failed")
 
             return Response(response_data, status=status.HTTP_200_OK)
 
         except Exception as e:
             error_msg = str(e)[:500]
-            logger = __import__("logging").getLogger(__name__)
-            logger.error(f"Verification request failed: {error_msg}")
+            import logging as _logging
+            _logging.getLogger(__name__).error("Verification request failed: %s", error_msg)
             cred.mark_as_invalid(reason=error_msg)
-
             return Response(
                 {
                     "success": False,
@@ -503,13 +501,78 @@ class LinkedInCredentialsVerifyView(APIView):
                     "credentials": {
                         "id": cred.pk,
                         "status": cred.status,
-                        "linkedin_profile_id": getattr(
-                            cred, "linkedin_profile_id", None
-                        ),
+                        "linkedin_profile_id": getattr(cred, "linkedin_profile_id", None),
                     },
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
+
+class LinkedInCredentialsConfirmView(APIView):
+    """Confirm that a challenge was completed in VNC.
+
+    POST /api/linkedin-credentials/{id}/confirm
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk=None):
+        if LinkedInCredentials is None:
+            return Response(
+                {"error": "LinkedIn credentials support unavailable"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        try:
+            cred = LinkedInCredentials.objects.get(pk=pk)
+        except LinkedInCredentials.DoesNotExist:
+            return Response(
+                {"success": False, "error": "Credential not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        session = LinkedInCredentialsVerifyView._pending_sessions.get(pk)
+        if not session:
+            return Response(
+                {
+                    "success": False,
+                    "error": "No pending challenge session. Please start verification again.",
+                    "details": {"error_type": "session_expired"},
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        success, details = cred.confirm_challenge(session)
+
+        if success:
+            # Challenge resolved — clean up and close
+            LinkedInCredentialsVerifyView._pending_sessions.pop(pk, None)
+            try:
+                session.close()
+            except Exception:
+                pass
+
+        response_data = {
+            "success": success,
+            "credentials": {
+                "id": cred.pk,
+                "status": cred.status,
+                "last_verified": (
+                    cred.last_verified.isoformat() if cred.last_verified else None
+                ),
+                "verification_failures": cred.verification_failures,
+                "linkedin_profile_id": getattr(cred, "linkedin_profile_id", None),
+            },
+            "details": {
+                "verified_at": details.get("verified_at"),
+                "message": details.get("message"),
+                "error_type": details.get("error_type"),
+            },
+        }
+        if not success:
+            response_data["error"] = details.get("message", "Challenge not completed")
+
+        return Response(response_data, status=status.HTTP_200_OK)
 
 
 class LinkedInCredentialsRotationView(APIView):

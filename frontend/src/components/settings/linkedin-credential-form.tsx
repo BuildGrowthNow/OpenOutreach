@@ -25,13 +25,12 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
-import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/use-toast";
 import { Icons } from "@/lib/types/components";
 import { Shield } from "lucide-react";
 import VncViewer from "./vnc-viewer";
-import { post } from "@/lib/api";
 import {
+  confirmLinkedInCredentials,
   createLinkedInCredentials,
   deleteLinkedInCredentials,
   updateLinkedInCredentials,
@@ -43,7 +42,6 @@ import {
 const credentialSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
   password: z.string().min(8, "Password must be at least 8 characters"),
-  cookie_data: z.string().optional(),
 });
 
 type CredentialFormValues = z.infer<typeof credentialSchema>;
@@ -61,11 +59,10 @@ export default function LinkedInCredentialForm({
 }: CredentialFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showChallengeModal, setShowChallengeModal] = useState(false);
-  const [challengeCredentialId, setChallengeCredentialId] = useState<number | null>(null);
   const [success, setSuccess] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [showOptionalCookie, setShowOptionalCookie] = useState(false);
+  const [showChallengeModal, setShowChallengeModal] = useState(false);
+  const [challengeCredentialId, setChallengeCredentialId] = useState<number | null>(null);
   const { toast } = useToast();
 
   const form = useForm<CredentialFormValues>({
@@ -73,103 +70,8 @@ export default function LinkedInCredentialForm({
     defaultValues: {
       email: initialData?.publicEmail.replace(/\*\*\*/g, "") || "",
       password: "",
-      cookie_data: "",
     },
   });
-
-  const uploadCookie = async (profileId: number, cookieData: string) => {
-    const data = await post<{ success?: boolean; message?: string }>(
-      `/api/linkedin-profiles/${profileId}/cookies/`,
-      { cookie_data: cookieData },
-    );
-    return data.data?.message || "Cookie saved";
-  };
-
-  const ensureProfileId = async (
-    credentialId: number,
-    fallbackProfileId?: number | null,
-  ) => {
-    // Set a 90-second timeout for verification (cookie path is fast, login takes longer)
-    const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("Verification timed out after 90 seconds")), 90000)
-    );
-
-    const verifyResp = await Promise.race([
-      verifyLinkedInCredentials(credentialId),
-      timeoutPromise
-    ]);
-    const verifyData = verifyResp.data as
-      | {
-          success?: boolean;
-          details?: { message?: string };
-          error?: string;
-          credentials: LinkedInCredentials;
-        }
-      | undefined;
-
-    if (!verifyData?.success) {
-      throw new Error(
-        verifyResp.error ||
-          verifyData?.error ||
-          verifyData?.details?.message ||
-          "Verification failed",
-      );
-    }
-
-    return verifyData.credentials.linkedinProfileId ?? fallbackProfileId ?? null;
-  };
-
-  const submitCredential = async (
-    values: CredentialFormValues,
-    {
-      onCreated,
-    }: { onCreated?: (credentialId: number) => void },
-  ) => {
-    const cookieData = values.cookie_data?.trim() || "";
-    const formData: CreateLinkedInCredentialsData = {
-      email: values.email,
-      password: values.password,
-    };
-
-    let credentialId = initialData?.id ?? null;
-    let profileId = initialData?.linkedinProfileId ?? null;
-    let response;
-
-    if (initialData) {
-      response = await updateLinkedInCredentials(initialData.id, formData);
-    } else {
-      response = await createLinkedInCredentials(formData);
-    }
-
-    if (!response.data) {
-      throw new Error(response.error || "Failed to save credentials");
-    }
-
-    credentialId = response.data.id;
-    profileId = response.data.credentials.linkedinProfileId ?? profileId;
-
-    if (!initialData) {
-      onCreated?.(credentialId);
-    }
-
-    // Upload cookies BEFORE verification so verify can use them as a fast-path
-    if (cookieData && profileId) {
-      await uploadCookie(profileId, cookieData);
-      form.setValue("cookie_data", "");
-    }
-
-    // Always verify credentials immediately after save
-    profileId = await ensureProfileId(credentialId, profileId);
-
-    // If cookies were provided but profile wasn't available before verify, upload now
-    if (cookieData && !profileId) {
-      throw new Error(
-        "Cookie could not be saved because no LinkedIn profile is linked yet",
-      );
-    }
-
-    return { credentialId, profileId };
-  };
 
   const onSubmit = async (values: CredentialFormValues) => {
     let createdCredentialId: number | null = null;
@@ -179,42 +81,120 @@ export default function LinkedInCredentialForm({
       setError(null);
       setSuccess(false);
 
-      const { credentialId } = await submitCredential(values, {
-        onCreated: (id) => {
-          createdCredentialId = id;
-        },
-      });
-      createdCredentialId = initialData ? null : credentialId;
+      // 1. Save credentials
+      const formData: CreateLinkedInCredentialsData = {
+        email: values.email,
+        password: values.password,
+      };
 
-      toast({
-        title: "Credentials verified",
-        description: "LinkedIn credentials are valid and active",
-      });
+      let credentialId = initialData?.id ?? null;
+      let response;
 
-      setSuccess(true);
-      if (onSuccess) onSuccess();
+      if (initialData) {
+        response = await updateLinkedInCredentials(initialData.id, formData);
+      } else {
+        response = await createLinkedInCredentials(formData);
+      }
+
+      if (!response.data) {
+        throw new Error(response.error || "Failed to save credentials");
+      }
+
+      credentialId = response.data.id;
+      if (!initialData) createdCredentialId = credentialId;
+
+      // 2. Verify immediately
+      const verifyResp = await verifyLinkedInCredentials(credentialId);
+      const verifyData = verifyResp.data as {
+        success?: boolean;
+        error?: string;
+        details?: { error_type?: string; message?: string };
+        credentials?: LinkedInCredentials;
+      } | undefined;
+
+      if (verifyData?.success) {
+        toast({
+          title: "Credentials verified",
+          description: "LinkedIn credentials are valid and active",
+        });
+        setSuccess(true);
+        if (onSuccess) onSuccess();
+        return;
+      }
+
+      // 3. Check if challenge — open VNC modal
+      const errorType = verifyData?.details?.error_type;
+      if (errorType === "awaiting_challenge") {
+        setChallengeCredentialId(credentialId);
+        setShowChallengeModal(true);
+        return;
+      }
+
+      // 4. Other failure
+      throw new Error(
+        verifyData?.error ||
+          verifyData?.details?.message ||
+          verifyResp.error ||
+          "Verification failed",
+      );
     } catch (err) {
       const message = err instanceof Error ? err.message : "Verification failed";
+      setError(message);
+      toast({
+        title: "Verification failed",
+        description: message,
+        variant: "destructive",
+      });
 
-      // Check if this is a checkpoint error — open VNC modal for user to complete challenge
-      if (message.includes("checkpoint") || message.includes("challenge") || message.includes("additional verification")) {
-        setChallengeCredentialId(createdCredentialId ?? initialData?.id ?? null);
-        setShowChallengeModal(true);
-      } else {
-        toast({
-          title: "Verification failed",
-          description: message,
-          variant: "destructive",
-        });
-
-        if (createdCredentialId) {
-          try {
-            await deleteLinkedInCredentials(createdCredentialId);
-          } catch {
-            // Ignore cleanup failures.
-          }
+      if (createdCredentialId) {
+        try {
+          await deleteLinkedInCredentials(createdCredentialId);
+        } catch {
+          // Ignore cleanup failures.
         }
       }
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleConfirmChallenge = async () => {
+    if (!challengeCredentialId) return;
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+      const resp = await confirmLinkedInCredentials(challengeCredentialId);
+      const data = resp.data as {
+        success?: boolean;
+        error?: string;
+        details?: { error_type?: string; message?: string };
+      } | undefined;
+
+      if (data?.success) {
+        setShowChallengeModal(false);
+        toast({
+          title: "Credentials verified",
+          description: "LinkedIn challenge completed successfully",
+        });
+        setSuccess(true);
+        if (onSuccess) onSuccess();
+      } else {
+        const errType = data?.details?.error_type;
+        if (errType === "challenge_incomplete") {
+          toast({
+            title: "Not done yet",
+            description: "Complete the challenge in the browser viewer first, then click Confirm again.",
+            variant: "default",
+          });
+        } else {
+          setShowChallengeModal(false);
+          setError(data?.error || resp.error || "Challenge confirmation failed");
+        }
+      }
+    } catch (err) {
+      setShowChallengeModal(false);
+      setError(err instanceof Error ? err.message : "Challenge confirmation failed");
     } finally {
       setIsSubmitting(false);
     }
@@ -233,9 +213,7 @@ export default function LinkedInCredentialForm({
         <Alert className="border-emerald-800/80 bg-emerald-950/70 text-emerald-100">
           <Icons.CheckCircle className="h-4 w-4 text-emerald-400" />
           <AlertDescription>
-            {initialData
-              ? "Credentials updated successfully. The modal will close automatically."
-              : "Credentials saved successfully. The modal will close automatically."}
+            Credentials verified successfully. The daemon will use this account.
           </AlertDescription>
         </Alert>
       ) : null}
@@ -251,9 +229,9 @@ export default function LinkedInCredentialForm({
                       LinkedIn login
                     </h3>
                     <p className="text-sm text-zinc-400">
-                      Add the LinkedIn email and password used to sign in. The
-                      account profile and display details are discovered after
-                      login.
+                      Enter the LinkedIn email and password. If LinkedIn asks for
+                      a verification code, you&apos;ll see the browser and can enter
+                      it directly.
                     </p>
                   </div>
 
@@ -308,11 +286,7 @@ export default function LinkedInCredentialForm({
                                 type="button"
                                 onClick={() => setShowPassword(!showPassword)}
                                 className="absolute inset-y-0 right-0 flex items-center px-3 text-zinc-400 transition hover:text-zinc-100"
-                                aria-label={
-                                  showPassword
-                                    ? "Hide password"
-                                    : "Show password"
-                                }
+                                aria-label={showPassword ? "Hide password" : "Show password"}
                               >
                                 {showPassword ? (
                                   <Icons.EyeOff className="h-4 w-4" />
@@ -330,152 +304,6 @@ export default function LinkedInCredentialForm({
                       </FormItem>
                     )}
                   />
-
-                  <div className="rounded-xl border border-zinc-800/80 bg-zinc-900/40 p-2">
-                    <button
-                      type="button"
-                      onClick={() => setShowOptionalCookie((open) => !open)}
-                      className="flex w-full items-center justify-between rounded-lg px-3 py-3 text-left transition hover:bg-zinc-800/40"
-                    >
-                      <div className="space-y-1 pr-4">
-                        <div className="flex items-center gap-2 text-sm font-medium text-zinc-100">
-                          <Icons.Info className="h-4 w-4 text-zinc-400" />
-                          Optional session cookie
-                        </div>
-                        <p className="text-sm text-zinc-400">
-                          Optional fallback if normal email/password login has
-                          trouble, or if you want to reuse a session that is
-                          already logged in.
-                        </p>
-                      </div>
-                      <Icons.ChevronDown
-                        className={`h-4 w-4 shrink-0 text-zinc-400 transition-transform ${showOptionalCookie ? "rotate-180" : "rotate-0"}`}
-                      />
-                    </button>
-
-                    {showOptionalCookie ? (
-                      <div className="mt-2 border-t border-zinc-800/80 px-3 pb-3 pt-4">
-                        <div className="max-h-64 space-y-4 overflow-y-auto pr-2">
-                          <div className="rounded-lg border border-amber-800/80 bg-amber-950/60 p-4">
-                            <p className="text-sm font-medium text-amber-100">
-                              ⚠️ Important: Export ALL cookies with a browser extension
-                            </p>
-                            <p className="mt-1 text-sm text-amber-200/80">
-                              LinkedIn's Voyager API requires the full cookie set including the HttpOnly <code className="rounded bg-amber-900/40 px-1 py-0.5">li_at</code> cookie.
-                              Browser extensions can export HttpOnly cookies; browser console scripts cannot.
-                            </p>
-                          </div>
-
-                          <div className="rounded-lg border border-zinc-800/80 bg-zinc-950/60 p-4">
-                            <p className="text-sm font-medium text-zinc-100">
-                              When to use cookies
-                            </p>
-                            <p className="mt-1 text-sm text-zinc-400">
-                              Most users should start with only LinkedIn email
-                              and password. Use cookies only if LinkedIn blocks
-                              the normal login flow, asks for repeated
-                              challenges, or you want to reuse an existing
-                              logged-in browser session.
-                            </p>
-                          </div>
-
-                          <div className="space-y-3 rounded-lg border border-zinc-800/80 bg-zinc-950/60 p-4">
-                            <div>
-                              <h4 className="text-sm font-medium text-zinc-100">
-                                How to Export Cookies
-                              </h4>
-                              <p className="mt-1 text-sm text-zinc-400">
-                                Use a browser extension to export ALL LinkedIn cookies including HttpOnly cookies.
-                              </p>
-                            </div>
-                            <ol className="list-decimal space-y-2 pl-5 text-sm text-zinc-300">
-                              <li>
-                                Install a cookie exporter extension:
-                                <ul className="ml-4 mt-1 list-disc space-y-1 text-zinc-400">
-                                  <li>
-                                    <a
-                                      href="https://chromewebstore.google.com/detail/editthiscookie/fngmhnnpilhplaeedifhccceomclgfbg"
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="underline hover:text-zinc-200"
-                                    >
-                                      EditThisCookie
-                                    </a> (Chrome/Edge - 3M+ users)
-                                  </li>
-                                  <li>
-                                    <a
-                                      href="https://chromewebstore.google.com/detail/cookie-editor/hlkenndednhfkekhgcdicdfddnkalmdm"
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="underline hover:text-zinc-200"
-                                    >
-                                      Cookie-Editor
-                                    </a> (Chrome/Edge/Firefox - open source)
-                                  </li>
-                                </ul>
-                              </li>
-                              <li>
-                                Log into LinkedIn at{" "}
-                                <a
-                                  href="https://www.linkedin.com/feed/"
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="underline hover:text-zinc-200"
-                                >
-                                  linkedin.com/feed/
-                                </a>
-                              </li>
-                              <li>
-                                Click the extension icon in your browser toolbar
-                              </li>
-                              <li>
-                                Click "Export" → "JSON" (EditThisCookie) or the export icon (Cookie-Editor)
-                              </li>
-                              <li>
-                                Verify the exported JSON includes <code className="rounded bg-zinc-800 px-1 py-0.5 text-xs">li_at</code> cookie
-                              </li>
-                              <li>
-                                Paste the full JSON array below (starts with <code className="rounded bg-zinc-800 px-1 py-0.5 text-xs">[</code>)
-                              </li>
-                            </ol>
-                          </div>
-
-                          <div className="space-y-3 rounded-lg border border-zinc-800/80 bg-zinc-950/60 p-4">
-                            <h4 className="text-sm font-medium text-zinc-100">
-                              ⚠️ Security Note
-                            </h4>
-                            <p className="text-sm text-zinc-400">
-                              Browser extensions can access all site data. Only install extensions from trusted publishers with good reviews.
-                              Both recommended extensions are well-established with millions of users or open source code.
-                            </p>
-                          </div>
-
-                          <FormField
-                            control={form.control}
-                            name="cookie_data"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Cookie JSON Array</FormLabel>
-                                <FormControl>
-                                  <Textarea
-                                    placeholder='Paste the JSON array from EditThisCookie/Cookie-Editor: [{"name":"li_at","value":"...","domain":".linkedin.com",...},{...}]'
-                                    {...field}
-                                    rows={6}
-                                    className="border-zinc-800 bg-zinc-950/70 font-mono text-xs"
-                                  />
-                                </FormControl>
-                                <FormDescription>
-                                  Must include the <code className="rounded bg-zinc-800 px-1 py-0.5 text-xs">li_at</code> cookie. Paste the complete JSON array from your extension (starts with <code className="rounded bg-zinc-800 px-1 py-0.5 text-xs">[</code>).
-                                  Stored encrypted and used for API authentication.
-                                </FormDescription>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                        </div>
-                      </div>
-                    ) : null}
-                  </div>
                 </CardContent>
               </Card>
 
@@ -520,7 +348,7 @@ export default function LinkedInCredentialForm({
                   <div className="mt-4 space-y-3 text-sm text-zinc-400">
                     <div className="flex items-start">
                       <Icons.CheckCircle className="mr-2 mt-0.5 h-3 w-3 text-green-500/80" />
-                      <span>Passwords and cookies are encrypted at rest.</span>
+                      <span>Password is encrypted at rest.</span>
                     </div>
                     <div className="flex items-start">
                       <Icons.CheckCircle className="mr-2 mt-0.5 h-3 w-3 text-green-500/80" />
@@ -528,9 +356,7 @@ export default function LinkedInCredentialForm({
                     </div>
                     <div className="flex items-start">
                       <Icons.CheckCircle className="mr-2 mt-0.5 h-3 w-3 text-green-500/80" />
-                      <span>
-                        The modal only stores the data needed to log in.
-                      </span>
+                      <span>Session cookies are maintained server-side only.</span>
                     </div>
                   </div>
                 </CardContent>
@@ -539,34 +365,28 @@ export default function LinkedInCredentialForm({
               <Card className="border-zinc-800/80 bg-zinc-950/50 shadow-none">
                 <CardContent className="pt-6">
                   <h3 className="flex items-center text-sm font-semibold text-zinc-100">
-                    <Icons.AlertCircle className="mr-2 h-4 w-4 text-zinc-400" />
-                    What to know
+                    <Icons.Info className="mr-2 h-4 w-4 text-zinc-400" />
+                    How it works
                   </h3>
                   <ul className="mt-4 space-y-3 text-sm text-zinc-400">
                     <li className="flex items-start">
-                      <Icons.Info className="mr-2 mt-0.5 h-3 w-3 text-blue-400/80" />
+                      <Icons.CheckCircle className="mr-2 mt-0.5 h-3 w-3 text-blue-400/80" />
                       <span>
-                        Use the same LinkedIn account you want the daemon to run
-                        under.
+                        We log into LinkedIn on the server using your credentials.
                       </span>
                     </li>
                     <li className="flex items-start">
-                      <Icons.Info className="mr-2 mt-0.5 h-3 w-3 text-blue-400/80" />
+                      <Icons.CheckCircle className="mr-2 mt-0.5 h-3 w-3 text-blue-400/80" />
                       <span>
-                        Profile details are discovered automatically after a
-                        successful login or verification.
+                        If LinkedIn sends a verification code, a live browser
+                        viewer opens so you can enter it.
                       </span>
                     </li>
                     <li className="flex items-start">
-                      <Icons.AlertCircle className="mr-2 mt-0.5 h-3 w-3 text-amber-400/80" />
+                      <Icons.CheckCircle className="mr-2 mt-0.5 h-3 w-3 text-blue-400/80" />
                       <span>
-                        If uploading cookies, export <strong>ALL</strong> cookies (not just li_at) — the Voyager API needs the full set.
-                      </span>
-                    </li>
-                    <li className="flex items-start">
-                      <Icons.Info className="mr-2 mt-0.5 h-3 w-3 text-blue-400/80" />
-                      <span>
-                        Recommended: use EditThisCookie or Cookie-Editor extension for the most complete export.
+                        Once verified, the server maintains its own session —
+                        your personal browser stays unaffected.
                       </span>
                     </li>
                   </ul>
@@ -582,14 +402,14 @@ export default function LinkedInCredentialForm({
           <DialogHeader className="p-6 pb-4 border-b border-zinc-800">
             <DialogTitle className="flex items-center gap-2">
               <Shield className="h-5 w-5 text-amber-500" />
-              Complete LinkedIn Challenge
+              Complete LinkedIn Verification
             </DialogTitle>
             <DialogDescription className="space-y-2">
-              <p>LinkedIn requires additional verification. Follow these steps:</p>
+              <p>LinkedIn sent a verification code to your email. Complete it below:</p>
               <ol className="list-decimal list-inside space-y-1 text-sm">
-                <li>Enter the verification code sent to your email in the browser below</li>
-                <li>Wait for LinkedIn to redirect you to the feed page</li>
-                <li>Click &quot;Confirm Login&quot; to verify your credentials</li>
+                <li>Check your email for the LinkedIn verification code</li>
+                <li>Enter the code in the browser viewer below</li>
+                <li>Once you see the LinkedIn feed, click &quot;Confirm Login&quot;</li>
               </ol>
             </DialogDescription>
           </DialogHeader>
@@ -598,7 +418,7 @@ export default function LinkedInCredentialForm({
           </div>
           <div className="flex items-center justify-between gap-2 p-4 border-t border-zinc-800 bg-zinc-950/80">
             <p className="text-sm text-zinc-400">
-              Complete the challenge, then confirm your login
+              Enter the code, wait for the feed to load, then confirm
             </p>
             <div className="flex gap-2">
               <Button
@@ -606,39 +426,17 @@ export default function LinkedInCredentialForm({
                 onClick={() => setShowChallengeModal(false)}
                 className="border-zinc-700 hover:bg-zinc-900"
               >
-                Close
+                Cancel
               </Button>
               <Button
-                onClick={async () => {
-                  if (!challengeCredentialId) return;
-                  setShowChallengeModal(false);
-                  setIsSubmitting(true);
-                  try {
-                    const resp = await verifyLinkedInCredentials(challengeCredentialId);
-                    const data = resp.data as { success?: boolean; error?: string } | undefined;
-                    if (data?.success) {
-                      toast({
-                        title: "Credentials verified",
-                        description: "LinkedIn credentials are valid and active",
-                      });
-                      setSuccess(true);
-                      if (onSuccess) onSuccess();
-                    } else {
-                      setError(data?.error || resp.error || "Verification failed after challenge");
-                    }
-                  } catch (err) {
-                    setError(err instanceof Error ? err.message : "Verification failed");
-                  } finally {
-                    setIsSubmitting(false);
-                  }
-                }}
+                onClick={handleConfirmChallenge}
                 disabled={isSubmitting}
                 className="bg-emerald-600 hover:bg-emerald-700"
               >
                 {isSubmitting ? (
                   <>
                     <Icons.RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                    Verifying...
+                    Checking...
                   </>
                 ) : (
                   <>

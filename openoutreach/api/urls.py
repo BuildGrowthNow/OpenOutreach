@@ -43,6 +43,7 @@ from .views.leads import (
     LeadProfileView,
 )
 from .views.linkedin_credentials import (
+    LinkedInCredentialsConfirmView,
     LinkedInCredentialsHealthView,
     LinkedInCredentialsLogsView,
     LinkedInCredentialsRotationView,
@@ -240,6 +241,11 @@ urlpatterns = [
         "linkedin-credentials/<int:pk>/verify/",
         LinkedInCredentialsVerifyView.as_view(),
         name="linkedin-credentials-verify",
+    ),
+    path(
+        "linkedin-credentials/<int:pk>/confirm/",
+        LinkedInCredentialsConfirmView.as_view(),
+        name="linkedin-credentials-confirm",
     ),
     path(
         "linkedin-credentials/<int:pk>/rotate/",
@@ -471,6 +477,11 @@ urlpatterns += [
         r"^linkedin-credentials/(?P<pk>[0-9]+)/verify$",
         LinkedInCredentialsVerifyView.as_view(),
         name="linkedin-credentials-verify-no-slash",
+    ),
+    re_path(
+        r"^linkedin-credentials/(?P<pk>[0-9]+)/confirm$",
+        LinkedInCredentialsConfirmView.as_view(),
+        name="linkedin-credentials-confirm-no-slash",
     ),
     re_path(
         r"^linkedin-credentials/(?P<pk>[0-9]+)/rotate$",
