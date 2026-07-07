@@ -252,6 +252,10 @@ def plan_check_pending_window(session, campaign) -> int:
     ).count()
     n = min(n_due, CHECK_PENDING_DAILY_CAP)
 
+    # Don't create tasks if there are no PENDING deals due in the next 24h
+    if n == 0:
+        return 0
+
     created = _plan_slots(Task.TaskType.CHECK_PENDING, campaign.pk, n)
     if created:
         logger.info(
