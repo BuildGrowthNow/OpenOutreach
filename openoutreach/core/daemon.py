@@ -601,6 +601,19 @@ def run_daemon(session):
                 task.payload.get("campaign_id", "unknown"),
                 error_msg,
             )
+
+            # Create ActionLog entry for failed task
+            try:
+                from openoutreach.linkedin.models import ActionLog
+                ActionLog.objects.create(
+                    linkedin_profile=session.linkedin_profile,
+                    campaign=campaign,
+                    action_type=task.task_type,
+                    status="failed",
+                    error_message=error_msg[:1000],
+                )
+            except Exception as e:
+                logger.debug("Failed to create ActionLog for failed task: %s", e)
             continue
 
         task.mark_completed()
@@ -611,6 +624,18 @@ def run_daemon(session):
             task.pk,
             task.payload.get("campaign_id", "unknown"),
         )
+
+        # Create ActionLog entry for completed task
+        try:
+            from openoutreach.linkedin.models import ActionLog
+            ActionLog.objects.create(
+                linkedin_profile=session.linkedin_profile,
+                campaign=campaign,
+                action_type=task.task_type,
+                status="completed",
+            )
+        except Exception as e:
+            logger.debug("Failed to create ActionLog for completed task: %s", e)
 
         # Refresh cookies after every successful task to keep session warm
         try:
