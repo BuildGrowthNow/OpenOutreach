@@ -25,7 +25,7 @@ export default function ProfilePage() {
       setLoading(true)
       const response = await getSettings()
       if (response.data) {
-        setProfileData(response.data.linkedin_profile)
+        setProfileData(response.data.linkedinProfile)
       } else {
         setError('Failed to load profile')
       }

@@ -135,12 +135,12 @@ export default function SettingsPage() {
             <CardDescription>LinkedIn profile</CardDescription>
               <CardTitle className="flex items-center gap-2">
                 <Icons.User className="h-4 w-4 text-blue-500" />@
-                {settings.linkedin_profile?.username || "not set"}
+                {settings.linkedinProfile?.username || "not set"}
               </CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">
-              Campaign: {settings.linkedin_profile?.campaign || "Not configured"}
+              Campaign: {settings.linkedinProfile?.campaign || "Not configured"}
             </p>
           </CardContent>
         </Card>
@@ -150,14 +150,14 @@ export default function SettingsPage() {
             <CardDescription>Daily sending profile</CardDescription>
             <CardTitle className="flex items-center gap-2">
               <Icons.Shield className="h-4 w-4 text-blue-500" />
-              {(settings.rate_limits?.daily_connection_limit ?? 0)} connect /{" "}
-              {(settings.rate_limits?.daily_follow_up_limit ?? 0)} follow-up
+              {(settings.rateLimits?.dailyConnectionLimit ?? 0)} connect /{" "}
+              {(settings.rateLimits?.dailyFollowUpLimit ?? 0)} follow-up
             </CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">
-              Velocity {(settings.rate_limits?.velocity ?? 0)}/day, cooldown{" "}
-              {(settings.rate_limits?.cooldown_minutes ?? 0)} min
+              Velocity {(settings.rateLimits?.velocity ?? 0)}/day, cooldown{" "}
+              {(settings.rateLimits?.cooldownMinutes ?? 0)} min
             </p>
           </CardContent>
         </Card>
@@ -175,18 +175,18 @@ export default function SettingsPage() {
               Model: {settings.llm.model || "Not configured"}
             </p>
             <div className="flex flex-wrap gap-2">
-              {settings.llm.writing_style && (
+              {settings.llm.writingStyle && (
                 <Badge variant="outline">Style</Badge>
               )}
-              {settings.llm.say_rules && (
+              {settings.llm.sayRules && (
                 <Badge variant="outline">Prefer</Badge>
               )}
-              {settings.llm.avoid_rules && (
+              {settings.llm.avoidRules && (
                 <Badge variant="outline">Avoid</Badge>
               )}
-              {!settings.llm.writing_style &&
-                !settings.llm.say_rules &&
-                !settings.llm.avoid_rules && (
+              {!settings.llm.writingStyle &&
+                !settings.llm.sayRules &&
+                !settings.llm.avoidRules && (
                   <Badge variant="outline">Defaults only</Badge>
                 )}
             </div>
@@ -272,7 +272,7 @@ export default function SettingsPage() {
             </CardHeader>
             <CardContent>
               <RateLimitForm
-                initialData={settings.rate_limits}
+                initialData={settings.rateLimits}
                 onSuccess={handleSettingsUpdate}
               />
             </CardContent>

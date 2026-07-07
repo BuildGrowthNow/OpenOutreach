@@ -49,7 +49,7 @@ export default function ProfileForm({ initialData, onSuccess }: ProfileFormProps
 
       // Update settings with profile data
       const response = await updateSettings({
-        linkedin_profile: {
+        linkedinProfile: {
           username: values.username,
           campaign: values.campaign
         }

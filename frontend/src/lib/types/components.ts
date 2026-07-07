@@ -363,21 +363,21 @@ export interface DailyUsageResponse {
 // LinkedIn Profile Health Status interfaces
 export interface LinkedInProfileHealth {
   id: number;
-  linkedin_username: string;
+  linkedinUsername: string;
   status: boolean;
-  credentials_status: string;
-  health_score: number;
-  health_status: string;
-  needs_attention: boolean;
-  last_error?: string | null;
-  last_verification?: string | null;
+  credentialsStatus: string;
+  healthScore: number;
+  healthStatus: string;
+  needsAttention: boolean;
+  lastError?: string | null;
+  lastVerification?: string | null;
 }
 
 export interface LinkedInProfileHealthResponse {
   profiles: LinkedInProfileHealth[];
   count: number;
-  total_profiles: number;
-  needs_attention_count: number;
+  totalProfiles: number;
+  needsAttentionCount: number;
 }
 
 // Campaign Template types

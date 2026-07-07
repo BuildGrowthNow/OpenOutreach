@@ -67,27 +67,27 @@ const Header = ({ onMenuClick, className }: HeaderProps) => {
     
     // Sort profiles by severity (invalid > locked > expired > active > neutral)
     for (const profile of linkedinHealth.profiles) {
-      if (profile.credentials_status === 'invalid') {
+      if (profile.credentialsStatus === 'invalid') {
         return { label: 'LinkedIn Invalid', color: 'bg-red-500' }
       }
     }
-    
+
     for (const profile of linkedinHealth.profiles) {
-      if (profile.credentials_status === 'locked') {
+      if (profile.credentialsStatus === 'locked') {
         worstStatus = 'locked'
       }
     }
-    
+
     for (const profile of linkedinHealth.profiles) {
-      if (profile.credentials_status === 'expired') {
+      if (profile.credentialsStatus === 'expired') {
         if (worstStatus === 'neutral') {
           worstStatus = 'expired'
         }
       }
     }
-    
+
     for (const profile of linkedinHealth.profiles) {
-      if (profile.credentials_status === 'active') {
+      if (profile.credentialsStatus === 'active') {
         if (worstStatus === 'neutral') {
           worstStatus = 'active'
         }
@@ -115,21 +115,21 @@ const Header = ({ onMenuClick, className }: HeaderProps) => {
     }
 
     for (const profile of linkedinHealth.profiles) {
-      if (profile.credentials_status === 'invalid' && profile.last_error) {
-        return `LinkedIn Invalid: ${profile.last_error}`
+      if (profile.credentialsStatus === 'invalid' && profile.lastError) {
+        return `LinkedIn Invalid: ${profile.lastError}`
       }
-      if (profile.credentials_status === 'locked' && profile.last_error) {
-        return `LinkedIn Locked: ${profile.last_error}`
+      if (profile.credentialsStatus === 'locked' && profile.lastError) {
+        return `LinkedIn Locked: ${profile.lastError}`
       }
-      if (profile.credentials_status === 'expired' && profile.last_error) {
-        return `LinkedIn Expired: ${profile.last_error}`
+      if (profile.credentialsStatus === 'expired' && profile.lastError) {
+        return `LinkedIn Expired: ${profile.lastError}`
       }
     }
 
     // Show last verification if available
     for (const profile of linkedinHealth.profiles) {
-      if (profile.last_verification) {
-        return `Last verified: ${new Date(profile.last_verification).toLocaleDateString()}`
+      if (profile.lastVerification) {
+        return `Last verified: ${new Date(profile.lastVerification).toLocaleDateString()}`
       }
     }
 

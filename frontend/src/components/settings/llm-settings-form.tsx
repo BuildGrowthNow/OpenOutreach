@@ -93,10 +93,10 @@ export default function LlmSettingsForm({ initialData, onSuccess }: LlmSettingsF
     defaultValues: {
       provider: (initialData?.provider as typeof providerValues[number]) || 'openai',
       model: initialData?.model || '',
-      apiBase: initialData?.api_base || '',
-      writingStyle: initialData?.writing_style || '',
-      sayRules: initialData?.say_rules || '',
-      avoidRules: initialData?.avoid_rules || '',
+      apiBase: initialData?.apiBase || '',
+      writingStyle: initialData?.writingStyle || '',
+      sayRules: initialData?.sayRules || '',
+      avoidRules: initialData?.avoidRules || '',
     },
   })
 
@@ -124,10 +124,10 @@ export default function LlmSettingsForm({ initialData, onSuccess }: LlmSettingsF
         llm: {
           provider: values.provider,
           model: values.model.trim(),
-          api_base: values.apiBase.trim(),
-          writing_style: values.writingStyle.trim(),
-          say_rules: values.sayRules.trim(),
-          avoid_rules: values.avoidRules.trim(),
+          apiBase: values.apiBase.trim(),
+          writingStyle: values.writingStyle.trim(),
+          sayRules: values.sayRules.trim(),
+          avoidRules: values.avoidRules.trim(),
         },
       })
 
@@ -405,10 +405,10 @@ export default function LlmSettingsForm({ initialData, onSuccess }: LlmSettingsF
             onClick={() => form.reset({
               provider: (initialData?.provider as typeof providerValues[number]) || 'openai',
               model: initialData?.model || '',
-              apiBase: initialData?.api_base || '',
-              writingStyle: initialData?.writing_style || '',
-              sayRules: initialData?.say_rules || '',
-              avoidRules: initialData?.avoid_rules || '',
+              apiBase: initialData?.apiBase || '',
+              writingStyle: initialData?.writingStyle || '',
+              sayRules: initialData?.sayRules || '',
+              avoidRules: initialData?.avoidRules || '',
             })}
             disabled={isSubmitting}
           >

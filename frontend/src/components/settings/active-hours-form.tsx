@@ -45,21 +45,21 @@ const WEEKDAYS = [
 export default function ActiveHoursForm({ settings, onUpdate }: ActiveHoursFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  // Provide default values if active_hours is undefined
-  const activeHours = settings.active_hours || {
-    enable_active_hours: false,
-    active_start_hour: 9,
-    active_end_hour: 17,
-    active_timezone: "UTC",
-    active_days: "1,2,3,4,5",
+  // Provide default values if activeHours is undefined
+  const activeHours = settings.activeHours || {
+    enableActiveHours: false,
+    activeStartHour: 9,
+    activeEndHour: 17,
+    activeTimezone: "UTC",
+    activeDays: "1,2,3,4,5",
   };
-  
-  const [enabled, setEnabled] = useState(activeHours.enable_active_hours);
-  const [startHour, setStartHour] = useState(activeHours.active_start_hour);
-  const [endHour, setEndHour] = useState(activeHours.active_end_hour);
-  const [timezone, setTimezone] = useState(activeHours.active_timezone);
+
+  const [enabled, setEnabled] = useState(activeHours.enableActiveHours);
+  const [startHour, setStartHour] = useState(activeHours.activeStartHour);
+  const [endHour, setEndHour] = useState(activeHours.activeEndHour);
+  const [timezone, setTimezone] = useState(activeHours.activeTimezone);
   const [activeDays, setActiveDays] = useState<number[]>(
-    activeHours.active_days.split(",").map((d) => parseInt(d.trim())).filter((d) => !isNaN(d))
+    activeHours.activeDays.split(",").map((d) => parseInt(d.trim())).filter((d) => !isNaN(d))
   );
   const { toast } = useToast();
 
@@ -95,12 +95,12 @@ export default function ActiveHoursForm({ settings, onUpdate }: ActiveHoursFormP
 
     try {
       const response = await updateSettings({
-        active_hours: {
-          enable_active_hours: enabled,
-          active_start_hour: startHour,
-          active_end_hour: endHour,
-          active_timezone: timezone,
-          active_days: activeDays.join(","),
+        activeHours: {
+          enableActiveHours: enabled,
+          activeStartHour: startHour,
+          activeEndHour: endHour,
+          activeTimezone: timezone,
+          activeDays: activeDays.join(","),
         },
       });
 

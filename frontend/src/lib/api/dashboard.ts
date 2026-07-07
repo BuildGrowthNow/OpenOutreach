@@ -655,25 +655,25 @@ export interface Settings {
   llm: {
     provider: string;
     model: string;
-    api_base: string;
-    writing_style: string;
-    say_rules: string;
-    avoid_rules: string;
+    apiBase: string;
+    writingStyle: string;
+    sayRules: string;
+    avoidRules: string;
   };
-  rate_limits: {
-    daily_connection_limit: number;
-    daily_follow_up_limit: number;
+  rateLimits: {
+    dailyConnectionLimit: number;
+    dailyFollowUpLimit: number;
     velocity: number;
-    cooldown_minutes: number;
+    cooldownMinutes: number;
   };
-  active_hours?: {
-    enable_active_hours: boolean;
-    active_start_hour: number;
-    active_end_hour: number;
-    active_timezone: string;
-    active_days: string;
+  activeHours?: {
+    enableActiveHours: boolean;
+    activeStartHour: number;
+    activeEndHour: number;
+    activeTimezone: string;
+    activeDays: string;
   };
-  linkedin_profile: {
+  linkedinProfile: {
     username: string;
     campaign: string;
   };
@@ -686,16 +686,16 @@ export async function getSettings(): Promise<ApiResponse<Settings>> {
 export async function updateSettings(
   data: Partial<{
     llm?: Partial<Settings["llm"]>;
-    rate_limits?: Partial<Settings["rate_limits"]>;
-    active_hours?: Partial<Settings["active_hours"]>;
-    linkedin_profile?: Partial<Settings["linkedin_profile"]>;
+    rateLimits?: Partial<Settings["rateLimits"]>;
+    activeHours?: Partial<Settings["activeHours"]>;
+    linkedinProfile?: Partial<Settings["linkedinProfile"]>;
   }>,
 ): Promise<ApiResponse<Settings>> {
   return patch("/api/settings", data);
 }
 
 export async function getRateLimits(): Promise<
-  ApiResponse<Settings["rate_limits"]>
+  ApiResponse<Settings["rateLimits"]>
 > {
   return get("/api/settings/rate-limits");
 }
@@ -1106,10 +1106,10 @@ export async function getLinkedInCredentialsLogs(
 // LinkedIn Profiles API
 export interface LinkedInProfile {
   id: number;
-  linkedin_username: string;
+  linkedinUsername: string;
   active: boolean;
-  connect_daily_limit: number;
-  follow_up_daily_limit: number;
+  connectDailyLimit: number;
+  followUpDailyLimit: number;
 }
 
 export async function getLinkedInProfiles(): Promise<

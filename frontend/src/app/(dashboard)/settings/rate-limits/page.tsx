@@ -16,7 +16,7 @@ import { getRateLimits, type Settings } from "@/lib/api/dashboard";
 import RateLimitForm from "@/components/settings/rate-limit-form";
 
 export default function RateLimitsPage() {
-  const [rateLimits, setRateLimits] = useState<Settings["rate_limits"] | null>(
+  const [rateLimits, setRateLimits] = useState<Settings["rateLimits"] | null>(
     null,
   );
   const [loading, setLoading] = useState(true);

@@ -22,10 +22,10 @@ import { Icons } from "@/lib/types/components";
 import { updateSettings } from "@/lib/api/dashboard";
 
 interface BackendRateLimits {
-  daily_connection_limit: number;
-  daily_follow_up_limit: number;
+  dailyConnectionLimit: number;
+  dailyFollowUpLimit: number;
   velocity: number;
-  cooldown_minutes: number;
+  cooldownMinutes: number;
 }
 
 const rateLimitSchema = z.object({
@@ -80,10 +80,10 @@ export default function RateLimitForm({
   const form = useForm<RateLimitFormValues>({
     resolver: zodResolver(rateLimitSchema),
     defaultValues: {
-      dailyConnectionLimit: initialData?.daily_connection_limit ?? 20,
-      dailyFollowUpLimit: initialData?.daily_follow_up_limit ?? 25,
+      dailyConnectionLimit: initialData?.dailyConnectionLimit ?? 20,
+      dailyFollowUpLimit: initialData?.dailyFollowUpLimit ?? 25,
       velocity: initialData?.velocity ?? 20,
-      cooldownMinutes: initialData?.cooldown_minutes ?? 0,
+      cooldownMinutes: initialData?.cooldownMinutes ?? 0,
     },
   });
 
@@ -94,11 +94,11 @@ export default function RateLimitForm({
       setSuccess(false);
 
       const response = await updateSettings({
-        rate_limits: {
-          daily_connection_limit: values.dailyConnectionLimit,
-          daily_follow_up_limit: values.dailyFollowUpLimit,
+        rateLimits: {
+          dailyConnectionLimit: values.dailyConnectionLimit,
+          dailyFollowUpLimit: values.dailyFollowUpLimit,
           velocity: values.velocity,
-          cooldown_minutes: values.cooldownMinutes,
+          cooldownMinutes: values.cooldownMinutes,
         },
       });
 
@@ -413,10 +413,10 @@ export default function RateLimitForm({
             variant="outline"
             onClick={() =>
               form.reset({
-                dailyConnectionLimit: initialData?.daily_connection_limit || 20,
-                dailyFollowUpLimit: initialData?.daily_follow_up_limit || 25,
+                dailyConnectionLimit: initialData?.dailyConnectionLimit || 20,
+                dailyFollowUpLimit: initialData?.dailyFollowUpLimit || 25,
                 velocity: initialData?.velocity || 20,
-                cooldownMinutes: initialData?.cooldown_minutes || 0,
+                cooldownMinutes: initialData?.cooldownMinutes || 0,
               })
             }
             disabled={isSubmitting}
