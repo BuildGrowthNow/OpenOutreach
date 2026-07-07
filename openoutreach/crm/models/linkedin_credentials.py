@@ -318,7 +318,57 @@ class LinkedInCredentials(models.Model):
         )
 
         try:
-            # Launch browser directly without authentication to avoid checkpoint polling
+            # Fast path: try cookie-based session first
+            profile = self.linkedin_profile
+            cookie_data = None
+            if profile:
+                profile.refresh_from_db(fields=["cookie_data_encrypted"])
+                cookie_data = profile.cookie_data
+
+            if cookie_data:
+                logger.info("Attempting cookie-based verification for %s", self.get_public_email())
+                session.page, session.context, session.browser, session.playwright = launch_browser(
+                    storage_state=cookie_data
+                )
+                session.page.goto("https://www.linkedin.com/feed/", timeout=30000)
+                session.page.wait_for_load_state("domcontentloaded", timeout=15000)
+                current_url = session.page.url
+
+                if "linkedin.com/feed" in current_url:
+                    logger.info("Cookie-based verification successful for %s", self.get_public_email())
+                    self.last_verified = timezone.now()
+                    self.verification_failures = 0
+                    self.status = self.STATUS_ACTIVE if mark_as_active else self.STATUS_TESTED
+                    self.save(update_fields=["last_verified", "verification_failures", "status"])
+
+                    LinkedInCredentialLog.objects.create(
+                        credentials=self,
+                        action="verified",
+                        details={"verified_by": "cookie_session", "status": self.status},
+                    )
+
+                    return True, {
+                        "verified_at": self.last_verified.isoformat(),
+                        "failures": 0,
+                        "status": self.status,
+                        "message": "LinkedIn credentials verified successfully (cookie session)",
+                        "error_type": None,
+                    }
+
+                # Cookie session didn't land on feed — close and fall through to login
+                logger.info("Cookie session invalid for %s, falling back to login", self.get_public_email())
+                try:
+                    if session.context:
+                        session.context.close()
+                    if session.browser:
+                        session.browser.close()
+                    if session.playwright:
+                        session.playwright.stop()
+                except Exception:
+                    pass
+                session.page = session.context = session.browser = session.playwright = None
+
+            # Full login flow
             session.page, session.context, session.browser, session.playwright = launch_browser()
 
             # Navigate to LinkedIn login page

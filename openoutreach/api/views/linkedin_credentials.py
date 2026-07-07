@@ -265,15 +265,11 @@ class LinkedInCredentialsView(APIView):
                 details={"created_by": request.user.username},
             )
 
-            # Note: We don't auto-verify here because verification can block for several
-            # minutes if LinkedIn presents a checkpoint/challenge. Users should explicitly
-            # click "Test Credentials" or "Verify" to trigger verification.
-
             return Response(
                 {
                     "success": True,
                     "id": cred.pk,
-                    "message": "Credentials created successfully. Click 'Verify' to test the connection.",
+                    "message": "Credentials created successfully.",
                     "credentials": {
                         "id": cred.pk,
                         "username": cred.username,

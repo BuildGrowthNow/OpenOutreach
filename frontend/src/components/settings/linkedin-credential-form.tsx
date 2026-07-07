@@ -51,7 +51,6 @@ export default function LinkedInCredentialForm({
   onCancel,
 }: CredentialFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isTesting, setIsTesting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -79,13 +78,9 @@ export default function LinkedInCredentialForm({
     credentialId: number,
     fallbackProfileId?: number | null,
   ) => {
-    if (fallbackProfileId) {
-      return fallbackProfileId;
-    }
-
-    // Set a 60-second timeout for verification
+    // Set a 90-second timeout for verification (cookie path is fast, login takes longer)
     const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("Verification timed out after 60 seconds")), 60000)
+      setTimeout(() => reject(new Error("Verification timed out after 90 seconds")), 90000)
     );
 
     const verifyResp = await Promise.race([
@@ -96,6 +91,7 @@ export default function LinkedInCredentialForm({
       | {
           success?: boolean;
           details?: { message?: string };
+          error?: string;
           credentials: LinkedInCredentials;
         }
       | undefined;
@@ -103,20 +99,20 @@ export default function LinkedInCredentialForm({
     if (!verifyData?.success) {
       throw new Error(
         verifyResp.error ||
+          verifyData?.error ||
           verifyData?.details?.message ||
-          "Verification failed while preparing cookie upload",
+          "Verification failed",
       );
     }
 
-    return verifyData.credentials.linkedinProfileId ?? null;
+    return verifyData.credentials.linkedinProfileId ?? fallbackProfileId ?? null;
   };
 
   const submitCredential = async (
     values: CredentialFormValues,
     {
-      verifyAfterSave,
       onCreated,
-    }: { verifyAfterSave: boolean; onCreated?: (credentialId: number) => void },
+    }: { onCreated?: (credentialId: number) => void },
   ) => {
     const cookieData = values.cookie_data?.trim() || "";
     const formData: CreateLinkedInCredentialsData = {
@@ -145,64 +141,34 @@ export default function LinkedInCredentialForm({
       onCreated?.(credentialId);
     }
 
-    if (verifyAfterSave) {
-      profileId = await ensureProfileId(credentialId, profileId);
+    // Upload cookies BEFORE verification so verify can use them as a fast-path
+    if (cookieData && profileId) {
+      await uploadCookie(profileId, cookieData);
+      form.setValue("cookie_data", "");
     }
 
-    if (cookieData) {
-      profileId = await ensureProfileId(credentialId, profileId);
-      if (!profileId) {
-        throw new Error(
-          "Cookie could not be saved because no LinkedIn profile is linked yet",
-        );
-      }
-      const cookieMessage = await uploadCookie(profileId, cookieData);
-      form.setValue("cookie_data", "");
-      toast({
-        title: "Cookie saved",
-        description: cookieMessage,
-      });
+    // Always verify credentials immediately after save
+    profileId = await ensureProfileId(credentialId, profileId);
+
+    // If cookies were provided but profile wasn't available before verify, upload now
+    if (cookieData && !profileId) {
+      throw new Error(
+        "Cookie could not be saved because no LinkedIn profile is linked yet",
+      );
     }
 
     return { credentialId, profileId };
   };
 
   const onSubmit = async (values: CredentialFormValues) => {
+    let createdCredentialId: number | null = null;
+
     try {
       setIsSubmitting(true);
       setError(null);
       setSuccess(false);
 
-      await submitCredential(values, { verifyAfterSave: false });
-
-      toast({
-        title: initialData ? "Credentials updated" : "Credentials saved",
-        description: initialData
-          ? "Successfully updated. Click 'Verify' on the credential card to test the connection."
-          : "Successfully saved. Click 'Verify' on the credential card to test the connection.",
-      });
-
-      setSuccess(true);
-      if (onSuccess) onSuccess();
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "An unexpected error occurred",
-      );
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleTestCredentials = async () => {
-    setIsTesting(true);
-    setError(null);
-
-    let createdCredentialId: number | null = null;
-
-    try {
-      const values = form.getValues();
       const { credentialId } = await submitCredential(values, {
-        verifyAfterSave: true,
         onCreated: (id) => {
           createdCredentialId = id;
         },
@@ -211,12 +177,13 @@ export default function LinkedInCredentialForm({
 
       toast({
         title: "Credentials verified",
-        description: "Credentials appear valid",
+        description: "LinkedIn credentials are valid and active",
       });
 
+      setSuccess(true);
       if (onSuccess) onSuccess();
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Test failed";
+      const message = err instanceof Error ? err.message : "Verification failed";
 
       // Check if this is a checkpoint error
       if (message.includes("checkpoint") || message.includes("challenge") || message.includes("additional verification")) {
@@ -244,7 +211,7 @@ export default function LinkedInCredentialForm({
         }
       }
     } finally {
-      setIsTesting(false);
+      setIsSubmitting(false);
     }
   };
 
@@ -514,50 +481,23 @@ export default function LinkedInCredentialForm({
                       type="button"
                       variant="outline"
                       onClick={onCancel}
-                      disabled={isSubmitting || isTesting}
+                      disabled={isSubmitting}
                       className="border-zinc-800 bg-zinc-950 text-zinc-100 hover:bg-zinc-900"
                     >
                       Cancel
                     </Button>
                   ) : null}
 
-                  {!initialData ? (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      disabled={isSubmitting || isTesting}
-                      onClick={handleTestCredentials}
-                      className="border-zinc-800 bg-zinc-950 text-zinc-100 hover:bg-zinc-900"
-                    >
-                      {isTesting ? (
-                        <>
-                          <Icons.RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                          Testing & Saving...
-                        </>
-                      ) : (
-                        <>
-                          <Icons.Activity className="mr-2 h-4 w-4" />
-                          Test & Add
-                        </>
-                      )}
-                    </Button>
-                  ) : null}
-
-                  <Button type="submit" disabled={isSubmitting || isTesting}>
+                  <Button type="submit" disabled={isSubmitting}>
                     {isSubmitting ? (
                       <>
                         <Icons.RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                        Saving...
-                      </>
-                    ) : initialData ? (
-                      <>
-                        <Icons.Save className="mr-2 h-4 w-4" />
-                        Save Changes
+                        Verifying...
                       </>
                     ) : (
                       <>
-                        <Icons.Save className="mr-2 h-4 w-4" />
-                        Save Without Testing
+                        <Icons.Activity className="mr-2 h-4 w-4" />
+                        {initialData ? "Save & Verify" : "Add & Verify"}
                       </>
                     )}
                   </Button>
