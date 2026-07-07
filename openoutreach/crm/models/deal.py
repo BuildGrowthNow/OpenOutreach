@@ -20,13 +20,18 @@ class DealState(models.TextChoices):
     OpenOutreach owns these values, not linkedin_cli. The library's connect/status
     verbs only *observe* three of them off the LinkedIn UI — QUALIFIED, PENDING,
     CONNECTED — and hand them back as plain strings over the CLI boundary; every
-    other state is written only here: READY_TO_CONNECT (passed the GP threshold),
-    COMPLETED/FAILED (outcome), and NO_EMAIL (enrichment found no address — the
-    deal is held out of the connect pool without advancing the LinkedIn state
-    machine). String values match the library's UI states so lifting a returned
-    string into this enum is a plain ``DealState(value)`` lookup at the boundary.
+    other state is written only here: DISCOVERED (initial state for all new leads),
+    READY_TO_CONNECT (passed the GP threshold), COMPLETED/FAILED (outcome), and
+    NO_EMAIL (enrichment found no address — the deal is held out of the connect pool
+    without advancing the LinkedIn state machine). String values match the library's
+    UI states so lifting a returned string into this enum is a plain ``DealState(value)``
+    lookup at the boundary.
+
+    ALL leads start in DISCOVERED state. AI qualification moves them to QUALIFIED,
+    but operators can manually qualify any DISCOVERED lead via UI actions.
     """
 
+    DISCOVERED = "Discovered"
     QUALIFIED = "Qualified"
     READY_TO_CONNECT = "Ready to Connect"
     PENDING = "Pending"
@@ -66,7 +71,7 @@ class Deal(models.Model):
     state: models.CharField = models.CharField(  # type: ignore[var-annotated]
         max_length=20,
         choices=DealState.choices,
-        default=DealState.QUALIFIED,
+        default=DealState.DISCOVERED,
     )
     outcome: models.CharField = models.CharField(  # type: ignore[var-annotated]
         max_length=20,

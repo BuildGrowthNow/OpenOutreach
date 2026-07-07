@@ -36,6 +36,7 @@ from .views.campaigns import (
 from .views.health import HealthView
 from .views.leads import (
     LeadAddToCampaignView,
+    LeadDealStateView,
     LeadDetailView,
     LeadListView,
     LeadMessagesView,
@@ -197,6 +198,11 @@ urlpatterns = [
         "leads/<int:pk>/add-to-campaign/",
         LeadAddToCampaignView.as_view(),
         name="lead-add-to-campaign",
+    ),
+    path(
+        "leads/<int:pk>/campaigns/<int:campaign_id>/state/",
+        LeadDealStateView.as_view(),
+        name="lead-deal-state",
     ),
     # Messages endpoints
     path("messages/", MessagesView.as_view(), name="messages-list"),
@@ -423,6 +429,11 @@ urlpatterns += [
         r"^leads/(?P<pk>[0-9]+)/add-to-campaign$",
         LeadAddToCampaignView.as_view(),
         name="lead-add-to-campaign-no-slash",
+    ),
+    re_path(
+        r"^leads/(?P<pk>[0-9]+)/campaigns/(?P<campaign_id>[0-9]+)/state$",
+        LeadDealStateView.as_view(),
+        name="lead-deal-state-no-slash",
     ),
     # Messages endpoints (no trailing slash)
     re_path(r"^messages$", MessagesView.as_view(), name="messages-list-no-slash"),

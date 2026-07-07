@@ -1385,3 +1385,12 @@ export interface AddToCampaignParams {
   leadId: string;
   campaignId: string;
 }
+
+// Update deal state
+export async function updateDealState(
+  leadId: string,
+  campaignId: string,
+  state: string
+): Promise<ApiResponse<{ success: boolean; message: string }>> {
+  return patch(`/api/leads/${leadId}/campaigns/${campaignId}/state`, { state });
+}

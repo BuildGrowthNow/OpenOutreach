@@ -53,7 +53,7 @@ const Dashboard = () => {
   useEffect(() => {
     fetchHealth()
     fetchCampaigns('active')
-    fetchLeads('QUALIFIED')
+    fetchLeads() // Fetch all leads, not just QUALIFIED
   }, [fetchHealth, fetchCampaigns, fetchLeads])
   
   // Note: Campaigns, leads, and rate limits require authentication
@@ -100,7 +100,7 @@ const Dashboard = () => {
     try {
       await Promise.all([
         fetchCampaigns('active'),
-        fetchLeads('QUALIFIED'),
+        fetchLeads(), // Fetch all leads, not just QUALIFIED
         fetchHealth(),
         fetchRateLimits()
       ])

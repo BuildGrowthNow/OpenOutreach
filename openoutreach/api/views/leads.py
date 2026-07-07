@@ -997,3 +997,60 @@ class LeadNotesView(APIView):
 
         note.delete()
         return Response({"success": True})
+
+
+class LeadDealStateView(APIView):
+    """
+    API view for updating deal state for a lead in a campaign.
+
+    PATCH /api/leads/{id}/campaigns/{campaign_id}/state - Update deal state
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get_lead(self, pk):
+        try:
+            return Lead.objects.get(pk=pk)
+        except Lead.DoesNotExist:
+            raise Http404
+
+    def patch(self, request, pk, campaign_id):
+        """Update deal state for a lead in a specific campaign."""
+        lead = self.get_lead(pk)
+
+        # Get the deal
+        try:
+            deal = Deal.objects.get(lead=lead, campaign_id=campaign_id)
+        except Deal.DoesNotExist:
+            return Response(
+                {"error": "Deal not found for this lead and campaign"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Get new state from request
+        new_state = request.data.get("state")
+        if not new_state:
+            return Response(
+                {"error": "State is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Validate state
+        if new_state not in DealState.values:
+            return Response(
+                {"error": f"Invalid state. Must be one of: {', '.join(DealState.values)}"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Update state
+        deal.state = new_state
+        deal.save()
+
+        return Response({
+            "success": True,
+            "deal_id": deal.id,
+            "lead_id": lead.id,
+            "campaign_id": campaign_id,
+            "state": deal.state,
+            "message": f"Deal state updated to {new_state}"
+        })

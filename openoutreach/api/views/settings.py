@@ -46,6 +46,21 @@ class SettingsView(APIView):
                 "ui_preferences": profile_dict.get("ui_preferences", {}),
             }
 
+        # Get actual LinkedIn profile from DB
+        linkedin_profile_data = {}
+        linkedin_profile = LinkedInProfile.objects.filter(user=request.user).first()
+        if linkedin_profile:
+            linkedin_profile_data["username"] = linkedin_profile.linkedin_username
+            # Get campaign name if there's an active campaign
+            from openoutreach.core.models import Campaign
+            active_campaign = Campaign.objects.filter(status="active").first()
+            linkedin_profile_data["campaign"] = (
+                active_campaign.name if active_campaign else "No active campaign"
+            )
+        else:
+            linkedin_profile_data["username"] = "not set"
+            linkedin_profile_data["campaign"] = "Not configured"
+
         return Response(
             {
                 "llm": {
@@ -69,10 +84,7 @@ class SettingsView(APIView):
                     "active_timezone": config.active_timezone,
                     "active_days": config.active_days,
                 },
-                "linkedin_profile": {
-                    "username": config.linkedin_username,
-                    "campaign": config.linkedin_campaign,
-                },
+                "linkedin_profile": linkedin_profile_data,
                 "profile": profile_data,
             }
         )

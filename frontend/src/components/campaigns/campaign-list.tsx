@@ -2,6 +2,8 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { updateDealState } from '@/lib/api/dashboard'
+import { useToast } from '@/hooks/use-toast'
 import {
   Table,
   TableBody,
@@ -33,10 +35,12 @@ interface CampaignListProps {
 
 export function CampaignList({ leads, campaignId, className }: CampaignListProps) {
   const router = useRouter()
+  const { toast } = useToast()
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [sortBy, setSortBy] = useState<'name' | 'company' | 'state' | 'date'>('date')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
+  const [updatingLeadId, setUpdatingLeadId] = useState<string | null>(null)
 
   // Filter leads based on search and status
   const filteredLeads = leads.filter(lead => {
@@ -98,6 +102,58 @@ export function CampaignList({ leads, campaignId, className }: CampaignListProps
     return sortOrder === 'asc' ? <Icons.ChevronUp className="h-4 w-4" /> : <Icons.ChevronDown className="h-4 w-4" />
   }
 
+  const handleQualify = async (leadId: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    setUpdatingLeadId(leadId)
+    try {
+      const response = await updateDealState(leadId, campaignId, 'Qualified')
+      if (response.data?.success) {
+        toast({
+          title: 'Lead Qualified',
+          description: 'Lead has been manually qualified and will be processed.',
+        })
+        // Refresh the page to show updated state
+        window.location.reload()
+      } else {
+        throw new Error(response.error || 'Failed to qualify lead')
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to qualify lead',
+        variant: 'destructive',
+      })
+    } finally {
+      setUpdatingLeadId(null)
+    }
+  }
+
+  const handleDisqualify = async (leadId: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    setUpdatingLeadId(leadId)
+    try {
+      const response = await updateDealState(leadId, campaignId, 'Failed')
+      if (response.data?.success) {
+        toast({
+          title: 'Lead Disqualified',
+          description: 'Lead has been marked as failed.',
+        })
+        // Refresh the page to show updated state
+        window.location.reload()
+      } else {
+        throw new Error(response.error || 'Failed to disqualify lead')
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to disqualify lead',
+        variant: 'destructive',
+      })
+    } finally {
+      setUpdatingLeadId(null)
+    }
+  }
+
   return (
     <div className={cn('space-y-4', className)}>
       <div className="flex flex-col sm:flex-row gap-4">
@@ -118,6 +174,7 @@ export function CampaignList({ leads, campaignId, className }: CampaignListProps
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Statuses</SelectItem>
+              <SelectItem value="DISCOVERED">Discovered</SelectItem>
               <SelectItem value="QUALIFIED">Qualified</SelectItem>
               <SelectItem value="READY_TO_CONNECT">Ready to Connect</SelectItem>
               <SelectItem value="PENDING">Pending</SelectItem>
@@ -202,8 +259,18 @@ export function CampaignList({ leads, campaignId, className }: CampaignListProps
                   onClick={() => handleLeadClick(lead.id)}
                 >
                     <TableCell>
-                      <div className="font-medium">{lead.name || <span className="text-muted-foreground italic">Unnamed Lead</span>}</div>
-                      <div className="text-sm text-muted-foreground">{lead.title || <span className="text-muted-foreground italic">Unnamed Lead</span>}</div>
+                      <div className="flex items-center gap-2">
+                        <div>
+                          <div className="font-medium">{lead.name || <span className="text-muted-foreground italic">Unnamed Lead</span>}</div>
+                          <div className="text-sm text-muted-foreground">{lead.title || <span className="text-muted-foreground italic">Unnamed Lead</span>}</div>
+                        </div>
+                        {lead.state === 'QUALIFIED' && (
+                          <Badge variant="outline" className="border-emerald-500/20 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10">
+                            <Icons.CheckCircle2 className="h-3 w-3 mr-1" />
+                            AI Qualified
+                          </Badge>
+                        )}
+                      </div>
                     </TableCell>
                    <TableCell>{lead.company || <span className="text-muted-foreground italic">Unnamed Lead</span>}</TableCell>
                   <TableCell>
@@ -218,6 +285,42 @@ export function CampaignList({ leads, campaignId, className }: CampaignListProps
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-2" onClick={e => e.stopPropagation()}>
+                      {lead.state === 'DISCOVERED' && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={(e) => handleQualify(lead.id, e)}
+                          disabled={updatingLeadId === lead.id}
+                          className="border-emerald-500/20 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10"
+                        >
+                          {updatingLeadId === lead.id ? (
+                            <Icons.RefreshCw className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <>
+                              <Icons.CheckCircle2 className="h-4 w-4 mr-1" />
+                              Qualify
+                            </>
+                          )}
+                        </Button>
+                      )}
+                      {(lead.state === 'DISCOVERED' || lead.state === 'QUALIFIED') && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={(e) => handleDisqualify(lead.id, e)}
+                          disabled={updatingLeadId === lead.id}
+                          className="border-red-500/20 text-red-600 dark:text-red-400 hover:bg-red-500/10"
+                        >
+                          {updatingLeadId === lead.id ? (
+                            <Icons.RefreshCw className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <>
+                              <Icons.XCircle className="h-4 w-4 mr-1" />
+                              Disqualify
+                            </>
+                          )}
+                        </Button>
+                      )}
                       <Button
                         size="sm"
                         variant="ghost"
