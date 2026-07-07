@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -58,12 +58,32 @@ export default function LinkedInCredentialForm({
   onCancel,
 }: CredentialFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [countdown, setCountdown] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showChallengeModal, setShowChallengeModal] = useState(false);
   const [challengeCredentialId, setChallengeCredentialId] = useState<number | null>(null);
   const { toast } = useToast();
+  const countdownRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (isSubmitting) {
+      setCountdown(60);
+      countdownRef.current = setInterval(() => {
+        setCountdown((c) => (c > 0 ? c - 1 : 0));
+      }, 1000);
+    } else {
+      setCountdown(0);
+      if (countdownRef.current) {
+        clearInterval(countdownRef.current);
+        countdownRef.current = null;
+      }
+    }
+    return () => {
+      if (countdownRef.current) clearInterval(countdownRef.current);
+    };
+  }, [isSubmitting]);
 
   const form = useForm<CredentialFormValues>({
     resolver: zodResolver(credentialSchema),
@@ -337,7 +357,7 @@ export default function LinkedInCredentialForm({
                     {isSubmitting ? (
                       <>
                         <Icons.RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                        Verifying...
+                        Validating{countdown > 0 ? ` in ${countdown}s` : ""}...
                       </>
                     ) : (
                       <>
