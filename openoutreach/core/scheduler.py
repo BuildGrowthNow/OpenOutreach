@@ -245,10 +245,12 @@ def plan_check_pending_window(session, campaign) -> int:
         return 0
 
     now = timezone.now()
+    # Only count deals that are due RIGHT NOW (not future deals within 24h)
+    # This matches the handler's query in check_pending.py:_next_due_pending_deal
     n_due = Deal.objects.filter(
         campaign_id=campaign.pk,
         state=DealState.PENDING,
-        next_check_pending_at__lte=now + timedelta(hours=24),
+        next_check_pending_at__lte=now,
     ).count()
     n = min(n_due, CHECK_PENDING_DAILY_CAP)
 
