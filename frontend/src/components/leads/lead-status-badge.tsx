@@ -25,6 +25,11 @@ const normalizeState = (state: string): DealState => {
 }
 
 const stateConfig: Record<DealState, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline'; color: string }> = {
+  DISCOVERED: {
+    label: 'Discovered',
+    variant: 'outline',
+    color: 'text-slate-600 border-slate-600'
+  },
   QUALIFIED: {
     label: 'Qualified',
     variant: 'outline',

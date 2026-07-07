@@ -26,6 +26,7 @@ const statusColors = {
 }
 
 const stateColorMapping: Record<DealState, string> = {
+  DISCOVERED: 'bg-slate-500/10 text-slate-600 dark:text-slate-400',
   QUALIFIED: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
   READY_TO_CONNECT: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400',
   PENDING: 'bg-purple-500/10 text-purple-600 dark:text-purple-400',

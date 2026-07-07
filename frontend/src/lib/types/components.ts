@@ -173,6 +173,7 @@ export type CampaignStatus = "active" | "paused" | "draft";
 
 // Deal state variants
 export type DealState =
+  | "DISCOVERED"
   | "QUALIFIED"
   | "READY_TO_CONNECT"
   | "PENDING"
