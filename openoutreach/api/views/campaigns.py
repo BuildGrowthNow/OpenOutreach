@@ -14,7 +14,7 @@ from openoutreach.api.serializers.campaigns import (
     CampaignSerializer,
     CampaignUpdateSerializer,
 )
-from openoutreach.core.models import Campaign
+from openoutreach.core.models import Campaign, Task
 from openoutreach.crm.models import Deal
 from openoutreach.crm.models.deal import DealState
 from openoutreach.linkedin.models import ActionLog
@@ -1634,4 +1634,151 @@ class AnalyticsOverviewView(APIView):
         )
 
 
-# No legacy view needed -CampaignGhostModeSimulationListView is the primary view
+class CampaignActivityView(APIView):
+    """Campaign activity log — completed actions + scheduled tasks.
+
+    GET /api/campaigns/{id}/activity?page=1&limit=20
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self, pk):
+        try:
+            return Campaign.objects.filter(users=self.request.user).get(pk=pk)
+        except Campaign.DoesNotExist:
+            raise Http404
+
+    def get(self, request, pk):
+        campaign = self.get_object(pk)
+
+        page = int(request.query_params.get("page", 1))
+        limit = int(request.query_params.get("limit", 20))
+        limit = min(limit, 100)
+
+        # --- Next scheduled task for this campaign ---
+        next_task = (
+            Task.objects.filter(
+                status=Task.Status.PENDING,
+                payload__campaign_id=campaign.pk,
+            )
+            .order_by("scheduled_at")
+            .values("id", "task_type", "scheduled_at", "status")
+            .first()
+        )
+
+        next_task_data = None
+        if next_task:
+            scheduled = next_task["scheduled_at"]
+            now = timezone.now()
+            eta_seconds = max(0, (scheduled - now).total_seconds())
+            next_task_data = {
+                "id": next_task["id"],
+                "task_type": next_task["task_type"],
+                "scheduled_at": scheduled.isoformat(),
+                "eta_seconds": int(eta_seconds),
+            }
+
+        # --- Activity entries: merge ActionLog + completed/failed Tasks ---
+        # ActionLog entries (completed actions with details)
+        action_logs = (
+            ActionLog.objects.filter(campaign=campaign)
+            .order_by("-created_at")
+            .values(
+                "id",
+                "action_type",
+                "status",
+                "error_message",
+                "duration_ms",
+                "created_at",
+            )
+        )
+
+        # Task entries (all states for full timeline)
+        tasks = (
+            Task.objects.filter(payload__campaign_id=campaign.pk)
+            .exclude(status=Task.Status.PENDING)
+            .order_by("-scheduled_at")
+            .values(
+                "id",
+                "task_type",
+                "status",
+                "scheduled_at",
+                "started_at",
+                "completed_at",
+                "payload",
+            )
+        )
+
+        # Build unified timeline
+        entries = []
+
+        for log in action_logs:
+            entries.append(
+                {
+                    "id": f"action_{log['id']}",
+                    "source": "action",
+                    "type": log["action_type"],
+                    "status": log["status"] or "completed",
+                    "error": log["error_message"] or None,
+                    "duration_ms": log["duration_ms"],
+                    "timestamp": log["created_at"].isoformat(),
+                }
+            )
+
+        for task in tasks:
+            ts = task["completed_at"] or task["started_at"] or task["scheduled_at"]
+            error = (task["payload"] or {}).get("last_error")
+            entries.append(
+                {
+                    "id": f"task_{task['id']}",
+                    "source": "task",
+                    "type": task["task_type"],
+                    "status": task["status"],
+                    "error": error,
+                    "duration_ms": None,
+                    "timestamp": ts.isoformat(),
+                }
+            )
+
+        # Deduplicate: if an action_log and a task have the same type and
+        # close timestamps (within 5s), keep only the action_log (richer).
+        action_keys = set()
+        for e in entries:
+            if e["source"] == "action":
+                action_keys.add((e["type"], e["timestamp"][:16]))
+
+        deduped = []
+        for e in entries:
+            if e["source"] == "task":
+                key = (e["type"], e["timestamp"][:16])
+                if key in action_keys:
+                    continue
+            deduped.append(e)
+
+        # Sort by timestamp descending
+        deduped.sort(key=lambda e: e["timestamp"], reverse=True)
+
+        total = len(deduped)
+        start = (page - 1) * limit
+        end = start + limit
+        page_entries = deduped[start:end]
+
+        # Pending task count for context
+        pending_count = Task.objects.filter(
+            status=Task.Status.PENDING,
+            payload__campaign_id=campaign.pk,
+        ).count()
+
+        return Response(
+            {
+                "data": page_entries,
+                "next_task": next_task_data,
+                "pending_count": pending_count,
+                "pagination": {
+                    "page": page,
+                    "limit": limit,
+                    "total": total,
+                    "has_more": end < total,
+                },
+            }
+        )

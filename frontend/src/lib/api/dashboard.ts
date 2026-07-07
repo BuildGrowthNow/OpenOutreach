@@ -1287,6 +1287,47 @@ export async function patchMongoUserProfile(
   return patch("/api/mongodb/profile/update/", data);
 }
 
+// Campaign activity log
+export interface ActivityEntry {
+  id: string;
+  source: "action" | "task";
+  type: string;
+  status: string;
+  error: string | null;
+  durationMs: number | null;
+  timestamp: string;
+}
+
+export interface NextTask {
+  id: number;
+  taskType: string;
+  scheduledAt: string;
+  etaSeconds: number;
+}
+
+export interface CampaignActivityResponse {
+  data: ActivityEntry[];
+  nextTask: NextTask | null;
+  pendingCount: number;
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    hasMore: boolean;
+  };
+}
+
+export async function getCampaignActivity(
+  campaignId: number | string,
+  page = 1,
+  limit = 20,
+): Promise<ApiResponse<CampaignActivityResponse>> {
+  return get(`/api/campaigns/${campaignId}/activity`, {
+    page: String(page),
+    limit: String(limit),
+  });
+}
+
 // Re-export AddToCampaignModal types for convenience
 export interface AddToCampaignParams {
   leadId: string;

@@ -49,6 +49,7 @@ import {
 import { CampaignForm } from "@/components/campaigns/campaign-form";
 import { CampaignStats as CampaignStatsComponent } from "@/components/campaigns/campaign-stats";
 import { CampaignList as CampaignListComponent } from "@/components/campaigns/campaign-list";
+import { CampaignActivity } from "@/components/campaigns/campaign-activity";
 import { DailyProgress } from "@/components/campaigns/daily-progress";
 import { cn } from "@/lib/utils";
 import { LinksManager } from "@/components/campaign/LinksManager";
@@ -677,56 +678,8 @@ export default function CampaignDetailsPage() {
                 </CardContent>
               </Card>
 
-              {/* Recent Activity */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Recent Activity</CardTitle>
-                  <CardDescription>Latest actions and updates</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {leads.length > 0 ? (
-                      <div className="space-y-2">
-                        {leads.slice(0, 5).map((lead) => (
-                          <div
-                            key={(lead as { id?: string }).id}
-                            className="flex items-center justify-between p-3 rounded-lg border"
-                          >
-                            <div className="flex items-center gap-3">
-                              <div className="h-2 w-2 rounded-full bg-emerald-500" />
-                              <div>
-                                <p className="font-medium">
-                                  {(lead as { name?: string }).name || (
-                                    <span className="text-muted-foreground italic">
-                                      Unnamed Lead
-                                    </span>
-                                  )}
-                                </p>
-                                <p className="text-sm text-muted-foreground">
-                                  {(lead as { company?: string }).company || (
-                                    <span className="text-muted-foreground italic">
-                                      Unnamed Lead
-                                    </span>
-                                  )}
-                                </p>
-                              </div>
-                            </div>
-                            <Badge variant="outline">
-                              {(lead as { state?: string }).state}
-                            </Badge>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="text-center py-8">
-                        <p className="text-muted-foreground">
-                          No recent activity
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
+              {/* Campaign Activity */}
+              <CampaignActivity campaignId={campaignId} compact />
             </div>
 
             {/* Right Column */}

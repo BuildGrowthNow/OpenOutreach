@@ -21,6 +21,7 @@ from .views.campaign_templates import (
 )
 from .views.campaigns import (
     AnalyticsOverviewView,
+    CampaignActivityView,
     CampaignAnalyticsView,
     CampaignDetailView,
     CampaignGhostModeActionView,
@@ -137,6 +138,11 @@ urlpatterns = [
         "campaigns/<int:pk>/state-machine/simulate/",
         StateMachineSimulationView.as_view(),
         name="campaign-state-machine-simulate",
+    ),
+    path(
+        "campaigns/<int:pk>/activity/",
+        CampaignActivityView.as_view(),
+        name="campaign-activity",
     ),
     path(
         "campaigns/<int:pk>/status/",
@@ -340,6 +346,11 @@ urlpatterns += [
         r"^campaigns/(?P<pk>[0-9]+)/state-machine/simulate$",
         StateMachineSimulationView.as_view(),
         name="campaign-state-machine-simulate-no-slash",
+    ),
+    re_path(
+        r"^campaigns/(?P<pk>[0-9]+)/activity$",
+        CampaignActivityView.as_view(),
+        name="campaign-activity-no-slash",
     ),
     re_path(
         r"^campaigns/(?P<pk>[0-9]+)/status$",
