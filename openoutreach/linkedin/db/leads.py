@@ -93,7 +93,7 @@ def get_leads_for_qualification(session) -> list:
     leads = Lead.objects.filter(
         disqualified=False,
     ).exclude(
-        deal__campaign=session.campaign,
+        deals__campaign=session.campaign,
     )
 
     return [lead.to_profile_dict() for lead in leads]
