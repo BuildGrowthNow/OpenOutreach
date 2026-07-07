@@ -44,6 +44,15 @@ class ConnectStrategy:
 def strategy_for(campaign, qualifiers):
     """Build the right ConnectStrategy based on campaign type."""
     qualifier = qualifiers.get(campaign.pk)
+    
+    if qualifier is None:
+        logger.error(
+            "No qualifier found for campaign %s (pk=%d). Available qualifiers: %s",
+            campaign,
+            campaign.pk,
+            list(qualifiers.keys()),
+        )
+        raise ValueError(f"No qualifier found for campaign {campaign.pk}")
 
     if campaign.is_freemium:
         from openoutreach.core.db.deals import create_freemium_deal

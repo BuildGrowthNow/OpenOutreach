@@ -10,6 +10,20 @@ interface LeadStatusBadgeProps {
   className?: string
 }
 
+// Map to normalize state from backend format (Title Case with spaces) to frontend format
+const normalizeState = (state: string): DealState => {
+  const stateMap: Record<string, DealState> = {
+    'Qualified': 'QUALIFIED',
+    'Ready to Connect': 'READY_TO_CONNECT',
+    'Pending': 'PENDING',
+    'Connected': 'CONNECTED',
+    'Completed': 'COMPLETED',
+    'Failed': 'FAILED',
+    'No Email': 'NO_EMAIL',
+  }
+  return (stateMap[state] || state) as DealState
+}
+
 const stateConfig: Record<DealState, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline'; color: string }> = {
   QUALIFIED: {
     label: 'Qualified',
@@ -48,6 +62,13 @@ const stateConfig: Record<DealState, { label: string; variant: 'default' | 'seco
   }
 }
 
+// Default config for unknown states
+const defaultStateConfig = {
+  label: 'Unknown',
+  variant: 'secondary' as const,
+  color: 'text-gray-600 border-gray-600'
+}
+
 const outcomeConfig: Record<DealOutcome, { label: string; color: string }> = {
   not_interested: {
     label: 'Not Interested',
@@ -76,7 +97,9 @@ const outcomeConfig: Record<DealOutcome, { label: string; color: string }> = {
 }
 
 export function LeadStatusBadge({ state, outcome, className }: LeadStatusBadgeProps) {
-  const stateInfo = stateConfig[state]
+  // Normalize state value from backend format to frontend format
+  const normalizedState = normalizeState(state as string)
+  const stateInfo = stateConfig[normalizedState] || defaultStateConfig
   const outcomeInfo = outcome ? outcomeConfig[outcome] : null
 
   return (

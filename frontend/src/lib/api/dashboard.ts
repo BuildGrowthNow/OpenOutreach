@@ -1,6 +1,7 @@
 "use client";
 
 import { get, post, patch, del, ApiResponse } from "../api";
+import { normalizeState, normalizeOutcome } from "../utils/normalize-state";
 
 // JWT Authentication API
 export interface JwtTokens {
@@ -346,7 +347,19 @@ export async function getCampaignLeads(
   if (search) params.search = search;
   if (page) params.page = page.toString();
   if (limit) params.limit = limit.toString();
-  return get(`/api/campaigns/${id}/leads`, params);
+  
+  const response = await get(`/api/campaigns/${id}/leads`, params);
+  
+  // Normalize state and outcome values
+  if (response.data?.data) {
+    response.data.data = response.data.data.map((lead: Lead) => ({
+      ...lead,
+      state: normalizeState(lead.state as string) as any,
+      outcome: normalizeOutcome(lead.outcome as string) as any,
+    }));
+  }
+  
+  return response;
 }
 
 // Campaign Messages API
@@ -375,11 +388,31 @@ export async function getLeads(
   if (disqualified !== undefined) params.disqualified = disqualified;
   if (page) params.page = page.toString();
   if (limit) params.limit = limit.toString();
-  return get("/api/leads", params as Record<string, string>);
+  
+  const response = await get("/api/leads", params as Record<string, string>);
+  
+  // Normalize state and outcome values from backend format to frontend format
+  if (response.data?.data) {
+    response.data.data = response.data.data.map((lead: Lead) => ({
+      ...lead,
+      state: normalizeState(lead.state as string) as any,
+      outcome: normalizeOutcome(lead.outcome as string) as any,
+    }));
+  }
+  
+  return response;
 }
 
 export async function getLead(id: string): Promise<ApiResponse<Lead>> {
-  return get(`/api/leads/${id}`);
+  const response = await get(`/api/leads/${id}`);
+  
+  // Normalize state and outcome values
+  if (response.data) {
+    response.data.state = normalizeState(response.data.state as string) as any;
+    response.data.outcome = normalizeOutcome(response.data.outcome as string) as any;
+  }
+  
+  return response;
 }
 
 export async function createLead(
