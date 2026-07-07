@@ -1686,14 +1686,24 @@ class CampaignActivityView(APIView):
             .first()
         )
 
+        # Task type label mapping
+        TASK_LABELS = {
+            "connect": "Send Connection Request",
+            "check_pending": "Check Pending Connections",
+            "follow_up": "Send Follow-up Message",
+            "send_manual_message": "Send Manual Message",
+        }
+
         next_task_data = None
         if next_task:
             scheduled = next_task["scheduled_at"]
             now = timezone.now()
             eta_seconds = max(0, (scheduled - now).total_seconds())
+            task_type = next_task["task_type"]
             next_task_data = {
                 "id": next_task["id"],
-                "task_type": next_task["task_type"],
+                "task_type": task_type,
+                "label": TASK_LABELS.get(task_type, task_type.replace("_", " ").title()),
                 "scheduled_at": scheduled.isoformat(),
                 "eta_seconds": int(eta_seconds),
             }
@@ -1732,12 +1742,24 @@ class CampaignActivityView(APIView):
         # Build unified timeline
         entries = []
 
+        # Action type label mapping
+        ACTION_LABELS = {
+            "connect": "Connection Request",
+            "check_pending": "Checked Pending Connections",
+            "follow_up": "Follow-up Message",
+            "send_manual_message": "Manual Message",
+            "campaign_paused": "Campaign Paused",
+            "campaign_started": "Campaign Started",
+        }
+
         for log in action_logs:
+            action_type = log["action_type"]
             entries.append(
                 {
                     "id": f"action_{log['id']}",
                     "source": "action",
-                    "type": log["action_type"],
+                    "type": action_type,
+                    "label": ACTION_LABELS.get(action_type, action_type.replace("_", " ").title()),
                     "status": log["status"] or "completed",
                     "error": log["error_message"] or None,
                     "duration_ms": log["duration_ms"],
@@ -1748,11 +1770,13 @@ class CampaignActivityView(APIView):
         for task in tasks:
             ts = task["completed_at"] or task["started_at"] or task["scheduled_at"]
             error = (task["payload"] or {}).get("last_error")
+            task_type = task["task_type"]
             entries.append(
                 {
                     "id": f"task_{task['id']}",
                     "source": "task",
-                    "type": task["task_type"],
+                    "type": task_type,
+                    "label": ACTION_LABELS.get(task_type, task_type.replace("_", " ").title()),
                     "status": task["status"],
                     "error": error,
                     "duration_ms": None,
