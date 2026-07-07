@@ -37,10 +37,15 @@ class AccountSession:
 
     @cached_property
     def campaigns(self):
-        """All campaigns this user belongs to (cached)."""
+        """Active campaigns this user belongs to (cached)."""
         from openoutreach.core.models import Campaign
 
-        return list(Campaign.objects.filter(users=self.django_user))
+        return list(
+            Campaign.objects.filter(
+                users=self.django_user,
+                status=Campaign.Status.ACTIVE,
+            )
+        )
 
     def ensure_browser(self):
         """Launch or recover browser + login if needed. Call before using .page"""

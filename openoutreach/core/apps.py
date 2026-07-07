@@ -6,3 +6,7 @@ class CoreConfig(AppConfig):
     name = "openoutreach.core"
     label = "core"  # Use 'core' as the app label
     default_auto_field = "django.db.models.BigAutoField"
+
+    def ready(self):
+        """Import signal handlers when Django starts."""
+        import openoutreach.core.signals  # noqa: F401

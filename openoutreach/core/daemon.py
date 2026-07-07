@@ -505,6 +505,17 @@ def run_daemon(session):
             task.mark_failed(error_message=error_msg)
             continue
 
+        # Skip tasks for non-active campaigns
+        if campaign.status != Campaign.Status.ACTIVE:
+            logger.debug(
+                "[%s] Skipping task for campaign %s (status=%s)",
+                task.task_type,
+                campaign.pk,
+                campaign.status,
+            )
+            task.mark_failed(error_message=f"Campaign status is {campaign.status}, not active")
+            continue
+
         # Lazy auth: authenticate session on first task claim
         if not _authenticated:
             logger.info("First task claimed — authenticating session")
