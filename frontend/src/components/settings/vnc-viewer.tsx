@@ -22,8 +22,8 @@ export function VncViewer({ vncUrl }: VncViewerProps) {
   const [showViewer, setShowViewer] = useState(true); // Auto-show when used in modal
   const [error, setError] = useState<string | null>(null);
 
-  // Always use http:// for VNC — noVNC runs plain websocket without SSL
-  const effectiveUrl = vncUrl || `http://${window.location.hostname}:6080`;
+  // Proxy VNC through the same HTTPS origin via /vnc/ nginx location
+  const effectiveUrl = vncUrl || `${window.location.origin}/vnc`;
 
   const handleOpenViewer = () => {
     setShowViewer(true);

@@ -23,12 +23,13 @@ from openoutreach.linkedin.services.smart_rate_limits import (
     smart_get_remaining,
 )
 
-logger = logging.getLogger(__name__)
 from linkedin_cli.exceptions import (
     ProfileInaccessibleError,
     ReachedConnectionLimit,
     SkipProfile,
 )
+
+logger = logging.getLogger(__name__)
 
 MAX_CONNECT_ATTEMPTS = 3
 
@@ -48,16 +49,27 @@ def strategy_for(campaign, qualifiers):
         from openoutreach.core.db.deals import create_freemium_deal
         from openoutreach.linkedin.pipeline.freemium_pool import find_freemium_candidate
 
+        # Capture find_freemium_candidate in closure
+        def find_candidate_wrapper(s):
+            return find_freemium_candidate(s, qualifier)
+
+        def pre_connect_wrapper(s, pid):
+            return create_freemium_deal(s, pid)
+
         return ConnectStrategy(
-            find_candidate=lambda s: find_freemium_candidate(s, qualifier),
-            pre_connect=lambda s, pid: create_freemium_deal(s, pid),
+            find_candidate=find_candidate_wrapper,
+            pre_connect=pre_connect_wrapper,
             qualifier=qualifier,
         )
 
     from openoutreach.linkedin.pipeline.pools import find_candidate
 
+    # Capture find_candidate in closure
+    def find_candidate_wrapper(s):
+        return find_candidate(s, qualifier)
+
     return ConnectStrategy(
-        find_candidate=lambda s: find_candidate(s, qualifier),
+        find_candidate=find_candidate_wrapper,
         pre_connect=None,
         qualifier=qualifier,
     )

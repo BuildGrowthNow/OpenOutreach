@@ -333,17 +333,20 @@ class LinkedInCredentials(models.Model):
                 "Challenge detected for %s (state=%s, url=%s) — browser kept alive for VNC",
                 self.get_public_email(), page_state, session.page.url,
             )
-            LinkedInCredentialLog.objects.create(
-                credentials=self,
-                action="locked",
-                details={
-                    "error_type": "awaiting_challenge",
-                    "page_state": str(page_state),
-                    "checkpoint_url": session.page.url,
-                },
-            )
             self.status = self.STATUS_LOCKED
             self.save(update_fields=["status"])
+            try:
+                LinkedInCredentialLog.objects.create(
+                    credentials=self,
+                    action="locked",
+                    details={
+                        "error_type": "awaiting_challenge",
+                        "page_state": str(page_state),
+                        "checkpoint_url": session.page.url,
+                    },
+                )
+            except Exception:
+                logger.debug("Could not write audit log for challenge")
 
             # Browser intentionally NOT closed — VNC exposes it
             return False, {
@@ -359,14 +362,17 @@ class LinkedInCredentials(models.Model):
             is_timeout = "timeout" in error_msg.lower()
             logger.error("Credential verification failed for %s: %s", self.get_public_email(), error_msg)
 
-            LinkedInCredentialLog.objects.create(
-                credentials=self,
-                action="failed",
-                details={
-                    "error_type": "timeout" if is_timeout else "verification_error",
-                    "error_message": error_msg,
-                },
-            )
+            try:
+                LinkedInCredentialLog.objects.create(
+                    credentials=self,
+                    action="failed",
+                    details={
+                        "error_type": "timeout" if is_timeout else "verification_error",
+                        "error_message": error_msg,
+                    },
+                )
+            except Exception:
+                pass
             if mark_as_stored:
                 self.status = self.STATUS_STORED
                 self.save(update_fields=["status"])

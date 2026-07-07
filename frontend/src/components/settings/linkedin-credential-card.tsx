@@ -567,7 +567,7 @@ export default function LinkedInCredentialCard({
               </DialogDescription>
             </DialogHeader>
             <div className="flex-1 overflow-hidden min-h-0">
-              <VncViewer vncUrl={`http://${window.location.hostname}:6080`} />
+              <VncViewer vncUrl={`${window.location.origin}/vnc`} />
             </div>
             <div className="flex items-center justify-between gap-2 p-4 border-t border-zinc-800 bg-zinc-950/80">
               <p className="text-sm text-zinc-400">
