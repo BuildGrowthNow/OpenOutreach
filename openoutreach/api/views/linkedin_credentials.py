@@ -453,13 +453,19 @@ class LinkedInCredentialsVerifyView(APIView):
                 pass
 
         try:
+            import concurrent.futures
+
             session = AccountSession(cred.linkedin_profile)  # type: ignore[arg-type]
 
-            success, details = cred.verify_credentials(
-                session=session,
-                mark_as_active=True,
-                mark_as_stored=True,
-            )
+            # Run Playwright in a thread — sync API can't run inside an asyncio loop
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(
+                    cred.verify_credentials,
+                    session=session,
+                    mark_as_active=True,
+                    mark_as_stored=True,
+                )
+                success, details = future.result(timeout=120)
 
             error_type = details.get("error_type")
 
