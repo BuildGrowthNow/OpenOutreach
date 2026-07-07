@@ -29,7 +29,7 @@ export function VncViewer({ vncUrl, embedded }: VncViewerProps) {
   if (embedded) {
     return (
       <iframe
-        src={`${effectiveUrl}/vnc.html?autoconnect=true&resize=scale`}
+        src={`${effectiveUrl}/vnc.html?autoconnect=true&resize=remote&reconnect=true`}
         className="w-full h-full border-0"
         title="VNC Browser Session"
         allow="clipboard-read; clipboard-write"
@@ -123,7 +123,7 @@ export function VncViewer({ vncUrl, embedded }: VncViewerProps) {
           className={`relative bg-black ${isExpanded ? "h-[calc(100vh-8rem)]" : "h-[600px]"}`}
         >
           <iframe
-            src={`${effectiveUrl}/vnc.html?autoconnect=true&resize=scale`}
+            src={`${effectiveUrl}/vnc.html?autoconnect=true&resize=remote&reconnect=true`}
             className="w-full h-full border-0"
             title="VNC Browser Session"
             onError={handleIframeError}

@@ -70,6 +70,62 @@ def _clear_profile_login(profile: Any) -> None:  # type: ignore[assignment, unio
         profile.save(update_fields=update_fields)
 
 
+import threading
+import queue
+
+
+class _PlaywrightWorker:
+    """Keeps a Playwright browser alive in a dedicated thread.
+
+    Playwright objects are thread-bound, so verify and confirm must run in
+    the same thread.  This worker stays alive between the two calls.
+    """
+
+    def __init__(self, cred, session):
+        self._cred = cred
+        self._session = session
+        self._cmd_q: queue.Queue = queue.Queue()
+        self._result_q: queue.Queue = queue.Queue()
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
+
+    def _run(self):
+        """Worker loop: wait for commands, execute in-thread."""
+        while True:
+            cmd = self._cmd_q.get()
+            if cmd == "verify":
+                try:
+                    result = self._cred.verify_credentials(
+                        self._session, mark_as_active=True, mark_as_stored=True,
+                    )
+                except Exception as e:
+                    result = (False, {"error_type": "verification_error", "message": str(e)[:500]})
+                self._result_q.put(result)
+            elif cmd == "confirm":
+                try:
+                    result = self._cred.confirm_challenge(self._session)
+                except Exception as e:
+                    result = (False, {"error_type": "verification_error", "message": str(e)[:200]})
+                self._result_q.put(result)
+            elif cmd == "shutdown":
+                try:
+                    self._session.close()
+                except Exception:
+                    pass
+                break
+
+    def verify(self) -> tuple:
+        self._cmd_q.put("verify")
+        return self._result_q.get(timeout=120)
+
+    def confirm(self) -> tuple:
+        self._cmd_q.put("confirm")
+        return self._result_q.get(timeout=15)
+
+    def shutdown(self):
+        self._cmd_q.put("shutdown")
+
+
 # Type alias for optional LinkedInCredentials (can be None if import fails)
 LinkedInCredentialsType = Any
 
@@ -415,9 +471,9 @@ class LinkedInCredentialsVerifyView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    # Module-level dict to hold sessions awaiting challenge resolution.
-    # Keyed by credential PK. The session's browser stays open so VNC works.
-    _pending_sessions: dict = {}
+    # Persistent worker threads keyed by credential PK.
+    # Each holds the Playwright browser alive so confirm can use it.
+    _workers: dict = {}
 
     def post(self, request, pk=None):
         """Verify LinkedIn credentials using real LinkedIn browser automation."""
@@ -444,34 +500,22 @@ class LinkedInCredentialsVerifyView(APIView):
                 endpoint="linkedin-credentials:verify", exc=exc
             )
 
-        # Close any stale pending session for this credential
-        old_session = self.__class__._pending_sessions.pop(pk, None)
-        if old_session:
-            try:
-                old_session.close()
-            except Exception:
-                pass
+        # Clean up any stale worker for this credential
+        old_worker = self.__class__._workers.pop(pk, None)
+        if old_worker:
+            old_worker.shutdown()
 
         try:
-            import concurrent.futures
-
             session = AccountSession(cred.linkedin_profile)  # type: ignore[arg-type]
-
-            # Run Playwright in a thread — sync API can't run inside an asyncio loop
-            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                future = pool.submit(
-                    cred.verify_credentials,
-                    session=session,
-                    mark_as_active=True,
-                    mark_as_stored=True,
-                )
-                success, details = future.result(timeout=120)
+            worker = _PlaywrightWorker(cred, session)
+            success, details = worker.verify()
 
             error_type = details.get("error_type")
 
-            # If challenge detected, park the session so /confirm can use it
             if error_type == "awaiting_challenge":
-                self.__class__._pending_sessions[pk] = session
+                self.__class__._workers[pk] = worker
+            else:
+                worker.shutdown()
 
             response_data = {
                 "success": success,
@@ -537,8 +581,8 @@ class LinkedInCredentialsConfirmView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        session = LinkedInCredentialsVerifyView._pending_sessions.get(pk)
-        if not session:
+        worker = LinkedInCredentialsVerifyView._workers.get(pk)
+        if not worker:
             return Response(
                 {
                     "success": False,
@@ -548,15 +592,11 @@ class LinkedInCredentialsConfirmView(APIView):
                 status=status.HTTP_409_CONFLICT,
             )
 
-        success, details = cred.confirm_challenge(session)
+        success, details = worker.confirm()
 
         if success:
-            # Challenge resolved — clean up and close
-            LinkedInCredentialsVerifyView._pending_sessions.pop(pk, None)
-            try:
-                session.close()
-            except Exception:
-                pass
+            LinkedInCredentialsVerifyView._workers.pop(pk, None)
+            worker.shutdown()
 
         response_data = {
             "success": success,
