@@ -22,10 +22,8 @@ export function VncViewer({ vncUrl }: VncViewerProps) {
   const [showViewer, setShowViewer] = useState(true); // Auto-show when used in modal
   const [error, setError] = useState<string | null>(null);
 
-  // Use the same hostname as the current page (works for localhost and production)
-  // In production (linkedin.lengrowth.com), this becomes https://linkedin.lengrowth.com:6080
-  // In local dev (localhost:3000), this becomes http://localhost:6080
-  const effectiveUrl = vncUrl || `${window.location.protocol}//${window.location.hostname}:6080`;
+  // Always use http:// for VNC — noVNC runs plain websocket without SSL
+  const effectiveUrl = vncUrl || `http://${window.location.hostname}:6080`;
 
   const handleOpenViewer = () => {
     setShowViewer(true);
