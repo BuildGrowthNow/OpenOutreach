@@ -1339,6 +1339,15 @@ export interface ActivityEntry {
   error: string | null;
   durationMs: number | null;
   timestamp: string;
+  details?: {
+    lead_name?: string;
+    public_identifier?: string;
+    lead_url?: string;
+    headline?: string;
+    reason?: string;
+    message_preview?: string;
+    state?: string;
+  };
 }
 
 export interface NextTask {

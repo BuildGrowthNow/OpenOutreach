@@ -18,7 +18,55 @@ const TYPE_LABELS: Record<string, string> = {
   check_pending: "Check Pending",
   follow_up: "Follow Up",
   send_manual_message: "Manual Message",
+  campaign_paused: "Campaign Paused",
+  campaign_started: "Campaign Started",
+  lead_discovered: "Lead Discovered",
+  lead_qualified: "Lead Qualified",
+  lead_disqualified: "Lead Disqualified",
 };
+
+function formatActivityDescription(entry: ActivityEntry): string {
+  const baseLabel = TYPE_LABELS[entry.type] || entry.type;
+
+  // Use details if available
+  if (entry.details) {
+    const { lead_name, reason, message_preview, headline } = entry.details;
+
+    switch (entry.type) {
+      case "connect":
+        return lead_name ? `Sent connection request to ${lead_name}` : baseLabel;
+
+      case "follow_up":
+        if (lead_name && message_preview) {
+          return `Sent message to ${lead_name}: "${message_preview.substring(0, 50)}..."`;
+        }
+        return lead_name ? `Sent follow-up to ${lead_name}` : baseLabel;
+
+      case "lead_discovered":
+        if (lead_name && headline) {
+          return `Discovered ${lead_name} (${headline})`;
+        }
+        return lead_name ? `Discovered ${lead_name}` : baseLabel;
+
+      case "lead_qualified":
+        if (lead_name && reason) {
+          return `Qualified ${lead_name}: ${reason}`;
+        }
+        return lead_name ? `Qualified ${lead_name}` : baseLabel;
+
+      case "lead_disqualified":
+        if (lead_name && reason) {
+          return `Disqualified ${lead_name}: ${reason}`;
+        }
+        return lead_name ? `Disqualified ${lead_name}` : baseLabel;
+
+      default:
+        return lead_name ? `${baseLabel}: ${lead_name}` : baseLabel;
+    }
+  }
+
+  return baseLabel;
+}
 
 const STATUS_STYLES: Record<string, { variant: "default" | "secondary" | "destructive" | "outline"; label: string }> = {
   completed: { variant: "default", label: "Completed" },
@@ -49,7 +97,7 @@ function formatTimestamp(iso: string): string {
 
 function ActivityItem({ entry }: { entry: ActivityEntry }) {
   const style = STATUS_STYLES[entry.status] || STATUS_STYLES.pending;
-  const label = TYPE_LABELS[entry.type] || entry.type;
+  const description = formatActivityDescription(entry);
 
   return (
     <div className="flex items-center justify-between gap-3 py-2.5 px-3 rounded-md hover:bg-zinc-900/50 transition-colors">
@@ -66,7 +114,7 @@ function ActivityItem({ entry }: { entry: ActivityEntry }) {
           }`}
         />
         <div className="min-w-0">
-          <p className="text-sm font-medium text-zinc-100 truncate">{label}</p>
+          <p className="text-sm font-medium text-zinc-100 truncate">{description}</p>
           {entry.error ? (
             <p className="text-xs text-red-400 truncate">{entry.error}</p>
           ) : (
