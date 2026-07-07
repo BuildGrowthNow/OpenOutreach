@@ -139,18 +139,30 @@ export default function LinkedInCredentialForm({
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : "Verification failed";
-      setError(message);
-      toast({
-        title: "Verification failed",
-        description: message,
-        variant: "destructive",
-      });
+      const isNetworkError = message.includes("fetch") || message.includes("network") || message.includes("timeout") || message.includes("CORS");
 
-      if (createdCredentialId) {
-        try {
-          await deleteLinkedInCredentials(createdCredentialId);
-        } catch {
-          // Ignore cleanup failures.
+      if (isNetworkError) {
+        setError("Verification is taking longer than expected. Check the credential card status — it may still complete.");
+        toast({
+          title: "Connection issue",
+          description: "The verification may still be in progress. Refresh in a moment.",
+          variant: "default",
+        });
+        if (onSuccess) onSuccess();
+      } else {
+        setError(message);
+        toast({
+          title: "Verification failed",
+          description: message,
+          variant: "destructive",
+        });
+
+        if (createdCredentialId) {
+          try {
+            await deleteLinkedInCredentials(createdCredentialId);
+          } catch {
+            // Ignore cleanup failures.
+          }
         }
       }
     } finally {

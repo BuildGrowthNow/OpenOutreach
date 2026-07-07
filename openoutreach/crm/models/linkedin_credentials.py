@@ -333,8 +333,11 @@ class LinkedInCredentials(models.Model):
                 "Challenge detected for %s (state=%s, url=%s) — browser kept alive for VNC",
                 self.get_public_email(), page_state, session.page.url,
             )
-            self.status = self.STATUS_LOCKED
-            self.save(update_fields=["status"])
+            try:
+                self.status = self.STATUS_LOCKED
+                self.save(update_fields=["status"])
+            except Exception:
+                pass
             try:
                 LinkedInCredentialLog.objects.create(
                     credentials=self,
