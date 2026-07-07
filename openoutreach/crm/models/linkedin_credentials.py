@@ -303,7 +303,6 @@ class LinkedInCredentials(models.Model):
             When error_type is ``"awaiting_challenge"`` the browser is still
             running and the session is usable for ``confirm_challenge``.
         """
-        from linkedin_cli.browser.nav import resolve_locator  # type: ignore[import-untyped]
         from linkedin_cli.browser.login import launch_browser  # type: ignore[import-untyped]
 
         logger.info(
@@ -316,20 +315,16 @@ class LinkedInCredentials(models.Model):
             session.page.goto("https://www.linkedin.com/login", timeout=30000)
 
             # Enter credentials
-            email_input = resolve_locator(
-                session.page, ["input#username"], timeout_per_ms=10000
-            )
-            password_input = resolve_locator(
-                session.page, ["input#password"], timeout_per_ms=10000
-            )
-            email_input.fill("")
-            email_input.type(self.get_email())
-            password_input.fill("")
-            password_input.type(self.get_password())
+            email_input = session.page.locator("input#username")
+            email_input.wait_for(state="visible", timeout=10000)
+            email_input.fill(self.get_email())
 
-            login_button = resolve_locator(
-                session.page, ["button[type='submit']"], timeout_per_ms=10000
-            )
+            password_input = session.page.locator("input#password")
+            password_input.wait_for(state="visible", timeout=10000)
+            password_input.fill(self.get_password())
+
+            login_button = session.page.locator("button[type='submit']")
+            login_button.wait_for(state="visible", timeout=10000)
             login_button.click()
             session.page.wait_for_load_state("domcontentloaded", timeout=15000)
 
