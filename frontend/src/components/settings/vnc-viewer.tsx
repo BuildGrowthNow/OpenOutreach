@@ -15,15 +15,27 @@ import { Monitor, Maximize2, Minimize2, AlertCircle } from "lucide-react";
 
 interface VncViewerProps {
   vncUrl?: string;
+  embedded?: boolean;
 }
 
-export function VncViewer({ vncUrl }: VncViewerProps) {
+export function VncViewer({ vncUrl, embedded }: VncViewerProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [showViewer, setShowViewer] = useState(true); // Auto-show when used in modal
   const [error, setError] = useState<string | null>(null);
 
   // Proxy VNC through the same HTTPS origin via /vnc/ nginx location
   const effectiveUrl = vncUrl || `${window.location.origin}/vnc`;
+
+  if (embedded) {
+    return (
+      <iframe
+        src={`${effectiveUrl}/vnc.html?autoconnect=true&resize=scale`}
+        className="w-full h-full border-0"
+        title="VNC Browser Session"
+        allow="clipboard-read; clipboard-write"
+      />
+    );
+  }
 
   const handleOpenViewer = () => {
     setShowViewer(true);
