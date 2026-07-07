@@ -1,6 +1,6 @@
 # Generated manually to fix credential status defaults
 
-from django.db import migrations
+from django.db import migrations, models
 
 
 def fix_credential_statuses(apps, schema_editor):
@@ -25,7 +25,7 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='linkedincredentials',
             name='status',
-            field=migrations.CharField(
+            field=models.CharField(
                 choices=[
                     ('stored', 'Stored - not yet verified'),
                     ('tested', 'Tested - login attempted'),
