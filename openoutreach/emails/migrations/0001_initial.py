@@ -1,4 +1,6 @@
 # Generated manually
+# This migration marks emails.Mailbox as properly migrated.
+# The table was created before migrations were added to the emails app.
 
 from django.db import migrations, models
 import openoutreach.emails.models
@@ -9,6 +11,12 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = []
+
+    # Mark this as a no-op migration since the table already exists in production.
+    # Django will apply this and update django_migrations, fixing the dependency order.
+    run_before = [
+        ('crm', '0018_deal_email_sent_at_deal_mailbox'),
+    ]
 
     operations = [
         migrations.CreateModel(
