@@ -336,10 +336,14 @@ class LinkedInCredentials(models.Model):
 
                 if "linkedin.com/feed" in current_url:
                     logger.info("Cookie-based verification successful for %s", self.get_public_email())
+
+                    # Discover username from the profile link
+                    self._discover_username(session)
+
                     self.last_verified = timezone.now()
                     self.verification_failures = 0
                     self.status = self.STATUS_ACTIVE if mark_as_active else self.STATUS_TESTED
-                    self.save(update_fields=["last_verified", "verification_failures", "status"])
+                    self.save(update_fields=["last_verified", "verification_failures", "status", "username"])
 
                     LinkedInCredentialLog.objects.create(
                         credentials=self,
@@ -507,6 +511,8 @@ class LinkedInCredentials(models.Model):
                             f"LinkedIn credential verification successful for {self.get_public_email()}"
                         )
 
+                        self._discover_username(session)
+
                         self.last_verified = timezone.now()
                         self.verification_failures = 0
                         self.status = (
@@ -517,6 +523,7 @@ class LinkedInCredentials(models.Model):
                                 "last_verified",
                                 "verification_failures",
                                 "status",
+                                "username",
                             ]
                         )
 
@@ -545,6 +552,8 @@ class LinkedInCredentials(models.Model):
                 f"LinkedIn credential verification successful for {self.get_public_email()}"
             )
 
+            self._discover_username(session)
+
             self.last_verified = timezone.now()
             self.verification_failures = 0
             self.status = self.STATUS_ACTIVE if mark_as_active else self.STATUS_TESTED
@@ -553,6 +562,7 @@ class LinkedInCredentials(models.Model):
                     "last_verified",
                     "verification_failures",
                     "status",
+                    "username",
                 ]
             )
 
@@ -606,6 +616,38 @@ class LinkedInCredentials(models.Model):
                 "message": f"Verification {'timed out' if is_timeout else 'error'}: {error_msg}",
                 "error_type": "timeout" if is_timeout else "verification_error",
             }
+
+    def _discover_username(self, session) -> None:
+        """Extract the LinkedIn username from the current authenticated page."""
+        try:
+            # Try the /in/username link in the nav
+            me_link = session.page.query_selector("a[href*='/in/']")
+            if me_link:
+                href = me_link.get_attribute("href") or ""
+                # Extract username from /in/username or /in/username/
+                parts = [p for p in href.split("/") if p]
+                if "in" in parts:
+                    idx = parts.index("in")
+                    if idx + 1 < len(parts):
+                        username = parts[idx + 1]
+                        if username and username != "me":
+                            self.username = username
+                            return
+
+            # Fallback: check URL after navigating to /me/
+            session.page.goto("https://www.linkedin.com/in/me/", timeout=10000)
+            session.page.wait_for_load_state("domcontentloaded", timeout=5000)
+            url = session.page.url
+            if "/in/" in url:
+                parts = [p for p in url.split("/") if p]
+                if "in" in parts:
+                    idx = parts.index("in")
+                    if idx + 1 < len(parts):
+                        username = parts[idx + 1]
+                        if username and username != "me":
+                            self.username = username
+        except Exception as e:
+            logger.debug("Could not discover username: %s", e)
 
     def check_checkpoint_challenge(self, session) -> tuple[bool, str]:
         """
