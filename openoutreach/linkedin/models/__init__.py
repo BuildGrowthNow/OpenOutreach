@@ -174,11 +174,15 @@ class ActionLog(models.Model):
         CHECK_PENDING = "check_pending", "Check Pending"
         FOLLOW_UP = "follow_up", "Follow Up"
         SEND_MANUAL_MESSAGE = "send_manual_message", "Send Manual Message"
+        CAMPAIGN_PAUSED = "campaign_paused", "Campaign Paused"
+        CAMPAIGN_STARTED = "campaign_started", "Campaign Started"
 
     linkedin_profile = models.ForeignKey(
         LinkedInProfile,
         on_delete=models.CASCADE,
         related_name="action_logs",
+        null=True,
+        blank=True,
     )
     campaign = models.ForeignKey(
         Campaign,

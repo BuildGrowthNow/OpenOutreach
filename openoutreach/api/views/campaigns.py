@@ -210,6 +210,26 @@ class CampaignDetailView(APIView):
             # Don't crash if notification fails
             pass
 
+        # Create ActionLog entries for status changes
+        try:
+            from openoutreach.linkedin.models import ActionLog
+
+            if old_is_paused != campaign.is_paused:
+                action_type = (
+                    ActionLog.ActionType.CAMPAIGN_PAUSED
+                    if campaign.is_paused
+                    else ActionLog.ActionType.CAMPAIGN_STARTED
+                )
+                ActionLog.objects.create(
+                    linkedin_profile=None,
+                    campaign=campaign,
+                    action_type=action_type,
+                    status="completed",
+                )
+        except Exception:
+            # Don't crash if ActionLog creation fails
+            pass
+
     def delete(self, request, pk):
         """Delete campaign."""
         campaign = self.get_object(pk)
