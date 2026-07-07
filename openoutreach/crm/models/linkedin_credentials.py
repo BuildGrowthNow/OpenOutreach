@@ -408,12 +408,31 @@ class LinkedInCredentials(models.Model):
             }
 
         try:
-            session.page.wait_for_load_state("domcontentloaded", timeout=10000)
+            # Check current page state
+            current_url = session.page.url
             page_state = classify_page(session.page)
 
+            # If still on checkpoint, try navigating to feed to trigger LinkedIn's redirect
+            if page_state == PageState.CHECKPOINT:
+                logger.debug("Still on checkpoint URL, attempting navigation to /feed/")
+                try:
+                    session.page.goto("https://www.linkedin.com/feed/", timeout=15000)
+                    session.page.wait_for_load_state("domcontentloaded", timeout=10000)
+                    page_state = classify_page(session.page)
+                except Exception as nav_error:
+                    logger.debug("Navigation attempt failed: %s", nav_error)
+                    # Page might have redirected automatically, re-check
+                    page_state = classify_page(session.page)
+
+            # If we're on the feed, login succeeded
             if page_state == PageState.FEED:
                 return self._mark_verified(session, mark_as_active=True)
 
+            # Still not on feed — challenge incomplete or failed
+            logger.warning(
+                "Challenge confirmation failed: still at %s (state=%s)",
+                session.page.url, page_state,
+            )
             return False, {
                 "verified_at": None,
                 "status": self.STATUS_LOCKED,
@@ -421,6 +440,7 @@ class LinkedInCredentials(models.Model):
                 "error_type": "challenge_incomplete",
             }
         except Exception as e:
+            logger.error("Error checking challenge status: %s", e)
             return False, {
                 "verified_at": None,
                 "status": self.status,
