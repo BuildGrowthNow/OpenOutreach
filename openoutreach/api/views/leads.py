@@ -47,44 +47,104 @@ def _is_valid_status(status_param: str | None) -> bool:
     return normalized in DealState.values
 
 
+def _serialize_profile(profile: dict) -> dict:
+    """Convert a Voyager profile dict to frontend-friendly shape."""
+    positions = profile.get("positions") or []
+    experience = []
+    for pos in positions:
+        if isinstance(pos, dict):
+            dr = pos.get("date_range") or {}
+            start = dr.get("start") or {}
+            end = dr.get("end") or {}
+            start_yr = start.get("year", "")
+            end_yr = end.get("year", "Present")
+            duration = f"{start_yr} - {end_yr}" if start_yr else ""
+            experience.append({
+                "company": pos.get("company_name"),
+                "title": pos.get("title"),
+                "duration": duration,
+            })
+
+    educations = profile.get("educations") or []
+    education = []
+    for edu in educations:
+        if isinstance(edu, dict):
+            dr = edu.get("date_range") or {}
+            start = dr.get("start") or {}
+            end = dr.get("end") or {}
+            year = ""
+            if start.get("year") and end.get("year"):
+                year = f"{start['year']} - {end['year']}"
+            elif end.get("year"):
+                year = str(end["year"])
+            education.append({
+                "school": edu.get("school_name"),
+                "degree": edu.get("degree_name"),
+                "year": year,
+            })
+
+    return {
+        "firstName": profile.get("first_name"),
+        "lastName": profile.get("last_name"),
+        "headline": profile.get("headline"),
+        "summary": profile.get("summary"),
+        "location": profile.get("location_name"),
+        "experience": experience,
+        "education": education,
+    }
+
+
 def _extract_lead_name(lead: Lead) -> str | None:
-    """Extract lead name from contact info or public identifier."""
+    """Extract lead name from cached profile, contact info, or public identifier."""
+    if lead.cached_profile and isinstance(lead.cached_profile, dict):
+        first = lead.cached_profile.get("first_name", "") or ""
+        last = lead.cached_profile.get("last_name", "") or ""
+        full = f"{first} {last}".strip()
+        if full:
+            return full
     if lead.contact_info and isinstance(lead.contact_info, dict):
         email = lead.contact_info.get("email")
         if email and "@" in email:
             return email.split("@")[0].replace(".", " ").replace("_", " ").title()
-    # Fall back to public identifier (e.g., "john-doe-12345" -> "John Doe")
     if lead.public_identifier:
-        return lead.public_identifier.replace("-", " ").replace("_", " ").title()
+        parts = lead.public_identifier.rstrip("0123456789").rstrip("-")
+        return parts.replace("-", " ").replace("_", " ").title()
     return None
 
 
 def _extract_lead_info(lead: Lead) -> tuple[str | None, str | None, str | None]:
-    """Extract company and title from contact info or profile data."""
+    """Extract company and title from cached profile, contact info, or email."""
     company = None
     title = None
 
+    if lead.cached_profile and isinstance(lead.cached_profile, dict):
+        headline = lead.cached_profile.get("headline") or ""
+        if headline and " at " in headline:
+            title, company = headline.rsplit(" at ", 1)
+        elif headline:
+            title = headline
+        positions = lead.cached_profile.get("positions")
+        if isinstance(positions, list) and positions:
+            latest = positions[0]
+            if isinstance(latest, dict):
+                company = company or latest.get("company_name")
+                title = title or latest.get("title")
+
     if lead.contact_info and isinstance(lead.contact_info, dict):
-        # Try job_info field (from enrichment API)
         job_info = lead.contact_info.get("job_info", {})
         if isinstance(job_info, dict):
-            company = job_info.get("company") or company
-            title = job_info.get("title") or title
-
-        # Also check generic fields
+            company = company or job_info.get("company")
+            title = title or job_info.get("title")
         if not company:
-            company = lead.contact_info.get("company")
+            company = company or lead.contact_info.get("company")
         if not title:
-            title = lead.contact_info.get("title")
+            title = title or lead.contact_info.get("title")
 
-    # If no contact info, fall back to api_email if available
     if not company and lead.api_email:
-        # Extract company name from email domain
         domain = lead.api_email.split("@")[-1] if "@" in lead.api_email else None
         if domain:
             company = domain.split(".")[0].replace("-", " ").title()
 
-    # Third return value is a fallback field for future use
     return company, title, None
 
 
@@ -388,6 +448,14 @@ class LeadDetailView(APIView):
                 }
             )
 
+        # Build profile payload from cached data
+        profile_data = None
+        if lead.cached_profile:
+            profile_data = _serialize_profile(lead.cached_profile)
+
+        # Top-level state/outcome from the latest deal
+        latest_deal = deals.order_by("-creation_date").first() if deals.exists() else None
+
         return Response(
             {
                 "id": lead.id,
@@ -396,6 +464,8 @@ class LeadDetailView(APIView):
                 "name": name,
                 "company": company,
                 "title": title,
+                "state": latest_deal.state if latest_deal else None,
+                "outcome": latest_deal.outcome if latest_deal else None,
                 "disqualified": lead.disqualified,
                 "creationDate": (
                     lead.creation_date.isoformat() if lead.creation_date else None
@@ -411,6 +481,7 @@ class LeadDetailView(APIView):
                     last_message.created_at.isoformat() if last_message else None
                 ),
                 "linkedinUrn": lead.urn,
+                "profile": profile_data,
             }
         )
 
@@ -495,45 +566,43 @@ class LeadProfileView(APIView):
             raise Http404
 
     def post(self, request, pk):
-        """Re-scrape lead profile."""
+        """Re-scrape lead profile.
+
+        Runs Playwright in a dedicated thread to avoid conflict with
+        Django's asyncio event loop (channels/asgiref).
+        """
+        import concurrent.futures
+
         lead = self.get_object(pk)
 
-        try:
-            # Import dependencies
+        def _scrape():
             from openoutreach.linkedin.browser.registry import resolve_profile
             from openoutreach.linkedin.browser.session import AccountSession
 
-            # Get a LinkedInProfile to create an AccountSession
             linkedin_profile = resolve_profile()
             if not linkedin_profile:
+                return None, "No active LinkedIn profile found"
+
+            session = AccountSession(linkedin_profile)
+            profile = lead.get_profile(session)
+            return profile, None
+
+        try:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(_scrape)
+                profile, err = future.result(timeout=60)
+
+            if err:
                 return Response(
-                    {
-                        "success": False,
-                        "profile": None,
-                        "error": "No active LinkedIn profile found",
-                    },
+                    {"success": False, "profile": None, "error": err},
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 )
-
-            # Create a session for this profile
-            session = AccountSession(linkedin_profile)
-
-            # Get the profile using the session
-            profile = lead.get_profile(session)
 
             if profile:
                 return Response(
                     {
                         "success": True,
-                        "profile": {
-                            "firstName": profile.get("first_name"),
-                            "lastName": profile.get("last_name"),
-                            "headline": profile.get("headline"),
-                            "summary": profile.get("summary"),
-                            "location": profile.get("location"),
-                            "experience": profile.get("experience", []),
-                            "education": profile.get("education", []),
-                        },
+                        "profile": _serialize_profile(profile),
                     }
                 )
             else:
@@ -546,6 +615,11 @@ class LeadProfileView(APIView):
                     status=status.HTTP_404_NOT_FOUND,
                 )
 
+        except concurrent.futures.TimeoutError:
+            return Response(
+                {"success": False, "profile": None, "error": "Scrape timed out"},
+                status=status.HTTP_504_GATEWAY_TIMEOUT,
+            )
         except Exception as e:
             return Response(
                 {"success": False, "profile": None, "error": str(e)},

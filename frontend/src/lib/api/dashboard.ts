@@ -457,7 +457,7 @@ export interface LeadProfile {
 
 export async function reScrapeLeadProfile(
   id: string,
-): Promise<ApiResponse<{ success: boolean; profile: LeadProfile }>> {
+): Promise<ApiResponse<{ success: boolean; profile: LeadProfile; error?: string }>> {
   return post(`/api/leads/${id}/profile`);
 }
 

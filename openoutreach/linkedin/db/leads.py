@@ -63,8 +63,12 @@ def create_enriched_lead(session, url: str, profile: Dict[str, Any]) -> Optional
             )
             return None
 
-        # Create new lead
-        lead = Lead.objects.create(linkedin_url=clean_url, public_identifier=public_id)
+        # Create new lead with cached profile data
+        lead = Lead.objects.create(
+            linkedin_url=clean_url,
+            public_identifier=public_id,
+            cached_profile=profile,
+        )
         _cache_urn_from_profile(lead, profile)
 
         # Create Deal to link lead to campaign immediately

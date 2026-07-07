@@ -35,6 +35,7 @@ class Lead(models.Model):
     #                  captured once at CONNECTED; null = never scraped (idempotency flag).
     #   api_email    — enrichment-API result (BetterContact); its writer lands with the
     #                  finder slice (p1-e3). null = not found.
+    cached_profile = models.JSONField(null=True, blank=True, default=None)
     contact_info = models.JSONField(null=True, blank=True, default=None)
     api_email = models.EmailField(null=True, blank=True, default=None)
     notes = models.TextField(null=True, blank=True, help_text="Notes about this lead")
@@ -74,6 +75,8 @@ class Lead(models.Model):
             return None
 
         urn = profile.get("urn") or None
+        update_fields = ["cached_profile"]
+        self.cached_profile = profile
         if urn and self.urn != urn:
             if Lead.objects.filter(urn=urn).exclude(pk=self.pk).exists():
                 logger.warning(
@@ -83,7 +86,8 @@ class Lead(models.Model):
                 )
             else:
                 self.urn = urn
-                self.save(update_fields=["urn"])
+                update_fields.append("urn")
+        self.save(update_fields=update_fields)
 
         return profile
 

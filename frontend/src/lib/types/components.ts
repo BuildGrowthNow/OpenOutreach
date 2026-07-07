@@ -243,6 +243,23 @@ export interface Lead {
   campaignId?: string;
   campaignName?: string;
   disqualified?: boolean;
+  profile?: {
+    firstName?: string;
+    lastName?: string;
+    headline?: string;
+    summary?: string;
+    location?: string;
+    experience?: Array<{
+      company?: string;
+      title?: string;
+      duration?: string;
+    }>;
+    education?: Array<{
+      school?: string;
+      degree?: string;
+      year?: string;
+    }>;
+  };
 }
 
 export interface Campaign {

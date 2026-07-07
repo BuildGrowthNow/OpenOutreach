@@ -74,31 +74,21 @@ const LeadDetailsPage = () => {
   const [showEditModal, setShowEditModal] = useState(false)
   const [showAddToCampaign, setShowAddToCampaign] = useState(false)
 
-  const fetchProfileData = useCallback(async (id: string) => {
-    try {
-      const response = await reScrapeLeadProfile(id)
-      if (response.data?.profile) {
-        setProfile(response.data.profile)
-      } else if (response.data?.success && response.data?.profile) {
-        setProfile(response.data.profile)
-      }
-    } catch (err) {
-      console.error('Failed to fetch profile data:', err)
-    }
-  }, [])
 
   const fetchLeadDetails = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
-      
+
       const response = await getLead(leadId)
-      
+
       if (response.data) {
         setLead(response.data)
-        
-        // Fetch full profile data from separate endpoint
-        await fetchProfileData(leadId)
+
+        // Use cached profile from lead detail response (no live scrape)
+        if (response.data.profile) {
+          setProfile(response.data.profile)
+        }
       } else {
         setError(response.error || 'Failed to fetch lead details')
       }
@@ -107,7 +97,7 @@ const LeadDetailsPage = () => {
     } finally {
       setLoading(false)
     }
-  }, [leadId, fetchProfileData])
+  }, [leadId])
 
   const fetchCampaigns = useCallback(async () => {
     try {
@@ -130,15 +120,16 @@ const LeadDetailsPage = () => {
 
   const handleReScrape = async () => {
     if (!lead) return
-    
+
     try {
       const response = await reScrapeLeadProfile(lead.id)
       if (response.data?.success) {
+        if (response.data.profile) {
+          setProfile(response.data.profile)
+        }
         alert('Profile re-scraped successfully!')
-        await fetchLeadDetails()
-        await fetchCampaigns()
       } else {
-        alert(`Failed to re-scrape profile: ${response.error || 'Unknown error'}`)
+        alert(`Failed to re-scrape profile: ${response.data?.error || response.error || 'Unknown error'}`)
       }
     } catch (err) {
       alert(`Failed to re-scrape profile: ${err instanceof Error ? err.message : 'Unknown error'}`)
@@ -163,16 +154,15 @@ const LeadDetailsPage = () => {
 
   const handleEditSubmit = async (data: Partial<Lead>) => {
     if (!lead) return
-    
+
     try {
       setShowEditModal(false)
       setLoading(true)
       const response = await updateLead(lead.id, data)
-      
+
       if (response.data) {
         setLead(response.data)
         alert('Lead updated successfully!')
-        await fetchProfileData(lead.id)
       } else {
         alert(`Failed to update lead: ${response.error || 'Unknown error'}`)
       }
