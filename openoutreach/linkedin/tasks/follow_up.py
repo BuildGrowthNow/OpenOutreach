@@ -40,6 +40,57 @@ def _build_send_profile(deal) -> dict:
     }
 
 
+def _replace_placeholders(message: str, deal) -> str:
+    """Replace common placeholders in messages with actual lead data.
+
+    Handles cases where the LLM generates placeholders despite being told not to.
+    Falls back to public_identifier if profile data is unavailable.
+    """
+    import json
+    import re
+
+    lead = deal.lead
+    first_name = ""
+    last_name = ""
+    company = ""
+
+    # Try to get data from cached_profile
+    if lead.cached_profile:
+        try:
+            profile = json.loads(lead.cached_profile)
+            first_name = profile.get("first_name", "")
+            last_name = profile.get("last_name", "")
+            # Company could be in various places in the profile
+            if "experience" in profile and profile["experience"]:
+                company = profile["experience"][0].get("company_name", "")
+        except Exception:
+            pass
+
+    # Fallback to public_identifier if we don't have a first name
+    if not first_name:
+        first_name = lead.public_identifier
+
+    # Replace common placeholder patterns (case-insensitive)
+    replacements = {
+        r'\[First Name\]': first_name,
+        r'\[first name\]': first_name,
+        r'\[FIRST NAME\]': first_name,
+        r'\[Last Name\]': last_name,
+        r'\[last name\]': last_name,
+        r'\[LAST NAME\]': last_name,
+        r'\[Company Name\]': company,
+        r'\[company name\]': company,
+        r'\[COMPANY NAME\]': company,
+    }
+
+    result = message
+    for pattern, replacement in replacements.items():
+        if replacement:  # Only replace if we have data
+            result = re.sub(pattern, replacement, result)
+
+    return result
+
+
 def _too_soon_to_nudge(deal) -> bool:
     """Wait ``unanswered_count * MIN_DAYS_PER_UNANSWERED`` days between nudges."""
     from openoutreach.chat.models import ChatMessage
@@ -148,6 +199,8 @@ def handle_follow_up(task, session, qualifiers):
 
     if decision.action == "send_message":
         message = decision.message or ""
+        # Replace any placeholders the LLM may have generated
+        message = _replace_placeholders(message, deal)
         logger.info("[%s] follow_up message for %s: %s", campaign, public_id, message)
         sent = send_raw_message(session, profile, message)
         if not sent:
