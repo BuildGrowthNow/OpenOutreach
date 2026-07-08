@@ -62,12 +62,17 @@ class SiteConfig(models.Model):
     daily_follow_up_limit: models.PositiveIntegerField = models.PositiveIntegerField(
         default=25
     )  # type: ignore[var-annotated]
+    # velocity: actions per hour. Controls task spacing:
+    #   >= 30 actions/hr (<=2min spacing) → aggressive burst mode (tasks fire immediately with 5-10s rhythm)
+    #   < 30 actions/hr (>2min spacing) → conservative spread mode (Poisson spacing across 24h window)
+    #   Default 20 actions/hr = 3min average spacing
     velocity: models.PositiveIntegerField = models.PositiveIntegerField(
-        default=20
-    )  # max actions per time period  # type: ignore[var-annotated]
+        default=20, help_text="Actions per hour (>= 30 = burst mode, < 30 = spread mode)"
+    )  # type: ignore[var-annotated]
+    # cooldown_minutes: DEPRECATED — use velocity instead (velocity=60/cooldown converts min→hr)
     cooldown_minutes: models.PositiveIntegerField = models.PositiveIntegerField(
-        default=0
-    )  # minutes between actions  # type: ignore[var-annotated]
+        default=0, help_text="DEPRECATED: use velocity (actions/hour) instead"
+    )  # type: ignore[var-annotated]
 
     # BetterContact email-finder key; blank disables enrichment (see emails/bettercontact.py).
     bettercontact_api_key = models.CharField(max_length=500, blank=True, default="")

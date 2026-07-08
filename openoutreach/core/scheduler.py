@@ -1,5 +1,5 @@
 # openoutreach/core/scheduler.py
-"""Per-type 24h planner with Poisson-spaced lazy task slots.
+"""Per-type 24h planner with dynamic task spacing.
 
 The daemon's task queue is *lazy*: each row carries only ``task_type``,
 ``campaign_id``, and ``scheduled_at``. The handler resolves a concrete
@@ -11,11 +11,10 @@ moves forward in three layers:
 1. **Per-type planner** — ``plan_connect_window``,
    ``plan_follow_up_window``, ``plan_check_pending_window``. Each one,
    when no PENDING task of its type exists for a campaign, computes the
-   right slot count ``n`` for the next 24h, inserts one row that fires
-   immediately, and Poisson-spaces the remaining ``n - 1`` rows across
-   the working portion of the window. The leading immediate slot kills
-   the cold-start ramp (without it the first action would sit ``T/n``
-   away on average — ~72 min for a 20/day campaign).
+   right slot count ``n`` for the next 24h and spaces tasks according
+   to ``SiteConfig.velocity`` (actions per hour). When velocity is high
+   (aggressive mode), tasks cluster into bursts; when low, they spread
+   uniformly via Poisson spacing.
 
 2. **State-transition hook** — ``on_deal_state_entered(deal)`` only
    updates ``deal.next_check_pending_at`` for PENDING transitions. It
@@ -38,12 +37,8 @@ from zoneinfo import ZoneInfo
 from django.utils import timezone
 
 from openoutreach.core.conf import (
-    ACTIVE_END_HOUR,
-    ACTIVE_START_HOUR,
-    ACTIVE_TIMEZONE,
     CAMPAIGN_CONFIG,
     CHECK_PENDING_DAILY_CAP,
-    ENABLE_ACTIVE_HOURS,
 )
 from openoutreach.crm.models import DealState
 from openoutreach.core.models import Task
@@ -54,14 +49,28 @@ logger = logging.getLogger(__name__)
 # ── Working-hours arithmetic ──────────────────────────────────────────
 
 
+def _get_active_hours_config():
+    """Load active hours configuration from SiteConfig DB singleton."""
+    from openoutreach.core.models import SiteConfig
+    config = SiteConfig.load()
+    return {
+        'enabled': config.enable_active_hours,
+        'start_hour': config.active_start_hour,
+        'end_hour': config.active_end_hour,
+        'timezone': config.active_timezone,
+        'days': set(int(d.strip()) for d in config.active_days.split(",") if d.strip()) if config.active_days else {1,2,3,4,5}
+    }
+
+
 def _working_intervals(start, end) -> list[tuple]:
     """Return ``[(s, e), ...]`` UTC datetimes for the working portions of
-    ``[start, end]``. When ``ENABLE_ACTIVE_HOURS`` is False the only
+    ``[start, end]``. When ``enable_active_hours`` is False the only
     interval is ``[(start, end)]``."""
-    if not ENABLE_ACTIVE_HOURS:
+    cfg = _get_active_hours_config()
+    if not cfg['enabled']:
         return [(start, end)]
 
-    tz = ZoneInfo(ACTIVE_TIMEZONE)
+    tz = ZoneInfo(cfg['timezone'])
     local_start = start.astimezone(tz)
     local_end = end.astimezone(tz)
 
@@ -69,18 +78,24 @@ def _working_intervals(start, end) -> list[tuple]:
     day = local_start.date()
     last_day = local_end.date()
     while day <= last_day:
+        # Check if this day is active (1=Monday, 7=Sunday)
+        weekday = day.weekday() + 1
+        if weekday not in cfg['days']:
+            day = day + timedelta(days=1)
+            continue
+
         day_active_start = Datetime(
             day.year,
             day.month,
             day.day,
-            ACTIVE_START_HOUR,
+            cfg['start_hour'],
             tzinfo=tz,
         )
         day_active_end = Datetime(
             day.year,
             day.month,
             day.day,
-            ACTIVE_END_HOUR,
+            cfg['end_hour'],
             tzinfo=tz,
         )
         s = max(day_active_start, local_start)
@@ -92,39 +107,80 @@ def _working_intervals(start, end) -> list[tuple]:
 
 
 def working_seconds_in_window(start, end) -> float:
-    """Sum of seconds inside ``[ACTIVE_START_HOUR, ACTIVE_END_HOUR]`` between
-    ``start`` and ``end``. Returns ``(end - start).total_seconds()`` when
-    active hours are disabled."""
-    if not ENABLE_ACTIVE_HOURS:
+    """Sum of seconds inside active hours between ``start`` and ``end``.
+    Returns ``(end - start).total_seconds()`` when active hours are disabled."""
+    cfg = _get_active_hours_config()
+    if not cfg['enabled']:
         return max(0.0, (end - start).total_seconds())
     return sum((e - s).total_seconds() for s, e in _working_intervals(start, end))
 
 
-def poisson_slot_times(now, n: int, horizon_hours: float = 24) -> list:
-    """Return ``n`` strictly-increasing timestamps inside the working
-    portion of ``[now, now + horizon_hours]``.
+def velocity_slot_times(now, n: int, velocity: int, horizon_hours: float = 24) -> list:
+    """Return ``n`` timestamps spaced according to velocity (actions/hour).
 
-    Implementation: sample ``n`` uniform positions in ``[0, T)`` (working
-    seconds) and sort. This is the order-statistic representation of a
-    conditional Poisson process given ``n`` arrivals in the window —
-    same distribution as exponential inter-arrival sampling, but
-    guarantees exactly ``n`` slots without overshoot. Mean spacing in
-    working time is ``T / (n + 1)``.
+    When velocity is high (>= 30 actions/hr, i.e., <= 2min spacing), tasks
+    cluster into immediate bursts. When velocity is low, tasks spread uniformly
+    via Poisson spacing across the working window.
+
+    Args:
+        now: Start time
+        n: Number of slots to create
+        velocity: Target actions per hour (from SiteConfig)
+        horizon_hours: Planning window (default 24h)
+
+    Returns:
+        List of strictly-increasing timestamps
     """
     if n <= 0:
         return []
 
     end = now + timedelta(hours=horizon_hours)
     intervals = _working_intervals(now, end)
-    total = sum((e - s).total_seconds() for s, e in intervals)
-    if total <= 0:
+    total_seconds = sum((e - s).total_seconds() for s, e in intervals)
+    if total_seconds <= 0:
         return []
 
-    positions = sorted(random.uniform(0, total) for _ in range(n))
+    # Compute inter-action delay from velocity (actions/hour)
+    # velocity = 60 → 1 action/min, velocity = 30 → 1 action/2min, etc.
+    target_spacing_seconds = 3600.0 / max(1, velocity) if velocity > 0 else 3600.0
 
+    # Aggressive mode: velocity >= 30/hr (≤ 2min spacing) → burst immediately
+    if target_spacing_seconds <= 120:
+        # Cluster all tasks with minimal spacing (5-10 seconds human rhythm)
+        times = []
+        cursor = now
+        for i in range(n):
+            times.append(cursor)
+            cursor = cursor + timedelta(seconds=random.uniform(5, 10))
+        return times
+
+    # Conservative mode: spread uniformly via Poisson
+    # Mean spacing from Poisson: total_seconds / (n + 1)
+    poisson_mean_spacing = total_seconds / (n + 1)
+
+    # Use the MORE AGGRESSIVE of: velocity target or Poisson mean
+    # (if velocity allows 5min spacing but Poisson would give 10min, use 5min)
+    effective_spacing = min(target_spacing_seconds, poisson_mean_spacing)
+
+    # If effective spacing is still aggressive, use deterministic spacing
+    if effective_spacing < poisson_mean_spacing * 0.5:
+        # Linear spacing with jitter
+        times = []
+        cursor_seconds = 0.0
+        for i in range(n):
+            # Add jitter (±20% of spacing)
+            jitter = random.uniform(-0.2, 0.2) * effective_spacing
+            cursor_seconds += effective_spacing + jitter
+            if cursor_seconds >= total_seconds:
+                break
+            times.append(_seconds_to_timestamp(cursor_seconds, intervals))
+        return times
+
+    # Otherwise fall back to Poisson (uniform order statistics)
+    positions = sorted(random.uniform(0, total_seconds) for _ in range(n))
     times: list = []
     cursor_interval = 0
-    cursor_offset = 0.0  # working-seconds consumed before the current interval
+    cursor_offset = 0.0
     for pos in positions:
         while cursor_interval < len(intervals):
             s, e = intervals[cursor_interval]
@@ -135,6 +191,18 @@ def poisson_slot_times(now, n: int, horizon_hours: float = 24) -> list:
             cursor_offset += dur
             cursor_interval += 1
     return times
+
+
+def _seconds_to_timestamp(seconds: float, intervals: list[tuple]):
+    """Convert working-seconds offset to UTC timestamp within intervals."""
+    cursor_offset = 0.0
+    for s, e in intervals:
+        dur = (e - s).total_seconds()
+        if seconds < cursor_offset + dur:
+            return s + timedelta(seconds=seconds - cursor_offset)
+        cursor_offset += dur
+    # Overflow: return end of last interval
+    return intervals[-1][1] if intervals else timezone.now()
 
 
 # ── Per-type planners ─────────────────────────────────────────────────
@@ -166,19 +234,22 @@ def _create_lazy_slots(
     return len(times)
 
 
-def _plan_slots(task_type: "Task.TaskType", campaign_id: int, n: int) -> int:
-    """Schedule *n* lazy slots: one fires immediately, the remaining
-    ``n - 1`` are Poisson-spaced across the next 24h working window.
+def _plan_slots(task_type: "Task.TaskType", campaign_id: int, n: int, velocity: int) -> int:
+    """Schedule *n* lazy slots spaced according to velocity.
 
-    The leading immediate slot is intentional — without it the first
-    action of a freshly-planned window would sit ``T/n`` away on average
-    (the mean of a single ``Exp(n/T)`` draw). That cold-start ramp made
-    `make run` feel dead for ~an hour on a 20/day campaign.
+    When velocity is high (>= 30 actions/hr), tasks fire in immediate bursts.
+    When velocity is low, tasks spread uniformly across the 24h working window.
+
+    Args:
+        task_type: Type of task to create
+        campaign_id: Campaign PK
+        n: Number of slots to create
+        velocity: Actions per hour (from SiteConfig)
     """
     if n <= 0:
         return 0
     now = timezone.now()
-    times = [now] + poisson_slot_times(now, n - 1)
+    times = velocity_slot_times(now, n, velocity)
     return _create_lazy_slots(task_type, campaign_id, times)
 
 
@@ -192,20 +263,24 @@ def plan_connect_window(session, campaign) -> int:
     if _has_pending(Task.TaskType.CONNECT, campaign.pk):
         return 0
 
+    from openoutreach.core.models import SiteConfig
+    config = SiteConfig.load()
+
     profile = session.linkedin_profile
     n = max(0, profile.connect_daily_limit - profile._daily_count("connect"))
 
     if campaign.is_freemium:
         n = int(n * campaign.action_fraction)
 
-    created = _plan_slots(Task.TaskType.CONNECT, campaign.pk, n)
+    velocity = config.velocity if config.velocity > 0 else 20  # Default 20 actions/hr
+    created = _plan_slots(Task.TaskType.CONNECT, campaign.pk, n, velocity)
     if created:
+        spacing_desc = "burst mode" if velocity >= 30 else f"velocity={velocity}/hr"
         logger.info(
-            "[%s] planned %d connect slots over next 24h — 1 fires now, "
-            "%d Poisson-spaced (daily=%d)",
+            "[%s] planned %d connect slots over next 24h (%s, daily=%d)",
             campaign,
             created,
-            max(0, created - 1),
+            spacing_desc,
             profile.connect_daily_limit,
         )
     return created
@@ -217,20 +292,24 @@ def plan_follow_up_window(session, campaign) -> int:
     if _has_pending(Task.TaskType.FOLLOW_UP, campaign.pk):
         return 0
 
+    from openoutreach.core.models import SiteConfig
+    config = SiteConfig.load()
+
     profile = session.linkedin_profile
     daily_remaining = max(
         0, profile.follow_up_daily_limit - profile._daily_count("follow_up")
     )
 
-    created = _plan_slots(Task.TaskType.FOLLOW_UP, campaign.pk, daily_remaining)
+    velocity = config.velocity if config.velocity > 0 else 20  # Default 20 actions/hr
+    created = _plan_slots(Task.TaskType.FOLLOW_UP, campaign.pk, daily_remaining, velocity)
     if created:
+        spacing_desc = "burst mode" if velocity >= 30 else f"velocity={velocity}/hr"
         logger.info(
-            "[%s] planned %d follow_up slots over next 24h — 1 fires now, "
-            "%d Poisson-spaced (daily=%d)",
+            "[%s] planned %d follow_up slots over next 24h (%s, daily=%d)",
             campaign,
             created,
-            max(0, created - 1),
-            daily_remaining,
+            spacing_desc,
+            profile.follow_up_daily_limit,
         )
     return created
 
@@ -240,10 +319,12 @@ def plan_check_pending_window(session, campaign) -> int:
     matches the PENDING deals whose backoff has expired (or expires
     within the horizon), capped by ``CHECK_PENDING_DAILY_CAP``."""
     from openoutreach.crm.models import Deal
+    from openoutreach.core.models import SiteConfig
 
     if _has_pending(Task.TaskType.CHECK_PENDING, campaign.pk):
         return 0
 
+    config = SiteConfig.load()
     now = timezone.now()
     # Only count deals that are due RIGHT NOW (not future deals within 24h)
     # This matches the handler's query in check_pending.py:_next_due_pending_deal
@@ -258,14 +339,15 @@ def plan_check_pending_window(session, campaign) -> int:
     if n == 0:
         return 0
 
-    created = _plan_slots(Task.TaskType.CHECK_PENDING, campaign.pk, n)
+    velocity = config.velocity if config.velocity > 0 else 20  # Default 20 actions/hr
+    created = _plan_slots(Task.TaskType.CHECK_PENDING, campaign.pk, n, velocity)
     if created:
+        spacing_desc = "burst mode" if velocity >= 30 else f"velocity={velocity}/hr"
         logger.info(
-            "[%s] planned %d check_pending slots over next 24h — 1 fires now, "
-            "%d Poisson-spaced (due=%d, cap=%d)",
+            "[%s] planned %d check_pending slots over next 24h (%s, due=%d, cap=%d)",
             campaign,
             created,
-            max(0, created - 1),
+            spacing_desc,
             n_due,
             CHECK_PENDING_DAILY_CAP,
         )
