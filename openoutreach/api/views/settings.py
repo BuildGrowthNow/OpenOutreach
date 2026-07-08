@@ -75,7 +75,8 @@ class SettingsView(APIView):
                     "daily_connection_limit": config.daily_connection_limit,
                     "daily_follow_up_limit": config.daily_follow_up_limit,
                     "velocity": config.velocity,
-                    "cooldown_minutes": config.cooldown_minutes,
+                    "enable_smart_rate_limiting": config.enable_smart_rate_limiting,
+                    "aggressiveness_preset": config.aggressiveness_preset,
                 },
                 "active_hours": {
                     "enable_active_hours": config.enable_active_hours,
@@ -126,8 +127,10 @@ class SettingsView(APIView):
             config.daily_follow_up_limit = rate_limits["daily_follow_up_limit"]
         if "velocity" in rate_limits:
             config.velocity = rate_limits["velocity"]
-        if "cooldown_minutes" in rate_limits:
-            config.cooldown_minutes = rate_limits["cooldown_minutes"]
+        if "enable_smart_rate_limiting" in rate_limits:
+            config.enable_smart_rate_limiting = rate_limits["enable_smart_rate_limiting"]
+        if "aggressiveness_preset" in rate_limits:
+            config.aggressiveness_preset = rate_limits["aggressiveness_preset"]
 
         # Update active hours if provided
         active_hours = data.get("active_hours", {})
@@ -204,7 +207,8 @@ class SettingsView(APIView):
                     "daily_connection_limit": config.daily_connection_limit,
                     "daily_follow_up_limit": config.daily_follow_up_limit,
                     "velocity": config.velocity,
-                    "cooldown_minutes": config.cooldown_minutes,
+                    "enable_smart_rate_limiting": config.enable_smart_rate_limiting,
+                    "aggressiveness_preset": config.aggressiveness_preset,
                 },
                 "active_hours": {
                     "enable_active_hours": config.enable_active_hours,
@@ -352,7 +356,8 @@ class RateLimitsView(APIView):
                 "daily_connection_limit": config.daily_connection_limit,
                 "daily_follow_up_limit": config.daily_follow_up_limit,
                 "velocity": config.velocity,
-                "cooldown_minutes": config.cooldown_minutes,
+                "enable_smart_rate_limiting": config.enable_smart_rate_limiting,
+                "aggressiveness_preset": config.aggressiveness_preset,
             }
         )
 
@@ -377,8 +382,15 @@ class RateLimitsView(APIView):
         if "velocity" in rate_limits:
             config.velocity = rate_limits["velocity"]
 
-        if "cooldown_minutes" in rate_limits:
-            config.cooldown_minutes = rate_limits["cooldown_minutes"]
+        if "enableSmartRateLimiting" in rate_limits:
+            config.enable_smart_rate_limiting = rate_limits["enableSmartRateLimiting"]
+        elif "enable_smart_rate_limiting" in rate_limits:
+            config.enable_smart_rate_limiting = rate_limits["enable_smart_rate_limiting"]
+
+        if "aggressivenessPreset" in rate_limits:
+            config.aggressiveness_preset = rate_limits["aggressivenessPreset"]
+        elif "aggressiveness_preset" in rate_limits:
+            config.aggressiveness_preset = rate_limits["aggressiveness_preset"]
 
         config.save()
 
@@ -387,6 +399,7 @@ class RateLimitsView(APIView):
                 "daily_connection_limit": config.daily_connection_limit,
                 "daily_follow_up_limit": config.daily_follow_up_limit,
                 "velocity": config.velocity,
-                "cooldown_minutes": config.cooldown_minutes,
+                "enable_smart_rate_limiting": config.enable_smart_rate_limiting,
+                "aggressiveness_preset": config.aggressiveness_preset,
             }
         )
