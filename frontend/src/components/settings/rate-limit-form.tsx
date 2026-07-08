@@ -25,12 +25,19 @@ import { updateSettings } from "@/lib/api/dashboard";
 import { Badge } from "@/components/ui/badge";
 import { Info } from "lucide-react";
 
+type AggressivenessPreset =
+  | "very_slow"
+  | "slow"
+  | "average"
+  | "aggressive"
+  | "very_aggressive";
+
 interface BackendRateLimits {
   dailyConnectionLimit: number;
   dailyFollowUpLimit: number;
   velocity: number;
   enableSmartRateLimiting?: boolean;
-  aggressivenessPreset?: string;
+  aggressivenessPreset?: AggressivenessPreset;
 }
 
 const rateLimitSchema = z.object({
@@ -321,7 +328,7 @@ export default function RateLimitForm({
                       <div className="flex justify-between text-xs text-muted-foreground">
                         <span>Safe: ≤20</span>
                         <span>Moderate: ≤50</span>
-                        <span>Aggressive: >50</span>
+                        <span>Aggressive: &gt;50</span>
                       </div>
                     </div>
                     <FormDescription>
@@ -362,7 +369,7 @@ export default function RateLimitForm({
                       <div className="flex justify-between text-xs text-muted-foreground">
                         <span>Safe: ≤25</span>
                         <span>Moderate: ≤40</span>
-                        <span>Aggressive: >40</span>
+                        <span>Aggressive: &gt;40</span>
                       </div>
                     </div>
                     <FormDescription>
