@@ -115,6 +115,112 @@ def working_seconds_in_window(start, end) -> float:
     return sum((e - s).total_seconds() for s, e in _working_intervals(start, end))
 
 
+def smart_velocity_slot_times(
+    now, n: int, velocity: int, limiter_context=None, time_aware: bool = True, horizon_hours: float = 24
+) -> list:
+    """Return ``n`` timestamps spaced with smart rate limiting awareness.
+
+    When time_aware=True and limiter_context is provided:
+      - Clusters more tasks during business hours (9am-6pm)
+      - Reduces tasks during off-hours (night/weekends)
+      - Respects detectability score (spaces out more when suspicious)
+
+    When time_aware=False or no context:
+      - Falls back to velocity-based spacing
+
+    Args:
+        now: Start time
+        n: Number of slots to create
+        velocity: Target actions per hour
+        limiter_context: SmartRateLimitContext instance (optional)
+        time_aware: Whether to use time-of-day weighting
+        horizon_hours: Planning window (default 24h)
+
+    Returns:
+        List of strictly-increasing timestamps
+    """
+    if n <= 0:
+        return []
+
+    # Fall back to simple velocity spacing if no smart context
+    if not time_aware or limiter_context is None:
+        return velocity_slot_times(now, n, velocity, horizon_hours)
+
+    end = now + timedelta(hours=horizon_hours)
+    intervals = _working_intervals(now, end)
+    if not intervals:
+        return []
+
+    # Apply time-of-day weights (more tasks during business hours)
+    weighted_intervals = []
+    for start, end_time in intervals:
+        hour = start.hour
+        if 9 <= hour <= 17:  # Business hours
+            weight = limiter_context.time_of_day_limit_multiplier * 1.5
+        elif 7 <= hour <= 9 or 17 <= hour <= 20:
+            weight = limiter_context.time_of_day_limit_multiplier * 1.0
+        else:  # Night/early morning
+            weight = limiter_context.time_of_day_limit_multiplier * 0.3
+
+        weighted_intervals.append((start, end_time, max(0.1, weight)))
+
+    # Distribute tasks weighted by time-of-day preference
+    times = _distribute_weighted(n, weighted_intervals, velocity)
+
+    # Apply detectability jitter (add randomness when score is high)
+    if limiter_context.detectability_score > 60:
+        times = _add_detectability_jitter(times, limiter_context.detectability_score)
+
+    return times
+
+
+def _distribute_weighted(n: int, weighted_intervals: list, velocity: int) -> list:
+    """Distribute n tasks across weighted intervals according to velocity."""
+    total_weight = sum(w for _, _, w in weighted_intervals)
+    if total_weight <= 0:
+        # Fallback to uniform distribution
+        return velocity_slot_times(
+            weighted_intervals[0][0] if weighted_intervals else timezone.now(),
+            n,
+            velocity
+        )
+
+    times = []
+    target_spacing_seconds = 3600.0 / max(1, velocity)
+
+    # Allocate slots proportionally by weight
+    for start, end, weight in weighted_intervals:
+        interval_seconds = (end - start).total_seconds()
+        slot_count = int(n * (weight / total_weight))
+
+        cursor = start
+        for _ in range(slot_count):
+            if cursor >= end:
+                break
+            times.append(cursor)
+            # Add spacing with jitter
+            jitter = random.uniform(-0.2, 0.2) * target_spacing_seconds
+            cursor = cursor + timedelta(seconds=target_spacing_seconds + jitter)
+
+    # Sort and return up to n times
+    times.sort()
+    return times[:n]
+
+
+def _add_detectability_jitter(times: list, detectability_score: int) -> list:
+    """Add random jitter to task times when detectability is high."""
+    jitter_factor = (detectability_score - 60) / 40.0  # 0.0 at score=60, 1.0 at score=100
+    jittered = []
+
+    for t in times:
+        max_jitter_seconds = 300 * jitter_factor  # up to 5 min jitter at score=100
+        jitter = random.uniform(-max_jitter_seconds, max_jitter_seconds)
+        jittered.append(t + timedelta(seconds=jitter))
+
+    jittered.sort()
+    return jittered
+
+
 def velocity_slot_times(now, n: int, velocity: int, horizon_hours: float = 24) -> list:
     """Return ``n`` timestamps spaced according to velocity (actions/hour).
 
@@ -234,22 +340,41 @@ def _create_lazy_slots(
     return len(times)
 
 
-def _plan_slots(task_type: "Task.TaskType", campaign_id: int, n: int, velocity: int) -> int:
-    """Schedule *n* lazy slots spaced according to velocity.
+def _plan_slots(
+    task_type: "Task.TaskType",
+    campaign_id: int,
+    n: int,
+    velocity: int,
+    limiter_context=None,
+    time_aware: bool = False
+) -> int:
+    """Schedule *n* lazy slots spaced according to velocity and smart context.
 
-    When velocity is high (>= 30 actions/hr), tasks fire in immediate bursts.
-    When velocity is low, tasks spread uniformly across the 24h working window.
+    When smart rate limiting is enabled (time_aware=True + limiter_context):
+      - Clusters tasks during business hours
+      - Reduces tasks during off-hours
+      - Adds jitter when detectability is high
+
+    When smart rate limiting is disabled:
+      - Uses fixed velocity spacing across working window
 
     Args:
         task_type: Type of task to create
         campaign_id: Campaign PK
         n: Number of slots to create
-        velocity: Actions per hour (from SiteConfig)
+        velocity: Actions per hour
+        limiter_context: SmartRateLimitContext instance (optional)
+        time_aware: Whether to use smart time-of-day spacing
     """
     if n <= 0:
         return 0
     now = timezone.now()
-    times = velocity_slot_times(now, n, velocity)
+
+    if time_aware and limiter_context:
+        times = smart_velocity_slot_times(now, n, velocity, limiter_context, time_aware=True)
+    else:
+        times = velocity_slot_times(now, n, velocity)
+
     return _create_lazy_slots(task_type, campaign_id, times)
 
 
@@ -264,25 +389,59 @@ def plan_connect_window(session, campaign) -> int:
         return 0
 
     from openoutreach.core.models import SiteConfig
-    config = SiteConfig.load()
+    from openoutreach.core.rate_limit_presets import get_preset
 
+    config = SiteConfig.load()
     profile = session.linkedin_profile
     n = max(0, profile.connect_daily_limit - profile._daily_count("connect"))
 
     if campaign.is_freemium:
         n = int(n * campaign.action_fraction)
 
-    velocity = config.velocity if config.velocity > 0 else 20  # Default 20 actions/hr
-    created = _plan_slots(Task.TaskType.CONNECT, campaign.pk, n, velocity)
-    if created:
-        spacing_desc = "burst mode" if velocity >= 30 else f"velocity={velocity}/hr"
-        logger.info(
-            "[%s] planned %d connect slots over next 24h (%s, daily=%d)",
-            campaign,
-            created,
-            spacing_desc,
-            profile.connect_daily_limit,
+    # Smart mode vs Manual mode
+    if config.enable_smart_rate_limiting:
+        from openoutreach.linkedin.services.smart_rate_limits import SmartRateLimiter
+        limiter = SmartRateLimiter(profile)
+
+        # Get preset configuration
+        preset = get_preset(config.aggressiveness_preset)
+        velocity = preset["velocity"]
+        time_aware = preset["time_aware"]
+
+        # Apply smart effective limit (accounts for detectability, time-of-day)
+        smart_effective = limiter.context.get_effective_limit('connect', campaign)
+        n = min(n, int(smart_effective * preset["detectability_multiplier"]))
+
+        created = _plan_slots(
+            Task.TaskType.CONNECT,
+            campaign.pk,
+            n,
+            velocity,
+            limiter_context=limiter.context,
+            time_aware=time_aware
         )
+        if created:
+            logger.info(
+                "[%s] planned %d connect slots over next 24h (smart mode: %s, daily=%d)",
+                campaign,
+                created,
+                config.aggressiveness_preset,
+                profile.connect_daily_limit,
+            )
+    else:
+        # Manual mode: use fixed velocity
+        velocity = config.velocity if config.velocity > 0 else 20
+        created = _plan_slots(Task.TaskType.CONNECT, campaign.pk, n, velocity)
+        if created:
+            spacing_desc = "burst mode" if velocity >= 30 else f"velocity={velocity}/hr"
+            logger.info(
+                "[%s] planned %d connect slots over next 24h (manual: %s, daily=%d)",
+                campaign,
+                created,
+                spacing_desc,
+                profile.connect_daily_limit,
+            )
+
     return created
 
 
@@ -293,24 +452,54 @@ def plan_follow_up_window(session, campaign) -> int:
         return 0
 
     from openoutreach.core.models import SiteConfig
+    from openoutreach.core.rate_limit_presets import get_preset
+
     config = SiteConfig.load()
-
     profile = session.linkedin_profile
-    daily_remaining = max(
-        0, profile.follow_up_daily_limit - profile._daily_count("follow_up")
-    )
+    n = max(0, profile.follow_up_daily_limit - profile._daily_count("follow_up"))
 
-    velocity = config.velocity if config.velocity > 0 else 20  # Default 20 actions/hr
-    created = _plan_slots(Task.TaskType.FOLLOW_UP, campaign.pk, daily_remaining, velocity)
-    if created:
-        spacing_desc = "burst mode" if velocity >= 30 else f"velocity={velocity}/hr"
-        logger.info(
-            "[%s] planned %d follow_up slots over next 24h (%s, daily=%d)",
-            campaign,
-            created,
-            spacing_desc,
-            profile.follow_up_daily_limit,
+    # Smart mode vs Manual mode
+    if config.enable_smart_rate_limiting:
+        from openoutreach.linkedin.services.smart_rate_limits import SmartRateLimiter
+        limiter = SmartRateLimiter(profile)
+
+        preset = get_preset(config.aggressiveness_preset)
+        velocity = preset["velocity"]
+        time_aware = preset["time_aware"]
+
+        smart_effective = limiter.context.get_effective_limit('follow_up', campaign)
+        n = min(n, int(smart_effective * preset["detectability_multiplier"]))
+
+        created = _plan_slots(
+            Task.TaskType.FOLLOW_UP,
+            campaign.pk,
+            n,
+            velocity,
+            limiter_context=limiter.context,
+            time_aware=time_aware
         )
+        if created:
+            logger.info(
+                "[%s] planned %d follow_up slots over next 24h (smart mode: %s, daily=%d)",
+                campaign,
+                created,
+                config.aggressiveness_preset,
+                profile.follow_up_daily_limit,
+            )
+    else:
+        # Manual mode
+        velocity = config.velocity if config.velocity > 0 else 20
+        created = _plan_slots(Task.TaskType.FOLLOW_UP, campaign.pk, n, velocity)
+        if created:
+            spacing_desc = "burst mode" if velocity >= 30 else f"velocity={velocity}/hr"
+            logger.info(
+                "[%s] planned %d follow_up slots over next 24h (manual: %s, daily=%d)",
+                campaign,
+                created,
+                spacing_desc,
+                profile.follow_up_daily_limit,
+            )
+
     return created
 
 
@@ -320,14 +509,13 @@ def plan_check_pending_window(session, campaign) -> int:
     within the horizon), capped by ``CHECK_PENDING_DAILY_CAP``."""
     from openoutreach.crm.models import Deal
     from openoutreach.core.models import SiteConfig
+    from openoutreach.core.rate_limit_presets import get_preset
 
     if _has_pending(Task.TaskType.CHECK_PENDING, campaign.pk):
         return 0
 
     config = SiteConfig.load()
     now = timezone.now()
-    # Only count deals that are due RIGHT NOW (not future deals within 24h)
-    # This matches the handler's query in check_pending.py:_next_due_pending_deal
     n_due = Deal.objects.filter(
         campaign_id=campaign.pk,
         state=DealState.PENDING,
@@ -335,22 +523,50 @@ def plan_check_pending_window(session, campaign) -> int:
     ).count()
     n = min(n_due, CHECK_PENDING_DAILY_CAP)
 
-    # Don't create tasks if there are no PENDING deals due in the next 24h
     if n == 0:
         return 0
 
-    velocity = config.velocity if config.velocity > 0 else 20  # Default 20 actions/hr
-    created = _plan_slots(Task.TaskType.CHECK_PENDING, campaign.pk, n, velocity)
-    if created:
-        spacing_desc = "burst mode" if velocity >= 30 else f"velocity={velocity}/hr"
-        logger.info(
-            "[%s] planned %d check_pending slots over next 24h (%s, due=%d, cap=%d)",
-            campaign,
-            created,
-            spacing_desc,
-            n_due,
-            CHECK_PENDING_DAILY_CAP,
+    # Smart mode vs Manual mode
+    if config.enable_smart_rate_limiting:
+        from openoutreach.linkedin.services.smart_rate_limits import SmartRateLimiter
+        limiter = SmartRateLimiter(session.linkedin_profile)
+
+        preset = get_preset(config.aggressiveness_preset)
+        velocity = preset["velocity"]
+        time_aware = preset["time_aware"]
+
+        created = _plan_slots(
+            Task.TaskType.CHECK_PENDING,
+            campaign.pk,
+            n,
+            velocity,
+            limiter_context=limiter.context,
+            time_aware=time_aware
         )
+        if created:
+            logger.info(
+                "[%s] planned %d check_pending slots over next 24h (smart mode: %s, due=%d, cap=%d)",
+                campaign,
+                created,
+                config.aggressiveness_preset,
+                n_due,
+                CHECK_PENDING_DAILY_CAP,
+            )
+    else:
+        # Manual mode
+        velocity = config.velocity if config.velocity > 0 else 20
+        created = _plan_slots(Task.TaskType.CHECK_PENDING, campaign.pk, n, velocity)
+        if created:
+            spacing_desc = "burst mode" if velocity >= 30 else f"velocity={velocity}/hr"
+            logger.info(
+                "[%s] planned %d check_pending slots over next 24h (manual: %s, due=%d, cap=%d)",
+                campaign,
+                created,
+                spacing_desc,
+                n_due,
+                CHECK_PENDING_DAILY_CAP,
+            )
+
     return created
 
 

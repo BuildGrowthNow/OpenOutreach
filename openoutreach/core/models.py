@@ -55,23 +55,39 @@ class SiteConfig(models.Model):
         max_length=100, blank=True, default=""
     )  # type: ignore[var-annotated]
 
-    # Rate limit configuration
+    # Rate limit configuration - SMART vs MANUAL modes
+    enable_smart_rate_limiting: models.BooleanField = models.BooleanField(
+        default=False,
+        help_text="Enable context-aware rate limiting (time-of-day, detectability, engagement patterns)"
+    )  # type: ignore[var-annotated]
+
+    class AggressivenessPreset(models.TextChoices):
+        VERY_SLOW = "very_slow", "Very Slow (Safest)"
+        SLOW = "slow", "Slow"
+        AVERAGE = "average", "Average"
+        AGGRESSIVE = "aggressive", "Aggressive"
+        VERY_AGGRESSIVE = "very_aggressive", "Very Aggressive (Riskiest)"
+
+    aggressiveness_preset: models.CharField = models.CharField(
+        max_length=20,
+        choices=AggressivenessPreset.choices,
+        default=AggressivenessPreset.AVERAGE,
+        help_text="Smart rate limiting aggressiveness level (only used when Smart Rate Limiting is ON)"
+    )  # type: ignore[var-annotated]
+
+    # Manual rate limit controls (only used when enable_smart_rate_limiting = False)
     daily_connection_limit: models.PositiveIntegerField = models.PositiveIntegerField(
-        default=20
+        default=20,
+        help_text="Daily connection limit (per LinkedIn profile)"
     )  # type: ignore[var-annotated]
     daily_follow_up_limit: models.PositiveIntegerField = models.PositiveIntegerField(
-        default=25
+        default=25,
+        help_text="Daily follow-up message limit (per LinkedIn profile)"
     )  # type: ignore[var-annotated]
-    # velocity: actions per hour. Controls task spacing:
-    #   >= 30 actions/hr (<=2min spacing) → aggressive burst mode (tasks fire immediately with 5-10s rhythm)
-    #   < 30 actions/hr (>2min spacing) → conservative spread mode (Poisson spacing across 24h window)
-    #   Default 20 actions/hr = 3min average spacing
+    # velocity: actions per hour (only used when Smart Rate Limiting is OFF)
     velocity: models.PositiveIntegerField = models.PositiveIntegerField(
-        default=20, help_text="Actions per hour (>= 30 = burst mode, < 30 = spread mode)"
-    )  # type: ignore[var-annotated]
-    # cooldown_minutes: DEPRECATED — use velocity instead (velocity=60/cooldown converts min→hr)
-    cooldown_minutes: models.PositiveIntegerField = models.PositiveIntegerField(
-        default=0, help_text="DEPRECATED: use velocity (actions/hour) instead"
+        default=20,
+        help_text="Actions per hour - only used when Smart Rate Limiting is OFF (>= 30 = burst mode, < 30 = spread mode)"
     )  # type: ignore[var-annotated]
 
     # BetterContact email-finder key; blank disables enrichment (see emails/bettercontact.py).
@@ -177,13 +193,7 @@ class Campaign(models.Model):
     seed_public_ids: models.JSONField = models.JSONField(default=list, blank=True)  # type: ignore[var-annotated]
     model_blob: models.BinaryField = models.BinaryField(null=True, blank=True)  # type: ignore[var-annotated]
 
-    # Campaign configuration for auto-recovery
-    velocity: models.PositiveIntegerField = models.PositiveIntegerField(
-        default=20
-    )  # max actions per time period  # type: ignore[var-annotated]
-    cooldown_minutes: models.PositiveIntegerField = models.PositiveIntegerField(
-        default=0
-    )  # minutes between actions  # type: ignore[var-annotated]
+    # Campaign status (rate limiting moved to account-level SiteConfig)
     is_paused: models.BooleanField = models.BooleanField(
         default=False
     )  # pause the campaign  # type: ignore[var-annotated]
