@@ -93,8 +93,6 @@ class CampaignListView(APIView):
                     "ghost_mode_enabled", False
                 ),
                 action_fraction=serializer.validated_data.get("action_fraction", 0.2),
-                velocity=serializer.validated_data.get("velocity", 20),
-                cooldown_minutes=serializer.validated_data.get("cooldown_minutes", 0),
                 is_paused=serializer.validated_data.get("is_paused", False),
                 status=serializer.validated_data.get("status", "active"),
             )

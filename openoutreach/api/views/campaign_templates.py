@@ -92,8 +92,6 @@ class CampaignTemplateListView(APIView):
                 ghost_mode_enabled=serializer.validated_data.get(
                     "ghost_mode_enabled", False
                 ),
-                velocity=serializer.validated_data.get("velocity", 20),
-                cooldown_minutes=serializer.validated_data.get("cooldown_minutes", 0),
                 is_public=serializer.validated_data.get("is_public", False),
                 created_by=request.user,
             )
@@ -105,8 +103,6 @@ class CampaignTemplateListView(APIView):
                     "description": template.description,
                     "campaign_objective": template.campaign_objective,
                     "ghost_mode_enabled": template.ghost_mode_enabled,
-                    "velocity": template.velocity,
-                    "cooldown_minutes": template.cooldown_minutes,
                     "is_public": template.is_public,
                     "created_by": {
                         "id": template.created_by.id,
@@ -155,8 +151,6 @@ class CampaignTemplateDetailView(APIView):
                 "description": template.description,
                 "campaign_objective": template.campaign_objective,
                 "ghost_mode_enabled": template.ghost_mode_enabled,
-                "velocity": template.velocity,
-                "cooldown_minutes": template.cooldown_minutes,
                 "is_public": template.is_public,
                 "created_by": {
                     "id": template.created_by.id,
@@ -199,8 +193,6 @@ class CampaignTemplateDetailView(APIView):
                     "description": template.description,
                     "campaign_objective": template.campaign_objective,
                     "ghost_mode_enabled": template.ghost_mode_enabled,
-                    "velocity": template.velocity,
-                    "cooldown_minutes": template.cooldown_minutes,
                     "is_public": template.is_public,
                     "created_by": {
                         "id": template.created_by.id,
@@ -267,8 +259,6 @@ class CampaignTemplateCloneView(APIView):
             icp_titles=template.icp_titles,
             follow_up_strategy=template.follow_up_strategy,
             ghost_mode_enabled=template.ghost_mode_enabled,
-            velocity=template.velocity,
-            cooldown_minutes=template.cooldown_minutes,
             is_public=is_public,
             created_by=request.user,
         )
@@ -340,8 +330,6 @@ class CampaignCreateFromTemplateView(APIView):
             icp_titles=template.icp_titles,
             follow_up_strategy=template.follow_up_strategy,
             ghost_mode_enabled=template.ghost_mode_enabled,
-            velocity=template.velocity,
-            cooldown_minutes=template.cooldown_minutes,
             is_freemium=False,
             is_paused=False,
             status="draft",
@@ -355,8 +343,6 @@ class CampaignCreateFromTemplateView(APIView):
                 "description": campaign.description,
                 "campaign_objective": campaign.campaign_objective,
                 "ghost_mode_enabled": campaign.ghost_mode_enabled,
-                "velocity": campaign.velocity,
-                "cooldown_minutes": campaign.cooldown_minutes,
                 "status": campaign.status,
                 "created_at": (
                     campaign.created_at.isoformat() if campaign.created_at else None

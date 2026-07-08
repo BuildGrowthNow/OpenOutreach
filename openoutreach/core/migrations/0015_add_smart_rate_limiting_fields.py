@@ -36,13 +36,21 @@ class Migration(migrations.Migration):
             ),
         ),
 
-        # Remove deprecated fields from Campaign
+        # Remove deprecated fields from Campaign and CampaignTemplate
         migrations.RemoveField(
             model_name='campaign',
             name='velocity',
         ),
         migrations.RemoveField(
             model_name='campaign',
+            name='cooldown_minutes',
+        ),
+        migrations.RemoveField(
+            model_name='campaigntemplate',
+            name='velocity',
+        ),
+        migrations.RemoveField(
+            model_name='campaigntemplate',
             name='cooldown_minutes',
         ),
     ]

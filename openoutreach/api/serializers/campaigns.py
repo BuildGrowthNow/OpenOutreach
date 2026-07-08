@@ -176,8 +176,6 @@ class CampaignSerializer(serializers.ModelSerializer):
             "ghost_mode_enabled",
             "action_fraction",
             "seed_public_ids",
-            "velocity",
-            "cooldown_minutes",
             "is_paused",
             "model_blob",
             "users",
@@ -321,8 +319,6 @@ class CampaignCreateSerializer(serializers.Serializer):
     action_fraction = serializers.FloatField(
         required=False, default=0.2, min_value=0, max_value=1
     )
-    velocity = serializers.IntegerField(required=False, default=20, min_value=1)
-    cooldown_minutes = serializers.IntegerField(required=False, default=0, min_value=0)
     is_paused = serializers.BooleanField(required=False, default=False)
     status = serializers.CharField(required=False, default="active")
 
@@ -346,8 +342,6 @@ class CampaignUpdateSerializer(serializers.Serializer):
     is_freemium = serializers.BooleanField(required=False)
     ghost_mode_enabled = serializers.BooleanField(required=False)
     action_fraction = serializers.FloatField(required=False, min_value=0, max_value=1)
-    velocity = serializers.IntegerField(required=False, min_value=1)
-    cooldown_minutes = serializers.IntegerField(required=False, min_value=0)
     is_paused = serializers.BooleanField(required=False)
     model_blob = serializers.JSONField(required=False)
     status = serializers.CharField(required=False)
@@ -381,8 +375,6 @@ class CampaignTemplateSerializer(serializers.ModelSerializer):
             "icp_titles",
             "follow_up_strategy",
             "ghost_mode_enabled",
-            "velocity",
-            "cooldown_minutes",
             "is_public",
             "created_by",
             "created_by_username",
@@ -414,10 +406,4 @@ class CampaignTemplateCreateSerializer(serializers.Serializer):
     )
     follow_up_strategy = serializers.CharField(required=False, allow_blank=True)
     ghost_mode_enabled = serializers.BooleanField(required=False, default=False)
-    velocity = serializers.IntegerField(
-        required=False, default=20, min_value=1, max_value=100
-    )
-    cooldown_minutes = serializers.IntegerField(
-        required=False, default=0, min_value=0, max_value=1440
-    )
     is_public = serializers.BooleanField(required=False, default=False)

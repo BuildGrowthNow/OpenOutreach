@@ -146,10 +146,6 @@ class CampaignTemplate(models.Model):
     icp_titles: models.JSONField = models.JSONField(default=list, blank=True)  # type: ignore[var-annotated]
     follow_up_strategy: models.TextField = models.TextField(blank=True)  # type: ignore[var-annotated]
     ghost_mode_enabled: models.BooleanField = models.BooleanField(default=False)  # type: ignore[var-annotated]
-    velocity: models.PositiveIntegerField = models.PositiveIntegerField(default=20)  # type: ignore[var-annotated]
-    cooldown_minutes: models.PositiveIntegerField = models.PositiveIntegerField(
-        default=0
-    )  # type: ignore[var-annotated]
 
     # Template sharing
     is_public: models.BooleanField = models.BooleanField(default=False)  # type: ignore[var-annotated]
