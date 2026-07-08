@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 
-from openoutreach.crm.models import Message
+from openoutreach.chat.models import ChatMessage
 
 
 class MessagesView(APIView):
@@ -26,8 +26,8 @@ class MessagesView(APIView):
         page = request.query_params.get("page")
         limit = request.query_params.get("limit")
 
-        # Query Message model with filters
-        messages = Message.objects.select_related("deal__lead", "deal__campaign").all()
+        # Query ChatMessage model with filters
+        messages = ChatMessage.objects.select_related("deal__lead", "deal__campaign").all()
 
         # Filter by campaign or deal if provided
         if campaign_id:
@@ -50,7 +50,7 @@ class MessagesView(APIView):
                 pass
 
         # Apply ordering for stable message order (oldest first)
-        messages = messages.order_by("created_at")
+        messages = messages.order_by("creation_date")
 
         # Pagination
         total = messages.count()
@@ -80,7 +80,7 @@ class MessagesView(APIView):
                     "is_outgoing": msg.is_outgoing,
                     "sender": "me" if msg.is_outgoing else "them",
                     "creationDate": (
-                        msg.created_at.isoformat() if msg.created_at else None
+                        msg.creation_date.isoformat() if msg.creation_date else None
                     ),
                     "recipientName": (
                         str(msg.deal.lead) if msg.deal and msg.deal.lead else "Unknown"
@@ -115,10 +115,10 @@ class MessagesDetailView(APIView):
     def get(self, request, pk: str | int) -> Response:
         """Get message details."""
         try:
-            message = Message.objects.select_related(
+            message = ChatMessage.objects.select_related(
                 "deal__lead", "deal__campaign"
             ).get(pk=pk)
-        except Message.DoesNotExist:
+        except ChatMessage.DoesNotExist:
             return Response(
                 {"error": "Message not found"}, status=status.HTTP_404_NOT_FOUND
             )
@@ -136,7 +136,7 @@ class MessagesDetailView(APIView):
                 "is_outgoing": message.is_outgoing,
                 "sender": "me" if message.is_outgoing else "them",
                 "creationDate": (
-                    message.created_at.isoformat() if message.created_at else None
+                    message.creation_date.isoformat() if message.creation_date else None
                 ),
                 "recipientName": (
                     str(message.deal.lead)
