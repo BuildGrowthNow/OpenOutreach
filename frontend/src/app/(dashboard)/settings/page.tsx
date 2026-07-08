@@ -156,8 +156,7 @@ export default function SettingsPage() {
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">
-              Velocity {(settings.rateLimits?.velocity ?? 0)}/day, cooldown{" "}
-              {(settings.rateLimits?.cooldownMinutes ?? 0)} min
+              Velocity {(settings.rateLimits?.velocity ?? 0)}/hour
             </p>
           </CardContent>
         </Card>
