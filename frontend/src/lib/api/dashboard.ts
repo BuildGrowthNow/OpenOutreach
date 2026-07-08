@@ -664,7 +664,8 @@ export interface Settings {
     dailyConnectionLimit: number;
     dailyFollowUpLimit: number;
     velocity: number;
-    cooldownMinutes: number;
+    enableSmartRateLimiting?: boolean;
+    aggressivenessPreset?: "very_slow" | "slow" | "average" | "aggressive" | "very_aggressive";
   };
   activeHours?: {
     enableActiveHours: boolean;
