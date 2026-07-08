@@ -75,6 +75,13 @@ class AnalyticsView(APIView):
             connections_accepted / connections_sent * 100 if connections_sent > 0 else 0
         )
 
+        # Message metrics
+        messages_sent = ActionLog.objects.filter(
+            campaign__users=request.user,
+            action_type=ActionLog.ActionType.FOLLOW_UP,
+            created_at__gte=since,
+        ).count()
+
         # Response metrics
         response_deals = (
             accessible_deals.filter(
@@ -164,17 +171,35 @@ class AnalyticsView(APIView):
                         "failed_deals": failed_deals,
                     },
                     "stats": {
-                        "connections_sent": connections_sent,
-                        "connections_accepted": connections_accepted,
-                        "connection_accept_rate": round(connection_accept_rate, 2),
-                        "response_rate": round(response_rate, 2),
-                        "conversion_rate": round(conversion_rate, 2),
+                        "connectionsSent": connections_sent,
+                        "connectionsAccepted": connections_accepted,
+                        "connectionAcceptRate": round(connection_accept_rate, 2),
+                        "messagesSent": messages_sent,
+                        "messagesReplied": response_deals,
+                        "responseRate": round(response_rate, 2),
+                        "conversions": conversions,
+                        "conversionRate": round(conversion_rate, 2),
+                    },
+                    "totals": {
+                        "leads": total_leads,
+                        "qualified": pipeline["qualified"],
+                        "readyToConnect": pipeline["ready_to_connect"],
+                        "connected": pipeline["connected"],
+                        "pending": pipeline["pending"],
+                        "failed": pipeline["failed"],
+                        "noEmail": pipeline["no_email"],
+                        "connectionAcceptRate": round(connection_accept_rate, 2),
+                        "responseRate": round(response_rate, 2),
+                        "conversionRate": round(conversion_rate, 2),
                     },
                     "metrics": {
                         "connections_sent": connections_sent,
                         "connections_accepted": connections_accepted,
                         "connection_accept_rate": round(connection_accept_rate, 2),
+                        "messages_sent": messages_sent,
+                        "messages_replied": response_deals,
                         "response_rate": round(response_rate, 2),
+                        "conversions": conversions,
                         "conversion_rate": round(conversion_rate, 2),
                     },
                     "pipeline": pipeline,
@@ -189,17 +214,35 @@ class AnalyticsView(APIView):
                     "failed_deals": failed_deals,
                 },
                 "stats": {
-                    "connections_sent": connections_sent,
-                    "connections_accepted": connections_accepted,
-                    "connection_accept_rate": round(connection_accept_rate, 2),
-                    "response_rate": round(response_rate, 2),
-                    "conversion_rate": round(conversion_rate, 2),
+                    "connectionsSent": connections_sent,
+                    "connectionsAccepted": connections_accepted,
+                    "connectionAcceptRate": round(connection_accept_rate, 2),
+                    "messagesSent": messages_sent,
+                    "messagesReplied": response_deals,
+                    "responseRate": round(response_rate, 2),
+                    "conversions": conversions,
+                    "conversionRate": round(conversion_rate, 2),
+                },
+                "totals": {
+                    "leads": total_leads,
+                    "qualified": pipeline["qualified"],
+                    "readyToConnect": pipeline["ready_to_connect"],
+                    "connected": pipeline["connected"],
+                    "pending": pipeline["pending"],
+                    "failed": pipeline["failed"],
+                    "noEmail": pipeline["no_email"],
+                    "connectionAcceptRate": round(connection_accept_rate, 2),
+                    "responseRate": round(response_rate, 2),
+                    "conversionRate": round(conversion_rate, 2),
                 },
                 "metrics": {
                     "connections_sent": connections_sent,
                     "connections_accepted": connections_accepted,
                     "connection_accept_rate": round(connection_accept_rate, 2),
+                    "messages_sent": messages_sent,
+                    "messages_replied": response_deals,
                     "response_rate": round(response_rate, 2),
+                    "conversions": conversions,
                     "conversion_rate": round(conversion_rate, 2),
                 },
                 "pipeline": pipeline,
