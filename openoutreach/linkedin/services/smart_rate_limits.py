@@ -40,11 +40,12 @@ class SmartRateLimiter:
         return recent_count < effective_limit
 
     def record_action(self, action_type: str, campaign=None):
-        """Record an action and update rate limit context."""
-        self.context.record_action(action_type)
+        """Record an action and update rate limit context.
 
-        # Also record in ActionLog for backward compatibility
-        self._record_action_log(action_type)
+        NOTE: ActionLog entries are created by task handlers, not here.
+        This method only updates the SmartRateLimitContext for detectability tracking.
+        """
+        self.context.record_action(action_type)
 
     def get_remaining_quota(self, action_type: str, campaign=None) -> int:
         """Get remaining quota for action type."""
@@ -87,16 +88,6 @@ class SmartRateLimiter:
             action_type=action_type,
             created_at__gte=since,
         ).count()
-
-    def _record_action_log(self, action_type: str):
-        """Record action in ActionLog."""
-        from openoutreach.linkedin.models import ActionLog
-
-        ActionLog.objects.create(
-            linkedin_profile=self.linkedin_profile,
-            campaign=None,  # Will be set in handler
-            action_type=action_type,
-        )
 
     def check_detectability(self) -> bool:
         """Check if detectability is too high."""
