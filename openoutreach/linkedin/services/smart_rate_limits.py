@@ -77,7 +77,12 @@ class SmartRateLimiter:
     def _count_recent_actions(
         self, action_type: str, since: Optional[datetime] = None
     ) -> int:
-        """Count recent actions of a given type."""
+        """Count recent actions of a given type.
+
+        Only counts actions that were actually executed. Excludes daemon-generated
+        entries (empty details dict) which were created for skipped tasks in older
+        versions. Task handlers now only create ActionLog entries when actions succeed.
+        """
         if since is None:
             since = timezone.now() - timedelta(hours=24)
 
@@ -87,6 +92,8 @@ class SmartRateLimiter:
             linkedin_profile=self.linkedin_profile,
             action_type=action_type,
             created_at__gte=since,
+        ).exclude(
+            details={}  # Exclude daemon-created entries for skipped tasks
         ).count()
 
     def check_detectability(self) -> bool:

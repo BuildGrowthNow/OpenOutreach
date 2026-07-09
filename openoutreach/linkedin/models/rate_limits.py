@@ -144,25 +144,23 @@ class SmartRateLimitContext(models.Model):
         hour = now.hour
         day_of_week = now.weekday()  # Monday = 0, Sunday = 6
 
-        # Time of day multiplier
-        if 9 <= hour <= 17:  # Business hours
+        # Time of day multiplier (9am-5pm business, 7-9am and 5-8pm early/late, else night)
+        if 9 <= hour < 17:  # Business hours 9am-4:59pm
             self.time_of_day_limit_multiplier = 1.0
-        elif 7 <= hour <= 9 or 17 <= hour <= 20:  # Early/late
+        elif 7 <= hour < 9 or 17 <= hour < 20:  # Early/late 7-9am, 5-8pm
             self.time_of_day_limit_multiplier = 0.8
-        elif 20 <= hour or hour <= 6:  # Night
+        else:  # Night (8pm-7am)
             self.time_of_day_limit_multiplier = 0.3
 
         # Day of week multiplier
-        if day_of_week >= 5:  # Weekend
-            self.day_of_week_limit_multiplier = 0.5
-        elif day_of_week == 6:  # Sunday
+        if day_of_week == 6:  # Sunday
             self.day_of_week_limit_multiplier = 0.2
-        else:  # Weekday
-            self.day_of_week_limit_multiplier = 1.0
-
-        # Friday effect (people wrap up week)
-        if day_of_week == 4:  # Friday
+        elif day_of_week == 5:  # Saturday
+            self.day_of_week_limit_multiplier = 0.5
+        elif day_of_week == 4:  # Friday
             self.day_of_week_limit_multiplier = 0.8
+        else:  # Monday-Thursday
+            self.day_of_week_limit_multiplier = 1.0
 
     def update_detectability(self, score_delta: int):
         """Adjust detectability score (positive = more suspicious)."""
