@@ -32,6 +32,10 @@ pytest tests/api/test_voyager.py   # single file
 pytest -k test_name                # single test
 ```
 
+## Hidden/Incomplete Features
+
+- **State Machine Editor** (disabled): Visual workflow builder at `/state-machine` and `/campaigns/[id]/state-machine`. Hidden via `NEXT_PUBLIC_ENABLE_STATE_MACHINE` feature flag. Missing: edge editing UI, node configuration panels, daemon execution integration. DB models and basic canvas exist. See `frontend/src/app/(dashboard)/state-machine/page.tsx` header comment for full status.
+
 ## Architecture (quick reference)
 
 For detailed module docs, see `ARCHITECTURE.md`.

@@ -16,6 +16,9 @@ interface SidebarItem {
   icon: SidebarIcon
 }
 
+// Feature flag for state machine (disabled - incomplete feature)
+const ENABLE_STATE_MACHINE = process.env.NEXT_PUBLIC_ENABLE_STATE_MACHINE === 'true'
+
 const dashboardItems: SidebarItem[] = [
   {
     title: 'Dashboard',
@@ -37,11 +40,14 @@ const dashboardItems: SidebarItem[] = [
     href: '/messages',
     icon: 'MessageSquare'
   },
-  {
+  // State Machine temporarily hidden - incomplete feature
+  // Missing: edge editing, node configuration, daemon integration
+  // Uncomment or set NEXT_PUBLIC_ENABLE_STATE_MACHINE=true to re-enable
+  ...(ENABLE_STATE_MACHINE ? [{
     title: 'State Machine',
     href: '/state-machine',
-    icon: 'Workflow'
-  },
+    icon: 'Workflow' as SidebarIcon
+  }] : []),
   {
     title: 'Analytics',
     href: '/analytics',

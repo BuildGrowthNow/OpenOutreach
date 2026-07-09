@@ -1,3 +1,21 @@
+/**
+ * State Machine Visual Editor
+ *
+ * STATUS: HIDDEN - Incomplete feature
+ *
+ * This page is currently hidden from production users via feature flag.
+ * Access by setting NEXT_PUBLIC_ENABLE_STATE_MACHINE=true in .env
+ *
+ * Missing features before production-ready:
+ * - Edge editing modal (edit transition labels, conditions)
+ * - Node configuration panels (message content, wait duration, gate conditions)
+ * - Connection drawing tool (visual edge creation between nodes)
+ * - Start/end node enforcement (prevent multiple start nodes)
+ * - Daemon integration (state machine execution not wired to task queue)
+ *
+ * Current status: UI only, no backend execution
+ */
+
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";

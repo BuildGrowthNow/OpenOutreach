@@ -820,16 +820,19 @@ export default function CampaignDetailsPage() {
                     <Icons.BarChart3 className="mr-2 h-4 w-4" />
                     View Analytics
                   </Button>
-                  <Button
-                    variant="outline"
-                    className="w-full justify-start"
-                    onClick={() =>
-                      router.push(`/campaigns/${campaignId}/state-machine`)
-                    }
-                  >
-                    <Icons.ListTodo className="mr-2 h-4 w-4" />
-                    State Machine
-                  </Button>
+                  {/* State Machine temporarily hidden - incomplete feature */}
+                  {process.env.NEXT_PUBLIC_ENABLE_STATE_MACHINE === 'true' && (
+                    <Button
+                      variant="outline"
+                      className="w-full justify-start"
+                      onClick={() =>
+                        router.push(`/campaigns/${campaignId}/state-machine`)
+                      }
+                    >
+                      <Icons.ListTodo className="mr-2 h-4 w-4" />
+                      State Machine
+                    </Button>
+                  )}
                   {campaign.status !== "completed" && (
                     <>
                       <Button

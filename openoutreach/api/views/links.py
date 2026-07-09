@@ -179,6 +179,24 @@ class LinksListView(APIView):
                 "id": link.id,
                 "short_code": link.short_code,
                 "url": f"/l/{link.short_code}",
+                "original_url": link.original_url,
+                "is_active": link.is_active,
+                "campaign": (
+                    {
+                        "id": campaign.id,
+                        "name": campaign.name,
+                    }
+                    if campaign
+                    else None
+                ),
+                "total_clicks": link.total_clicks,
+                "unique_clicks": link.unique_clicks,
+                "utm_source": link.utm_source,
+                "utm_medium": link.utm_medium,
+                "utm_campaign": link.utm_campaign,
+                "utm_term": link.utm_term,
+                "utm_content": link.utm_content,
+                "created_at": link.created_at.isoformat(),
             },
             status=status.HTTP_201_CREATED,
         )

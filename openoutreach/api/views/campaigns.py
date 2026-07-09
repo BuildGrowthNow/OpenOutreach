@@ -1399,6 +1399,44 @@ class CampaignGhostModeActionView(APIView):
                 },
             )
 
+            # If newly created or no logs exist, generate sample simulation logs
+            if created or not GhostSimulationLog.objects.filter(ghost_campaign=ghost_campaign).exists():
+                from openoutreach.linkedin.services.ghost_mode import GhostModeInterceptor
+
+                interceptor = GhostModeInterceptor(ghost_campaign)
+
+                # Generate sample search simulation
+                interceptor.simulate_action(
+                    "search",
+                    {
+                        "keywords": ["CEO", "founder", "startup"],
+                        "linkedin_url": "https://linkedin.com/search",
+                        "name": "Search for leads",
+                    },
+                    {"filters": {"location": "US", "industry": "Technology"}},
+                )
+
+                # Generate sample qualify simulation
+                interceptor.simulate_action(
+                    "qualify",
+                    {
+                        "name": "John Smith",
+                        "linkedin_url": "https://linkedin.com/in/johnsmith",
+                        "title": "CEO at TechCorp",
+                    },
+                    {"campaign": campaign.name},
+                )
+
+                # Generate sample connect simulation
+                interceptor.simulate_action(
+                    "connect",
+                    {
+                        "name": "Jane Doe",
+                        "linkedin_url": "https://linkedin.com/in/janedoe",
+                        "title": "Founder at StartupXYZ",
+                    },
+                )
+
             return Response(
                 {
                     "success": True,

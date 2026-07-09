@@ -1,3 +1,14 @@
+/**
+ * Campaign State Machine Editor
+ *
+ * STATUS: HIDDEN - Incomplete feature
+ *
+ * This page is currently hidden from production users via feature flag.
+ * Access by setting NEXT_PUBLIC_ENABLE_STATE_MACHINE=true in .env
+ *
+ * See /state-machine/page.tsx for full list of missing features.
+ */
+
 "use client";
 
 import { useState, useEffect, useCallback } from "react";

@@ -85,7 +85,7 @@ export function LinkList({ links, onEdit, onDelete, onViewStats }: LinkListProps
                 <Icons.ChevronDown className="ml-1 h-4 w-4 inline" />
               )}
             </TableHead>
-            <TableHead>Short Code</TableHead>
+            <TableHead>Short URL</TableHead>
             <TableHead 
               className="cursor-pointer hover:bg-muted/50 text-right"
               onClick={() => handleSort('total_clicks')}
@@ -123,9 +123,23 @@ export function LinkList({ links, onEdit, onDelete, onViewStats }: LinkListProps
                   </a>
                 </TableCell>
                 <TableCell>
-                  <code className="bg-muted px-2 py-1 rounded text-sm">
-                    {link.short_code}
-                  </code>
+                  <div className="flex items-center gap-2">
+                    <code className="bg-muted px-2 py-1 rounded text-sm">
+                      {`${typeof window !== 'undefined' ? window.location.origin : ''}/l/${link.short_code}`}
+                    </code>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 px-2"
+                      onClick={() => {
+                        const url = `${typeof window !== 'undefined' ? window.location.origin : ''}/l/${link.short_code}`;
+                        navigator.clipboard.writeText(url);
+                      }}
+                      title="Copy short URL"
+                    >
+                      <Icons.Copy className="h-3 w-3" />
+                    </Button>
+                  </div>
                 </TableCell>
                 <TableCell className="text-right font-bold text-emerald-600 dark:text-emerald-400">
                   {formatClicks(link.total_clicks || 0)}

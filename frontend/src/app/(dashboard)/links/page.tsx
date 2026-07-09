@@ -288,7 +288,7 @@ export default function LinksPage() {
                   filteredLinks.map(link => {
                     const metrics = getLinkMetrics(link)
                     return (
-                      <div key={link.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50">
+                      <div key={link.id} className="flex items-center justify-between p-4 border border-zinc-800 rounded-lg hover:bg-zinc-900/50 dark:hover:bg-zinc-900/50">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center space-x-2 mb-2">
                             <Badge variant="outline" className="text-xs">
