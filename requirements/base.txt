@@ -18,7 +18,8 @@ scikit-learn
 huggingface_hub
 questionary
 pytz
-git+https://github.com/eracle/linkedin-cli.git
+# linkedin-cli dependency - TODO: Add correct package source
+# linkedin_cli @ git+https://github.com/eracle/linkedin-cli.git@main
 psutil
 cryptography>=39.0.0
 
