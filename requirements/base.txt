@@ -18,7 +18,7 @@ scikit-learn
 huggingface_hub
 questionary
 pytz
-linkedin-agent-cli
+git+https://github.com/eracle/linkedin-cli.git
 psutil
 cryptography>=39.0.0
 
