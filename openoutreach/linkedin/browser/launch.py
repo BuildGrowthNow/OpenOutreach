@@ -25,37 +25,48 @@ LINKEDIN_FEED_URL = "https://www.linkedin.com/feed/"
 def _mark_credential_verified(session) -> None:
     """Update the linked credential after successful browser session start."""
     try:
-        from django.utils import timezone
+        from datetime import datetime, timezone
+        from openoutreach.mongodb import models
+        from openoutreach.mongodb.connection import get_mongodb_collection
 
         profile = session.linkedin_profile
-        cred = getattr(profile, "credentials", None)
-        if cred is None:
-            try:
-                from openoutreach.crm.models import LinkedInCredentials
-                cred = LinkedInCredentials.objects.filter(linkedin_profile=profile).first()
-            except Exception:
-                return
-
-        if cred is None:
+        if not profile or not hasattr(profile, '_id'):
             return
 
-        update_fields = []
-        cred.last_verified = timezone.now()
-        update_fields.append("last_verified")
+        # Find credential by profile ID
+        cred_collection = get_mongodb_collection("linkedin_credentials")
+        if cred_collection is None:
+            return
 
-        if cred.status != "active":
-            cred.status = "active"
-            update_fields.append("status")
+        cred_doc = cred_collection.find_one({"linkedin_profile_id": profile._id})
+        if cred_doc is None:
+            return
 
-        cred.save(update_fields=update_fields)
+        # Update credential verification status
+        now = datetime.now(timezone.utc)
+        update_fields = {
+            "last_verified": now,
+            "updated_at": now
+        }
 
+        if cred_doc.get("status") != "active":
+            update_fields["status"] = "active"
+
+        cred_collection.update_one(
+            {"_id": cred_doc["_id"]},
+            {"$set": update_fields}
+        )
+
+        # Create audit log entry
         try:
-            from openoutreach.crm.models import LinkedInCredentialLog
-            LinkedInCredentialLog.objects.create(
-                credentials=cred,
-                action=LinkedInCredentialLog.ACTION_VERIFIED,
-                details={"verified_by": "daemon", "method": "cookie_session"},
-            )
+            log_collection = get_mongodb_collection("linkedin_credential_logs")
+            if log_collection:
+                log_collection.insert_one({
+                    "credentials_id": str(cred_doc["_id"]),
+                    "action": "verified",
+                    "details": {"verified_by": "daemon", "method": "cookie_session"},
+                    "created_at": now
+                })
         except Exception:
             pass
     except Exception:
