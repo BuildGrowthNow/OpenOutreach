@@ -5,10 +5,8 @@ from __future__ import annotations
 
 import logging
 from collections import Counter
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone as tz
 from typing import Optional
-
-from django.utils import timezone
 
 from openoutreach.core.models import Campaign
 from openoutreach.linkedin.models import (
@@ -94,7 +92,7 @@ class CampaignHealthMonitor:
         alerts: list[HealthAlert] = []
 
         # Get metrics for last 24 hours
-        since = timezone.now() - timedelta(hours=24)
+        since = datetime.now(tz.utc) - timedelta(hours=24)
 
         connections_sent, connections_accepted = self._get_connection_metrics(since)
 
@@ -136,7 +134,7 @@ class CampaignHealthMonitor:
         alerts: list[HealthAlert] = []
 
         # Get metrics for last 48 hours
-        since = timezone.now() - timedelta(hours=48)
+        since = datetime.now(tz.utc) - timedelta(hours=48)
 
         # Get connected deals
         connected_deals = Deal.objects.filter(
@@ -239,7 +237,7 @@ class CampaignHealthMonitor:
             pass  # Fall back to manual calculation if context doesn't exist
 
         # Fall back to manual calculation
-        since = timezone.now() - timedelta(hours=24)
+        since = datetime.now(tz.utc) - timedelta(hours=24)
 
         # Get recent action logs
         actions = ActionLog.objects.filter(
@@ -289,7 +287,7 @@ class CampaignHealthMonitor:
         alerts: list[HealthAlert] = []
 
         # Get metrics for last 24 hours
-        since = timezone.now() - timedelta(hours=24)
+        since = datetime.now(tz.utc) - timedelta(hours=24)
 
         # Get all LinkedIn profiles for this campaign
         linkedin_profiles = LinkedInProfile.objects.filter(
@@ -458,7 +456,7 @@ class CampaignHealthMonitor:
 
             # Mark alert as resolved
             alert.is_resolved = True
-            alert.resolved_at = timezone.now()
+            alert.resolved_at = datetime.now(tz.utc)
             alert.auto_remediation_applied = True
             alert.resolution_notes = f"Auto-remediation: {action_type}"
             alert.save()

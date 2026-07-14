@@ -40,6 +40,8 @@ The system gets smarter with every decision. It starts by exploring broadly, the
 - 💾 **Self-hosted + full data ownership** — Everything runs locally, browse your CRM in a web UI
 - 🐳 **One-command setup** — Dockerized deployment, interactive onboarding
 - ✨ **AI-powered messaging** — LLM-generated personalized outreach (bring your own model)
+- 👥 **Multi-tenant & team collaboration** — Multiple users, LinkedIn profiles, and shared campaigns with team access control
+- 🔐 **Production-grade security** — JWT authentication, encrypted cookies, per-profile rate limiting, full data isolation
 
 Perfect for founders, sales teams, and agencies who want powerful automation **without account bans or subscription lock-in**.
 
@@ -82,7 +84,40 @@ docker compose up --build
 
 The interactive onboarding walks you through the required configuration on first run. All data persists in MongoDB.
 
-For Docker Compose details, see the **[Phase 3 Completion Guide](./PHASE3_COMPLETION.md)**.
+For Docker Compose details, see the **[Phase 3 Completion Guide](./PHASE_3_COMPLETE.md)**.
+
+---
+
+## 👥 Multi-Tenant Features
+
+OpenOutreach supports **multiple users, LinkedIn profiles, and team collaboration**:
+
+### User Management
+- **Local authentication** with JWT tokens (bcrypt password hashing)
+- **Supabase SSO** support (optional)
+- User registration and login via API or frontend
+- Secure password storage with 256-bit encryption
+
+### Multiple LinkedIn Profiles
+- Each user can add **multiple LinkedIn profiles**
+- **Profile switcher** in the UI to select active profile
+- Per-profile rate limiting (connect/follow-up daily limits)
+- Independent browser sessions per profile
+- Encrypted cookie storage (Fernet AES-256)
+
+### Team Collaboration
+- **Campaign sharing** — Add team members to campaigns
+- **Team access control** — Owner and team members can view/edit campaigns
+- **Team notifications** — All team members receive campaign events
+- **Owner-only deletion** — Only campaign owner can delete campaigns
+
+### Data Isolation
+- ✅ **Full multi-tenant isolation** — Users can only access their own data
+- ✅ **Campaign-based access** — Leads/messages accessible via campaign access
+- ✅ **Team member verification** — Access checks on all endpoints
+- ✅ **Secure by default** — All queries filter by user_id or verify team access
+
+For architecture details, see **[MULTI_TENANT_FASTAPI_MONGODB.md](./MULTI_TENANT_FASTAPI_MONGODB.md)**.
 
 ---
 

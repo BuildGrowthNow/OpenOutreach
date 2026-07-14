@@ -5,10 +5,8 @@ from __future__ import annotations
 
 import logging
 import random
-from datetime import datetime
+from datetime import datetime, timezone as tz
 from typing import Dict, Optional, List, Any
-
-from django.utils import timezone
 
 from openoutreach.linkedin.models.ghost_mode import GhostCampaign, GhostSimulationLog
 
@@ -42,7 +40,7 @@ class GhostModeInterceptor:
         if not self.enabled:
             return {"success": False, "error": "Ghost mode not enabled"}
 
-        simulation_start = timezone.now()
+        simulation_start = datetime.now(tz.utc)
 
         # Simulate different action types
         if action_type == "search":
@@ -58,7 +56,7 @@ class GhostModeInterceptor:
         else:
             result = {"success": True, "message": f"Simulated {action_type}"}
 
-        simulation_duration = (timezone.now() - simulation_start).total_seconds()
+        simulation_duration = (datetime.now(tz.utc) - simulation_start).total_seconds()
 
         # Log simulation
         GhostSimulationLog.objects.create(
@@ -70,7 +68,7 @@ class GhostModeInterceptor:
             rating=result.get("rating", None),
             score=result.get("score", None),
             started_at=simulation_start,
-            completed_at=timezone.now(),
+            completed_at=datetime.now(tz.utc),
             simulated_action={
                 "action_type": action_type,
                 "target": target_data,
@@ -155,7 +153,7 @@ class GhostModeInterceptor:
         return {
             "success": True,
             "message_sent": True,
-            "message_id": f"msg_{timezone.now().timestamp():.0f}",
+            "message_id": f"msg_{datetime.now(tz.utc).timestamp():.0f}",
             "will_response": will_response,
             "simulated_delay_hours": 24 if will_response else None,
             "simulated_response_content": (

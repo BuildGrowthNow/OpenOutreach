@@ -74,11 +74,18 @@ from openoutreach.api_v2.routers import (
     websocket,
 )
 
+# Import new auth v2 router for multi-tenant
+from openoutreach.api_v2.routers import auth_v2
+
 # Health check (no auth required)
 app.include_router(health.router, prefix="/api", tags=["health"])
 
 # Auth endpoints (no auth required)
-app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
+# Legacy auth (Supabase) - backwards compatibility
+app.include_router(auth.router, prefix="/api/auth/legacy", tags=["auth-legacy"])
+
+# New multi-tenant auth - production
+app.include_router(auth_v2.router, prefix="/api/auth", tags=["auth"])
 
 # Settings
 app.include_router(settings.router, prefix="/api/settings", tags=["settings"])

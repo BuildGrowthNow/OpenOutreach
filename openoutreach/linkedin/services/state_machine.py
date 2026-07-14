@@ -4,10 +4,8 @@
 from __future__ import annotations
 
 import logging
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone as tz
 from typing import Dict, List, Optional, Tuple
-
-from django.utils import timezone
 
 from openoutreach.core.models import Campaign
 from openoutreach.crm.models import Deal
@@ -62,7 +60,7 @@ class StateMachineEngine:
             return getattr(deal, "qualification_score", 0) >= min_score
         elif condition_type == "days_since":
             days = node.config.get("days", 0)
-            days_since = (timezone.now() - deal.update_date).days
+            days_since = (datetime.now(tz.utc) - deal.update_date).days
             return days_since >= days
         elif condition_type == "message_count":
             count = node.config.get("min_count", 0)
@@ -122,7 +120,7 @@ class StateMachineEngine:
             # Wait if it's a wait node
             if next_node.node_type == StateNode.TYPE_WAIT:
                 wait_minutes = next_node.config.get("wait_minutes", 1440)
-                state_machine.wait_until = timezone.now() + timedelta(
+                state_machine.wait_until = datetime.now(tz.utc) + timedelta(
                     minutes=wait_minutes
                 )
                 state_machine.wait_reason = next_node.config.get(
@@ -132,7 +130,7 @@ class StateMachineEngine:
         else:
             # No more transitions - end the state machine
             state_machine.status = CampaignState.STATUS_COMPLETED
-            state_machine.completed_at = timezone.now()
+            state_machine.completed_at = datetime.now(tz.utc)
             state_machine.save()
 
         return True, "Step completed"
@@ -172,7 +170,7 @@ class StateMachineEngine:
                     sender="outgoing",
                     message=template_text,
                     is_outgoing=True,
-                    creation_date=timezone.now(),
+                    creation_date=datetime.now(tz.utc),
                 )
 
                 if linkedin_profile:
@@ -422,7 +420,7 @@ class StateMachineEngine:
                     sender="outgoing",
                     message=message_with_link,
                     is_outgoing=True,
-                    creation_date=timezone.now(),
+                    creation_date=datetime.now(tz.utc),
                 )
 
                 # Record initial link click (when message is sent)

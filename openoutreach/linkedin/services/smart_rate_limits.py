@@ -3,10 +3,8 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone as tz
 from typing import Optional
-
-from django.utils import timezone
 
 from openoutreach.linkedin.models import (
     LinkedInProfile,
@@ -34,7 +32,7 @@ class SmartRateLimiter:
         effective_limit = self.context.get_effective_limit(action_type, campaign)
 
         # Count recent actions (last 24 hours)
-        since = timezone.now() - timedelta(hours=24)
+        since = datetime.now(tz.utc) - timedelta(hours=24)
         recent_count = self._count_recent_actions(action_type, since)
 
         return recent_count < effective_limit
@@ -50,7 +48,7 @@ class SmartRateLimiter:
     def get_remaining_quota(self, action_type: str, campaign=None) -> int:
         """Get remaining quota for action type."""
         effective_limit = self.context.get_effective_limit(action_type, campaign)
-        since = timezone.now() - timedelta(hours=24)
+        since = datetime.now(tz.utc) - timedelta(hours=24)
         recent_count = self._count_recent_actions(action_type, since)
 
         return max(0, effective_limit - recent_count)
@@ -69,8 +67,8 @@ class SmartRateLimiter:
             "remaining": self.get_remaining_quota(action_type, campaign),
             "detectability_score": self.context.detectability_score,
             "context": {
-                "time_of_day": timezone.now().strftime("%H:%M"),
-                "day_of_week": timezone.now().strftime("%A"),
+                "time_of_day": datetime.now(tz.utc).strftime("%H:%M"),
+                "day_of_week": datetime.now(tz.utc).strftime("%A"),
             },
         }
 
@@ -84,7 +82,7 @@ class SmartRateLimiter:
         versions. Task handlers now only create ActionLog entries when actions succeed.
         """
         if since is None:
-            since = timezone.now() - timedelta(hours=24)
+            since = datetime.now(tz.utc) - timedelta(hours=24)
 
         from openoutreach.linkedin.models import ActionLog
 

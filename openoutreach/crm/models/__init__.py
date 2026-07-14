@@ -1,7 +1,29 @@
-from .deal import Deal, DealState, Outcome
-from .lead import Lead
-from .message import Message
-from .note import Note
-from .persona import LeadPersona
-from .link import TrackedLink, LinkClick, LinkDealConversion
-from .linkedin_credentials import LinkedInCredentials, LinkedInCredentialLog
+from .deal import DealState, Outcome
+
+from openoutreach.mongodb.models import (
+    Deal,
+    Lead,
+    Message,
+    Note,
+    LeadPersona,
+    TrackedLink,
+    LinkClick,
+    LinkDealConversion,
+    LinkedInCredentials,
+    LinkedInCredentialLog,
+)
+
+__all__ = [
+    "Deal",
+    "DealState",
+    "Outcome",
+    "Lead",
+    "Message",
+    "Note",
+    "LeadPersona",
+    "TrackedLink",
+    "LinkClick",
+    "LinkDealConversion",
+    "LinkedInCredentials",
+    "LinkedInCredentialLog",
+]

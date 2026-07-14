@@ -21,6 +21,7 @@ import { getLinkedInProfileHealth } from '@/lib/api/dashboard'
 import { LinkedInProfileHealthResponse } from '@/lib/types/components'
 import { AlertCircle } from 'lucide-react'
 import { getNotificationSummary, markNotificationAsRead, Notification } from '@/lib/api/notifications'
+import { ProfileSwitcher } from './profile-switcher'
 
 interface HeaderProps {
   onMenuClick: () => void
@@ -272,14 +273,16 @@ const Header = ({ onMenuClick, className }: HeaderProps) => {
       </div>
 
       <div className="flex items-center gap-3">
-        <div className="hidden md:flex items-center gap-2">
+        <div className="hidden md:flex items-center gap-3">
+          <ProfileSwitcher />
+
           {loadingHealth ? (
             <div className="flex items-center gap-2 px-2 py-1">
               <div className="h-4 w-4 rounded-full border-2 border-slate-500 border-t-transparent animate-spin" />
               <span className="text-xs text-muted-foreground">Checking...</span>
             </div>
           ) : (
-            <div 
+            <div
               className="cursor-pointer hover:opacity-90 transition-opacity"
               title={getTooltipContent()}
               onClick={handleBadgeClick}

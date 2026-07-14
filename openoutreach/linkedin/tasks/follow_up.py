@@ -4,14 +4,13 @@
 from __future__ import annotations
 
 import logging
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Dict, Optional
 
-from django.utils import timezone
 from termcolor import colored
 
-from openoutreach.crm.models import DealState
-from openoutreach.linkedin.models import ActionLog
+from openoutreach.mongodb import models
+from openoutreach.mongodb.connection import get_mongodb_collection
 from openoutreach.linkedin.services.ghost_mode import GhostModeInterceptor
 from openoutreach.linkedin.services.smart_rate_limits import (
     smart_can_execute,
@@ -22,8 +21,6 @@ from openoutreach.linkedin.services.smart_rate_limits import (
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    # Fix: The correct import paths are in crm.models, not core.db.lead/deal
-    from openoutreach.crm.models import Lead, Deal
     from openoutreach.linkedin.browser.session import AccountSession
 
 # Required silence between nudges scales with unanswered count:
@@ -93,37 +90,71 @@ def _replace_placeholders(message: str, deal) -> str:
 
 def _too_soon_to_nudge(deal) -> bool:
     """Wait ``unanswered_count * MIN_DAYS_PER_UNANSWERED`` days between nudges."""
-    from openoutreach.chat.models import ChatMessage
-
-    messages = ChatMessage.objects.filter(deal=deal)
-
-    last = messages.order_by("-creation_date").first()
-    if last is None or not last.is_outgoing:
+    message_collection = get_mongodb_collection("chat_messages")
+    if message_collection is None:
         return False
 
-    last_reply = messages.filter(is_outgoing=False).order_by("-creation_date").first()
-    nudges = messages.filter(is_outgoing=True)
-    if last_reply:
-        nudges = nudges.filter(creation_date__gt=last_reply.creation_date)
+    # Get all messages for this deal, sorted by creation_date descending
+    messages = list(message_collection.find(
+        {"deal_id": deal._id},
+        sort=[("creation_date", -1)]
+    ))
 
-    required = timedelta(days=nudges.count() * MIN_DAYS_PER_UNANSWERED)
-    return timezone.now() - last.creation_date < required
+    if not messages:
+        return False
+
+    last = messages[0]
+    if not last.get("is_outgoing", False):
+        return False
+
+    # Find last reply (incoming message)
+    last_reply = None
+    for msg in messages:
+        if not msg.get("is_outgoing", False):
+            last_reply = msg
+            break
+
+    # Count nudges (outgoing messages after last reply)
+    if last_reply:
+        last_reply_date = last_reply.get("creation_date")
+        nudges = [m for m in messages if m.get("is_outgoing", False) and m.get("creation_date", datetime.min.replace(tzinfo=timezone.utc)) > last_reply_date]
+    else:
+        nudges = [m for m in messages if m.get("is_outgoing", False)]
+
+    required = timedelta(days=len(nudges) * MIN_DAYS_PER_UNANSWERED)
+    now = datetime.now(timezone.utc)
+    last_creation_date = last.get("creation_date", now)
+    return now - last_creation_date < required
 
 
 def _connected_deals(campaign):
     """Open, non-disqualified CONNECTED deals in *campaign*, oldest first."""
-    from openoutreach.crm.models import Deal
+    deal_collection = get_mongodb_collection("deals")
+    lead_collection = get_mongodb_collection("leads")
+    if deal_collection is None or lead_collection is None:
+        return []
 
-    return (
-        Deal.objects.filter(
-            campaign=campaign,
-            state=DealState.CONNECTED,
-            outcome="",
-            lead__disqualified=False,
-        )
-        .select_related("lead", "campaign")
-        .order_by("update_date")
-    )
+    # Find all CONNECTED deals for this campaign
+    campaign_id = campaign._id if hasattr(campaign, '_id') else str(campaign)
+    deal_docs = list(deal_collection.find(
+        {
+            "campaign_id": campaign_id,
+            "state": models.Deal.DealState.CONNECTED,
+            "outcome": "",
+        },
+        sort=[("update_date", 1)]  # Oldest first
+    ))
+
+    # Filter out deals with disqualified leads
+    valid_deals = []
+    for deal_doc in deal_docs:
+        lead_id = deal_doc.get("lead_id")
+        if lead_id:
+            lead_doc = lead_collection.find_one({"_id": lead_id})
+            if lead_doc and not lead_doc.get("disqualified", False):
+                valid_deals.append(models.Deal.from_dict(deal_doc))
+
+    return valid_deals
 
 
 def _next_followup_deal(campaign):

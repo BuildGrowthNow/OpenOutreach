@@ -8,6 +8,7 @@ and checking profile health status.
 import json
 import logging
 from typing import Dict, List, Optional
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Body
 from pydantic import BaseModel
@@ -300,6 +301,276 @@ async def upload_profile_cookies(
             success=False,
             message="",
             error=str(e)
+        )
+
+
+@router.post("/linkedin-profiles", response_model=LinkedInProfileResponse, status_code=201)
+async def create_profile(
+    linkedin_username: str = Body(...),
+    connect_daily_limit: int = Body(20),
+    follow_up_daily_limit: int = Body(25),
+    user_id: str = Depends(get_current_user),
+):
+    """
+    Create a new LinkedIn profile for the current user.
+
+    Multi-tenant: automatically assigns user_id from authenticated token.
+    Creates SmartRateLimitContext for the new profile.
+    """
+    from openoutreach.linkedin.models import LinkedInProfile
+
+    collection = get_mongodb_collection("linkedin_profiles")
+    if collection is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="LinkedIn profiles database unavailable"
+        )
+
+    # Check for duplicate
+    existing = collection.find_one({
+        "user_id": user_id,
+        "linkedin_username": linkedin_username
+    })
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Profile '{linkedin_username}' already exists"
+        )
+
+    try:
+        # Create profile
+        profile = LinkedInProfile(
+            user_id=user_id,
+            linkedin_username=linkedin_username,
+            connect_daily_limit=connect_daily_limit,
+            follow_up_daily_limit=follow_up_daily_limit,
+            active=True,
+        )
+        profile.save()
+
+        # Create SmartRateLimitContext for this profile
+        try:
+            rate_ctx_collection = get_mongodb_collection("smart_rate_limit_contexts")
+            if rate_ctx_collection:
+                rate_ctx_collection.insert_one({
+                    "_id": str(uuid4()),
+                    "linkedin_profile_id": profile._id,
+                    "detectability_score": 0.5,  # Default neutral
+                    "time_multiplier": 1.0,
+                    "day_multiplier": 1.0,
+                    "campaign_context": {},
+                })
+                logger.info(f"Created SmartRateLimitContext for profile {profile._id}")
+        except Exception as e:
+            logger.warning(f"Failed to create SmartRateLimitContext: {e}")
+
+        return LinkedInProfileResponse(
+            id=profile._id,
+            linkedin_username=profile.linkedin_username,
+            active=profile.active,
+            connect_daily_limit=profile.connect_daily_limit,
+            follow_up_daily_limit=profile.follow_up_daily_limit,
+            has_cookies=bool(profile.cookie_data_encrypted),
+        )
+
+    except Exception as e:
+        logger.exception("Failed to create LinkedIn profile")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create profile: {str(e)}"
+        )
+
+
+@router.get("/linkedin-profiles/{profile_id}", response_model=LinkedInProfileResponse)
+async def get_profile(
+    profile_id: str,
+    user_id: str = Depends(get_current_user),
+):
+    """
+    Get a single LinkedIn profile by ID.
+
+    Multi-tenant: verifies user owns the profile.
+    Returns 404 if profile not found or access denied.
+    """
+    collection = get_mongodb_collection("linkedin_profiles")
+    if collection is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="LinkedIn profiles database unavailable"
+        )
+
+    try:
+        profile_doc = collection.find_one({"_id": profile_id, "user_id": user_id})
+        if not profile_doc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Profile not found or access denied"
+            )
+
+        return LinkedInProfileResponse(
+            id=str(profile_doc.get("_id")),
+            linkedin_username=profile_doc.get("linkedin_username", ""),
+            active=profile_doc.get("active", True),
+            connect_daily_limit=profile_doc.get("connect_daily_limit", 20),
+            follow_up_daily_limit=profile_doc.get("follow_up_daily_limit", 25),
+            has_cookies=bool(profile_doc.get("cookie_data_encrypted")),
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Failed to get LinkedIn profile")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve profile: {str(e)}"
+        )
+
+
+@router.put("/linkedin-profiles/{profile_id}", response_model=LinkedInProfileResponse)
+async def update_profile(
+    profile_id: str,
+    linkedin_username: Optional[str] = Body(None),
+    active: Optional[bool] = Body(None),
+    connect_daily_limit: Optional[int] = Body(None),
+    follow_up_daily_limit: Optional[int] = Body(None),
+    user_id: str = Depends(get_current_user),
+):
+    """
+    Update a LinkedIn profile.
+
+    Multi-tenant: verifies user owns the profile before updating.
+    Only provided fields are updated.
+    """
+    collection = get_mongodb_collection("linkedin_profiles")
+    if collection is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="LinkedIn profiles database unavailable"
+        )
+
+    try:
+        # Verify ownership
+        profile_doc = collection.find_one({"_id": profile_id, "user_id": user_id})
+        if not profile_doc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Profile not found or access denied"
+            )
+
+        # Build update
+        updates = {}
+        if linkedin_username is not None:
+            updates["linkedin_username"] = linkedin_username
+        if active is not None:
+            updates["active"] = active
+        if connect_daily_limit is not None:
+            updates["connect_daily_limit"] = connect_daily_limit
+        if follow_up_daily_limit is not None:
+            updates["follow_up_daily_limit"] = follow_up_daily_limit
+
+        if not updates:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No fields to update"
+            )
+
+        # Apply update
+        collection.update_one(
+            {"_id": profile_id, "user_id": user_id},
+            {"$set": updates}
+        )
+
+        # Fetch updated profile
+        updated_doc = collection.find_one({"_id": profile_id})
+
+        return LinkedInProfileResponse(
+            id=str(updated_doc.get("_id")),
+            linkedin_username=updated_doc.get("linkedin_username", ""),
+            active=updated_doc.get("active", True),
+            connect_daily_limit=updated_doc.get("connect_daily_limit", 20),
+            follow_up_daily_limit=updated_doc.get("follow_up_daily_limit", 25),
+            has_cookies=bool(updated_doc.get("cookie_data_encrypted")),
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Failed to update LinkedIn profile")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update profile: {str(e)}"
+        )
+
+
+@router.delete("/linkedin-profiles/{profile_id}", status_code=204)
+async def delete_profile(
+    profile_id: str,
+    user_id: str = Depends(get_current_user),
+):
+    """
+    Delete a LinkedIn profile.
+
+    Multi-tenant: verifies user owns the profile before deleting.
+    Safety: blocks deletion if any active campaigns use this profile.
+    Also removes associated SmartRateLimitContext.
+    """
+    profiles_collection = get_mongodb_collection("linkedin_profiles")
+    campaigns_collection = get_mongodb_collection("campaigns")
+
+    if profiles_collection is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="LinkedIn profiles database unavailable"
+        )
+
+    try:
+        # Verify ownership
+        profile_doc = profiles_collection.find_one({"_id": profile_id, "user_id": user_id})
+        if not profile_doc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Profile not found or access denied"
+            )
+
+        # Check for active campaigns
+        if campaigns_collection:
+            active_campaigns = campaigns_collection.count_documents({
+                "linkedin_profile_id": profile_id,
+                "is_paused": False
+            })
+            if active_campaigns > 0:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Cannot delete profile: {active_campaigns} active campaign(s) use this profile"
+                )
+
+        # Delete SmartRateLimitContext
+        try:
+            rate_ctx_collection = get_mongodb_collection("smart_rate_limit_contexts")
+            if rate_ctx_collection:
+                rate_ctx_collection.delete_one({"linkedin_profile_id": profile_id})
+                logger.info(f"Deleted SmartRateLimitContext for profile {profile_id}")
+        except Exception as e:
+            logger.warning(f"Failed to delete SmartRateLimitContext: {e}")
+
+        # Delete profile
+        result = profiles_collection.delete_one({"_id": profile_id, "user_id": user_id})
+        if result.deleted_count == 0:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Profile not found or access denied"
+            )
+
+        logger.info(f"Deleted LinkedIn profile {profile_id} for user {user_id}")
+        return None
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Failed to delete LinkedIn profile")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete profile: {str(e)}"
         )
 
 

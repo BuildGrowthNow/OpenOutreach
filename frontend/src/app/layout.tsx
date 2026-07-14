@@ -2,6 +2,7 @@ import type { Metadata } from "next"
 import { Geist, Geist_Mono, Roboto_Slab, Lato } from "next/font/google"
 import "./globals.css"
 import { AuthProvider } from "./auth-provider"
+import { AuthProviderV2 } from "@/components/auth/auth-provider-v2"
 import { ToastProvider } from "@/components/ui/toast"
 import { Toaster } from "@/components/ui/toaster"
 
@@ -45,7 +46,9 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <ToastProvider>
-          <AuthProvider>{children}</AuthProvider>
+          <AuthProviderV2>
+            <AuthProvider>{children}</AuthProvider>
+          </AuthProviderV2>
           <Toaster />
         </ToastProvider>
       </body>

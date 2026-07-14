@@ -3,13 +3,10 @@ MongoDB Models for OpenOutreach
 
 This module provides MongoDB-compatible versions of the CRM models
 that use pymongo directly for data operations.
-
-Since Djongo is not compatible with Django 5.x, this module uses
-pymongo directly for all MongoDB operations.
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone as tz
 from typing import Any, Dict, List, Optional, TypeVar
 from uuid import uuid4
 
@@ -22,6 +19,7 @@ from .connection import (
     check_mongodb_connection,
     mongodb_connection,
 )
+from .models_user import User
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +52,7 @@ class SupabaseUser:
         self.django_user_id = django_user_id
         self.email = email
         self.full_name = full_name
-        self.created_at = created_at or datetime.utcnow()
+        self.created_at = created_at or datetime.now(tz.utc)
         self.last_login = last_login
         self.token_data = token_data or {}
         self.is_active = is_active
@@ -271,42 +269,53 @@ class Lead:
         public_identifier: str = "",
         urn: Optional[str] = None,
         embedding: Optional[bytes] = None,
+        cached_profile: Optional[Dict[str, Any]] = None,
         contact_info: Optional[Dict[str, Any]] = None,
         api_email: Optional[str] = None,
+        notes: Optional[str] = None,
         disqualified: bool = False,
-        user_id: Optional[str] = None,  # Reference to Django User
+        user_id: Optional[str] = None,
         creation_date: Optional[datetime] = None,
+        update_date: Optional[datetime] = None,
     ):
         self._id = _id or str(uuid4())
         self.linkedin_url = linkedin_url
         self.public_identifier = public_identifier
         self.urn = urn
         self.embedding = embedding
-        self.contact_info = contact_info or {}
+        self.cached_profile = cached_profile
+        self.contact_info = contact_info
         self.api_email = api_email
+        self.notes = notes
         self.disqualified = disqualified
-        self.user_id = user_id  # Reference to Django User who created/owns this lead
-        self.creation_date = creation_date or datetime.utcnow()
+        self.user_id = user_id
+        self.creation_date = creation_date or datetime.now(tz.utc)
+        self.update_date = update_date or datetime.now(tz.utc)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert model instance to dictionary for MongoDB storage."""
-        data = {
+        data: Dict[str, Any] = {
             "_id": self._id,
             "linkedin_url": self.linkedin_url,
             "public_identifier": self.public_identifier,
+            "disqualified": self.disqualified,
             "creation_date": self.creation_date,
+            "update_date": self.update_date,
         }
-        if self.urn:
+        if self.urn is not None:
             data["urn"] = self.urn
-        if self.embedding:
+        if self.embedding is not None:
             data["embedding"] = self.embedding
-        if self.contact_info:
+        if self.cached_profile is not None:
+            data["cached_profile"] = self.cached_profile
+        if self.contact_info is not None:
             data["contact_info"] = self.contact_info
-        if self.api_email:
+        if self.api_email is not None:
             data["api_email"] = self.api_email
-        if self.user_id:
+        if self.notes is not None:
+            data["notes"] = self.notes
+        if self.user_id is not None:
             data["user_id"] = self.user_id
-        data["disqualified"] = self.disqualified
         return data
 
     @classmethod
@@ -318,22 +327,36 @@ class Lead:
             public_identifier=data.get("public_identifier", ""),
             urn=data.get("urn"),
             embedding=data.get("embedding"),
-            contact_info=data.get("contact_info", {}),
+            cached_profile=data.get("cached_profile"),
+            contact_info=data.get("contact_info"),
             api_email=data.get("api_email"),
+            notes=data.get("notes"),
             disqualified=data.get("disqualified", False),
             user_id=data.get("user_id"),
             creation_date=data.get("creation_date"),
+            update_date=data.get("update_date"),
         )
 
-    def save(self) -> str:
-        """Save the lead to MongoDB."""
+    def save(self, update_fields: Optional[List[str]] = None) -> str:
+        """Save the lead to MongoDB.
+
+        If update_fields is given, only those fields are written (partial update).
+        """
         collection = get_mongodb_collection("leads")
         if collection is None:
             raise RuntimeError("MongoDB collection 'leads' not available")
 
-        doc = self.to_dict()
-        result = collection.update_one({"_id": self._id}, {"$set": doc}, upsert=True)
-        return str(result.upserted_id or self._id)
+        self.update_date = datetime.now(tz.utc)
+
+        if update_fields:
+            field_map = self.to_dict()
+            update_doc = {f: field_map[f] for f in update_fields if f in field_map}
+            update_doc["update_date"] = self.update_date
+            collection.update_one({"_id": self._id}, {"$set": update_doc}, upsert=True)
+        else:
+            doc = self.to_dict()
+            collection.update_one({"_id": self._id}, {"$set": doc}, upsert=True)
+        return self._id
 
     @classmethod
     def get(cls, lead_id: str) -> Optional["Lead"]:
@@ -342,14 +365,10 @@ class Lead:
         if collection is None:
             return None
 
-        try:
-            data = collection.find_one({"_id": lead_id})
-            if data:
-                return cls.from_dict(data)
-            return None
-        except Exception as e:
-            logger.error(f"Failed to get lead '{lead_id}': {e}")
-            return None
+        data = collection.find_one({"_id": lead_id})
+        if data:
+            return cls.from_dict(data)
+        return None
 
     @classmethod
     def find_by_public_identifier(cls, public_identifier: str) -> Optional["Lead"]:
@@ -358,16 +377,10 @@ class Lead:
         if collection is None:
             return None
 
-        try:
-            data = collection.find_one({"public_identifier": public_identifier})
-            if data:
-                return cls.from_dict(data)
-            return None
-        except Exception as e:
-            logger.error(
-                f"Failed to find lead by public_identifier '{public_identifier}': {e}"
-            )
-            return None
+        data = collection.find_one({"public_identifier": public_identifier})
+        if data:
+            return cls.from_dict(data)
+        return None
 
     @classmethod
     def find_by_linkedin_url(cls, linkedin_url: str) -> Optional["Lead"]:
@@ -376,30 +389,31 @@ class Lead:
         if collection is None:
             return None
 
-        try:
-            data = collection.find_one({"linkedin_url": linkedin_url})
-            if data:
-                return cls.from_dict(data)
+        data = collection.find_one({"linkedin_url": linkedin_url})
+        if data:
+            return cls.from_dict(data)
+        return None
+
+    @classmethod
+    def find_by_urn(cls, urn: str) -> Optional["Lead"]:
+        """Find a lead by URN."""
+        collection = get_mongodb_collection("leads")
+        if collection is None:
             return None
-        except Exception as e:
-            logger.error(f"Failed to find lead by linkedin_url '{linkedin_url}': {e}")
-            return None
+
+        data = collection.find_one({"urn": urn})
+        if data:
+            return cls.from_dict(data)
+        return None
 
     @classmethod
     def find_by_user_id(cls, user_id: str) -> List["Lead"]:
-        """Find leads by user ID (creator)."""
+        """Find leads by user ID."""
         collection = get_mongodb_collection("leads")
         if collection is None:
             return []
 
-        try:
-            leads = []
-            for data in collection.find({"user_id": user_id}):
-                leads.append(cls.from_dict(data))
-            return leads
-        except Exception as e:
-            logger.error(f"Failed to find leads by user_id '{user_id}': {e}")
-            return []
+        return [cls.from_dict(d) for d in collection.find({"user_id": user_id})]
 
     @classmethod
     def delete(cls, lead_id: str) -> bool:
@@ -408,12 +422,8 @@ class Lead:
         if collection is None:
             return False
 
-        try:
-            result = collection.delete_one({"_id": lead_id})
-            return result.deleted_count > 0
-        except Exception as e:
-            logger.error(f"Failed to delete lead '{lead_id}': {e}")
-            return False
+        result = collection.delete_one({"_id": lead_id})
+        return result.deleted_count > 0
 
     def __str__(self):
         label = self.public_identifier or self.linkedin_url or f"Lead#{self._id[:8]}"
@@ -423,30 +433,249 @@ class Lead:
 
     @property
     def pk(self):
-        """Get the primary key."""
         return self._id
 
     @pk.setter
     def pk(self, value):
-        """Set the primary key."""
         self._id = value
+
+    @property
+    def id(self):
+        return self._id
 
     @classmethod
     def objects(cls) -> "LeadManager":
-        """Get the LeadManager for querying leads."""
         return LeadManager()
+
+    # ------------------------------------------------------------------
+    # Lazy accessors — live Voyager scrape on demand
+    # ------------------------------------------------------------------
+
+    def get_profile(self, session) -> Optional[Dict[str, Any]]:
+        """Live Voyager scrape of the parsed profile dict.
+
+        Opportunistically sets urn and cached_profile.
+        """
+        from linkedin_cli.api.client import PlaywrightLinkedinAPI
+        from linkedin_cli.exceptions import ProfileInaccessibleError
+
+        session.ensure_browser()
+        api = PlaywrightLinkedinAPI(session=session)
+        try:
+            profile, _raw = api.get_profile(public_identifier=self.public_identifier)
+        except ProfileInaccessibleError:
+            return None
+        if not profile:
+            return None
+
+        urn = profile.get("urn") or None
+        self.cached_profile = profile
+        update_fields = ["cached_profile"]
+        if urn and self.urn != urn:
+            existing = Lead.find_by_urn(urn)
+            if existing and existing._id != self._id:
+                logger.warning(
+                    "URN %s already owned by another lead — skipping for %s",
+                    urn,
+                    self.public_identifier,
+                )
+            else:
+                self.urn = urn
+                update_fields.append("urn")
+        self.save(update_fields=update_fields)
+        return profile
+
+    def capture_contact_info(self, session) -> None:
+        """Scrape + persist the LinkedIn contact-info overlay once connected.
+
+        Idempotent: non-null contact_info means we already tried.
+        """
+        if self.contact_info is not None:
+            return
+        from linkedin_cli.api.client import PlaywrightLinkedinAPI
+
+        session.ensure_browser()
+        api = PlaywrightLinkedinAPI(session=session)
+        contact, _raw = api.get_contact_info(public_identifier=self.public_identifier)
+        self.contact_info = contact
+        self.save(update_fields=["contact_info"])
+
+    def resolve_api_email(self) -> Optional[bool]:
+        """Resolve + persist a work email via the finder.
+
+        Returns True on hit, False on miss, None if finder unavailable.
+        """
+        if self.api_email:
+            return True
+        from openoutreach.emails.finder import (
+            FinderQuery,
+            FinderUnavailable,
+            resolve_email,
+        )
+
+        try:
+            result = resolve_email(FinderQuery(linkedin_url=self.linkedin_url))
+        except FinderUnavailable:
+            return None
+        if result:
+            self.api_email = result.email
+            self.save(update_fields=["api_email"])
+            return True
+        return False
+
+    def get_urn(self, session) -> str:
+        """LinkedIn URN. Reads cached; falls back to a live scrape."""
+        if self.urn:
+            return self.urn
+        self.get_profile(session)
+        if self.urn:
+            return self.urn
+        raise ValueError(f"Lead {self._id}: could not resolve URN after re-fetch")
+
+    def get_embedding(self, session):
+        """384-dim embedding. Lazy: scrapes + embeds on first access."""
+        import numpy as np
+
+        if self.embedding is None:
+            profile = self.get_profile(session)
+            if profile:
+                self.embed_from_profile(profile)
+        return self.embedding_array
+
+    def embed_from_profile(self, profile: dict) -> None:
+        """Compute and persist the 384-dim embedding from an in-hand profile."""
+        from openoutreach.linkedin.ml.embeddings import embed_text
+        from openoutreach.linkedin.ml.profile_text import build_profile_text
+
+        text = build_profile_text({"profile": profile})
+        emb = embed_text(text)
+        self.embedding = emb.tobytes()
+        self.save(update_fields=["embedding"])
+
+    def to_profile_dict(self) -> dict:
+        """Standard profile dict shape used by qualifiers and pools."""
+        return {
+            "lead_id": self._id,
+            "public_identifier": self.public_identifier,
+            "url": self.linkedin_url or "",
+            "meta": {},
+        }
+
+    @property
+    def embedding_array(self):
+        """384-dim float32 numpy array from stored bytes, or None."""
+        import numpy as np
+
+        if self.embedding is None:
+            return None
+        return np.frombuffer(bytes(self.embedding), dtype=np.float32).copy()
+
+    @embedding_array.setter
+    def embedding_array(self, arr):
+        import numpy as np
+
+        self.embedding = np.asarray(arr, dtype=np.float32).tobytes()
+
+    @classmethod
+    def get_labeled_arrays(cls, campaign):
+        """Labeled embeddings for a campaign as (X, y) numpy arrays for warm start."""
+        import numpy as np
+        from openoutreach.crm.models.deal import DealState, Outcome
+
+        collection = get_mongodb_collection("deals")
+        if collection is None:
+            return np.empty((0, 384), dtype=np.float32), np.empty(0, dtype=np.int32)
+
+        deals = collection.find(
+            {"campaign_id": campaign._id if hasattr(campaign, "_id") else str(campaign)},
+            {"lead_id": 1, "state": 1, "outcome": 1},
+        )
+
+        label_by_lead: Dict[str, int] = {}
+        for d in deals:
+            lid = d.get("lead_id")
+            if not lid:
+                continue
+            state = d.get("state", "")
+            outcome = d.get("outcome", "")
+            if state == DealState.FAILED.value:
+                if outcome == Outcome.WRONG_FIT.value:
+                    label_by_lead[lid] = 0
+            else:
+                label_by_lead[lid] = 1
+
+        if not label_by_lead:
+            return np.empty((0, 384), dtype=np.float32), np.empty(0, dtype=np.int32)
+
+        leads_collection = get_mongodb_collection("leads")
+        if leads_collection is None:
+            return np.empty((0, 384), dtype=np.float32), np.empty(0, dtype=np.int32)
+
+        leads_with_emb = leads_collection.find(
+            {"_id": {"$in": list(label_by_lead.keys())}, "embedding": {"$ne": None}},
+            {"_id": 1, "embedding": 1},
+        )
+
+        emb_map = {d["_id"]: d["embedding"] for d in leads_with_emb}
+
+        X_list, y_list = [], []
+        for lid, label in label_by_lead.items():
+            emb = emb_map.get(lid)
+            if emb is None:
+                continue
+            X_list.append(np.frombuffer(bytes(emb), dtype=np.float32))
+            y_list.append(label)
+
+        if not X_list:
+            return np.empty((0, 384), dtype=np.float32), np.empty(0, dtype=np.int32)
+
+        return np.array(X_list, dtype=np.float32), np.array(y_list, dtype=np.int32)
 
 
 class LeadManager:
-    """Manager for Lead queries."""
+    """Manager for Lead queries with Django-compatible interface."""
 
     def __init__(self):
         self.collection = None
+        self._filter_query: Dict[str, Any] = {}
+        self._exclude_query: Dict[str, Any] = {}
 
     def _get_collection(self) -> Optional[Collection]:
         if self.collection is None:
             self.collection = get_mongodb_collection("leads")
         return self.collection
+
+    @staticmethod
+    def _translate_kwargs(kwargs: Dict[str, Any]) -> Dict[str, Any]:
+        """Translate Django-style lookups to MongoDB query operators."""
+        query: Dict[str, Any] = {}
+        for key, value in kwargs.items():
+            if "__isnull" in key:
+                field = key.replace("__isnull", "")
+                if field == "pk":
+                    field = "_id"
+                query[field] = {"$eq": None} if value else {"$ne": None}
+            elif "__in" in key:
+                field = key.replace("__in", "")
+                if field == "pk":
+                    field = "_id"
+                query[field] = {"$in": list(value)}
+            elif "__gte" in key:
+                field = key.replace("__gte", "")
+                query[field] = {"$gte": value}
+            elif "__lte" in key:
+                field = key.replace("__lte", "")
+                query[field] = {"$lte": value}
+            elif "__gt" in key:
+                field = key.replace("__gt", "")
+                query[field] = {"$gt": value}
+            elif "__lt" in key:
+                field = key.replace("__lt", "")
+                query[field] = {"$lt": value}
+            else:
+                field = key if key != "pk" else "_id"
+                query[field] = value
+        return query
 
     def all(self) -> List[Lead]:
         """Get all leads."""
@@ -463,47 +692,107 @@ class LeadManager:
             logger.error(f"Failed to get all leads: {e}")
             return []
 
-    def filter(self, **kwargs) -> List[Lead]:
-        """Filter leads by criteria."""
+    def filter(self, **kwargs) -> "LeadManager":
+        """Filter leads by criteria. Returns self for chaining."""
+        mgr = LeadManager()
+        mgr._filter_query = {**self._filter_query, **self._translate_kwargs(kwargs)}
+        mgr._exclude_query = self._exclude_query.copy()
+        return mgr
+
+    def exclude(self, **kwargs) -> "LeadManager":
+        """Exclude leads matching criteria. Returns self for chaining."""
+        mgr = LeadManager()
+        mgr._filter_query = self._filter_query.copy()
+        translated = self._translate_kwargs(kwargs)
+        for k, v in translated.items():
+            mgr._exclude_query[k] = v
+        return mgr
+
+    def _build_query(self) -> Dict[str, Any]:
+        query = dict(self._filter_query)
+        for field, val in self._exclude_query.items():
+            if isinstance(val, dict):
+                inverted = {}
+                for op, v in val.items():
+                    if op == "$eq":
+                        inverted["$ne"] = v
+                    elif op == "$ne":
+                        inverted["$eq"] = v
+                    elif op == "$in":
+                        inverted["$nin"] = v
+                    else:
+                        inverted[op] = v
+                query[field] = {**query.get(field, {}), **inverted} if field in query else inverted
+            else:
+                query[field] = {"$ne": val}
+        return query
+
+    def _find(self):
         collection = self._get_collection()
         if collection is None:
-            return []
+            return iter([])
+        return collection.find(self._build_query())
 
-        try:
-            leads = []
-            for data in collection.find(kwargs):
-                leads.append(Lead.from_dict(data))
-            return leads
-        except Exception as e:
-            logger.error(f"Failed to filter leads: {e}")
-            return []
+    def exists(self) -> bool:
+        """Check if any leads match the current filter."""
+        collection = self._get_collection()
+        if collection is None:
+            return False
+        return collection.count_documents(self._build_query(), limit=1) > 0
 
     def count(self) -> int:
-        """Count total leads."""
+        """Count matching leads."""
         collection = self._get_collection()
         if collection is None:
             return 0
+        return collection.count_documents(self._build_query())
 
-        try:
-            return collection.count_documents({})
-        except Exception as e:
-            logger.error(f"Failed to count leads: {e}")
-            return 0
+    def first(self) -> Optional[Lead]:
+        """Return the first matching lead or None."""
+        collection = self._get_collection()
+        if collection is None:
+            return None
+        data = collection.find_one(self._build_query())
+        if data:
+            return Lead.from_dict(data)
+        return None
+
+    def values_list(self, *fields, flat: bool = False):
+        """Return specified field values. With flat=True and one field, returns a flat list."""
+        collection = self._get_collection()
+        if collection is None:
+            return []
+        projection = {f if f != "pk" else "_id": 1 for f in fields}
+        projection["_id"] = 1 if "_id" in projection or "pk" in fields else 0
+        cursor = collection.find(self._build_query(), projection)
+        results = []
+        for doc in cursor:
+            row = []
+            for f in fields:
+                key = "_id" if f == "pk" else f
+                row.append(doc.get(key))
+            if flat and len(fields) == 1:
+                results.append(row[0])
+            else:
+                results.append(tuple(row))
+        return results
 
     def get(self, **kwargs) -> Optional[Lead]:
         """Get a single lead by criteria."""
         collection = self._get_collection()
         if collection is None:
             return None
+        query = self._translate_kwargs(kwargs) if kwargs else self._build_query()
+        data = collection.find_one(query)
+        if data:
+            return Lead.from_dict(data)
+        return None
 
-        try:
-            data = collection.find_one(kwargs)
-            if data:
-                return Lead.from_dict(data)
-            return None
-        except Exception as e:
-            logger.error(f"Failed to get lead: {e}")
-            return None
+    def create(self, **kwargs) -> Lead:
+        """Create and save a new lead."""
+        lead = Lead(**kwargs)
+        lead.save()
+        return lead
 
     def get_or_create(
         self, defaults: Optional[Dict[str, Any]] = None, **kwargs
@@ -521,6 +810,14 @@ class LeadManager:
         lead.save()
         return lead, True
 
+    def __iter__(self):
+        """Iterate over matching leads."""
+        for data in self._find():
+            yield Lead.from_dict(data)
+
+    def __len__(self):
+        return self.count()
+
 
 class Campaign:
     """
@@ -528,6 +825,9 @@ class Campaign:
 
     Represents a marketing campaign with MongoDB-specific fields.
     Uses pymongo directly for data operations.
+
+    Multi-tenant: Each campaign has an owner (user_id) and can be shared
+    with team members (team_member_ids).
     """
 
     def __init__(
@@ -544,6 +844,9 @@ class Campaign:
         velocity: int = 20,
         cooldown_minutes: int = 0,
         is_paused: bool = False,
+        user_id: str = "",
+        linkedin_profile_id: Optional[str] = None,
+        team_member_ids: Optional[List[str]] = None,
         created_at: Optional[datetime] = None,
     ):
         self._id = _id or str(uuid4())
@@ -558,7 +861,10 @@ class Campaign:
         self.velocity = velocity
         self.cooldown_minutes = cooldown_minutes
         self.is_paused = is_paused
-        self.created_at = created_at or datetime.utcnow()
+        self.user_id = user_id
+        self.linkedin_profile_id = linkedin_profile_id
+        self.team_member_ids = team_member_ids or []
+        self.created_at = created_at or datetime.now(tz.utc)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert model instance to dictionary for MongoDB storage."""
@@ -574,6 +880,9 @@ class Campaign:
             "velocity": self.velocity,
             "cooldown_minutes": self.cooldown_minutes,
             "is_paused": self.is_paused,
+            "user_id": self.user_id,
+            "linkedin_profile_id": self.linkedin_profile_id,
+            "team_member_ids": self.team_member_ids,
             "created_at": self.created_at,
         }
         if self.model_blob:
@@ -596,8 +905,21 @@ class Campaign:
             velocity=data.get("velocity", 20),
             cooldown_minutes=data.get("cooldown_minutes", 0),
             is_paused=data.get("is_paused", False),
+            user_id=data.get("user_id", ""),
+            linkedin_profile_id=data.get("linkedin_profile_id"),
+            team_member_ids=data.get("team_member_ids", []),
             created_at=data.get("created_at"),
         )
+
+    def has_access(self, user_id: str) -> bool:
+        """Check if a user has access to this campaign (owner OR team member)."""
+        return user_id == self.user_id or user_id in self.team_member_ids
+
+    def get_all_user_ids(self) -> List[str]:
+        """Get all users with access (owner + team members)."""
+        user_ids = [self.user_id] if self.user_id else []
+        user_ids.extend(self.team_member_ids)
+        return user_ids
 
     def save(self) -> str:
         """Save the campaign to MongoDB."""
@@ -768,6 +1090,7 @@ class Deal:
     """
 
     class DealState:
+        DISCOVERED = "Discovered"
         QUALIFIED = "Qualified"
         READY_TO_CONNECT = "Ready to Connect"
         PENDING = "Pending"
@@ -791,8 +1114,8 @@ class Deal:
         _id: Optional[str] = None,
         lead_id: str = "",
         campaign_id: str = "",
-        user_id: Optional[str] = None,  # Reference to Django User (owner)
-        state: str = DealState.QUALIFIED,
+        user_id: Optional[str] = None,
+        state: str = DealState.DISCOVERED,
         outcome: str = "",
         reason: str = "",
         connect_attempts: int = 0,
@@ -805,7 +1128,7 @@ class Deal:
         self._id = _id or str(uuid4())
         self.lead_id = lead_id
         self.campaign_id = campaign_id
-        self.user_id = user_id  # Reference to Django User who owns this deal
+        self.user_id = user_id
         self.state = state
         self.outcome = outcome
         self.reason = reason
@@ -814,7 +1137,7 @@ class Deal:
         self.next_check_pending_at = next_check_pending_at
         self.profile_summary = profile_summary or {}
         self.chat_summary = chat_summary or {}
-        self.creation_date = creation_date or datetime.utcnow()
+        self.creation_date = creation_date or datetime.now(tz.utc)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert model instance to dictionary for MongoDB storage."""
@@ -974,8 +1297,7 @@ class UserProfile:
     def __init__(
         self,
         _id: Optional[str] = None,
-        user_id: str = "",  # Reference to Django User ID
-        first_name: str = "",
+        user_id: str = "",        first_name: str = "",
         last_name: str = "",
         email: str = "",
         phone: str = "",
@@ -1007,8 +1329,8 @@ class UserProfile:
             "language": "en",
             "sidebar_collapsed": False
         }
-        self.created_at = created_at or datetime.utcnow()
-        self.updated_at = updated_at or datetime.utcnow()
+        self.created_at = created_at or datetime.now(tz.utc)
+        self.updated_at = updated_at or datetime.now(tz.utc)
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert model instance to dictionary for MongoDB storage."""
@@ -1055,7 +1377,7 @@ class UserProfile:
             raise RuntimeError("MongoDB collection 'user_profiles' not available")
         
         # Update the updated_at timestamp
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(tz.utc)
         doc = self.to_dict()
         
         # Remove _id from the document when updating to avoid immutable field error
@@ -1216,24 +1538,27 @@ class Message:
         deal_id: str = "",
         content: str = "",
         is_outgoing: bool = True,
-        user_id: Optional[str] = None,  # Reference to Django User (author)
+        user_id: Optional[str] = None,
         created_at: Optional[datetime] = None,
+        updated_at: Optional[datetime] = None,
     ):
         self._id = _id or str(uuid4())
         self.deal_id = deal_id
         self.content = content
         self.is_outgoing = is_outgoing
-        self.user_id = user_id  # Reference to Django User who created this message
-        self.created_at = created_at or datetime.utcnow()
+        self.user_id = user_id
+        self.created_at = created_at or datetime.now(tz.utc)
+        self.updated_at = updated_at or datetime.now(tz.utc)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert model instance to dictionary for MongoDB storage."""
-        data = {
+        data: Dict[str, Any] = {
             "_id": self._id,
             "deal_id": self.deal_id,
             "content": self.content,
             "is_outgoing": self.is_outgoing,
             "created_at": self.created_at,
+            "updated_at": self.updated_at,
         }
         if self.user_id:
             data["user_id"] = self.user_id
@@ -1249,7 +1574,13 @@ class Message:
             is_outgoing=data.get("is_outgoing", True),
             user_id=data.get("user_id"),
             created_at=data.get("created_at"),
+            updated_at=data.get("updated_at"),
         )
+
+    @property
+    def sender(self) -> str:
+        """Get the sender of the message."""
+        return "User" if self.is_outgoing else "Lead"
 
     def save(self) -> str:
         """Save the message to MongoDB."""
@@ -1440,18 +1771,16 @@ class Note:
         _id: Optional[str] = None,
         deal_id: str = "",
         content: str = "",
-        created_by_id: Optional[str] = None,  # Reference to Django User (creator)
-        user_id: Optional[str] = None,  # Reference to Django User (owner/creator)
+        created_by_id: Optional[str] = None,
+        user_id: Optional[str] = None,
         created_at: Optional[datetime] = None,
     ):
         self._id = _id or str(uuid4())
         self.deal_id = deal_id
         self.content = content
-        self.created_by_id = (
-            created_by_id  # Reference to Django User who created (legacy)
-        )
-        self.user_id = user_id  # Reference to Django User who owns/created this note
-        self.created_at = created_at or datetime.utcnow()
+        self.created_by_id = created_by_id
+        self.user_id = user_id
+        self.created_at = created_at or datetime.now(tz.utc)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert model instance to dictionary for MongoDB storage."""
@@ -1668,7 +1997,7 @@ class LeadPersona:
         _id: Optional[str] = None,
         lead_id: str = "",
         campaign_id: str = "",
-        user_id: Optional[str] = None,  # Reference to Django User (creator)
+        user_id: Optional[str] = None,
         pain_points: Optional[List[str]] = None,
         goals: Optional[List[str]] = None,
         messaging_preferences: Optional[Dict[str, Any]] = None,
@@ -1682,7 +2011,7 @@ class LeadPersona:
         self._id = _id or str(uuid4())
         self.lead_id = lead_id
         self.campaign_id = campaign_id
-        self.user_id = user_id  # Reference to Django User who created this persona
+        self.user_id = user_id
         self.pain_points = pain_points or []
         self.goals = goals or []
         self.messaging_preferences = messaging_preferences or {}
@@ -1690,8 +2019,8 @@ class LeadPersona:
         self.confidence_score = confidence_score
         self.recommendations = recommendations or []
         self.version = version
-        self.generated_at = generated_at or datetime.utcnow()
-        self.last_updated = last_updated or datetime.utcnow()
+        self.generated_at = generated_at or datetime.now(tz.utc)
+        self.last_updated = last_updated or datetime.now(tz.utc)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert model instance to dictionary for MongoDB storage."""
@@ -1825,17 +2154,35 @@ class LeadPersona:
 
     @property
     def pk(self):
-        """Get the primary key."""
         return self._id
 
     @pk.setter
     def pk(self, value):
-        """Set the primary key."""
         self._id = value
+
+    @property
+    def is_high_confidence(self) -> bool:
+        return self.confidence_score >= 0.7
+
+    @property
+    def has_buy_signals(self) -> bool:
+        return len(self.buy_signals) > 0
+
+    def get_formatted_pain_points(self, limit: int = 3) -> List[str]:
+        return self.pain_points[:limit] if self.pain_points else []
+
+    def get_formatted_goals(self, limit: int = 3) -> List[str]:
+        return self.goals[:limit] if self.goals else []
+
+    def get_formatted_buy_signals(self, limit: int = 3) -> List[str]:
+        return (
+            [s.get("description", "Unknown") for s in self.buy_signals[:limit]]
+            if self.buy_signals
+            else []
+        )
 
     @classmethod
     def objects(cls) -> "LeadPersonaManager":
-        """Get the LeadPersonaManager for querying personae."""
         return LeadPersonaManager()
 
 
@@ -1936,7 +2283,7 @@ class TrackedLink:
         self,
         _id: Optional[str] = None,
         campaign_id: Optional[str] = None,
-        user_id: Optional[str] = None,  # Reference to Django User (creator)
+        user_id: Optional[str] = None,
         original_url: str = "",
         short_code: str = "",
         is_active: bool = True,
@@ -1954,7 +2301,7 @@ class TrackedLink:
     ):
         self._id = _id or str(uuid4())
         self.campaign_id = campaign_id
-        self.user_id = user_id  # Reference to Django User who created this link
+        self.user_id = user_id
         self.original_url = original_url
         self.short_code = short_code
         self.is_active = is_active
@@ -1965,7 +2312,7 @@ class TrackedLink:
         self.utm_content = utm_content
         self.total_clicks = total_clicks
         self.unique_clicks = unique_clicks
-        self.created_at = created_at or datetime.utcnow()
+        self.created_at = created_at or datetime.now(tz.utc)
         self.last_clicked_at = last_clicked_at
         self.last_ip = last_ip
         self.last_user_agent = last_user_agent
@@ -2107,22 +2454,57 @@ class TrackedLink:
             logger.error(f"Failed to delete tracked link '{link_id}': {e}")
             return False
 
+    def record_click(
+        self, ip_address: Optional[str] = None, user_agent: Optional[str] = None
+    ) -> None:
+        """Record a click on this link."""
+        self.total_clicks += 1
+        self.last_clicked_at = datetime.now(tz.utc)
+        if ip_address:
+            self.last_ip = ip_address
+        if user_agent:
+            self.last_user_agent = user_agent[:500]
+        collection = get_mongodb_collection("tracked_links")
+        if collection:
+            collection.update_one(
+                {"_id": self._id},
+                {"$set": {
+                    "total_clicks": self.total_clicks,
+                    "last_clicked_at": self.last_clicked_at,
+                    "last_ip": self.last_ip,
+                    "last_user_agent": self.last_user_agent,
+                }},
+            )
+
+    @property
+    def conversion_rate(self) -> float:
+        """Calculate conversion rate based on linked deal conversions."""
+        if self.total_clicks == 0:
+            return 0.0
+        collection = get_mongodb_collection("link_deal_conversions")
+        if collection is None:
+            return 0.0
+        count = collection.count_documents({"link_id": self._id})
+        return round(count / self.total_clicks * 100, 2)
+
+    def get_short_url(self, base_url: Optional[str] = None) -> str:
+        """Get the short tracked URL."""
+        base = base_url or "https://yourdomain.com"
+        return f"{base}/l/{self.short_code}"
+
     def __str__(self) -> str:
         return f"TrackedLink#{self.short_code}"
 
     @property
     def pk(self):
-        """Get the primary key."""
         return self._id
 
     @pk.setter
     def pk(self, value):
-        """Set the primary key."""
         self._id = value
 
     @classmethod
     def objects(cls) -> "TrackedLinkManager":
-        """Get the TrackedLinkManager for querying links."""
         return TrackedLinkManager()
 
 
@@ -2235,7 +2617,7 @@ class LinkClick:
         self.ip_address = ip_address
         self.user_agent = user_agent
         self.referrer = referrer
-        self.clicked_at = clicked_at or datetime.utcnow()
+        self.clicked_at = clicked_at or datetime.now(tz.utc)
         self.device_type = device_type
         self.country = country
 
@@ -2323,22 +2705,37 @@ class LinkClick:
             logger.error(f"Failed to delete link click '{click_id}': {e}")
             return False
 
+    def detect_device(self) -> Optional[str]:
+        """Detect device type from user agent."""
+        if not self.user_agent:
+            return None
+        ua_lower = self.user_agent.lower()
+        if "mobile" in ua_lower or "android" in ua_lower or "iphone" in ua_lower:
+            self.device_type = "mobile"
+        elif "ipad" in ua_lower or "tablet" in ua_lower:
+            self.device_type = "tablet"
+        else:
+            self.device_type = "desktop"
+        collection = get_mongodb_collection("link_clicks")
+        if collection:
+            collection.update_one(
+                {"_id": self._id}, {"$set": {"device_type": self.device_type}}
+            )
+        return self.device_type
+
     def __str__(self) -> str:
         return f"LinkClick#{self._id[:8]}"
 
     @property
     def pk(self):
-        """Get the primary key."""
         return self._id
 
     @pk.setter
     def pk(self, value):
-        """Set the primary key."""
         self._id = value
 
     @classmethod
     def objects(cls) -> "LinkClickManager":
-        """Get the LinkClickManager for querying clicks."""
         return LinkClickManager()
 
 
@@ -2447,7 +2844,7 @@ class LinkDealConversion:
         self.link_id = link_id
         self.click_id = click_id
         self.deal_id = deal_id
-        self.converted_at = converted_at or datetime.utcnow()
+        self.converted_at = converted_at or datetime.now(tz.utc)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert model instance to dictionary for MongoDB storage."""
@@ -2653,8 +3050,7 @@ class LinkedInCredentials:
     """
     MongoDB LinkedInCredentials model.
 
-    Represents LinkedIn credentials with encrypted storage.
-    Uses pymongo directly for data operations.
+    Securely stored LinkedIn credentials with encryption at rest via Fernet (AES-256).
     """
 
     STATUS_STORED = "stored"
@@ -2672,14 +3068,14 @@ class LinkedInCredentials:
         email_encrypted: str = "",
         password_encrypted: str = "",
         username: str = "",
-        status: str = STATUS_ACTIVE,
+        status: str = "stored",
         last_verified: Optional[datetime] = None,
         verification_failed_at: Optional[datetime] = None,
         verification_failures: int = 0,
         usage_count: int = 0,
         last_used: Optional[datetime] = None,
         campaign_id: Optional[str] = None,
-        user_id: Optional[str] = None,  # Reference to Django User (owner)
+        user_id: Optional[str] = None,
         created_at: Optional[datetime] = None,
         updated_at: Optional[datetime] = None,
         expires_at: Optional[datetime] = None,
@@ -2702,9 +3098,9 @@ class LinkedInCredentials:
         self.usage_count = usage_count
         self.last_used = last_used
         self.campaign_id = campaign_id
-        self.user_id = user_id  # Reference to Django User who owns these credentials
-        self.created_at = created_at or datetime.utcnow()
-        self.updated_at = updated_at or datetime.utcnow()
+        self.user_id = user_id
+        self.created_at = created_at or datetime.now(tz.utc)
+        self.updated_at = updated_at or datetime.now(tz.utc)
         self.expires_at = expires_at
         self.rotated_at = rotated_at
         self.rotation_required_days = rotation_required_days
@@ -2714,8 +3110,7 @@ class LinkedInCredentials:
         self.security_alert_sent_at = security_alert_sent_at
 
     def to_dict(self) -> Dict[str, Any]:
-        """Convert model instance to dictionary for MongoDB storage."""
-        data = {
+        data: Dict[str, Any] = {
             "_id": self._id,
             "linkedin_profile_id": self.linkedin_profile_id,
             "email_encrypted": self.email_encrypted,
@@ -2744,14 +3139,13 @@ class LinkedInCredentials:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "LinkedInCredentials":
-        """Create LinkedInCredentials instance from MongoDB document."""
         return cls(
             _id=str(data.get("_id")),
             linkedin_profile_id=data.get("linkedin_profile_id"),
             email_encrypted=data.get("email_encrypted", ""),
             password_encrypted=data.get("password_encrypted", ""),
             username=data.get("username", ""),
-            status=data.get("status", cls.STATUS_ACTIVE),
+            status=data.get("status", cls.STATUS_STORED),
             last_verified=data.get("last_verified"),
             verification_failed_at=data.get("verification_failed_at"),
             verification_failures=data.get("verification_failures", 0),
@@ -2770,118 +3164,459 @@ class LinkedInCredentials:
             security_alert_sent_at=data.get("security_alert_sent_at"),
         )
 
-    def save(self) -> str:
-        """Save the LinkedIn credentials to MongoDB."""
+    def save(self, update_fields: Optional[List[str]] = None) -> str:
+        """Save to MongoDB. If update_fields given, partial update only."""
         collection = get_mongodb_collection("linkedin_credentials")
         if collection is None:
-            raise RuntimeError(
-                "MongoDB collection 'linkedin_credentials' not available"
-            )
+            raise RuntimeError("MongoDB collection 'linkedin_credentials' not available")
 
-        doc = self.to_dict()
-        result = collection.update_one({"_id": self._id}, {"$set": doc}, upsert=True)
-        return str(result.upserted_id or self._id)
+        self.updated_at = datetime.now(tz.utc)
+
+        if update_fields:
+            field_map = self.to_dict()
+            update_doc = {f: field_map[f] for f in update_fields if f in field_map}
+            update_doc["updated_at"] = self.updated_at
+            collection.update_one({"_id": self._id}, {"$set": update_doc}, upsert=True)
+        else:
+            doc = self.to_dict()
+            collection.update_one({"_id": self._id}, {"$set": doc}, upsert=True)
+        return self._id
 
     @classmethod
     def get(cls, credential_id: str) -> Optional["LinkedInCredentials"]:
-        """Get LinkedIn credentials by ID."""
         collection = get_mongodb_collection("linkedin_credentials")
         if collection is None:
             return None
-
-        try:
-            data = collection.find_one({"_id": credential_id})
-            if data:
-                return cls.from_dict(data)
-            return None
-        except Exception as e:
-            logger.error(f"Failed to get LinkedIn credentials '{credential_id}': {e}")
-            return None
+        data = collection.find_one({"_id": credential_id})
+        if data:
+            return cls.from_dict(data)
+        return None
 
     @classmethod
     def find_by_profile_id(cls, profile_id: str) -> Optional["LinkedInCredentials"]:
-        """Find credentials by LinkedIn profile ID."""
         collection = get_mongodb_collection("linkedin_credentials")
         if collection is None:
             return None
-
-        try:
-            data = collection.find_one({"linkedin_profile_id": profile_id})
-            if data:
-                return cls.from_dict(data)
-            return None
-        except Exception as e:
-            logger.error(
-                f"Failed to find credentials by profile_id '{profile_id}': {e}"
-            )
-            return None
+        data = collection.find_one({"linkedin_profile_id": profile_id})
+        if data:
+            return cls.from_dict(data)
+        return None
 
     @classmethod
     def find_by_campaign_id(cls, campaign_id: str) -> List["LinkedInCredentials"]:
-        """Find credentials by campaign ID."""
         collection = get_mongodb_collection("linkedin_credentials")
         if collection is None:
             return []
-
-        try:
-            credentials = []
-            for data in collection.find({"campaign_id": campaign_id}):
-                credentials.append(cls.from_dict(data))
-            return credentials
-        except Exception as e:
-            logger.error(
-                f"Failed to find credentials by campaign_id '{campaign_id}': {e}"
-            )
-            return []
+        return [cls.from_dict(d) for d in collection.find({"campaign_id": campaign_id})]
 
     @classmethod
     def find_by_user_id(cls, user_id: str) -> List["LinkedInCredentials"]:
-        """Find credentials by user ID."""
         collection = get_mongodb_collection("linkedin_credentials")
         if collection is None:
             return []
-
-        try:
-            credentials = []
-            for data in collection.find({"user_id": user_id}):
-                credentials.append(cls.from_dict(data))
-            return credentials
-        except Exception as e:
-            logger.error(f"Failed to find credentials by user_id '{user_id}': {e}")
-            return []
+        return [cls.from_dict(d) for d in collection.find({"user_id": user_id})]
 
     @classmethod
     def delete(cls, credential_id: str) -> bool:
-        """Delete LinkedIn credentials by ID."""
         collection = get_mongodb_collection("linkedin_credentials")
         if collection is None:
             return False
+        result = collection.delete_one({"_id": credential_id})
+        return result.deleted_count > 0
+
+    # ==================== Encryption Methods ====================
+
+    @classmethod
+    def encrypt(cls, plaintext: str) -> str:
+        """Encrypt a string using Fernet AES encryption."""
+        from openoutreach.mongodb.crypto import encrypt_text
+        return encrypt_text(plaintext)
+
+    @classmethod
+    def decrypt(cls, ciphertext: str) -> str:
+        """Decrypt a string using Fernet AES decryption."""
+        from openoutreach.mongodb.crypto import decrypt_text
+        return decrypt_text(ciphertext)
+
+    def get_email(self) -> str:
+        """Get the decrypted email address."""
+        if not self.email_encrypted:
+            return ""
+        return self.decrypt(self.email_encrypted)
+
+    def set_email(self, email: str) -> None:
+        """Set and encrypt the email address."""
+        self.email_encrypted = self.encrypt(email)
+
+    def get_password(self) -> str:
+        """Get the decrypted password."""
+        if not self.password_encrypted:
+            return ""
+        return self.decrypt(self.password_encrypted)
+
+    def set_password(self, password: str) -> None:
+        """Set and encrypt the password."""
+        self.password_encrypted = self.encrypt(password)
+
+    def get_public_email(self) -> str:
+        """Get a masked version of the email for display."""
+        try:
+            email = self.get_email()
+            if "@" in email:
+                local, domain = email.rsplit("@", 1)
+                if len(local) > 2:
+                    return f"{local[0]}***@{domain}"
+                return f"***@{domain}"
+            return "***@***"
+        except Exception:
+            return "***@***"
+
+    # ==================== Status Methods ====================
+
+    def mark_as_invalid(self, reason: str = "") -> None:
+        self.status = self.STATUS_INVALID
+        self.verification_failed_at = datetime.now(tz.utc)
+        self.verification_failures += 1
+        if reason:
+            self._save_verification_log("invalid", reason)
+        self.save(update_fields=["status", "verification_failed_at", "verification_failures"])
+
+    def mark_as_active(self) -> None:
+        self.status = self.STATUS_ACTIVE
+        self.save(update_fields=["status"])
+
+    def mark_as_expired(self) -> None:
+        self.status = self.STATUS_EXPIRED
+        self.save(update_fields=["status"])
+
+    def mark_as_locked(self, reason: str = "") -> None:
+        self.status = self.STATUS_LOCKED
+        if reason:
+            self._save_verification_log("locked", reason)
+        self.save(update_fields=["status"])
+
+    def unlock(self) -> None:
+        if self.status == self.STATUS_LOCKED:
+            self.status = self.STATUS_ACTIVE
+            self.save(update_fields=["status"])
+
+    # ==================== Verification Methods ====================
+
+    def verify_credentials(
+        self, session, mark_as_active: bool = True, mark_as_stored: bool = False
+    ) -> tuple:
+        """Verify credentials via browser automation.
+
+        Returns (success, details) tuple.
+        """
+        from linkedin_cli.browser.login import launch_browser, submit_login_form
+        from linkedin_cli.page_state import classify_page, PageState
+
+        logger.info("Starting LinkedIn credential verification for %s", self.get_public_email())
 
         try:
-            result = collection.delete_one({"_id": credential_id})
-            return result.deleted_count > 0
-        except Exception as e:
-            logger.error(
-                f"Failed to delete LinkedIn credentials '{credential_id}': {e}"
+            session.page, session.context, session.browser, session.playwright = launch_browser()
+            session.username = self.get_email()
+            session.password = self.get_password()
+            submit_login_form(session, session.username, session.password)
+
+            page_state = classify_page(session.page)
+            logger.info("Post-login page state: %s (%s)", page_state, session.page.url)
+
+            if page_state == PageState.FEED:
+                return self._mark_verified(session, mark_as_active)
+
+            logger.warning(
+                "Challenge detected for %s (state=%s) — browser kept alive for VNC",
+                self.get_public_email(), page_state,
             )
+            self.status = self.STATUS_LOCKED
+            self.save(update_fields=["status"])
+            LinkedInCredentialLog(
+                credential_id=self._id,
+                action="locked",
+                details={
+                    "error_type": "awaiting_challenge",
+                    "page_state": str(page_state),
+                    "checkpoint_url": session.page.url,
+                },
+            ).save()
+
+            return False, {
+                "verified_at": None,
+                "failures": self.verification_failures,
+                "status": self.STATUS_LOCKED,
+                "message": "LinkedIn requires verification. Complete the challenge in the browser viewer, then confirm.",
+                "error_type": "awaiting_challenge",
+            }
+
+        except Exception as e:
+            error_msg = str(e)[:500]
+            is_timeout = "timeout" in error_msg.lower()
+            logger.error("Credential verification failed for %s: %s", self.get_public_email(), error_msg)
+
+            LinkedInCredentialLog(
+                credential_id=self._id,
+                action="failed",
+                details={
+                    "error_type": "timeout" if is_timeout else "verification_error",
+                    "error_message": error_msg,
+                },
+            ).save()
+
+            if mark_as_stored:
+                self.status = self.STATUS_STORED
+                self.save(update_fields=["status"])
+            else:
+                self.mark_as_invalid(reason=error_msg)
+
+            return False, {
+                "verified_at": None,
+                "failures": self.verification_failures,
+                "status": self.status,
+                "message": f"Verification {'timed out' if is_timeout else 'error'}: {error_msg}",
+                "error_type": "timeout" if is_timeout else "verification_error",
+            }
+
+    def confirm_challenge(self, session) -> tuple:
+        """Check if the user resolved the challenge in VNC and finalize auth."""
+        from linkedin_cli.page_state import classify_page, PageState
+
+        if not session.page or session.page.is_closed():
+            return False, {
+                "verified_at": None,
+                "status": self.status,
+                "message": "Browser session expired. Please try again.",
+                "error_type": "session_expired",
+            }
+
+        try:
+            page_state = classify_page(session.page)
+
+            if page_state == PageState.CHECKPOINT:
+                try:
+                    session.page.goto("https://www.linkedin.com/feed/", timeout=15000)
+                    session.page.wait_for_load_state("domcontentloaded", timeout=10000)
+                    page_state = classify_page(session.page)
+                except Exception:
+                    page_state = classify_page(session.page)
+
+            if page_state == PageState.FEED:
+                return self._mark_verified(session, mark_as_active=True)
+
+            return False, {
+                "verified_at": None,
+                "status": self.STATUS_LOCKED,
+                "message": "Challenge not yet completed. Finish the verification in the browser viewer and try again.",
+                "error_type": "challenge_incomplete",
+            }
+        except Exception as e:
+            return False, {
+                "verified_at": None,
+                "status": self.status,
+                "message": f"Error checking challenge status: {str(e)[:200]}",
+                "error_type": "verification_error",
+            }
+
+    def _mark_verified(self, session, mark_as_active: bool) -> tuple:
+        """Common path: mark credential active, save cookies, discover username."""
+        from openoutreach.linkedin.browser.launch import _save_cookies
+
+        self._discover_username(session)
+        _save_cookies(session)
+
+        self.last_verified = datetime.now(tz.utc)
+        self.verification_failures = 0
+        self.status = self.STATUS_ACTIVE if mark_as_active else self.STATUS_TESTED
+        self.save(update_fields=["last_verified", "verification_failures", "status", "username"])
+
+        LinkedInCredentialLog(
+            credential_id=self._id,
+            action="verified",
+            details={"verified_by": "browser_automation", "status": self.status},
+        ).save()
+
+        return True, {
+            "verified_at": self.last_verified.isoformat(),
+            "failures": 0,
+            "status": self.status,
+            "message": "LinkedIn credentials verified successfully",
+            "error_type": None,
+        }
+
+    def _discover_username(self, session) -> None:
+        """Extract the LinkedIn username from the current authenticated page."""
+        try:
+            me_link = session.page.query_selector("a[href*='/in/']")
+            if me_link:
+                href = me_link.get_attribute("href") or ""
+                parts = [p for p in href.split("/") if p]
+                if "in" in parts:
+                    idx = parts.index("in")
+                    if idx + 1 < len(parts):
+                        username = parts[idx + 1]
+                        if username and username != "me":
+                            self.username = username
+                            return
+
+            session.page.goto("https://www.linkedin.com/in/me/", timeout=10000)
+            session.page.wait_for_load_state("domcontentloaded", timeout=5000)
+            url = session.page.url
+            if "/in/" in url:
+                parts = [p for p in url.split("/") if p]
+                if "in" in parts:
+                    idx = parts.index("in")
+                    if idx + 1 < len(parts):
+                        username = parts[idx + 1]
+                        if username and username != "me":
+                            self.username = username
+        except Exception as e:
+            logger.debug("Could not discover username: %s", e)
+
+    def check_checkpoint_challenge(self, session) -> tuple:
+        """Check if LinkedIn is presenting a checkpoint/challenge."""
+        try:
+            current_url = session.page.url
+            checkpoint_patterns = [
+                "checkpoint", "challenge", "secondary", "sms",
+                "email", "security", "2fa", "verify",
+            ]
+            for pattern in checkpoint_patterns:
+                if pattern in current_url.lower():
+                    return True, f"Checkpoint detected: {current_url}"
+
+            checkpoint_selectors = [
+                "h1:has-text('check')", "h1:has-text('Security')",
+                "h1:has-text('Confirm')", "h1:has-text('Verify')",
+                "h1:has-text('Challenge')", "[class*='checkpoint']",
+                "[class*='challenge']",
+            ]
+            for selector in checkpoint_selectors:
+                elements = session.page.query_selector_all(selector)
+                if elements:
+                    return True, f"Checkpoint element detected: {selector}"
+
+            return False, "No checkpoint detected"
+        except Exception as e:
+            return False, str(e)
+
+    # ==================== Usage & Rotation ====================
+
+    def record_usage(self, campaign=None, action_type: str = "") -> None:
+        self.usage_count += 1
+        self.last_used = datetime.now(tz.utc)
+        if campaign:
+            cid = campaign._id if hasattr(campaign, "_id") else str(campaign)
+            if self.campaign_id != cid:
+                self.campaign_id = cid
+        self.save(update_fields=["usage_count", "last_used", "campaign_id"])
+
+    def needs_rotation(self) -> bool:
+        if self.status != self.STATUS_ACTIVE:
             return False
+        if self.expires_at is None:
+            return False
+        return datetime.now(tz.utc) >= self.expires_at
+
+    def rotate_credentials(
+        self, new_email: Optional[str] = None, new_password: Optional[str] = None
+    ) -> None:
+        from datetime import timedelta
+
+        if new_email:
+            self.set_email(new_email)
+        if new_password:
+            self.set_password(new_password)
+        self.rotated_at = datetime.now(tz.utc)
+        self.expires_at = datetime.now(tz.utc) + timedelta(days=self.rotation_required_days)
+        self.is_primary = False
+        self.is_backup = True
+        self.save(update_fields=[
+            "email_encrypted", "password_encrypted", "rotated_at",
+            "expires_at", "is_primary", "is_backup",
+        ])
+
+    def create_backup(
+        self, email: Optional[str] = None, password: Optional[str] = None
+    ) -> "LinkedInCredentials":
+        backup = LinkedInCredentials(
+            username=f"Backup of {self.username or 'credential'}",
+            email_encrypted=self.email_encrypted if email is None else self.encrypt(email),
+            password_encrypted=self.password_encrypted if password is None else self.encrypt(password),
+            status=self.STATUS_BACKUP,
+            is_primary=False,
+            is_backup=True,
+            backup_of_id=self._id,
+            expires_at=self.expires_at,
+            rotation_required_days=self.rotation_required_days,
+            user_id=self.user_id,
+        )
+        backup.save()
+        return backup
+
+    # ==================== Health Status ====================
+
+    def get_health_status(self) -> Dict[str, Any]:
+        now = datetime.now(tz.utc)
+        days_since_rotation = 0
+        if self.rotated_at:
+            days_since_rotation = (now - self.rotated_at).days
+
+        days_until_expiry = None
+        if self.expires_at:
+            days_until_expiry = (self.expires_at - now).days
+
+        return {
+            "id": self._id,
+            "username": self.username or "",
+            "public_email": self.get_public_email(),
+            "status": self.status,
+            "is_primary": self.is_primary,
+            "is_backup": self.is_backup,
+            "usage_count": self.usage_count,
+            "days_since_rotation": days_since_rotation,
+            "days_until_expiry": days_until_expiry,
+            "verification_failures": self.verification_failures,
+            "last_verified": self.last_verified.isoformat() if self.last_verified else None,
+            "last_used": self.last_used.isoformat() if self.last_used else None,
+            "health_score": self._calculate_health_score(),
+        }
+
+    def _calculate_health_score(self) -> int:
+        score = 100
+        if self.status == self.STATUS_INVALID:
+            score -= 50
+        elif self.status == self.STATUS_LOCKED:
+            score -= 30
+        elif self.status == self.STATUS_EXPIRED:
+            score -= 20
+        if self.rotated_at:
+            days_old = (datetime.now(tz.utc) - self.rotated_at).days
+            if days_old > self.rotation_required_days:
+                score -= 20
+        score -= self.verification_failures * 5
+        return max(0, min(100, score))
+
+    def _save_verification_log(self, action: str, reason: str) -> None:
+        LinkedInCredentialLog(
+            credential_id=self._id,
+            action=action,
+            details={"reason": reason},
+        ).save()
 
     def __str__(self) -> str:
-        return f"LinkedInCredential#{self._id[:8]} ({self.username})"
+        return f"LinkedInCredential#{self._id[:8]} ({self.get_public_email()})"
 
     @property
     def pk(self):
-        """Get the primary key."""
         return self._id
 
     @pk.setter
     def pk(self, value):
-        """Set the primary key."""
         self._id = value
 
     @classmethod
     def objects(cls) -> "LinkedInCredentialsManager":
-        """Get the LinkedInCredentialsManager for querying credentials."""
         return LinkedInCredentialsManager()
 
 
@@ -3002,7 +3737,7 @@ class LinkedInCredentialLog:
         self.details = details or {}
         self.ip_address = ip_address
         self.user_agent = user_agent
-        self.created_at = created_at or datetime.utcnow()
+        self.created_at = created_at or datetime.now(tz.utc)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert model instance to dictionary for MongoDB storage."""
@@ -3463,7 +4198,7 @@ class Task:
         status: str = STATUS_PENDING,
         scheduled_at: Optional[datetime] = None,
         payload: Optional[Dict[str, Any]] = None,
-        user_id: Optional[str] = None,  # Reference to Django User (owner)
+        user_id: Optional[str] = None,
         created_at: Optional[datetime] = None,
         started_at: Optional[datetime] = None,
         completed_at: Optional[datetime] = None,
@@ -3471,10 +4206,10 @@ class Task:
         self._id = _id or str(uuid4())
         self.task_type = task_type
         self.status = status
-        self.scheduled_at = scheduled_at or datetime.utcnow()
+        self.scheduled_at = scheduled_at or datetime.now(tz.utc)
         self.payload = payload or {}
-        self.user_id = user_id  # Reference to Django User who owns this task
-        self.created_at = created_at or datetime.utcnow()
+        self.user_id = user_id
+        self.created_at = created_at or datetime.now(tz.utc)
         self.started_at = started_at
         self.completed_at = completed_at
 

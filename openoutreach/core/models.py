@@ -1,280 +1,604 @@
 # openoutreach/core/models.py
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
-from django.contrib.auth.models import User
-from django.db import models
-from django.utils import timezone
+from datetime import datetime
+from typing import TYPE_CHECKING, Optional, Dict, Any, List
+from uuid import uuid4
 
 if TYPE_CHECKING:
     from openoutreach.crm.models import Deal
     from openoutreach.linkedin.models import CampaignStateGraph, SearchKeyword
 
 
-class SiteConfig(models.Model):
+class SiteConfig:
     """Singleton model for global site configuration (LLM keys, etc.)."""
 
-    class LLMProvider(models.TextChoices):
-        OPENAI = "openai", "OpenAI"
-        ANTHROPIC = "anthropic", "Anthropic"
-        GOOGLE = "google", "Google"
-        GROQ = "groq", "Groq"
-        MISTRAL = "mistral", "Mistral"
-        COHERE = "cohere", "Cohere"
-        OPENAI_COMPATIBLE = "openai_compatible", "OpenAI-compatible"
+    class LLMProvider:
+        OPENAI = "openai"
+        ANTHROPIC = "anthropic"
+        GOOGLE = "google"
+        GROQ = "groq"
+        MISTRAL = "mistral"
+        COHERE = "cohere"
+        OPENAI_COMPATIBLE = "openai_compatible"
 
-    llm_provider: models.CharField = models.CharField(  # type: ignore[var-annotated,assignment]
-        max_length=32,
-        choices=LLMProvider.choices,
-        default=LLMProvider.OPENAI,
-    )
-    llm_api_key: models.CharField = models.CharField(
-        max_length=500, blank=True, default=""
-    )  # type: ignore[var-annotated]
-    ai_model: models.CharField = models.CharField(
-        max_length=200, blank=True, default=""
-    )  # type: ignore[var-annotated]
-    llm_api_base: models.CharField = models.CharField(
-        max_length=500, blank=True, default=""
-    )  # type: ignore[var-annotated]
-    ai_writing_style: models.TextField = models.TextField(blank=True, default="")  # type: ignore[var-annotated]
-    ai_say_rules: models.TextField = models.TextField(blank=True, default="")  # type: ignore[var-annotated]
-    ai_avoid_rules: models.TextField = models.TextField(blank=True, default="")  # type: ignore[var-annotated]
+    class AggressivenessPreset:
+        VERY_SLOW = "very_slow"
+        SLOW = "slow"
+        AVERAGE = "average"
+        AGGRESSIVE = "aggressive"
+        VERY_AGGRESSIVE = "very_aggressive"
 
-    # BetterContact email-finder key; blank disables enrichment (see emails/bettercontact.py).
-    finder_api_key: models.CharField = models.CharField(
-        max_length=500, blank=True, default=""
-    )  # type: ignore[var-annotated]
-
-    # LinkedIn profile settings
-    linkedin_username: models.CharField = models.CharField(
-        max_length=50, blank=True, default=""
-    )  # type: ignore[var-annotated]
-    linkedin_campaign: models.CharField = models.CharField(
-        max_length=100, blank=True, default=""
-    )  # type: ignore[var-annotated]
-
-    # Rate limit configuration - SMART vs MANUAL modes
-    enable_smart_rate_limiting: models.BooleanField = models.BooleanField(
-        default=False,
-        help_text="Enable context-aware rate limiting (time-of-day, detectability, engagement patterns)"
-    )  # type: ignore[var-annotated]
-
-    class AggressivenessPreset(models.TextChoices):
-        VERY_SLOW = "very_slow", "Very Slow (Safest)"
-        SLOW = "slow", "Slow"
-        AVERAGE = "average", "Average"
-        AGGRESSIVE = "aggressive", "Aggressive"
-        VERY_AGGRESSIVE = "very_aggressive", "Very Aggressive (Riskiest)"
-
-    aggressiveness_preset: models.CharField = models.CharField(
-        max_length=20,
-        choices=AggressivenessPreset.choices,
-        default=AggressivenessPreset.AVERAGE,
-        help_text="Smart rate limiting aggressiveness level (only used when Smart Rate Limiting is ON)"
-    )  # type: ignore[var-annotated]
-
-    # Manual rate limit controls (only used when enable_smart_rate_limiting = False)
-    daily_connection_limit: models.PositiveIntegerField = models.PositiveIntegerField(
-        default=20,
-        help_text="Daily connection limit (per LinkedIn profile)"
-    )  # type: ignore[var-annotated]
-    daily_follow_up_limit: models.PositiveIntegerField = models.PositiveIntegerField(
-        default=25,
-        help_text="Daily follow-up message limit (per LinkedIn profile)"
-    )  # type: ignore[var-annotated]
-    # velocity: actions per hour (only used when Smart Rate Limiting is OFF)
-    velocity: models.PositiveIntegerField = models.PositiveIntegerField(
-        default=20,
-        help_text="Actions per hour - only used when Smart Rate Limiting is OFF (>= 30 = burst mode, < 30 = spread mode)"
-    )  # type: ignore[var-annotated]
-
-    # BetterContact email-finder key; blank disables enrichment (see emails/bettercontact.py).
-    bettercontact_api_key = models.CharField(max_length=500, blank=True, default="")
-    # Central contacts service (see openoutreach/contacts/). The token is earned
-    # on the first contribution and persisted here — never in the repo; blank
-    # means "not registered yet" (resolve misses until the first give-back mints
-    # it). The URL is blank by default (falls back to DEFAULT_CONTACTS_API_URL).
-    contacts_api_token = models.CharField(max_length=500, blank=True, default="")
-    contacts_api_url = models.CharField(max_length=500, blank=True, default="")
-
-    # Active hours configuration (when daemon executes tasks)
-    enable_active_hours: models.BooleanField = models.BooleanField(default=True)  # type: ignore[var-annotated]
-    active_start_hour: models.PositiveSmallIntegerField = models.PositiveSmallIntegerField(
-        default=9, help_text="Start hour (0-23, inclusive)"
-    )  # type: ignore[var-annotated]
-    active_end_hour: models.PositiveSmallIntegerField = models.PositiveSmallIntegerField(
-        default=19, help_text="End hour (0-23, exclusive)"
-    )  # type: ignore[var-annotated]
-    active_timezone: models.CharField = models.CharField(
-        max_length=100, default="UTC", help_text="IANA timezone (e.g., America/New_York)"
-    )  # type: ignore[var-annotated]
-    active_days: models.CharField = models.CharField(
-        max_length=50,
-        default="1,2,3,4,5",
-        help_text="Active weekdays as comma-separated integers (1=Monday, 7=Sunday)",
-    )  # type: ignore[var-annotated]
-
-    class Meta:
-        verbose_name = "Site Configuration"
-        verbose_name_plural = "Site Configuration"
+    def __init__(
+        self,
+        _id: str = "1",
+        llm_provider: str = LLMProvider.OPENAI,
+        llm_api_key: str = "",
+        ai_model: str = "",
+        llm_api_base: str = "",
+        ai_writing_style: str = "",
+        ai_say_rules: str = "",
+        ai_avoid_rules: str = "",
+        finder_api_key: str = "",
+        linkedin_username: str = "",
+        linkedin_campaign: str = "",
+        enable_smart_rate_limiting: bool = False,
+        aggressiveness_preset: str = AggressivenessPreset.AVERAGE,
+        daily_connection_limit: int = 20,
+        daily_follow_up_limit: int = 25,
+        velocity: int = 20,
+        bettercontact_api_key: str = "",
+        contacts_api_token: str = "",
+        contacts_api_url: str = "",
+        enable_active_hours: bool = True,
+        active_start_hour: int = 9,
+        active_end_hour: int = 19,
+        active_timezone: str = "UTC",
+        active_days: str = "1,2,3,4,5",
+    ):
+        self._id = _id
+        self.llm_provider = llm_provider
+        self.llm_api_key = llm_api_key
+        self.ai_model = ai_model
+        self.llm_api_base = llm_api_base
+        self.ai_writing_style = ai_writing_style
+        self.ai_say_rules = ai_say_rules
+        self.ai_avoid_rules = ai_avoid_rules
+        self.finder_api_key = finder_api_key
+        self.linkedin_username = linkedin_username
+        self.linkedin_campaign = linkedin_campaign
+        self.enable_smart_rate_limiting = enable_smart_rate_limiting
+        self.aggressiveness_preset = aggressiveness_preset
+        self.daily_connection_limit = daily_connection_limit
+        self.daily_follow_up_limit = daily_follow_up_limit
+        self.velocity = velocity
+        self.bettercontact_api_key = bettercontact_api_key
+        self.contacts_api_token = contacts_api_token
+        self.contacts_api_url = contacts_api_url
+        self.enable_active_hours = enable_active_hours
+        self.active_start_hour = active_start_hour
+        self.active_end_hour = active_end_hour
+        self.active_timezone = active_timezone
+        self.active_days = active_days
 
     def __str__(self):
         return "Site Configuration"
 
-    def save(self, *args, **kwargs):
-        self.pk = 1
-        super().save(*args, **kwargs)
+    @property
+    def pk(self):
+        return self._id
+
+    @pk.setter
+    def pk(self, value):
+        self._id = value
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert model instance to dictionary for MongoDB storage."""
+        return {
+            "_id": self._id,
+            "llm_provider": self.llm_provider,
+            "llm_api_key": self.llm_api_key,
+            "ai_model": self.ai_model,
+            "llm_api_base": self.llm_api_base,
+            "ai_writing_style": self.ai_writing_style,
+            "ai_say_rules": self.ai_say_rules,
+            "ai_avoid_rules": self.ai_avoid_rules,
+            "finder_api_key": self.finder_api_key,
+            "linkedin_username": self.linkedin_username,
+            "linkedin_campaign": self.linkedin_campaign,
+            "enable_smart_rate_limiting": self.enable_smart_rate_limiting,
+            "aggressiveness_preset": self.aggressiveness_preset,
+            "daily_connection_limit": self.daily_connection_limit,
+            "daily_follow_up_limit": self.daily_follow_up_limit,
+            "velocity": self.velocity,
+            "bettercontact_api_key": self.bettercontact_api_key,
+            "contacts_api_token": self.contacts_api_token,
+            "contacts_api_url": self.contacts_api_url,
+            "enable_active_hours": self.enable_active_hours,
+            "active_start_hour": self.active_start_hour,
+            "active_end_hour": self.active_end_hour,
+            "active_timezone": self.active_timezone,
+            "active_days": self.active_days,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "SiteConfig":
+        """Create SiteConfig instance from MongoDB document."""
+        return cls(
+            _id=str(data.get("_id", "1")),
+            llm_provider=data.get("llm_provider", cls.LLMProvider.OPENAI),
+            llm_api_key=data.get("llm_api_key", ""),
+            ai_model=data.get("ai_model", ""),
+            llm_api_base=data.get("llm_api_base", ""),
+            ai_writing_style=data.get("ai_writing_style", ""),
+            ai_say_rules=data.get("ai_say_rules", ""),
+            ai_avoid_rules=data.get("ai_avoid_rules", ""),
+            finder_api_key=data.get("finder_api_key", ""),
+            linkedin_username=data.get("linkedin_username", ""),
+            linkedin_campaign=data.get("linkedin_campaign", ""),
+            enable_smart_rate_limiting=data.get("enable_smart_rate_limiting", False),
+            aggressiveness_preset=data.get("aggressiveness_preset", cls.AggressivenessPreset.AVERAGE),
+            daily_connection_limit=data.get("daily_connection_limit", 20),
+            daily_follow_up_limit=data.get("daily_follow_up_limit", 25),
+            velocity=data.get("velocity", 20),
+            bettercontact_api_key=data.get("bettercontact_api_key", ""),
+            contacts_api_token=data.get("contacts_api_token", ""),
+            contacts_api_url=data.get("contacts_api_url", ""),
+            enable_active_hours=data.get("enable_active_hours", True),
+            active_start_hour=data.get("active_start_hour", 9),
+            active_end_hour=data.get("active_end_hour", 19),
+            active_timezone=data.get("active_timezone", "UTC"),
+            active_days=data.get("active_days", "1,2,3,4,5"),
+        )
+
+    def save(self) -> str:
+        """Save the site config to MongoDB."""
+        from openoutreach.mongodb.connection import get_mongodb_collection
+
+        collection = get_mongodb_collection("site_config")
+        if collection is None:
+            raise RuntimeError("MongoDB collection 'site_config' not available")
+
+        # Singleton pattern: always use _id="1"
+        self._id = "1"
+        doc = self.to_dict()
+        result = collection.update_one({"_id": self._id}, {"$set": doc}, upsert=True)
+        return str(result.upserted_id or self._id)
 
     @classmethod
     def load(cls) -> "SiteConfig":
-        obj, _ = cls.objects.get_or_create(pk=1)
-        return obj
+        """Load the singleton site config from MongoDB."""
+        from openoutreach.mongodb.connection import get_mongodb_collection
+
+        collection = get_mongodb_collection("site_config")
+        if collection is None:
+            # Return default instance if MongoDB not available
+            return cls()
+
+        data = collection.find_one({"_id": "1"})
+        if data:
+            return cls.from_dict(data)
+
+        # Create and save default instance
+        config = cls()
+        config.save()
+        return config
+
+    @classmethod
+    def objects(cls):
+        """Provide basic objects interface for compatibility."""
+        return SiteConfigManager()
 
 
-class CampaignTemplate(models.Model):
+class SiteConfigManager:
+    """Manager for SiteConfig singleton."""
+
+    def get_or_create(self, pk=None, **kwargs):
+        """Get or create the singleton config."""
+        config = SiteConfig.load()
+        return config, False
+
+
+class CampaignTemplate:
     """Template for creating campaigns with predefined settings."""
 
-    id: models.AutoField  # type: ignore[assignment]
+    def __init__(
+        self,
+        _id: Optional[str] = None,
+        name: str = "",
+        description: str = "",
+        product_pitch: str = "",
+        campaign_objective: str = "",
+        booking_link: str = "",
+        icp_titles: Optional[List[str]] = None,
+        follow_up_strategy: str = "",
+        ghost_mode_enabled: bool = False,
+        is_public: bool = False,
+        created_by_id: Optional[str] = None,  # User ID reference
+        created_at: Optional[datetime] = None,
+        updated_at: Optional[datetime] = None,
+    ):
+        self._id = _id or str(uuid4())
+        self.name = name
+        self.description = description
+        self.product_pitch = product_pitch
+        self.campaign_objective = campaign_objective
+        self.booking_link = booking_link
+        self.icp_titles = icp_titles or []
+        self.follow_up_strategy = follow_up_strategy
+        self.ghost_mode_enabled = ghost_mode_enabled
+        self.is_public = is_public
+        self.created_by_id = created_by_id
+        self.created_at = created_at or datetime.utcnow()
+        self.updated_at = updated_at or datetime.utcnow()
 
-    name: models.CharField = models.CharField(max_length=200)  # type: ignore[var-annotated]
-    description: models.TextField = models.TextField(blank=True)  # type: ignore[var-annotated]
-    product_pitch: models.TextField = models.TextField(blank=True)  # type: ignore[var-annotated]
-    campaign_objective: models.TextField = models.TextField(blank=True)  # type: ignore[var-annotated]
-    booking_link: models.URLField = models.URLField(max_length=500, blank=True)  # type: ignore[var-annotated]
-    icp_titles: models.JSONField = models.JSONField(default=list, blank=True)  # type: ignore[var-annotated]
-    follow_up_strategy: models.TextField = models.TextField(blank=True)  # type: ignore[var-annotated]
-    ghost_mode_enabled: models.BooleanField = models.BooleanField(default=False)  # type: ignore[var-annotated]
+    @property
+    def id(self):
+        return self._id
 
-    # Template sharing
-    is_public: models.BooleanField = models.BooleanField(default=False)  # type: ignore[var-annotated]
-    created_by: models.ForeignKey = models.ForeignKey(
-        User, on_delete=models.CASCADE, related_name="campaign_templates"
-    )  # type: ignore[var-annotated]
+    @property
+    def pk(self):
+        return self._id
 
-    # Timestamps
-    created_at: models.DateTimeField = models.DateTimeField(auto_now_add=True)  # type: ignore[var-annotated]
-    updated_at: models.DateTimeField = models.DateTimeField(auto_now=True)  # type: ignore[var-annotated]
+    @pk.setter
+    def pk(self, value):
+        self._id = value
 
     def __str__(self) -> str:
         return self.name
 
-    class Meta:
-        ordering = ["-created_at"]
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert model instance to dictionary for MongoDB storage."""
+        return {
+            "_id": self._id,
+            "name": self.name,
+            "description": self.description,
+            "product_pitch": self.product_pitch,
+            "campaign_objective": self.campaign_objective,
+            "booking_link": self.booking_link,
+            "icp_titles": self.icp_titles,
+            "follow_up_strategy": self.follow_up_strategy,
+            "ghost_mode_enabled": self.ghost_mode_enabled,
+            "is_public": self.is_public,
+            "created_by_id": self.created_by_id,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "CampaignTemplate":
+        """Create CampaignTemplate instance from MongoDB document."""
+        return cls(
+            _id=str(data.get("_id")),
+            name=data.get("name", ""),
+            description=data.get("description", ""),
+            product_pitch=data.get("product_pitch", ""),
+            campaign_objective=data.get("campaign_objective", ""),
+            booking_link=data.get("booking_link", ""),
+            icp_titles=data.get("icp_titles", []),
+            follow_up_strategy=data.get("follow_up_strategy", ""),
+            ghost_mode_enabled=data.get("ghost_mode_enabled", False),
+            is_public=data.get("is_public", False),
+            created_by_id=data.get("created_by_id"),
+            created_at=data.get("created_at"),
+            updated_at=data.get("updated_at"),
+        )
+
+    def save(self) -> str:
+        """Save the campaign template to MongoDB."""
+        from openoutreach.mongodb.connection import get_mongodb_collection
+
+        collection = get_mongodb_collection("campaign_templates")
+        if collection is None:
+            raise RuntimeError("MongoDB collection 'campaign_templates' not available")
+
+        self.updated_at = datetime.utcnow()
+        doc = self.to_dict()
+        result = collection.update_one({"_id": self._id}, {"$set": doc}, upsert=True)
+        return str(result.upserted_id or self._id)
+
+    @classmethod
+    def objects(cls):
+        """Provide basic objects interface for compatibility."""
+        return CampaignTemplateManager()
 
 
-class Campaign(models.Model):
-    # Type hints for Django's automatic fields
-    id: models.AutoField  # type: ignore[assignment]
+class CampaignTemplateManager:
+    """Manager for CampaignTemplate queries."""
 
-    class Status(models.TextChoices):
+    def __init__(self):
+        self.collection = None
+
+    def _get_collection(self):
+        from openoutreach.mongodb.connection import get_mongodb_collection
+
+        if self.collection is None:
+            self.collection = get_mongodb_collection("campaign_templates")
+        return self.collection
+
+    def all(self) -> List[CampaignTemplate]:
+        """Get all campaign templates."""
+        collection = self._get_collection()
+        if collection is None:
+            return []
+
+        templates = []
+        for data in collection.find().sort("created_at", -1):
+            templates.append(CampaignTemplate.from_dict(data))
+        return templates
+
+    def filter(self, **kwargs) -> List[CampaignTemplate]:
+        """Filter campaign templates by criteria."""
+        collection = self._get_collection()
+        if collection is None:
+            return []
+
+        templates = []
+        for data in collection.find(kwargs).sort("created_at", -1):
+            templates.append(CampaignTemplate.from_dict(data))
+        return templates
+
+    def get(self, **kwargs) -> Optional[CampaignTemplate]:
+        """Get a single campaign template."""
+        collection = self._get_collection()
+        if collection is None:
+            return None
+
+        data = collection.find_one(kwargs)
+        if data:
+            return CampaignTemplate.from_dict(data)
+        return None
+
+
+class Campaign:
+    """Campaign model for MongoDB."""
+
+    class Status:
         ACTIVE = "active"
         PAUSED = "paused"
         DRAFT = "draft"
 
-    name: models.CharField = models.CharField(max_length=200, unique=True)  # type: ignore[var-annotated]
-    description: models.TextField = models.TextField(blank=True)  # type: ignore[var-annotated]
-    users: models.ManyToManyField = models.ManyToManyField(
-        User, blank=True, related_name="campaigns"
-    )  # type: ignore[var-annotated]
-    product_pitch: models.TextField = models.TextField(blank=True)  # type: ignore[var-annotated]
-    campaign_objective: models.TextField = models.TextField(blank=True)  # type: ignore[var-annotated]
-    booking_link: models.URLField = models.URLField(max_length=500, blank=True)  # type: ignore[var-annotated]
-    icp_titles: models.JSONField = models.JSONField(default=list, blank=True)  # type: ignore[var-annotated]
-    follow_up_strategy: models.TextField = models.TextField(blank=True)  # type: ignore[var-annotated]
-    is_freemium: models.BooleanField = models.BooleanField(default=False)  # type: ignore[var-annotated]
-    ghost_mode_enabled: models.BooleanField = models.BooleanField(default=False)  # type: ignore[var-annotated]
-    action_fraction: models.FloatField = models.FloatField(default=0.2)  # type: ignore[var-annotated]
-    seed_public_ids: models.JSONField = models.JSONField(default=list, blank=True)  # type: ignore[var-annotated]
-    model_blob: models.BinaryField = models.BinaryField(null=True, blank=True)  # type: ignore[var-annotated]
+    def __init__(
+        self,
+        _id: Optional[str] = None,
+        name: str = "",
+        description: str = "",
+        user_ids: Optional[List[str]] = None,  # List of User IDs
+        product_pitch: str = "",
+        campaign_objective: str = "",
+        booking_link: str = "",
+        icp_titles: Optional[List[str]] = None,
+        follow_up_strategy: str = "",
+        is_freemium: bool = False,
+        ghost_mode_enabled: bool = False,
+        action_fraction: float = 0.2,
+        seed_public_ids: Optional[List[str]] = None,
+        model_blob: Optional[bytes] = None,
+        is_paused: bool = False,
+        status: str = Status.ACTIVE,
+        created_at: Optional[datetime] = None,
+        updated_at: Optional[datetime] = None,
+    ):
+        self._id = _id or str(uuid4())
+        self.name = name
+        self.description = description
+        self.user_ids = user_ids or []
+        self.product_pitch = product_pitch
+        self.campaign_objective = campaign_objective
+        self.booking_link = booking_link
+        self.icp_titles = icp_titles or []
+        self.follow_up_strategy = follow_up_strategy
+        self.is_freemium = is_freemium
+        self.ghost_mode_enabled = ghost_mode_enabled
+        self.action_fraction = action_fraction
+        self.seed_public_ids = seed_public_ids or []
+        self.model_blob = model_blob
+        self.is_paused = is_paused
+        self.status = status
+        self.created_at = created_at or datetime.utcnow()
+        self.updated_at = updated_at or datetime.utcnow()
 
-    # Campaign status (rate limiting moved to account-level SiteConfig)
-    is_paused: models.BooleanField = models.BooleanField(
-        default=False
-    )  # pause the campaign  # type: ignore[var-annotated]
-    status: models.CharField = models.CharField(  # type: ignore[var-annotated]
-        max_length=10,
-        choices=Status.choices,
-        default=Status.ACTIVE,
-    )
+    @property
+    def id(self):
+        return self._id
 
-    # Timestamps
-    created_at: models.DateTimeField = models.DateTimeField(auto_now_add=True)  # type: ignore[var-annotated]
-    updated_at: models.DateTimeField = models.DateTimeField(auto_now=True)  # type: ignore[var-annotated]
+    @property
+    def pk(self):
+        return self._id
 
-    # Links - references to TrackedLink from crm app for URL tracking
-    # Using a ManyToMany through a string reference to avoid circular imports
-    # The existing TrackedLink model has a ForeignKey to Campaign already,
-    # but we'll also allow multiple campaigns to use the same link
-    # For now, we just reference the model for type hints
-    if TYPE_CHECKING:
-        from openoutreach.crm.models import TrackedLink
-
-        tracked_links: models.Manager["TrackedLink"]
-
-    # Type hints for reverse relations (from other apps)
-    state_graph: "CampaignStateGraph"
-    deals: "models.Manager[Deal]"
-    search_keywords: "models.Manager[SearchKeyword]"
+    @pk.setter
+    def pk(self, value):
+        self._id = value
 
     def __str__(self) -> str:
         return self.name
 
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert model instance to dictionary for MongoDB storage."""
+        data = {
+            "_id": self._id,
+            "name": self.name,
+            "description": self.description,
+            "user_ids": self.user_ids,
+            "product_pitch": self.product_pitch,
+            "campaign_objective": self.campaign_objective,
+            "booking_link": self.booking_link,
+            "icp_titles": self.icp_titles,
+            "follow_up_strategy": self.follow_up_strategy,
+            "is_freemium": self.is_freemium,
+            "ghost_mode_enabled": self.ghost_mode_enabled,
+            "action_fraction": self.action_fraction,
+            "seed_public_ids": self.seed_public_ids,
+            "is_paused": self.is_paused,
+            "status": self.status,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+        }
+        if self.model_blob:
+            data["model_blob"] = self.model_blob
+        return data
 
-# NOTE: We use the existing TrackedLink from crm.models.link for link tracking
-# This avoids duplicate models and allows both apps to share the same functionality
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "Campaign":
+        """Create Campaign instance from MongoDB document."""
+        return cls(
+            _id=str(data.get("_id")),
+            name=data.get("name", ""),
+            description=data.get("description", ""),
+            user_ids=data.get("user_ids", []),
+            product_pitch=data.get("product_pitch", ""),
+            campaign_objective=data.get("campaign_objective", ""),
+            booking_link=data.get("booking_link", ""),
+            icp_titles=data.get("icp_titles", []),
+            follow_up_strategy=data.get("follow_up_strategy", ""),
+            is_freemium=data.get("is_freemium", False),
+            ghost_mode_enabled=data.get("ghost_mode_enabled", False),
+            action_fraction=data.get("action_fraction", 0.2),
+            seed_public_ids=data.get("seed_public_ids", []),
+            model_blob=data.get("model_blob"),
+            is_paused=data.get("is_paused", False),
+            status=data.get("status", cls.Status.ACTIVE),
+            created_at=data.get("created_at"),
+            updated_at=data.get("updated_at"),
+        )
+
+    def save(self) -> str:
+        """Save the campaign to MongoDB."""
+        from openoutreach.mongodb.connection import get_mongodb_collection
+
+        collection = get_mongodb_collection("campaigns")
+        if collection is None:
+            raise RuntimeError("MongoDB collection 'campaigns' not available")
+
+        self.updated_at = datetime.utcnow()
+        doc = self.to_dict()
+        result = collection.update_one({"_id": self._id}, {"$set": doc}, upsert=True)
+        return str(result.upserted_id or self._id)
+
+    @classmethod
+    def objects(cls):
+        """Provide basic objects interface for compatibility."""
+        return CampaignManager()
+
+    # Type hints for reverse relations (from other apps)
+    if TYPE_CHECKING:
+        from openoutreach.crm.models import TrackedLink
+
+        state_graph: "CampaignStateGraph"
+        deals: "List[Deal]"
+        search_keywords: "List[SearchKeyword]"
 
 
-class TaskQuerySet(models.QuerySet):
-    def pending(self) -> "TaskQuerySet":  # type: ignore[misc]
-        return self.filter(status=Task.Status.PENDING).order_by("scheduled_at")
+class CampaignManager:
+    """Manager for Campaign queries."""
 
-    def claim_next(self) -> "Task | None":
-        return self.pending().filter(scheduled_at__lte=timezone.now()).first()  # type: ignore[call-arg,no-any-return]
+    def __init__(self):
+        self.collection = None
 
-    def seconds_to_next(self) -> float | None:
-        """Seconds until the next pending task, or None if queue is empty."""
-        next_task = self.pending().only("scheduled_at").first()  # type: ignore[call-arg]
-        if next_task is None:
+    def _get_collection(self):
+        from openoutreach.mongodb.connection import get_mongodb_collection
+
+        if self.collection is None:
+            self.collection = get_mongodb_collection("campaigns")
+        return self.collection
+
+    def all(self) -> List[Campaign]:
+        """Get all campaigns."""
+        collection = self._get_collection()
+        if collection is None:
+            return []
+
+        campaigns = []
+        for data in collection.find():
+            campaigns.append(Campaign.from_dict(data))
+        return campaigns
+
+    def filter(self, **kwargs) -> List[Campaign]:
+        """Filter campaigns by criteria."""
+        collection = self._get_collection()
+        if collection is None:
+            return []
+
+        campaigns = []
+        for data in collection.find(kwargs):
+            campaigns.append(Campaign.from_dict(data))
+        return campaigns
+
+    def get(self, **kwargs) -> Optional[Campaign]:
+        """Get a single campaign."""
+        collection = self._get_collection()
+        if collection is None:
             return None
-        return max((next_task.scheduled_at - timezone.now()).total_seconds(), 0)  # type: ignore[misc]
+
+        data = collection.find_one(kwargs)
+        if data:
+            return Campaign.from_dict(data)
+        return None
+
+    def get_or_create(self, defaults: Optional[Dict[str, Any]] = None, **kwargs) -> tuple[Campaign, bool]:
+        """Get existing campaign or create new one."""
+        existing = self.get(**kwargs)
+        if existing:
+            return existing, False
+
+        data = kwargs.copy()
+        if defaults:
+            data.update(defaults)
+
+        campaign = Campaign(**data)
+        campaign.save()
+        return campaign, True
 
 
-class Task(models.Model):
-    class TaskType(models.TextChoices):
+# NOTE: TrackedLink is now in openoutreach.mongodb.models
+
+
+class Task:
+    """Task model for MongoDB."""
+
+    class TaskType:
         CONNECT = "connect"
         CHECK_PENDING = "check_pending"
         FOLLOW_UP = "follow_up"
         SEND_MANUAL_MESSAGE = "send_manual_message"
 
-    class Status(models.TextChoices):
+    class Status:
         PENDING = "pending"
         RUNNING = "running"
         COMPLETED = "completed"
         FAILED = "failed"
 
-    task_type: models.CharField = models.CharField(
-        max_length=20, choices=TaskType.choices
-    )  # type: ignore[var-annotated]
-    status: models.CharField = models.CharField(
-        max_length=20, choices=Status.choices, default=Status.PENDING
-    )  # type: ignore[var-annotated]
-    scheduled_at: models.DateTimeField = models.DateTimeField()  # type: ignore[var-annotated]
-    payload: models.JSONField = models.JSONField(default=dict)  # type: ignore[var-annotated]
-    created_at: models.DateTimeField = models.DateTimeField(auto_now_add=True)  # type: ignore[var-annotated]
-    started_at: models.DateTimeField = models.DateTimeField(null=True, blank=True)  # type: ignore[var-annotated]
-    completed_at: models.DateTimeField = models.DateTimeField(null=True, blank=True)  # type: ignore[var-annotated]
+    def __init__(
+        self,
+        _id: Optional[str] = None,
+        task_type: str = TaskType.CONNECT,
+        status: str = Status.PENDING,
+        scheduled_at: Optional[datetime] = None,
+        payload: Optional[Dict[str, Any]] = None,
+        created_at: Optional[datetime] = None,
+        started_at: Optional[datetime] = None,
+        completed_at: Optional[datetime] = None,
+    ):
+        self._id = _id or str(uuid4())
+        self.task_type = task_type
+        self.status = status
+        self.scheduled_at = scheduled_at or datetime.utcnow()
+        self.payload = payload or {}
+        self.created_at = created_at or datetime.utcnow()
+        self.started_at = started_at
+        self.completed_at = completed_at
 
-    objects: TaskQuerySet = TaskQuerySet.as_manager()  # type: ignore[assignment, misc, var-annotated]
+    @property
+    def id(self):
+        return self._id
 
-    class Meta:
-        indexes = [
-            models.Index(
-                fields=["status", "scheduled_at"],
-                name="core_task_status_sched_idx",
-            ),
-        ]
+    @property
+    def pk(self):
+        return self._id
+
+    @pk.setter
+    def pk(self, value):
+        self._id = value
 
     def __str__(self) -> str:
         return f"{self.task_type} [{self.status}] scheduled={self.scheduled_at}"
@@ -283,14 +607,62 @@ class Task(models.Model):
         """Get the last error message from payload if available."""
         return (self.payload or {}).get("last_error")
 
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert model instance to dictionary for MongoDB storage."""
+        return {
+            "_id": self._id,
+            "task_type": self.task_type,
+            "status": self.status,
+            "scheduled_at": self.scheduled_at,
+            "payload": self.payload,
+            "created_at": self.created_at,
+            "started_at": self.started_at,
+            "completed_at": self.completed_at,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "Task":
+        """Create Task instance from MongoDB document."""
+        return cls(
+            _id=str(data.get("_id")),
+            task_type=data.get("task_type", cls.TaskType.CONNECT),
+            status=data.get("status", cls.Status.PENDING),
+            scheduled_at=data.get("scheduled_at"),
+            payload=data.get("payload", {}),
+            created_at=data.get("created_at"),
+            started_at=data.get("started_at"),
+            completed_at=data.get("completed_at"),
+        )
+
+    def save(self, update_fields: Optional[List[str]] = None) -> str:
+        """Save the task to MongoDB."""
+        from openoutreach.mongodb.connection import get_mongodb_collection
+
+        collection = get_mongodb_collection("tasks")
+        if collection is None:
+            raise RuntimeError("MongoDB collection 'tasks' not available")
+
+        doc = self.to_dict()
+
+        # If update_fields specified, only update those fields
+        if update_fields:
+            update_doc = {field: doc[field] for field in update_fields if field in doc}
+            result = collection.update_one({"_id": self._id}, {"$set": update_doc})
+        else:
+            result = collection.update_one({"_id": self._id}, {"$set": doc}, upsert=True)
+
+        return str(result.upserted_id or self._id)
+
     def mark_running(self):
+        """Mark task as running."""
         self.status = self.Status.RUNNING
-        self.started_at = timezone.now()
+        self.started_at = datetime.utcnow()
         self.save(update_fields=["status", "started_at"])
 
     def mark_completed(self):
+        """Mark task as completed."""
         self.status = self.Status.COMPLETED
-        self.completed_at = timezone.now()
+        self.completed_at = datetime.utcnow()
         self.save(update_fields=["status", "completed_at"])
 
     def mark_failed(self, error_message: str | None = None):
@@ -304,8 +676,108 @@ class Task(models.Model):
         # Store error details in payload for debugging
         if error_message:
             updated_payload = dict(self.payload or {})
-            updated_payload["last_error"] = error_message[
-                :500
-            ]  # Truncate to avoid huge payloads
+            updated_payload["last_error"] = error_message[:500]  # Truncate to avoid huge payloads
             self.payload = updated_payload
-        self.save(update_fields=["status"])
+        self.save(update_fields=["status", "payload"])
+
+    @classmethod
+    def objects(cls):
+        """Provide basic objects interface for compatibility."""
+        return TaskManager()
+
+
+class TaskManager:
+    """Manager for Task queries."""
+
+    def __init__(self):
+        self.collection = None
+
+    def _get_collection(self):
+        from openoutreach.mongodb.connection import get_mongodb_collection
+
+        if self.collection is None:
+            self.collection = get_mongodb_collection("tasks")
+        return self.collection
+
+    def all(self) -> List[Task]:
+        """Get all tasks."""
+        collection = self._get_collection()
+        if collection is None:
+            return []
+
+        tasks = []
+        for data in collection.find():
+            tasks.append(Task.from_dict(data))
+        return tasks
+
+    def filter(self, **kwargs) -> List[Task]:
+        """Filter tasks by criteria."""
+        collection = self._get_collection()
+        if collection is None:
+            return []
+
+        tasks = []
+        for data in collection.find(kwargs):
+            tasks.append(Task.from_dict(data))
+        return tasks
+
+    def pending(self) -> List[Task]:
+        """Get pending tasks ordered by scheduled_at."""
+        collection = self._get_collection()
+        if collection is None:
+            return []
+
+        tasks = []
+        for data in collection.find({"status": Task.Status.PENDING}).sort("scheduled_at", 1):
+            tasks.append(Task.from_dict(data))
+        return tasks
+
+    def claim_next(self) -> Optional[Task]:
+        """Claim the next pending task that's due."""
+        collection = self._get_collection()
+        if collection is None:
+            return None
+
+        now = datetime.utcnow()
+        data = collection.find_one(
+            {"status": Task.Status.PENDING, "scheduled_at": {"$lte": now}},
+            sort=[("scheduled_at", 1)]
+        )
+        if data:
+            return Task.from_dict(data)
+        return None
+
+    def seconds_to_next(self) -> float | None:
+        """Seconds until the next pending task, or None if queue is empty."""
+        collection = self._get_collection()
+        if collection is None:
+            return None
+
+        data = collection.find_one(
+            {"status": Task.Status.PENDING},
+            {"scheduled_at": 1},
+            sort=[("scheduled_at", 1)]
+        )
+        if data is None:
+            return None
+
+        next_task = Task.from_dict(data)
+        now = datetime.utcnow()
+        return max((next_task.scheduled_at - now).total_seconds(), 0)
+
+    def get(self, **kwargs) -> Optional[Task]:
+        """Get a single task."""
+        collection = self._get_collection()
+        if collection is None:
+            return None
+
+        data = collection.find_one(kwargs)
+        if data:
+            return Task.from_dict(data)
+        return None
+
+    def create(self, **kwargs) -> Task:
+        """Create a new task."""
+        task = Task(**kwargs)
+        task.save()
+        return task

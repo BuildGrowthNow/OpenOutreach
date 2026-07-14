@@ -3,7 +3,28 @@ Pydantic schemas for Auth API endpoints.
 """
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, Field, EmailStr
+from pydantic import BaseModel, Field, EmailStr, field_validator
+
+
+class RegisterRequest(BaseModel):
+    """Schema for user registration."""
+    email: EmailStr = Field(..., description="User email")
+    password: str = Field(..., min_length=8, description="User password (min 8 characters)")
+    full_name: str = Field(..., min_length=1, max_length=100, description="Full name")
+
+    @field_validator('password')
+    @classmethod
+    def validate_password_strength(cls, v: str) -> str:
+        """Ensure password has minimum complexity."""
+        if len(v) < 8:
+            raise ValueError('Password must be at least 8 characters')
+        if not any(c.isupper() for c in v):
+            raise ValueError('Password must contain at least one uppercase letter')
+        if not any(c.islower() for c in v):
+            raise ValueError('Password must contain at least one lowercase letter')
+        if not any(c.isdigit() for c in v):
+            raise ValueError('Password must contain at least one digit')
+        return v
 
 
 class LoginRequest(BaseModel):
@@ -17,20 +38,20 @@ class TokenResponse(BaseModel):
     access_token: str = Field(..., description="JWT access token")
     token_type: str = Field(default="bearer", description="Token type")
     refresh_token: Optional[str] = Field(None, description="JWT refresh token")
-    expires_in: Optional[int] = Field(None, description="Token expiration in seconds")
+    expires_in: int = Field(..., description="Token expiration in seconds")
 
 
 class UserResponse(BaseModel):
     """Schema for user info response."""
-    id: str = Field(alias="_id", description="User ID")
+    id: str = Field(..., description="User ID")
     email: str = Field(..., description="User email")
     full_name: str = Field(..., description="Full name")
     is_active: bool = Field(..., description="Whether user is active")
-    supabase_user_id: Optional[str] = Field(None, description="Supabase user ID if linked")
     created_at: datetime = Field(..., description="User creation timestamp")
 
     class Config:
         populate_by_name = True
+        from_attributes = True
 
 
 class PasswordResetRequest(BaseModel):

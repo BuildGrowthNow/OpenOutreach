@@ -1,0 +1,136 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Loader2 } from 'lucide-react';
+
+interface LinkedInProfile {
+  id: string;
+  linkedin_username: string;
+  active: boolean;
+  has_cookies: boolean;
+  connect_daily_limit: number;
+  follow_up_daily_limit: number;
+}
+
+export function ProfileSwitcher() {
+  const [profiles, setProfiles] = useState<LinkedInProfile[]>([]);
+  const [selectedId, setSelectedId] = useState<string>('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string>('');
+
+  useEffect(() => {
+    loadProfiles();
+  }, []);
+
+  const loadProfiles = async () => {
+    try {
+      setLoading(true);
+      setError('');
+
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setError('Not authenticated');
+        return;
+      }
+
+      const response = await fetch('/api/linkedin-profiles', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to load profiles');
+      }
+
+      const data = await response.json();
+      setProfiles(data.profiles || []);
+
+      // Load saved selection or use first profile
+      const saved = localStorage.getItem('selected_profile_id');
+      if (saved && data.profiles?.find((p: LinkedInProfile) => p.id === saved)) {
+        setSelectedId(saved);
+      } else if (data.profiles?.length > 0) {
+        const firstId = data.profiles[0].id;
+        setSelectedId(firstId);
+        localStorage.setItem('selected_profile_id', firstId);
+      }
+    } catch (err) {
+      console.error('Failed to load profiles:', err);
+      setError('Failed to load LinkedIn profiles');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleProfileChange = (profileId: string) => {
+    setSelectedId(profileId);
+    localStorage.setItem('selected_profile_id', profileId);
+    // Reload page to reflect profile change
+    window.location.reload();
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 text-sm text-gray-500">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        Loading profiles...
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <Alert variant="destructive" className="max-w-sm">
+        <AlertDescription>{error}</AlertDescription>
+      </Alert>
+    );
+  }
+
+  if (profiles.length === 0) {
+    return (
+      <Alert className="max-w-sm bg-yellow-50 border-yellow-200">
+        <AlertDescription className="text-yellow-800">
+          ⚠️ No LinkedIn profiles found.{' '}
+          <a href="/settings" className="underline font-medium">
+            Add one in Settings
+          </a>
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
+  if (profiles.length === 1) {
+    const profile = profiles[0];
+    return (
+      <div className="flex items-center gap-2 text-sm">
+        <span className="text-gray-600">Profile:</span>
+        <span className="font-medium">{profile.linkedin_username}</span>
+        {!profile.has_cookies && (
+          <span className="text-yellow-600">⚠️ No cookies</span>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-sm text-gray-600">Profile:</span>
+      <Select value={selectedId} onValueChange={handleProfileChange}>
+        <SelectTrigger className="w-[200px]">
+          <SelectValue placeholder="Select profile" />
+        </SelectTrigger>
+        <SelectContent>
+          {profiles.map((profile) => (
+            <SelectItem key={profile.id} value={profile.id}>
+              {profile.linkedin_username}
+              {!profile.has_cookies && ' ⚠️'}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}

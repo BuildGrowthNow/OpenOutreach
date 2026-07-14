@@ -2,6 +2,99 @@
 
 Detailed module documentation for OpenOutreach. See `CLAUDE.md` for rules and quick reference.
 
+## Multi-Tenant Architecture (FastAPI + MongoDB)
+
+**Status:** Phase 1 (Auth) ✅ Complete | Phase 2 (Multi-Profile) ✅ Complete
+
+OpenOutreach supports **production-grade multi-tenancy** with user authentication, multiple LinkedIn profiles per user, and campaign team access. See detailed implementation:
+- `PHASE_1_COMPLETE.md` - User authentication (JWT + Supabase compatibility)
+- `PHASE_2_COMPLETE.md` - Multi-profile support + team access
+- `MULTI_TENANT_FASTAPI_MONGODB.md` - Overall architecture plan
+
+### Key Concepts
+
+**User Ownership:** Every MongoDB document has a `user_id` field:
+- `User` - Base user account (email/password or Supabase SSO)
+- `LinkedInProfile` - Each user can have multiple LinkedIn profiles
+- `Campaign` - Owned by user, executed by a specific profile, shareable with team members
+- `Deal`, `Lead`, `Task`, `Notification`, etc. - All scoped to user
+
+**Campaign Team Access:** Campaigns support owner + team member access:
+- `Campaign.user_id` - Campaign owner (creator)
+- `Campaign.linkedin_profile_id` - Which profile executes tasks
+- `Campaign.team_member_ids` - Additional users with access (array)
+- `Campaign.has_access(user_id)` - Returns true if user is owner OR team member
+
+**Per-Profile Rate Limiting:** Each LinkedIn profile has independent rate limits:
+- `LinkedInProfile.connect_daily_limit` - Max connections per day
+- `LinkedInProfile.follow_up_daily_limit` - Max follow-ups per day
+- `SmartRateLimitContext` - One per profile, tracks detectability score + multipliers
+- `ActionLog` - Tracks actions per profile for daily counting
+
+**Multi-Tenant Notifications:** Team notification routing (owner + all team members):
+- `NotificationService.notify_campaign_users()` - Routes to all users with campaign access
+- Campaign lifecycle, messages, errors, rate limits → entire team
+
+### API Endpoints (FastAPI v2)
+
+**Authentication** (`/api/auth/`):
+- `POST /register/` - Create new user
+- `POST /login/` - Login with email/password
+- `POST /logout/` - Logout (clear refresh cookie)
+- `GET /me/` - Get current user info
+- `POST /refresh/` - Refresh access token
+
+**LinkedIn Profiles** (`/api/linkedin-profiles`):
+- `GET /` - List user's profiles
+- `POST /` - Create new profile (auto-creates SmartRateLimitContext)
+- `GET /{id}` - Get single profile
+- `PUT /{id}` - Update profile
+- `DELETE /{id}` - Delete profile (blocked if active campaigns use it)
+- `POST /{id}/cookies` - Upload session cookies (encrypted storage)
+- `GET /linkedin-profile-health` - Health status for all profiles
+
+**Campaigns** (`/api/campaigns`):
+- `GET /` - List campaigns (owner + team access)
+- `POST /` - Create campaign (requires profile ownership)
+- `GET /{id}` - Get campaign (access check)
+- `PUT /{id}` - Update campaign (access check; only owner can update team)
+- `DELETE /{id}` - Delete campaign (owner only, blocked if deals exist)
+
+### Multi-Tenant Security
+
+**Profile Ownership:** All profile operations verify `user_id`:
+```python
+collection.find_one({"_id": profile_id, "user_id": user_id})
+```
+
+**Campaign Access Control:**
+```python
+# List: owner OR team member
+{"$or": [{"user_id": user_id}, {"team_member_ids": user_id}]}
+
+# Detail: access check
+if not campaign.has_access(user_id):
+    raise HTTPException(403, "Access denied")
+
+# Delete: owner only
+if user_id != campaign.user_id:
+    raise HTTPException(403, "Only owner can delete")
+```
+
+**Data Isolation:** MongoDB indexes optimize multi-tenant queries:
+```python
+# Campaigns
+{'user_id': 1, 'is_paused': 1}
+{'team_member_ids': 1}
+{'linkedin_profile_id': 1, 'is_paused': 1}
+
+# Profiles
+{'user_id': 1}
+
+# Notifications
+{'recipient_id': 1, 'is_read': 1, 'created_at': -1}
+```
+
 ## Project Layout
 
 All source lives in the single `openoutreach/` package; Django apps are nested inside it

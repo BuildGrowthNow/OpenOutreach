@@ -46,20 +46,13 @@ def resolve_profile(username: str | None = None) -> Any | None:  # type: ignore[
 
 
 def cli_parser(description: str):
-    """Bootstrap Django and return an ArgumentParser with ``--handle``.
+    """Bootstrap application and return an ArgumentParser with ``--handle``.
 
-    Call from ``if __name__ == "__main__"`` blocks. Sets up Django,
-    configures logging, and returns a parser with ``--handle`` pre-added.
+    Call from ``if __name__ == "__main__"`` blocks. Configures logging
+    and returns a parser with ``--handle`` pre-added.
     After adding extra arguments, call ``cli_session(args)`` to get the session.
     """
     import argparse
-    import os
-
-    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "openoutreach.settings")
-
-    import django
-
-    django.setup()  # type: ignore[attr-defined]
 
     from openoutreach.core.logging import configure_logging
 
@@ -67,7 +60,7 @@ def cli_parser(description: str):
 
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument(
-        "--handle", default=None, help="Django username (default: first active profile)"
+        "--handle", default=None, help="LinkedIn username (default: first active profile)"
     )
     return parser
 
