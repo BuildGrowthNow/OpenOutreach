@@ -3,8 +3,6 @@ import random
 import time
 from typing import Dict, Any, Optional
 
-from django.db import transaction
-
 from linkedin_cli.url_utils import url_to_public_id, public_id_to_url
 from openoutreach.crm.models import DealState
 
@@ -13,12 +11,12 @@ logger = logging.getLogger(__name__)
 
 def lead_exists(url: str) -> bool:
     """Check if Lead already exists for this LinkedIn URL."""
-    from openoutreach.crm.models import Lead
+    from openoutreach.mongodb.models import Lead
 
     pid = url_to_public_id(url)
     if not pid:
         return False
-    return Lead.objects.filter(public_identifier=pid).exists()
+    return Lead.get_by_public_id(pid) is not None
 
 
 def create_enriched_lead(session, url: str, profile: Dict[str, Any]) -> Optional[int]:
@@ -27,7 +25,7 @@ def create_enriched_lead(session, url: str, profile: Dict[str, Any]) -> Optional
     Returns lead PK or None if exists.
     Creates a Deal to link the lead to the campaign immediately upon discovery.
     """
-    from openoutreach.crm.models import Lead, Deal, DealState
+    from openoutreach.mongodb.models import Lead, Deal
 
     # Use canonical public_identifier from Voyager response when available.
     canonical_pid = profile.get("public_identifier")
@@ -38,57 +36,59 @@ def create_enriched_lead(session, url: str, profile: Dict[str, Any]) -> Optional
 
     urn = profile.get("urn") or None
 
-    with transaction.atomic():
-        # Check if lead exists for this campaign
-        existing_lead = Lead.objects.filter(public_identifier=public_id).first()
-        if existing_lead:
-            # Lead exists - check if already linked to this campaign
-            if Deal.objects.filter(lead=existing_lead, campaign=session.campaign).exists():
-                return None  # Already discovered by this campaign
-            # Lead exists but not in this campaign - create deal to link them
-            Deal.objects.create(
-                lead=existing_lead,
-                campaign=session.campaign,
-                state=DealState.QUALIFIED,  # Start as QUALIFIED, awaiting LLM decision
-                reason="Discovered via search"
-            )
-            logger.debug("Linked existing lead %s to campaign %s", public_id, session.campaign)
-            return existing_lead.pk
-
-        if urn and Lead.objects.filter(urn=urn).exists():
-            logger.info(
-                "Lead with URN %s already exists — skipping duplicate %s",
-                urn,
-                public_id,
-            )
-            return None
-
-        # Create new lead with cached profile data
-        lead = Lead.objects.create(
-            linkedin_url=clean_url,
-            public_identifier=public_id,
-            cached_profile=profile,
-        )
-        _cache_urn_from_profile(lead, profile)
-
-        # Create Deal to link lead to campaign immediately
-        Deal.objects.create(
-            lead=lead,
-            campaign=session.campaign,
+    # Check if lead exists for this campaign
+    existing_lead = Lead.get_by_public_id(public_id)
+    if existing_lead:
+        # Lead exists - check if already linked to this campaign
+        if Deal.get_by_lead_and_campaign(public_id, session.campaign.pk) is not None:
+            return None  # Already discovered by this campaign
+        # Lead exists but not in this campaign - create deal to link them
+        deal = Deal(
+            lead_id=existing_lead.pk,
+            campaign_id=session.campaign.pk,
             state=DealState.QUALIFIED,  # Start as QUALIFIED, awaiting LLM decision
             reason="Discovered via search"
         )
+        deal.save()
+        logger.debug("Linked existing lead %s to campaign %s", public_id, session.campaign)
+        return existing_lead.pk
+
+    if urn and Lead.get_by_urn(urn) is not None:
+        logger.info(
+            "Lead with URN %s already exists — skipping duplicate %s",
+            urn,
+            public_id,
+        )
+        return None
+
+    # Create new lead with cached profile data
+    lead = Lead(
+        linkedin_url=clean_url,
+        public_identifier=public_id,
+        cached_profile=profile,
+    )
+    lead.save()
+    _cache_urn_from_profile(lead, profile)
+
+    # Create Deal to link lead to campaign immediately
+    deal = Deal(
+        lead_id=lead.pk,
+        campaign_id=session.campaign.pk,
+        state=DealState.QUALIFIED,  # Start as QUALIFIED, awaiting LLM decision
+        reason="Discovered via search"
+    )
+    deal.save()
 
     lead.embed_from_profile(profile)
 
-    logger.debug("Created enriched lead for %s (pk=%d)", public_id, lead.pk)
+    logger.debug("Created enriched lead for %s (pk=%s)", public_id, lead.pk)
 
     # Log discovery to activity feed
-    from openoutreach.linkedin.models import ActionLog
-    ActionLog.objects.create(
-        linkedin_profile=session.linkedin_profile,
-        campaign=session.campaign,
-        action_type=ActionLog.ActionType.LEAD_DISCOVERED,
+    from openoutreach.mongodb.models import ActionLog
+    action_log = ActionLog(
+        linkedin_profile_id=session.linkedin_profile.pk,
+        campaign_id=session.campaign.pk,
+        action_type="lead_discovered",
         details={
             "lead_name": profile.get("profile", {}).get("firstName", "") + " " + profile.get("profile", {}).get("lastName", ""),
             "lead_url": clean_url,
@@ -96,37 +96,38 @@ def create_enriched_lead(session, url: str, profile: Dict[str, Any]) -> Optional
             "headline": profile.get("profile", {}).get("headline", ""),
         },
     )
+    action_log.save()
 
     return lead.pk
 
 
-@transaction.atomic
 def promote_lead_to_deal(session, public_id: str, reason: str = ""):
     """Update or create a QUALIFIED Deal for a Lead after LLM approval.
 
     If a Deal already exists from discovery, it's updated with the qualification reason.
     Returns the Deal.
     """
-    from openoutreach.crm.models import Lead, Deal, DealState
+    from openoutreach.mongodb.models import Lead, Deal
 
-    lead = Lead.objects.filter(public_identifier=public_id).first()
+    lead = Lead.get_by_public_id(public_id)
     if not lead:
         raise ValueError(f"No Lead for {public_id}")
 
     # Check if deal already exists from discovery
-    deal = Deal.objects.filter(lead=lead, campaign=session.campaign).first()
+    deal = Deal.get_by_lead_and_campaign(public_id, session.campaign.pk)
     if deal:
         # Update existing deal with qualification reason
         deal.reason = reason
-        deal.save(update_fields=["reason", "update_date"])
+        deal.save()
     else:
         # Create new deal (shouldn't happen if discovery creates them, but keep as fallback)
-        deal = Deal.objects.create(
-            lead=lead,
-            campaign=session.campaign,
+        deal = Deal(
+            lead_id=lead.pk,
+            campaign_id=session.campaign.pk,
             state=DealState.QUALIFIED,
             reason=reason,
         )
+        deal.save()
 
     from termcolor import colored
 
@@ -142,48 +143,46 @@ def get_leads_for_qualification(session) -> list:
     - Have a Deal in this campaign (created at discovery)
     - But haven't been evaluated yet (reason is still "Discovered via search")
     """
-    from openoutreach.crm.models import Lead, Deal
+    from openoutreach.mongodb.models import Lead, Deal
 
     # Get Deals that were discovered but not yet qualified by LLM
-    unevaluated_deals = Deal.objects.filter(
-        campaign=session.campaign,
-        state=DealState.QUALIFIED,
-        reason="Discovered via search"
-    ).select_related("lead")
+    unevaluated_deals = Deal.find_unevaluated(session.campaign.pk)
 
     # Get the leads from those deals, filtering out disqualified ones
     leads = []
     for deal in unevaluated_deals:
-        if not deal.lead.disqualified:
-            leads.append(deal.lead)
+        lead = Lead.get(deal.lead_id)
+        if lead and not lead.disqualified:
+            leads.append(lead)
 
     return [lead.to_profile_dict() for lead in leads]
 
 
 def update_lead_slug(old_public_id: str, new_public_id: str):
     """Update a Lead after LinkedIn redirected its vanity URL."""
-    from openoutreach.crm.models import Lead
+    from openoutreach.mongodb.models import Lead
 
     new_url = public_id_to_url(new_public_id)
-    updated = Lead.objects.filter(public_identifier=old_public_id).update(
-        public_identifier=new_public_id,
-        linkedin_url=new_url,
-    )
-    if updated:
+    lead = Lead.get_by_public_id(old_public_id)
+    if lead:
+        lead.public_identifier = new_public_id
+        lead.linkedin_url = new_url
+        lead.save()
         logger.info("Lead slug updated: %s → %s", old_public_id, new_public_id)
-    return updated
+        return True
+    return False
 
 
 def disqualify_lead(public_id: str):
     """Set Lead.disqualified = True (account-level, permanent, cross-campaign)."""
-    from openoutreach.crm.models import Lead
+    from openoutreach.mongodb.models import Lead
 
-    lead = Lead.objects.filter(public_identifier=public_id).first()
+    lead = Lead.get_by_public_id(public_id)
     if not lead:
         logger.warning("disqualify_lead: no Lead for %s", public_id)
         return
     lead.disqualified = True
-    lead.save(update_fields=["disqualified"])
+    lead.save()
 
 
 def discover_and_enrich(session, urls):
@@ -246,7 +245,7 @@ def _cache_urn_from_profile(lead, profile: Dict[str, Any]):
     urn = profile.get("urn") or None
     if urn and lead.urn != urn:
         lead.urn = urn
-        lead.save(update_fields=["urn"])
+        lead.save()
 
 
 def register_self_lead(session, profile: Dict[str, Any]):
@@ -256,15 +255,24 @@ def register_self_lead(session, profile: Dict[str, Any]):
     the real profile disqualified (so auto-discovery never targets it) and links
     it as ``linkedin_profile.self_lead``. Idempotent per profile.
     """
-    from openoutreach.crm.models import Lead
+    from openoutreach.mongodb.models import Lead
 
     public_id = profile["public_identifier"]
-    lead, _ = Lead.objects.update_or_create(
-        public_identifier=public_id,
-        defaults={"linkedin_url": public_id_to_url(public_id), "disqualified": True},
-    )
+    lead = Lead.get_by_public_id(public_id)
+    if not lead:
+        lead = Lead(
+            public_identifier=public_id,
+            linkedin_url=public_id_to_url(public_id),
+            disqualified=True
+        )
+        lead.save()
+    else:
+        lead.linkedin_url = public_id_to_url(public_id)
+        lead.disqualified = True
+        lead.save()
+
     _cache_urn_from_profile(lead, profile)
 
-    session.linkedin_profile.self_lead = lead
-    session.linkedin_profile.save(update_fields=["self_lead"])
+    session.linkedin_profile.self_lead_id = lead.pk
+    session.linkedin_profile.save()
     logger.info("Registered self-profile as disqualified Lead: %s", public_id)

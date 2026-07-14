@@ -9,14 +9,14 @@ def _get_lead_and_deal(session, public_identifier: str):
     The conversation is owned by the Deal (per lead+campaign), so sync needs it.
     Returns (lead, None) when no Deal exists yet — the caller skips the upsert.
     """
-    from openoutreach.crm.models import Deal, Lead
+    from openoutreach.mongodb.models import Deal, Lead
 
-    lead = Lead.objects.get(public_identifier=public_identifier)
-    deal = (
-        Deal.objects.filter(lead=lead, campaign=session.campaign)
-        .select_related("lead")
-        .first()
-    )
+    lead = Lead.get_by_public_id(public_identifier)
+    if not lead:
+        return None, None
+    deal = Deal.get_by_lead_and_campaign(public_identifier, session.campaign.pk)
+    if deal and not hasattr(deal, 'lead'):
+        deal.lead = lead
     return lead, deal
 
 
@@ -55,7 +55,7 @@ def _sync_from_api(session, public_identifier: str, deal) -> list:
     Returns the list of newly-created ``ChatMessage`` rows (in arrival order),
     so callers can incrementally update derived caches like ``chat_summary``.
     """
-    from openoutreach.chat.models import ChatMessage
+    from openoutreach.mongodb.models import ChatMessage
     from linkedin_cli.actions.conversations import (
         find_conversation_urn,
         find_conversation_urn_via_navigation,
@@ -95,21 +95,29 @@ def _sync_from_api(session, public_identifier: str, deal) -> list:
 
         is_outgoing = parsed["sender_host_urn"] == self_urn
 
-        # Upsert by (deal, linkedin_urn): the conversation is per-deal.
-        obj, created = ChatMessage.objects.update_or_create(
-            deal=deal,
-            linkedin_urn=parsed["entityUrn"],
-            defaults={
-                "content": parsed["text"],
-                "is_outgoing": is_outgoing,
-                "owner": session.django_user,
-                **(
-                    {"creation_date": parsed["delivered_at"]}
-                    if parsed["delivered_at"]
-                    else {}
-                ),
-            },
-        )
+        # Check if message exists
+        existing = ChatMessage.get_by_deal_and_urn(deal.pk, parsed["entityUrn"])
+        if existing:
+            # Update existing message
+            existing.content = parsed["text"]
+            existing.is_outgoing = is_outgoing
+            if parsed["delivered_at"]:
+                existing.creation_date = parsed["delivered_at"]
+            existing.save()
+            created = False
+        else:
+            # Create new message
+            obj = ChatMessage(
+                deal_id=deal.pk,
+                linkedin_urn=parsed["entityUrn"],
+                content=parsed["text"],
+                is_outgoing=is_outgoing,
+                owner_id=session.linkedin_profile.user_id,
+                creation_date=parsed["delivered_at"] if parsed["delivered_at"] else None,
+            )
+            obj.save()
+            created = True
+
         if created:
             new_messages.append(obj)
             logger.debug(
@@ -131,27 +139,18 @@ def _sync_from_api(session, public_identifier: str, deal) -> list:
 
 def _read_from_db(deal) -> list[dict]:
     """Read all ChatMessages for a deal, sorted chronologically."""
-    from openoutreach.chat.models import ChatMessage
+    from openoutreach.mongodb.models import ChatMessage
 
     lead_name = deal.lead.public_identifier or "them"
 
-    messages = (
-        ChatMessage.objects.filter(deal=deal)
-        .select_related("owner")
-        .order_by("creation_date")
-    )
+    messages = ChatMessage.find_by_deal(deal.pk)
 
     result = []
     for msg in messages:
         if not msg.content:
             continue
         if msg.is_outgoing:
-            owner = msg.owner
-            sender = (
-                f"{owner.first_name or ''} {owner.last_name or ''}".strip()
-                if owner
-                else "me"
-            )
+            sender = "me"
         else:
             sender = lead_name
         result.append(

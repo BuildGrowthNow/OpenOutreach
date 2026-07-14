@@ -4,8 +4,8 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone as tz
 
-from django.utils import timezone
 from termcolor import colored
 
 logger = logging.getLogger(__name__)
@@ -16,16 +16,12 @@ def run_search(session) -> str | None:
     from linkedin_cli.actions.search import search_people
     from openoutreach.linkedin.db.leads import discover_and_enrich
     from openoutreach.linkedin.pipeline.search_keywords import generate_search_keywords
-    from openoutreach.linkedin.models import SearchKeyword
+    from openoutreach.mongodb.models import SearchKeyword
 
     campaign = session.campaign
 
-    if not SearchKeyword.objects.filter(campaign=campaign, used=False).exists():
-        used = list(
-            SearchKeyword.objects.filter(campaign=campaign, used=True).values_list(
-                "keyword", flat=True
-            )
-        )
+    if not SearchKeyword.exists_unused(campaign.pk):
+        used = SearchKeyword.get_used_keywords(campaign.pk)
         fresh = generate_search_keywords(
             product_pitch=campaign.product_pitch,
             campaign_objective=campaign.campaign_objective,
@@ -36,19 +32,16 @@ def run_search(session) -> str | None:
         if not fresh:
             return None
 
-        objs = [SearchKeyword(campaign=campaign, keyword=k) for k in fresh]
-        SearchKeyword.objects.bulk_create(objs, ignore_conflicts=True)
+        for keyword in fresh:
+            sk = SearchKeyword(campaign_id=campaign.pk, keyword=keyword, used=False)
+            sk.save()
 
-    kw = (
-        SearchKeyword.objects.filter(campaign=campaign, used=False)
-        .order_by("pk")
-        .first()
-    )
+    kw = SearchKeyword.get_next_unused(campaign.pk)
     if not kw:
         return None
 
     kw.used = True
-    kw.used_at = timezone.now()
+    kw.used_at = datetime.now(tz.utc)
     kw.save()
 
     logger.info(

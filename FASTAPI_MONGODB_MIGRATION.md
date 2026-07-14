@@ -198,70 +198,87 @@ Files still containing Django imports but not critical for daemon operation:
 
 ## Phase 6: Port LinkedIn Module
 
-**Status:** Not started
+**Status:** ✅ COMPLETE (Core files)
 **Effort:** 2-3 days
 **Depends on:** Phase 4 + 5
 
 ### 6.1 Port `linkedin/db/leads.py`
 
-**Current Django deps:**
-- `from django.db import transaction`
-- Django ORM: `Lead.objects.filter()`, `Lead.objects.create()`, `Deal.objects.filter()`
+**Django deps removed:**
+- ✅ `from django.db import transaction` → removed entirely
+- ✅ `Lead.objects.filter()` → `Lead.get_by_public_id()`, `Lead.get_by_urn()`
+- ✅ `Lead.objects.create()` → `Lead()` + `save()`
+- ✅ `Deal.objects.filter()` → `Deal.get_by_lead_and_campaign()`, `Deal.find_unevaluated()`
+- ✅ `ActionLog.objects.create()` → `ActionLog()` + `save()`
+- ✅ All `@transaction.atomic` decorators removed
 
 ### 6.2 Port `linkedin/db/chat.py`
 
-Django ORM queries for messages/deals.
+**Django deps removed:**
+- ✅ `Lead.objects.get()` → `Lead.get_by_public_id()`
+- ✅ `Deal.objects.filter().select_related()` → `Deal.get_by_lead_and_campaign()`
+- ✅ `ChatMessage.objects.update_or_create()` → Manual upsert logic with MongoDB
+- ✅ `ChatMessage.objects.filter().order_by()` → `ChatMessage.find_by_deal()`
 
 ### 6.3 Port `linkedin/pipeline/*`
 
-4 files using `django.utils.timezone` and Django ORM:
-- `search.py` — `timezone.now()`, Lead/Deal queries
-- `qualify.py` — Lead queries, DealState transitions
-- `ready_pool.py` — Deal queries
-- `freemium_pool.py` — Deal/Lead queries
+**Django deps removed:**
+- ✅ `pipeline/search.py` — `timezone.now()` → `datetime.now(tz.utc)`, SearchKeyword MongoDB methods
+- ✅ `pipeline/qualify.py` — Lead/Deal queries replaced with MongoDB methods
+- ⏳ `ready_pool.py` — Not yet ported (non-critical)
+- ⏳ `freemium_pool.py` — Not yet ported (non-critical)
 
 ### 6.4 Port `linkedin/services/*`
 
-4 files using `django.utils.timezone` and Django model imports:
-- `smart_rate_limits.py`
-- `health_monitor.py`
-- `state_machine.py`
-- `ghost_mode.py`
+**Remaining Django deps:**
+- ⏳ `smart_rate_limits.py` — Uses Django timezone
+- ⏳ `health_monitor.py` — Uses Django timezone
+- ⏳ `state_machine.py` — Uses Django models
+- ⏳ `ghost_mode.py` — Uses Django models
 
-### 6.5 Port `linkedin/tasks/connect.py` and `send_manual_message.py`
+### 6.5 Port `linkedin/tasks/*`
 
-Import `DealState` (already an enum) and Django CRM models.
+**Django deps removed:**
+- ⏳ `connect.py` — Uses DealState (enum, no Django), but imports not yet updated
+- ✅ `send_manual_message.py` — Message model updated to MongoDB
 
 ### 6.6 Port `linkedin/browser/registry.py`
 
-Has `import django` — likely for Django setup. Remove.
+**Remaining:**
+- ⏳ Has `import django` — needs removal
 
 ### 6.7 Port `linkedin/agents/persona.py`
 
-Uses `Deal`, `Lead`, `LeadPersona` from CRM Django models.
+**Remaining:**
+- ⏳ Uses Django models
 
 ### 6.8 Port `linkedin/ml/qualifier.py`
 
-Uses `Lead` from CRM Django models.
+**Remaining:**
+- ⏳ Uses Django models
 
-### 6.9 Remove Django boilerplate
+### 6.9 Remove Django boilerplate (Phase 7)
 
-- Delete `linkedin/admin.py`
-- Delete `linkedin/apps.py`
-- Delete `linkedin/models/rate_limits.py` Django parts (if any remain)
-- Delete `linkedin/models/state_machine.py` Django parts (if any remain)
+Files to delete in Phase 7:
+- `linkedin/admin.py` — Django admin
+- `linkedin/apps.py` — Django app config
+- `linkedin/models/rate_limits.py` — Django model parts
+- `linkedin/models/state_machine.py` — Django model parts
 
 ### Deliverables:
-- [ ] `linkedin/db/leads.py` — MongoDB queries
-- [ ] `linkedin/db/chat.py` — MongoDB queries
-- [ ] `linkedin/pipeline/*` — all 4 files Django-free
-- [ ] `linkedin/services/*` — all 4 files Django-free
-- [ ] `linkedin/tasks/connect.py` — Django-free
-- [ ] `linkedin/tasks/send_manual_message.py` — Django-free
-- [ ] `linkedin/browser/registry.py` — no Django setup
-- [ ] `linkedin/agents/persona.py` — MongoDB models
-- [ ] `linkedin/ml/qualifier.py` — MongoDB models
-- [ ] Delete `linkedin/admin.py`, `linkedin/apps.py`
+- [x] `linkedin/db/leads.py` — MongoDB queries, zero Django imports
+- [x] `linkedin/db/chat.py` — MongoDB queries, zero Django imports
+- [x] `linkedin/pipeline/search.py` — Django-free
+- [x] `linkedin/pipeline/qualify.py` — Django-free
+- [x] `linkedin/tasks/send_manual_message.py` — Django-free
+- [ ] `linkedin/pipeline/ready_pool.py` — Not critical (Phase 7)
+- [ ] `linkedin/pipeline/freemium_pool.py` — Not critical (Phase 7)
+- [ ] `linkedin/services/*` — 4 files (Phase 7)
+- [ ] `linkedin/tasks/connect.py` — Needs model import updates
+- [ ] `linkedin/browser/registry.py` — Needs Django import removal
+- [ ] `linkedin/agents/persona.py` — Needs model updates
+- [ ] `linkedin/ml/qualifier.py` — Needs model updates
+- [ ] Delete `linkedin/admin.py`, `linkedin/apps.py` (Phase 7)
 
 ---
 
@@ -494,9 +511,9 @@ key = settings.SECRET_KEY
 | 1-3 | MongoDB models, FastAPI endpoints, infrastructure | Done | ✅ Partial |
 | **4** | **Port CRM Django ORM models to MongoDB** | 3-5 days | ✅ Complete |
 | **5** | **Port core engine (daemon, scheduler, db)** | 2-3 days | ✅ Complete |
-| **6** | **Port LinkedIn module** | 2-3 days | ❌ Not started |
+| **6** | **Port LinkedIn module (core files)** | 2-3 days | ✅ Core Complete |
 | **7** | **Port remaining + delete all Django files** | 1-2 days | ❌ Not started |
 | **8** | **Integration test + production deploy** | 2-3 days | ❌ Not started |
-| **Total remaining** | | **6-10 days** | |
+| **Total remaining** | | **3-6 days** | |
 
 **Success criteria:** `grep -r "from django" openoutreach --include="*.py" | wc -l` returns **0**.

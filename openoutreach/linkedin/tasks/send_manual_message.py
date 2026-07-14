@@ -4,7 +4,8 @@
 from __future__ import annotations
 
 import logging
-from openoutreach.crm.models import Message, DealState
+from openoutreach.mongodb.models import Message
+from openoutreach.crm.models import DealState
 from openoutreach.core.db.deals import set_profile_state
 
 logger = logging.getLogger(__name__)
@@ -17,9 +18,8 @@ def handle_send_manual_message(task, session, qualifiers):
     campaign = session.campaign
     message_id = task.payload.get("message_id")
 
-    try:
-        msg = Message.objects.get(pk=message_id)
-    except Message.DoesNotExist:
+    msg = Message.get(message_id)
+    if not msg:
         logger.error(
             "[%s] send_manual_message: Message %s not found — task skipped",
             campaign,

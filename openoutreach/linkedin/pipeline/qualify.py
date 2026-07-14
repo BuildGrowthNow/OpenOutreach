@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 def fetch_qualification_candidates(session):
     """Return Lead rows (with embeddings) for leads awaiting qualification."""
-    from openoutreach.crm.models import Lead
+    from openoutreach.mongodb.models import Lead
     from openoutreach.linkedin.db.leads import get_leads_for_qualification
 
     leads = get_leads_for_qualification(session)
@@ -24,17 +24,13 @@ def fetch_qualification_candidates(session):
 
     lead_ids = {ld["lead_id"] for ld in leads}
 
-    candidates = list(
-        Lead.objects.filter(pk__in=lead_ids, embedding__isnull=False).order_by(
-            "creation_date"
-        )
-    )
+    candidates = Lead.find_with_embeddings(list(lead_ids))
     if candidates:
         return candidates
 
     # Robustness fallback: embed any lead that was missed at discovery time
     for ld in leads:
-        lead = Lead.objects.filter(pk=ld["lead_id"]).first()
+        lead = Lead.get(ld["lead_id"])
         if not lead or lead.embedding is not None:
             continue
         if lead.get_embedding(session) is not None:
@@ -182,10 +178,9 @@ def _save_qualification_result(
 
 def _log_qualification_action(session, lead_id: int, public_id: str, qualified: bool, reason: str):
     """Log qualification decision to activity feed."""
-    from openoutreach.crm.models import Lead
-    from openoutreach.linkedin.models import ActionLog
+    from openoutreach.mongodb.models import Lead, ActionLog
 
-    lead = Lead.objects.filter(pk=lead_id).first()
+    lead = Lead.get(lead_id)
     lead_name = public_id
     if lead:
         try:
@@ -197,23 +192,24 @@ def _log_qualification_action(session, lead_id: int, public_id: str, qualified: 
         except Exception:
             pass
 
-    ActionLog.objects.create(
-        linkedin_profile=session.linkedin_profile,
-        campaign=session.campaign,
-        action_type=ActionLog.ActionType.LEAD_QUALIFIED if qualified else ActionLog.ActionType.LEAD_DISQUALIFIED,
+    action_log = ActionLog(
+        linkedin_profile_id=session.linkedin_profile.pk,
+        campaign_id=session.campaign.pk,
+        action_type="lead_qualified" if qualified else "lead_disqualified",
         details={
             "lead_name": lead_name,
             "public_identifier": public_id,
             "reason": reason,
         },
     )
+    action_log.save()
 
 
 def _fetch_profile_text(session, lead_id: int, public_id: str) -> str | None:
-    from openoutreach.crm.models import Lead
+    from openoutreach.mongodb.models import Lead
     from openoutreach.linkedin.ml.profile_text import build_profile_text
 
-    lead = Lead.objects.filter(pk=lead_id).first()
+    lead = Lead.get(lead_id)
     if not lead:
         return None
     profile_data = lead.get_profile(session)
