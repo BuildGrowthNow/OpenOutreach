@@ -1,9 +1,9 @@
 -r base.txt
 
-# Testing
+# Testing (Django-free)
 pytest
-pytest-django
 pytest-asyncio
 pytest-mock
 pytest-cov
 factory-boy
+httpx  # For FastAPI test client

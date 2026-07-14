@@ -1,49 +1,32 @@
 """
 MongoDB Connection Handler
 
-This module provides a singleton MongoDB connection handler that manages
-connections to both SQLite and MongoDB (dual-write mode).
+This module provides a singleton MongoDB connection handler for FastAPI + MongoDB stack.
 """
 
 import logging
 from typing import Optional, Any, Dict, Type, TypeVar
-from django.conf import settings
 from pymongo import MongoClient
 from pymongo.collection import Collection
 from pymongo.database import Database
 
-# Import django.conf.settings at module level, not the values directly
-# This ensures Django's settings (which are loaded last) take precedence
-from django.conf import settings as django_settings
+from openoutreach.config import settings
 
 
-# Use helper functions to access settings dynamically at runtime
+# Helper functions to access settings
 def _is_mongodb_enabled() -> bool:
-    """Check if MongoDB is enabled by reading Django settings."""
-    try:
-        return django_settings.MONGODB_ENABLED
-    except AttributeError:
-        return False
+    """Check if MongoDB is enabled."""
+    return settings.MONGODB_ENABLED
 
 
 def _get_mongodb_uri() -> Optional[str]:
-    """Get MongoDB URI from Django settings."""
-    try:
-        from openoutreach.mongodb.settings import get_mongodb_uri as get_base_uri
-
-        return get_base_uri() or getattr(django_settings, "MONGODB_ATLAS_URI", None)
-    except Exception:
-        return None
+    """Get MongoDB URI from settings."""
+    return settings.MONGODB_URI or None
 
 
-def _get_mongodb_config() -> dict:
-    """Get MongoDB config from Django settings."""
-    try:
-        from openoutreach.mongodb.settings import get_mongodb_config as get_base_config
-
-        return get_base_config()
-    except Exception:
-        return {}
+def _get_mongodb_name() -> str:
+    """Get MongoDB database name."""
+    return settings.MONGODB_NAME
 
 
 logger = logging.getLogger(__name__)
@@ -81,16 +64,11 @@ class MongoDBConnection:
         self._database = None
         self._initialized = True  # type: ignore[has-type]
 
-        # Check if Django is configured before accessing settings
-        try:
-            django_settings.DATABASES  # Check if DATABASES is configured
-            if _is_mongodb_enabled():
-                self.connect()
-            else:
-                logger.info("MongoDB is disabled. Using SQLite only.")
-        except Exception:
-            # Django not configured yet, skip connection until explicitly requested
-            logger.debug("Django not configured yet, deferring MongoDB connection")
+        # Auto-connect if MongoDB is enabled
+        if _is_mongodb_enabled():
+            self.connect()
+        else:
+            logger.info("MongoDB is disabled.")
 
     def connect(self) -> bool:
         """
@@ -112,21 +90,18 @@ class MongoDBConnection:
                 return False
 
             # Create client with connection options
-            # Use fallback defaults if settings don't exist
             self._client = MongoClient(
                 uri,
-                serverSelectionTimeoutMS=getattr(
-                    settings, "MONGODB_SERVER_SELECTION_TIMEOUT", 30000
-                ),
-                connectTimeoutMS=getattr(settings, "MONGODB_CONNECT_TIMEOUT", 30000),
-                socketTimeoutMS=getattr(settings, "MONGODB_SOCKET_TIMEOUT", 10000),
+                serverSelectionTimeoutMS=30000,
+                connectTimeoutMS=30000,
+                socketTimeoutMS=10000,
             )
 
             # Verify connection
             self._client.admin.command("ping")
 
             # Get database
-            db_name = getattr(settings, "MONGODB_NAME", "openoutreach")
+            db_name = _get_mongodb_name()
             self._database = self._client[db_name]
 
             logger.info("MongoDB connection established successfully")
