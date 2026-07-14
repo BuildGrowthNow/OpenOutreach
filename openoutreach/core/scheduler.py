@@ -31,17 +31,15 @@ from __future__ import annotations
 import datetime
 import logging
 import random
-from datetime import datetime as Datetime, timedelta
+from datetime import datetime as Datetime, timedelta, timezone as tz
 from zoneinfo import ZoneInfo
-
-from django.utils import timezone
 
 from openoutreach.core.conf import (
     CAMPAIGN_CONFIG,
     CHECK_PENDING_DAILY_CAP,
 )
 from openoutreach.crm.models import DealState
-from openoutreach.core.models import Task
+from openoutreach.mongodb.models import Task
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +49,7 @@ logger = logging.getLogger(__name__)
 
 def _get_active_hours_config():
     """Load active hours configuration from SiteConfig DB singleton."""
-    from openoutreach.core.models import SiteConfig
+    from openoutreach.mongodb.models import SiteConfig
     config = SiteConfig.load()
     return {
         'enabled': config.enable_active_hours,
@@ -142,6 +140,10 @@ def smart_velocity_slot_times(
     if n <= 0:
         return []
 
+    # Ensure now is timezone-aware
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=tz.utc)
+
     # Fall back to simple velocity spacing if no smart context
     if not time_aware or limiter_context is None:
         return velocity_slot_times(now, n, velocity, horizon_hours)
@@ -180,7 +182,7 @@ def _distribute_weighted(n: int, weighted_intervals: list, velocity: int) -> lis
     if total_weight <= 0:
         # Fallback to uniform distribution
         return velocity_slot_times(
-            weighted_intervals[0][0] if weighted_intervals else timezone.now(),
+            weighted_intervals[0][0] if weighted_intervals else Datetime.now(tz.utc),
             n,
             velocity
         )
@@ -308,7 +310,7 @@ def _seconds_to_timestamp(seconds: float, intervals: list[tuple]):
             return s + timedelta(seconds=seconds - cursor_offset)
         cursor_offset += dur
     # Overflow: return end of last interval
-    return intervals[-1][1] if intervals else timezone.now()
+    return intervals[-1][1] if intervals else Datetime.now(tz.utc)
 
 
 # ── Per-type planners ─────────────────────────────────────────────────
@@ -368,7 +370,7 @@ def _plan_slots(
     """
     if n <= 0:
         return 0
-    now = timezone.now()
+    now = Datetime.now(tz.utc)
 
     if time_aware and limiter_context:
         times = smart_velocity_slot_times(now, n, velocity, limiter_context, time_aware=True)
@@ -388,7 +390,7 @@ def plan_connect_window(session, campaign) -> int:
     if _has_pending(Task.TaskType.CONNECT, campaign.pk):
         return 0
 
-    from openoutreach.core.models import SiteConfig
+    from openoutreach.mongodb.models import SiteConfig
     from openoutreach.core.rate_limit_presets import get_preset
 
     config = SiteConfig.load()
@@ -451,7 +453,7 @@ def plan_follow_up_window(session, campaign) -> int:
     if _has_pending(Task.TaskType.FOLLOW_UP, campaign.pk):
         return 0
 
-    from openoutreach.core.models import SiteConfig
+    from openoutreach.mongodb.models import SiteConfig
     from openoutreach.core.rate_limit_presets import get_preset
 
     config = SiteConfig.load()
@@ -507,15 +509,14 @@ def plan_check_pending_window(session, campaign) -> int:
     """Plan the next 24h of check_pending slots for *campaign*. Slot count
     matches the PENDING deals whose backoff has expired (or expires
     within the horizon), capped by ``CHECK_PENDING_DAILY_CAP``."""
-    from openoutreach.crm.models import Deal
-    from openoutreach.core.models import SiteConfig
+    from openoutreach.mongodb.models import Deal, SiteConfig
     from openoutreach.core.rate_limit_presets import get_preset
 
     if _has_pending(Task.TaskType.CHECK_PENDING, campaign.pk):
         return 0
 
     config = SiteConfig.load()
-    now = timezone.now()
+    now = Datetime.now(tz.utc)
     n_due = Deal.objects.filter(
         campaign_id=campaign.pk,
         state=DealState.PENDING,
@@ -575,7 +576,7 @@ def plan_check_pending_window(session, campaign) -> int:
 
 def seconds_until_tomorrow() -> float:
     """Seconds until 00:00 local time — used for daily rate-limit waits."""
-    now = timezone.now()
+    now = Datetime.now(tz.utc)
     tomorrow = (now + datetime.timedelta(days=1)).replace(
         hour=0,
         minute=0,
@@ -598,8 +599,8 @@ def on_deal_state_entered(deal) -> None:
 
     backoff = deal.backoff_hours or CAMPAIGN_CONFIG["check_pending_recheck_after_hours"]
     # Type: backoff should be a number (int or float)
-    deal.next_check_pending_at = timezone.now() + timedelta(hours=float(backoff))  # type: ignore
-    deal.save(update_fields=["next_check_pending_at"])
+    deal.next_check_pending_at = Datetime.now(tz.utc) + timedelta(hours=float(backoff))  # type: ignore
+    deal.save()
 
 
 # ── Reconciliation ────────────────────────────────────────────────────

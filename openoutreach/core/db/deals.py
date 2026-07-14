@@ -1,6 +1,5 @@
 import logging
 
-from django.db import transaction
 from termcolor import colored
 
 from openoutreach.crm.models import DealState
@@ -20,17 +19,14 @@ _STATE_LOG_STYLE = {
 
 def increment_connect_attempts(session, public_id: str) -> int:
     """Increment connect_attempts on the Deal and return the new count."""
-    from openoutreach.crm.models import Deal
+    from openoutreach.mongodb.models import Deal
 
-    deal = Deal.objects.filter(
-        lead__public_identifier=public_id,
-        campaign=session.campaign,
-    ).first()
+    deal = Deal.get_by_lead_and_campaign(public_id, session.campaign.pk)
     if not deal:
         return 1
 
     deal.connect_attempts += 1
-    deal.save(update_fields=["connect_attempts"])
+    deal.save()
     return deal.connect_attempts
 
 
@@ -47,13 +43,10 @@ def _deal_to_profile_dict(deal) -> dict:
 
 def _deals_at_state(session, state: DealState) -> list:
     """Return profile dicts for all Deals at the given state in this campaign."""
-    from openoutreach.crm.models import Deal
+    from openoutreach.mongodb.models import Deal
 
-    qs = Deal.objects.filter(
-        state=state,
-        campaign=session.campaign,
-    ).select_related("lead")
-    return [_deal_to_profile_dict(d) for d in qs]
+    deals = Deal.find_by_state_and_campaign(state, session.campaign.pk)
+    return [_deal_to_profile_dict(d) for d in deals]
 
 
 def _existing_deal_or_lead(public_id: str, campaign):
@@ -62,14 +55,12 @@ def _existing_deal_or_lead(public_id: str, campaign):
     Returns (lead, existing_deal) — exactly one will be non-None,
     or both None if no Lead exists at all.
     """
-    from openoutreach.crm.models import Deal, Lead
+    from openoutreach.mongodb.models import Deal, Lead
 
-    existing = Deal.objects.filter(
-        lead__public_identifier=public_id, campaign=campaign
-    ).first()
+    existing = Deal.get_by_lead_and_campaign(public_id, campaign.pk)
     if existing:
         return None, existing
-    lead = Lead.objects.filter(public_identifier=public_id).first()
+    lead = Lead.get_by_public_id(public_id)
     return lead, None
 
 
@@ -107,20 +98,18 @@ def set_profile_state(
     PENDING → check_pending) happens here via the scheduler hook — callers
     do not enqueue directly.
     """
-    from openoutreach.crm.models import Deal
+    from openoutreach.mongodb.models import Deal, Lead
     from openoutreach.core.scheduler import on_deal_state_entered
 
-    deal = (
-        Deal.objects.filter(
-            lead__public_identifier=public_identifier, campaign=session.campaign
-        )
-        .select_related("lead")
-        .first()
-    )
+    deal = Deal.get_by_lead_and_campaign(public_identifier, session.campaign.pk)
     if not deal:
         raise ValueError(
             f"No Deal for {public_identifier} — cannot set state {new_state}"
         )
+
+    # Load lead if not already loaded
+    if not hasattr(deal, 'lead') or deal.lead is None:
+        deal.lead = Lead.get_by_public_id(public_identifier)
 
     ps = DealState(new_state)
     state_changed = deal.state != ps
@@ -162,24 +151,22 @@ def get_ready_to_connect_profiles(session) -> list:
 
 def get_profile_dict_for_public_id(session, public_id: str) -> dict | None:
     """Load profile dict for a single public_id from Deal + Lead (campaign-scoped)."""
-    from openoutreach.crm.models import Deal
+    from openoutreach.mongodb.models import Deal, Lead
 
-    deal = (
-        Deal.objects.filter(
-            lead__public_identifier=public_id, campaign=session.campaign
-        )
-        .select_related("lead")
-        .first()
-    )
+    deal = Deal.get_by_lead_and_campaign(public_id, session.campaign.pk)
     if not deal:
         return None
+
+    # Load lead if not already loaded
+    if not hasattr(deal, 'lead') or deal.lead is None:
+        deal.lead = Lead.get_by_public_id(public_id)
+
     return _deal_to_profile_dict(deal)
 
 
 # ── Deal creation ──
 
 
-@transaction.atomic
 def create_disqualified_deal(session, public_id: str, reason: str = ""):
     """Create a FAILED Deal with 'Disqualified' closing reason for an LLM-rejected lead.
 
@@ -211,7 +198,6 @@ def create_disqualified_deal(session, public_id: str, reason: str = ""):
     return deal
 
 
-@transaction.atomic
 def create_freemium_deal(session, public_id: str):
     """Create a Deal in the freemium campaign for a candidate lead."""
     campaign = session.campaign
@@ -240,12 +226,15 @@ def _create_deal(
     reason="",
 ):
     """Shared Deal creation with common defaults."""
-    from openoutreach.crm.models import Deal
+    from openoutreach.mongodb.models import Deal
 
-    return Deal.objects.create(
-        lead=lead,
-        campaign=session.campaign,
+    deal = Deal(
+        lead_id=lead.pk,
+        campaign_id=session.campaign.pk,
         state=state,
         outcome=outcome,
         reason=reason,
     )
+    deal.save()
+    deal.lead = lead  # Attach for immediate access
+    return deal

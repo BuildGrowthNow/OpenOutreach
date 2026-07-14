@@ -178,15 +178,15 @@ def _log_chat_facts(public_id: str, deal) -> None:
 
 def _load_recent_messages(deal, limit: int = RECENT_MESSAGES_WINDOW) -> list:
     """Last `limit` ChatMessages for `deal`, in chronological order."""
-    from openoutreach.chat.models import ChatMessage
+    from openoutreach.mongodb.models import ChatMessage
 
-    qs = ChatMessage.objects.filter(deal=deal).order_by("-creation_date", "-pk")[:limit]
-    return list(reversed(list(qs)))
+    messages = ChatMessage.find_by_deal(deal.pk, limit=limit)
+    return list(reversed(messages))
 
 
 def _render_system_prompt(session, deal, recent_messages: list) -> str:
     """Render the agent system prompt from the Jinja2 template."""
-    from django.utils import timezone
+    from datetime import datetime, timezone as tz
 
     env = jinja2.Environment(loader=jinja2.FileSystemLoader(str(PROMPTS_DIR)))
     template = env.get_template("follow_up_agent.j2")
@@ -195,17 +195,17 @@ def _render_system_prompt(session, deal, recent_messages: list) -> str:
     self_prof = session.self_profile
     self_name = (
         f"{self_prof.get('first_name', '')} {self_prof.get('last_name', '')}".strip()
-        or session.django_user.username
+        or session.linkedin_profile.linkedin_username
     )
 
-    from openoutreach.core.models import SiteConfig
+    from openoutreach.mongodb.models import SiteConfig
 
     config = SiteConfig.load()
 
     # Get persona context if available
     persona = get_lead_persona(deal)
 
-    now = timezone.now()
+    now = datetime.now(tz.utc)
     return template.render(
         self_name=self_name,
         contact_email=session.linkedin_profile.linkedin_username,
@@ -260,8 +260,7 @@ def run_follow_up_agent(session, deal) -> FollowUpDecision:
 
 if __name__ == "__main__":
     from openoutreach.core.db.summaries import materialize_profile_summary_if_missing
-    from openoutreach.core.models import Task
-    from openoutreach.crm.models import Deal
+    from openoutreach.mongodb.models import Task, Campaign, Deal
     from openoutreach.linkedin.browser.registry import cli_parser, cli_session
 
     parser = cli_parser("Run the follow-up agent for a profile")
@@ -273,23 +272,16 @@ if __name__ == "__main__":
     session.ensure_browser()
 
     if args.task_id:
-        task = Task.objects.get(pk=args.task_id)
+        task = Task.get(args.task_id)
         public_id = task.payload["public_id"]
         campaign_id = task.payload["campaign_id"]
-        from openoutreach.core.models import Campaign
 
-        campaign = Campaign.objects.get(pk=campaign_id)
+        campaign = Campaign.get(campaign_id)
         session.campaign = campaign
     else:
         public_id = args.profile
 
-    deal = (
-        Deal.objects.filter(
-            lead__public_identifier=public_id, campaign=session.campaign
-        )
-        .select_related("lead", "campaign")
-        .first()
-    )
+    deal = Deal.get_by_lead_and_campaign(public_id, session.campaign.pk)
     if not deal:
         logger.error("No Deal found for %s", public_id)
         raise SystemExit(1)

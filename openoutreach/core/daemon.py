@@ -5,10 +5,9 @@ import logging
 import random
 import sys
 import time
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone as tz
 from zoneinfo import ZoneInfo
 
-from django.utils import timezone
 from pydantic_ai.exceptions import ModelHTTPError
 
 from termcolor import colored
@@ -17,7 +16,7 @@ from openoutreach.core.conf import CAMPAIGN_CONFIG
 from openoutreach.linkedin.diagnostics import failure_diagnostics
 from linkedin_cli.exceptions import AuthenticationError, CheckpointChallengeError
 from openoutreach.linkedin.ml.qualifier import BayesianQualifier, KitQualifier
-from openoutreach.core.models import Task
+from openoutreach.mongodb.models import Task
 from openoutreach.linkedin.tasks.check_pending import handle_check_pending
 from openoutreach.linkedin.tasks.connect import handle_connect
 from openoutreach.linkedin.tasks.follow_up import handle_follow_up
@@ -36,14 +35,13 @@ _HANDLERS = {
 def _notify_auth_required(session, reason: str) -> None:
     """Create a user notification for authentication required."""
     try:
-        from django.contrib.auth.models import User
-        from openoutreach.notifications.models import Notification
+        from openoutreach.mongodb.models import Notification
 
-        user = session.linkedin_profile.user
-        if user:
+        user_id = session.linkedin_profile.user_id
+        if user_id:
             Notification.create_notification(
-                recipient=user,
-                notification_type=Notification.TYPE_CAMPAIGN_ERROR,
+                user_id=user_id,
+                notification_type="campaign_error",
                 title="LinkedIn Authentication Required",
                 message=f"Authentication failed: {reason}. Please add valid LinkedIn credentials in Settings → LinkedIn Connection.",
             )
@@ -54,14 +52,13 @@ def _notify_auth_required(session, reason: str) -> None:
 def _notify_checkpoint_challenge(session, url: str) -> None:
     """Create a user notification for checkpoint challenge."""
     try:
-        from django.contrib.auth.models import User
-        from openoutreach.notifications.models import Notification
+        from openoutreach.mongodb.models import Notification
 
-        user = session.linkedin_profile.user
-        if user:
+        user_id = session.linkedin_profile.user_id
+        if user_id:
             Notification.create_notification(
-                recipient=user,
-                notification_type=Notification.TYPE_CAMPAIGN_ERROR,
+                user_id=user_id,
+                notification_type="campaign_error",
                 title="LinkedIn Challenge Required",
                 message=f"LinkedIn requires additional verification. Complete the challenge at: {url}",
                 metadata={"challenge_url": url, "requires_action": True},
@@ -294,14 +291,14 @@ def seconds_until_active() -> float:
     Reads configuration from SiteConfig (enable_active_hours, active_start_hour,
     active_end_hour, active_timezone, active_days). Active days filter by weekday.
     """
-    from openoutreach.core.models import SiteConfig
+    from openoutreach.mongodb.models import SiteConfig
 
     config = SiteConfig.load()
     if not config.enable_active_hours:
         return 0.0
 
-    tz = ZoneInfo(config.active_timezone)
-    now = timezone.localtime(timezone=tz)
+    zone = ZoneInfo(config.active_timezone)
+    now = datetime.now(tz.utc).astimezone(zone)
 
     # Parse active days (comma-separated: 1=Monday, 7=Sunday)
     try:
@@ -318,31 +315,21 @@ def seconds_until_active() -> float:
             next_day = (current_weekday + days_ahead - 1) % 7 + 1
             if next_day in active_days:
                 # Jump to start of next active day
-                candidate = timezone.make_aware(
-                    now.replace(
-                        hour=config.active_start_hour,
-                        minute=0,
-                        second=0,
-                        microsecond=0,
-                        tzinfo=None,
-                    )
-                    + timedelta(days=days_ahead),
-                    timezone=tz,
-                )
+                candidate = now.replace(
+                    hour=config.active_start_hour,
+                    minute=0,
+                    second=0,
+                    microsecond=0,
+                ) + timedelta(days=days_ahead)
                 return (candidate - now).total_seconds()
             days_ahead += 1
         # All days inactive (shouldn't happen, but fallback to tomorrow)
-        candidate = timezone.make_aware(
-            now.replace(
-                hour=config.active_start_hour,
-                minute=0,
-                second=0,
-                microsecond=0,
-                tzinfo=None,
-            )
-            + timedelta(days=1),
-            timezone=tz,
-        )
+        candidate = now.replace(
+            hour=config.active_start_hour,
+            minute=0,
+            second=0,
+            microsecond=0,
+        ) + timedelta(days=1)
         return (candidate - now).total_seconds()
 
     # Today is active - check if we're within hours
@@ -350,15 +337,11 @@ def seconds_until_active() -> float:
         return 0.0
 
     # Outside active hours today - wait until start hour
-    candidate = timezone.make_aware(
-        now.replace(
-            hour=config.active_start_hour,
-            minute=0,
-            second=0,
-            microsecond=0,
-            tzinfo=None,
-        ),
-        timezone=tz,
+    candidate = now.replace(
+        hour=config.active_start_hour,
+        minute=0,
+        second=0,
+        microsecond=0,
     )
     if candidate <= now:
         # Past today's window - jump to next active day
@@ -366,17 +349,12 @@ def seconds_until_active() -> float:
         while days_ahead <= 7:
             next_day = (current_weekday + days_ahead - 1) % 7 + 1
             if next_day in active_days:
-                candidate = timezone.make_aware(
-                    now.replace(
-                        hour=config.active_start_hour,
-                        minute=0,
-                        second=0,
-                        microsecond=0,
-                        tzinfo=None,
-                    )
-                    + timedelta(days=days_ahead),
-                    timezone=tz,
-                )
+                candidate = now.replace(
+                    hour=config.active_start_hour,
+                    minute=0,
+                    second=0,
+                    microsecond=0,
+                ) + timedelta(days=days_ahead)
                 break
             days_ahead += 1
     return (candidate - now).total_seconds()
@@ -417,7 +395,7 @@ def _handle_checkpoint(session, task, url: str) -> None:
 def run_daemon(session):
     from openoutreach.linkedin.ml.hub import fetch_kit
     from openoutreach.linkedin.setup.freemium import import_freemium_campaign
-    from openoutreach.core.models import Campaign
+    from openoutreach.mongodb.models import Campaign
 
     cfg = CAMPAIGN_CONFIG
 

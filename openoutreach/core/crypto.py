@@ -5,7 +5,7 @@ import hashlib
 from typing import Optional
 
 from cryptography.fernet import Fernet
-from django.conf import settings
+from openoutreach.config import settings
 
 
 def _derive_key_from_secret(
@@ -26,19 +26,19 @@ def get_fernet_key() -> bytes:
     """Return a Fernet-compatible key.
 
     Priority:
-    - settings.COOKIE_ENCRYPTION_KEY (raw base64 urlsafe key)
-    - derive from settings.SECRET_KEY
+    - settings.cookie_encryption_key (raw base64 urlsafe key)
+    - derive from settings.secret_key
     """
-    key = getattr(settings, "COOKIE_ENCRYPTION_KEY", None)
+    key = getattr(settings, "cookie_encryption_key", None)
     if key:
         if isinstance(key, str):
             return key.encode("utf-8")
         return key
     # Derive from SECRET_KEY
-    secret = getattr(settings, "SECRET_KEY", None)
+    secret = getattr(settings, "secret_key", None)
     if not secret:
         raise RuntimeError(
-            "No COOKIE_ENCRYPTION_KEY or SECRET_KEY configured for encryption"
+            "No cookie_encryption_key or secret_key configured for encryption"
         )
     return _derive_key_from_secret(secret)
 
