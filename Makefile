@@ -1,54 +1,126 @@
 .DEFAULT_GOAL := help
-.PHONY: help logs test docker-test stop build up up-view install setup run admin view
+.PHONY: help logs test docker-test stop build up setup run shell api healthcheck migrate ensure-indexes
 
 help:
 	@perl -nle'print $& if m{^[a-zA-Z_-]+:.*?## .*$$}' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-25s\033[0m %s\n", $$1, $$2}'
 
-install: ## install all Python dependencies (local dev)
+# ============================================================================
+# Local Development (Phase 3 - FastAPI + MongoDB)
+# ============================================================================
+
+install: ## Install all Python dependencies (local dev)
 	pip install uv 2>/dev/null || true
-	uv pip install -r requirements/local.txt
+	uv pip install -r requirements/base.txt
 
-setup: install ## install deps + Playwright browsers + migrate + bootstrap CRM
+setup: install ## Install deps + Playwright browsers + ensure MongoDB indexes
 	playwright install --with-deps chromium
-	python manage.py migrate --no-input
-	python manage.py setup_crm
+	python -m openoutreach.cli ensure-indexes
 
-run: ## run the daemon
-	python manage.py rundaemon
+run: ## Run the daemon (task queue worker)
+	python -m openoutreach.cli rundaemon
 
-test: ## run the test suite
-	python manage.py migrate --no-input
-	.venv/bin/pytest
+api: ## Start the FastAPI server (dev mode with auto-reload)
+	python -m openoutreach.cli runserver --host 0.0.0.0 --port 8001 --reload
 
-admin: ## start the Django Admin web server
-	@echo ""
-	@echo "  Django Admin: http://localhost:8000/admin/"
-	@echo "  No superuser yet? Run: python manage.py createsuperuser"
-	@echo ""
-	python manage.py runserver
+shell: ## Open an interactive Python shell with MongoDB context
+	python -m openoutreach.cli shell
 
-# Docker targets
-logs: ## follow the logs of the service
-	docker compose -f local.yml logs -f
+healthcheck: ## Check system health (MongoDB connection, API availability)
+	python -m openoutreach.cli healthcheck
 
-docker-test: ## run tests in Docker
-	docker compose -f local.yml run --remove-orphans app python manage.py migrate --no-input && python -m pytest -vv -p no:cacheprovider
+migrate: ## Migrate data from SQLite to MongoDB (run once during migration)
+	python -m openoutreach.cli migrate
 
-stop: ## stop all services defined in Docker Compose
-	docker compose -f local.yml stop
+ensure-indexes: ## Create all MongoDB indexes (idempotent)
+	python -m openoutreach.cli ensure-indexes
 
-build: ## build all services defined in Docker Compose
-	docker compose -f local.yml build
+showconfig: ## Show current configuration (env vars, safe)
+	python -m openoutreach.cli showconfig
 
-up: ## run the defined service in Docker Compose
-	docker compose -f local.yml up --build -d
-	docker compose -f local.yml logs -f
+test: ## Run the test suite
+	pytest
 
-up-view: ## run the defined service in Docker Compose and open vinagre
-	docker compose -f local.yml up --build -d
-	sleep 3
-	$(MAKE) view
-	docker compose -f local.yml logs -f app
+# ============================================================================
+# Docker Targets (Phase 3 - FastAPI + MongoDB)
+# ============================================================================
 
-view: ## open vinagre to view the app
-	@sh -c 'vinagre vnc://127.0.0.1:5900 > /dev/null 2>&1 &'
+logs: ## Follow the logs of the service
+	docker compose -f docker-compose.v2.yml logs -f
+
+docker-test: ## Run tests in Docker
+	docker compose -f docker-compose.v2.yml run --rm openoutreach pytest -vv
+
+stop: ## Stop all services defined in Docker Compose
+	docker compose -f docker-compose.v2.yml stop
+
+down: ## Stop and remove all containers
+	docker compose -f docker-compose.v2.yml down
+
+build: ## Build all services defined in Docker Compose
+	docker compose -f docker-compose.v2.yml build
+
+up: ## Run the service in Docker Compose (foreground)
+	docker compose -f docker-compose.v2.yml up --build
+
+up-detached: ## Run the service in Docker Compose (background)
+	docker compose -f docker-compose.v2.yml up --build -d
+	docker compose -f docker-compose.v2.yml logs -f
+
+restart: ## Restart all services
+	docker compose -f docker-compose.v2.yml restart
+
+ps: ## Show running containers
+	docker compose -f docker-compose.v2.yml ps
+
+# ============================================================================
+# MongoDB Management
+# ============================================================================
+
+mongo-shell: ## Open MongoDB shell
+	docker compose -f docker-compose.v2.yml exec mongodb mongosh openoutreach
+
+mongo-backup: ## Backup MongoDB to ./data/mongo-backup/
+	mkdir -p ./data/mongo-backup
+	docker compose -f docker-compose.v2.yml exec -T mongodb mongodump --out=/data/db/backup --db=openoutreach
+	docker compose -f docker-compose.v2.yml exec -T mongodb tar czf /data/db/backup.tar.gz -C /data/db backup
+	docker cp $$(docker compose -f docker-compose.v2.yml ps -q mongodb):/data/db/backup.tar.gz ./data/mongo-backup/backup-$$(date +%Y%m%d-%H%M%S).tar.gz
+
+mongo-restore: ## Restore MongoDB from latest backup in ./data/mongo-backup/
+	@LATEST=$$(ls -t ./data/mongo-backup/backup-*.tar.gz 2>/dev/null | head -1); \
+	if [ -z "$$LATEST" ]; then \
+		echo "No backup found in ./data/mongo-backup/"; \
+		exit 1; \
+	fi; \
+	echo "Restoring from $$LATEST"; \
+	docker cp $$LATEST $$(docker compose -f docker-compose.v2.yml ps -q mongodb):/tmp/backup.tar.gz; \
+	docker compose -f docker-compose.v2.yml exec -T mongodb tar xzf /tmp/backup.tar.gz -C /tmp; \
+	docker compose -f docker-compose.v2.yml exec -T mongodb mongorestore --drop --db=openoutreach /tmp/backup/openoutreach
+
+# ============================================================================
+# Cleanup
+# ============================================================================
+
+clean: ## Remove Python cache files
+	find . -type f -name '*.pyc' -delete
+	find . -type d -name '__pycache__' -delete
+	find . -type d -name '*.egg-info' -exec rm -rf {} +
+	find . -type d -name '.pytest_cache' -exec rm -rf {} +
+
+clean-docker: ## Remove all Docker containers, images, and volumes
+	docker compose -f docker-compose.v2.yml down -v --rmi all
+
+# ============================================================================
+# Frontend
+# ============================================================================
+
+frontend-install: ## Install frontend dependencies
+	cd frontend && npm install
+
+frontend-dev: ## Run frontend in dev mode
+	cd frontend && npm run dev
+
+frontend-build: ## Build frontend for production
+	cd frontend && npm run build
+
+frontend-start: ## Start frontend production server
+	cd frontend && npm start

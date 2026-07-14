@@ -92,8 +92,8 @@ RUN chown ubuntu:ubuntu ${APP_HOME} && \
 RUN mkdir -p /app/frontend/.next/cache/images && \
     chown -R ubuntu:ubuntu /app/frontend/.next/cache
 
-# Expose ports for frontend (3000), Django API (8000), and VNC (6080, 5900)
-EXPOSE 3000 8000 6080 5900
+# Expose ports for frontend (3000), FastAPI (8001), and VNC (6080, 5900)
+EXPOSE 3000 8001 6080 5900
 
 ENTRYPOINT ["/entrypoint"]
 CMD ["/start"]

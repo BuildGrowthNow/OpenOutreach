@@ -59,19 +59,30 @@ That's it. No spreadsheets, no lead databases, no scraping setup.
 
 ## ⚡ Quick Start (Docker — Recommended)
 
-Pre-built images are published to GitHub Container Registry on every push to `master`.
+**Note**: OpenOutreach now uses **FastAPI + MongoDB** instead of Django + SQLite.
 
 ```bash
-docker run --pull always -it -p 5900:5900 -p 6080:6080 -v ~/.Lengrowth Outreach/data:/app/data ghcr.io/eracle/Lengrowth Outreach:latest
+# Clone repository
+git clone https://github.com/eracle/OpenOutreach.git
+cd OpenOutreach
 
-# Open http://localhost:6080/vnc.html in your browser to watch the automation live
+# Configure environment
+cp .env.example .env
+nano .env  # Edit with your MongoDB URI, LLM API key, etc.
+
+# Build and run with Docker Compose
+docker compose up --build
+
+# Access services:
+# - Frontend: http://localhost:3000
+# - API: http://localhost:8001
+# - API Docs: http://localhost:8001/docs
+# - noVNC: http://localhost:6080 (if ENABLE_VNC=true)
 ```
 
-The interactive onboarding walks you through the three inputs above on first run. All data persists in `~/.Lengrowth Outreach/data` on your host across restarts.
+The interactive onboarding walks you through the required configuration on first run. All data persists in MongoDB.
 
-Once the container is running, open **http://localhost:6080/vnc.html** in your browser to watch the browser live (noVNC). Alternatively, connect a native VNC client to `localhost:5900`.
-
-For Docker Compose, build-from-source, and more options see the **[Docker Guide](./docs/docker.md)**.
+For Docker Compose details, see the **[Phase 3 Completion Guide](./PHASE3_COMPLETION.md)**.
 
 ---
 
@@ -83,21 +94,71 @@ For contributors or if you prefer running directly on your machine.
 
 - [Git](https://git-scm.com/)
 - [Python](https://www.python.org/downloads/) (3.12+)
+- [MongoDB](https://www.mongodb.com/try/download/community) (7.0+) or MongoDB Atlas
 
 ### 1. Clone & Set Up
 ```bash
 git clone https://github.com/eracle/Lengrowth Outreach.git
 cd Lengrowth Outreach
 
-# Install deps, Playwright browsers, run migrations, and bootstrap CRM
-make setup
+# Install dependencies and Playwright browsers
+make -f Makefile.v2 install
+playwright install --with-deps chromium
+
+# Set up MongoDB indexes
+make -f Makefile.v2 ensure-indexes
 ```
 
-### 2. Run the Daemon
+### 2. Configure Environment
+
+Create a `.env` file in the project root:
 
 ```bash
-make run
+# MongoDB
+MONGODB_URI=mongodb://localhost:27017/
+MONGODB_NAME=openoutreach
+
+# LLM Configuration
+LLM_PROVIDER=openai
+LLM_API_KEY=sk-your-api-key
+AI_MODEL=gpt-4o-mini
+
+# Supabase Auth (optional - for frontend)
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=your-anon-key
+SUPABASE_SERVICE_KEY=your-service-key
+
+# Security
+SECRET_KEY=your-secret-key
 ```
+
+### 3. Run the Services
+
+#### Option A: Run Everything (Daemon + API + Frontend)
+
+```bash
+# Terminal 1: FastAPI server
+make -f Makefile.v2 api
+
+# Terminal 2: Daemon
+make -f Makefile.v2 run
+
+# Terminal 3: Frontend (optional)
+cd frontend && npm install && npm run dev
+```
+
+#### Option B: Run Daemon Only
+
+```bash
+# For task queue worker only
+python -m openoutreach.cli rundaemon
+```
+
+### 4. Access the Application
+
+- **Frontend**: http://localhost:3000 (Next.js)
+- **API**: http://localhost:8001 (FastAPI)
+- **API Docs**: http://localhost:8001/docs (Swagger UI)
 The interactive onboarding will prompt for LinkedIn credentials, LLM API key, and campaign details on first run. Fully resumable — stop/restart anytime without losing progress.
 
 ### 3. View Your Data (CRM Admin)
@@ -113,6 +174,32 @@ make admin
 Then open:
 - **Django Admin:** http://localhost:8000/admin/
 - **Next.js Frontend:** http://localhost:3000 (new browser-based interface)
+
+### 4. Run FastAPI Server (New API - Phase 2 Complete! ✅)
+
+Lengrowth Outreach now has a modern FastAPI + MongoDB stack running alongside Django:
+
+```bash
+# Install FastAPI dependencies (if not already installed)
+pip install -r requirements/api.txt
+
+# Run the FastAPI server (port 8001)
+python run_fastapi.py
+```
+
+Then visit:
+- **FastAPI API Docs:** http://localhost:8001/docs (OpenAPI/Swagger UI)
+- **Alternative docs:** http://localhost:8001/redoc (ReDoc UI)
+
+The FastAPI stack provides:
+- ✅ 60+ REST endpoints (same `/api/*` structure as Django)
+- ✅ WebSocket support for real-time notifications and campaign status
+- ✅ SSE (Server-Sent Events) for browser fallback
+- ✅ Supabase JWT + local JWT authentication
+- ✅ MongoDB-native operations (no ORM overhead)
+- ✅ Production-ready performance
+
+**Migration Status**: Phase 2 complete. Phase 3 (removing Django) is ready to start. See `/MIGRATION_PROGRESS.md` for details.
 
 ---
 

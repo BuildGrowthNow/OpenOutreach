@@ -1,3 +1,4 @@
+# docker-compose.v2.yml - Phase 3: FastAPI + MongoDB (Django-free)
 services:
   openoutreach:
     build:
@@ -5,45 +6,86 @@ services:
       dockerfile: Dockerfile
       args:
         - BUILD_ENV=production
-        - NEXT_PUBLIC_API_URL=https://linkedin-api.lengrowth.com
-        - NEXT_PUBLIC_APP_URL=https://linkedin.lengrowth.com
+        - NEXT_PUBLIC_API_URL=http://localhost:8001
+        - NEXT_PUBLIC_APP_URL=http://localhost:3000
     restart: unless-stopped
     stdin_open: true
     tty: true
     environment:
-      - ENABLE_VNC=true
-      - HOST_UID=1000
-      - HOST_GID=1000
-      - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY:-change-in-production}
-      - DJANGO_DEBUG=${DJANGO_DEBUG:-false}
-      - OPENOUTREACH_LOG_LEVEL=${OPENOUTREACH_LOG_LEVEL:-INFO}
+      # Core
+      - SECRET_KEY=${SECRET_KEY:-change-in-production}
+      - DEBUG=${DEBUG:-false}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - DOCKER_ENV=true
-      - DJANGO_ALLOW_ASYNC_UNSAFE=true
       - SKIP_DAEMON=${SKIP_DAEMON:-false}
-      - NEXT_PUBLIC_API_URL=https://linkedin-api.lengrowth.com
-      - NEXT_PUBLIC_APP_URL=https://linkedin.lengrowth.com
-      
+
+      # API URLs
+      - NEXT_PUBLIC_API_URL=http://localhost:8001
+      - NEXT_PUBLIC_APP_URL=http://localhost:3000
+
+      # MongoDB
+      - MONGODB_ENABLED=true
+      - MONGODB_URI=${MONGODB_URI:-mongodb://mongodb:27017/}
+      - MONGODB_NAME=${MONGODB_NAME:-openoutreach}
+
       # LLM Configuration
+      - LLM_PROVIDER=${LLM_PROVIDER:-openai}
       - LLM_API_KEY=${LLM_API_KEY}
       - LLM_API_BASE=${LLM_API_BASE:-}
-      - AI_MODEL=${AI_MODEL}
+      - AI_MODEL=${AI_MODEL:-gpt-4o-mini}
+
       # LinkedIn Configuration
       - LINKEDIN_USERNAME=${LINKEDIN_USERNAME}
       - LINKEDIN_PASSWORD=${LINKEDIN_PASSWORD}
-      # MongoDB Configuration
-      - MONGODB_ENABLED=${MONGODB_ENABLED:-true}
-      - MONGODB_ATLAS_URI=${MONGODB_ATLAS_URI}
-      
+
       # Supabase Configuration
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
       - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
+
+      # JWT Configuration
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-}
+      - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
+
+      # Browser
+      - BROWSER_HEADLESS=${BROWSER_HEADLESS:-true}
+      - ENABLE_VNC=${ENABLE_VNC:-true}
+
+      # Encryption
+      - COOKIE_ENCRYPTION_KEY=${COOKIE_ENCRYPTION_KEY:-}
+
+      # Finder API
+      - FINDER_API_KEY=${FINDER_API_KEY:-}
+
+      # CORS
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+
     volumes:
       - ./data:/app/data
       - ./openoutreach/media:/app/openoutreach/media
-      
+
     ports:
-      - "3000:3000"
-      - "8000:8000"
-      - "6080:6080"
-      - "5900:5900"
+      - "3000:3000"  # Next.js frontend
+      - "8001:8001"  # FastAPI backend
+      - "6080:6080"  # noVNC web viewer
+      - "5900:5900"  # VNC direct connection
+
+    depends_on:
+      - mongodb
+
+    command: ["/start_v2"]
+
+  mongodb:
+    image: mongo:7.0
+    restart: unless-stopped
+    environment:
+      - MONGO_INITDB_DATABASE=openoutreach
+    volumes:
+      - mongodb_data:/data/db
+      - mongodb_config:/data/configdb
+    ports:
+      - "27017:27017"
+
+volumes:
+  mongodb_data:
+  mongodb_config:

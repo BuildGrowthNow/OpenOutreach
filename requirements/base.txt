@@ -1,8 +1,8 @@
 playwright>=1.59
 pytest>=8.0.0
-pytest-django>=4.9.0
 playwright-stealth
-pydantic
+pydantic>=2.10.0
+pydantic-settings>=2.7.0
 pydantic-ai-slim[openai,anthropic,google,groq,mistral,cohere,bedrock]
 # pydantic-ai 1.96 imports `from griffe import ...`, but griffe 2.x split into an
 # empty `griffelib` meta-package and reorganized symbols. Pin until upstream fixes.
@@ -11,8 +11,6 @@ jsonpath-ng
 pandas
 jinja2
 termcolor
-Django>=5.2,<7.0
-django-channels
 tendo
 pyyaml
 fastembed
@@ -23,5 +21,6 @@ pytz
 linkedin-agent-cli
 psutil
 cryptography>=39.0.0
-# API Dependencies
--r api.txt
+
+# FastAPI + MongoDB Dependencies
+-r fastapi.txt

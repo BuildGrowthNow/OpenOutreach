@@ -1,0 +1,31 @@
+# FastAPI + MongoDB Requirements (Phase 3 - Django-free)
+# Core framework
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+pydantic>=2.10.0
+pydantic-settings>=2.7.0
+python-multipart>=0.0.20
+
+# MongoDB
+pymongo>=4.6.0
+motor>=3.6.0
+
+# Auth
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+httpx>=0.27.0
+
+# Encryption
+cryptography>=39.0.0
+
+# CLI
+click>=8.1.0
+
+# WebSocket / Real-time
+websockets>=12.0
+
+# Redis (optional - for multi-process WebSocket)
+redis>=5.0.0
+
+# Logging & Monitoring
+python-json-logger>=2.0.7

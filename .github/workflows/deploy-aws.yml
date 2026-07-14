@@ -11,7 +11,7 @@ jobs:
   deploy:
     name: Deploy to AWS EC2
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -29,8 +29,8 @@ jobs:
         env:
           EC2_HOST: ${{ secrets.EC2_HOST }}
           EC2_USER: ${{ secrets.EC2_USER }}
-          DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
-          DJANGO_DEBUG: ${{ secrets.DJANGO_DEBUG }}
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
+          DEBUG: ${{ secrets.DEBUG }}
           SSH_AUTH_SOCK: /dev/null
         run: |
           # Clone or update the repository on the server (force reset to avoid merge conflicts)
@@ -49,7 +49,7 @@ jobs:
             fi
             cd ~/OpenOutreach
           "
-          
+
           # Deploy with docker-compose
           ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o IdentitiesOnly=yes "${EC2_USER}@${EC2_HOST}" "
             set -e
@@ -58,17 +58,17 @@ jobs:
             docker compose up -d --build
           "
 
-      - name: Run Django Migrations
+      - name: Ensure MongoDB Indexes
         env:
           EC2_HOST: ${{ secrets.EC2_HOST }}
           EC2_USER: ${{ secrets.EC2_USER }}
         run: |
-          echo "Running Django migrations..."
+          echo "Creating MongoDB indexes..."
           ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o IdentitiesOnly=yes "${EC2_USER}@${EC2_HOST}" "
             set -e
             cd ~/OpenOutreach
-            # Run migrations in the Django container
-            docker compose exec openoutreach python manage.py migrate --no-input
+            # Ensure MongoDB indexes are created (idempotent)
+            docker compose exec -T openoutreach python -m openoutreach.cli ensure-indexes
           "
 
       - name: Wait for services to start

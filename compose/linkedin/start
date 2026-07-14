@@ -1,5 +1,5 @@
 #!/bin/bash
-# compose/start - Start Next.js and Django (no container nginx)
+# compose/start_v2 - Start Next.js and FastAPI (Phase 3 - no Django)
 
 set -euo pipefail
 
@@ -9,7 +9,7 @@ Xvfb :99 -screen 0 1920x1080x24 &
 sleep 1
 export DISPLAY=:99
 
-# Start Next.js frontend server on port 3000 (nginx is not used in container)
+# Start Next.js frontend server on port 3000
 echo "Starting Next.js server on port 3000..."
 if [ -d /app/frontend ]; then
     cd /app/frontend
@@ -30,7 +30,6 @@ if [ -d /app/frontend ]; then
     # Wait for Next.js to be ready (up to 30 seconds)
     echo "Waiting for Next.js to be ready..."
     for i in $(seq 1 30); do
-        # Check if Next.js process is running and listening on port 3000
         if curl -sf http://localhost:3000 >/dev/null; then
             echo "Next.js is ready and listening on port 3000!"
             break
@@ -55,46 +54,48 @@ fi
 # Wait for Next.js to be ready
 sleep 2
 
-# If SKIP_DAEMON is set, run migrations and Django in background
+# If SKIP_DAEMON is set, run migrations and FastAPI in background
 if [ "${SKIP_DAEMON:-false}" = "true" ]; then
-    echo "SKIP_DAEMON=true - Starting Django admin without daemon..."
-    echo "Running Django migrations before starting the API server..."
-    gosu ubuntu python manage.py migrate --no-input
+    echo "SKIP_DAEMON=true - Starting FastAPI without daemon..."
+    echo "Ensuring MongoDB indexes..."
+    gosu ubuntu python -m openoutreach.cli ensure-indexes
 
-    gosu ubuntu gunicorn openoutreach.wsgi:application --bind 0.0.0.0:8000 --workers 1 --threads 4 --timeout 180 &
-    DJANGO_PID=$!
-    echo "Django started with PID $DJANGO_PID"
+    # Start FastAPI server on port 8001
+    gosu ubuntu python -m openoutreach.cli runserver --host 0.0.0.0 --port 8001 &
+    API_PID=$!
+    echo "FastAPI started with PID $API_PID"
 
-    wait -n $NEXTJS_PID $DJANGO_PID
+    wait -n $NEXTJS_PID $API_PID
     EXIT_CODE=$?
     echo "A server process exited with status $EXIT_CODE, shutting down..."
     kill $NEXTJS_PID 2>/dev/null || true
-    kill $DJANGO_PID 2>/dev/null || true
+    kill $API_PID 2>/dev/null || true
     wait $NEXTJS_PID 2>/dev/null || true
-    wait $DJANGO_PID 2>/dev/null || true
+    wait $API_PID 2>/dev/null || true
     exit $EXIT_CODE
 fi
 
-# Start Django API server in background (needed for frontend → API communication)
-# Use gunicorn in production to avoid auto-reloader restart loops
-gosu ubuntu gunicorn openoutreach.wsgi:application --bind 0.0.0.0:8000 --workers 1 --threads 4 --timeout 180 &
-DJANGO_PID=$!
-echo "Django API started with PID $DJANGO_PID"
+# Start FastAPI server in background (needed for frontend → API communication)
+echo "Starting FastAPI server on port 8001..."
+gosu ubuntu python -m openoutreach.cli runserver --host 0.0.0.0 --port 8001 &
+API_PID=$!
+echo "FastAPI started with PID $API_PID"
 
-# Run the daemon (migrate + onboard + task queue).
-# Forward any arguments, e.g. --onboard <file>.
-gosu ubuntu python manage.py rundaemon "$@" &
+# Run the daemon (MongoDB-native task queue)
+# Forward any arguments, e.g. --onboard <file>
+echo "Starting daemon..."
+gosu ubuntu python -m openoutreach.cli rundaemon "$@" &
 DAEMON_PID=$!
 echo "Daemon started with PID $DAEMON_PID"
 
 # Wait for any process to exit
-wait -n $NEXTJS_PID $DJANGO_PID $DAEMON_PID
+wait -n $NEXTJS_PID $API_PID $DAEMON_PID
 EXIT_CODE=$?
 echo "A process exited with status $EXIT_CODE, shutting down..."
 kill $NEXTJS_PID 2>/dev/null || true
-kill $DJANGO_PID 2>/dev/null || true
+kill $API_PID 2>/dev/null || true
 kill $DAEMON_PID 2>/dev/null || true
 wait $NEXTJS_PID 2>/dev/null || true
-wait $DJANGO_PID 2>/dev/null || true
+wait $API_PID 2>/dev/null || true
 wait $DAEMON_PID 2>/dev/null || true
 exit $EXIT_CODE
