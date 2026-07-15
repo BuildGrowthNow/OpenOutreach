@@ -12,7 +12,6 @@ class CampaignCreate(BaseModel):
     product_pitch: str = Field(..., description="Product/service pitch")
     campaign_objective: str = Field(..., description="Campaign objective/goal")
     booking_link: Optional[str] = Field(None, description="Calendar booking link")
-    is_freemium: bool = Field(default=False, description="Whether this is a freemium campaign")
     velocity: int = Field(default=20, ge=1, le=100, description="Actions per hour")
     cooldown_minutes: int = Field(default=0, ge=0, description="Cooldown between actions")
     icp_titles: Optional[List[str]] = Field(None, description="Ideal customer profile job titles")
@@ -28,7 +27,6 @@ class CampaignUpdate(BaseModel):
     campaign_objective: Optional[str] = None
     booking_link: Optional[str] = None
     is_paused: Optional[bool] = None
-    is_freemium: Optional[bool] = None
     velocity: Optional[int] = Field(None, ge=1, le=100)
     cooldown_minutes: Optional[int] = Field(None, ge=0)
     icp_titles: Optional[List[str]] = None
@@ -43,7 +41,6 @@ class CampaignResponse(BaseModel):
     product_pitch: str
     campaign_objective: str
     booking_link: Optional[str] = None
-    is_freemium: bool
     is_paused: bool
     velocity: int
     cooldown_minutes: int

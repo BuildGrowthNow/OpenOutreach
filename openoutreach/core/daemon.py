@@ -17,7 +17,7 @@ from termcolor import colored
 from openoutreach.core.conf import CAMPAIGN_CONFIG
 from openoutreach.linkedin.diagnostics import failure_diagnostics
 from linkedin_cli.exceptions import AuthenticationError, CheckpointChallengeError
-from openoutreach.linkedin.ml.qualifier import BayesianQualifier, KitQualifier
+from openoutreach.linkedin.ml.qualifier import BayesianQualifier
 from openoutreach.mongodb.models import Campaign, SiteConfig, Task
 
 logger = logging.getLogger(__name__)
@@ -198,30 +198,25 @@ def seconds_until_active(user_id: Optional[str] = None) -> float:
 # ── Qualifiers ─────────────────────────────────────────────────────────
 
 
-def _build_qualifiers(campaigns, cfg, kit_model=None):
+def _build_qualifiers(campaigns, cfg):
     from openoutreach.crm.models import Lead
 
     qualifiers: dict = {}
     for campaign in campaigns:
-        if campaign.is_freemium:
-            if kit_model is None:
-                continue
-            qualifiers[campaign.pk] = KitQualifier(kit_model)
-        else:
-            q = BayesianQualifier(
-                seed=42,
-                n_mc_samples=cfg["qualification_n_mc_samples"],
-                campaign=campaign,
+        q = BayesianQualifier(
+            seed=42,
+            n_mc_samples=cfg["qualification_n_mc_samples"],
+            campaign=campaign,
+        )
+        X, y = Lead.get_labeled_arrays(campaign)
+        if len(X) > 0:
+            q.warm_start(X, y)
+            logger.info(
+                colored("GP qualifier warm-started", "cyan")
+                + " on %d samples (%d+, %d-) for %s",
+                len(y), int((y == 1).sum()), int((y == 0).sum()), campaign,
             )
-            X, y = Lead.get_labeled_arrays(campaign)
-            if len(X) > 0:
-                q.warm_start(X, y)
-                logger.info(
-                    colored("GP qualifier warm-started", "cyan")
-                    + " on %d samples (%d+, %d-) for %s",
-                    len(y), int((y == 1).sum()), int((y == 0).sum()), campaign,
-                )
-            qualifiers[campaign.pk] = q
+        qualifiers[campaign.pk] = q
 
     return qualifiers
 
@@ -363,14 +358,6 @@ def run_daemon():
     heartbeat = Heartbeat()
     rhythm = _HumanRhythmBreak(heartbeat)
 
-    # Load kit model for freemium campaigns
-    kit = None
-    try:
-        from openoutreach.linkedin.ml.hub import fetch_kit
-        kit = fetch_kit()
-    except Exception:
-        pass
-
     # Session pool: profile_id -> ProfileSession
     pool: dict[str, ProfileSession] = {}
     last_profile_refresh = 0.0
@@ -407,9 +394,7 @@ def run_daemon():
             return
         session = ps.ensure_session()
         campaigns = session.campaigns
-        ps.qualifiers = _build_qualifiers(
-            campaigns, cfg, kit_model=kit["model"] if kit else None,
-        )
+        ps.qualifiers = _build_qualifiers(campaigns, cfg)
 
     logger.info(colored("Daemon starting", "green", attrs=["bold"]) + " — multi-profile mode")
 

@@ -15,7 +15,6 @@ tendo
 pyyaml
 fastembed
 scikit-learn
-huggingface_hub
 questionary
 pytz
 # linkedin_cli is vendored at project root (PyPI package was yanked)

@@ -218,24 +218,6 @@ def create_disqualified_deal(session, public_id: str, reason: str = ""):
     return deal
 
 
-def create_freemium_deal(session, public_id: str):
-    """Create a Deal in the freemium campaign for a candidate lead."""
-    campaign = session.campaign
-    lead, existing = _existing_deal_or_lead(public_id, campaign)
-    if existing:
-        return existing
-    if not lead:
-        raise ValueError(f"No Lead for {public_id}")
-
-    deal = _create_deal(
-        lead=lead,
-        state=DealState.QUALIFIED,
-        session=session,
-    )
-
-    logger.info("%s %s", public_id, colored("FREEMIUM DEAL", "cyan", attrs=["bold"]))
-    return deal
-
 
 def _create_deal(
     *,

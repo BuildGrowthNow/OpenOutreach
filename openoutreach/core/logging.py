@@ -93,7 +93,6 @@ SILENCED_LOGGERS = (
     "playwright",
     "httpcore",
     "fastembed",
-    "huggingface_hub",
     "filelock",
     "asyncio",
     "requests",

@@ -54,23 +54,6 @@ def strategy_for(campaign, qualifiers):
         )
         raise ValueError(f"No qualifier found for campaign {campaign.pk}")
 
-    if campaign.is_freemium:
-        from openoutreach.core.db.deals import create_freemium_deal
-        from openoutreach.linkedin.pipeline.freemium_pool import find_freemium_candidate
-
-        # Capture find_freemium_candidate in closure
-        def find_candidate_wrapper(s):
-            return find_freemium_candidate(s, qualifier)
-
-        def pre_connect_wrapper(s, pid):
-            return create_freemium_deal(s, pid)
-
-        return ConnectStrategy(
-            find_candidate=find_candidate_wrapper,
-            pre_connect=pre_connect_wrapper,
-            qualifier=qualifier,
-        )
-
     from openoutreach.linkedin.pipeline.pools import find_candidate
 
     # Capture find_candidate in closure

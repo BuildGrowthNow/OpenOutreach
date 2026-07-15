@@ -390,9 +390,6 @@ def plan_connect_window(session, campaign) -> int:
     config = SiteConfig.load(user_id=profile.user_id)
     n = max(0, profile.connect_daily_limit - profile._daily_count("connect"))
 
-    if campaign.is_freemium:
-        n = int(n * campaign.action_fraction)
-
     profile_id = profile.pk
     user_id = profile.user_id
 
