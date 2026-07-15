@@ -81,17 +81,16 @@ gosu ubuntu python -m openoutreach.cli runserver --host 0.0.0.0 --port 8001 &
 API_PID=$!
 echo "FastAPI started with PID $API_PID"
 
-# Run the daemon (MongoDB-native task queue)
-# Forward any arguments, e.g. --onboard <file>
+# Run the daemon (MongoDB-native task queue) — non-fatal if it crashes
 echo "Starting daemon..."
 gosu ubuntu python -m openoutreach.cli rundaemon "$@" &
 DAEMON_PID=$!
 echo "Daemon started with PID $DAEMON_PID"
 
-# Wait for any process to exit
-wait -n $NEXTJS_PID $API_PID $DAEMON_PID
+# Wait for critical services (Next.js + FastAPI) — daemon crash is non-fatal
+wait -n $NEXTJS_PID $API_PID
 EXIT_CODE=$?
-echo "A process exited with status $EXIT_CODE, shutting down..."
+echo "A critical process exited with status $EXIT_CODE, shutting down..."
 kill $NEXTJS_PID 2>/dev/null || true
 kill $API_PID 2>/dev/null || true
 kill $DAEMON_PID 2>/dev/null || true

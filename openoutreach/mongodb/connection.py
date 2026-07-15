@@ -262,20 +262,16 @@ def reset_mongodb_connection() -> None:
 
 def initialize_mongodb_connection() -> bool:
     """
-    Initialize MongoDB connection after Django is configured.
-    This can be called after Django setup to establish the connection
-    if it was deferred during module initialization.
-
-    Returns:
-        True if connection successful, False otherwise
+    Initialize MongoDB connection.
+    Returns True if connected (already or newly), False on failure.
     """
-    # Only try to connect if not already initialized
-    if mongodb_connection._client is None:
-        try:
-            if _is_mongodb_enabled() and _get_mongodb_uri():
-                return mongodb_connection.connect()
-            else:
-                logger.info("MongoDB is disabled or URI not configured")
-        except Exception as e:
-            logger.error(f"Failed to initialize MongoDB connection: {e}")
+    if mongodb_connection._client is not None:
+        return True
+    try:
+        if _is_mongodb_enabled() and _get_mongodb_uri():
+            return mongodb_connection.connect()
+        else:
+            logger.info("MongoDB is disabled or URI not configured")
+    except Exception as e:
+        logger.error(f"Failed to initialize MongoDB connection: {e}")
     return False
