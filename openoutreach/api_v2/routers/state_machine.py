@@ -17,7 +17,7 @@ from openoutreach.linkedin.models import (
 from openoutreach.mongodb.connection import get_mongodb_collection
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/state-machines", tags=["State Machine"])
+router = APIRouter(tags=["State Machine"])
 
 
 # ============================================================================

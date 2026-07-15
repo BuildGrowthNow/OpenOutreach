@@ -115,7 +115,7 @@ def encrypt_cookie_data(storage_state: Dict) -> str:
 
 # Endpoints
 
-@router.get("/linkedin-profiles", response_model=ProfileListResponse)
+@router.get("/", response_model=ProfileListResponse)
 async def list_linkedin_profiles(
     skip: int = 0,
     limit: int = 100,
@@ -163,7 +163,7 @@ async def list_linkedin_profiles(
 
 
 @router.post(
-    "/linkedin-profiles/{profile_id}/cookies",
+    "/{profile_id}/cookies",
     response_model=CookieUploadResponse,
     status_code=status.HTTP_200_OK,
 )
@@ -304,7 +304,7 @@ async def upload_profile_cookies(
         )
 
 
-@router.post("/linkedin-profiles", response_model=LinkedInProfileResponse, status_code=201)
+@router.post("/", response_model=LinkedInProfileResponse, status_code=201)
 async def create_profile(
     linkedin_username: str = Body(...),
     connect_daily_limit: int = Body(20),
@@ -386,7 +386,7 @@ async def create_profile(
         )
 
 
-@router.get("/linkedin-profiles/{profile_id}", response_model=LinkedInProfileResponse)
+@router.get("/{profile_id}", response_model=LinkedInProfileResponse)
 async def get_profile(
     profile_id: str,
     user_id: str = Depends(get_current_user),
@@ -436,7 +436,7 @@ async def get_profile(
         )
 
 
-@router.put("/linkedin-profiles/{profile_id}", response_model=LinkedInProfileResponse)
+@router.put("/{profile_id}", response_model=LinkedInProfileResponse)
 async def update_profile(
     profile_id: str,
     linkedin_username: Optional[str] = Body(None),
@@ -522,7 +522,7 @@ async def update_profile(
         )
 
 
-@router.delete("/linkedin-profiles/{profile_id}", status_code=204)
+@router.delete("/{profile_id}", status_code=204)
 async def delete_profile(
     profile_id: str,
     user_id: str = Depends(get_current_user),
@@ -594,7 +594,7 @@ async def delete_profile(
         )
 
 
-@router.get("/linkedin-profile-health")
+@router.get("/health")
 async def get_profile_health(
     user_id: str = Depends(get_current_user),
 ):

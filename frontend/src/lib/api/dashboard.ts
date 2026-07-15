@@ -1116,14 +1116,14 @@ export interface LinkedInProfile {
 export async function getLinkedInProfiles(): Promise<
   ApiResponse<{ profiles: LinkedInProfile[]; count: number }>
 > {
-  return get("/api/linkedin-profiles");
+  return get("/api/linkedin-profiles/");
 }
 
 // LinkedIn Profile Health API
 export async function getLinkedInProfileHealth(): Promise<
   ApiResponse<LinkedInProfileHealthResponse>
 > {
-  return get("/api/linkedin-profile-health");
+  return get("/api/linkedin-profiles/health");
 }
 
 // Upload campaign leads (CSV)

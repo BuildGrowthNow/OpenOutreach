@@ -80,7 +80,7 @@ class CampaignListResponse(BaseModel):
 
 # Endpoints
 
-@router.get("/campaigns", response_model=CampaignListResponse)
+@router.get("/", response_model=CampaignListResponse)
 async def list_campaigns(
     skip: int = 0,
     limit: int = 100,
@@ -137,7 +137,7 @@ async def list_campaigns(
         )
 
 
-@router.post("/campaigns", response_model=CampaignResponse, status_code=201)
+@router.post("/", response_model=CampaignResponse, status_code=201)
 async def create_campaign(
     data: CampaignCreate,
     user_id: str = Depends(get_current_user),
@@ -226,7 +226,7 @@ async def create_campaign(
         )
 
 
-@router.get("/campaigns/{campaign_id}", response_model=CampaignResponse)
+@router.get("/{campaign_id}", response_model=CampaignResponse)
 async def get_campaign(
     campaign: models.Campaign = Depends(get_campaign_with_access),
 ):
@@ -250,7 +250,7 @@ async def get_campaign(
     )
 
 
-@router.put("/campaigns/{campaign_id}", response_model=CampaignResponse)
+@router.put("/{campaign_id}", response_model=CampaignResponse)
 async def update_campaign(
     campaign_id: str,
     data: CampaignUpdate,
@@ -367,7 +367,7 @@ async def update_campaign(
         )
 
 
-@router.delete("/campaigns/{campaign_id}", status_code=204)
+@router.delete("/{campaign_id}", status_code=204)
 async def delete_campaign(
     campaign_id: str,
     user_id: str = Depends(get_current_user),
