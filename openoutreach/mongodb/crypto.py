@@ -285,19 +285,25 @@ class EncryptedField:
         if obj is None:
             return self
 
-        encrypted_value = getattr(obj, self.field_name, None)
+        field_name = self.field_name
+        if field_name is None:
+            return ""
+        encrypted_value = getattr(obj, field_name, None)
         if not encrypted_value:
             return ""
 
         return safe_decrypt(encrypted_value)
 
     def __set__(self, obj, value):
+        field_name = self.field_name
+        if field_name is None:
+            return
         if not value:
-            setattr(obj, self.field_name, "")
+            setattr(obj, field_name, "")
             return
 
         encrypted = safe_encrypt(value)
-        setattr(obj, self.field_name, encrypted)
+        setattr(obj, field_name, encrypted)
 
 
 __all__ = [

@@ -1,12 +1,11 @@
 """
 MongoDB Integration Module for OpenOutreach
 
-This module provides MongoDB integration using Djongo, allowing Django ORM
-to work with MongoDB while maintaining compatibility with existing SQLite setup.
+This module provides MongoDB integration for FastAPI, with native MongoDB
+models and queries.
 
 Features:
-- Dual-write support for migration
-- MongoDB-compatible models
+- Native MongoDB models and queries
 - Data aggregation pipelines
 - Performance indexing
 - Backup strategies

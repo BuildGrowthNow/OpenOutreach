@@ -142,7 +142,7 @@ def _register(config: SiteConfig, session, record: dict, lead) -> None:
     """
     body = {
         "linkedin_public_id": session.self_profile.get("public_identifier"),
-        "subscriber_email": session.django_user.email
+        "subscriber_email": session.user.email
         or session.linkedin_profile.linkedin_username,
         **record,
     }
@@ -151,7 +151,7 @@ def _register(config: SiteConfig, session, record: dict, lead) -> None:
     if not token:
         return
     config.contacts_api_token = token
-    config.save(update_fields=["contacts_api_token"])
+    config.save()
     logger.info("hub: registered — API token earned and stored")
 
 

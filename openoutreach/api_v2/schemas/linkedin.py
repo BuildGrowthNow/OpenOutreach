@@ -20,7 +20,7 @@ class LinkedInProfileResponse(BaseModel):
     """
 
     id: str = Field(..., description="Unique profile identifier (MongoDB _id)")
-    user_id: str = Field(..., description="Reference to the Django User who owns this profile")
+    user_id: str = Field(..., description="Reference to the User who owns this profile")
     linkedin_username: str = Field(..., description="LinkedIn account username/email")
     subscribe_newsletter: bool = Field(default=True, description="Newsletter subscription preference")
     active: bool = Field(default=True, description="Whether this profile is active")
@@ -108,7 +108,7 @@ class LinkedInCredentialResponse(BaseModel):
     usage_count: int = Field(default=0, description="Number of times this credential has been used")
     last_used: Optional[datetime] = Field(None, description="Last usage timestamp")
     campaign_id: Optional[str] = Field(None, description="Associated campaign ID")
-    user_id: Optional[str] = Field(None, description="Reference to the Django User who owns these credentials")
+    user_id: Optional[str] = Field(None, description="Reference to the User who owns these credentials")
     created_at: datetime = Field(..., description="Credential creation timestamp")
     updated_at: datetime = Field(..., description="Last credential update timestamp")
     expires_at: Optional[datetime] = Field(None, description="Credential expiration timestamp")

@@ -66,7 +66,7 @@ def _build_identity_binding(seller_name: str) -> str:
 def seller_name_from(session) -> str:
     """Return the seller's first name as known to the LLM, with a username fallback."""
     sp = session.self_profile
-    return (sp.get("first_name") or "").strip() or session.django_user.username
+    return (sp.get("first_name") or "").strip() or session.user.email.split('@')[0]
 
 
 class FactList(BaseModel):

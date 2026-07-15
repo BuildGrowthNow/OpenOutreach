@@ -178,7 +178,7 @@ def _log_chat_facts(public_id: str, deal) -> None:
 
 def _load_recent_messages(deal, limit: int = RECENT_MESSAGES_WINDOW) -> list:
     """Last `limit` ChatMessages for `deal`, in chronological order."""
-    from openoutreach.mongodb.models import ChatMessage
+    from openoutreach.mongodb.models_extended import ChatMessage
 
     messages = ChatMessage.find_by_deal(deal.pk, limit=limit)
     return list(reversed(messages))
@@ -273,14 +273,23 @@ if __name__ == "__main__":
 
     if args.task_id:
         task = Task.get(args.task_id)
+        if not task:
+            logger.error("Task %s not found", args.task_id)
+            raise SystemExit(1)
         public_id = task.payload["public_id"]
         campaign_id = task.payload["campaign_id"]
 
         campaign = Campaign.get(campaign_id)
+        if not campaign:
+            logger.error("Campaign %s not found", campaign_id)
+            raise SystemExit(1)
         session.campaign = campaign
     else:
         public_id = args.profile
 
+    if not session.campaign:
+        logger.error("No campaign set on session")
+        raise SystemExit(1)
     deal = Deal.get_by_lead_and_campaign(public_id, session.campaign.pk)
     if not deal:
         logger.error("No Deal found for %s", public_id)

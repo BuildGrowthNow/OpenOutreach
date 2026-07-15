@@ -44,7 +44,11 @@ def email_state() -> str:
     """Which setup step is next: NO_BETTERCONTACT, NO_MAILBOX, or CONFIGURED."""
     if not SiteConfig.load().bettercontact_api_key:
         return NO_BETTERCONTACT
-    if not Mailbox.objects.exists():
+
+    # Check if any mailbox exists
+    from openoutreach.mongodb.connection import get_mongodb_collection
+    mailboxes_collection = get_mongodb_collection("mailboxes")
+    if mailboxes_collection is None or mailboxes_collection.count_documents({}) == 0:
         return NO_MAILBOX
     return CONFIGURED
 
@@ -121,11 +125,24 @@ def _waiting_line(stats: dict) -> str:
 
 def pipeline_stats() -> dict:
     """The user's own numbers — what makes the nudge land instead of nag."""
-    profile = LinkedInProfile.objects.filter(active=True).first()
+    from openoutreach.mongodb.connection import get_mongodb_collection
+
+    # Get first active profile
+    profiles = LinkedInProfile.objects.filter(active=True)
+    profile = profiles[0] if profiles else None
+
+    # Count deals and leads via MongoDB
+    deals_collection = get_mongodb_collection("deals")
+    leads_collection = get_mongodb_collection("leads")
+
+    qualified_count = deals_collection.count_documents({"state": DealState.QUALIFIED.value}) if deals_collection is not None else 0
+    pending_count = deals_collection.count_documents({"state": DealState.PENDING.value}) if deals_collection is not None else 0
+    resolved_emails_count = leads_collection.count_documents({"api_email": {"$ne": None}}) if leads_collection is not None else 0
+
     return {
-        "qualified": Deal.objects.filter(state=DealState.QUALIFIED).count(),
-        "pending": Deal.objects.filter(state=DealState.PENDING).count(),
-        "resolved_emails": Lead.objects.filter(api_email__isnull=False).count(),
+        "qualified": qualified_count,
+        "pending": pending_count,
+        "resolved_emails": resolved_emails_count,
         "connect_cap": (
             profile.connect_daily_limit if profile else DEFAULT_CONNECT_DAILY_LIMIT
         ),
@@ -167,14 +184,25 @@ def _store_mailboxes(rows: list[tuple[str, str]], daily_limit: int) -> ImportRep
         if not ok:
             report.failures.append((email, reason))
             continue
-        Mailbox.objects.update_or_create(
-            username=email,
-            defaults={
-                "password": password,
-                "from_address": email,
-                "daily_limit": daily_limit,
-            },
-        )
+        # Get or create mailbox
+        from openoutreach.mongodb.connection import get_mongodb_collection
+        mailboxes_collection = get_mongodb_collection("mailboxes")
+        if mailboxes_collection is not None:
+            existing = mailboxes_collection.find_one({"username": email})
+            if existing:
+                mailbox = Mailbox.from_dict(existing)
+                mailbox.password = password
+                mailbox.from_address = email
+                mailbox.daily_limit = daily_limit
+                mailbox.save()
+            else:
+                mailbox = Mailbox(
+                    username=email,
+                    password=password,
+                    from_address=email,
+                    daily_limit=daily_limit,
+                )
+                mailbox.save()
         report.stored += 1
     return report
 
@@ -238,7 +266,7 @@ def _collect_bettercontact_key() -> None:
     if not key or key == _BACK:
         return
     cfg = SiteConfig.load()
-    cfg.bettercontact_api_key = key
+    cfg.bettercontact_api_key = str(key)
     cfg.save()
     logger.info(
         "BetterContact key saved — enrichment is on; emails resolve as leads qualify."

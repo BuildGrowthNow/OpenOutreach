@@ -181,14 +181,29 @@ _PROVIDER_BUILDERS: dict[str, Callable] = {
 
 
 def _validated_site_config():
-    """Load `SiteConfig` and assert the required LLM fields are populated."""
+    """Load `SiteConfig` and assert the required LLM fields are populated.
+
+    Falls back to .env values (via settings) when the user hasn't configured
+    LLM settings in the database — allows a platform-level default key.
+    """
     from openoutreach.core.models import SiteConfig
+    from openoutreach.config import settings
 
     cfg = SiteConfig.load()
+
+    if not cfg.llm_api_key and settings.LLM_API_KEY:
+        cfg.llm_api_key = settings.LLM_API_KEY
+    if not cfg.ai_model and settings.AI_MODEL:
+        cfg.ai_model = settings.AI_MODEL
+    if not cfg.llm_provider and settings.LLM_PROVIDER:
+        cfg.llm_provider = settings.LLM_PROVIDER
+    if not cfg.llm_api_base and settings.LLM_API_BASE:
+        cfg.llm_api_base = settings.LLM_API_BASE
+
     if not cfg.llm_api_key:
-        raise ValueError("LLM_API_KEY is not set in Site Configuration.")
+        raise ValueError("LLM_API_KEY is not set in Site Configuration or .env")
     if not cfg.ai_model:
-        raise ValueError("AI_MODEL is not set in Site Configuration.")
+        raise ValueError("AI_MODEL is not set in Site Configuration or .env")
     return cfg
 
 

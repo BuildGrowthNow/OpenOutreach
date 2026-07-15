@@ -56,7 +56,7 @@ def _get_active_hours_config():
         'start_hour': config.active_start_hour,
         'end_hour': config.active_end_hour,
         'timezone': config.active_timezone,
-        'days': set(int(d.strip()) for d in config.active_days.split(",") if d.strip()) if config.active_days else {1,2,3,4,5}
+        'days': (set(int(d.strip()) for d in config.active_days.split(",") if d.strip()) if isinstance(config.active_days, str) else set(config.active_days)) if config.active_days else {1,2,3,4,5}
     }
 
 
@@ -316,58 +316,47 @@ def _seconds_to_timestamp(seconds: float, intervals: list[tuple]):
 # ── Per-type planners ─────────────────────────────────────────────────
 
 
-def _has_pending(task_type: "Task.TaskType", campaign_id: int) -> bool:
-    return Task.objects.filter(
+def _has_pending(task_type: str, campaign_id: str) -> bool:
+    pending = Task.objects.filter(
         task_type=task_type,
         status=Task.Status.PENDING,
-        payload__campaign_id=campaign_id,
-    ).exists()
+    )
+    return any(t.payload.get("campaign_id") == campaign_id for t in pending)
 
 
 def _create_lazy_slots(
-    task_type: "Task.TaskType", campaign_id: int, times: list
+    task_type: str, campaign_id: str, times: list,
+    linkedin_profile_id: str | None = None,
+    user_id: str | None = None,
 ) -> int:
     if not times:
         return 0
-    Task.objects.bulk_create(
-        [
-            Task(
-                task_type=task_type,
-                scheduled_at=t,
-                payload={"campaign_id": campaign_id},
-            )
-            for t in times
-        ]
-    )
-    return len(times)
+    tasks = [
+        Task(
+            task_type=task_type,
+            scheduled_at=t,
+            payload={"campaign_id": campaign_id},
+            linkedin_profile_id=linkedin_profile_id,
+            user_id=user_id,
+        )
+        for t in times
+    ]
+    for task in tasks:
+        task.save()
+    return len(tasks)
 
 
 def _plan_slots(
-    task_type: "Task.TaskType",
-    campaign_id: int,
+    task_type: str,
+    campaign_id: str,
     n: int,
     velocity: int,
     limiter_context=None,
-    time_aware: bool = False
+    time_aware: bool = False,
+    linkedin_profile_id: str | None = None,
+    user_id: str | None = None,
 ) -> int:
-    """Schedule *n* lazy slots spaced according to velocity and smart context.
-
-    When smart rate limiting is enabled (time_aware=True + limiter_context):
-      - Clusters tasks during business hours
-      - Reduces tasks during off-hours
-      - Adds jitter when detectability is high
-
-    When smart rate limiting is disabled:
-      - Uses fixed velocity spacing across working window
-
-    Args:
-        task_type: Type of task to create
-        campaign_id: Campaign PK
-        n: Number of slots to create
-        velocity: Actions per hour
-        limiter_context: SmartRateLimitContext instance (optional)
-        time_aware: Whether to use smart time-of-day spacing
-    """
+    """Schedule *n* lazy slots spaced according to velocity and smart context."""
     if n <= 0:
         return 0
     now = Datetime.now(tz.utc)
@@ -377,7 +366,11 @@ def _plan_slots(
     else:
         times = velocity_slot_times(now, n, velocity)
 
-    return _create_lazy_slots(task_type, campaign_id, times)
+    return _create_lazy_slots(
+        task_type, campaign_id, times,
+        linkedin_profile_id=linkedin_profile_id,
+        user_id=user_id,
+    )
 
 
 def plan_connect_window(session, campaign) -> int:
@@ -393,55 +386,49 @@ def plan_connect_window(session, campaign) -> int:
     from openoutreach.mongodb.models import SiteConfig
     from openoutreach.core.rate_limit_presets import get_preset
 
-    config = SiteConfig.load()
     profile = session.linkedin_profile
+    config = SiteConfig.load(user_id=profile.user_id)
     n = max(0, profile.connect_daily_limit - profile._daily_count("connect"))
 
     if campaign.is_freemium:
         n = int(n * campaign.action_fraction)
 
-    # Smart mode vs Manual mode
+    profile_id = profile.pk
+    user_id = profile.user_id
+
     if config.enable_smart_rate_limiting:
         from openoutreach.linkedin.services.smart_rate_limits import SmartRateLimiter
         limiter = SmartRateLimiter(profile)
 
-        # Get preset configuration
         preset = get_preset(config.aggressiveness_preset)
         velocity = preset["velocity"]
         time_aware = preset["time_aware"]
 
-        # Apply smart effective limit (accounts for detectability, time-of-day)
         smart_effective = limiter.context.get_effective_limit('connect', campaign)
         n = min(n, int(smart_effective * preset["detectability_multiplier"]))
 
         created = _plan_slots(
-            Task.TaskType.CONNECT,
-            campaign.pk,
-            n,
-            velocity,
-            limiter_context=limiter.context,
-            time_aware=time_aware
+            Task.TaskType.CONNECT, campaign.pk, n, velocity,
+            limiter_context=limiter.context, time_aware=time_aware,
+            linkedin_profile_id=profile_id, user_id=user_id,
         )
         if created:
             logger.info(
-                "[%s] planned %d connect slots over next 24h (smart mode: %s, daily=%d)",
-                campaign,
-                created,
-                config.aggressiveness_preset,
+                "[%s] planned %d connect slots (smart: %s, daily=%d)",
+                campaign, created, config.aggressiveness_preset,
                 profile.connect_daily_limit,
             )
     else:
-        # Manual mode: use fixed velocity
         velocity = config.velocity if config.velocity > 0 else 20
-        created = _plan_slots(Task.TaskType.CONNECT, campaign.pk, n, velocity)
+        created = _plan_slots(
+            Task.TaskType.CONNECT, campaign.pk, n, velocity,
+            linkedin_profile_id=profile_id, user_id=user_id,
+        )
         if created:
             spacing_desc = "burst mode" if velocity >= 30 else f"velocity={velocity}/hr"
             logger.info(
-                "[%s] planned %d connect slots over next 24h (manual: %s, daily=%d)",
-                campaign,
-                created,
-                spacing_desc,
-                profile.connect_daily_limit,
+                "[%s] planned %d connect slots (manual: %s, daily=%d)",
+                campaign, created, spacing_desc, profile.connect_daily_limit,
             )
 
     return created
@@ -456,11 +443,13 @@ def plan_follow_up_window(session, campaign) -> int:
     from openoutreach.mongodb.models import SiteConfig
     from openoutreach.core.rate_limit_presets import get_preset
 
-    config = SiteConfig.load()
     profile = session.linkedin_profile
+    config = SiteConfig.load(user_id=profile.user_id)
     n = max(0, profile.follow_up_daily_limit - profile._daily_count("follow_up"))
 
-    # Smart mode vs Manual mode
+    profile_id = profile.pk
+    user_id = profile.user_id
+
     if config.enable_smart_rate_limiting:
         from openoutreach.linkedin.services.smart_rate_limits import SmartRateLimiter
         limiter = SmartRateLimiter(profile)
@@ -473,33 +462,27 @@ def plan_follow_up_window(session, campaign) -> int:
         n = min(n, int(smart_effective * preset["detectability_multiplier"]))
 
         created = _plan_slots(
-            Task.TaskType.FOLLOW_UP,
-            campaign.pk,
-            n,
-            velocity,
-            limiter_context=limiter.context,
-            time_aware=time_aware
+            Task.TaskType.FOLLOW_UP, campaign.pk, n, velocity,
+            limiter_context=limiter.context, time_aware=time_aware,
+            linkedin_profile_id=profile_id, user_id=user_id,
         )
         if created:
             logger.info(
-                "[%s] planned %d follow_up slots over next 24h (smart mode: %s, daily=%d)",
-                campaign,
-                created,
-                config.aggressiveness_preset,
+                "[%s] planned %d follow_up slots (smart: %s, daily=%d)",
+                campaign, created, config.aggressiveness_preset,
                 profile.follow_up_daily_limit,
             )
     else:
-        # Manual mode
         velocity = config.velocity if config.velocity > 0 else 20
-        created = _plan_slots(Task.TaskType.FOLLOW_UP, campaign.pk, n, velocity)
+        created = _plan_slots(
+            Task.TaskType.FOLLOW_UP, campaign.pk, n, velocity,
+            linkedin_profile_id=profile_id, user_id=user_id,
+        )
         if created:
             spacing_desc = "burst mode" if velocity >= 30 else f"velocity={velocity}/hr"
             logger.info(
-                "[%s] planned %d follow_up slots over next 24h (manual: %s, daily=%d)",
-                campaign,
-                created,
-                spacing_desc,
-                profile.follow_up_daily_limit,
+                "[%s] planned %d follow_up slots (manual: %s, daily=%d)",
+                campaign, created, spacing_desc, profile.follow_up_daily_limit,
             )
 
     return created
@@ -515,57 +498,58 @@ def plan_check_pending_window(session, campaign) -> int:
     if _has_pending(Task.TaskType.CHECK_PENDING, campaign.pk):
         return 0
 
-    config = SiteConfig.load()
+    profile = session.linkedin_profile
+    config = SiteConfig.load(user_id=profile.user_id)
     now = Datetime.now(tz.utc)
-    n_due = Deal.objects.filter(
-        campaign_id=campaign.pk,
-        state=DealState.PENDING,
-        next_check_pending_at__lte=now,
-    ).count()
+
+    from openoutreach.mongodb.connection import get_mongodb_collection
+    deals_collection = get_mongodb_collection("deals")
+    if deals_collection is None:
+        return 0
+
+    n_due = deals_collection.count_documents({
+        "campaign_id": campaign.pk,
+        "state": DealState.PENDING.value,
+        "next_check_pending_at": {"$lte": now},
+    })
     n = min(n_due, CHECK_PENDING_DAILY_CAP)
 
     if n == 0:
         return 0
 
-    # Smart mode vs Manual mode
+    profile_id = profile.pk
+    user_id = profile.user_id
+
     if config.enable_smart_rate_limiting:
         from openoutreach.linkedin.services.smart_rate_limits import SmartRateLimiter
-        limiter = SmartRateLimiter(session.linkedin_profile)
+        limiter = SmartRateLimiter(profile)
 
         preset = get_preset(config.aggressiveness_preset)
         velocity = preset["velocity"]
         time_aware = preset["time_aware"]
 
         created = _plan_slots(
-            Task.TaskType.CHECK_PENDING,
-            campaign.pk,
-            n,
-            velocity,
-            limiter_context=limiter.context,
-            time_aware=time_aware
+            Task.TaskType.CHECK_PENDING, campaign.pk, n, velocity,
+            limiter_context=limiter.context, time_aware=time_aware,
+            linkedin_profile_id=profile_id, user_id=user_id,
         )
         if created:
             logger.info(
-                "[%s] planned %d check_pending slots over next 24h (smart mode: %s, due=%d, cap=%d)",
-                campaign,
-                created,
-                config.aggressiveness_preset,
-                n_due,
-                CHECK_PENDING_DAILY_CAP,
+                "[%s] planned %d check_pending slots (smart: %s, due=%d, cap=%d)",
+                campaign, created, config.aggressiveness_preset,
+                n_due, CHECK_PENDING_DAILY_CAP,
             )
     else:
-        # Manual mode
         velocity = config.velocity if config.velocity > 0 else 20
-        created = _plan_slots(Task.TaskType.CHECK_PENDING, campaign.pk, n, velocity)
+        created = _plan_slots(
+            Task.TaskType.CHECK_PENDING, campaign.pk, n, velocity,
+            linkedin_profile_id=profile_id, user_id=user_id,
+        )
         if created:
             spacing_desc = "burst mode" if velocity >= 30 else f"velocity={velocity}/hr"
             logger.info(
-                "[%s] planned %d check_pending slots over next 24h (manual: %s, due=%d, cap=%d)",
-                campaign,
-                created,
-                spacing_desc,
-                n_due,
-                CHECK_PENDING_DAILY_CAP,
+                "[%s] planned %d check_pending slots (manual: %s, due=%d, cap=%d)",
+                campaign, created, spacing_desc, n_due, CHECK_PENDING_DAILY_CAP,
             )
 
     return created
@@ -616,22 +600,18 @@ def _recover_stale_running_tasks() -> int:
     if not running_tasks:
         return 0
 
-    count = Task.objects.filter(status=Task.Status.RUNNING).update(
-        status=Task.Status.PENDING,
-    )
-
-    # Log details of recovered tasks for debugging
+    # Update all RUNNING tasks to PENDING
+    count = 0
     for task in running_tasks:
-        error_info = ""
-        err_msg = task.get_error_message()
-        if err_msg:
-            error_info = f" (last error: {err_msg[:100]}...)"
+        task.status = Task.Status.PENDING
+        task.save()
+        count += 1
+
         logger.warning(
-            "Recovered stale task: %s campaign_id=%s scheduled_at=%s%s",
+            "Recovered stale task: %s campaign_id=%s scheduled_at=%s",
             task.task_type,
             task.payload.get("campaign_id", "unknown"),
             task.scheduled_at,
-            error_info,
         )
 
     logger.info("Recovered %d stale running tasks from previous daemon crash", count)

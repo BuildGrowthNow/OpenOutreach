@@ -90,7 +90,7 @@ class User:
     def save(self) -> str:
         """Save user to MongoDB."""
         collection = get_mongodb_collection("users")
-        if not collection:
+        if collection is None:
             raise RuntimeError("MongoDB collection 'users' not available")
 
         self.updated_at = datetime.now(tz.utc)
@@ -103,7 +103,7 @@ class User:
     def get(cls, user_id: str) -> Optional["User"]:
         """Get user by ID."""
         collection = get_mongodb_collection("users")
-        if not collection:
+        if collection is None:
             return None
 
         data = collection.find_one({"_id": user_id})
@@ -113,7 +113,7 @@ class User:
     def get_by_email(cls, email: str) -> Optional["User"]:
         """Get user by email (case-insensitive)."""
         collection = get_mongodb_collection("users")
-        if not collection:
+        if collection is None:
             return None
 
         data = collection.find_one({"email": email.lower().strip()})
@@ -123,7 +123,7 @@ class User:
     def get_by_supabase_id(cls, supabase_id: str) -> Optional["User"]:
         """Get user by Supabase user ID."""
         collection = get_mongodb_collection("users")
-        if not collection:
+        if collection is None:
             return None
 
         data = collection.find_one({"supabase_user_id": supabase_id})
@@ -147,7 +147,7 @@ class User:
     def update_last_login(self):
         """Update last login timestamp."""
         collection = get_mongodb_collection("users")
-        if collection:
+        if collection is not None:
             self.last_login = datetime.now(tz.utc)
             collection.update_one(
                 {"_id": self._id},

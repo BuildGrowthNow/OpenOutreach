@@ -351,7 +351,7 @@ async def create_profile(
         # Create SmartRateLimitContext for this profile
         try:
             rate_ctx_collection = get_mongodb_collection("smart_rate_limit_contexts")
-            if rate_ctx_collection:
+            if rate_ctx_collection is not None:
                 rate_ctx_collection.insert_one({
                     "_id": str(uuid4()),
                     "linkedin_profile_id": profile._id,
@@ -366,11 +366,16 @@ async def create_profile(
 
         return LinkedInProfileResponse(
             id=profile._id,
+            user_id=profile.user_id or "",
             linkedin_username=profile.linkedin_username,
             active=profile.active,
             connect_daily_limit=profile.connect_daily_limit,
             follow_up_daily_limit=profile.follow_up_daily_limit,
-            has_cookies=bool(profile.cookie_data_encrypted),
+            cookie_data_encrypted=profile.cookie_data_encrypted,
+            campaign_id=profile.campaign_id,
+            self_lead_id=profile.self_lead_id,
+            created_at=None,
+            updated_at=None,
         )
 
     except Exception as e:
@@ -409,11 +414,16 @@ async def get_profile(
 
         return LinkedInProfileResponse(
             id=str(profile_doc.get("_id")),
+            user_id=profile_doc.get("user_id", ""),
             linkedin_username=profile_doc.get("linkedin_username", ""),
             active=profile_doc.get("active", True),
             connect_daily_limit=profile_doc.get("connect_daily_limit", 20),
             follow_up_daily_limit=profile_doc.get("follow_up_daily_limit", 25),
-            has_cookies=bool(profile_doc.get("cookie_data_encrypted")),
+            cookie_data_encrypted=profile_doc.get("cookie_data_encrypted"),
+            campaign_id=profile_doc.get("campaign_id"),
+            self_lead_id=profile_doc.get("self_lead_id"),
+            created_at=profile_doc.get("created_at"),
+            updated_at=profile_doc.get("updated_at"),
         )
 
     except HTTPException:
@@ -482,14 +492,24 @@ async def update_profile(
 
         # Fetch updated profile
         updated_doc = collection.find_one({"_id": profile_id})
+        if not updated_doc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Profile not found after update"
+            )
 
         return LinkedInProfileResponse(
             id=str(updated_doc.get("_id")),
+            user_id=updated_doc.get("user_id", ""),
             linkedin_username=updated_doc.get("linkedin_username", ""),
             active=updated_doc.get("active", True),
             connect_daily_limit=updated_doc.get("connect_daily_limit", 20),
             follow_up_daily_limit=updated_doc.get("follow_up_daily_limit", 25),
-            has_cookies=bool(updated_doc.get("cookie_data_encrypted")),
+            cookie_data_encrypted=updated_doc.get("cookie_data_encrypted"),
+            campaign_id=updated_doc.get("campaign_id"),
+            self_lead_id=updated_doc.get("self_lead_id"),
+            created_at=updated_doc.get("created_at"),
+            updated_at=updated_doc.get("updated_at"),
         )
 
     except HTTPException:
@@ -533,7 +553,7 @@ async def delete_profile(
             )
 
         # Check for active campaigns
-        if campaigns_collection:
+        if campaigns_collection is not None:
             active_campaigns = campaigns_collection.count_documents({
                 "linkedin_profile_id": profile_id,
                 "is_paused": False
@@ -547,7 +567,7 @@ async def delete_profile(
         # Delete SmartRateLimitContext
         try:
             rate_ctx_collection = get_mongodb_collection("smart_rate_limit_contexts")
-            if rate_ctx_collection:
+            if rate_ctx_collection is not None:
                 rate_ctx_collection.delete_one({"linkedin_profile_id": profile_id})
                 logger.info(f"Deleted SmartRateLimitContext for profile {profile_id}")
         except Exception as e:
@@ -618,7 +638,7 @@ async def get_profile_health(
             last_error = None
             last_verification = None
 
-            if credentials_collection:
+            if credentials_collection is not None:
                 credential = credentials_collection.find_one({
                     "linkedin_profile_id": profile_id
                 })
@@ -644,7 +664,7 @@ async def get_profile_health(
                         last_verification = last_verified.isoformat()
 
                     # Get last error from logs
-                    if logs_collection:
+                    if logs_collection is not None:
                         try:
                             error_log = logs_collection.find_one(
                                 {

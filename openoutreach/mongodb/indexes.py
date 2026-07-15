@@ -241,6 +241,61 @@ def ensure_all_indexes():
             ({'is_public': 1}, {'name': 'ghost_scenario_public_idx'}),
             ({'created_by_id': 1}, {'name': 'ghost_scenario_creator_idx'}),
         ]),
+
+        # Smart Rate Limiting
+        ('smart_rate_limit_contexts', [
+            ({'linkedin_profile_id': 1}, {'name': 'rate_context_profile_idx', 'unique': True}),
+            ({'detectability_score': 1}, {'name': 'rate_context_detect_idx'}),
+            ({'last_action_at': -1}, {'name': 'rate_context_last_action_idx'}),
+        ]),
+
+        ('rate_limit_warnings', [
+            ({'linkedin_profile_id': 1, 'at_time': -1}, {'name': 'rate_warn_profile_time_idx'}),
+            ({'resolved': 1, 'warning_level': 1}, {'name': 'rate_warn_status_idx'}),
+        ]),
+
+        # State Machine
+        ('campaign_state_graphs', [
+            ({'campaign_id': 1}, {'name': 'state_graph_campaign_idx', 'unique': True}),
+            ({'is_active': 1, 'is_valid': 1}, {'name': 'state_graph_active_valid_idx'}),
+        ]),
+
+        ('state_nodes', [
+            ({'state_graph_id': 1, 'x': 1}, {'name': 'state_node_graph_x_idx'}),
+            ({'node_type': 1, 'is_active': 1}, {'name': 'state_node_type_active_idx'}),
+        ]),
+
+        ('state_transitions', [
+            ({'state_graph_id': 1, 'order': 1}, {'name': 'state_trans_graph_order_idx'}),
+            ({'source_node_id': 1}, {'name': 'state_trans_source_idx'}),
+            ({'target_node_id': 1}, {'name': 'state_trans_target_idx'}),
+        ]),
+
+        ('campaign_states', [
+            ({'deal_id': 1, 'is_active': 1}, {'name': 'campaign_state_deal_idx'}),
+            ({'state_graph_id': 1, 'completed': 1}, {'name': 'campaign_state_graph_complete_idx'}),
+        ]),
+
+        ('campaign_execution_logs', [
+            ({'campaign_state_id': 1, 'executed_at': -1}, {'name': 'exec_log_state_time_idx'}),
+            ({'node_id': 1, 'result': 1}, {'name': 'exec_log_node_result_idx'}),
+        ]),
+
+        # Campaign Health Monitoring
+        ('campaign_health_metrics', [
+            ({'campaign_id': 1, 'timestamp': -1}, {'name': 'health_metric_campaign_time_idx'}),
+            ({'errors_total': 1, 'timestamp': -1}, {'name': 'health_metric_errors_idx'}),
+        ]),
+
+        ('health_alerts', [
+            ({'campaign_id': 1, 'is_resolved': 1, 'created_at': -1}, {'name': 'health_alert_campaign_idx'}),
+            ({'severity': 1, 'is_resolved': 1}, {'name': 'health_alert_severity_idx'}),
+        ]),
+
+        ('recovery_actions', [
+            ({'campaign_id': 1, 'executed_at': -1}, {'name': 'recovery_campaign_time_idx'}),
+            ({'alert_id': 1}, {'name': 'recovery_alert_idx'}),
+        ]),
     ]
 
     created_count = 0

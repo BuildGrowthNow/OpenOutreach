@@ -5,19 +5,30 @@ from __future__ import annotations
 
 import logging
 from datetime import date, datetime
-from typing import Optional
+from typing import ClassVar, Optional
 from uuid import uuid4
 
 from openoutreach.core.models import Campaign
 from openoutreach.mongodb.connection import get_mongodb_collection
 
-from .health import CampaignHealthMetric, HealthAlert, RecoveryAction
+# Health monitoring models
+try:
+    from .health import CampaignHealthMetric, HealthAlert, RecoveryAction
+except ImportError:
+    # Health models not yet migrated
+    CampaignHealthMetric = None
+    HealthAlert = None
+    RecoveryAction = None
+
+# Rate limiting models (MongoDB)
 from .rate_limits import (
     EngagementLevel,
     LinkedInDetectability,
     RateLimitWarning,
     SmartRateLimitContext,
 )
+
+# State machine models (MongoDB)
 from .state_machine import (
     CampaignExecutionLog,
     CampaignState,
@@ -37,6 +48,8 @@ _RATE_LIMIT_FIELDS = {
 
 class LinkedInProfile:
     """MongoDB-based LinkedIn profile model."""
+
+    objects: ClassVar[LinkedInProfileManager]
 
     def __init__(
         self,
@@ -68,6 +81,7 @@ class LinkedInProfile:
         self.newsletter_processed = newsletter_processed
         self.campaign_id = campaign_id
         self._exhausted: dict[str, date] = {}
+        self._user_cache = None  # Cache for lazy-loaded user
 
     @property
     def cookie_data(self) -> dict | None:
@@ -104,6 +118,16 @@ class LinkedInProfile:
         except Exception:
             # Fall back to clearing the field on error
             self.cookie_data_encrypted = None
+
+    @property
+    def user(self):
+        """Get the User object for this profile (lazy load)."""
+        if not self.user_id:
+            return None
+        if self._user_cache is None:
+            from openoutreach.mongodb.models_user import User
+            self._user_cache = User.get(self.user_id)
+        return self._user_cache
 
     @property
     def pk(self):
@@ -167,6 +191,18 @@ class LinkedInProfile:
         result = collection.update_one({"_id": self._id}, {"$set": doc}, upsert=True)
         return str(result.upserted_id or self._id)
 
+    @classmethod
+    def get(cls, profile_id: str) -> Optional["LinkedInProfile"]:
+        """Get a LinkedIn profile by ID."""
+        collection = get_mongodb_collection("linkedin_profiles")
+        if collection is None:
+            return None
+
+        data = collection.find_one({"_id": profile_id})
+        if data:
+            return cls.from_dict(data)
+        return None
+
     def refresh_from_db(self, fields=None):
         """Refresh the instance from the database."""
         collection = get_mongodb_collection("linkedin_profiles")
@@ -207,7 +243,7 @@ class LinkedInProfile:
         """Persist a rate-limited action with optional descriptive details."""
         action_log = ActionLog(
             linkedin_profile_id=self._id,
-            campaign_id=campaign.pk if campaign else None,
+            campaign_id=campaign.pk if campaign else "",
             action_type=action_type,
             details=details or {},
         )
@@ -233,14 +269,11 @@ class LinkedInProfile:
     def __str__(self):
         return f"LinkedInProfile({self.linkedin_username})"
 
-    @classmethod
-    def objects(cls):
-        """Get the LinkedInProfileManager for querying profiles."""
-        return LinkedInProfileManager()
-
 
 class SearchKeyword:
     """MongoDB-based search keyword model."""
+
+    objects: ClassVar[SearchKeywordManager]
 
     def __init__(
         self,
@@ -302,17 +335,40 @@ class SearchKeyword:
         result = collection.update_one({"_id": self._id}, {"$set": doc}, upsert=True)
         return str(result.upserted_id or self._id)
 
-    def __str__(self):
-        return self.keyword
+    @classmethod
+    def exists_unused(cls, campaign_id: str) -> bool:
+        """Check if there are unused keywords for a campaign."""
+        collection = get_mongodb_collection("search_keywords")
+        if collection is None:
+            return False
+        return collection.count_documents({"campaign_id": campaign_id, "used": False}) > 0
 
     @classmethod
-    def objects(cls):
-        """Get the SearchKeywordManager for querying keywords."""
-        return SearchKeywordManager()
+    def get_used_keywords(cls, campaign_id: str) -> list[str]:
+        """Get list of used keywords for a campaign."""
+        collection = get_mongodb_collection("search_keywords")
+        if collection is None:
+            return []
+        docs = collection.find({"campaign_id": campaign_id, "used": True})
+        return [doc.get("keyword", "") for doc in docs]
+
+    @classmethod
+    def get_next_unused(cls, campaign_id: str) -> Optional["SearchKeyword"]:
+        """Get the next unused keyword for a campaign."""
+        collection = get_mongodb_collection("search_keywords")
+        if collection is None:
+            return None
+        data = collection.find_one({"campaign_id": campaign_id, "used": False})
+        return cls.from_dict(data) if data else None
+
+    def __str__(self):
+        return self.keyword
 
 
 class ActionLog:
     """MongoDB-based action log model."""
+
+    objects: ClassVar[ActionLogManager]
 
     class ActionType:
         CONNECT = "connect"
@@ -404,10 +460,6 @@ class ActionLog:
     def __str__(self):
         return f"{self.action_type} at {self.created_at}"
 
-    @classmethod
-    def objects(cls):
-        """Get the ActionLogManager for querying action logs."""
-        return ActionLogManager()
 
 
 # Manager classes for MongoDB queries
@@ -630,3 +682,9 @@ class ActionLogManager:
         log = ActionLog(**kwargs)
         log.save()
         return log
+
+
+# Assign managers as class attributes
+LinkedInProfile.objects = LinkedInProfileManager()
+SearchKeyword.objects = SearchKeywordManager()
+ActionLog.objects = ActionLogManager()

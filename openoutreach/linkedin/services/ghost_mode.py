@@ -59,8 +59,8 @@ class GhostModeInterceptor:
         simulation_duration = (datetime.now(tz.utc) - simulation_start).total_seconds()
 
         # Log simulation
-        GhostSimulationLog.objects.create(
-            ghost_campaign=self.campaign,
+        log = GhostSimulationLog(
+            ghost_campaign_id=self.campaign._id if hasattr(self.campaign, '_id') else str(self.campaign),
             action_type=action_type,
             target_url=target_data.get("linkedin_url", ""),
             target_name=target_data.get("name", "Unknown"),
@@ -76,6 +76,7 @@ class GhostModeInterceptor:
                 "duration_seconds": simulation_duration,
             },
         )
+        log.save()
 
         # Update campaign stats
         self._update_campaign_stats(action_type, result)
@@ -177,25 +178,31 @@ class GhostModeInterceptor:
 
     def _update_campaign_stats(self, action_type: str, result: Dict) -> None:
         """Update ghost campaign statistics."""
+        from openoutreach.mongodb.connection import get_mongodb_collection
+
+        campaign_id = self.campaign._id if hasattr(self.campaign, '_id') else str(self.campaign)
+
         if action_type == "search":
-            self.campaign.leads_processed += result.get("leads_found", 0)
+            self.campaign.leads_processed = getattr(self.campaign, 'leads_processed', 0) + result.get("leads_found", 0)
         elif action_type == "connect":
-            self.campaign.connections_simulated += 1
+            self.campaign.connections_simulated = getattr(self.campaign, 'connections_simulated', 0) + 1
         elif action_type == "message":
-            self.campaign.messages_simulated += 1
+            self.campaign.messages_simulated = getattr(self.campaign, 'messages_simulated', 0) + 1
         elif action_type == "qualify":
             if result.get("is_qualified"):
-                self.campaign.conversions_simulated += 1
+                self.campaign.conversions_simulated = getattr(self.campaign, 'conversions_simulated', 0) + 1
 
-        # Update average rating/score
-        all_logs = GhostSimulationLog.objects.filter(ghost_campaign=self.campaign)
-        ratings = [log.rating for log in all_logs if log.rating is not None]
-        scores = [log.score for log in all_logs if log.score is not None]
+        # Update average rating/score using MongoDB query
+        collection = get_mongodb_collection("ghost_simulation_logs")
+        if collection is not None:
+            logs = list(collection.find({"ghost_campaign_id": campaign_id}))
+            ratings = [log.get("rating") for log in logs if log.get("rating") is not None]
+            scores = [log.get("score") for log in logs if log.get("score") is not None]
 
-        if ratings:
-            self.campaign.avg_rating = sum(ratings) / len(ratings)
-        if scores:
-            self.campaign.avg_score = sum(scores) / len(scores)
+            if ratings:
+                self.campaign.avg_rating = sum(ratings) / len(ratings)
+            if scores:
+                self.campaign.avg_score = sum(scores) / len(scores)
 
         self.campaign.save()
 

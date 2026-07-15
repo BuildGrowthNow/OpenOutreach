@@ -6,7 +6,7 @@ import json
 import asyncio
 import logging
 from datetime import datetime
-from typing import Optional, AsyncIterator
+from typing import Any, AsyncIterator, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
@@ -61,11 +61,11 @@ async def list_notifications(
     - **notification_type**: Filter by notification type (optional)
     """
     collection = get_mongodb_collection("notifications")
-    if not collection:
+    if collection is None:
         raise HTTPException(status_code=503, detail="Database not available")
 
     # Build query
-    query = {"recipient_id": user_id}
+    query: Dict[str, Any] = {"recipient_id": user_id}
     if is_read is not None:
         query["is_read"] = is_read
     if notification_type:
@@ -107,7 +107,7 @@ async def get_notification_summary(
     Useful for notification bell/badge UI elements.
     """
     collection = get_mongodb_collection("notifications")
-    if not collection:
+    if collection is None:
         raise HTTPException(status_code=503, detail="Database not available")
 
     try:
@@ -273,7 +273,7 @@ async def sse_notification_stream(
         yield f"data: {json.dumps({'type': 'connected', 'user_id': user_id, 'timestamp': datetime.utcnow().isoformat()})}\n\n"
 
         collection = get_mongodb_collection("notifications")
-        if not collection:
+        if collection is None:
             logger.error("Database not available for SSE stream")
             return
 

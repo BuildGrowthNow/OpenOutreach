@@ -16,12 +16,12 @@ from openoutreach.core.db.deals import increment_connect_attempts, set_profile_s
 from openoutreach.crm.models import DealState
 from openoutreach.linkedin.db.leads import disqualify_lead
 from openoutreach.linkedin.models import ActionLog
-from openoutreach.linkedin.services.ghost_mode import GhostModeInterceptor
 from openoutreach.linkedin.services.smart_rate_limits import (
     smart_can_execute,
     smart_record_action,
     smart_get_remaining,
 )
+from openoutreach.mongodb.models import Deal, Lead
 
 from linkedin_cli.exceptions import (
     ProfileInaccessibleError,
@@ -91,29 +91,7 @@ def handle_connect(task, session, qualifiers):
     campaign = session.campaign
     strategy = strategy_for(campaign, qualifiers)
 
-    # Check if ghost mode is active for this campaign
-    ghost_campaign = campaign.ghost_campaigns.filter(is_active=True).first()
-    if ghost_campaign:
-        interceptor = GhostModeInterceptor(ghost_campaign)
-        if not interceptor.can_proceed("connect"):
-            candidate = strategy.find_candidate(session)
-            if candidate:
-                interceptor.simulate_action(
-                    "connect",
-                    {
-                        "linkedin_url": candidate.get("url", ""),
-                        "name": candidate.get(
-                            "name", candidate.get("public_identifier", "Unknown")
-                        ),
-                    },
-                    {"campaign": campaign, "session": session},
-                )
-                logger.info(
-                    "[%s] Ghost mode: %s would be connected (simulated)",
-                    campaign,
-                    candidate.get("public_identifier", "Unknown"),
-                )
-            return
+    # Note: Ghost mode is a disabled feature, skipping check
 
     # Smart rate limiting check
     if not smart_can_execute(
@@ -141,12 +119,12 @@ def handle_connect(task, session, qualifiers):
     if strategy.pre_connect:
         strategy.pre_connect(session, public_id)
 
-    from openoutreach.crm.models import Deal
+    # Find the deal using MongoDB query
+    lead = Lead.find_by_public_identifier(public_id)
+    deal = None
+    if lead:
+        deal = Deal.get_by_lead_and_campaign(lead._id, session.campaign._id if hasattr(session.campaign, '_id') else str(session.campaign))
 
-    deal = Deal.objects.filter(
-        lead__public_identifier=public_id,
-        campaign=session.campaign,
-    ).first()
     reason = deal.reason if deal else ""
     stats = strategy.qualifier.explain(candidate, session) if strategy.qualifier else ""
     logger.info("[%s] connect", campaign)
@@ -193,12 +171,11 @@ def handle_connect(task, session, qualifiers):
                 session.linkedin_profile, ActionLog.ActionType.CONNECT, campaign
             )
             # Also record in ActionLog with details
-            from openoutreach.crm.models import Lead
-            lead = Lead.objects.filter(public_identifier=public_id).first()
+            lead_obj = Lead.find_by_public_identifier(public_id)
             lead_name = ""
-            if lead:
+            if lead_obj:
                 try:
-                    prof = lead.get_profile(session)
+                    prof = lead_obj.get_profile(session)
                     if prof and "profile" in prof:
                         first = prof["profile"].get("firstName", "")
                         last = prof["profile"].get("lastName", "")

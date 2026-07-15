@@ -24,7 +24,7 @@ def promote_to_ready(session, qualifier: BayesianQualifier, threshold: float) ->
     Returns the number of profiles promoted. Returns 0 when the GP model
     is not fitted (cold start) or when no QUALIFIED profiles exist.
     """
-    from openoutreach.crm.models import Lead
+    from openoutreach.mongodb.models import Lead
 
     profiles = get_qualified_profiles(session)
     if not profiles:
@@ -33,7 +33,7 @@ def promote_to_ready(session, qualifier: BayesianQualifier, threshold: float) ->
     embeddings = []
     valid = []
     for p in profiles:
-        lead = Lead.objects.filter(pk=p.get("lead_id")).first()
+        lead = Lead.get(p.get("lead_id"))
         emb = lead.get_embedding(session) if lead else None
         if emb is not None:
             embeddings.append(emb)

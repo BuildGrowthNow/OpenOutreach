@@ -24,7 +24,7 @@ def random_sleep(min_val, max_val):
 class AccountSession:
     def __init__(self, linkedin_profile):
         self.linkedin_profile = linkedin_profile
-        self.django_user = linkedin_profile.user
+        self.user = linkedin_profile.user
 
         # Active campaign — set by the daemon before each lane execution
         self.campaign: Optional[Any] = None
@@ -38,14 +38,25 @@ class AccountSession:
     @cached_property
     def campaigns(self):
         """Active campaigns this user belongs to (cached)."""
-        from openoutreach.core.models import Campaign
+        from openoutreach.mongodb.models import Campaign
+        from openoutreach.mongodb.connection import get_mongodb_collection
 
-        return list(
-            Campaign.objects.filter(
-                users=self.django_user,
-                status=Campaign.Status.ACTIVE,
-            )
-        )
+        # Get campaigns where user is owner or team member
+        collection = get_mongodb_collection("campaigns")
+        if collection is None:
+            return []
+
+        user_id = self.user._id if hasattr(self.user, '_id') else str(self.user.id)
+        campaigns = []
+        for data in collection.find({
+            "$or": [
+                {"user_id": user_id},
+                {"team_member_ids": user_id}
+            ],
+            "status": Campaign.Status.ACTIVE
+        }):
+            campaigns.append(Campaign.from_dict(data))
+        return campaigns
 
     def ensure_browser(self):
         """Launch or recover browser + login if needed. Call before using .page"""

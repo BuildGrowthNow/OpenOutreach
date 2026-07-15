@@ -7,7 +7,7 @@ that use pymongo directly for data operations.
 
 import logging
 from datetime import datetime, timezone as tz
-from typing import Any, Dict, List, Optional, TypeVar
+from typing import Any, ClassVar, Dict, List, Optional, TypeVar
 from uuid import uuid4
 
 from pymongo.collection import Collection
@@ -30,8 +30,8 @@ class SupabaseUser:
     """
     MongoDB SupabaseUser model.
 
-    Tracks the relationship between Supabase users and Django users.
-    Allows efficient lookup of Django users by Supabase user ID.
+    Tracks the relationship between Supabase users and local MongoDB users.
+    Allows efficient lookup of local users by Supabase user ID for SSO integration.
     Uses pymongo directly for data operations.
     """
 
@@ -39,7 +39,7 @@ class SupabaseUser:
         self,
         _id: Optional[str] = None,
         supabase_user_id: str = "",
-        django_user_id: Optional[str] = None,
+        django_user_id: Optional[str] = None,  # Legacy field for migration compatibility
         email: str = "",
         full_name: str = "",
         created_at: Optional[datetime] = None,
@@ -120,7 +120,7 @@ class SupabaseUser:
 
     @classmethod
     def get_by_django_user_id(cls, django_user_id: str) -> Optional["SupabaseUser"]:
-        """Get a Supabase user by Django user ID."""
+        """Get a Supabase user by legacy user ID (for migration compatibility)."""
         collection = get_mongodb_collection("supabase_users")
         if collection is None:
             return None
@@ -132,7 +132,7 @@ class SupabaseUser:
             return None
         except Exception as e:
             logger.error(
-                f"Failed to get Supabase user by Django user ID '{django_user_id}': {e}"
+                f"Failed to get Supabase user by legacy user ID '{django_user_id}': {e}"
             )
             return None
 
@@ -381,6 +381,35 @@ class Lead:
         if data:
             return cls.from_dict(data)
         return None
+
+    @classmethod
+    def get_by_public_id(cls, public_identifier: str) -> Optional["Lead"]:
+        """Alias for find_by_public_identifier."""
+        return cls.find_by_public_identifier(public_identifier)
+
+    @classmethod
+    def get_by_urn(cls, urn: str) -> Optional["Lead"]:
+        """Get a lead by URN."""
+        return cls.find_by_urn(urn)
+
+    @classmethod
+    def find_with_embeddings(cls, campaign_id: str) -> List["Lead"]:
+        """Find leads that have embeddings for a campaign's deals."""
+        collection = get_mongodb_collection("leads")
+        if collection is None:
+            return []
+        deals_collection = get_mongodb_collection("deals")
+        if deals_collection is None:
+            return []
+        lead_ids = [str(d["lead_id"]) for d in deals_collection.find(
+            {"campaign_id": campaign_id}, {"lead_id": 1}
+        )]
+        if not lead_ids:
+            return []
+        return [cls.from_dict(d) for d in collection.find({
+            "_id": {"$in": lead_ids},
+            "embedding": {"$ne": None}
+        })]
 
     @classmethod
     def find_by_linkedin_url(cls, linkedin_url: str) -> Optional["Lead"]:
@@ -830,6 +859,14 @@ class Campaign:
     with team members (team_member_ids).
     """
 
+    objects: ClassVar["CampaignManager"]
+
+    class Status:
+        """Campaign status constants."""
+        ACTIVE = "active"
+        PAUSED = "paused"
+        DRAFT = "draft"
+
     def __init__(
         self,
         _id: Optional[str] = None,
@@ -844,6 +881,7 @@ class Campaign:
         velocity: int = 20,
         cooldown_minutes: int = 0,
         is_paused: bool = False,
+        status: str = "active",
         user_id: str = "",
         linkedin_profile_id: Optional[str] = None,
         team_member_ids: Optional[List[str]] = None,
@@ -861,6 +899,7 @@ class Campaign:
         self.velocity = velocity
         self.cooldown_minutes = cooldown_minutes
         self.is_paused = is_paused
+        self.status = status
         self.user_id = user_id
         self.linkedin_profile_id = linkedin_profile_id
         self.team_member_ids = team_member_ids or []
@@ -880,6 +919,7 @@ class Campaign:
             "velocity": self.velocity,
             "cooldown_minutes": self.cooldown_minutes,
             "is_paused": self.is_paused,
+            "status": self.status,
             "user_id": self.user_id,
             "linkedin_profile_id": self.linkedin_profile_id,
             "team_member_ids": self.team_member_ids,
@@ -905,6 +945,7 @@ class Campaign:
             velocity=data.get("velocity", 20),
             cooldown_minutes=data.get("cooldown_minutes", 0),
             is_paused=data.get("is_paused", False),
+            status=data.get("status", "active"),
             user_id=data.get("user_id", ""),
             linkedin_profile_id=data.get("linkedin_profile_id"),
             team_member_ids=data.get("team_member_ids", []),
@@ -990,10 +1031,6 @@ class Campaign:
         """Set the primary key."""
         self._id = value
 
-    @classmethod
-    def objects(cls) -> "CampaignManager":
-        """Get the CampaignManager for querying campaigns."""
-        return CampaignManager()
 
 
 class CampaignManager:
@@ -1081,6 +1118,10 @@ class CampaignManager:
         return campaign, True
 
 
+# Assign Campaign manager as class attribute
+Campaign.objects = CampaignManager()
+
+
 class Deal:
     """
     MongoDB Deal model.
@@ -1088,6 +1129,8 @@ class Deal:
     Represents a deal in the CRM system linked to a lead and campaign.
     Uses pymongo directly for data operations.
     """
+
+    objects: ClassVar["DealManager"]
 
     class DealState:
         DISCOVERED = "Discovered"
@@ -1138,6 +1181,8 @@ class Deal:
         self.profile_summary = profile_summary or {}
         self.chat_summary = chat_summary or {}
         self.creation_date = creation_date or datetime.now(tz.utc)
+        self.lead: Optional["Lead"] = None
+        self.campaign: Optional["Campaign"] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert model instance to dictionary for MongoDB storage."""
@@ -1204,6 +1249,37 @@ class Deal:
         except Exception as e:
             logger.error(f"Failed to get deal '{deal_id}': {e}")
             return None
+
+    @classmethod
+    def get_by_lead_and_campaign(cls, lead_id: str, campaign_id: str) -> Optional["Deal"]:
+        """Get deal by lead and campaign."""
+        collection = get_mongodb_collection("deals")
+        if collection is None:
+            return None
+        data = collection.find_one({"lead_id": lead_id, "campaign_id": campaign_id})
+        return cls.from_dict(data) if data else None
+
+    @classmethod
+    def find_by_state_and_campaign(cls, state: str, campaign_id: str) -> List["Deal"]:
+        """Find deals by state and campaign."""
+        collection = get_mongodb_collection("deals")
+        if collection is None:
+            return []
+        return [cls.from_dict(d) for d in collection.find({"state": state, "campaign_id": campaign_id})]
+
+    @classmethod
+    def get_by_lead(cls, lead_id: str) -> Optional["Deal"]:
+        """Get first deal for a lead."""
+        collection = get_mongodb_collection("deals")
+        if collection is None:
+            return None
+        data = collection.find_one({"lead_id": lead_id})
+        return cls.from_dict(data) if data else None
+
+    @classmethod
+    def find_unevaluated(cls, campaign_id: str) -> List["Deal"]:
+        """Find deals in DISCOVERED state for a campaign (not yet evaluated)."""
+        return cls.find_by_state_and_campaign(cls.DealState.DISCOVERED, campaign_id)
 
     @classmethod
     def find_by_lead_id(cls, lead_id: str) -> List["Deal"]:
@@ -1280,10 +1356,7 @@ class Deal:
         """Set the primary key."""
         self._id = value
 
-    @classmethod
-    def objects(cls) -> "DealManager":
-        """Get the DealManager for querying deals."""
-        return DealManager()
+
 
 
 class UserProfile:
@@ -2465,7 +2538,7 @@ class TrackedLink:
         if user_agent:
             self.last_user_agent = user_agent[:500]
         collection = get_mongodb_collection("tracked_links")
-        if collection:
+        if collection is not None:
             collection.update_one(
                 {"_id": self._id},
                 {"$set": {
@@ -2489,7 +2562,7 @@ class TrackedLink:
 
     def get_short_url(self, base_url: Optional[str] = None) -> str:
         """Get the short tracked URL."""
-        base = base_url or "https://yourdomain.com"
+        base = base_url or "https://linkedin.lengrowth.com"
         return f"{base}/l/{self.short_code}"
 
     def __str__(self) -> str:
@@ -2717,7 +2790,7 @@ class LinkClick:
         else:
             self.device_type = "desktop"
         collection = get_mongodb_collection("link_clicks")
-        if collection:
+        if collection is not None:
             collection.update_one(
                 {"_id": self._id}, {"$set": {"device_type": self.device_type}}
             )
@@ -3938,6 +4011,7 @@ class SiteConfig:
     def __init__(
         self,
         _id: Optional[str] = None,
+        user_id: Optional[str] = None,
         llm_provider: str = "",
         llm_api_key: str = "",
         ai_model: str = "",
@@ -3952,8 +4026,19 @@ class SiteConfig:
         bettercontact_api_key: str = "",
         contacts_api_token: str = "",
         contacts_api_url: str = "",
+        enable_active_hours: bool = False,
+        active_start_hour: int = 9,
+        active_end_hour: int = 18,
+        active_timezone: str = "UTC",
+        active_days: Optional[List[int]] = None,
+        enable_smart_rate_limiting: bool = False,
+        aggressiveness_preset: str = "average",
+        ai_writing_style: str = "",
+        ai_say_rules: str = "",
+        ai_avoid_rules: str = "",
     ):
         self._id = _id or str(uuid4())
+        self.user_id = user_id
         self.llm_provider = llm_provider
         self.llm_api_key = llm_api_key
         self.ai_model = ai_model
@@ -3968,11 +4053,22 @@ class SiteConfig:
         self.bettercontact_api_key = bettercontact_api_key
         self.contacts_api_token = contacts_api_token
         self.contacts_api_url = contacts_api_url
+        self.enable_active_hours = enable_active_hours
+        self.active_start_hour = active_start_hour
+        self.active_end_hour = active_end_hour
+        self.active_timezone = active_timezone
+        self.active_days = active_days if active_days is not None else [0, 1, 2, 3, 4]
+        self.enable_smart_rate_limiting = enable_smart_rate_limiting
+        self.aggressiveness_preset = aggressiveness_preset
+        self.ai_writing_style = ai_writing_style
+        self.ai_say_rules = ai_say_rules
+        self.ai_avoid_rules = ai_avoid_rules
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert model instance to dictionary for MongoDB storage."""
         data = {
             "_id": self._id,
+            "user_id": self.user_id,
             "llm_provider": self.llm_provider,
             "llm_api_key": self.llm_api_key,
             "ai_model": self.ai_model,
@@ -3995,6 +4091,7 @@ class SiteConfig:
         """Create SiteConfig instance from MongoDB document."""
         return cls(
             _id=str(data.get("_id")),
+            user_id=data.get("user_id"),
             llm_provider=data.get("llm_provider", ""),
             llm_api_key=data.get("llm_api_key", ""),
             ai_model=data.get("ai_model", ""),
@@ -4009,6 +4106,16 @@ class SiteConfig:
             bettercontact_api_key=data.get("bettercontact_api_key", ""),
             contacts_api_token=data.get("contacts_api_token", ""),
             contacts_api_url=data.get("contacts_api_url", ""),
+            enable_active_hours=data.get("enable_active_hours", False),
+            active_start_hour=data.get("active_start_hour", 9),
+            active_end_hour=data.get("active_end_hour", 18),
+            active_timezone=data.get("active_timezone", "UTC"),
+            active_days=data.get("active_days"),
+            enable_smart_rate_limiting=data.get("enable_smart_rate_limiting", False),
+            aggressiveness_preset=data.get("aggressiveness_preset", "average"),
+            ai_writing_style=data.get("ai_writing_style", ""),
+            ai_say_rules=data.get("ai_say_rules", ""),
+            ai_avoid_rules=data.get("ai_avoid_rules", ""),
         )
 
     def save(self) -> str:
@@ -4020,6 +4127,26 @@ class SiteConfig:
         doc = self.to_dict()
         result = collection.update_one({"_id": self._id}, {"$set": doc}, upsert=True)
         return str(result.upserted_id or self._id)
+
+    @classmethod
+    def load(cls, user_id: Optional[str] = None) -> "SiteConfig":
+        """Load a SiteConfig. If user_id is given, loads that user's config;
+        otherwise returns the first document (backwards-compatible singleton)."""
+        collection = get_mongodb_collection("site_config")
+        if collection is None:
+            return cls()
+
+        try:
+            query = {"user_id": user_id} if user_id else {}
+            data = collection.find_one(query)
+            if data:
+                return cls.from_dict(data)
+            config = cls(user_id=user_id)
+            config.save()
+            return config
+        except Exception as e:
+            logger.error(f"Failed to load site config: {e}")
+            return cls()
 
     @classmethod
     def get(cls, config_id: str) -> Optional["SiteConfig"]:
@@ -4181,6 +4308,8 @@ class Task:
     Uses pymongo directly for data operations.
     """
 
+    objects: ClassVar["TaskManager"]
+
     TASK_TYPE_CONNECT = "connect"
     TASK_TYPE_CHECK_PENDING = "check_pending"
     TASK_TYPE_FOLLOW_UP = "follow_up"
@@ -4191,6 +4320,18 @@ class Task:
     STATUS_COMPLETED = "completed"
     STATUS_FAILED = "failed"
 
+    class TaskType:
+        CONNECT = "connect"
+        CHECK_PENDING = "check_pending"
+        FOLLOW_UP = "follow_up"
+        SEND_MANUAL_MESSAGE = "send_manual_message"
+
+    class Status:
+        PENDING = "pending"
+        RUNNING = "running"
+        COMPLETED = "completed"
+        FAILED = "failed"
+
     def __init__(
         self,
         _id: Optional[str] = None,
@@ -4199,6 +4340,7 @@ class Task:
         scheduled_at: Optional[datetime] = None,
         payload: Optional[Dict[str, Any]] = None,
         user_id: Optional[str] = None,
+        linkedin_profile_id: Optional[str] = None,
         created_at: Optional[datetime] = None,
         started_at: Optional[datetime] = None,
         completed_at: Optional[datetime] = None,
@@ -4209,6 +4351,7 @@ class Task:
         self.scheduled_at = scheduled_at or datetime.now(tz.utc)
         self.payload = payload or {}
         self.user_id = user_id
+        self.linkedin_profile_id = linkedin_profile_id
         self.created_at = created_at or datetime.now(tz.utc)
         self.started_at = started_at
         self.completed_at = completed_at
@@ -4225,6 +4368,8 @@ class Task:
         }
         if self.user_id:
             data["user_id"] = self.user_id
+        if self.linkedin_profile_id:
+            data["linkedin_profile_id"] = self.linkedin_profile_id
         if self.started_at:
             data["started_at"] = self.started_at
         if self.completed_at:
@@ -4241,6 +4386,7 @@ class Task:
             scheduled_at=data.get("scheduled_at"),
             payload=data.get("payload", {}),
             user_id=data.get("user_id"),
+            linkedin_profile_id=data.get("linkedin_profile_id"),
             created_at=data.get("created_at"),
             started_at=data.get("started_at"),
             completed_at=data.get("completed_at"),
@@ -4318,6 +4464,24 @@ class Task:
             logger.error(f"Failed to delete task '{task_id}': {e}")
             return False
 
+    def mark_running(self) -> None:
+        """Mark task as running."""
+        self.status = self.STATUS_RUNNING
+        self.started_at = datetime.now(tz.utc)
+        self.save()
+
+    def mark_completed(self) -> None:
+        """Mark task as completed."""
+        self.status = self.STATUS_COMPLETED
+        self.completed_at = datetime.now(tz.utc)
+        self.save()
+
+    def mark_failed(self, error_message: Optional[str] = None) -> None:
+        """Mark task as failed."""
+        self.status = self.STATUS_FAILED
+        self.completed_at = datetime.now(tz.utc)
+        self.save()
+
     def __str__(self) -> str:
         return f"Task#{self._id[:8]} - {self.task_type} [{self.status}]"
 
@@ -4331,10 +4495,7 @@ class Task:
         """Set the primary key."""
         self._id = value
 
-    @classmethod
-    def objects(cls) -> "TaskManager":
-        """Get the TaskManager for querying tasks."""
-        return TaskManager()
+    objects: "TaskManager"
 
 
 class TaskManager:
@@ -4421,6 +4582,87 @@ class TaskManager:
         task.save()
         return task, True
 
+    def bulk_create(self, tasks: List["Task"]) -> List["Task"]:
+        """Save multiple tasks at once."""
+        collection = self._get_collection()
+        if collection is None:
+            return tasks
+        docs = [t.to_dict() for t in tasks]
+        if docs:
+            collection.insert_many(docs)
+        return tasks
+
+    def pending(self) -> "TaskManager":
+        """Return a filtered view of pending tasks."""
+        return _FilteredTaskManager({"status": Task.STATUS_PENDING})
+
+    def claim_next(self, linkedin_profile_id: Optional[str] = None) -> Optional["Task"]:
+        """Atomically claim the next pending task, optionally scoped to a profile."""
+        collection = self._get_collection()
+        if collection is None:
+            return None
+        from datetime import datetime, timezone as _tz
+        now = datetime.now(_tz.utc)
+        query = {"status": Task.STATUS_PENDING, "scheduled_at": {"$lte": now}}
+        if linkedin_profile_id:
+            query["linkedin_profile_id"] = linkedin_profile_id
+        doc = collection.find_one_and_update(
+            query,
+            {"$set": {"status": Task.STATUS_RUNNING, "started_at": now}},
+            sort=[("scheduled_at", 1)],
+        )
+        if doc:
+            return Task.from_dict(doc)
+        return None
+
+    def seconds_to_next(self, linkedin_profile_id: Optional[str] = None) -> Optional[float]:
+        """Seconds until next pending task is due, optionally scoped to a profile."""
+        collection = self._get_collection()
+        if collection is None:
+            return None
+        from datetime import datetime, timezone as _tz
+        query = {"status": Task.STATUS_PENDING}
+        if linkedin_profile_id:
+            query["linkedin_profile_id"] = linkedin_profile_id
+        doc = collection.find_one(
+            query,
+            sort=[("scheduled_at", 1)],
+        )
+        if doc and doc.get("scheduled_at"):
+            delta = (doc["scheduled_at"] - datetime.now(_tz.utc)).total_seconds()
+            return max(0.0, delta)
+        return None
+
+
+class _FilteredTaskManager(TaskManager):
+    """TaskManager with a pre-applied filter."""
+
+    def __init__(self, base_query: Dict[str, Any]):
+        super().__init__()
+        self._base_query = base_query
+
+    def filter(self, **kwargs) -> List[Task]:
+        query = {**self._base_query, **kwargs}
+        collection = self._get_collection()
+        if collection is None:
+            return []
+        try:
+            return [Task.from_dict(d) for d in collection.find(query)]
+        except Exception:
+            return []
+
+    def count(self) -> int:
+        collection = self._get_collection()
+        if collection is None:
+            return 0
+        try:
+            return collection.count_documents(self._base_query)
+        except Exception:
+            return 0
+
+
+Task.objects = TaskManager()
+
 
 class DealManager:
     """Manager for Deal queries."""
@@ -4505,6 +4747,10 @@ class DealManager:
         deal = Deal(**data)
         deal.save()
         return deal, True
+
+
+# Assign Deal manager as class attribute
+Deal.objects = DealManager()
 
 
 def ensure_mongodb_indexes():

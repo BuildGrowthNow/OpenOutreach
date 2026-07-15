@@ -29,13 +29,14 @@ class TaskDAL:
         """Create a new task."""
         from .models import Task
 
+        if linkedin_profile_id:
+            payload = {**payload, "linkedin_profile_id": linkedin_profile_id}
         task = Task(
             task_type=task_type,
-            linkedin_profile_id=linkedin_profile_id,
             payload=payload,
             scheduled_at=scheduled_at,
             user_id=user_id,
-            status=Task.STATUS_PENDING
+            status=Task.STATUS_PENDING,
         )
         task.save()
         return task
@@ -49,7 +50,7 @@ class TaskDAL:
         from .models import Task
 
         collection = get_mongodb_collection('tasks')
-        if not collection:
+        if collection is None:
             return None
 
         now = datetime.utcnow()
@@ -80,7 +81,7 @@ class TaskDAL:
         from .models import Task
 
         collection = get_mongodb_collection('tasks')
-        if not collection:
+        if collection is None:
             return False
 
         try:
@@ -102,7 +103,7 @@ class TaskDAL:
         from .models import Task
 
         collection = get_mongodb_collection('tasks')
-        if not collection:
+        if collection is None:
             return False
 
         try:
@@ -125,7 +126,7 @@ class TaskDAL:
         from .models import Task
 
         collection = get_mongodb_collection('tasks')
-        if not collection:
+        if collection is None:
             return []
 
         query = {
@@ -151,7 +152,7 @@ class TaskDAL:
         from .models import Task
 
         collection = get_mongodb_collection('tasks')
-        if not collection:
+        if collection is None:
             return 0
 
         query = {"status": Task.STATUS_PENDING}
@@ -171,7 +172,7 @@ class TaskDAL:
         Replaces Django pre_delete signal on Campaign.
         """
         collection = get_mongodb_collection('tasks')
-        if not collection:
+        if collection is None:
             return 0
 
         try:
@@ -192,7 +193,7 @@ class TaskDAL:
         from .models import Task
 
         collection = get_mongodb_collection('tasks')
-        if not collection:
+        if collection is None:
             return 0
 
         from datetime import timedelta
@@ -224,7 +225,7 @@ class CampaignDAL:
         from .models import Campaign
 
         collection = get_mongodb_collection('campaigns')
-        if not collection:
+        if collection is None:
             return []
 
         try:
@@ -242,10 +243,10 @@ class CampaignDAL:
         from .models import Campaign
 
         collection = get_mongodb_collection('campaigns')
-        if not collection:
+        if collection is None:
             return []
 
-        query = {"is_paused": False}
+        query: Dict[str, Any] = {"is_paused": False}
         if user_id:
             query["user_id"] = user_id
 
@@ -269,7 +270,7 @@ class CampaignDAL:
 
         # Delete deals
         deals_collection = get_mongodb_collection('deals')
-        if deals_collection:
+        if deals_collection is not None:
             try:
                 result = deals_collection.delete_many({"campaign_id": campaign_id})
                 logger.info(f"Deleted {result.deleted_count} deals for campaign '{campaign_id}'")
@@ -278,7 +279,7 @@ class CampaignDAL:
 
         # Delete state graph + nodes + transitions
         graph_collection = get_mongodb_collection('campaign_state_graphs')
-        if graph_collection:
+        if graph_collection is not None:
             try:
                 graph = graph_collection.find_one({"campaign_id": campaign_id})
                 if graph:
@@ -286,12 +287,12 @@ class CampaignDAL:
 
                     # Delete nodes
                     nodes_collection = get_mongodb_collection('state_nodes')
-                    if nodes_collection:
+                    if nodes_collection is not None:
                         nodes_collection.delete_many({"state_graph_id": graph_id})
 
                     # Delete transitions
                     transitions_collection = get_mongodb_collection('state_transitions')
-                    if transitions_collection:
+                    if transitions_collection is not None:
                         transitions_collection.delete_many({"state_graph_id": graph_id})
 
                     # Delete graph
@@ -301,7 +302,7 @@ class CampaignDAL:
 
         # Delete search keywords
         keywords_collection = get_mongodb_collection('search_keywords')
-        if keywords_collection:
+        if keywords_collection is not None:
             try:
                 keywords_collection.delete_many({"campaign_id": campaign_id})
             except Exception as e:
@@ -309,7 +310,7 @@ class CampaignDAL:
 
         # Delete action logs
         logs_collection = get_mongodb_collection('action_logs')
-        if logs_collection:
+        if logs_collection is not None:
             try:
                 logs_collection.delete_many({"campaign_id": campaign_id})
             except Exception as e:
@@ -317,7 +318,7 @@ class CampaignDAL:
 
         # Nullify campaign_id in notifications (don't delete notifications)
         notifications_collection = get_mongodb_collection('notifications')
-        if notifications_collection:
+        if notifications_collection is not None:
             try:
                 notifications_collection.update_many(
                     {"campaign_id": campaign_id},
@@ -328,7 +329,7 @@ class CampaignDAL:
 
         # Finally delete the campaign itself
         campaigns_collection = get_mongodb_collection('campaigns')
-        if campaigns_collection:
+        if campaigns_collection is not None:
             try:
                 result = campaigns_collection.delete_one({"_id": campaign_id})
                 if result.deleted_count > 0:
@@ -353,7 +354,7 @@ class DealDAL:
         from .models import Deal
 
         collection = get_mongodb_collection('deals')
-        if not collection:
+        if collection is None:
             return []
 
         try:
@@ -375,7 +376,7 @@ class DealDAL:
         from .models import Deal
 
         collection = get_mongodb_collection('deals')
-        if not collection:
+        if collection is None:
             return []
 
         try:
@@ -391,7 +392,7 @@ class DealDAL:
     def set_deal_state(deal_id: str, new_state: str, reason: Optional[str] = None):
         """Update deal state with optional reason."""
         collection = get_mongodb_collection('deals')
-        if not collection:
+        if collection is None:
             return False
 
         update = {"state": new_state}
@@ -414,7 +415,7 @@ class DealDAL:
         from .models import Deal
 
         collection = get_mongodb_collection('deals')
-        if not collection:
+        if collection is None:
             return []
 
         try:
@@ -473,7 +474,7 @@ class LeadDAL:
         from .models import Lead
 
         collection = get_mongodb_collection('leads')
-        if not collection:
+        if collection is None:
             return []
 
         try:
@@ -524,7 +525,7 @@ class NotificationDAL:
         from .models_extended import Notification
 
         collection = get_mongodb_collection('notifications')
-        if not collection:
+        if collection is None:
             return []
 
         try:
@@ -546,7 +547,7 @@ class NotificationDAL:
     def mark_all_read(user_id: str):
         """Mark all notifications as read for a user."""
         collection = get_mongodb_collection('notifications')
-        if not collection:
+        if collection is None:
             return 0
 
         try:
@@ -600,7 +601,7 @@ class ActionLogDAL:
     def get_daily_count(linkedin_profile_id: str, action_type: str) -> int:
         """Count actions of a specific type today for a profile."""
         collection = get_mongodb_collection('action_logs')
-        if not collection:
+        if collection is None:
             return 0
 
         midnight = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
@@ -621,7 +622,7 @@ class ActionLogDAL:
         from .models_extended import ActionLog
 
         collection = get_mongodb_collection('action_logs')
-        if not collection:
+        if collection is None:
             return []
 
         try:

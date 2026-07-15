@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone as tz
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
@@ -43,7 +43,7 @@ class CampaignHealthMetric:
     ):
         self._id = _id or str(uuid4())
         self.campaign_id = campaign_id
-        self.timestamp = timestamp or datetime.utcnow()
+        self.timestamp = timestamp or datetime.now(tz.utc)
         self.connections_sent = connections_sent
         self.connections_accepted = connections_accepted
         self.connection_accept_rate = connection_accept_rate
@@ -57,7 +57,7 @@ class CampaignHealthMetric:
         self.deals_created = deals_created
         self.conversions = conversions
         self.detectability_score = detectability_score
-        self.created_at = created_at or datetime.utcnow()
+        self.created_at = created_at or datetime.now(tz.utc)
 
     @property
     def id(self) -> str:
@@ -125,7 +125,7 @@ class CampaignHealthMetric:
     @classmethod
     def create_hourly_snapshot(cls, campaign_id: str) -> "CampaignHealthMetric":
         """Create a hourly snapshot for a campaign."""
-        now = datetime.utcnow()
+        now = datetime.now(tz.utc)
         hour_start = now.replace(minute=0, second=0, microsecond=0)
 
         # Get metrics for the hour
@@ -307,8 +307,8 @@ class HealthAlert:
         self.resolved_at = resolved_at
         self.resolution_notes = resolution_notes
         self.auto_remediation_applied = auto_remediation_applied
-        self.created_at = created_at or datetime.utcnow()
-        self.updated_at = updated_at or datetime.utcnow()
+        self.created_at = created_at or datetime.now(tz.utc)
+        self.updated_at = updated_at or datetime.now(tz.utc)
 
     @property
     def id(self) -> str:
@@ -359,7 +359,7 @@ class HealthAlert:
             )
             return self._id
 
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(tz.utc)
         doc = self.to_dict()
         result = collection.update_one({"_id": self._id}, {"$set": doc}, upsert=True)
         return str(result.upserted_id or self._id)
@@ -367,7 +367,7 @@ class HealthAlert:
     def resolve(self, notes: str = "") -> None:
         """Mark the alert as resolved."""
         self.is_resolved = True
-        self.resolved_at = datetime.utcnow()
+        self.resolved_at = datetime.now(tz.utc)
         self.resolution_notes = notes
         self.save()
 
@@ -407,7 +407,7 @@ class RecoveryAction:
         self.before_state = before_state or {}
         self.after_state = after_state or {}
         self.reason = reason
-        self.executed_at = executed_at or datetime.utcnow()
+        self.executed_at = executed_at or datetime.now(tz.utc)
         self.execution_result = execution_result
 
     @property

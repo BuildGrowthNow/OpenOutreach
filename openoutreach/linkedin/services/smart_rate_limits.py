@@ -22,9 +22,21 @@ class SmartRateLimiter:
 
     def _get_or_create_context(self) -> SmartRateLimitContext:
         """Get or create rate limit context for profile."""
-        context, _ = SmartRateLimitContext.objects.get_or_create(
-            linkedin_profile=self.linkedin_profile
-        )
+        from openoutreach.mongodb.connection import get_mongodb_collection
+
+        collection = get_mongodb_collection("smart_rate_limit_contexts")
+        if collection is None:
+            # Return a default context if DB is unavailable
+            return SmartRateLimitContext(linkedin_profile_id=self.linkedin_profile._id)
+
+        # Try to find existing context
+        doc = collection.find_one({"linkedin_profile_id": self.linkedin_profile._id})
+        if doc:
+            return SmartRateLimitContext.from_dict(doc)
+
+        # Create new context
+        context = SmartRateLimitContext(linkedin_profile_id=self.linkedin_profile._id)
+        context.save()
         return context
 
     def can_execute(self, action_type: str, campaign=None) -> bool:
@@ -84,15 +96,21 @@ class SmartRateLimiter:
         if since is None:
             since = datetime.now(tz.utc) - timedelta(hours=24)
 
-        from openoutreach.linkedin.models import ActionLog
+        from openoutreach.mongodb.connection import get_mongodb_collection
 
-        return ActionLog.objects.filter(
-            linkedin_profile=self.linkedin_profile,
-            action_type=action_type,
-            created_at__gte=since,
-        ).exclude(
-            details={}  # Exclude daemon-created entries for skipped tasks
-        ).count()
+        collection = get_mongodb_collection("action_logs")
+        if collection is None:
+            return 0
+
+        # Count actions, excluding empty details
+        count = collection.count_documents({
+            "linkedin_profile_id": self.linkedin_profile._id,
+            "action_type": action_type,
+            "created_at": {"$gte": since},
+            "details": {"$ne": {}, "$exists": True}  # Exclude empty details
+        })
+
+        return count
 
     def check_detectability(self) -> bool:
         """Check if detectability is too high."""
@@ -106,7 +124,7 @@ class SmartRateLimiter:
         level = "high" if self.context.detectability_score > 90 else "medium"
 
         return RateLimitWarning(
-            linkedin_profile=self.linkedin_profile,
+            linkedin_profile_id=self.linkedin_profile.pk,
             action_type="detection",
             limit_type="detectability",
             limit_exceeded=80,

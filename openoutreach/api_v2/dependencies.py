@@ -138,7 +138,7 @@ async def get_current_user(
             # Local JWT - sub IS the user_id
             from openoutreach.mongodb.connection import get_mongodb_collection
             users_collection = get_mongodb_collection("supabase_users")
-            if users_collection:
+            if users_collection is not None:
                 user_doc = users_collection.find_one({"_id": sub, "is_active": True})
                 if not user_doc:
                     raise HTTPException(status_code=401, detail="User not found or inactive")

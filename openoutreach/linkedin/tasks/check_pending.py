@@ -12,10 +12,9 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone
 
-from termcolor import colored
-
 from openoutreach.core.db.deals import set_profile_state
 from openoutreach.mongodb import models
+from openoutreach.mongodb.models import Lead
 from openoutreach.mongodb.connection import get_mongodb_collection
 from linkedin_cli.exceptions import SkipProfile
 
@@ -65,15 +64,19 @@ def handle_check_pending(task, session, qualifiers):
         logger.info("[%s] check_pending: no due PENDING deals — slot skipped", campaign)
         return
 
-    public_id = deal.lead.public_identifier
+    lead = Lead.get(deal.lead_id)
+    if not lead:
+        logger.warning("[%s] check_pending: Lead not found for deal %s — skipped", campaign, deal._id)
+        return
+
+    public_id = lead.public_identifier
     logger.info(
-        "[%s] %s %s",
+        "[%s] check_pending %s",
         campaign,
-        colored("▶ check_pending", "magenta", attrs=["bold"]),
         public_id,
     )
 
-    profile = deal.lead.to_profile_dict()
+    profile = lead.to_profile_dict()
     profile_for_status = profile.get("profile") or profile
 
     try:

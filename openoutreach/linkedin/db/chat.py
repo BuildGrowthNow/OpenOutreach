@@ -55,7 +55,7 @@ def _sync_from_api(session, public_identifier: str, deal) -> list:
     Returns the list of newly-created ``ChatMessage`` rows (in arrival order),
     so callers can incrementally update derived caches like ``chat_summary``.
     """
-    from openoutreach.mongodb.models import ChatMessage
+    from openoutreach.mongodb.models_extended import ChatMessage
     from linkedin_cli.actions.conversations import (
         find_conversation_urn,
         find_conversation_urn_via_navigation,
@@ -104,7 +104,6 @@ def _sync_from_api(session, public_identifier: str, deal) -> list:
             if parsed["delivered_at"]:
                 existing.creation_date = parsed["delivered_at"]
             existing.save()
-            created = False
         else:
             # Create new message
             obj = ChatMessage(
@@ -116,9 +115,6 @@ def _sync_from_api(session, public_identifier: str, deal) -> list:
                 creation_date=parsed["delivered_at"] if parsed["delivered_at"] else None,
             )
             obj.save()
-            created = True
-
-        if created:
             new_messages.append(obj)
             logger.debug(
                 "sync: new message from %s for %s",
@@ -139,7 +135,7 @@ def _sync_from_api(session, public_identifier: str, deal) -> list:
 
 def _read_from_db(deal) -> list[dict]:
     """Read all ChatMessages for a deal, sorted chronologically."""
-    from openoutreach.mongodb.models import ChatMessage
+    from openoutreach.mongodb.models_extended import ChatMessage
 
     lead_name = deal.lead.public_identifier or "them"
 

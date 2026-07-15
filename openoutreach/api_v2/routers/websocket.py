@@ -5,10 +5,11 @@ import asyncio
 import json
 from datetime import datetime
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, HTTPException
-from typing import Dict, Set
+from typing import Dict, Optional, Set
 import logging
 
 from openoutreach.mongodb import models
+from openoutreach.mongodb.models_extended import Notification
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -116,7 +117,7 @@ async def notification_websocket(websocket: WebSocket, token: str = Query(...)):
             elif msg_type == "mark_read":
                 notification_id = data.get("notification_id")
                 if notification_id:
-                    notif = models.Notification.get(notification_id)
+                    notif = Notification.get(notification_id)
                     if notif and notif.recipient_id == user_id:
                         notif.mark_as_read()
                         await websocket.send_json({
@@ -186,7 +187,7 @@ async def emit_notification_to_user(user_id: str, notification_data: dict):
     })
 
 
-async def emit_campaign_status_update(campaign_id: str, status: str, message: str = None):
+async def emit_campaign_status_update(campaign_id: str, status: str, message: Optional[str] = None):
     """Send campaign status update via WebSocket."""
     data = {
         "type": "campaign_status_update",
@@ -201,7 +202,7 @@ async def emit_campaign_status_update(campaign_id: str, status: str, message: st
     await manager.send_to_campaign(campaign_id, data)
 
 
-async def emit_campaign_error(campaign_id: str, error_message: str, deal_id: str = None):
+async def emit_campaign_error(campaign_id: str, error_message: str, deal_id: Optional[str] = None):
     """Send campaign error via WebSocket."""
     data = {
         "type": "campaign_error",

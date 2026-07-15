@@ -14,25 +14,46 @@ def import_freemium_campaign(kit_config: dict):
     Adds all active users to the campaign.
     Returns the Campaign instance or None.
     """
-    from openoutreach.core.models import Campaign
+    from openoutreach.mongodb.models import Campaign
     from openoutreach.linkedin.models import LinkedInProfile
+    from openoutreach.mongodb.connection import get_mongodb_collection
 
     campaign_name = kit_config.get("campaign_name", "Freemium Outreach")
 
-    campaign, _ = Campaign.objects.update_or_create(
-        name=campaign_name,
-        defaults={
-            "product_pitch": kit_config["product_pitch"],
-            "campaign_objective": kit_config["campaign_objective"],
-            "booking_link": kit_config["booking_link"],
-            "is_freemium": True,
-            "action_fraction": kit_config["action_fraction"],
-        },
-    )
+    # Find or create campaign
+    collection = get_mongodb_collection("campaigns")
+    if collection is None:
+        logger.error("MongoDB collection 'campaigns' not available")
+        return None
+
+    existing_doc = collection.find_one({"name": campaign_name})
+    if existing_doc:
+        # Update existing campaign
+        campaign = Campaign.from_dict(existing_doc)
+        campaign.product_pitch = kit_config["product_pitch"]
+        campaign.campaign_objective = kit_config["campaign_objective"]
+        campaign.booking_link = kit_config["booking_link"]
+        campaign.is_freemium = True
+        campaign.action_fraction = kit_config["action_fraction"]
+        campaign.save()
+    else:
+        # Create new campaign
+        campaign = Campaign(
+            name=campaign_name,
+            product_pitch=kit_config["product_pitch"],
+            campaign_objective=kit_config["campaign_objective"],
+            booking_link=kit_config["booking_link"],
+            is_freemium=True,
+            action_fraction=kit_config["action_fraction"],
+        )
+        campaign.save()
 
     # Add all active LinkedIn users to this campaign
-    for lp in LinkedInProfile.objects.filter(active=True).select_related("user"):
-        campaign.users.add(lp.user)
+    profiles = LinkedInProfile.objects.filter(active=True)
+    user_ids = [lp.user_id for lp in profiles if lp.user_id]
+    if user_ids and hasattr(campaign, 'team_member_ids'):
+        campaign.team_member_ids = list(set((campaign.team_member_ids or []) + user_ids))
+        campaign.save()
 
     logger.info(
         "[Freemium] Campaign imported: %s (action_fraction=%.2f)",
@@ -44,8 +65,7 @@ def import_freemium_campaign(kit_config: dict):
 
 def seed_profiles(session, kit_config: dict):
     """Seed Lead (with embedding) + QUALIFIED Deal for profiles listed in kit config."""
-    from openoutreach.crm.models import Lead
-
+    from openoutreach.mongodb.models import Lead
     from openoutreach.core.db.deals import create_freemium_deal
     from linkedin_cli.url_utils import public_id_to_url
 
@@ -56,9 +76,11 @@ def seed_profiles(session, kit_config: dict):
     for public_id in public_ids:
         url = public_id_to_url(public_id)
 
-        lead, _ = Lead.objects.get_or_create(
-            public_identifier=public_id, defaults={"linkedin_url": url}
-        )
+        # Get or create lead
+        lead = Lead.get_by_public_id(public_id)
+        if not lead:
+            lead = Lead(public_identifier=public_id, linkedin_url=url)
+            lead.save()
 
         lead.get_embedding(session)
         create_freemium_deal(session, public_id)

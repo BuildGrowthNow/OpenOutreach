@@ -1,0 +1,10 @@
+{
+  "include": ["openoutreach"],
+  "venvPath": ".",
+  "venv": ".venv",
+  "pythonVersion": "3.11",
+  "reportMissingImports": "warning",
+  "reportAttributeAccessIssue": "error",
+  "reportOptionalMemberAccess": "error",
+  "reportCallIssue": "error"
+}

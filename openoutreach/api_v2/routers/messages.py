@@ -45,7 +45,7 @@ async def list_messages(
     - deal_id: Messages for a specific deal
     """
     collection = get_mongodb_collection("chat_messages")
-    if not collection:
+    if collection is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
 
     # Build query
@@ -71,6 +71,8 @@ async def list_messages(
 
         # Get all deals for this campaign
         deals_collection = get_mongodb_collection("deals")
+        if deals_collection is None:
+            raise HTTPException(status_code=503, detail="Database unavailable")
         deals = list(deals_collection.find({"campaign_id": campaign_id}, {"_id": 1}))
         deal_ids = [str(d["_id"]) for d in deals]
         query["deal_id"] = {"$in": deal_ids}
@@ -78,6 +80,8 @@ async def list_messages(
     else:
         # Get all campaigns user has access to
         campaigns_collection = get_mongodb_collection("campaigns")
+        if campaigns_collection is None:
+            raise HTTPException(status_code=503, detail="Database unavailable")
         accessible_campaigns = list(campaigns_collection.find({
             "$or": [
                 {"user_id": user_id},
@@ -88,6 +92,8 @@ async def list_messages(
 
         # Get all deals for accessible campaigns
         deals_collection = get_mongodb_collection("deals")
+        if deals_collection is None:
+            raise HTTPException(status_code=503, detail="Database unavailable")
         deals = list(deals_collection.find({"campaign_id": {"$in": campaign_ids}}, {"_id": 1}))
         deal_ids = [str(d["_id"]) for d in deals]
         query["deal_id"] = {"$in": deal_ids}
@@ -99,6 +105,8 @@ async def list_messages(
     # Get campaign IDs for enrichment
     deal_ids = list(set(str(m["deal_id"]) for m in messages))
     deals_collection = get_mongodb_collection("deals")
+    if deals_collection is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
     deals_data = {str(d["_id"]): d for d in deals_collection.find({"_id": {"$in": deal_ids}})}
 
     results = []
@@ -130,7 +138,7 @@ async def get_message(
 ):
     """Get a single message by ID (access via campaign)."""
     collection = get_mongodb_collection("chat_messages")
-    if not collection:
+    if collection is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
 
     msg = collection.find_one({"_id": message_id})

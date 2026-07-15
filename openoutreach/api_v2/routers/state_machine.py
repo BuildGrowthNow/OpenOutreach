@@ -1,605 +1,527 @@
-"""
-State Machine API Router - Global simulation and execution
+"""State Machine API endpoints - MongoDB + FastAPI."""
 
-FastAPI endpoints for state machine operations.
-Replaces Django StateMachineExecutionView and StateMachineSimulationView.
-
-NOTE: Campaign-specific state machine endpoints are in campaigns.py:
-- GET /api/campaigns/{id}/state-machine/ - Get state graph
-- PUT /api/campaigns/{id}/state-machine/ - Update state graph
-- POST /api/campaigns/{id}/state-machine/validate/ - Validate graph
-- POST /api/campaigns/{id}/state-machine/simulate/ - Simulate execution
-"""
-
-import logging
 from datetime import datetime
-from typing import Optional, List, Dict, Any
+from typing import List, Optional, Dict, Any
+import logging
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from openoutreach.api_v2.dependencies import get_current_user
+from openoutreach.api_v2.dependencies_v2 import get_current_user, get_campaign_with_access
+from openoutreach.linkedin.models import (
+    CampaignStateGraph,
+    StateNode,
+    StateTransition,
+    CampaignState,
+)
 from openoutreach.mongodb.connection import get_mongodb_collection
-from openoutreach.mongodb import models
-from openoutreach.mongodb.dal import CampaignDAL, DealDAL
 
 logger = logging.getLogger(__name__)
-
-router = APIRouter()
-
-
-# ========== Pydantic Schemas ==========
-
-class ExecuteRequest(BaseModel):
-    """Request to execute state machine for a deal."""
-    campaign_id: str = Field(..., description="Campaign ID")
-    deal_id: str = Field(..., description="Deal ID")
+router = APIRouter(prefix="/state-machines", tags=["State Machine"])
 
 
-class ExecutionLogResponse(BaseModel):
-    """Execution log entry."""
+# ============================================================================
+# Request/Response Models
+# ============================================================================
+
+class StateNodeCreate(BaseModel):
+    """Request to create a state node."""
+    name: str = Field(..., min_length=1, max_length=100)
+    node_type: str = Field(..., description="Node type (start, wait, message, gate, etc.)")
+    config: Dict[str, Any] = Field(default_factory=dict)
+    x: float = Field(default=0.0)
+    y: float = Field(default=0.0)
+    description: str = Field(default="")
+
+
+class StateNodeUpdate(BaseModel):
+    """Request to update a state node."""
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    config: Optional[Dict[str, Any]] = None
+    x: Optional[float] = None
+    y: Optional[float] = None
+    description: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class StateNodeResponse(BaseModel):
+    """Response model for state node."""
     id: str
-    node_id: Optional[str] = None
-    node_name: Optional[str] = None
-    action: str = ""
-    result: Dict[str, Any] = Field(default_factory=dict)
-    timestamp: str = ""
-
-
-class ExecutionResultResponse(BaseModel):
-    """Execution result response."""
-    state_machine_id: str
-    current_node_id: Optional[str] = None
-    current_node_name: Optional[str] = None
-    status: str
-    steps_executed: int = 0
-    logs: List[ExecutionLogResponse] = Field(default_factory=list)
-    error: Optional[str] = None
-
-
-class ExecuteResponse(BaseModel):
-    """Response from execute endpoint."""
-    success: bool
-    execution: Optional[ExecutionResultResponse] = None
-    error: Optional[str] = None
-
-
-class SimulateRequest(BaseModel):
-    """Request to simulate state machine execution."""
-    deal_id: str = Field(..., description="Deal ID to simulate")
-    input: str = Field("", description="Optional input text")
-    start_state: str = Field("", description="Starting state node ID")
-    max_steps: int = Field(10, description="Maximum simulation steps")
-
-
-class SimulationPathStep(BaseModel):
-    """Single step in simulation path."""
-    node: str
+    state_graph_id: str
     name: str
-    type: str
-    timestamp: str = ""
+    node_type: str
+    config: Dict[str, Any]
+    x: float
+    y: float
+    is_active: bool
+    description: str
+    created_at: datetime
+    updated_at: datetime
 
 
-class SimulationResponse(BaseModel):
-    """Simulation result response."""
-    input: str
-    start_state: str
-    path: List[SimulationPathStep] = Field(default_factory=list)
-    nodes_visited: int = 0
-    transitions_used: int = 0
-    final_state: str = ""
-    messages_sent: List[str] = Field(default_factory=list)
-    completed: bool = False
-    steps: int = 0
-    error: Optional[str] = None
+class StateTransitionCreate(BaseModel):
+    """Request to create a state transition."""
+    source_node_id: str
+    target_node_id: str
+    condition_type: str = Field(default="always")
+    condition_config: Dict[str, Any] = Field(default_factory=dict)
+    label: str = Field(default="")
+    order: int = Field(default=0, ge=0)
 
 
-class SimulateResponse(BaseModel):
-    """Response from simulate endpoint."""
-    success: bool
-    simulation: Optional[SimulationResponse] = None
-    error: Optional[str] = None
+class StateTransitionUpdate(BaseModel):
+    """Request to update a state transition."""
+    condition_type: Optional[str] = None
+    condition_config: Optional[Dict[str, Any]] = None
+    label: Optional[str] = None
+    order: Optional[int] = Field(None, ge=0)
+    is_active: Optional[bool] = None
 
 
-# ========== Helper Functions ==========
-
-def _get_campaign_state_graph(campaign_id: str) -> Optional[Dict[str, Any]]:
-    """Get state graph for a campaign."""
-    collection = get_mongodb_collection("campaign_state_graphs")
-    if not collection:
-        return None
-
-    try:
-        return collection.find_one({"campaign_id": campaign_id})
-    except Exception as e:
-        logger.error(f"Failed to get state graph for campaign '{campaign_id}': {e}")
-        return None
-
-
-def _get_state_node(node_id: str, state_graph_id: str) -> Optional[Dict[str, Any]]:
-    """Get a state node by ID."""
-    collection = get_mongodb_collection("state_nodes")
-    if not collection:
-        return None
-
-    try:
-        return collection.find_one({"_id": node_id, "state_graph_id": state_graph_id})
-    except Exception as e:
-        logger.error(f"Failed to get state node '{node_id}': {e}")
-        return None
+class StateTransitionResponse(BaseModel):
+    """Response model for state transition."""
+    id: str
+    state_graph_id: str
+    source_node_id: str
+    target_node_id: str
+    condition_type: str
+    condition_config: Dict[str, Any]
+    label: str
+    order: int
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
 
 
-def _get_state_transitions(state_graph_id: str) -> List[Dict[str, Any]]:
-    """Get all transitions for a state graph."""
-    collection = get_mongodb_collection("state_transitions")
-    if not collection:
-        return []
-
-    try:
-        return list(collection.find({"state_graph_id": state_graph_id, "is_active": True}))
-    except Exception as e:
-        logger.error(f"Failed to get transitions for state graph '{state_graph_id}': {e}")
-        return []
+class CampaignStateGraphCreate(BaseModel):
+    """Request to create a campaign state graph."""
+    name: str = Field(..., min_length=1, max_length=100)
+    description: str = Field(default="")
 
 
-def _get_state_nodes(state_graph_id: str) -> Dict[str, Dict[str, Any]]:
-    """Get all nodes for a state graph as a dict keyed by node ID."""
-    collection = get_mongodb_collection("state_nodes")
-    if not collection:
-        return {}
-
-    try:
-        nodes = collection.find({"state_graph_id": state_graph_id})
-        return {str(node["_id"]): node for node in nodes}
-    except Exception as e:
-        logger.error(f"Failed to get nodes for state graph '{state_graph_id}': {e}")
-        return {}
+class CampaignStateGraphUpdate(BaseModel):
+    """Request to update a campaign state graph."""
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    description: Optional[str] = None
+    is_active: Optional[bool] = None
+    graph_data: Optional[Dict[str, Any]] = None
 
 
-def _create_or_get_campaign_state(deal_id: str, state_graph_id: str, start_node_id: str) -> Optional[Dict[str, Any]]:
-    """Create or get existing campaign state for a deal."""
-    collection = get_mongodb_collection("campaign_states")
-    if not collection:
-        return None
-
-    try:
-        # Check if state already exists
-        existing = collection.find_one({"deal_id": deal_id, "state_graph_id": state_graph_id})
-        if existing:
-            return existing
-
-        # Create new state
-        new_state = {
-            "_id": str(models.uuid4()),
-            "deal_id": deal_id,
-            "state_graph_id": state_graph_id,
-            "current_node_id": start_node_id,
-            "previous_nodes": [],
-            "status": "active",
-            "error_message": "",
-            "wait_until": None,
-            "wait_reason": "",
-            "metadata": {},
-            "started_at": datetime.utcnow(),
-            "completed_at": None,
-        }
-        collection.insert_one(new_state)
-        return new_state
-    except Exception as e:
-        logger.error(f"Failed to create/get campaign state: {e}")
-        return None
+class CampaignStateGraphResponse(BaseModel):
+    """Response model for campaign state graph."""
+    id: str
+    campaign_id: str
+    name: str
+    description: str
+    is_active: bool
+    is_valid: bool
+    validation_errors: List[str]
+    graph_data: Dict[str, Any]
+    created_at: datetime
+    updated_at: datetime
 
 
-def _create_execution_log(state_machine_id: str, node_id: Optional[str], action: str, result: Dict[str, Any]) -> str:
-    """Create execution log entry."""
-    collection = get_mongodb_collection("campaign_execution_logs")
-    if not collection:
-        return ""
-
-    try:
-        log = {
-            "_id": str(models.uuid4()),
-            "state_machine_id": state_machine_id,
-            "node_id": node_id,
-            "action": action,
-            "result": result,
-            "timestamp": datetime.utcnow(),
-        }
-        collection.insert_one(log)
-        return log["_id"]
-    except Exception as e:
-        logger.error(f"Failed to create execution log: {e}")
-        return ""
+class CampaignStateGraphDetail(BaseModel):
+    """Detailed response including nodes and transitions."""
+    graph: CampaignStateGraphResponse
+    nodes: List[StateNodeResponse]
+    transitions: List[StateTransitionResponse]
 
 
-# ========== Endpoints ==========
+# ============================================================================
+# Campaign State Graph Endpoints
+# ============================================================================
 
-@router.post("/execute/", response_model=ExecuteResponse)
-async def execute_state_machine(
-    request: ExecuteRequest,
-    user_id: str = Depends(get_current_user),
-):
-    """
-    Execute state machine for a campaign and deal.
-
-    Executes one step of the state machine workflow for the specified deal.
-    Creates a campaign state if it doesn't exist, executes the current node,
-    and transitions to the next node based on conditions.
-
-    **Multi-tenant**: Verifies user owns the campaign before execution.
-
-    **Returns 404** if campaign or deal not found or user doesn't own them.
-    """
-    # Get campaign
-    campaigns_collection = get_mongodb_collection("campaigns")
-    if not campaigns_collection:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Database unavailable"
-        )
-
-    try:
-        campaign_data = campaigns_collection.find_one({"_id": request.campaign_id})
-        if not campaign_data:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Campaign not found"
-            )
-
-        campaign = models.Campaign.from_dict(campaign_data)
-
-        # Verify ownership
-        if campaign.user_id != user_id:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Campaign not found"
-            )
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to get campaign: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to retrieve campaign"
-        )
-
-    # Get deal
-    deals_collection = get_mongodb_collection("deals")
-    if not deals_collection:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Database unavailable"
-        )
-
-    try:
-        deal_data = deals_collection.find_one({
-            "_id": request.deal_id,
-            "campaign_id": request.campaign_id
-        })
-        if not deal_data:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Deal not found in this campaign"
-            )
-
-        deal = models.Deal.from_dict(deal_data)
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to get deal: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to retrieve deal"
-        )
-
-    # Get state graph
-    state_graph = _get_campaign_state_graph(request.campaign_id)
-    if not state_graph:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No state machine defined for this campaign"
-        )
-
-    if not state_graph.get("is_active", False):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="State graph is not active"
-        )
-
-    state_graph_id = str(state_graph["_id"])
-
-    # Find start node
-    nodes = _get_state_nodes(state_graph_id)
-    start_node_id = None
-    for node_id, node in nodes.items():
-        if node.get("node_type") == "start":
-            start_node_id = node_id
-            break
-
-    if not start_node_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No start node defined in state machine"
-        )
-
-    # Create or get campaign state
-    campaign_state = _create_or_get_campaign_state(request.deal_id, state_graph_id, start_node_id)
-    if not campaign_state:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to initialize state machine"
-        )
-
-    current_node_id = campaign_state.get("current_node_id")
-    if not current_node_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No current node in state machine"
-        )
-
-    # Execute the step (simplified - in production would call StateMachineEngine)
-    # For now, just log the execution and return success
-    current_node = nodes.get(current_node_id)
-    if not current_node:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Current node not found"
-        )
-
-    # Create execution log
-    log_id = _create_execution_log(
-        state_machine_id=str(campaign_state["_id"]),
-        node_id=current_node_id,
-        action=current_node.get("node_type", "unknown"),
-        result={"executed": True, "node_name": current_node.get("name", "")}
-    )
-
-    # Get recent logs
-    logs_collection = get_mongodb_collection("campaign_execution_logs")
-    logs_data = []
-    if logs_collection:
-        try:
-            logs_cursor = logs_collection.find({
-                "state_machine_id": str(campaign_state["_id"])
-            }).sort("timestamp", -1).limit(10)
-
-            for log in logs_cursor:
-                node_data = nodes.get(str(log.get("node_id", "")))
-                logs_data.append(
-                    ExecutionLogResponse(
-                        id=str(log["_id"]),
-                        node_id=str(log.get("node_id", "")),
-                        node_name=node_data.get("name", "") if node_data else None,
-                        action=log.get("action", ""),
-                        result=log.get("result", {}),
-                        timestamp=log.get("timestamp", datetime.utcnow()).isoformat(),
-                    )
-                )
-        except Exception as e:
-            logger.error(f"Failed to fetch execution logs: {e}")
-
-    return ExecuteResponse(
-        success=True,
-        execution=ExecutionResultResponse(
-            state_machine_id=str(campaign_state["_id"]),
-            current_node_id=current_node_id,
-            current_node_name=current_node.get("name", ""),
-            status=campaign_state.get("status", "active"),
-            steps_executed=len(logs_data),
-            logs=logs_data,
-            error=None,
-        ),
-        error=None,
-    )
-
-
-@router.post("/simulate/", response_model=SimulateResponse)
-async def simulate_state_machine(
-    request: SimulateRequest,
+@router.get("/campaigns/{campaign_id}", response_model=Optional[CampaignStateGraphDetail])
+async def get_campaign_state_graph(
     campaign_id: str,
     user_id: str = Depends(get_current_user),
 ):
     """
-    Simulate state machine execution for a campaign.
+    Get state machine graph for a campaign.
 
-    Runs a dry-run simulation of the state machine workflow without
-    executing actual actions. Shows the path that would be taken through
-    the state graph based on the current configuration.
-
-    **Multi-tenant**: Verifies user owns the campaign.
-
-    **Returns 404** if campaign or deal not found or user doesn't own them.
-
-    Note: This endpoint is also available at:
-    POST /api/campaigns/{id}/state-machine/simulate/
+    Returns the workflow definition including all nodes and transitions.
     """
-    # Get campaign
-    campaigns_collection = get_mongodb_collection("campaigns")
-    if not campaigns_collection:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Database unavailable"
-        )
-
-    try:
-        campaign_data = campaigns_collection.find_one({"_id": campaign_id})
-        if not campaign_data:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Campaign not found"
-            )
-
-        campaign = models.Campaign.from_dict(campaign_data)
-
-        # Verify ownership
-        if campaign.user_id != user_id:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Campaign not found"
-            )
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to get campaign: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to retrieve campaign"
-        )
-
-    # Get deal
-    deals_collection = get_mongodb_collection("deals")
-    if not deals_collection:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Database unavailable"
-        )
-
-    try:
-        deal_data = deals_collection.find_one({
-            "_id": request.deal_id,
-            "campaign_id": campaign_id
-        })
-        if not deal_data:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Deal not found in this campaign"
-            )
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to get deal: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to retrieve deal"
-        )
+    # Verify campaign access
+    campaign = await get_campaign_with_access(campaign_id, user_id)
 
     # Get state graph
-    state_graph = _get_campaign_state_graph(campaign_id)
-    if not state_graph:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No state machine defined for this campaign"
-        )
+    graph = CampaignStateGraph.get_by_campaign(campaign_id)
+    if not graph:
+        return None
 
-    state_graph_id = str(state_graph["_id"])
+    # Get nodes and transitions
+    nodes = StateNode.get_by_graph(graph._id)
+    transitions = StateTransition.get_by_graph(graph._id)
 
-    # Get all nodes and transitions
-    nodes = _get_state_nodes(state_graph_id)
-    transitions = _get_state_transitions(state_graph_id)
-
-    if not nodes:
-        return SimulateResponse(
-            success=True,
-            simulation=SimulationResponse(
-                input=request.input,
-                start_state=request.start_state,
-                path=[],
-                nodes_visited=0,
-                transitions_used=0,
-                final_state="",
-                messages_sent=[],
-                completed=False,
-                steps=0,
-                error="No nodes defined in state machine",
-            ),
-            error=None,
-        )
-
-    # Determine start node
-    current_state = request.start_state
-    if not current_state:
-        # Find start node
-        for node_id, node in nodes.items():
-            if node.get("node_type") == "start":
-                current_state = node_id
-                break
-
-    if not current_state or current_state not in nodes:
-        return SimulateResponse(
-            success=True,
-            simulation=SimulationResponse(
-                input=request.input,
-                start_state=request.start_state,
-                path=[],
-                nodes_visited=0,
-                transitions_used=0,
-                final_state="",
-                messages_sent=[],
-                completed=False,
-                steps=0,
-                error="No valid start node found",
-            ),
-            error=None,
-        )
-
-    # Simulate execution
-    path: List[SimulationPathStep] = []
-    nodes_visited: List[str] = []
-    transitions_used: List[str] = []
-    messages_sent: List[str] = []
-    steps = 0
-    error = None
-
-    while current_state and steps < request.max_steps:
-        if current_state not in nodes:
-            error = f"Unknown node: {current_state}"
-            break
-
-        node = nodes[current_state]
-        nodes_visited.append(current_state)
-
-        # Add to path
-        path.append(
-            SimulationPathStep(
-                node=current_state,
-                name=node.get("name", ""),
-                type=node.get("node_type", ""),
-                timestamp=node.get("created_at", datetime.utcnow()).isoformat() if node.get("created_at") else "",
-            )
-        )
-
-        # Extract messages from node config
-        config = node.get("config", {})
-        if isinstance(config, dict) and "message" in config:
-            messages_sent.append(config["message"])
-
-        # Find next transition
-        next_transition = None
-        for trans in transitions:
-            if str(trans.get("source_node_id")) == current_state:
-                # Simple condition evaluation (always or response)
-                condition_type = trans.get("condition_type", "always")
-                if condition_type in ["always", "response"]:
-                    next_transition = trans
-                    break
-
-        if not next_transition:
-            # No more transitions - reached end
-            break
-
-        transitions_used.append(str(next_transition["_id"]))
-        current_state = str(next_transition.get("target_node_id", ""))
-        steps += 1
-
-    # Check if we reached an end node
-    final_state = current_state if current_state else "completed"
-    completed = False
-    if current_state and current_state in nodes:
-        completed = nodes[current_state].get("node_type") == "end"
-
-    return SimulateResponse(
-        success=True,
-        simulation=SimulationResponse(
-            input=request.input,
-            start_state=request.start_state,
-            path=path,
-            nodes_visited=len(nodes_visited),
-            transitions_used=len(transitions_used),
-            final_state=final_state,
-            messages_sent=messages_sent,
-            completed=completed,
-            steps=steps,
-            error=error,
+    return CampaignStateGraphDetail(
+        graph=CampaignStateGraphResponse(
+            id=graph._id,
+            campaign_id=graph.campaign_id,
+            name=graph.name,
+            description=graph.description,
+            is_active=graph.is_active,
+            is_valid=graph.is_valid,
+            validation_errors=graph.validation_errors,
+            graph_data=graph.graph_data,
+            created_at=graph.created_at,
+            updated_at=graph.updated_at,
         ),
-        error=None,
+        nodes=[
+            StateNodeResponse(
+                id=n._id,
+                state_graph_id=n.state_graph_id,
+                name=n.name,
+                node_type=n.node_type,
+                config=n.config,
+                x=n.x,
+                y=n.y,
+                is_active=n.is_active,
+                description=n.description,
+                created_at=n.created_at,
+                updated_at=n.updated_at,
+            )
+            for n in nodes
+        ],
+        transitions=[
+            StateTransitionResponse(
+                id=t._id,
+                state_graph_id=t.state_graph_id,
+                source_node_id=t.source_node_id,
+                target_node_id=t.target_node_id,
+                condition_type=t.condition_type,
+                condition_config=t.condition_config,
+                label=t.label,
+                order=t.order,
+                is_active=t.is_active,
+                created_at=t.created_at,
+                updated_at=t.updated_at,
+            )
+            for t in transitions
+        ],
     )
+
+
+@router.post("/campaigns/{campaign_id}", response_model=CampaignStateGraphResponse, status_code=201)
+async def create_campaign_state_graph(
+    campaign_id: str,
+    request: CampaignStateGraphCreate,
+    user_id: str = Depends(get_current_user),
+):
+    """
+    Create a state machine graph for a campaign.
+
+    This defines the workflow that all leads in the campaign will follow.
+    """
+    # Verify campaign access
+    await get_campaign_with_access(campaign_id, user_id)
+
+    # Check if graph already exists
+    existing = CampaignStateGraph.get_by_campaign(campaign_id)
+    if existing:
+        raise HTTPException(status_code=400, detail="State graph already exists for this campaign")
+
+    # Create graph
+    graph = CampaignStateGraph(
+        campaign_id=campaign_id,
+        name=request.name,
+        description=request.description,
+    )
+    graph.save()
+
+    return CampaignStateGraphResponse(
+        id=graph._id,
+        campaign_id=graph.campaign_id,
+        name=graph.name,
+        description=graph.description,
+        is_active=graph.is_active,
+        is_valid=graph.is_valid,
+        validation_errors=graph.validation_errors,
+        graph_data=graph.graph_data,
+        created_at=graph.created_at,
+        updated_at=graph.updated_at,
+    )
+
+
+@router.patch("/campaigns/{campaign_id}")
+async def update_campaign_state_graph(
+    campaign_id: str,
+    request: CampaignStateGraphUpdate,
+    user_id: str = Depends(get_current_user),
+):
+    """Update campaign state graph."""
+    # Verify campaign access
+    await get_campaign_with_access(campaign_id, user_id)
+
+    # Get graph
+    graph = CampaignStateGraph.get_by_campaign(campaign_id)
+    if not graph:
+        raise HTTPException(status_code=404, detail="State graph not found")
+
+    # Update fields
+    if request.name is not None:
+        graph.name = request.name
+    if request.description is not None:
+        graph.description = request.description
+    if request.is_active is not None:
+        graph.is_active = request.is_active
+    if request.graph_data is not None:
+        graph.graph_data = request.graph_data
+
+    graph.save()
+
+    return {"success": True, "message": "State graph updated"}
+
+
+@router.delete("/campaigns/{campaign_id}", status_code=204)
+async def delete_campaign_state_graph(
+    campaign_id: str,
+    user_id: str = Depends(get_current_user),
+):
+    """Delete campaign state graph and all associated nodes/transitions."""
+    # Verify campaign access
+    await get_campaign_with_access(campaign_id, user_id)
+
+    # Get graph
+    graph = CampaignStateGraph.get_by_campaign(campaign_id)
+    if not graph:
+        raise HTTPException(status_code=404, detail="State graph not found")
+
+    # Delete nodes, transitions, and graph
+    collection = get_mongodb_collection("state_nodes")
+    if collection is not None:
+        collection.delete_many({"state_graph_id": graph._id})
+
+    collection = get_mongodb_collection("state_transitions")
+    if collection is not None:
+        collection.delete_many({"state_graph_id": graph._id})
+
+    collection = get_mongodb_collection("campaign_state_graphs")
+    if collection is not None:
+        collection.delete_one({"_id": graph._id})
+
+    return None
+
+
+# ============================================================================
+# State Node Endpoints
+# ============================================================================
+
+@router.post("/campaigns/{campaign_id}/nodes", response_model=StateNodeResponse, status_code=201)
+async def create_state_node(
+    campaign_id: str,
+    request: StateNodeCreate,
+    user_id: str = Depends(get_current_user),
+):
+    """Create a new node in the state machine."""
+    # Verify campaign access
+    await get_campaign_with_access(campaign_id, user_id)
+
+    # Get graph
+    graph = CampaignStateGraph.get_by_campaign(campaign_id)
+    if not graph:
+        raise HTTPException(status_code=404, detail="State graph not found. Create it first.")
+
+    # Create node
+    node = StateNode(
+        state_graph_id=graph._id,
+        name=request.name,
+        node_type=request.node_type,
+        config=request.config,
+        x=request.x,
+        y=request.y,
+        description=request.description,
+    )
+    node.save()
+
+    return StateNodeResponse(
+        id=node._id,
+        state_graph_id=node.state_graph_id,
+        name=node.name,
+        node_type=node.node_type,
+        config=node.config,
+        x=node.x,
+        y=node.y,
+        is_active=node.is_active,
+        description=node.description,
+        created_at=node.created_at,
+        updated_at=node.updated_at,
+    )
+
+
+@router.patch("/campaigns/{campaign_id}/nodes/{node_id}")
+async def update_state_node(
+    campaign_id: str,
+    node_id: str,
+    request: StateNodeUpdate,
+    user_id: str = Depends(get_current_user),
+):
+    """Update a state node."""
+    # Verify campaign access
+    await get_campaign_with_access(campaign_id, user_id)
+
+    # Get node
+    collection = get_mongodb_collection("state_nodes")
+    if collection is None:
+        raise HTTPException(status_code=500, detail="Database not available")
+
+    node_data = collection.find_one({"_id": node_id})
+    if not node_data:
+        raise HTTPException(status_code=404, detail="Node not found")
+
+    node = StateNode.from_dict(node_data)
+
+    # Update fields
+    if request.name is not None:
+        node.name = request.name
+    if request.config is not None:
+        node.config = request.config
+    if request.x is not None:
+        node.x = request.x
+    if request.y is not None:
+        node.y = request.y
+    if request.description is not None:
+        node.description = request.description
+    if request.is_active is not None:
+        node.is_active = request.is_active
+
+    node.save()
+
+    return {"success": True, "message": "Node updated"}
+
+
+@router.delete("/campaigns/{campaign_id}/nodes/{node_id}", status_code=204)
+async def delete_state_node(
+    campaign_id: str,
+    node_id: str,
+    user_id: str = Depends(get_current_user),
+):
+    """Delete a state node and its transitions."""
+    # Verify campaign access
+    await get_campaign_with_access(campaign_id, user_id)
+
+    # Delete transitions
+    collection = get_mongodb_collection("state_transitions")
+    if collection is not None:
+        collection.delete_many({"$or": [{"source_node_id": node_id}, {"target_node_id": node_id}]})
+
+    # Delete node
+    collection = get_mongodb_collection("state_nodes")
+    if collection is not None:
+        collection.delete_one({"_id": node_id})
+
+    return None
+
+
+# ============================================================================
+# State Transition Endpoints
+# ============================================================================
+
+@router.post("/campaigns/{campaign_id}/transitions", response_model=StateTransitionResponse, status_code=201)
+async def create_state_transition(
+    campaign_id: str,
+    request: StateTransitionCreate,
+    user_id: str = Depends(get_current_user),
+):
+    """Create a new transition between nodes."""
+    # Verify campaign access
+    await get_campaign_with_access(campaign_id, user_id)
+
+    # Get graph
+    graph = CampaignStateGraph.get_by_campaign(campaign_id)
+    if not graph:
+        raise HTTPException(status_code=404, detail="State graph not found")
+
+    # Verify nodes exist
+    collection = get_mongodb_collection("state_nodes")
+    if collection is None:
+        raise HTTPException(status_code=500, detail="Database not available")
+
+    source_exists = collection.count_documents({"_id": request.source_node_id, "state_graph_id": graph._id}) > 0
+    target_exists = collection.count_documents({"_id": request.target_node_id, "state_graph_id": graph._id}) > 0
+
+    if not source_exists or not target_exists:
+        raise HTTPException(status_code=400, detail="Source or target node not found in this graph")
+
+    # Create transition
+    transition = StateTransition(
+        state_graph_id=graph._id,
+        source_node_id=request.source_node_id,
+        target_node_id=request.target_node_id,
+        condition_type=request.condition_type,
+        condition_config=request.condition_config,
+        label=request.label,
+        order=request.order,
+    )
+    transition.save()
+
+    return StateTransitionResponse(
+        id=transition._id,
+        state_graph_id=transition.state_graph_id,
+        source_node_id=transition.source_node_id,
+        target_node_id=transition.target_node_id,
+        condition_type=transition.condition_type,
+        condition_config=transition.condition_config,
+        label=transition.label,
+        order=transition.order,
+        is_active=transition.is_active,
+        created_at=transition.created_at,
+        updated_at=transition.updated_at,
+    )
+
+
+@router.patch("/campaigns/{campaign_id}/transitions/{transition_id}")
+async def update_state_transition(
+    campaign_id: str,
+    transition_id: str,
+    request: StateTransitionUpdate,
+    user_id: str = Depends(get_current_user),
+):
+    """Update a state transition."""
+    # Verify campaign access
+    await get_campaign_with_access(campaign_id, user_id)
+
+    # Get transition
+    collection = get_mongodb_collection("state_transitions")
+    if collection is None:
+        raise HTTPException(status_code=500, detail="Database not available")
+
+    trans_data = collection.find_one({"_id": transition_id})
+    if not trans_data:
+        raise HTTPException(status_code=404, detail="Transition not found")
+
+    transition = StateTransition.from_dict(trans_data)
+
+    # Update fields
+    if request.condition_type is not None:
+        transition.condition_type = request.condition_type
+    if request.condition_config is not None:
+        transition.condition_config = request.condition_config
+    if request.label is not None:
+        transition.label = request.label
+    if request.order is not None:
+        transition.order = request.order
+    if request.is_active is not None:
+        transition.is_active = request.is_active
+
+    transition.save()
+
+    return {"success": True, "message": "Transition updated"}
+
+
+@router.delete("/campaigns/{campaign_id}/transitions/{transition_id}", status_code=204)
+async def delete_state_transition(
+    campaign_id: str,
+    transition_id: str,
+    user_id: str = Depends(get_current_user),
+):
+    """Delete a state transition."""
+    # Verify campaign access
+    await get_campaign_with_access(campaign_id, user_id)
+
+    # Delete transition
+    collection = get_mongodb_collection("state_transitions")
+    if collection is not None:
+        collection.delete_one({"_id": transition_id})
+
+    return None

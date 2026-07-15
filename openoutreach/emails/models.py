@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, ClassVar, Dict, List, Optional
 from uuid import uuid4
 
 from pymongo.collection import Collection
@@ -123,6 +123,8 @@ class Mailbox:
     left untouched (re-import with fixed credentials to repair it).
     """
 
+    objects: ClassVar["MailboxManager"]
+
     def __init__(
         self,
         _id: Optional[str] = None,
@@ -239,10 +241,6 @@ class Mailbox:
         """Set the primary key."""
         self._id = value
 
-    @classmethod
-    def objects(cls) -> MailboxManager:
-        """Get the MailboxManager for querying mailboxes."""
-        return MailboxManager()
 
     def sent_today(self) -> int:
         """Emails this box has sent since local midnight (the per-box cap ledger).
@@ -272,8 +270,12 @@ class Mailbox:
         return max(0, self.daily_limit - self.sent_today())
 
 
+# Assign Mailbox manager as class attribute
+Mailbox.objects = MailboxManager()
+
+
 def has_mailbox() -> bool:
     """True when ≥1 mailbox is configured — i.e. email is a viable channel to
     send from. Gates email enrichment: with no mailbox there's nothing to send,
     so resolving an address is pointless and the deal should take the connect leg."""
-    return Mailbox.objects().exists()
+    return Mailbox.objects.exists()

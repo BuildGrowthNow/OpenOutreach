@@ -63,27 +63,42 @@ class CampaignHealthMonitor:
 
     def _get_connection_metrics(self, since):
         """Get connection metrics for the campaign."""
-        # Get all LinkedIn profiles for this campaign
-        linkedin_profiles = LinkedInProfile.objects.filter(
-            campaign=self.campaign
-        ).values_list("id", flat=True)
+        from openoutreach.mongodb.connection import get_mongodb_collection
 
-        if not linkedin_profiles:
+        # Get all LinkedIn profiles for this campaign
+        campaign_id = self.campaign._id if hasattr(self.campaign, '_id') else str(self.campaign)
+        profile_collection = get_mongodb_collection("linkedin_profiles")
+        if profile_collection is None:
+            return 0, 0
+
+        linkedin_profile_ids = [
+            str(doc["_id"]) for doc in profile_collection.find({"campaign_id": campaign_id}, {"_id": 1})
+        ]
+
+        if not linkedin_profile_ids:
             return 0, 0
 
         # Count connections sent
-        connections_sent = ActionLog.objects.filter(
-            linkedin_profile__in=linkedin_profiles,
-            action_type=ActionLog.ActionType.CONNECT,
-            created_at__gte=since,
-        ).count()
+        action_collection = get_mongodb_collection("action_logs")
+        if action_collection is not None:
+            connections_sent = action_collection.count_documents({
+                "linkedin_profile_id": {"$in": linkedin_profile_ids},
+                "action_type": ActionLog.ActionType.CONNECT,
+                "created_at": {"$gte": since},
+            })
+        else:
+            connections_sent = 0
 
         # Count connections accepted (deals in CONNECTED state from these connections)
-        connections_accepted = Deal.objects.filter(
-            campaign=self.campaign,
-            state=DealState.CONNECTED,
-            creation_date__gte=since,
-        ).count()
+        deal_collection = get_mongodb_collection("deals")
+        if deal_collection is not None:
+            connections_accepted = deal_collection.count_documents({
+                "campaign_id": campaign_id,
+                "state": DealState.CONNECTED,
+                "creation_date": {"$gte": since},
+            })
+        else:
+            connections_accepted = 0
 
         return connections_sent, connections_accepted
 
@@ -111,7 +126,7 @@ class CampaignHealthMonitor:
         ):
             alerts.append(
                 HealthAlert(
-                    campaign=self.campaign,
+                    campaign_id=self.campaign.pk,
                     alert_type=HealthAlert.TYPE_CONNECTION_RATE,
                     severity=HealthAlert.SEVERITY_MEDIUM,
                     message=(
@@ -136,27 +151,38 @@ class CampaignHealthMonitor:
         # Get metrics for last 48 hours
         since = datetime.now(tz.utc) - timedelta(hours=48)
 
+        from openoutreach.mongodb.connection import get_mongodb_collection
+
+        campaign_id = self.campaign._id if hasattr(self.campaign, '_id') else str(self.campaign)
+        deal_collection = get_mongodb_collection("deals")
+        message_collection = get_mongodb_collection("chat_messages")
+
+        if deal_collection is None or message_collection is None:
+            return alerts
+
         # Get connected deals
-        connected_deals = Deal.objects.filter(
-            campaign=self.campaign,
-            state=DealState.CONNECTED,
-            creation_date__gte=since,
-        ).count()
+        connected_deals = deal_collection.count_documents({
+            "campaign_id": campaign_id,
+            "state": DealState.CONNECTED,
+            "creation_date": {"$gte": since},
+        })
 
         if connected_deals == 0:
             return alerts
 
         # Get deals with incoming messages (responses)
-        deals_with_responses = (
-            Deal.objects.filter(
-                campaign=self.campaign,
-                state=DealState.CONNECTED,
-                creation_date__gte=since,
-            )
-            .exclude(messages__is_outgoing=True)
-            .distinct()
-            .count()
-        )
+        # Find deals that have at least one incoming message
+        deal_ids_with_responses = message_collection.distinct("deal_id", {
+            "is_outgoing": False,  # Incoming messages only
+        })
+
+        # Count how many of these deals are in our connected deals set
+        deals_with_responses = deal_collection.count_documents({
+            "_id": {"$in": deal_ids_with_responses},
+            "campaign_id": campaign_id,
+            "state": DealState.CONNECTED,
+            "creation_date": {"$gte": since},
+        })
 
         response_rate = (
             deals_with_responses / connected_deals if connected_deals > 0 else 0.0
@@ -166,7 +192,7 @@ class CampaignHealthMonitor:
         if connected_deals >= 5 and response_rate < self.RESPONSE_RATE_THRESHOLD:
             alerts.append(
                 HealthAlert(
-                    campaign=self.campaign,
+                    campaign_id=self.campaign.pk,
                     alert_type=HealthAlert.TYPE_RESPONSE_RATE,
                     severity=HealthAlert.SEVERITY_MEDIUM,
                     message=(
@@ -188,10 +214,18 @@ class CampaignHealthMonitor:
         """Check for rate limit warnings."""
         alerts: list[HealthAlert] = []
 
-        # Check detectability for each LinkedIn profile
-        linkedin_profiles = LinkedInProfile.objects.filter(campaign=self.campaign)
+        from openoutreach.mongodb.connection import get_mongodb_collection
 
-        for profile in linkedin_profiles:
+        # Check detectability for each LinkedIn profile
+        campaign_id = self.campaign._id if hasattr(self.campaign, '_id') else str(self.campaign)
+        profile_collection = get_mongodb_collection("linkedin_profiles")
+        if profile_collection is None:
+            return alerts
+
+        profile_docs = list(profile_collection.find({"campaign_id": campaign_id}))
+
+        for profile_doc in profile_docs:
+            profile = LinkedInProfile.from_dict(profile_doc)
             # Calculate detectability based on recent activity
             detectability_score = self._calculate_detectability(profile)
 
@@ -205,7 +239,7 @@ class CampaignHealthMonitor:
 
                 alerts.append(
                     HealthAlert(
-                        campaign=self.campaign,
+                        campaign_id=self.campaign.pk,
                         alert_type=HealthAlert.TYPE_DETECTION,
                         severity=severity,
                         message=(
@@ -228,22 +262,31 @@ class CampaignHealthMonitor:
 
     def _calculate_detectability(self, profile: LinkedInProfile) -> int:
         """Calculate detectability score for a LinkedIn profile using SmartRateLimitContext."""
+        from openoutreach.mongodb.connection import get_mongodb_collection
+
         # Try to get the detectability score from SmartRateLimitContext first
-        try:
-            context = SmartRateLimitContext.objects.get(linkedin_profile=profile)
-            # Return the detectability score directly from the context
-            return min(100, max(0, context.detectability_score))
-        except SmartRateLimitContext.DoesNotExist:
-            pass  # Fall back to manual calculation if context doesn't exist
+        context_collection = get_mongodb_collection("smart_rate_limit_contexts")
+        if context_collection is not None:
+            context_doc = context_collection.find_one({"linkedin_profile_id": profile._id})
+            if context_doc:
+                score = context_doc.get("detectability_score", 50)
+                return min(100, max(0, score))
 
         # Fall back to manual calculation
         since = datetime.now(tz.utc) - timedelta(hours=24)
 
         # Get recent action logs
-        actions = ActionLog.objects.filter(
-            linkedin_profile=profile,
-            created_at__gte=since,
-        ).order_by("created_at")
+        action_collection = get_mongodb_collection("action_logs")
+        if action_collection is None:
+            return 50
+
+        actions = list(action_collection.find(
+            {
+                "linkedin_profile_id": profile._id,
+                "created_at": {"$gte": since},
+            },
+            sort=[("created_at", 1)]
+        ))
 
         if not actions:
             return 50  # Neutral score if no recent activity
@@ -251,14 +294,14 @@ class CampaignHealthMonitor:
         detectability_score = 50
 
         # 1. High velocity (too many actions in short time)
-        action_count = actions.count()
+        action_count = len(actions)
         if action_count > 30:
             detectability_score += 20
         elif action_count > 20:
             detectability_score += 10
 
         # 2. Consecutive same-type actions (suspicious pattern)
-        action_types = [a.action_type for a in actions]
+        action_types = [a.get("action_type") for a in actions]
         if action_types:
             _, count = Counter(action_types).most_common(1)[0]
             if count / action_count > 0.8:  # 80% same type
@@ -267,10 +310,10 @@ class CampaignHealthMonitor:
         # 3. Action streak (too many in a row without breaks)
         # Check if actions are clustered in time
         if action_count >= 5:
-            first = actions.first()
-            last = actions.last()
+            first = actions[0]
+            last = actions[-1]
             if first and last:
-                duration = (last.created_at - first.created_at).total_seconds()
+                duration = (last.get("created_at") - first.get("created_at")).total_seconds()
             else:
                 duration = 0
 
@@ -289,23 +332,35 @@ class CampaignHealthMonitor:
         # Get metrics for last 24 hours
         since = datetime.now(tz.utc) - timedelta(hours=24)
 
-        # Get all LinkedIn profiles for this campaign
-        linkedin_profiles = LinkedInProfile.objects.filter(
-            campaign=self.campaign
-        ).values_list("id", flat=True)
+        from openoutreach.mongodb.connection import get_mongodb_collection
 
-        if not linkedin_profiles:
+        campaign_id = self.campaign._id if hasattr(self.campaign, '_id') else str(self.campaign)
+
+        # Get all LinkedIn profiles for this campaign
+        profile_collection = get_mongodb_collection("linkedin_profiles")
+        if profile_collection is None:
+            return alerts
+
+        linkedin_profile_ids = [
+            str(doc["_id"]) for doc in profile_collection.find({"campaign_id": campaign_id}, {"_id": 1})
+        ]
+
+        if not linkedin_profile_ids:
             return alerts
 
         # Count total actions
-        total_actions = ActionLog.objects.filter(
-            linkedin_profile__in=linkedin_profiles,
-            action_type__in=[
+        action_collection = get_mongodb_collection("action_logs")
+        if action_collection is None:
+            return alerts
+
+        total_actions = action_collection.count_documents({
+            "linkedin_profile_id": {"$in": linkedin_profile_ids},
+            "action_type": {"$in": [
                 ActionLog.ActionType.CONNECT,
                 ActionLog.ActionType.FOLLOW_UP,
-            ],
-            created_at__gte=since,
-        ).count()
+            ]},
+            "created_at": {"$gte": since},
+        })
 
         if total_actions < 20:
             return alerts
@@ -313,22 +368,30 @@ class CampaignHealthMonitor:
         latest_metric: Optional[CampaignHealthMetric] = None
         error_rate = 0.0
 
-        try:
-            latest_metric = CampaignHealthMetric.objects.filter(
-                campaign=self.campaign,
-                timestamp__gte=since,
-            ).latest("timestamp")
-
-            error_rate = (
-                latest_metric.errors_total / total_actions if total_actions > 0 else 0.0
+        # Try to get latest health metric
+        metric_collection = get_mongodb_collection("campaign_health_metrics")
+        if metric_collection is not None:
+            metric_doc = metric_collection.find_one(
+                {
+                    "campaign_id": campaign_id,
+                    "timestamp": {"$gte": since},
+                },
+                sort=[("timestamp", -1)]
             )
-        except CampaignHealthMetric.DoesNotExist:
+            if metric_doc:
+                latest_metric = CampaignHealthMetric.from_dict(metric_doc)
+                error_rate = (
+                    latest_metric.errors_total / total_actions if total_actions > 0 else 0.0
+                )
+            else:
+                error_rate = 0.0
+        else:
             error_rate = 0.0
 
         if error_rate > self.ERROR_RATE_THRESHOLD and latest_metric is not None:
             alerts.append(
                 HealthAlert(
-                    campaign=self.campaign,
+                    campaign_id=self.campaign.pk,
                     alert_type=HealthAlert.TYPE_ERROR_SPIKE,
                     severity=HealthAlert.SEVERITY_HIGH,
                     message=(
@@ -349,11 +412,22 @@ class CampaignHealthMonitor:
         """Check detectability score over time."""
         alerts: list[HealthAlert] = []
 
+        from openoutreach.mongodb.connection import get_mongodb_collection
+
+        campaign_id = self.campaign._id if hasattr(self.campaign, '_id') else str(self.campaign)
+
         # Get latest health metric
-        try:
-            latest = CampaignHealthMetric.objects.filter(
-                campaign=self.campaign,
-            ).latest("timestamp")
+        metric_collection = get_mongodb_collection("campaign_health_metrics")
+        if metric_collection is None:
+            return alerts
+
+        metric_doc = metric_collection.find_one(
+            {"campaign_id": campaign_id},
+            sort=[("timestamp", -1)]
+        )
+
+        if metric_doc:
+            latest = CampaignHealthMetric.from_dict(metric_doc)
 
             if latest.detectability_score >= self.DETECTABILITY_HIGH_THRESHOLD:
                 if latest.detectability_score >= self.DETECTABILITY_CRITICAL_THRESHOLD:
@@ -365,7 +439,7 @@ class CampaignHealthMonitor:
 
                 alerts.append(
                     HealthAlert(
-                        campaign=self.campaign,
+                        campaign_id=self.campaign.pk,
                         alert_type=HealthAlert.TYPE_DETECTION,
                         severity=severity,
                         message=f"Detectability score is {latest.detectability_score}/100",
@@ -374,10 +448,8 @@ class CampaignHealthMonitor:
                         },
                     )
                 )
-        except CampaignHealthMetric.DoesNotExist:
-            # No metrics yet, skip check
-            pass
 
+        # If no metric found, skip check
         return alerts
 
     def auto_remediate(self, alert: HealthAlert) -> bool:
@@ -442,8 +514,8 @@ class CampaignHealthMonitor:
             self.campaign.save()
 
             # Log recovery action
-            RecoveryAction.objects.create(
-                campaign=self.campaign,
+            recovery = RecoveryAction(
+                campaign_id=self.campaign._id if hasattr(self.campaign, '_id') else str(self.campaign),
                 action_type=action_type,
                 before_state=before_state,
                 after_state={
@@ -453,6 +525,7 @@ class CampaignHealthMonitor:
                 },
                 reason=alert.message,
             )
+            recovery.save()
 
             # Mark alert as resolved
             alert.is_resolved = True
@@ -466,28 +539,28 @@ class CampaignHealthMonitor:
         return False
 
 
-def run_health_check_for_campaign(campaign_id: int) -> list[HealthAlert]:
+def run_health_check_for_campaign(campaign_id: str) -> list[HealthAlert]:
     """Convenience function to run health check for a campaign by ID."""
     try:
-        campaign = Campaign.objects.get(pk=campaign_id)
+        campaign = Campaign.get(campaign_id)
+        if not campaign:
+            logger.error(f"Campaign {campaign_id} does not exist")
+            return []
         monitor = CampaignHealthMonitor(campaign)
         return monitor.run_health_check()
-    except Campaign.DoesNotExist:
-        logger.error(f"Campaign {campaign_id} does not exist")
-        return []
     except Exception as e:
         logger.error(f"Error running health check for campaign {campaign_id}: {e}")
         return []
 
 
-def create_hourly_health_metric(campaign_id: int) -> Optional[CampaignHealthMetric]:
+def create_hourly_health_metric(campaign_id: str) -> Optional[CampaignHealthMetric]:
     """Create an hourly health metric snapshot for a campaign."""
     try:
-        campaign = Campaign.objects.get(pk=campaign_id)
-        return CampaignHealthMetric.create_hourly_snapshot(campaign)
-    except Campaign.DoesNotExist:
-        logger.error(f"Campaign {campaign_id} does not exist")
-        return None
+        campaign = Campaign.get(campaign_id)
+        if not campaign:
+            logger.error(f"Campaign {campaign_id} does not exist")
+            return None
+        return CampaignHealthMetric.create_hourly_snapshot(campaign.pk)
     except Exception as e:
         logger.error(f"Error creating health metric for campaign {campaign_id}: {e}")
         return None

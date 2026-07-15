@@ -74,18 +74,14 @@ from openoutreach.api_v2.routers import (
     websocket,
 )
 
-# Import new auth v2 router for multi-tenant
-from openoutreach.api_v2.routers import auth_v2
+# Import rate limiting and campaign health routers
+from openoutreach.api_v2.routers import rate_limits, campaign_health
 
 # Health check (no auth required)
 app.include_router(health.router, prefix="/api", tags=["health"])
 
 # Auth endpoints (no auth required)
-# Legacy auth (Supabase) - backwards compatibility
-app.include_router(auth.router, prefix="/api/auth/legacy", tags=["auth-legacy"])
-
-# New multi-tenant auth - production
-app.include_router(auth_v2.router, prefix="/api/auth", tags=["auth"])
+app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 
 # Settings
 app.include_router(settings.router, prefix="/api/settings", tags=["settings"])
@@ -110,7 +106,13 @@ app.include_router(analytics.router, prefix="/api/analytics", tags=["analytics"]
 app.include_router(links.router, prefix="/api/links", tags=["links"])
 
 # State machine
-app.include_router(state_machine.router, prefix="/api/state-machine", tags=["state-machine"])
+app.include_router(state_machine.router, prefix="/api/state-machines", tags=["state-machine"])
+
+# Rate limiting
+app.include_router(rate_limits.router, prefix="/api", tags=["rate-limiting"])
+
+# Campaign health monitoring
+app.include_router(campaign_health.router, prefix="/api", tags=["campaign-health"])
 
 # Notifications
 app.include_router(notifications.router, prefix="/api/notifications", tags=["notifications"])

@@ -6,8 +6,6 @@ Pure Python command-line interface with no Django dependencies.
 import click
 import logging
 import sys
-import os
-from pathlib import Path
 
 
 @click.group()
@@ -50,8 +48,7 @@ def runserver(host, port, reload, workers):
 
 
 @cli.command()
-@click.option('--onboard', help='Path to onboarding config JSON file')
-def rundaemon(onboard):
+def rundaemon():
     """Run the OpenOutreach daemon (task queue worker).
 
     The daemon handles LinkedIn automation tasks:
@@ -59,55 +56,18 @@ def rundaemon(onboard):
     - Sending connection requests
     - Following up with personalized messages
     - Monitoring campaign health
+
+    Manages all active LinkedIn profiles automatically (multi-tenant).
     """
     from openoutreach.core.logging import print_banner
-    from openoutreach.mongodb.connection import initialize_mongodb_connection
-    from openoutreach.mongodb.indexes import ensure_all_indexes
 
     print_banner()
-    click.echo("Initializing MongoDB connection...")
-    initialize_mongodb_connection()
-    ensure_all_indexes()
+    click.echo("Starting multi-profile daemon...")
 
-    click.echo("Starting daemon...")
-
-    # Ensure onboarding is complete
-    _ensure_onboarded()
-
-    # Create session (requires LinkedIn profile)
-    session = _create_session()
-
-    # Ensure authenticated
-    _ensure_authenticated(session)
-
-    # Run daemon
-    from openoutreach.daemon.main import run_daemon
-    run_daemon(session)
+    from openoutreach.core.daemon import run_daemon
+    run_daemon()
 
 
-@cli.command()
-def migrate():
-    """Migrate data from SQLite to MongoDB.
-
-    This command is used during the migration from Django to FastAPI/MongoDB.
-    It copies all data from the Django SQLite database to MongoDB.
-    """
-    from openoutreach.mongodb.migration import MigrationManager
-    from openoutreach.mongodb.connection import initialize_mongodb_connection
-    from openoutreach.mongodb.indexes import ensure_all_indexes
-
-    click.echo("Initializing MongoDB connection...")
-    initialize_mongodb_connection()
-    ensure_all_indexes()
-
-    click.echo("Starting migration from SQLite to MongoDB...")
-    manager = MigrationManager()
-    results = manager.migrate_all()
-
-    click.echo("\n=== Migration Results ===")
-    click.echo(f"Total records migrated: {results.get('migrated', 0)}")
-    click.echo(f"Errors: {results.get('errors', 0)}")
-    click.echo("Migration complete!")
 
 
 @cli.command()
@@ -238,79 +198,6 @@ def healthcheck():
 # ============================================================================
 
 
-def _ensure_onboarded():
-    """Ensure onboarding is complete."""
-    from openoutreach.mongodb import models
-
-    # Check if SiteConfig exists with required fields
-    try:
-        config = models.SiteConfig.load(user_id="default")
-        if not config.llm_api_key:
-            click.echo("⚠️  LLM API key not configured", err=True)
-            click.echo("Please set LLM_API_KEY environment variable or configure via Settings", err=True)
-            sys.exit(1)
-    except Exception as e:
-        click.echo(f"⚠️  Could not load configuration: {e}", err=True)
-        sys.exit(1)
-
-
-def _create_session():
-    """Create a LinkedIn session."""
-    from openoutreach.linkedin.browser.registry import (
-        get_first_active_profile,
-        get_or_create_session,
-    )
-
-    profile = get_first_active_profile()
-    if profile is None:
-        click.echo("❌ No active LinkedIn profiles found", err=True)
-        click.echo("Please add a LinkedIn profile via Settings → LinkedIn Connection", err=True)
-        sys.exit(1)
-
-    session = get_or_create_session(profile)
-    return session
-
-
-def _ensure_authenticated(session):
-    """Ensure the browser session is authenticated."""
-    import time
-    from linkedin_cli.exceptions import AuthenticationError, CheckpointChallengeError
-
-    AUTH_POLL_INTERVAL = 30
-
-    # Refresh cookie data from DB
-    session.linkedin_profile.refresh_from_db(fields=["cookie_data_encrypted"])
-
-    if session.linkedin_profile.cookie_data:
-        try:
-            session.ensure_browser()
-            click.echo("✅ LinkedIn session authenticated")
-            return
-        except (AuthenticationError, CheckpointChallengeError):
-            click.echo("⚠️  Saved cookie is invalid or expired — clearing it")
-            session.close()
-            session.linkedin_profile.cookie_data = None
-            session.linkedin_profile.save(update_fields=["cookie_data_encrypted"])
-
-    click.echo("❌ No valid LinkedIn session cookie found", err=True)
-    click.echo("Upload an li_at cookie via Settings → LinkedIn Connection", err=True)
-    click.echo(f"Waiting for cookie upload (checking every {AUTH_POLL_INTERVAL}s)...")
-
-    while True:
-        time.sleep(AUTH_POLL_INTERVAL)
-        session.linkedin_profile.refresh_from_db(fields=["cookie_data_encrypted"])
-        if session.linkedin_profile.cookie_data:
-            click.echo("Cookie detected — attempting to connect...")
-            try:
-                session.ensure_browser()
-                click.echo("✅ LinkedIn session established successfully")
-                return
-            except (AuthenticationError, CheckpointChallengeError) as exc:
-                click.echo(f"❌ Uploaded cookie is invalid: {exc}", err=True)
-                session.close()
-                session.linkedin_profile.cookie_data = None
-                session.linkedin_profile.save(update_fields=["cookie_data_encrypted"])
-                click.echo("Waiting for a valid cookie...")
 
 
 def _get_safe_config(settings):

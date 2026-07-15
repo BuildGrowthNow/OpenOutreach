@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import logging
-from openoutreach.mongodb.models import Message
+from openoutreach.mongodb.models import Message, Deal, Lead
 from openoutreach.crm.models import DealState
 from openoutreach.core.db.deals import set_profile_state
 
@@ -27,13 +27,31 @@ def handle_send_manual_message(task, session, qualifiers):
         )
         return
 
-    deal = msg.deal
-    public_id = deal.lead.public_identifier
+    # Get deal and lead using MongoDB queries
+    deal = Deal.get(msg.deal_id) if hasattr(msg, 'deal_id') else None
+    if not deal:
+        logger.error(
+            "[%s] send_manual_message: Deal not found for message %s — task skipped",
+            campaign,
+            message_id,
+        )
+        return
+
+    lead = Lead.get(deal.lead_id)
+    if not lead:
+        logger.error(
+            "[%s] send_manual_message: Lead not found for deal %s — task skipped",
+            campaign,
+            deal._id,
+        )
+        return
+
+    public_id = lead.public_identifier
     logger.info("[%s] Sending manual message to %s", campaign, public_id)
 
     profile: dict[str, str] = {
         "public_identifier": public_id,
-        "urn": deal.lead.urn or "",
+        "urn": lead.urn or "",
     }
 
     # Ensure Playwright browser session is running and logged in
@@ -46,7 +64,7 @@ def handle_send_manual_message(task, session, qualifiers):
 
     # Mark the deal state as CONNECTED just in case it wasn't
     if deal.state != DealState.CONNECTED:
-        set_profile_state(session, public_id, DealState.CONNECTED.value)
+        set_profile_state(session, public_id, DealState.CONNECTED)
 
     # Sync the conversation back to DB to update chat logs and record the outgoing message
     try:

@@ -32,6 +32,25 @@ def increment_connect_attempts(session, public_id: str) -> int:
 
 def _deal_to_profile_dict(deal) -> dict:
     """Convert a Deal (with select_related lead) to a profile dict for lanes."""
+    from openoutreach.mongodb.models import Lead
+
+    # Load lead if not already attached
+    if not hasattr(deal, 'lead') or deal.lead is None:
+        deal.lead = Lead.get(deal.lead_id)
+
+    if not deal.lead:
+        # Fallback to minimal dict if lead is missing
+        return {
+            "lead_id": deal.lead_id,
+            "public_identifier": "unknown",
+            "url": "",
+            "meta": {
+                "connect_attempts": deal.connect_attempts,
+                "backoff_hours": deal.backoff_hours,
+                "reason": deal.reason,
+            }
+        }
+
     base = deal.lead.to_profile_dict()
     base["meta"] = {
         "connect_attempts": deal.connect_attempts,
@@ -135,7 +154,8 @@ def set_profile_state(
     on_deal_state_entered(deal)
 
     if state_changed and ps == DealState.CONNECTED:
-        _capture_contact_info(deal.lead, session)
+        if deal.lead:
+            _capture_contact_info(deal.lead, session)
 
 
 # ── State queries ──

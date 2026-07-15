@@ -16,7 +16,7 @@ def run_search(session) -> str | None:
     from linkedin_cli.actions.search import search_people
     from openoutreach.linkedin.db.leads import discover_and_enrich
     from openoutreach.linkedin.pipeline.search_keywords import generate_search_keywords
-    from openoutreach.mongodb.models import SearchKeyword
+    from openoutreach.linkedin.models import SearchKeyword
 
     campaign = session.campaign
 

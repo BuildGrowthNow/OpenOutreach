@@ -17,26 +17,40 @@ def find_freemium_candidate(session, qualifier) -> dict | None:
     the kit model).  Once all seeds are exhausted (connected / failed), falls
     back to embedded leads without any Deal in this campaign.
     """
-    from openoutreach.crm.models import Deal, Lead
+    from openoutreach.mongodb.models import Deal, Lead
+    from openoutreach.mongodb.connection import get_mongodb_collection
 
     campaign = session.campaign
 
-    # All embedded lead IDs
+    # All embedded lead IDs (leads with embedding field present)
+    leads_collection = get_mongodb_collection("leads")
+    if leads_collection is None:
+        return None
+
     embedded_pks = set(
-        Lead.objects.filter(embedding__isnull=False).values_list("pk", flat=True)
+        str(doc["_id"]) for doc in leads_collection.find(
+            {"embedding": {"$ne": None}}, {"_id": 1}
+        )
     )
 
     # Seed profiles: QUALIFIED Deals in this campaign (ready to connect)
+    deals_collection = get_mongodb_collection("deals")
+    if deals_collection is None:
+        return None
+
     seed_pks = set(
-        Deal.objects.filter(campaign=campaign, state=DealState.QUALIFIED).values_list(
-            "lead_id", flat=True
+        str(doc["lead_id"]) for doc in deals_collection.find(
+            {"campaign_id": campaign.pk, "state": DealState.QUALIFIED.value},
+            {"lead_id": 1}
         )
     )
     seed_pks &= embedded_pks  # must have embeddings
 
     # Leads with any Deal in this campaign (all states)
     all_dealt_pks = set(
-        Deal.objects.filter(campaign=campaign).values_list("lead_id", flat=True)
+        str(doc["lead_id"]) for doc in deals_collection.find(
+            {"campaign_id": campaign.pk}, {"lead_id": 1}
+        )
     )
 
     # Undiscovered: embedded leads with no Deal at all in this campaign
@@ -53,11 +67,13 @@ def find_freemium_candidate(session, qualifier) -> dict | None:
     return None
 
 
-def _pick_best(lead_pks: list[int], qualifier, session) -> dict | None:
+def _pick_best(lead_pks: list[str], qualifier, session) -> dict | None:
     """Rank leads by qualifier and return the top-1 profile dict."""
-    from openoutreach.crm.models import Lead
+    from openoutreach.mongodb.models import Lead
 
-    leads = Lead.objects.filter(pk__in=lead_pks, disqualified=False)
+    # Fetch leads from MongoDB
+    leads = [Lead.get(pk) for pk in lead_pks]
+    leads = [lead for lead in leads if lead and not lead.disqualified]
     profiles = [lead.to_profile_dict() for lead in leads]
 
     if not profiles:

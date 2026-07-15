@@ -129,7 +129,7 @@ def _calculate_rate(numerator: int, denominator: int) -> float:
 def _get_deals_by_state(campaign_id: str, state: str) -> int:
     """Count deals in a specific state for a campaign."""
     deals_collection = get_mongodb_collection("deals")
-    if not deals_collection:
+    if deals_collection is None:
         return 0
 
     try:
@@ -145,7 +145,7 @@ def _get_deals_by_state(campaign_id: str, state: str) -> int:
 def _get_action_logs_count(campaign_id: str, action_type: str, since: datetime) -> int:
     """Count action logs for a campaign, action type, and time range."""
     action_logs_collection = get_mongodb_collection("action_logs")
-    if not action_logs_collection:
+    if action_logs_collection is None:
         return 0
 
     try:
@@ -162,7 +162,7 @@ def _get_action_logs_count(campaign_id: str, action_type: str, since: datetime) 
 def _get_messages_replied_count(campaign_id: str, since: datetime) -> int:
     """Count distinct deals with inbound messages in time range."""
     messages_collection = get_mongodb_collection("chat_messages")
-    if not messages_collection:
+    if messages_collection is None:
         return 0
 
     try:
@@ -212,7 +212,7 @@ def _get_messages_replied_count(campaign_id: str, since: datetime) -> int:
 async def get_analytics_overview(
     user_id: str = Depends(get_current_user),
     campaign_id: Optional[str] = Query(None, description="Filter by specific campaign ID"),
-    period: str = Query("30d", regex="^(7d|30d|90d)$", description="Time period (7d, 30d, 90d)")
+    period: str = Query("30d", pattern="^(7d|30d|90d)$", description="Time period (7d, 30d, 90d)")
 ):
     """
     Get aggregated analytics across all campaigns or a specific campaign.
@@ -224,7 +224,7 @@ async def get_analytics_overview(
     """
     # Get campaigns for user
     campaigns_collection = get_mongodb_collection("campaigns")
-    if not campaigns_collection:
+    if campaigns_collection is None:
         return AnalyticsOverviewResponse(
             period=period,
             stats=OverviewStats(),
@@ -265,7 +265,7 @@ async def get_analytics_overview(
     deals_collection = get_mongodb_collection("deals")
     action_logs_collection = get_mongodb_collection("action_logs")
 
-    if not deals_collection or not action_logs_collection:
+    if deals_collection is None or action_logs_collection is None:
         return AnalyticsOverviewResponse(
             period=period,
             stats=OverviewStats(),
@@ -329,7 +329,7 @@ async def get_analytics_overview(
     # Calculate messages replied (distinct deals with inbound messages)
     messages_collection = get_mongodb_collection("chat_messages")
     total_messages_replied = 0
-    if messages_collection:
+    if messages_collection is not None:
         try:
             pipeline = [
                 {

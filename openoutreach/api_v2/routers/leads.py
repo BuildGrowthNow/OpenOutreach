@@ -57,7 +57,7 @@ async def list_leads(
     - state: Filter by deal state (Discovered, Qualified, etc.)
     """
     collection = get_mongodb_collection("deals")
-    if not collection:
+    if collection is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
 
     # Build query - get deals from campaigns user has access to
@@ -72,6 +72,8 @@ async def list_leads(
     else:
         # Get all campaigns user has access to
         campaigns_collection = get_mongodb_collection("campaigns")
+        if campaigns_collection is None:
+            raise HTTPException(status_code=503, detail="Database unavailable")
         accessible_campaigns = list(campaigns_collection.find({
             "$or": [
                 {"user_id": user_id},
@@ -93,6 +95,8 @@ async def list_leads(
 
     # Fetch leads
     leads_collection = get_mongodb_collection("leads")
+    if leads_collection is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
     leads_data = {str(l["_id"]): l for l in leads_collection.find({"_id": {"$in": lead_ids}})}
 
     # Build response
@@ -141,6 +145,8 @@ async def get_lead(
     """
     # Check if user has access to this lead via any campaign
     deals_collection = get_mongodb_collection("deals")
+    if deals_collection is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
     deals = list(deals_collection.find({"lead_id": lead_id}))
 
     if not deals:
@@ -159,6 +165,8 @@ async def get_lead(
 
     # Get lead
     leads_collection = get_mongodb_collection("leads")
+    if leads_collection is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
     lead_data = leads_collection.find_one({"_id": lead_id})
 
     if not lead_data:

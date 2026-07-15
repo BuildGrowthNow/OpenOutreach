@@ -27,21 +27,22 @@ def get_first_active_profile():
     """Return the first active LinkedInProfile, or None."""
     from openoutreach.linkedin.models import LinkedInProfile
 
-    return LinkedInProfile.objects.filter(active=True).select_related("user").first()
+    profiles = LinkedInProfile.objects.filter(active=True)
+    return profiles[0] if profiles else None
 
 
 def resolve_profile(username: str | None = None) -> Any | None:  # type: ignore[name-defined]
     """Resolve a LinkedInProfile from an optional username, falling back to first active."""
     if username:
         from openoutreach.linkedin.models import LinkedInProfile
+        from openoutreach.mongodb.models_user import User
 
-        return (
-            LinkedInProfile.objects.select_related("user")
-            .filter(
-                user__username=username,
-            )
-            .first()
-        )
+        # Find user by username, then profile by user_id
+        user = User.get_by_email(username)  # username is often email
+        if user:
+            profiles = LinkedInProfile.objects.filter(user_id=user._id, active=True)
+            if profiles:
+                return profiles[0]
     return get_first_active_profile()
 
 

@@ -47,7 +47,7 @@ class LeadCreate(BaseModel):
     )
     user_id: Optional[str] = Field(
         None,
-        description="ID of the Django User who created/owns this lead"
+        description="ID of the User who created/owns this lead"
     )
 
 
@@ -126,7 +126,7 @@ class LeadResponse(BaseModel):
     )
     user_id: Optional[str] = Field(
         None,
-        description="ID of the Django User who created/owns this lead"
+        description="ID of the User who created/owns this lead"
     )
     creation_date: datetime = Field(
         ...,
@@ -180,9 +180,8 @@ class LeadWithDeal(LeadResponse):
         description="ID of the campaign this lead-deal relationship belongs to"
     )
 
-    class Config:
+    class Config(LeadResponse.Config):
         """Pydantic model configuration."""
-        populate_by_name = True
         json_schema_extra = {
             "example": {
                 "_id": "550e8400-e29b-41d4-a716-446655440000",

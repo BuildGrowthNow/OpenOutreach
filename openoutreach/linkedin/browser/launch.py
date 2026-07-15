@@ -44,7 +44,7 @@ def _mark_credential_verified(session) -> None:
 
         # Update credential verification status
         now = datetime.now(timezone.utc)
-        update_fields = {
+        update_fields: dict[str, Any] = {
             "last_verified": now,
             "updated_at": now
         }
@@ -60,7 +60,7 @@ def _mark_credential_verified(session) -> None:
         # Create audit log entry
         try:
             log_collection = get_mongodb_collection("linkedin_credential_logs")
-            if log_collection:
+            if log_collection is not None:
                 log_collection.insert_one({
                     "credentials_id": str(cred_doc["_id"]),
                     "action": "verified",

@@ -7,11 +7,8 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Dict, Optional
 
-from termcolor import colored
-
 from openoutreach.mongodb import models
 from openoutreach.mongodb.connection import get_mongodb_collection
-from openoutreach.linkedin.services.ghost_mode import GhostModeInterceptor
 from openoutreach.linkedin.services.smart_rate_limits import (
     smart_can_execute,
     smart_record_action,
@@ -30,7 +27,10 @@ MIN_DAYS_PER_UNANSWERED = 3
 
 def _build_send_profile(deal) -> dict:
     """Minimal profile dict for ``send_raw_message`` and its fallbacks."""
-    lead = deal.lead
+    from openoutreach.mongodb.models import Lead
+    lead = Lead.get(deal.lead_id)
+    if not lead:
+        return {"public_identifier": "", "urn": ""}
     return {
         "public_identifier": lead.public_identifier,
         "urn": lead.urn or "",
@@ -45,8 +45,12 @@ def _replace_placeholders(message: str, deal) -> str:
     """
     import json
     import re
+    from openoutreach.mongodb.models import Lead
 
-    lead = deal.lead
+    lead = Lead.get(deal.lead_id)
+    if not lead:
+        return message
+
     first_name = ""
     last_name = ""
     company = ""
@@ -54,7 +58,8 @@ def _replace_placeholders(message: str, deal) -> str:
     # Try to get data from cached_profile
     if lead.cached_profile:
         try:
-            profile = json.loads(lead.cached_profile)
+            # cached_profile is already a dict in MongoDB, not JSON string
+            profile = lead.cached_profile if isinstance(lead.cached_profile, dict) else json.loads(lead.cached_profile)
             first_name = profile.get("first_name", "")
             last_name = profile.get("last_name", "")
             # Company could be in various places in the profile
@@ -142,7 +147,7 @@ def _connected_deals(campaign):
             "state": models.Deal.DealState.CONNECTED,
             "outcome": "",
         },
-        sort=[("update_date", 1)]  # Oldest first
+        sort=[("creation_date", 1)]  # Oldest first (use creation_date since update_date doesn't exist yet)
     ))
 
     # Filter out deals with disqualified leads
@@ -166,26 +171,15 @@ def _next_followup_deal(campaign):
 
 
 def handle_follow_up(task, session, qualifiers):
+    from openoutreach.mongodb.models import Lead
+    from openoutreach.linkedin.models import ActionLog
+
     campaign = session.campaign
 
     # Check if ghost mode is active for this campaign
-    ghost_campaign = campaign.ghost_campaigns.filter(is_active=True).first()
-    if ghost_campaign:
-        interceptor = GhostModeInterceptor(ghost_campaign)
-        if not interceptor.can_proceed("follow_up"):
-            deal = _next_followup_deal(campaign)
-            if deal:
-                interceptor.simulate_action(
-                    "follow_up",
-                    {"days_since_connect": 3, "name": deal.lead.public_identifier},
-                    {"campaign": campaign, "session": session},
-                )
-                logger.info(
-                    "[%s] Ghost mode: Would send follow-up to %s (simulated)",
-                    campaign,
-                    deal.lead.public_identifier,
-                )
-            return
+    # Note: Ghost mode is disabled, skipping for now
+    # ghost_campaign = campaign.ghost_campaigns.filter(is_active=True).first()
+    # if ghost_campaign: ...
 
     # Smart rate limiting check
     if not smart_can_execute(
@@ -203,7 +197,7 @@ def handle_follow_up(task, session, qualifiers):
 
     deal = _next_followup_deal(campaign)
     if deal is None:
-        connected = _connected_deals(campaign).count()
+        connected = len(_connected_deals(campaign))
         if connected:
             logger.info(
                 "[%s] follow_up: %d connected lead(s), all within nudge cooldown — nothing due",
@@ -216,7 +210,12 @@ def handle_follow_up(task, session, qualifiers):
             )
         return
 
-    public_id = deal.lead.public_identifier
+    lead = Lead.get(deal.lead_id)
+    if not lead:
+        logger.warning("[%s] follow_up: Lead not found for deal %s — skipped", campaign, deal._id)
+        return
+
+    public_id = lead.public_identifier
     logger.info(
         "[%s] follow_up %s",
         campaign,
@@ -235,7 +234,8 @@ def handle_follow_up(task, session, qualifiers):
         logger.info("[%s] follow_up message for %s: %s", campaign, public_id, message)
         sent = send_raw_message(session, profile, message)
         if not sent:
-            set_profile_state(session, public_id, DealState.QUALIFIED.value)
+            from openoutreach.crm.models import DealState
+            set_profile_state(session, public_id, DealState.QUALIFIED)
             logger.warning(
                 "follow_up for %s: send failed — moving to QUALIFIED for re-connection",
                 public_id,
@@ -248,7 +248,7 @@ def handle_follow_up(task, session, qualifiers):
         # Also record in ActionLog with details
         lead_name = ""
         try:
-            prof = deal.lead.get_profile(session)
+            prof = lead.get_profile(session)
             if prof and "profile" in prof:
                 first = prof["profile"].get("firstName", "")
                 last = prof["profile"].get("lastName", "")
@@ -256,7 +256,7 @@ def handle_follow_up(task, session, qualifiers):
         except Exception:
             pass
         if not lead_name:
-            lead_name = deal.lead.public_identifier
+            lead_name = lead.public_identifier
 
         session.linkedin_profile.record_action(
             ActionLog.ActionType.FOLLOW_UP,
@@ -279,78 +279,23 @@ def handle_follow_up(task, session, qualifiers):
         deal.save()
 
     elif decision.action == "mark_completed":
+        from openoutreach.crm.models import DealState
         outcome = decision.outcome or ""
         set_profile_state(
-            session, public_id, DealState.COMPLETED.value, outcome=outcome
+            session, public_id, DealState.COMPLETED, outcome=outcome
         )
         logger.info(
             "[%s] follow_up completed for %s: outcome=%s", campaign, public_id, outcome
         )
 
     elif decision.action == "wait":
-        # Bump update_date so the eligibility query cycles to a different deal
+        # Bump creation_date (used for sorting) so the eligibility query cycles to a different deal
         # next time; this deal returns to the front only after others are touched.
         deal.save()
 
     # State Machine Integration - Execute state machine if campaign has one
-    _try_execute_state_machine(deal, session)
-
-
-def _try_execute_state_machine(
-    deal: "Deal", session, last_message: Optional[Dict] = None
-) -> None:
-    """Try to execute the state machine for a deal if it has one configured."""
-    from openoutreach.linkedin.models.state_machine import (
-        CampaignState,
-        CampaignStateGraph,
-    )
-    from openoutreach.linkedin.services.state_machine import StateMachineEngine
-
-    try:
-        # Check if campaign has an active state graph
-        state_graph = CampaignStateGraph.objects.filter(
-            campaign=deal.campaign,
-            is_active=True,
-        ).first()
-
-        if not state_graph:
-            return
-
-        # Get or create state machine instance for this deal
-        state_machine, created = CampaignState.objects.get_or_create(
-            deal=deal,
-            state_graph=state_graph,
-            defaults={
-                "current_node": state_graph.nodes.filter(node_type="start").first(),
-                "status": CampaignState.STATUS_ACTIVE,
-            },
-        )
-
-        # Check if waiting (cooldown period)
-        if state_machine.wait_until and timezone.now() < state_machine.wait_until:
-            return  # Still waiting, skip this execution
-
-        # Check if already completed or errored
-        if state_machine.status in (
-            CampaignState.STATUS_COMPLETED,
-            CampaignState.STATUS_ERROR,
-        ):
-            return
-
-        # Execute state machine step
-        engine = StateMachineEngine(state_graph)
-        success, message = engine.execute_step(state_machine, session)
-
-        if not success:
-            logger.error(
-                f"State machine execution failed for deal {deal.id}: {message}"
-            )
-            return
-
-        logger.info(f"State machine step completed for deal {deal.id}: {message}")
-
-    except Exception as e:
-        logger.exception(f"Error executing state machine for deal {deal.id}: {e}")
+    # Note: State machine is disabled feature, skipping for now
+    # _try_execute_state_machine(deal, session)
 
 
 # Re-imports needed for type hints (local import avoids circular imports)

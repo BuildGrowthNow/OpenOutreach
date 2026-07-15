@@ -24,7 +24,9 @@ def fetch_qualification_candidates(session):
 
     lead_ids = {ld["lead_id"] for ld in leads}
 
-    candidates = Lead.find_with_embeddings(list(lead_ids))
+    # Find leads with embeddings for this campaign
+    candidates = [Lead.get(lead_id) for lead_id in lead_ids]
+    candidates = [c for c in candidates if c and c.embedding is not None]
     if candidates:
         return candidates
 
@@ -129,7 +131,7 @@ def run_qualification(session, qualifier: BayesianQualifier) -> str | None:
 def _save_qualification_result(
     session,
     qualifier: BayesianQualifier,
-    lead_id: int,
+    lead_id: str,
     public_id: str,
     embedding: np.ndarray,
     label: int,
@@ -161,7 +163,9 @@ def _save_qualification_result(
         # Tri-state: True = hit (proceed QUALIFIED), False = genuine miss (park
         # in NO_EMAIL, out of the connect pool), None = finder off/unreachable
         # (leave QUALIFIED to retry — a miss is free to re-attempt).
-        if deal.lead.resolve_api_email() is False:
+        from openoutreach.mongodb.models import Lead as LeadModel
+        lead = LeadModel.get(deal.lead_id)
+        if lead and lead.resolve_api_email() is False:
             from openoutreach.core.db.deals import set_profile_state
             from openoutreach.crm.models import DealState
 
@@ -176,9 +180,10 @@ def _save_qualification_result(
         _log_qualification_action(session, lead_id, public_id, False, reason)
 
 
-def _log_qualification_action(session, lead_id: int, public_id: str, qualified: bool, reason: str):
+def _log_qualification_action(session, lead_id: str, public_id: str, qualified: bool, reason: str):
     """Log qualification decision to activity feed."""
-    from openoutreach.mongodb.models import Lead, ActionLog
+    from openoutreach.mongodb.models import Lead
+    from openoutreach.linkedin.models import ActionLog
 
     lead = Lead.get(lead_id)
     lead_name = public_id
@@ -205,7 +210,7 @@ def _log_qualification_action(session, lead_id: int, public_id: str, qualified: 
     action_log.save()
 
 
-def _fetch_profile_text(session, lead_id: int, public_id: str) -> str | None:
+def _fetch_profile_text(session, lead_id: str, public_id: str) -> str | None:
     from openoutreach.mongodb.models import Lead
     from openoutreach.linkedin.ml.profile_text import build_profile_text
 

@@ -19,7 +19,7 @@ def lead_exists(url: str) -> bool:
     return Lead.get_by_public_id(pid) is not None
 
 
-def create_enriched_lead(session, url: str, profile: Dict[str, Any]) -> Optional[int]:
+def create_enriched_lead(session, url: str, profile: Dict[str, Any]) -> Optional[str]:
     """Create Lead with full profile data and embedding, and link to campaign.
 
     Returns lead PK or None if exists.
@@ -84,7 +84,7 @@ def create_enriched_lead(session, url: str, profile: Dict[str, Any]) -> Optional
     logger.debug("Created enriched lead for %s (pk=%s)", public_id, lead.pk)
 
     # Log discovery to activity feed
-    from openoutreach.mongodb.models import ActionLog
+    from openoutreach.mongodb.models_extended import ActionLog
     action_log = ActionLog(
         linkedin_profile_id=session.linkedin_profile.pk,
         campaign_id=session.campaign.pk,

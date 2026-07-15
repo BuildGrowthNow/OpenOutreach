@@ -111,6 +111,34 @@ class ChatMessage:
         self._id = value
 
     @classmethod
+    def get_by_deal_and_urn(cls, deal_id: str, linkedin_urn: str) -> Optional["ChatMessage"]:
+        """Find a single message by deal and LinkedIn URN."""
+        collection = get_mongodb_collection("chat_messages")
+        if collection is None:
+            return None
+        try:
+            data = collection.find_one({"deal_id": deal_id, "linkedin_urn": linkedin_urn})
+            return cls.from_dict(data) if data else None
+        except Exception as e:
+            logger.error(f"Failed to get message by deal/urn: {e}")
+            return None
+
+    @classmethod
+    def find_by_deal(cls, deal_id: str, limit: int = 0) -> List["ChatMessage"]:
+        """Find messages for a deal, most recent first."""
+        collection = get_mongodb_collection("chat_messages")
+        if collection is None:
+            return []
+        try:
+            cursor = collection.find({"deal_id": deal_id}).sort("creation_date", -1)
+            if limit:
+                cursor = cursor.limit(limit)
+            return [cls.from_dict(data) for data in cursor]
+        except Exception as e:
+            logger.error(f"Failed to find messages for deal '{deal_id}': {e}")
+            return []
+
+    @classmethod
     def objects(cls):
         return ChatMessageManager()
 

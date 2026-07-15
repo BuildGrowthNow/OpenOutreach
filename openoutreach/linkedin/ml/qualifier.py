@@ -127,11 +127,11 @@ def _load_profile_embeddings(profiles: list, session, *, skip_missing: bool = Fa
 
     Returns list of (profile, embedding) pairs.
     """
-    from openoutreach.crm.models import Lead
+    from openoutreach.mongodb.models import Lead
 
     result = []
     for p in profiles:
-        lead = Lead.objects.filter(pk=p.get("lead_id")).first()
+        lead = Lead.get(p.get("lead_id"))
         emb = lead.get_embedding(session) if lead else None
         if emb is None:
             if skip_missing:
@@ -456,9 +456,10 @@ class BayesianQualifier:
 
     def explain(self, profile: dict, session) -> str:
         """Human-readable compact scoring explanation."""
-        from openoutreach.crm.models import Lead
+        from openoutreach.mongodb.models import Lead
 
-        lead = Lead.objects.filter(pk=profile.get("lead_id")).first()
+        lead_id = profile.get("lead_id")
+        lead = Lead.get(str(lead_id)) if lead_id else None
         emb = lead.get_embedding(session) if lead else None
         if emb is None:
             return "No embedding found for profile"
@@ -507,9 +508,10 @@ class KitQualifier:
 
     def explain(self, profile: dict, session) -> str:
         """Human-readable compact scoring explanation."""
-        from openoutreach.crm.models import Lead
+        from openoutreach.mongodb.models import Lead
 
-        lead = Lead.objects.filter(pk=profile.get("lead_id")).first()
+        lead_id = profile.get("lead_id")
+        lead = Lead.get(str(lead_id)) if lead_id else None
         emb = lead.get_embedding(session) if lead else None
         if emb is None:
             return "No embedding found for profile"

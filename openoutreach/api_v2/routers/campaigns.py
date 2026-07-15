@@ -161,7 +161,7 @@ async def create_campaign(
 
     try:
         # Verify user owns the LinkedIn profile
-        if profiles_collection:
+        if profiles_collection is not None:
             profile_doc = profiles_collection.find_one({
                 "_id": data.linkedin_profile_id,
                 "user_id": user_id
@@ -178,7 +178,7 @@ async def create_campaign(
         team_ids = data.team_member_ids or []
         if team_ids:
             users_collection = get_mongodb_collection("users")
-            if users_collection:
+            if users_collection is not None:
                 for tid in team_ids:
                     user_doc = users_collection.find_one({"_id": tid})
                     if not user_doc:
@@ -295,7 +295,7 @@ async def update_campaign(
         if data.linkedin_profile_id is not None:
             # Verify user owns the new profile
             profiles_collection = get_mongodb_collection("linkedin_profiles")
-            if profiles_collection:
+            if profiles_collection is not None:
                 profile_doc = profiles_collection.find_one({
                     "_id": data.linkedin_profile_id,
                     "user_id": user_id
@@ -335,6 +335,11 @@ async def update_campaign(
 
         # Fetch updated campaign
         updated_campaign = models.Campaign.get(campaign_id)
+        if updated_campaign is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Campaign not found after update"
+            )
 
         logger.info(f"Updated campaign {campaign_id} by user {user_id}")
 
@@ -398,7 +403,7 @@ async def delete_campaign(
             )
 
         # Check for associated deals
-        if deals_collection:
+        if deals_collection is not None:
             deal_count = deals_collection.count_documents({"campaign_id": campaign_id})
             if deal_count > 0:
                 raise HTTPException(

@@ -1,6 +1,6 @@
 # openoutreach/daemon/__init__.py
-"""OpenOutreach daemon - pure Python task queue worker."""
+"""OpenOutreach daemon — re-exports from openoutreach.core.daemon."""
 
-from .main import run_daemon, DaemonConfig
+from openoutreach.core.daemon import run_daemon
 
-__all__ = ["run_daemon", "DaemonConfig"]
+__all__ = ["run_daemon"]
