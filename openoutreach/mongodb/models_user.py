@@ -10,14 +10,11 @@ from datetime import datetime, timezone as tz
 from typing import Any, Dict, Optional
 from uuid import uuid4
 
-from passlib.context import CryptContext
+import bcrypt
 
 from .connection import get_mongodb_collection
 
 logger = logging.getLogger(__name__)
-
-# Password hashing context
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 class User:
@@ -133,12 +130,12 @@ class User:
         """Verify password against hash."""
         if not self.hashed_password:
             return False
-        return pwd_context.verify(password, self.hashed_password)
+        return bcrypt.checkpw(password.encode(), self.hashed_password.encode())
 
     @staticmethod
     def hash_password(password: str) -> str:
         """Hash a password."""
-        return pwd_context.hash(password)
+        return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
     def set_password(self, password: str):
         """Set password (hashes automatically)."""
