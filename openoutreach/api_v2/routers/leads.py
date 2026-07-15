@@ -8,7 +8,7 @@ from datetime import datetime
 
 from openoutreach.mongodb import models
 from openoutreach.mongodb.connection import get_mongodb_collection
-from openoutreach.api_v2.dependencies import get_current_user
+from openoutreach.api_v2.dependencies_v2 import get_current_user
 
 router = APIRouter()
 

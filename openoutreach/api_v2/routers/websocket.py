@@ -93,7 +93,7 @@ async def notification_websocket(websocket: WebSocket, token: str = Query(...)):
     Sends: ping → pong, mark_read → ack
     """
     # Authenticate
-    from openoutreach.api_v2.dependencies import get_current_user
+    from openoutreach.api_v2.dependencies_v2 import get_current_user
     from fastapi.security import HTTPAuthorizationCredentials
 
     try:
@@ -145,7 +145,7 @@ async def campaign_status_websocket(
     Receives: campaign_status_update, campaign_error
     """
     # Authenticate
-    from openoutreach.api_v2.dependencies import get_current_user
+    from openoutreach.api_v2.dependencies_v2 import get_current_user
     from fastapi.security import HTTPAuthorizationCredentials
 
     try:

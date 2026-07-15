@@ -13,7 +13,7 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Body
 from pydantic import BaseModel
 
-from openoutreach.api_v2.dependencies import get_current_user
+from openoutreach.api_v2.dependencies_v2 import get_current_user
 from openoutreach.api_v2.schemas.linkedin import (
     LinkedInProfileResponse,
     LinkedInProfileHealthResponse,

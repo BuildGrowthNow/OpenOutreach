@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Response, Request
 from jose import jwt, JWTError
 
 from openoutreach.config import settings
-from openoutreach.api_v2.dependencies import get_current_user
+from openoutreach.api_v2.dependencies_v2 import get_current_user
 from openoutreach.api_v2.schemas.auth import (
     RegisterRequest,
     LoginRequest,
