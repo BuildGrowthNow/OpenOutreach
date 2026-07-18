@@ -18,10 +18,9 @@ from typing import Any, Optional
 
 from openoutreach.core.browser_detect import BrowserInfo, get_preferred_browser
 from openoutreach.core.remote_client import DaemonConfig, RemoteClient
+from openoutreach.desktop.__version__ import __version__
 
 logger = logging.getLogger(__name__)
-
-from openoutreach.desktop.__version__ import __version__
 
 
 class RemoteDaemonError(Exception):

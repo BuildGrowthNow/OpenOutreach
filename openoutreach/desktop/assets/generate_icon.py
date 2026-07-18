@@ -113,14 +113,14 @@ def create_icns(output_path: Path):
     else:
         icon = create_icon(256)
         icon.save(output_path.with_suffix(".png"))
-        print(f"Note: .icns generation requires macOS. Saved as .png instead.")
+        print("Note: .icns generation requires macOS. Saved as .png instead.")
 
 
 if __name__ == "__main__":
     assets_dir = Path(__file__).parent
 
     print("Generating Lengrowth Linkedin desktop icons...")
-    print(f"  Using source logo from: logos/icon.png")
+    print("  Using source logo from: logos/icon.png")
 
     # Main PNG icon (256x256)
     icon = create_icon(256)
