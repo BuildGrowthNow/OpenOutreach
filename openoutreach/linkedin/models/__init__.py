@@ -66,6 +66,17 @@ class LinkedInProfile:
         cookie_data_encrypted: Optional[str] = None,
         newsletter_processed: bool = False,
         campaign_id: Optional[str] = None,
+        # Daemon tracking
+        daemon_last_seen: Optional[datetime] = None,
+        daemon_version: Optional[str] = None,
+        daemon_platform: Optional[str] = None,
+        daemon_browser: Optional[str] = None,
+        # Session state (reported by daemon)
+        is_logged_in: bool = False,
+        requires_verification: bool = False,
+        verification_type: Optional[str] = None,
+        session_updated_at: Optional[datetime] = None,
+        cookies_updated_at: Optional[datetime] = None,
     ):
         self._id = _id or str(uuid4())
         self.user_id = user_id
@@ -80,6 +91,17 @@ class LinkedInProfile:
         self.cookie_data_encrypted = cookie_data_encrypted
         self.newsletter_processed = newsletter_processed
         self.campaign_id = campaign_id
+        # Daemon tracking
+        self.daemon_last_seen = daemon_last_seen
+        self.daemon_version = daemon_version
+        self.daemon_platform = daemon_platform
+        self.daemon_browser = daemon_browser
+        # Session state
+        self.is_logged_in = is_logged_in
+        self.requires_verification = requires_verification
+        self.verification_type = verification_type
+        self.session_updated_at = session_updated_at
+        self.cookies_updated_at = cookies_updated_at
         self._exhausted: dict[str, date] = {}
         self._user_cache = None  # Cache for lazy-loaded user
 
@@ -160,6 +182,17 @@ class LinkedInProfile:
             "cookie_data_encrypted": self.cookie_data_encrypted,
             "newsletter_processed": self.newsletter_processed,
             "campaign_id": self.campaign_id,
+            # Daemon tracking
+            "daemon_last_seen": self.daemon_last_seen,
+            "daemon_version": self.daemon_version,
+            "daemon_platform": self.daemon_platform,
+            "daemon_browser": self.daemon_browser,
+            # Session state
+            "is_logged_in": self.is_logged_in,
+            "requires_verification": self.requires_verification,
+            "verification_type": self.verification_type,
+            "session_updated_at": self.session_updated_at,
+            "cookies_updated_at": self.cookies_updated_at,
         }
 
     @classmethod
@@ -179,6 +212,17 @@ class LinkedInProfile:
             cookie_data_encrypted=data.get("cookie_data_encrypted"),
             newsletter_processed=data.get("newsletter_processed", False),
             campaign_id=data.get("campaign_id"),
+            # Daemon tracking
+            daemon_last_seen=data.get("daemon_last_seen"),
+            daemon_version=data.get("daemon_version"),
+            daemon_platform=data.get("daemon_platform"),
+            daemon_browser=data.get("daemon_browser"),
+            # Session state
+            is_logged_in=data.get("is_logged_in", False),
+            requires_verification=data.get("requires_verification", False),
+            verification_type=data.get("verification_type"),
+            session_updated_at=data.get("session_updated_at"),
+            cookies_updated_at=data.get("cookies_updated_at"),
         )
 
     def save(self) -> str:

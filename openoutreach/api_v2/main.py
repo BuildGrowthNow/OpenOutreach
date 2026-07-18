@@ -71,6 +71,7 @@ from openoutreach.api_v2.routers import (
     linkedin_setup,
     notifications,
     websocket,
+    daemon,
 )
 
 # Import rate limiting and campaign health routers
@@ -118,3 +119,6 @@ app.include_router(notifications.router, prefix="/api/notifications", tags=["not
 
 # WebSocket routes
 app.include_router(websocket.router, tags=["websocket"])
+
+# Daemon communication
+app.include_router(daemon.router, prefix="/api", tags=["daemon"])

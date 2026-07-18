@@ -60,6 +60,15 @@ OpenOutreach supports **production-grade multi-tenancy** with user authenticatio
 - `PUT /{id}` - Update campaign (access check; only owner can update team)
 - `DELETE /{id}` - Delete campaign (owner only, blocked if deals exist)
 
+**Daemon Communication** (`/api/daemon`):
+- `POST /heartbeat` - Desktop daemon health check (30s interval)
+- `POST /tasks/claim` - Atomically claim next pending task for profile
+- `POST /tasks/result` - Report task completion or failure
+- `POST /cookies/sync` - Sync browser cookies to backend
+- `POST /session/state` - Report login/verification status
+- `GET /config` - Get daemon config (rate limits, active hours)
+- `GET /credentials` - Get LinkedIn credentials for daemon login
+
 ### Multi-Tenant Security
 
 **Profile Ownership:** All profile operations verify `user_id`:
