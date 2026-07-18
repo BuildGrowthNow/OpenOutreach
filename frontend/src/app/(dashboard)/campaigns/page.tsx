@@ -15,7 +15,8 @@ import {
 } from "@/lib/api/dashboard";
 import { Campaign } from "@/lib/types/components";
 import { CampaignCard } from "@/components/dashboard/campaign-card";
-import { CampaignForm } from "@/components/campaigns/campaign-form";
+import { CreateCampaignWizard } from "@/components/campaigns/create-campaign-wizard";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -324,23 +325,17 @@ export default function CampaignsPage() {
         </div>
       )}
 
-      {showCreateForm && (
-        <CampaignForm
-          open={showCreateForm}
-          onOpenChange={setShowCreateForm}
-          onSubmit={handleCreateCampaign}
-        />
-      )}
-
-      {editingCampaign && (
-        <CampaignForm
-          open={!!editingCampaign}
-          onOpenChange={(open) => !open && setEditingCampaign(null)}
-          campaign={editingCampaign}
-          onSubmit={(data) => handleUpdateCampaign(editingCampaign.id, data)}
-          isEditing
-        />
-      )}
+      <Dialog open={showCreateForm} onOpenChange={setShowCreateForm}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <CreateCampaignWizard
+            onSuccess={(campaignId) => {
+              setShowCreateForm(false);
+              router.push(`/campaigns/${campaignId}`);
+            }}
+            onCancel={() => setShowCreateForm(false)}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

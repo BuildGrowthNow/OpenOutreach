@@ -142,6 +142,11 @@ def set_profile_state(
 
     deal.save()
 
+    # Reset backoff when deal becomes CONNECTED (clean state for future transitions)
+    if ps == DealState.CONNECTED and state_changed:
+        deal.backoff_hours = None
+        deal.save()
+
     label, color, attrs = _STATE_LOG_STYLE.get(ps, ("ERROR", "red", ["bold"]))
     suffix = f" ({reason})" if reason else ""
     if state_changed:

@@ -77,7 +77,11 @@ export function LeadCard({ lead, onView, onEdit, onDisqualify, onReScrape, onAdd
                 )}
               </div>
             </div>
-            <LeadStatusBadge state={lead.state} outcome={lead.outcome} />
+            <LeadStatusBadge
+              state={lead.state}
+              outcome={lead.outcome}
+              connectAttempts={lead.connectAttempts}
+            />
           </div>
         </CardHeader>
 

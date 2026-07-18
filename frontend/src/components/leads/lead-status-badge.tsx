@@ -2,11 +2,14 @@
 
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { DealState, DealOutcome } from '@/lib/types/components'
+import { AlertCircle } from 'lucide-react'
 
 interface LeadStatusBadgeProps {
   state: DealState
   outcome?: DealOutcome
+  connectAttempts?: number
   className?: string
 }
 
@@ -101,17 +104,60 @@ const outcomeConfig: Record<DealOutcome, { label: string; color: string }> = {
   }
 }
 
-export function LeadStatusBadge({ state, outcome, className }: LeadStatusBadgeProps) {
+export function LeadStatusBadge({ state, outcome, connectAttempts, className }: LeadStatusBadgeProps) {
   // Normalize state value from backend format to frontend format
   const normalizedState = normalizeState(state as string)
   const stateInfo = stateConfig[normalizedState] || defaultStateConfig
   const outcomeInfo = outcome ? outcomeConfig[outcome] : null
+
+  // Show retry attempts for QUALIFIED leads that are being retried
+  const showRetry = normalizedState === 'QUALIFIED' && connectAttempts && connectAttempts > 0;
+
+  // NO_EMAIL state needs explanation
+  if (normalizedState === 'NO_EMAIL') {
+    return (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div className={cn('flex flex-col gap-1', className)}>
+              <Badge variant={stateInfo.variant} className={cn('w-fit text-xs gap-1', stateInfo.color)}>
+                <AlertCircle className="h-3 w-3" />
+                {stateInfo.label}
+              </Badge>
+            </div>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="max-w-xs">
+            <p className="text-sm">
+              Email enrichment found no work email for this lead. Add manually to proceed with outreach.
+            </p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    )
+  }
 
   return (
     <div className={cn('flex flex-col gap-1', className)}>
       <Badge variant={stateInfo.variant} className={cn('w-fit text-xs', stateInfo.color)}>
         {stateInfo.label}
       </Badge>
+      {showRetry && (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Badge variant="outline" className="w-fit text-xs gap-1 text-amber-600 border-amber-600">
+                <AlertCircle className="h-3 w-3" />
+                Retry {connectAttempts}/3
+              </Badge>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="max-w-xs">
+              <p className="text-sm">
+                Profile unreachable (no Connect button found). Retrying automatically.
+              </p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )}
       {outcomeInfo && (
         <div className={cn('text-xs font-medium', outcomeInfo.color)}>
           {outcomeInfo.label}

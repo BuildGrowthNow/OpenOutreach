@@ -3,7 +3,7 @@ Messages Router - Multi-tenant chat message management
 """
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import Optional
 from datetime import datetime
 
 from openoutreach.mongodb import models
@@ -169,9 +169,42 @@ async def get_message(
 @router.get("/deals/{deal_id}/messages", response_model=dict)
 async def list_deal_messages(
     deal_id: str,
+    sync: bool = Query(True, description="Sync messages from LinkedIn before returning"),
     user_id: str = Depends(get_current_user),
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
 ):
-    """List messages for a specific deal (thread view)."""
+    """List messages for a specific deal (thread view).
+
+    By default, syncs messages from LinkedIn before returning (sync=true).
+    This ensures users see real-time messages instead of stale data.
+    Set sync=false to skip sync and just read from DB (for polling/background).
+    """
+    # Verify deal access
+    deal = models.Deal.get(deal_id)
+    if not deal:
+        raise HTTPException(status_code=404, detail="Deal not found")
+
+    campaign = models.Campaign.get(deal.campaign_id)
+    if not campaign or not campaign.has_access(user_id):
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    # Sync messages from LinkedIn if requested
+    if sync:
+        try:
+            from openoutreach.linkedin.db.chat import sync_conversation
+            from openoutreach.linkedin.browser.session import AccountSession
+            from openoutreach.mongodb.models import Lead
+
+            lead = Lead.get(deal.lead_id)
+            if lead and lead.public_identifier:
+                # Create minimal session for sync
+                session = AccountSession(campaign, campaign.linkedin_profile)
+                sync_conversation(session, lead.public_identifier)
+        except Exception as e:
+            # Log but don't fail - just return stale data
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Message sync failed for deal {deal_id}: {e}")
+
     return await list_messages(user_id=user_id, deal_id=deal_id, limit=limit, offset=offset)

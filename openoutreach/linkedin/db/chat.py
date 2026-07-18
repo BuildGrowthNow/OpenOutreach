@@ -88,6 +88,9 @@ def _sync_from_api(session, public_identifier: str, deal) -> list:
     self_urn = session.self_profile["urn"]
     new_messages: list = []
 
+    from openoutreach.mongodb.connection import get_mongodb_collection
+    messages_collection = get_mongodb_collection("chat_messages")
+
     for msg in elements:
         parsed = parse_message_element(msg)
         if not parsed or not parsed["entityUrn"]:
@@ -95,32 +98,67 @@ def _sync_from_api(session, public_identifier: str, deal) -> list:
 
         is_outgoing = parsed["sender_host_urn"] == self_urn
 
-        # Check if message exists
-        existing = ChatMessage.get_by_deal_and_urn(deal.pk, parsed["entityUrn"])
-        if existing:
-            # Update existing message
-            existing.content = parsed["text"]
-            existing.is_outgoing = is_outgoing
-            if parsed["delivered_at"]:
-                existing.creation_date = parsed["delivered_at"]
-            existing.save()
+        # Use upsert to prevent race conditions
+        message_data = {
+            "content": parsed["text"],
+            "is_outgoing": is_outgoing,
+            "owner_id": session.linkedin_profile.user_id,
+        }
+        if parsed["delivered_at"]:
+            message_data["creation_date"] = parsed["delivered_at"]
+
+        if messages_collection:
+            # Atomic upsert prevents duplicate creation
+            result = messages_collection.update_one(
+                {
+                    "deal_id": deal.pk,
+                    "linkedin_urn": parsed["entityUrn"],
+                },
+                {
+                    "$set": message_data,
+                    "$setOnInsert": {
+                        "deal_id": deal.pk,
+                        "linkedin_urn": parsed["entityUrn"],
+                    }
+                },
+                upsert=True
+            )
+
+            # Track newly created messages
+            if result.upserted_id:
+                obj = ChatMessage.get_by_deal_and_urn(deal.pk, parsed["entityUrn"])
+                if obj:
+                    new_messages.append(obj)
+                logger.debug(
+                    "sync: new message from %s for %s",
+                    parsed["sender_name"],
+                    public_identifier,
+                )
         else:
-            # Create new message
-            obj = ChatMessage(
-                deal_id=deal.pk,
-                linkedin_urn=parsed["entityUrn"],
-                content=parsed["text"],
-                is_outgoing=is_outgoing,
-                owner_id=session.linkedin_profile.user_id,
-                creation_date=parsed["delivered_at"] if parsed["delivered_at"] else None,
-            )
-            obj.save()
-            new_messages.append(obj)
-            logger.debug(
-                "sync: new message from %s for %s",
-                parsed["sender_name"],
-                public_identifier,
-            )
+            # Fallback to original logic if collection unavailable
+            existing = ChatMessage.get_by_deal_and_urn(deal.pk, parsed["entityUrn"])
+            if existing:
+                existing.content = parsed["text"]
+                existing.is_outgoing = is_outgoing
+                if parsed["delivered_at"]:
+                    existing.creation_date = parsed["delivered_at"]
+                existing.save()
+            else:
+                obj = ChatMessage(
+                    deal_id=deal.pk,
+                    linkedin_urn=parsed["entityUrn"],
+                    content=parsed["text"],
+                    is_outgoing=is_outgoing,
+                    owner_id=session.linkedin_profile.user_id,
+                    creation_date=parsed["delivered_at"] if parsed["delivered_at"] else None,
+                )
+                obj.save()
+                new_messages.append(obj)
+                logger.debug(
+                    "sync: new message from %s for %s",
+                    parsed["sender_name"],
+                    public_identifier,
+                )
 
     # Sort new messages chronologically so the LLM sees them in order.
     new_messages.sort(key=lambda m: m.creation_date or m.pk)

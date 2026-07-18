@@ -20,6 +20,9 @@ from linkedin_cli.exceptions import SkipProfile
 
 logger = logging.getLogger(__name__)
 
+# Maximum backoff to prevent deals from being frozen for weeks
+MAX_BACKOFF_HOURS = 48
+
 
 def _next_due_pending_deal(campaign):
     """Find the next due PENDING deal for a campaign using MongoDB."""
@@ -44,13 +47,14 @@ def _next_due_pending_deal(campaign):
 
 
 def _double_backoff(deal) -> float:
-    """Double the backoff hours for a deal using MongoDB."""
+    """Double the backoff hours for a deal, capped at MAX_BACKOFF_HOURS."""
     from openoutreach.core.conf import CAMPAIGN_CONFIG
 
     current = deal.backoff_hours or CAMPAIGN_CONFIG["check_pending_recheck_after_hours"]
     # Fix type issues: current might be Any | object, ensure it's a number
     backoff_value = float(current) if current is not None else 1.0  # type: ignore
-    deal.backoff_hours = backoff_value * 2
+    # Cap at MAX_BACKOFF_HOURS to prevent indefinite delays
+    deal.backoff_hours = min(backoff_value * 2, MAX_BACKOFF_HOURS)
     deal.save()  # MongoDB save doesn't need update_fields
     return float(deal.backoff_hours)  # type: ignore
 
