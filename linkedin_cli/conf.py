@@ -31,3 +31,12 @@ HUMAN_TYPE_MAX_DELAY_MS = 200
 # Seconds to wait for the user to clear a LinkedIn security checkpoint in the
 # live browser (noVNC http://localhost:6080/vnc.html) before the daemon exits.
 CHECKPOINT_RESOLVE_TIMEOUT_S = 1800
+
+# ----------------------------------------------------------------------
+# Proxy config (optional)
+# ----------------------------------------------------------------------
+# Format: "http://user:pass@host:port" or "socks5://user:pass@host:port"
+# Leave None to use direct connection (recommended for local/self-hosted)
+BROWSER_PROXY_SERVER = None
+BROWSER_PROXY_USERNAME = None  # Optional if auth is in URL
+BROWSER_PROXY_PASSWORD = None  # Optional if auth is in URL

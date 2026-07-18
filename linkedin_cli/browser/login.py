@@ -132,9 +132,32 @@ def launch_browser(storage_state=None):
     logger.debug("Launching Playwright")
     playwright = sync_playwright().start()
     browser = playwright.chromium.launch(headless=False, slow_mo=BROWSER_SLOW_MO)
-    context = browser.new_context(storage_state=storage_state)
+
+    # Build context options with optional proxy support
+    context_options = {"storage_state": storage_state}
+
+    # Optional proxy configuration (imported from conf)
+    from linkedin_cli.conf import BROWSER_PROXY_SERVER, BROWSER_PROXY_USERNAME, BROWSER_PROXY_PASSWORD
+    if BROWSER_PROXY_SERVER:
+        proxy_config = {"server": BROWSER_PROXY_SERVER}
+        if BROWSER_PROXY_USERNAME and BROWSER_PROXY_PASSWORD:
+            proxy_config["username"] = BROWSER_PROXY_USERNAME
+            proxy_config["password"] = BROWSER_PROXY_PASSWORD
+        context_options["proxy"] = proxy_config
+        logger.info(f"Using proxy: {BROWSER_PROXY_SERVER}")
+
+    context = browser.new_context(**context_options)
     context.set_default_timeout(BROWSER_DEFAULT_TIMEOUT_MS)
     context.set_default_navigation_timeout(BROWSER_DEFAULT_TIMEOUT_MS)
+
+    # Block resource-heavy content to reduce bandwidth by 60-70%
+    # Keeps essential resources for LinkedIn functionality
+    context.route("**/*", lambda route: (
+        route.abort() if route.request.resource_type in ["image", "media", "font", "stylesheet"]
+        and not any(domain in route.request.url for domain in ["linkedin.com", "licdn.com"])
+        else route.continue_()
+    ))
+
     Stealth().apply_stealth_sync(context)
     page = context.new_page()
     return page, context, browser, playwright
