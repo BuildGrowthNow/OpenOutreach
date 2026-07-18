@@ -1,0 +1,19 @@
+Windows Registry Editor Version 5.00
+
+; Register openoutreach:// protocol handler
+; This file is for manual registration only
+; The NSIS installer handles this automatically
+
+[HKEY_CLASSES_ROOT\openoutreach]
+@="URL:OpenOutreach Protocol"
+"URL Protocol"=""
+
+[HKEY_CLASSES_ROOT\openoutreach\DefaultIcon]
+@="\"C:\\Program Files\\OpenOutreach\\OpenOutreach.exe\",0"
+
+[HKEY_CLASSES_ROOT\openoutreach\shell]
+
+[HKEY_CLASSES_ROOT\openoutreach\shell\open]
+
+[HKEY_CLASSES_ROOT\openoutreach\shell\open\command]
+@="\"C:\\Program Files\\OpenOutreach\\OpenOutreach.exe\" \"%1\""

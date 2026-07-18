@@ -63,24 +63,65 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (isAuthenticated) {
-      // Check if LinkedIn setup is required after login
-      const checkLinkedIn = async () => {
-        try {
-          const response = await getLinkedInSetupStatus()
-          
-          if (response.data && !response.data.status.setupComplete) {
-            // LinkedIn is NOT configured - show modal
-            sessionStorage.setItem('openoutreach_linkedin_setup_pending', 'true')
-            router.push('/settings')
+      // Check if this is a desktop app login
+      const isDesktop = searchParams.get("desktop") === "true"
+      const callback = searchParams.get("callback") || "lengrowth://auth"
+
+      if (isDesktop && session) {
+        // Desktop app login - redirect back with credentials
+        const redirectToDesktop = async () => {
+          try {
+            // Fetch user's LinkedIn profiles
+            const response = await fetch('/api/linkedin-profiles/', {
+              headers: {
+                Authorization: `Bearer ${session.access_token}`
+              }
+            })
+
+            if (!response.ok) {
+              throw new Error('Failed to fetch profiles')
+            }
+
+            const data = await response.json()
+
+            if (data.profiles && data.profiles.length > 0) {
+              // Use first profile (or show picker if multiple in future)
+              const profileId = data.profiles[0].id
+
+              // Redirect back to desktop app with credentials
+              window.location.href = `${callback}?token=${session.access_token}&profile_id=${profileId}`
+            } else {
+              // No profiles - redirect to settings to set one up
+              router.push('/settings?setup-linkedin=true')
+            }
+          } catch (err) {
+            console.error('Failed to redirect to desktop:', err)
+            // Fallback: redirect to dashboard
+            router.push('/')
           }
-        } catch (err) {
-          console.error('Failed to check LinkedIn status:', err)
         }
+
+        redirectToDesktop()
+      } else {
+        // Normal web login - check if LinkedIn setup is required
+        const checkLinkedIn = async () => {
+          try {
+            const response = await getLinkedInSetupStatus()
+
+            if (response.data && !response.data.status.setupComplete) {
+              // LinkedIn is NOT configured - show modal
+              sessionStorage.setItem('openoutreach_linkedin_setup_pending', 'true')
+              router.push('/settings')
+            }
+          } catch (err) {
+            console.error('Failed to check LinkedIn status:', err)
+          }
+        }
+
+        checkLinkedIn()
       }
-      
-      checkLinkedIn()
     }
-  }, [isAuthenticated, router])
+  }, [isAuthenticated, session, searchParams, router])
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background px-4">

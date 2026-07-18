@@ -1,0 +1,39 @@
+# OpenOutreach Desktop App Dependencies
+# Install with: pip install -r desktop/requirements.txt
+
+# =============================================================================
+# Build Tools
+# =============================================================================
+pyinstaller>=6.0,<7.0
+
+# =============================================================================
+# Runtime Dependencies
+# =============================================================================
+
+# System tray
+pystray>=0.19,<1.0
+
+# Image handling (for icons)
+Pillow>=10.0,<12.0
+
+# System keychain (secure credential storage)
+keyring>=24.0,<26.0
+
+# HTTP client (for backend communication)
+httpx>=0.25,<1.0
+
+# Data validation
+pydantic>=2.0,<3.0
+
+# Version comparison (for update checker)
+packaging>=23.0,<25.0
+
+# Timezone support
+tzdata; platform_system == "Windows"
+
+# =============================================================================
+# Platform-specific
+# =============================================================================
+
+# Windows: pywin32 for system integration (installed by keyring on Windows)
+pywin32>=306; platform_system == "Windows"

@@ -1,0 +1,217 @@
+name: Build Desktop App
+
+on:
+  push:
+    tags:
+      - 'desktop-v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build (e.g., 1.0.0)'
+        required: false
+        default: ''
+
+jobs:
+  build-macos:
+    name: Build macOS App
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -r desktop/requirements.txt
+
+      - name: Generate icons (including .icns)
+        run: |
+          cd openoutreach/desktop/assets
+          python generate_icon.py
+
+      - name: Build macOS app
+        run: |
+          python desktop/build.py
+
+      - name: Create DMG
+        run: |
+          # Install create-dmg for better DMG creation
+          brew install create-dmg || true
+          python desktop/build.py --no-build --dmg
+
+      - name: Get version
+        id: version
+        run: |
+          VERSION=$(python -c "exec(open('openoutreach/desktop/__version__.py').read()); print(__version__)")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Upload macOS DMG
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenOutreach-macOS-${{ steps.version.outputs.version }}
+          path: desktop/dist/*.dmg
+
+      - name: Upload macOS App
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenOutreach-macOS-App-${{ steps.version.outputs.version }}
+          path: desktop/dist/OpenOutreach.app
+
+  build-windows:
+    name: Build Windows App
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -r desktop/requirements.txt
+
+      - name: Build Windows exe
+        run: |
+          python desktop/build.py
+
+      - name: Create MSIX package
+        run: |
+          python desktop/build.py --no-build --msix
+        continue-on-error: true
+
+      - name: Install NSIS
+        run: |
+          choco install nsis -y
+        continue-on-error: true
+
+      - name: Create NSIS installer
+        run: |
+          python desktop/build.py --no-build --installer
+        continue-on-error: true
+
+      - name: Get version
+        id: version
+        shell: bash
+        run: |
+          VERSION=$(python -c "exec(open('openoutreach/desktop/__version__.py').read()); print(__version__)")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Upload Windows exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenOutreach-Windows-${{ steps.version.outputs.version }}
+          path: desktop/dist/OpenOutreach.exe
+
+      - name: Upload Windows MSIX
+        uses: actions/upload-artifact@v4
+        if: hashFiles('desktop/dist/*.msix') != ''
+        with:
+          name: OpenOutreach-Windows-MSIX-${{ steps.version.outputs.version }}
+          path: desktop/dist/*.msix
+
+      - name: Upload Windows Installer
+        uses: actions/upload-artifact@v4
+        if: hashFiles('desktop/dist/*-Setup.exe') != ''
+        with:
+          name: OpenOutreach-Windows-Installer-${{ steps.version.outputs.version }}
+          path: desktop/dist/*-Setup.exe
+
+  release:
+    name: Create Release
+    needs: [build-macos, build-windows]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/desktop-v')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get version
+        id: version
+        run: |
+          VERSION=$(python3 -c "exec(open('openoutreach/desktop/__version__.py').read()); print(__version__)")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Download macOS artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: OpenOutreach-macOS-${{ steps.version.outputs.version }}
+          path: ./release/macos
+
+      - name: Download Windows exe artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: OpenOutreach-Windows-${{ steps.version.outputs.version }}
+          path: ./release/windows
+
+      - name: Download Windows MSIX artifact
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: OpenOutreach-Windows-MSIX-${{ steps.version.outputs.version }}
+          path: ./release/windows
+
+      - name: Download Windows Installer artifact
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: OpenOutreach-Windows-Installer-${{ steps.version.outputs.version }}
+          path: ./release/windows
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: OpenOutreach Desktop v${{ steps.version.outputs.version }}
+          body: |
+            ## OpenOutreach Desktop v${{ steps.version.outputs.version }}
+
+            ### Installation
+
+            **macOS:**
+            1. Download `OpenOutreach-${{ steps.version.outputs.version }}.dmg`
+            2. Open the DMG and drag OpenOutreach to Applications
+            3. **First launch only:** Right-click OpenOutreach in Applications, click "Open", then "Open" again
+            4. Log in with your OpenOutreach account
+
+            **Windows (Recommended - Installer):**
+            1. Download `OpenOutreach-${{ steps.version.outputs.version }}-Setup.exe`
+            2. Run the installer
+            3. If SmartScreen appears, click "More info" then "Run anyway"
+            4. Follow installation wizard
+            5. Log in with your OpenOutreach account
+
+            **Windows (Alternative - Standalone):**
+            1. Download `OpenOutreach.exe`
+            2. Run the executable directly (no installation)
+            3. If SmartScreen appears, click "More info" then "Run anyway"
+            4. Log in with your OpenOutreach account
+
+            **Windows (Microsoft Store):**
+            - MSIX package available for sideloading or Store submission
+
+            ### Features
+            - Local IP automation (no proxy needed!)
+            - System tray integration
+            - Auto-start on login
+            - Secure credential storage
+
+            ### Changes
+            - See commit history for details
+          files: |
+            ./release/macos/*.dmg
+            ./release/windows/OpenOutreach.exe
+            ./release/windows/*.msix
+            ./release/windows/*-Setup.exe
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

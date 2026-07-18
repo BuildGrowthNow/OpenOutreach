@@ -223,5 +223,18 @@ def _get_safe_config(settings):
     return config
 
 
+@cli.command()
+def desktop():
+    """Run desktop tray application."""
+    try:
+        from openoutreach.desktop.app import main
+
+        main()
+    except ImportError as e:
+        click.echo(f"Error: Desktop dependencies not installed: {e}", err=True)
+        click.echo("Install with: pip install -r desktop/requirements.txt", err=True)
+        raise SystemExit(1)
+
+
 if __name__ == '__main__':
     cli()
