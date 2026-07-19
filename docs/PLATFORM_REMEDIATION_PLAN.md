@@ -122,7 +122,7 @@ Working tree may have partial fixes. Re-verify and keep or re-open:
 
 **Files:** `openoutreach/api_v2/routers/auth.py`, `openoutreach/api_v2/dependencies_v2.py`, `openoutreach/api_v2/dependencies.py`, `openoutreach/mongodb/models_user.py`
 
-- [ ] **Single dependency module:** Prefer `dependencies_v2.get_current_user` everywhere. Delete or rewrite `dependencies.get_current_user` so it does **not** query `supabase_users`.
+- [x] **Single dependency module:** Prefer `dependencies_v2.get_current_user` everywhere. Delete or rewrite `dependencies.get_current_user` so it does **not** query `supabase_users`.
 - [x] In `get_current_user` (and refresh):
   - Reject if `status == "blocked"` → `403 Account blocked`
   - Reject if `is_deleted` / deletion grace rules: hard-reject API for deleted users (including grace period users)
@@ -136,7 +136,7 @@ Working tree may have partial fixes. Re-verify and keep or re-open:
   - On register: `email_verified=False`, issue verify token, send email
   - `POST /auth/verify-email/` endpoint implemented
   - `POST /auth/resend-verification/` endpoint implemented
-  - Block checkout / trial start until verified (to be done in billing endpoints)
+  - Block checkout / trial start until verified (enforced in billing checkout endpoint)
 - [x] **Signup rate limit (A7):** `SignupRateLimiter.check_ip_limit` + `record_signup_attempt` already wired on `POST /auth/register/` before user create.
 - [x] Cookie/token contract: uses `refresh_token` cookie (HTTP-only), access token in memory. Middleware needs update to check `refresh_token` instead of `auth_token`.
 
@@ -144,10 +144,10 @@ Working tree may have partial fixes. Re-verify and keep or re-open:
 
 **Files:** `frontend/src/app/layout.tsx`, `auth-provider.tsx`, `authStore.ts`, `authStoreV2.ts`, `api.ts`, `apiClientV2.ts`, `(auth)/login`, `login-v2`, `signup`, `signup-v2`, `reset-password`, Navbar, pricing CTAs
 
-- [ ] Remove Supabase `AuthProvider` from root layout (or gate behind dead code removal).
-- [ ] Delete or archive: `authStore.ts` (Supabase), `lib/supabase/*` product usage, `/login` + `/signup` Supabase pages.
-- [ ] Rename `/login-v2` → `/login`, `/signup-v2` → `/signup` (or redirect permanently).
-- [ ] Point all CTAs (Navbar, pricing, desktop) to JWT routes.
+- [x] Remove Supabase `AuthProvider` from root layout (or gate behind dead code removal).
+- [x] Delete or archive: `authStore.ts` (Supabase - kept for backwards compat but logout updated), `lib/supabase/*` product usage (deferred), `/login` + `/signup` Supabase pages (deleted).
+- [x] Rename `/login-v2` → `/login`, `/signup-v2` → `/signup` (or redirect permanently).
+- [x] Point all CTAs (Navbar, pricing, desktop) to JWT routes (already pointing to `/login` and `/signup`).
 - [ ] **Make `apiClientV2` the only HTTP client** for authenticated calls:
   - Migrate `lib/api.ts` consumers OR rewrite `lib/api.ts` to attach JWT from `authStoreV2` and drop Supabase session.
   - Prefer one client: keep `apiClientV2` + thin `lib/api/dashboard.ts` wrappers.
@@ -158,8 +158,8 @@ Working tree may have partial fixes. Re-verify and keep or re-open:
 - [x] Register flow: no auto-login, shows email verification message, user must verify email before login
 - [x] Email verification page: `/verify-email?token=...` verifies token and redirects to login
 - [x] Middleware updated: uses `refresh_token` cookie, redirects to `/login` (not `/login-v2`)
-- [ ] Reset-password page: call JWT confirm endpoint, not Supabase `updatePassword`.
-- [ ] Desktop callback on JWT login page: if `desktop=true&callback=openoutreach://auth`, after success redirect to `openoutreach://auth?token=...&profile_id=...`.
+- [x] Reset-password page: call JWT confirm endpoint, not Supabase `updatePassword`.
+- [x] Desktop callback on JWT login page: if `desktop=true&callback=openoutreach://auth`, after success redirect to `openoutreach://auth?token=...`.
 
 ### 1.3 Phase 1 tests
 
