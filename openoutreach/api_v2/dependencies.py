@@ -160,3 +160,84 @@ async def get_current_user_optional(
     if credentials is None:
         return None
     return await get_current_user(credentials)
+
+
+async def get_admin_user(user_id: str = Depends(get_current_user)) -> str:
+    """Ensure user is an admin."""
+    from openoutreach.mongodb.models_user import User
+
+    user = User.get(user_id)
+    if not user or not user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required",
+        )
+    return user_id
+
+
+async def check_subscription_active(user_id: str = Depends(get_current_user)) -> str:
+    """Ensure user has an active subscription."""
+    from openoutreach.mongodb.models_user import User
+
+    user = User.get(user_id)
+    if not user or user.subscription_status not in ("active", "trialing"):
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail="Active subscription required",
+        )
+    return user_id
+
+
+async def check_linkedin_account_limit(user_id: str = Depends(get_current_user)) -> str:
+    """Ensure user hasn't exceeded LinkedIn account limit."""
+    from openoutreach.mongodb.models_user import User
+    from openoutreach.mongodb.connection import get_mongodb_collection
+
+    user = User.get(user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+
+    collection = get_mongodb_collection("linkedin_profiles")
+    if collection is None:
+        return user_id
+
+    count = collection.count_documents({
+        "user_id": user_id,
+        "is_active": True,
+    })
+
+    if count >= user.linkedin_account_limit:
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail="LinkedIn account limit reached",
+        )
+    return user_id
+
+
+async def check_campaign_limit(user_id: str = Depends(get_current_user)) -> str:
+    """Ensure user hasn't exceeded campaign limit."""
+    from openoutreach.mongodb.models_user import User
+    from openoutreach.mongodb.connection import get_mongodb_collection
+
+    user = User.get(user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+
+    if user.campaign_limit is None:
+        return user_id
+
+    collection = get_mongodb_collection("campaigns")
+    if collection is None:
+        return user_id
+
+    count = collection.count_documents({
+        "user_id": user_id,
+        "is_paused": False,
+    })
+
+    if count >= user.campaign_limit:
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail="Campaign limit reached",
+        )
+    return user_id

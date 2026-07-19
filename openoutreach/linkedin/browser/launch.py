@@ -26,7 +26,6 @@ def _mark_credential_verified(session) -> None:
     """Update the linked credential after successful browser session start."""
     try:
         from datetime import datetime, timezone
-        from openoutreach.mongodb import models
         from openoutreach.mongodb.connection import get_mongodb_collection
 
         profile = session.linkedin_profile
@@ -90,15 +89,38 @@ def _save_cookies(session: Any) -> None:
 def start_browser_session(session: Any) -> None:
     logger.debug("Configuring browser for %s", session)
 
-    session.linkedin_profile.refresh_from_db(fields=["cookie_data_encrypted"])
+    session.linkedin_profile.refresh_from_db(
+        fields=["cookie_data_encrypted", "proxy_server", "proxy_username", "proxy_password"]
+    )
     cookie_data = session.linkedin_profile.cookie_data
 
     storage_state = cookie_data if cookie_data else None
     if storage_state:
         logger.info("Loading saved session for %s", session)
 
+    # Extract proxy configuration from profile
+    profile = session.linkedin_profile
+    proxy_server = profile.proxy_server
+    proxy_username = profile.proxy_username
+    proxy_password = profile.proxy_password
+
+    # Get the VNC display for this profile
+    display_override = None
+    try:
+        from openoutreach.core.vnc_manager import get_or_create_vnc_session
+        vnc_session = get_or_create_vnc_session(str(profile.pk))
+        if vnc_session:
+            display_override = vnc_session.display
+            logger.debug("Using VNC display %s for profile %s", display_override, profile.pk)
+    except Exception as e:
+        logger.debug("Could not get VNC display, using default: %s", e)
+
     session.page, session.context, session.browser, session.playwright = launch_browser(
-        storage_state=storage_state
+        storage_state=storage_state,
+        proxy_server=proxy_server,
+        proxy_username=proxy_username,
+        proxy_password=proxy_password,
+        display_override=display_override,
     )
 
     if not storage_state:

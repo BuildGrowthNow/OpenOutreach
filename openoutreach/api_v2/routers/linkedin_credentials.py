@@ -5,9 +5,10 @@ Provides endpoints for managing LinkedIn credentials with encryption,
 verification, health monitoring, rotation, and audit logging.
 """
 
+import json
 import logging
-from datetime import datetime, timezone as tz, timedelta
-from typing import Dict, List, Optional, Any
+from datetime import datetime, timezone as tz
+from typing import List, Optional
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status, Request
@@ -556,16 +557,47 @@ async def verify_credential(
         )
 
     # Actual browser-based verification
-    try:
-        from linkedin_cli.auth import authenticate
-        from linkedin_cli.browser.login import launch_browser
-        from openoutreach.linkedin.browser.session import AccountSession
+    from linkedin_cli.auth import authenticate
+    from linkedin_cli.browser.login import launch_browser
+    from linkedin_cli.page_state import IllegalPageTransition
 
+    # Get profile for proxy and VNC configuration (outside try block so it's accessible in except)
+    profile = None
+    if credential.linkedin_profile_id:
+        profile = LinkedInProfile.get(credential.linkedin_profile_id)
+
+    try:
         email = credential.get_email()
         password = credential.get_password()
 
-        # Launch browser and attempt login
-        page, context, browser, playwright = launch_browser()
+        # Extract proxy configuration from profile (web daemon only)
+        proxy_server = None
+        proxy_username = None
+        proxy_password = None
+        display_override = None
+
+        if profile:
+            proxy_server = profile.proxy_server
+            proxy_username = profile.proxy_username
+            proxy_password = profile.proxy_password
+
+            # Get VNC display for this profile (web daemon only)
+            try:
+                from openoutreach.core.vnc_manager import get_or_create_vnc_session
+                vnc_session = get_or_create_vnc_session(str(profile.pk))
+                if vnc_session:
+                    display_override = vnc_session.display
+                    logger.debug("Using VNC display %s for verification", display_override)
+            except Exception as e:
+                logger.debug("Could not get VNC display: %s", e)
+
+        # Launch browser with proxy and VNC support
+        page, context, browser, playwright = launch_browser(
+            proxy_server=proxy_server,
+            proxy_username=proxy_username,
+            proxy_password=proxy_password,
+            display_override=display_override,
+        )
 
         # Create mock profile for session
         class MockProfile:
@@ -589,10 +621,14 @@ async def verify_credential(
             def cookie_data(self, value):
                 pass
 
+            @property
+            def pk(self):
+                return self._id
+
         # Create session
         class MockSession:
-            def __init__(self, profile):
-                self.linkedin_profile = profile
+            def __init__(self, profile_obj):
+                self.linkedin_profile = profile_obj
                 self.page = page
                 self.context = context
                 self.browser = browser
@@ -621,6 +657,14 @@ async def verify_credential(
             credential.verification_failed_at = None
             credential.save(update_fields=["status", "last_verified", "verification_failures", "verification_failed_at"])
 
+            # Update profile session state
+            if profile:
+                profile.is_logged_in = True
+                profile.requires_verification = False
+                profile.verification_type = None
+                profile.session_updated_at = datetime.now(tz.utc)
+                profile.save(update_fields=["is_logged_in", "requires_verification", "verification_type", "session_updated_at"])
+
             log_entry = LinkedInCredentialLog(
                 credential_id=credential._id,
                 action="verified",
@@ -637,6 +681,34 @@ async def verify_credential(
             )
         finally:
             session.close()
+
+    except IllegalPageTransition as e:
+        # Challenge/verification detected
+        logger.warning(f"Verification requires challenge: {e}")
+
+        # Update profile to indicate verification required
+        if profile:
+            profile.is_logged_in = False
+            profile.requires_verification = True
+            profile.verification_type = "challenge"
+            profile.session_updated_at = datetime.now(tz.utc)
+            profile.save(update_fields=["is_logged_in", "requires_verification", "verification_type", "session_updated_at"])
+
+        log_entry = LinkedInCredentialLog(
+            credential_id=credential._id,
+            action="awaiting_challenge",
+            details={"method": "browser_login", "message": str(e)},
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent", ""),
+        )
+        log_entry.save()
+
+        return VerifyResponse(
+            success=False,
+            message="LinkedIn requires verification. Please complete the challenge.",
+            status=credential.status,
+            error=json.dumps({"errorType": "awaiting_challenge", "message": str(e)})
+        )
 
     except Exception as e:
         logger.error(f"Verification failed: {e}")
@@ -673,6 +745,7 @@ async def confirm_credential(
     Confirm credentials after manual test (e.g., via VNC viewer).
 
     Used when automated verification is not possible (challenges, CAPTCHA).
+    Checks if user successfully logged in via VNC by verifying the browser session state.
     """
     credential = LinkedInCredentials.get(credential_id)
     if not credential:
@@ -687,16 +760,37 @@ async def confirm_credential(
             detail="Access denied"
         )
 
+    # Get profile to check session state
+    profile = None
+    if credential.linkedin_profile_id:
+        profile = LinkedInProfile.get(credential.linkedin_profile_id)
+
+    # Auto-verify by checking if profile shows logged in state
+    auto_verified = False
+    if profile and profile.is_logged_in and not profile.requires_verification:
+        auto_verified = True
+        data.verified = True
+
     if data.verified:
         credential.mark_verified()
         credential.verification_failures = 0
         credential.verification_failed_at = None
         credential.save(update_fields=["status", "last_verified", "verification_failures", "verification_failed_at"])
 
+        # Update profile session state
+        if profile:
+            profile.requires_verification = False
+            profile.verification_type = None
+            profile.session_updated_at = datetime.now(tz.utc)
+            profile.save(update_fields=["requires_verification", "verification_type", "session_updated_at"])
+
         log_entry = LinkedInCredentialLog(
             credential_id=credential._id,
             action="verified",
-            details={"method": "manual_confirmation", "notes": data.notes},
+            details={
+                "method": "manual_confirmation" if not auto_verified else "auto_verified",
+                "notes": data.notes,
+            },
             ip_address=request.client.host if request.client else None,
             user_agent=request.headers.get("user-agent", ""),
         )
@@ -708,6 +802,16 @@ async def confirm_credential(
             status=credential.status
         )
     else:
+        # Check if challenge is still incomplete (user hasn't finished yet)
+        if profile and profile.requires_verification:
+            return VerifyResponse(
+                success=False,
+                message="Challenge not complete yet",
+                status=credential.status,
+                error=json.dumps({"errorType": "challenge_incomplete"})
+            )
+
+        # User explicitly marked as failed
         credential.mark_verification_failed()
         credential.save(update_fields=["status", "verification_failed_at", "verification_failures"])
 
@@ -870,7 +974,6 @@ async def get_credential_health(
     # Daily limit usage
     daily_limit_usage = {}
     if action_logs is not None:
-        from datetime import timedelta
         today_start = datetime.now(tz.utc).replace(hour=0, minute=0, second=0, microsecond=0)
 
         connect_count = action_logs.count_documents({

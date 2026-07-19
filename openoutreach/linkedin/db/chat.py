@@ -107,7 +107,7 @@ def _sync_from_api(session, public_identifier: str, deal) -> list:
         if parsed["delivered_at"]:
             message_data["creation_date"] = parsed["delivered_at"]
 
-        if messages_collection:
+        if messages_collection is not None:
             # Atomic upsert prevents duplicate creation
             result = messages_collection.update_one(
                 {

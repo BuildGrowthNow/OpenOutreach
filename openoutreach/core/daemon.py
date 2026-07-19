@@ -253,6 +253,7 @@ class ProfileSession:
         self.paused_until: Optional[float] = None
         self.qualifiers: dict = {}
         self.last_health_check: float = 0.0
+        self.vnc_session = None  # VNC session for this profile
 
     @property
     def profile_id(self) -> str:
@@ -276,6 +277,12 @@ class ProfileSession:
     def ensure_session(self):
         if self.session is None:
             from openoutreach.linkedin.browser.registry import get_or_create_session
+            from openoutreach.core.vnc_manager import get_or_create_vnc_session
+
+            # Start VNC session for this profile
+            if self.vnc_session is None:
+                self.vnc_session = get_or_create_vnc_session(self.profile_id)
+
             self.session = get_or_create_session(self.profile)
         return self.session
 
@@ -330,6 +337,10 @@ class ProfileSession:
         if self.session:
             self.session.close()
             self.session = None
+        if self.vnc_session:
+            from openoutreach.core.vnc_manager import stop_vnc_session
+            stop_vnc_session(self.profile_id)
+            self.vnc_session = None
         self.authenticated = False
 
 

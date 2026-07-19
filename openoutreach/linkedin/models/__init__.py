@@ -77,6 +77,10 @@ class LinkedInProfile:
         verification_type: Optional[str] = None,
         session_updated_at: Optional[datetime] = None,
         cookies_updated_at: Optional[datetime] = None,
+        # Proxy configuration (per-profile)
+        proxy_server: Optional[str] = None,
+        proxy_username: Optional[str] = None,
+        proxy_password: Optional[str] = None,
     ):
         self._id = _id or str(uuid4())
         self.user_id = user_id
@@ -102,6 +106,10 @@ class LinkedInProfile:
         self.verification_type = verification_type
         self.session_updated_at = session_updated_at
         self.cookies_updated_at = cookies_updated_at
+        # Proxy configuration
+        self.proxy_server = proxy_server
+        self.proxy_username = proxy_username
+        self.proxy_password = proxy_password
         self._exhausted: dict[str, date] = {}
         self._user_cache = None  # Cache for lazy-loaded user
 
@@ -193,6 +201,10 @@ class LinkedInProfile:
             "verification_type": self.verification_type,
             "session_updated_at": self.session_updated_at,
             "cookies_updated_at": self.cookies_updated_at,
+            # Proxy configuration
+            "proxy_server": self.proxy_server,
+            "proxy_username": self.proxy_username,
+            "proxy_password": self.proxy_password,
         }
 
     @classmethod
@@ -223,6 +235,10 @@ class LinkedInProfile:
             verification_type=data.get("verification_type"),
             session_updated_at=data.get("session_updated_at"),
             cookies_updated_at=data.get("cookies_updated_at"),
+            # Proxy configuration
+            proxy_server=data.get("proxy_server"),
+            proxy_username=data.get("proxy_username"),
+            proxy_password=data.get("proxy_password"),
         )
 
     def save(self, update_fields: Optional[list] = None) -> str:
@@ -237,7 +253,7 @@ class LinkedInProfile:
             collection.update_one({"_id": self._id}, {"$set": update_doc}, upsert=True)
         else:
             doc = self.to_dict()
-            result = collection.update_one({"_id": self._id}, {"$set": doc}, upsert=True)
+            collection.update_one({"_id": self._id}, {"$set": doc}, upsert=True)
         return self._id
 
     @classmethod

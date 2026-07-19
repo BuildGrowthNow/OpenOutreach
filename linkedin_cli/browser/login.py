@@ -128,23 +128,56 @@ def submit_login_form(session, username, password):
     page.wait_for_load_state("domcontentloaded", timeout=BROWSER_LOGIN_TIMEOUT_MS)
 
 
-def launch_browser(storage_state=None):
+def launch_browser(storage_state=None, proxy_server=None, proxy_username=None, proxy_password=None, display_override=None):
+    """Launch browser with optional per-profile VNC display.
+
+    Args:
+        storage_state: Playwright storage state (cookies/localStorage)
+        proxy_server: HTTP/SOCKS5 proxy URL
+        proxy_username: Proxy auth username
+        proxy_password: Proxy auth password
+        display_override: X11 DISPLAY value (e.g., ":100") for per-profile VNC isolation
+    """
+    import os
+
+    # Set DISPLAY environment variable for this browser instance if provided
+    old_display = os.environ.get("DISPLAY")
+    if display_override:
+        os.environ["DISPLAY"] = display_override
+        logger.debug(f"Using display: {display_override}")
+
     logger.debug("Launching Playwright")
     playwright = sync_playwright().start()
     browser = playwright.chromium.launch(headless=False, slow_mo=BROWSER_SLOW_MO)
 
+    # Restore original DISPLAY after launch
+    if display_override and old_display:
+        os.environ["DISPLAY"] = old_display
+    elif display_override:
+        os.environ.pop("DISPLAY", None)
+
     # Build context options with optional proxy support
     context_options = {"storage_state": storage_state}
 
-    # Optional proxy configuration (imported from conf)
-    from linkedin_cli.conf import BROWSER_PROXY_SERVER, BROWSER_PROXY_USERNAME, BROWSER_PROXY_PASSWORD
-    if BROWSER_PROXY_SERVER:
-        proxy_config = {"server": BROWSER_PROXY_SERVER}
-        if BROWSER_PROXY_USERNAME and BROWSER_PROXY_PASSWORD:
-            proxy_config["username"] = BROWSER_PROXY_USERNAME
-            proxy_config["password"] = BROWSER_PROXY_PASSWORD
+    # Priority: per-profile proxy > environment proxy > no proxy
+    # Per-profile proxy configuration (passed as parameters)
+    if proxy_server:
+        proxy_config = {"server": proxy_server}
+        if proxy_username and proxy_password:
+            proxy_config["username"] = proxy_username
+            proxy_config["password"] = proxy_password
         context_options["proxy"] = proxy_config
-        logger.info(f"Using proxy: {BROWSER_PROXY_SERVER}")
+        logger.info(f"Using profile-specific proxy: {proxy_server}")
+    else:
+        # Fall back to environment/global proxy (imported from conf)
+        from linkedin_cli.conf import BROWSER_PROXY_SERVER, BROWSER_PROXY_USERNAME, BROWSER_PROXY_PASSWORD
+        if BROWSER_PROXY_SERVER:
+            proxy_config = {"server": BROWSER_PROXY_SERVER}
+            if BROWSER_PROXY_USERNAME and BROWSER_PROXY_PASSWORD:
+                proxy_config["username"] = BROWSER_PROXY_USERNAME
+                proxy_config["password"] = BROWSER_PROXY_PASSWORD
+            context_options["proxy"] = proxy_config
+            logger.info(f"Using environment proxy: {BROWSER_PROXY_SERVER}")
 
     context = browser.new_context(**context_options)
     context.set_default_timeout(BROWSER_DEFAULT_TIMEOUT_MS)

@@ -3,7 +3,6 @@
 Pydantic Settings Configuration for OpenOutreach.
 Replaces Django settings with environment-based configuration.
 """
-import os
 from pathlib import Path
 from typing import Optional, List
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -94,6 +93,20 @@ class Settings(BaseSettings):
     # Finder API (BetterContact)
     # =========================================================================
     FINDER_API_KEY: Optional[str] = None
+
+    # =========================================================================
+    # Stripe Configuration
+    # =========================================================================
+    STRIPE_SECRET_KEY: Optional[str] = None
+    STRIPE_PUBLISHABLE_KEY: Optional[str] = None
+    STRIPE_WEBHOOK_SECRET: Optional[str] = None
+
+    # =========================================================================
+    # Billing Configuration
+    # =========================================================================
+    TRIAL_DURATION_DAYS: int = 3
+    LIFETIME_DEAL_ENABLED: bool = True
+    LIFETIME_DEAL_ENDS_AT: Optional[str] = None
 
     # =========================================================================
     # Environment Detection

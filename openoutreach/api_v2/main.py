@@ -36,6 +36,8 @@ async def startup():
 
     from openoutreach.mongodb.connection import initialize_mongodb_connection
     from openoutreach.mongodb.indexes import ensure_all_indexes
+    from openoutreach.billing.stripe_service import init_stripe
+    from openoutreach.billing.config import load_from_env
 
     logger.info("📊 Connecting to MongoDB...")
     if not initialize_mongodb_connection():
@@ -44,6 +46,10 @@ async def startup():
 
     logger.info("🔍 Creating indexes...")
     ensure_all_indexes()
+
+    logger.info("💳 Initializing Stripe...")
+    init_stripe()
+    load_from_env()
 
     logger.info("✅ FastAPI app ready!")
 
@@ -72,6 +78,8 @@ from openoutreach.api_v2.routers import (
     notifications,
     websocket,
     daemon,
+    vnc,
+    billing,
 )
 
 # Import rate limiting and campaign health routers
@@ -122,3 +130,10 @@ app.include_router(websocket.router, tags=["websocket"])
 
 # Daemon communication
 app.include_router(daemon.router, prefix="/api", tags=["daemon"])
+
+# VNC session management
+app.include_router(vnc.router, prefix="/api", tags=["vnc"])
+
+# Billing
+from openoutreach.api_v2.routers.billing import router as billing_router
+app.include_router(billing_router, tags=["billing"])

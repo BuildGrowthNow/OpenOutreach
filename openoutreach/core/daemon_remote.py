@@ -12,6 +12,7 @@ import json
 import logging
 import sys
 import uuid
+from collections.abc import Callable
 from datetime import datetime, timezone as tz
 from pathlib import Path
 from typing import Any, Optional
@@ -45,14 +46,17 @@ class RemoteDaemon:
         token: str,
         linkedin_profile_id: str,
         data_dir: Optional[Path] = None,
+        refresh_token: Optional[str] = None,
+        on_token_refresh: Optional[Callable[[str], None]] = None,
     ):
         self.api_url = api_url
         self.token = token
         self.linkedin_profile_id = linkedin_profile_id
         self.data_dir = data_dir or self._default_data_dir()
         self.daemon_id = self._get_or_create_daemon_id()
+        self.on_token_refresh = on_token_refresh
 
-        self.client = RemoteClient(api_url, token, self.daemon_id)
+        self.client = RemoteClient(api_url, token, self.daemon_id, refresh_token)
         self.config: Optional[DaemonConfig] = None
         self.session = None
         self.browser: Optional[BrowserInfo] = None
@@ -128,7 +132,6 @@ class RemoteDaemon:
     async def _start_session(self):
         """Initialize browser session using user's browser."""
         from linkedin_cli.auth import authenticate
-        from linkedin_cli.browser.login import launch_browser
 
         logger.info("Starting browser session...")
 
@@ -211,7 +214,8 @@ class RemoteDaemon:
                 self.browser: Any = None
                 self.playwright: Any = None
                 self.campaign: Optional[Any] = None  # Set before task execution
-                self.user: Optional[Any] = None
+                # Load user from the real profile (lazy loaded via property)
+                self.user: Optional[Any] = real_profile.user
 
             def close(self):
                 if self.context and hasattr(self.context, "close"):
@@ -238,15 +242,28 @@ class RemoteDaemon:
             except (json.JSONDecodeError, TypeError):
                 logger.warning("Invalid cookie data, will authenticate from scratch")
 
-        # Launch browser
-        # TODO: Pass browser.channel to use native browser instead of Playwright's Chromium
-        # Requires upstream fix in linkedin_cli.browser.login.launch_browser()
+        # Launch browser using user's native browser (not Playwright's bundled Chromium)
+        if not self.browser:
+            raise BrowserNotFoundError("Browser not detected")
+
+        # Extract proxy configuration from profile
+        proxy_server = real_profile.proxy_server
+        proxy_username = real_profile.proxy_username
+        proxy_password = real_profile.proxy_password
+
+        logger.info("Launching %s (channel: %s)", self.browser.name, self.browser.channel)
         (
             self.session.page,
             self.session.context,
             self.session.browser,
             self.session.playwright,
-        ) = launch_browser(storage_state=storage_state)
+        ) = self._launch_browser_with_channel(
+            storage_state,
+            self.browser.channel,
+            proxy_server,
+            proxy_username,
+            proxy_password,
+        )
 
         try:
             # Authenticate if no valid session
@@ -264,12 +281,16 @@ class RemoteDaemon:
 
         except Exception as e:
             logger.error("Login failed: %s", e)
-            if "verification" in str(e).lower():
+            if "verification" in str(e).lower() or "challenge" in str(e).lower():
                 await self.client.report_session_state(
                     linkedin_profile_id=self.linkedin_profile_id,
                     is_logged_in=False,
                     requires_verification=True,
+                    verification_type="challenge",
                 )
+                # For desktop daemon, browser is already open locally - user can solve challenge directly
+                # Show notification to guide them
+                self._show_verification_notification(is_desktop=True)
             raise
 
     async def _heartbeat_loop(self):
@@ -340,6 +361,9 @@ class RemoteDaemon:
                             linkedin_profile_id=self.linkedin_profile_id,
                             is_logged_in=False,
                         )
+                        # Trigger token refresh if callback provided
+                        if self.on_token_refresh and self.client._token != self.token:
+                            self.on_token_refresh(self.client._token)
 
             except Exception as e:
                 logger.error("Task loop error: %s", e)
@@ -448,17 +472,18 @@ class RemoteDaemon:
                 logger.warning("Config refresh failed: %s", e)
 
     async def _sync_cookies(self):
-        """Sync cookies to backend (encrypted)."""
+        """Sync cookies to backend.
+
+        Sends cookie data as JSON string (NOT encrypted).
+        The backend API handles encryption before storing in LinkedInProfile.cookie_data_encrypted.
+        """
         if not self.session or not self.session.context:
             return
         try:
-            from openoutreach.core.crypto import encrypt_text
-
             state = self.session.context.storage_state()
             cookie_json = json.dumps(state)
-            # Encrypt before sending (matches LinkedInProfile.cookie_data property expectations)
-            encrypted_cookies = encrypt_text(cookie_json)
-            await self.client.sync_cookies(self.linkedin_profile_id, encrypted_cookies)
+            # Send plaintext - API will encrypt before storing
+            await self.client.sync_cookies(self.linkedin_profile_id, cookie_json)
         except Exception as e:
             logger.warning("Cookie sync failed: %s", e)
 
@@ -477,10 +502,146 @@ class RemoteDaemon:
 
         return self.config.active_start_hour <= now.hour < self.config.active_end_hour
 
+    def _show_verification_notification(self, is_desktop: bool = True):
+        """Show system notification for LinkedIn verification requirement.
 
-async def run_daemon(api_url: str, token: str, linkedin_profile_id: str):
+        Args:
+            is_desktop: If True, user is running desktop daemon so browser is already open locally.
+                       If False, redirect to web platform VNC viewer.
+        """
+        if is_desktop:
+            message_title = "Lengrowth - Action Required"
+            message_body = "LinkedIn requires verification. Please complete the challenge in the open browser window, then restart the daemon."
+        else:
+            message_title = "Lengrowth - Action Required"
+            message_body = "LinkedIn requires verification. Please log in to the web platform to complete the challenge."
+
+        try:
+            # Try to use desktop notification if available
+            try:
+                import subprocess
+                import platform
+
+                system = platform.system()
+                if system == "Darwin":  # macOS
+                    subprocess.run([
+                        "osascript",
+                        "-e",
+                        f'display notification "{message_body}" with title "{message_title}"'
+                    ], check=False)
+                elif system == "Windows":
+                    # Use PowerShell toast notification
+                    ps_script = f'''
+                    [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
+                    [Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime] | Out-Null
+                    $template = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02)
+                    $xml = [xml]$template.GetXml()
+                    $xml.toast.visual.binding.text[0].InnerText = "{message_title}"
+                    $xml.toast.visual.binding.text[1].InnerText = "{message_body}"
+                    $xml = [Windows.Data.Xml.Dom.XmlDocument]::new()
+                    $xml.LoadXml($template.GetXml())
+                    $toast = [Windows.UI.Notifications.ToastNotification]::new($xml)
+                    [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("Lengrowth").Show($toast)
+                    '''
+                    subprocess.run(["powershell", "-Command", ps_script], check=False)
+                logger.info("Verification notification shown to user")
+            except Exception as inner_e:
+                logger.debug("Could not show system notification: %s", inner_e)
+        except Exception as e:
+            logger.debug("Notification failed: %s", e)
+
+    def _launch_browser_with_channel(
+        self,
+        storage_state,
+        channel: str,
+        proxy_server: Optional[str] = None,
+        proxy_username: Optional[str] = None,
+        proxy_password: Optional[str] = None,
+    ):
+        """Launch browser using Playwright with specified channel (chrome/msedge/webkit).
+
+        This uses the user's installed browser instead of Playwright's bundled Chromium.
+        Accepts optional per-profile proxy configuration.
+        """
+        from playwright.sync_api import sync_playwright
+        from linkedin_cli.conf import (
+            BROWSER_PROXY_SERVER,
+            BROWSER_PROXY_USERNAME,
+            BROWSER_PROXY_PASSWORD,
+            BROWSER_SLOW_MO,
+            BROWSER_DEFAULT_TIMEOUT_MS,
+        )
+        from playwright_stealth import Stealth
+
+        logger.debug("Launching Playwright with channel=%s", channel)
+        playwright = sync_playwright().start()
+
+        # Launch with channel to use installed browser
+        if channel == "webkit":
+            browser = playwright.webkit.launch(headless=False, slow_mo=BROWSER_SLOW_MO)
+        elif channel == "msedge":
+            browser = playwright.chromium.launch(
+                headless=False,
+                slow_mo=BROWSER_SLOW_MO,
+                channel="msedge",
+            )
+        else:  # chrome
+            browser = playwright.chromium.launch(
+                headless=False,
+                slow_mo=BROWSER_SLOW_MO,
+                channel="chrome",
+            )
+
+        # Build context options
+        context_options = {"storage_state": storage_state}
+
+        # Priority: per-profile proxy > environment proxy > no proxy
+        if proxy_server:
+            proxy_config = {"server": proxy_server}
+            if proxy_username and proxy_password:
+                proxy_config["username"] = proxy_username
+                proxy_config["password"] = proxy_password
+            context_options["proxy"] = proxy_config
+            logger.info("Using profile-specific proxy: %s", proxy_server)
+        elif BROWSER_PROXY_SERVER:
+            proxy_config = {"server": BROWSER_PROXY_SERVER}
+            if BROWSER_PROXY_USERNAME and BROWSER_PROXY_PASSWORD:
+                proxy_config["username"] = BROWSER_PROXY_USERNAME
+                proxy_config["password"] = BROWSER_PROXY_PASSWORD
+            context_options["proxy"] = proxy_config
+            logger.info("Using environment proxy: %s", BROWSER_PROXY_SERVER)
+
+        context = browser.new_context(**context_options)
+        context.set_default_timeout(BROWSER_DEFAULT_TIMEOUT_MS)
+        context.set_default_navigation_timeout(BROWSER_DEFAULT_TIMEOUT_MS)
+
+        # Block resource-heavy content to reduce bandwidth
+        context.route("**/*", lambda route: (
+            route.abort() if route.request.resource_type in ["image", "media", "font", "stylesheet"]
+            and not any(domain in route.request.url for domain in ["linkedin.com", "licdn.com"])
+            else route.continue_()
+        ))
+
+        Stealth().apply_stealth_sync(context)
+        page = context.new_page()
+        return page, context, browser, playwright
+
+
+async def run_daemon(
+    api_url: str,
+    token: str,
+    linkedin_profile_id: str,
+    refresh_token: Optional[str] = None,
+    on_token_refresh: Optional[Callable[[str], None]] = None,
+):
     """Entry point for the daemon."""
-    daemon = RemoteDaemon(api_url, token, linkedin_profile_id)
+    daemon = RemoteDaemon(
+        api_url,
+        token,
+        linkedin_profile_id,
+        refresh_token=refresh_token,
+        on_token_refresh=on_token_refresh,
+    )
 
     try:
         await daemon.start()

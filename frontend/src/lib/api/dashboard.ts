@@ -1126,6 +1126,52 @@ export async function getLinkedInProfileHealth(): Promise<
   return get("/api/linkedin-profiles/health");
 }
 
+// VNC Session API
+export interface VNCSession {
+  profile_id: string;
+  websockify_port: number;
+  vnc_url: string;
+}
+
+export async function getVNCSession(
+  profileId: string,
+): Promise<ApiResponse<VNCSession>> {
+  return get(`/api/vnc/${profileId}`);
+}
+
+export async function listVNCSessions(): Promise<
+  ApiResponse<{ sessions: Record<string, VNCSession> }>
+> {
+  return get("/api/vnc/sessions");
+}
+
+// Desktop Daemon Status API
+export interface DaemonProfileStatus {
+  profile_id: string;
+  username: string;
+  daemon_active: boolean;
+  last_seen: string | null;
+  version: string | null;
+  platform: string | null;
+  browser: string | null;
+  is_logged_in: boolean;
+  requires_verification: boolean;
+  verification_type: string | null;
+  session_updated_at: string | null;
+  status: "online" | "offline" | "stale";
+}
+
+export interface DaemonStatusResponse {
+  has_daemon: boolean;
+  profiles: DaemonProfileStatus[];
+}
+
+export async function getDaemonStatus(): Promise<
+  ApiResponse<DaemonStatusResponse>
+> {
+  return get("/api/linkedin-profiles/daemon/status");
+}
+
 // Upload campaign leads (CSV)
 export async function uploadCampaignLeads(
   campaignId: string,
@@ -1236,6 +1282,54 @@ export async function getLinkedInSetupStatus(): Promise<
   ApiResponse<LinkedInSetupStatus>
 > {
   return get("/api/linkedin-setup/status");
+}
+
+// LinkedIn Proxy Configuration API
+export interface ProxyConfig {
+  profileId: string;
+  proxyServer: string | null;
+  proxyUsername: string | null;
+  proxyPassword: string | null;
+  hasProxy: boolean;
+}
+
+export interface ProxyTestResult {
+  success: boolean;
+  message: string;
+  statusCode?: number;
+  error?: string;
+}
+
+export async function getProxyConfig(
+  profileId: string,
+): Promise<ApiResponse<ProxyConfig>> {
+  return get(`/api/linkedin-profiles/${profileId}/proxy`);
+}
+
+export async function updateProxyConfig(
+  profileId: string,
+  proxyServer: string | null,
+  proxyUsername?: string | null,
+  proxyPassword?: string | null,
+): Promise<ApiResponse<{ success: boolean }>> {
+  return patch(`/api/linkedin-profiles/${profileId}`, {
+    proxy_server: proxyServer,
+    proxy_username: proxyUsername,
+    proxy_password: proxyPassword,
+  });
+}
+
+export async function testProxy(
+  profileId: string,
+  proxyServer: string,
+  proxyUsername?: string | null,
+  proxyPassword?: string | null,
+): Promise<ApiResponse<ProxyTestResult>> {
+  return post(`/api/linkedin-profiles/${profileId}/proxy/test`, {
+    proxy_server: proxyServer,
+    proxy_username: proxyUsername,
+    proxy_password: proxyPassword,
+  });
 }
 
 // Campaign Templates API

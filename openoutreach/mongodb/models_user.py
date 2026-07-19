@@ -38,9 +38,22 @@ class User:
         created_at: Optional[datetime] = None,
         updated_at: Optional[datetime] = None,
         last_login: Optional[datetime] = None,
+        is_admin: bool = False,
+        admin_role: Optional[str] = None,
+        status: str = "active",
+        stripe_customer_id: Optional[str] = None,
+        stripe_subscription_id: Optional[str] = None,
+        plan: str = "starter",
+        billing_period: Optional[str] = None,
+        subscription_status: str = "none",
+        trial_ends_at: Optional[datetime] = None,
+        current_period_end: Optional[datetime] = None,
+        linkedin_account_limit: int = 1,
+        campaign_limit: Optional[int] = None,
+        cloud_profiles: int = 0,
     ):
         self._id = _id or str(uuid4())
-        self.email = email.lower().strip()  # Normalize email
+        self.email = email.lower().strip()
         self.hashed_password = hashed_password
         self.full_name = full_name
         self.is_active = is_active
@@ -50,6 +63,19 @@ class User:
         self.created_at = created_at or datetime.now(tz.utc)
         self.updated_at = updated_at or datetime.now(tz.utc)
         self.last_login = last_login
+        self.is_admin = is_admin
+        self.admin_role = admin_role
+        self.status = status
+        self.stripe_customer_id = stripe_customer_id
+        self.stripe_subscription_id = stripe_subscription_id
+        self.plan = plan
+        self.billing_period = billing_period
+        self.subscription_status = subscription_status
+        self.trial_ends_at = trial_ends_at
+        self.current_period_end = current_period_end
+        self.linkedin_account_limit = linkedin_account_limit
+        self.campaign_limit = campaign_limit
+        self.cloud_profiles = cloud_profiles
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to MongoDB document."""
@@ -65,6 +91,19 @@ class User:
             "created_at": self.created_at,
             "updated_at": self.updated_at,
             "last_login": self.last_login,
+            "is_admin": self.is_admin,
+            "admin_role": self.admin_role,
+            "status": self.status,
+            "stripe_customer_id": self.stripe_customer_id,
+            "stripe_subscription_id": self.stripe_subscription_id,
+            "plan": self.plan,
+            "billing_period": self.billing_period,
+            "subscription_status": self.subscription_status,
+            "trial_ends_at": self.trial_ends_at,
+            "current_period_end": self.current_period_end,
+            "linkedin_account_limit": self.linkedin_account_limit,
+            "campaign_limit": self.campaign_limit,
+            "cloud_profiles": self.cloud_profiles,
         }
 
     @classmethod
@@ -82,6 +121,19 @@ class User:
             created_at=data.get("created_at"),
             updated_at=data.get("updated_at"),
             last_login=data.get("last_login"),
+            is_admin=data.get("is_admin", False),
+            admin_role=data.get("admin_role"),
+            status=data.get("status", "active"),
+            stripe_customer_id=data.get("stripe_customer_id"),
+            stripe_subscription_id=data.get("stripe_subscription_id"),
+            plan=data.get("plan", "starter"),
+            billing_period=data.get("billing_period"),
+            subscription_status=data.get("subscription_status", "none"),
+            trial_ends_at=data.get("trial_ends_at"),
+            current_period_end=data.get("current_period_end"),
+            linkedin_account_limit=data.get("linkedin_account_limit", 1),
+            campaign_limit=data.get("campaign_limit"),
+            cloud_profiles=data.get("cloud_profiles", 0),
         )
 
     def save(self) -> str:

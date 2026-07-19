@@ -1,4 +1,4 @@
-"""URL protocol handler for lengrowth:// callback."""
+"""URL protocol handler for openoutreach:// callback."""
 
 import logging
 import sys
@@ -9,17 +9,17 @@ logger = logging.getLogger(__name__)
 
 
 def parse_auth_callback(url: str) -> Optional[dict]:
-    """Parse lengrowth://auth callback URL.
+    """Parse openoutreach://auth callback URL.
 
     Args:
-        url: URL like "lengrowth://auth?token=xxx&profile_id=yyy"
+        url: URL like "openoutreach://auth?token=xxx&profile_id=yyy"
 
     Returns:
         Dict with token and profile_id, or None if invalid
     """
     try:
         parsed = urllib.parse.urlparse(url)
-        if parsed.scheme != "lengrowth" or parsed.netloc != "auth":
+        if parsed.scheme != "openoutreach" or parsed.netloc != "auth":
             return None
 
         params = urllib.parse.parse_qs(parsed.query)
@@ -37,7 +37,7 @@ def parse_auth_callback(url: str) -> Optional[dict]:
 
 
 def register_protocol_handler():
-    """Register lengrowth:// protocol handler (Windows only).
+    """Register openoutreach:// protocol handler (Windows only).
 
     On macOS, this is handled by the app bundle's Info.plist.
     On Windows, this must be called on first launch to write registry entries.
@@ -56,9 +56,9 @@ def register_protocol_handler():
             exe_path = f'{sys.executable} "{Path(__file__).parent / "app.py"}"'
 
         # Create registry entries
-        key_path = r"Software\Classes\lengrowth"
+        key_path = r"Software\Classes\openoutreach"
         with winreg.CreateKey(winreg.HKEY_CURRENT_USER, key_path) as key:
-            winreg.SetValue(key, "", winreg.REG_SZ, "URL:Lengrowth Protocol")
+            winreg.SetValue(key, "", winreg.REG_SZ, "URL:OpenOutreach Protocol")
             winreg.SetValueEx(key, "URL Protocol", 0, winreg.REG_SZ, "")
 
         with winreg.CreateKey(
@@ -73,7 +73,7 @@ def register_protocol_handler():
 
 
 def handle_protocol_url(url: str, auth_manager) -> bool:
-    """Handle lengrowth:// protocol URL.
+    """Handle openoutreach:// protocol URL.
 
     Args:
         url: Protocol URL from command line

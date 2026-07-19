@@ -183,6 +183,15 @@ def ensure_all_indexes():
             ({'user_id': 1}, {'name': 'config_user_unique', 'unique': True}),
         ]),
 
+        # Billing
+        ('stripe_plans', [
+            ({'plan_name': 1}, {'name': 'stripe_plan_name_idx', 'unique': True}),
+        ]),
+
+        ('site_config', [
+            ({'_id': 1}, {'name': 'site_config_idx', 'unique': True}),
+        ]),
+
         # Lead Personas
         ('lead_personas', [
             ({'lead_id': 1, 'campaign_id': 1}, {'name': 'persona_lead_campaign_unique', 'unique': True}),

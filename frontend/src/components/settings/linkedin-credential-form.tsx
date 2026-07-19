@@ -64,6 +64,7 @@ export default function LinkedInCredentialForm({
   const [showPassword, setShowPassword] = useState(false);
   const [showChallengeModal, setShowChallengeModal] = useState(false);
   const [challengeCredentialId, setChallengeCredentialId] = useState<number | null>(null);
+  const [challengeProfileId, setChallengeProfileId] = useState<string | null>(null);
   const { toast } = useToast();
   const countdownRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -146,6 +147,9 @@ export default function LinkedInCredentialForm({
       const errorType = verifyData?.details?.errorType;
       if (errorType === "awaiting_challenge") {
         setChallengeCredentialId(credentialId);
+        // Get profile ID from the credentials response
+        const profileId = verifyData?.credentials?.linkedinProfileId?.toString() || null;
+        setChallengeProfileId(profileId);
         setShowChallengeModal(true);
         return;
       }
@@ -446,7 +450,10 @@ export default function LinkedInCredentialForm({
             </DialogDescription>
           </DialogHeader>
           <div className="flex-1 overflow-hidden min-h-0">
-            <VncViewer vncUrl={`${window.location.origin}/vnc`} embedded />
+            <VncViewer
+              profileId={challengeProfileId || undefined}
+              embedded
+            />
           </div>
           <div className="flex items-center justify-between gap-2 p-4 border-t border-zinc-800 bg-zinc-950/80">
             <p className="text-sm text-zinc-400">

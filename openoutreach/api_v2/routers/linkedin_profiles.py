@@ -10,13 +10,12 @@ import logging
 from typing import Dict, List, Optional
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Body
+from fastapi import APIRouter, Depends, HTTPException, status, Body
 from pydantic import BaseModel
 
 from openoutreach.api_v2.dependencies_v2 import get_current_user
 from openoutreach.api_v2.schemas.linkedin import (
     LinkedInProfileResponse,
-    LinkedInProfileHealthResponse,
 )
 from openoutreach.mongodb.connection import get_mongodb_collection
 
@@ -443,6 +442,9 @@ async def update_profile(
     active: Optional[bool] = Body(None),
     connect_daily_limit: Optional[int] = Body(None),
     follow_up_daily_limit: Optional[int] = Body(None),
+    proxy_server: Optional[str] = Body(None),
+    proxy_username: Optional[str] = Body(None),
+    proxy_password: Optional[str] = Body(None),
     user_id: str = Depends(get_current_user),
 ):
     """
@@ -450,6 +452,7 @@ async def update_profile(
 
     Multi-tenant: verifies user owns the profile before updating.
     Only provided fields are updated.
+    Supports proxy configuration (pass empty string to clear proxy).
     """
     collection = get_mongodb_collection("linkedin_profiles")
     if collection is None:
@@ -477,6 +480,13 @@ async def update_profile(
             updates["connect_daily_limit"] = connect_daily_limit
         if follow_up_daily_limit is not None:
             updates["follow_up_daily_limit"] = follow_up_daily_limit
+        # Proxy fields - support clearing with empty string
+        if proxy_server is not None:
+            updates["proxy_server"] = proxy_server if proxy_server else None
+        if proxy_username is not None:
+            updates["proxy_username"] = proxy_username if proxy_username else None
+        if proxy_password is not None:
+            updates["proxy_password"] = proxy_password if proxy_password else None
 
         if not updates:
             raise HTTPException(
@@ -519,6 +529,150 @@ async def update_profile(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to update profile: {str(e)}"
+        )
+
+
+@router.post("/{profile_id}/proxy/test")
+async def test_proxy(
+    profile_id: str,
+    proxy_server: str = Body(...),
+    proxy_username: Optional[str] = Body(None),
+    proxy_password: Optional[str] = Body(None),
+    user_id: str = Depends(get_current_user),
+):
+    """
+    Test proxy connectivity before saving.
+
+    Multi-tenant: verifies user owns the profile.
+    Returns connectivity status and any errors.
+    """
+    collection = get_mongodb_collection("linkedin_profiles")
+    if collection is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="LinkedIn profiles database unavailable"
+        )
+
+    try:
+        # Verify ownership
+        profile_doc = collection.find_one({"_id": profile_id, "user_id": user_id})
+        if not profile_doc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Profile not found or access denied"
+            )
+
+        # Test proxy connectivity
+        import httpx
+
+        proxy_url = proxy_server
+        if proxy_username and proxy_password:
+            # Inject auth into URL if provided
+            from urllib.parse import urlparse, urlunparse
+            parsed = urlparse(proxy_server)
+            netloc_with_auth = f"{proxy_username}:{proxy_password}@{parsed.hostname}"
+            if parsed.port:
+                netloc_with_auth += f":{parsed.port}"
+            proxy_url = urlunparse((
+                parsed.scheme,
+                netloc_with_auth,
+                parsed.path,
+                parsed.params,
+                parsed.query,
+                parsed.fragment
+            ))
+
+        try:
+            async with httpx.AsyncClient(proxy=proxy_url, timeout=10.0) as client:
+                # Test with a simple request to LinkedIn
+                response = await client.get("https://www.linkedin.com/")
+                if response.status_code in [200, 301, 302, 403]:
+                    # 403 is OK - it means proxy connected but LinkedIn blocked
+                    return {
+                        "success": True,
+                        "message": "Proxy connection successful",
+                        "status_code": response.status_code,
+                    }
+                else:
+                    return {
+                        "success": False,
+                        "message": f"Unexpected status code: {response.status_code}",
+                        "error": f"HTTP {response.status_code}",
+                    }
+        except httpx.ProxyError as e:
+            return {
+                "success": False,
+                "message": "Proxy connection failed",
+                "error": str(e),
+            }
+        except httpx.TimeoutException:
+            return {
+                "success": False,
+                "message": "Proxy connection timeout",
+                "error": "Request timed out after 10 seconds",
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "message": "Proxy test failed",
+                "error": str(e),
+            }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Failed to test proxy")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to test proxy: {str(e)}"
+        )
+
+
+@router.get("/{profile_id}/proxy")
+async def get_proxy_config(
+    profile_id: str,
+    user_id: str = Depends(get_current_user),
+):
+    """
+    Get proxy configuration for a profile.
+
+    Multi-tenant: verifies user owns the profile.
+    Returns proxy settings (password is masked).
+    """
+    collection = get_mongodb_collection("linkedin_profiles")
+    if collection is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="LinkedIn profiles database unavailable"
+        )
+
+    try:
+        profile_doc = collection.find_one({"_id": profile_id, "user_id": user_id})
+        if not profile_doc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Profile not found or access denied"
+            )
+
+        proxy_server = profile_doc.get("proxy_server")
+        proxy_username = profile_doc.get("proxy_username")
+        proxy_password = profile_doc.get("proxy_password")
+
+        return {
+            "profile_id": profile_id,
+            "proxy_server": proxy_server,
+            "proxy_username": proxy_username,
+            "proxy_password": "********" if proxy_password else None,
+            "has_proxy": proxy_server is not None,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Failed to get proxy config")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve proxy config: {str(e)}"
         )
 
 
@@ -733,4 +887,77 @@ async def get_profile_health(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve profile health: {str(e)}"
+        )
+
+
+@router.get("/daemon/status")
+async def get_daemon_status(user_id: str = Depends(get_current_user)):
+    """Get desktop daemon status for the current user.
+
+    Returns daemon health, session state, and verification requirements.
+    """
+    from datetime import datetime, timezone
+    from openoutreach.linkedin.models import LinkedInProfile
+
+    try:
+        profiles = LinkedInProfile.objects.filter(user_id=user_id, active=True)
+
+        if not profiles:
+            return {
+                "has_daemon": False,
+                "profiles": [],
+            }
+
+        daemon_statuses = []
+        for profile in profiles:
+            daemon_info = {
+                "profile_id": profile.pk,
+                "username": profile.linkedin_username,
+                "daemon_active": False,
+                "last_seen": None,
+                "version": None,
+                "platform": None,
+                "browser": None,
+                "is_logged_in": profile.is_logged_in,
+                "requires_verification": profile.requires_verification,
+                "verification_type": profile.verification_type,
+                "session_updated_at": profile.session_updated_at.isoformat() if profile.session_updated_at else None,
+                "status": "offline",
+            }
+
+            # Check if daemon was seen recently (within 2 minutes = 2 heartbeats)
+            if profile.daemon_last_seen:
+                now = datetime.now(timezone.utc)
+                # Handle timezone-naive datetime
+                last_seen = profile.daemon_last_seen
+                if last_seen.tzinfo is None:
+                    from datetime import timezone as tz
+                    last_seen = last_seen.replace(tzinfo=tz.utc)
+
+                seconds_since_seen = (now - last_seen).total_seconds()
+                daemon_info["last_seen"] = last_seen.isoformat()
+                daemon_info["version"] = profile.daemon_version
+                daemon_info["platform"] = profile.daemon_platform
+                daemon_info["browser"] = profile.daemon_browser
+
+                if seconds_since_seen < 120:  # 2 minutes
+                    daemon_info["daemon_active"] = True
+                    daemon_info["status"] = "online"
+                elif seconds_since_seen < 600:  # 10 minutes
+                    daemon_info["status"] = "stale"
+                else:
+                    daemon_info["status"] = "offline"
+
+            daemon_statuses.append(daemon_info)
+
+        return {
+            "has_daemon": len(daemon_statuses) > 0,
+            "profiles": daemon_statuses,
+        }
+
+    except Exception as e:
+        logger.exception("Failed to get daemon status")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve daemon status: {str(e)}"
         )

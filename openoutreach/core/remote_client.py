@@ -36,9 +36,11 @@ class DaemonConfig:
 class RemoteClient:
     """HTTP client for desktop daemon to communicate with backend."""
 
-    def __init__(self, api_url: str, token: str, daemon_id: str):
+    def __init__(self, api_url: str, token: str, daemon_id: str, refresh_token: Optional[str] = None):
         self.api_url = api_url.rstrip("/")
         self.daemon_id = daemon_id
+        self._token = token
+        self._refresh_token = refresh_token
         self._client = httpx.AsyncClient(
             base_url=self.api_url,
             headers={"Authorization": f"Bearer {token}"},
@@ -184,3 +186,59 @@ class RemoteClient:
         )
         response.raise_for_status()
         return response.json()
+
+    async def refresh_access_token(self) -> Optional[str]:
+        """Refresh the JWT access token using the refresh token.
+
+        Returns:
+            New access token if successful, None otherwise.
+        """
+        if not self._refresh_token:
+            logger.warning("No refresh token available")
+            return None
+
+        try:
+            response = await self._client.post(
+                "/api/auth/refresh",
+                json={"refresh_token": self._refresh_token},
+            )
+            response.raise_for_status()
+            data = response.json()
+            new_token = data.get("access_token")
+            if new_token:
+                self._token = new_token
+                self._client.headers["Authorization"] = f"Bearer {new_token}"
+                logger.info("Access token refreshed successfully")
+                return new_token
+            return None
+        except Exception as e:
+            logger.error("Token refresh failed: %s", e)
+            return None
+
+    async def _request_with_retry(self, method: str, url: str, **kwargs):
+        """Make HTTP request with automatic token refresh on 401."""
+        try:
+            if method == "GET":
+                response = await self._client.get(url, **kwargs)
+            elif method == "POST":
+                response = await self._client.post(url, **kwargs)
+            else:
+                raise ValueError(f"Unsupported method: {method}")
+
+            response.raise_for_status()
+            return response
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 401 and self._refresh_token:
+                logger.info("Got 401, attempting token refresh")
+                new_token = await self.refresh_access_token()
+                if new_token:
+                    # Retry the request with new token
+                    retry_response = None
+                    if method == "GET":
+                        retry_response = await self._client.get(url, **kwargs)
+                    elif method == "POST":
+                        retry_response = await self._client.post(url, **kwargs)
+                    if retry_response:
+                        retry_response.raise_for_status()
+                        return retry_response
+            raise

@@ -195,12 +195,17 @@ async def list_deal_messages(
             from openoutreach.linkedin.db.chat import sync_conversation
             from openoutreach.linkedin.browser.session import AccountSession
             from openoutreach.mongodb.models import Lead
+            from openoutreach.linkedin.models import LinkedInProfile
 
             lead = Lead.get(deal.lead_id)
-            if lead and lead.public_identifier:
-                # Create minimal session for sync
-                session = AccountSession(campaign, campaign.linkedin_profile)
-                sync_conversation(session, lead.public_identifier)
+            if lead and lead.public_identifier and campaign.linkedin_profile_id:
+                # Load the LinkedIn profile
+                linkedin_profile = LinkedInProfile.objects.get(_id=campaign.linkedin_profile_id)
+                if linkedin_profile:
+                    # Create minimal session for sync
+                    session = AccountSession(linkedin_profile)
+                    session.campaign = campaign
+                    sync_conversation(session, lead.public_identifier)
         except Exception as e:
             # Log but don't fail - just return stale data
             import logging

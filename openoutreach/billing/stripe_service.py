@@ -1,0 +1,285 @@
+"""
+Stripe API integration service.
+Handles product/price sync, customer creation, checkout sessions, and portal sessions.
+"""
+import logging
+from typing import Any, Optional
+
+import stripe
+
+from openoutreach.config import settings
+from openoutreach.billing.plans import PLANS
+from openoutreach.billing.models import StripePlan
+
+logger = logging.getLogger(__name__)
+
+
+def init_stripe() -> None:
+    """Initialize Stripe with API key."""
+    if not settings.STRIPE_SECRET_KEY:
+        logger.warning("STRIPE_SECRET_KEY not set, Stripe operations will fail")
+        return
+    stripe.api_key = settings.STRIPE_SECRET_KEY
+
+
+def sync_stripe_products() -> dict[str, StripePlan]:
+    """
+    Sync all plans to Stripe, creating/updating products and prices.
+    Returns mapping of plan_name → StripePlan with Stripe IDs.
+    Idempotent: matches by plan_name metadata.
+    """
+    init_stripe()
+
+    results: dict[str, StripePlan] = {}
+
+    for plan_def in PLANS:
+        plan_name = plan_def["name"]
+        logger.info(f"Syncing plan: {plan_name}")
+
+        product = _get_or_create_product(plan_name, plan_def["display_name"])
+        if not product:
+            logger.error(f"Failed to create product for {plan_name}")
+            continue
+
+        stripe_plan = StripePlan(
+            plan_name=plan_name,
+            stripe_product_id=product.id,
+        )
+
+        if plan_name == "cloud_addon":
+            price = _create_or_update_price(
+                product.id,
+                plan_name,
+                plan_def["monthly_price"],
+                "monthly",
+                True,
+            )
+            if price:
+                stripe_plan.monthly_price_id = price.id
+        elif plan_name == "lifetime":
+            price = _create_or_update_price(
+                product.id,
+                plan_name,
+                plan_def["annual_price"],
+                "one_time",
+                False,
+            )
+            if price:
+                stripe_plan.annual_price_id = price.id
+        else:
+            monthly_price = _create_or_update_price(
+                product.id,
+                f"{plan_name}_monthly",
+                plan_def["monthly_price"],
+                "month",
+                False,
+            )
+            if monthly_price:
+                stripe_plan.monthly_price_id = monthly_price.id
+
+            annual_price = _create_or_update_price(
+                product.id,
+                f"{plan_name}_annual",
+                plan_def["annual_price"],
+                "year",
+                False,
+            )
+            if annual_price:
+                stripe_plan.annual_price_id = annual_price.id
+
+        stripe_plan.save()
+        results[plan_name] = stripe_plan
+        logger.info(f"Synced {plan_name}: product={product.id}")
+
+    return results
+
+
+def _get_or_create_product(
+    plan_name: str,
+    display_name: str,
+) -> Optional[stripe.Product]:
+    """Get or create Stripe product, matching by plan_name metadata."""
+    try:
+        existing = stripe.Product.search(
+            query=f'metadata["plan_name"]:"{plan_name}"',
+        )
+        if existing.data:
+            logger.info(f"Found existing product for {plan_name}")
+            return existing.data[0]
+
+        logger.info(f"Creating new product for {plan_name}")
+        product = stripe.Product.create(
+            name=display_name,
+            metadata={"plan_name": plan_name},
+        )
+        return product
+    except stripe.error.StripeError as e:
+        logger.error(f"Failed to get/create product for {plan_name}: {e}")
+        return None
+
+
+def _create_or_update_price(
+    product_id: str,
+    price_key: str,
+    amount_cents: int,
+    interval: str,
+    metered: bool = False,
+) -> Optional[stripe.Price]:
+    """Create or find Stripe price, matching by product + metadata."""
+    if amount_cents == 0 and interval != "one_time":
+        logger.info(f"Skipping zero-price for {price_key}")
+        return None
+
+    try:
+        existing = stripe.Price.search(
+            query=f'product:"{product_id}" metadata["price_key"]:"{price_key}"',
+        )
+        if existing.data:
+            for price in existing.data:
+                if price.active:
+                    logger.info(f"Found existing price for {price_key}")
+                    return price
+
+        logger.info(f"Creating new price for {price_key}")
+
+        if interval == "one_time":
+            price = stripe.Price.create(
+                product=product_id,
+                type="one_time",
+                unit_amount=amount_cents,
+                currency="usd",
+                metadata={"price_key": price_key},
+            )
+        elif metered:
+            price = stripe.Price.create(
+                product=product_id,
+                type="recurring",
+                recurring={
+                    "interval": interval,
+                    "usage_type": "metered",
+                },
+                currency="usd",
+                metadata={"price_key": price_key},
+            )
+        else:
+            price = stripe.Price.create(
+                product=product_id,
+                type="recurring",
+                unit_amount=amount_cents,
+                currency="usd",
+                recurring={"interval": interval},
+                metadata={"price_key": price_key},
+            )
+        return price
+    except stripe.error.StripeError as e:
+        logger.error(f"Failed to create price for {price_key}: {e}")
+        return None
+
+
+def create_or_get_customer(
+    email: str,
+    full_name: str = "",
+    metadata: Optional[dict[str, str]] = None,
+) -> Optional[stripe.Customer]:
+    """Create or get Stripe customer by email."""
+    try:
+        existing = stripe.Customer.search(query=f'email:"{email}"')
+        if existing.data:
+            logger.info(f"Found existing customer: {email}")
+            return existing.data[0]
+
+        logger.info(f"Creating new customer: {email}")
+        customer = stripe.Customer.create(
+            email=email,
+            name=full_name or "",
+            metadata=metadata or {},
+        )
+        return customer
+    except stripe.error.StripeError as e:
+        logger.error(f"Failed to get/create customer for {email}: {e}")
+        return None
+
+
+def create_checkout_session(
+    customer_id: str,
+    price_id: str,
+    trial_period_days: Optional[int] = None,
+    success_url: str = "",
+    cancel_url: str = "",
+) -> Optional[str]:
+    """Create Stripe Checkout session, returns session URL."""
+    try:
+        params: dict[str, Any] = {
+            "customer": customer_id,
+            "mode": "subscription",
+            "line_items": [
+                {
+                    "price": price_id,
+                    "quantity": 1,
+                }
+            ],
+            "success_url": success_url,
+            "cancel_url": cancel_url,
+        }
+
+        if trial_period_days and trial_period_days > 0:
+            params["subscription_data"] = {
+                "trial_period_days": trial_period_days,
+            }
+
+        session = stripe.checkout.Session.create(**params)
+        logger.info(f"Created checkout session: {session.id}")
+        return session.url
+    except stripe.error.StripeError as e:
+        logger.error(f"Failed to create checkout session: {e}")
+        return None
+
+
+def create_portal_session(customer_id: str, return_url: str = "") -> Optional[str]:
+    """Create Stripe Customer Portal session URL."""
+    try:
+        session = stripe.billing_portal.Session.create(
+            customer=customer_id,
+            return_url=return_url or "https://localhost:3000/settings/billing",
+        )
+        logger.info(f"Created portal session for {customer_id}")
+        return session.url
+    except stripe.error.StripeError as e:
+        logger.error(f"Failed to create portal session: {e}")
+        return None
+
+
+def get_subscription(subscription_id: str) -> Optional[stripe.Subscription]:
+    """Get Stripe subscription by ID."""
+    try:
+        return stripe.Subscription.retrieve(subscription_id)
+    except stripe.error.StripeError as e:
+        logger.error(f"Failed to get subscription {subscription_id}: {e}")
+        return None
+
+
+def get_customer(customer_id: str) -> Optional[stripe.Customer]:
+    """Get Stripe customer by ID."""
+    try:
+        return stripe.Customer.retrieve(customer_id)
+    except stripe.error.StripeError as e:
+        logger.error(f"Failed to get customer {customer_id}: {e}")
+        return None
+
+
+def construct_webhook_event(body: str, signature: str) -> Optional[dict[str, Any]]:
+    """Verify and construct webhook event from Stripe."""
+    if not settings.STRIPE_WEBHOOK_SECRET:
+        logger.error("STRIPE_WEBHOOK_SECRET not configured")
+        return None
+
+    try:
+        event = stripe.Webhook.construct_event(
+            body,
+            signature,
+            settings.STRIPE_WEBHOOK_SECRET,
+        )
+        return event
+    except (ValueError, stripe.error.SignatureVerificationError) as e:
+        logger.error(f"Webhook signature verification failed: {e}")
+        return None

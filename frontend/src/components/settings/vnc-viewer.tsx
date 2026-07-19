@@ -16,17 +16,69 @@ import { Monitor, Maximize2, Minimize2, AlertCircle } from "lucide-react";
 interface VncViewerProps {
   vncUrl?: string;
   embedded?: boolean;
+  profileId?: string;  // LinkedIn profile ID for per-user VNC sessions
 }
 
-export function VncViewer({ vncUrl, embedded }: VncViewerProps) {
+export function VncViewer({ vncUrl, embedded, profileId }: VncViewerProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [showViewer, setShowViewer] = useState(true); // Auto-show when used in modal
   const [error, setError] = useState<string | null>(null);
+  const [vncSession, setVncSession] = useState<{ websockify_port: number } | null>(null);
+  const [loading, setLoading] = useState(!!profileId);
 
-  // Proxy VNC through the same HTTPS origin via /vnc/ nginx location
-  const effectiveUrl = vncUrl || `${window.location.origin}/vnc`;
+  // Fetch profile-specific VNC session if profileId provided
+  useState(() => {
+    if (profileId) {
+      import("@/lib/api/dashboard")
+        .then((api) => api.getVNCSession(profileId))
+        .then((response) => {
+          if (response.success && response.data) {
+            setVncSession(response.data);
+            setLoading(false);
+          } else {
+            setError("Failed to load VNC session for this profile");
+            setLoading(false);
+          }
+        })
+        .catch(() => {
+          setError("VNC session unavailable. The daemon may not be running.");
+          setLoading(false);
+        });
+    }
+  });
+
+  // Build effective URL based on profileId or fallback
+  const effectiveUrl = (() => {
+    if (vncUrl) return vncUrl;
+    if (vncSession) {
+      // Use profile-specific websockify port
+      const origin = window.location.origin.replace(/:\d+$/, "");
+      return `${origin}:${vncSession.websockify_port}`;
+    }
+    return `${window.location.origin}/vnc`;  // Fallback to shared session
+  })();
 
   if (embedded) {
+    if (loading) {
+      return (
+        <div className="w-full h-full flex items-center justify-center bg-zinc-900 text-zinc-400">
+          <div className="flex flex-col items-center gap-2">
+            <Icons.Loader className="h-6 w-6 animate-spin" />
+            <p className="text-sm">Loading VNC session...</p>
+          </div>
+        </div>
+      );
+    }
+    if (error) {
+      return (
+        <div className="w-full h-full flex items-center justify-center bg-zinc-900 text-red-400">
+          <div className="flex flex-col items-center gap-2">
+            <AlertCircle className="h-6 w-6" />
+            <p className="text-sm">{error}</p>
+          </div>
+        </div>
+      );
+    }
     return (
       <iframe
         src={`${effectiveUrl}/vnc.html?autoconnect=true&resize=remote&reconnect=true`}

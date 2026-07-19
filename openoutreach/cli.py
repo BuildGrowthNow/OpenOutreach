@@ -200,13 +200,60 @@ def healthcheck():
 
 
 
+@cli.command()
+@click.option('--email', required=True, help='Email of user to promote to admin')
+@click.option('--role', default='superadmin', help='Admin role (superadmin/finance/support)')
+def create_admin(email, role):
+    """Promote a user to admin."""
+    from openoutreach.mongodb.connection import initialize_mongodb_connection
+    from openoutreach.mongodb.models_user import User
+
+    initialize_mongodb_connection()
+
+    user = User.get_by_email(email)
+    if not user:
+        click.echo(f"❌ User not found: {email}", err=True)
+        sys.exit(1)
+
+    user.is_admin = True
+    user.admin_role = role
+    user.save()
+
+    click.echo(f"✅ Promoted {email} to admin (role: {role})")
+
+
+@cli.command()
+def sync_stripe():
+    """Sync billing plans to Stripe.
+
+    Creates/updates all Stripe products and prices based on plans.py.
+    This is idempotent and safe to run multiple times.
+    """
+    from openoutreach.mongodb.connection import initialize_mongodb_connection
+    from openoutreach.billing.stripe_service import sync_stripe_products
+
+    initialize_mongodb_connection()
+
+    try:
+        click.echo("Syncing plans to Stripe...")
+        results = sync_stripe_products()
+
+        click.echo(f"\n✅ Successfully synced {len(results)} plans:")
+        for plan_name, stripe_plan in results.items():
+            click.echo(f"  {plan_name}: {stripe_plan.stripe_product_id}")
+
+    except Exception as e:
+        click.echo(f"❌ Failed to sync Stripe: {e}", err=True)
+        sys.exit(1)
+
+
 def _get_safe_config(settings):
     """Get configuration dict with secrets masked."""
     config = {}
     sensitive_keys = {
         'SECRET_KEY', 'JWT_SECRET_KEY', 'COOKIE_ENCRYPTION_KEY',
         'LLM_API_KEY', 'LINKEDIN_PASSWORD', 'SUPABASE_SERVICE_KEY',
-        'FINDER_API_KEY'
+        'FINDER_API_KEY', 'STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET'
     }
 
     for key in dir(settings):

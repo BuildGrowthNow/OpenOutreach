@@ -49,9 +49,9 @@ class TrayApp:
     def run(self):
         """Run the tray application."""
         icon = pystray.Icon(
-            "Lengrowth",
+            "OpenOutreach",
             self._create_icon(),
-            "Lengrowth Linkedin",
+            "OpenOutreach LinkedIn",
             menu=self._create_menu(),
         )
         self.icon = icon
@@ -77,9 +77,9 @@ class TrayApp:
         """Create tray menu based on auth state."""
         if not self.auth.is_logged_in():
             items = [
-                Item(f"Lengrowth Linkedin v{__version__}", None, enabled=False),
+                Item(f"OpenOutreach LinkedIn v{__version__}", None, enabled=False),
                 pystray.Menu.SEPARATOR,
-                Item("Login to Lengrowth", self._on_login),
+                Item("Login to OpenOutreach", self._on_login),
             ]
 
             if self._pending_update:
@@ -95,7 +95,7 @@ class TrayApp:
             return pystray.Menu(*items)
 
         items = [
-            Item(f"Lengrowth Linkedin v{__version__}", None, enabled=False),
+            Item(f"OpenOutreach LinkedIn v{__version__}", None, enabled=False),
             Item(
                 f"Status: {'Running' if self._is_running() else 'Stopped'}",
                 None,
@@ -156,7 +156,7 @@ class TrayApp:
         """Open login page in browser."""
         # Open web platform (Next.js), not API backend
         platform_url = self.config.api_url.replace("linkedin-api.", "linkedin.")
-        login_url = f"{platform_url}/login?desktop=true&callback=lengrowth://auth"
+        login_url = f"{platform_url}/login?desktop=true&callback=openoutreach://auth"
         webbrowser.open(login_url)
 
     def _on_logout(self):
@@ -203,11 +203,17 @@ class TrayApp:
             return
 
         token = self.auth.get_token()
+        refresh_token = self.auth.get_refresh_token()
         profile_id = self.auth.get_profile_id()
 
         if not token or not profile_id:
             logger.error("Missing credentials")
             return
+
+        def on_token_refresh(new_token: str):
+            """Callback when token is refreshed."""
+            logger.info("Access token refreshed, updating keychain")
+            self.auth.update_token(new_token)
 
         def run_daemon():
             """Background thread entry point."""
@@ -218,6 +224,8 @@ class TrayApp:
                 api_url=self.config.api_url,
                 token=token,
                 linkedin_profile_id=profile_id,
+                refresh_token=refresh_token,
+                on_token_refresh=on_token_refresh,
             )
 
             try:
@@ -332,7 +340,7 @@ def main():
     app = TrayApp()
 
     # Handle protocol URL if passed as argument
-    if len(sys.argv) > 1 and sys.argv[1].startswith("lengrowth://"):
+    if len(sys.argv) > 1 and sys.argv[1].startswith("openoutreach://"):
         if handle_protocol_url(sys.argv[1], app.auth):
             app._update_menu()
             if app.icon:
