@@ -26,6 +26,15 @@ from openoutreach.billing.config import get_site_config, is_lifetime_deal_active
 from openoutreach.billing.webhooks import process_webhook_event
 from openoutreach.billing.enforcement import PlanEnforcer
 from openoutreach.billing.downgrade_handler import handle_plan_downgrade
+from openoutreach.billing.referrals import (
+    apply_referral_code,
+    get_referral_dashboard,
+)
+from openoutreach.billing.coupons import (
+    Coupon,
+    validate_coupon_for_checkout,
+    increment_coupon_redemptions,
+)
 from openoutreach.config import settings
 
 logger = logging.getLogger(__name__)
@@ -67,7 +76,6 @@ class BillingStatusResponse(BaseModel):
     campaign_limit: Optional[int]
     cloud_profiles: int
     user_status: str
-    admin_notes: Optional[str]
 
 
 class CheckoutSessionRequest(BaseModel):
@@ -76,6 +84,7 @@ class CheckoutSessionRequest(BaseModel):
     billing_period: str  # 'monthly' or 'annual'
     success_url: str = ""
     cancel_url: str = ""
+    coupon_code: Optional[str] = None
 
 
 class CheckoutSessionResponse(BaseModel):
@@ -92,6 +101,34 @@ class PlanChangeRequest(BaseModel):
 class CloudAddonRequest(BaseModel):
     """Request to add/remove cloud profile seats."""
     quantity: int
+
+
+class ReferralDashboardResponse(BaseModel):
+    """Response for referral dashboard."""
+    referral_code: str
+    referral_link: str
+    referrals_count: int
+    credits_earned: str
+    credits_earned_cents: int
+
+
+class CouponValidationRequest(BaseModel):
+    """Request to validate a coupon code."""
+    coupon_code: str
+
+
+class CouponValidationResponse(BaseModel):
+    """Response for coupon validation."""
+    valid: bool
+    code: Optional[str] = None
+    discount_type: Optional[str] = None
+    discount_value: Optional[int] = None
+    message: Optional[str] = None
+
+
+class ApplyReferralRequest(BaseModel):
+    """Request to apply a referral code at signup."""
+    referral_code: str
 
 
 class InvoiceResponse(BaseModel):
@@ -160,15 +197,14 @@ async def billing_status(
         campaign_limit=user.campaign_limit,
         cloud_profiles=user.cloud_profiles,
         user_status=user.status,
-        admin_notes=user.admin_notes,
     )
 
 
 @router.get("/usage")
 async def get_current_usage(
     user_id: str = Depends(get_current_user),
-) -> dict[str, int]:
-    """Get current usage stats for the user."""
+) -> dict[str, int | None]:
+    """Get current usage stats and limits for the user."""
     user = User.get(user_id)
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
@@ -196,13 +232,17 @@ async def get_current_usage(
 
         return {
             "linkedin_accounts_used": linkedin_accounts_used,
+            "linkedin_accounts_limit": user.linkedin_account_limit,
             "campaigns_used": campaigns_used,
+            "campaigns_limit": user.campaign_limit,
         }
     except Exception as e:
         logger.error(f"Failed to get usage: {e}")
         return {
             "linkedin_accounts_used": 0,
+            "linkedin_accounts_limit": user.linkedin_account_limit,
             "campaigns_used": 0,
+            "campaigns_limit": user.campaign_limit,
         }
 
 
@@ -217,10 +257,19 @@ async def create_checkout(
     For new users (subscription_status=none), this initiates a trial.
     For existing users upgrading, prorations are applied.
     Success redirects to /settings/billing?success=true
+
+    Requires email_verified=True before checkout.
     """
     user = User.get(user_id)
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+
+    # Enforce email verification before checkout
+    if not user.email_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Email verification required before checkout"
+        )
 
     plan = get_plan(request.plan_name)
     if not plan:
@@ -294,12 +343,23 @@ async def create_checkout(
                 else None
             )
 
+            coupon_id = None
+            if request.coupon_code:
+                coupon_id = validate_coupon_for_checkout(request.coupon_code)
+                if not coupon_id:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Invalid or expired coupon code",
+                    )
+
             url = create_checkout_session(
                 customer_id=customer.id,
                 price_id=price_id,
                 trial_period_days=trial_days,
                 success_url=request.success_url or f"{settings.CORS_ALLOWED_ORIGINS.split(',')[0]}/settings/billing?success=true",
                 cancel_url=request.cancel_url or f"{settings.CORS_ALLOWED_ORIGINS.split(',')[0]}/settings/billing?canceled=true",
+                coupon_id=coupon_id,
+                coupon_code=request.coupon_code if coupon_id else None,
             )
 
         if not url:
@@ -360,39 +420,6 @@ async def create_portal(
         )
 
 
-@router.get("/usage")
-async def get_usage(
-    user_id: str = Depends(get_current_user),
-) -> dict:
-    """Get user's current usage stats."""
-    from openoutreach.mongodb.connection import get_mongodb_collection
-
-    user = User.get(user_id)
-    if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
-
-    profiles_collection = get_mongodb_collection("linkedin_profiles")
-    linkedin_accounts_used = 0
-    if profiles_collection is not None:
-        linkedin_accounts_used = profiles_collection.count_documents({
-            "user_id": user_id,
-            "is_active": True,
-        })
-
-    campaigns_collection = get_mongodb_collection("campaigns")
-    campaigns_used = 0
-    if campaigns_collection is not None:
-        campaigns_used = campaigns_collection.count_documents({
-            "user_id": user_id,
-            "is_paused": False,
-        })
-
-    return {
-        "linkedin_accounts_used": linkedin_accounts_used,
-        "linkedin_accounts_limit": user.linkedin_account_limit,
-        "campaigns_used": campaigns_used,
-        "campaigns_limit": user.campaign_limit,
-    }
 
 
 @router.post("/plan-change")
@@ -453,6 +480,7 @@ async def change_plan(
                 detail="Failed to update subscription",
             )
 
+        old_limit = user.linkedin_account_limit
         user.plan = request.plan_name
         user.billing_period = request.billing_period
         new_limit = plan["max_linkedin_accounts"]
@@ -460,7 +488,7 @@ async def change_plan(
         user.campaign_limit = plan["max_campaigns"]
         user.save()
 
-        if not is_upgrade and new_limit < (get_plan(request.plan_name) or {}).get("max_linkedin_accounts", 1):
+        if not is_upgrade and new_limit < old_limit:
             handle_plan_downgrade(user, new_limit)
 
         return {"status": "success", "message": "Plan changed successfully"}
@@ -480,7 +508,9 @@ async def update_cloud_addon(
     request: CloudAddonRequest,
     user_id: str = Depends(get_current_user),
 ) -> dict[str, int]:
-    """Update cloud addon profile count."""
+    """Update cloud addon profile count via Stripe subscription."""
+    import stripe as _stripe
+
     user = User.get(user_id)
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
@@ -488,10 +518,54 @@ async def update_cloud_addon(
     if request.quantity < 0:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Quantity must be >= 0")
 
+    if not user.stripe_subscription_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No active subscription. Subscribe to a plan first.",
+        )
+
+    stripe_plan = StripePlan.get_by_plan("cloud_addon")
+    if not stripe_plan or not stripe_plan.monthly_price_id:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Cloud addon not configured in Stripe",
+        )
+
     try:
+        subscription = _stripe.Subscription.retrieve(user.stripe_subscription_id)
+        if not subscription:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Could not retrieve subscription",
+            )
+
+        addon_item = None
+        for item in subscription.items.data:
+            if item.price.id == stripe_plan.monthly_price_id:
+                addon_item = item
+                break
+
+        if request.quantity == 0 and addon_item:
+            _stripe.SubscriptionItem.delete(addon_item.id, proration_behavior="create_prorations")
+        elif request.quantity > 0 and addon_item:
+            _stripe.SubscriptionItem.modify(
+                addon_item.id,
+                quantity=request.quantity,
+                proration_behavior="create_prorations",
+            )
+        elif request.quantity > 0:
+            _stripe.SubscriptionItem.create(
+                subscription=user.stripe_subscription_id,
+                price=stripe_plan.monthly_price_id,
+                quantity=request.quantity,
+                proration_behavior="create_prorations",
+            )
+
         user.cloud_profiles = request.quantity
         user.save()
         return {"cloud_profiles": user.cloud_profiles}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Cloud addon error: {e}")
         raise HTTPException(
@@ -599,6 +673,72 @@ async def check_feature(
 
     has_access = PlanEnforcer.has_feature(user, feature_name)
     return {"has_access": has_access}
+
+
+@router.get("/referral/dashboard")
+async def get_referral_info(
+    user_id: str = Depends(get_current_user),
+) -> ReferralDashboardResponse:
+    """Get user's referral dashboard information."""
+    user = User.get(user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+
+    dashboard = get_referral_dashboard(user)
+    return ReferralDashboardResponse(**dashboard)
+
+
+@router.post("/coupons/validate")
+async def validate_coupon(
+    request_body: CouponValidationRequest,
+    user_id: str = Depends(get_current_user),
+) -> CouponValidationResponse:
+    """Validate a coupon code before checkout."""
+    coupon_code = request_body.coupon_code.upper()
+    coupon = Coupon.get_by_code(coupon_code)
+
+    if not coupon or not coupon.is_valid():
+        return CouponValidationResponse(
+            valid=False,
+            message="Coupon code is invalid or expired"
+        )
+
+    return CouponValidationResponse(
+        valid=True,
+        code=coupon.code,
+        discount_type=coupon.discount_type,
+        discount_value=coupon.discount_value,
+    )
+
+
+@router.post("/referral/apply")
+async def apply_referral(
+    request_body: ApplyReferralRequest,
+    user_id: str = Depends(get_current_user),
+) -> dict[str, str]:
+    """Apply a referral code to current user's account."""
+    user = User.get(user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+
+    if user.referrer_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Referral code already applied to this account"
+        )
+
+    referrer = apply_referral_code(user, request_body.referral_code)
+    if not referrer:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid referral code or cannot use your own code"
+        )
+
+    user.save()
+    return {
+        "status": "success",
+        "message": "Referral code applied successfully!"
+    }
 
 
 @router.post("/webhooks/stripe")

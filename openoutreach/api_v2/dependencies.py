@@ -56,99 +56,15 @@ async def get_current_user(
     Extract and validate JWT token, return user_id.
 
     Supports:
-    1. Supabase JWT (HS256 with service key, or RS256/ES256 with JWKS)
-    2. Local JWT (HS256 with JWT_SECRET_KEY)
+    1. Local JWT (HS256 with JWT_SECRET_KEY) - production multi-tenant
+    2. Supabase JWT (HS256/RS256/ES256) - backwards compatibility
 
-    On first Supabase login, creates/links user in MongoDB.
+    Returns user_id string.
+    Raises 403 if user is blocked, deleted, or inactive.
     """
-    token = credentials.credentials
-
-    try:
-        # Decode header to determine algorithm
-        unverified_header = jwt.get_unverified_header(token)
-        algorithm = unverified_header.get("alg", "HS256")
-
-        payload = None
-
-        # Try Supabase HS256 (service key)
-        if algorithm == "HS256" and SUPABASE_SERVICE_KEY:
-            try:
-                payload = jwt.decode(
-                    token,
-                    SUPABASE_SERVICE_KEY,
-                    algorithms=["HS256"],
-                    options={"verify_aud": False}
-                )
-                logger.debug("Token verified with Supabase service key")
-            except JWTError as e:
-                logger.debug(f"Supabase HS256 verification failed: {e}")
-
-        # Try local JWT
-        if payload is None and algorithm == "HS256" and JWT_SECRET_KEY:
-            try:
-                payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=["HS256"])
-                logger.debug("Token verified with local JWT secret")
-            except JWTError as e:
-                logger.debug(f"Local JWT verification failed: {e}")
-
-        # Try Supabase RS256/ES256 with JWKS
-        if payload is None and algorithm in ("RS256", "ES256"):
-            jwks_data = await _fetch_supabase_jwks()
-            if jwks_data:
-                kid = unverified_header.get("kid")
-                for key_data in jwks_data.get("keys", []):
-                    if key_data.get("kid") == kid:
-                        public_key = jwk.construct(key_data)
-                        payload = jwt.decode(
-                            token,
-                            public_key,
-                            algorithms=[algorithm],
-                            options={"verify_aud": False}
-                        )
-                        logger.debug(f"Token verified with JWKS {algorithm}")
-                        break
-
-        if payload is None:
-            raise HTTPException(status_code=401, detail="Invalid token")
-
-        # Extract user info
-        sub = payload.get("sub")
-        email = payload.get("email", "")
-
-        if not sub:
-            raise HTTPException(status_code=401, detail="Token missing 'sub' claim")
-
-        # Check if this is a Supabase token (has 'aud' or 'role' claims)
-        if payload.get("aud") or payload.get("role"):
-            # Supabase token - get or create local user
-            user = models.SupabaseUser.get(sub)
-            if not user:
-                # First login - create user
-                user = models.SupabaseUser(
-                    supabase_user_id=sub,
-                    email=email,
-                    full_name=payload.get("user_metadata", {}).get("full_name", ""),
-                    is_active=True,
-                )
-                user.save()
-                logger.info(f"Created new user from Supabase: {email}")
-
-            return user._id
-        else:
-            # Local JWT - sub IS the user_id
-            from openoutreach.mongodb.connection import get_mongodb_collection
-            users_collection = get_mongodb_collection("supabase_users")
-            if users_collection is not None:
-                user_doc = users_collection.find_one({"_id": sub, "is_active": True})
-                if not user_doc:
-                    raise HTTPException(status_code=401, detail="User not found or inactive")
-            return sub
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Authentication failed: {e}")
-        raise HTTPException(status_code=401, detail=f"Authentication failed: {str(e)}")
+    # Delegate to production dependency
+    from openoutreach.api_v2.dependencies_v2 import get_current_user as get_current_user_v2
+    return await get_current_user_v2(credentials)
 
 
 async def get_current_user_optional(
