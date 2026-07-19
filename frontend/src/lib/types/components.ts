@@ -85,6 +85,8 @@ import {
   MessageCircle,
   Inbox,
   InboxIcon,
+  CreditCard,
+  Loader,
 } from "lucide-react";
 
 export type Icon = React.FC<React.SVGProps<SVGSVGElement>>;
@@ -174,6 +176,8 @@ export const Icons = {
   MessageCircle,
   Inbox,
   InboxIcon,
+  CreditCard,
+  Loader,
 };
 
 // Campaign status variants

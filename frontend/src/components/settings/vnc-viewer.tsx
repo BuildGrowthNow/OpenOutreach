@@ -32,7 +32,7 @@ export function VncViewer({ vncUrl, embedded, profileId }: VncViewerProps) {
       import("@/lib/api/dashboard")
         .then((api) => api.getVNCSession(profileId))
         .then((response) => {
-          if (response.success && response.data) {
+          if (response.data) {
             setVncSession(response.data);
             setLoading(false);
           } else {

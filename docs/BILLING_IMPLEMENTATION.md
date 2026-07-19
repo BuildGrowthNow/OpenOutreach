@@ -191,30 +191,30 @@
 **Goal**: Settings pages for users to view/manage their subscription.
 
 ### 4.1 Billing Settings Tab (`/settings/billing`)
-- [ ] Current plan card: plan name, price, billing period, next renewal date
-- [ ] Plan status badge: Active / Trialing (X days left) / Past Due / Canceled
-- [ ] "Manage Subscription" button → Stripe Customer Portal (update card, cancel)
-- [ ] Payment history section (fetch from Stripe API: last 10 invoices with status, amount, date, PDF link)
-- [ ] "Change Plan" button → opens plan comparison modal or redirects to upgrade page
+- [x] Current plan card: plan name, price, billing period, next renewal date
+- [x] Plan status badge: Active / Trialing (X days left) / Past Due / Canceled
+- [x] "Manage Subscription" button → Stripe Customer Portal (update card, cancel)
+- [x] Payment history section (fetch from Stripe API: last 10 invoices with status, amount, date, PDF link)
+- [x] "Change Plan" button → opens plan comparison modal or redirects to upgrade page
 
 ### 4.2 Plan/Upgrade Page (`/settings/plan`)
-- [ ] Plan comparison cards (same as pricing page but in-app)
-- [ ] Current plan highlighted
-- [ ] Upgrade/downgrade buttons with confirmation:
+- [x] Plan comparison cards (same as pricing page but in-app)
+- [x] Current plan highlighted
+- [x] Upgrade/downgrade buttons with confirmation:
   - Upgrade: "You'll be charged the prorated difference immediately"
   - Downgrade: "Your plan will change at the end of your billing period on [date]"
-- [ ] Cloud add-on toggle with quantity selector
-- [ ] Annual/monthly toggle with savings callout
+- [x] Cloud add-on toggle with quantity selector
+- [x] Annual/monthly toggle with savings callout
 
 ### 4.3 Usage Indicators
-- [ ] In sidebar or settings: "1/1 LinkedIn accounts used", "2/3 campaigns used"
-- [ ] Warning state when at limit (amber)
-- [ ] Block state with upgrade CTA when over limit
+- [x] In sidebar or settings: "1/1 LinkedIn accounts used", "2/3 campaigns used"
+- [x] Warning state when at limit (amber)
+- [x] Block state with upgrade CTA when over limit
 
 ### 4.4 Trial Banner
-- [ ] Global banner (top of app) during trial: "Your trial ends in X days. [Choose a plan]"
-- [ ] Last day urgency: "Your trial ends today. Add a plan to keep your campaigns running."
-- [ ] Post-expiry: full-page overlay "Your trial has ended. Choose a plan to continue."
+- [x] Global banner (top of app) during trial: "Your trial ends in X days. [Choose a plan]"
+- [x] Last day urgency: "Your trial ends today. Add a plan to keep your campaigns running."
+- [x] Post-expiry: full-page overlay "Your trial has ended. Choose a plan to continue."
 
 ---
 

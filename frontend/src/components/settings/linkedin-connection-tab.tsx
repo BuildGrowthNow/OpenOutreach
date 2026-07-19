@@ -107,11 +107,11 @@ export function LinkedInConnectionTab({
 
   // Check if desktop daemon is actively running
   const isDesktopDaemonActive = (): boolean => {
-    if (!daemonStatus || !daemonStatus.hasDaemon) return false;
+    if (!daemonStatus || !daemonStatus.has_daemon) return false;
 
     // If any profile's daemon is online and has platform information, it's desktop
     return daemonStatus.profiles.some(
-      (profile) => profile.status === "online" && profile.daemonActive && profile.platform
+      (profile) => profile.status === "online" && profile.daemon_active && profile.platform
     );
   };
 

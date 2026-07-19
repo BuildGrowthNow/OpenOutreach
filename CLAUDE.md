@@ -14,6 +14,7 @@
 - **Post-task linting**: After completing a task, always run `make lint` and `make pyright` (or equivalent), then fix any issues before reporting the task as done.
 - **Implementation docs**: When following a phased implementation document, don't create new docs — update the original with checkboxes (`- [x]`) to track completed steps.
 - **Production-ready code**: All code (frontend, backend, daemon, desktop) must be production-ready. Search the codebase before writing new code — reuse and improve existing utilities, components, and patterns instead of duplicating. Refactor shared logic into common modules.
+- **Frontend UI components**: Always use `shadcn@latest` components. Install new components with `npx shadcn@latest add <component> --yes`. Never implement custom UI components when shadcn has one available.
 
 ## Project Overview
 

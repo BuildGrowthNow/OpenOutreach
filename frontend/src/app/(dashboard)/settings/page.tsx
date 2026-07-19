@@ -204,7 +204,7 @@ export default function SettingsPage() {
       </div>
 
       <Tabs defaultValue="linkedin" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2 gap-2 rounded-xl bg-muted p-1 sm:grid-cols-4">
+        <TabsList className="grid w-full grid-cols-2 gap-2 rounded-xl bg-muted p-1 sm:grid-cols-5">
           <TabsTrigger value="linkedin" className="py-2">
             <Icons.Link className="h-4 w-4" />
             LinkedIn Connection
@@ -220,6 +220,10 @@ export default function SettingsPage() {
           <TabsTrigger value="active-hours" className="py-2">
             <Icons.Clock className="h-4 w-4" />
             Active Hours
+          </TabsTrigger>
+          <TabsTrigger value="billing" className="py-2">
+            <Icons.CreditCard className="h-4 w-4" />
+            Billing
           </TabsTrigger>
         </TabsList>
 
@@ -309,6 +313,27 @@ export default function SettingsPage() {
 
         <TabsContent value="active-hours" className="space-y-6">
           <ActiveHoursForm settings={settings} onUpdate={handleSettingsUpdate} />
+        </TabsContent>
+
+        <TabsContent value="billing" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Billing & Subscription</CardTitle>
+              <CardDescription>
+                View and manage your subscription plan, invoices, and payment method.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  For detailed billing information, invoices, and subscription management, visit the dedicated billing settings page.
+                </p>
+                <Button asChild>
+                  <a href="/settings/billing">Go to Billing Settings</a>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>

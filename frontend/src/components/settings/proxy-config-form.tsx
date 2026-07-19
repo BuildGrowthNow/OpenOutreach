@@ -51,7 +51,7 @@ export function ProxyConfigForm({ profileId, onConfigUpdate }: ProxyConfigFormPr
     try {
       setLoading(true);
       const response = await getProxyConfig(profileId);
-      if (response.success && response.data) {
+      if (response.data) {
         setProxyServer(response.data.proxyServer || "");
         setProxyUsername(response.data.proxyUsername || "");
         setProxyPassword("");
@@ -93,7 +93,7 @@ export function ProxyConfigForm({ profileId, onConfigUpdate }: ProxyConfigFormPr
         proxyUsername || null,
         proxyPassword || null,
       );
-      if (response.success && response.data) {
+      if (response.data) {
         setTestResult(response.data);
         if (response.data.success) {
           toast({
@@ -134,7 +134,7 @@ export function ProxyConfigForm({ profileId, onConfigUpdate }: ProxyConfigFormPr
         proxyUsername || null,
         proxyPassword || null,
       );
-      if (response.success) {
+      if (response.data?.success) {
         toast({
           title: "Proxy Updated",
           description: proxyServer
@@ -166,7 +166,7 @@ export function ProxyConfigForm({ profileId, onConfigUpdate }: ProxyConfigFormPr
     try {
       setSaving(true);
       const response = await updateProxyConfig(profileId, null, null, null);
-      if (response.success) {
+      if (response.data?.success) {
         toast({
           title: "Proxy Cleared",
           description: "Proxy configuration has been removed",
@@ -236,7 +236,7 @@ export function ProxyConfigForm({ profileId, onConfigUpdate }: ProxyConfigFormPr
         </div>
 
         <Collapsible open={showAdvanced} onOpenChange={setShowAdvanced}>
-          <CollapsibleTrigger asChild>
+          <CollapsibleTrigger className="w-full">
             <Button variant="ghost" size="sm" className="gap-2">
               <ChevronDown
                 className={`h-4 w-4 transition-transform ${

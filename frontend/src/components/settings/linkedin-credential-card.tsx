@@ -568,7 +568,7 @@ export default function LinkedInCredentialCard({
             </DialogHeader>
             <div className="flex-1 overflow-hidden min-h-0">
               <VncViewer
-                profileId={credential.linkedinProfileId}
+                profileId={String(credential.linkedinProfileId || "")}
                 embedded
               />
             </div>
