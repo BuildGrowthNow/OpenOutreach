@@ -13,20 +13,18 @@ from openoutreach.desktop.__version__ import __version__
 logger = logging.getLogger(__name__)
 
 GITHUB_RELEASES_URL = (
-    "https://api.github.com/repos/BuildGrowthNow/OpenOutreach/releases/latest"
+    "https://api.github.com/repos/Lengrowth/outbound/releases/latest"
 )
 
 
-def _get_platform_asset_name(version_str: str) -> str:
+def _get_platform_asset_name() -> str:
     """Get the expected asset filename for current platform."""
     system = platform.system().lower()
-
     if system == "darwin":
-        return f"Lengrowth-{version_str}.dmg"
+        return "Lengrowth-macOS.dmg"
     elif system == "windows":
-        return f"Lengrowth-{version_str}-Setup.exe"
-    else:
-        return ""
+        return "Lengrowth-Windows-Setup.exe"
+    return ""
 
 
 async def check_for_updates() -> Optional[dict]:
@@ -45,13 +43,13 @@ async def check_for_updates() -> Optional[dict]:
             release = response.json()
             tag_name = release["tag_name"]
 
-            # Strip "desktop-v" or "v" prefix
-            latest_version = tag_name.replace("desktop-v", "").lstrip("v")
+            # Tags are like "v1.0.1-a3f2b1c" — extract semver prefix
+            latest_version = tag_name.lstrip("v").split("-")[0]
 
             if version.parse(latest_version) > version.parse(__version__):
-                # Find platform-specific download URL
+                # Match platform asset by fixed name
                 assets = release.get("assets", [])
-                expected_name = _get_platform_asset_name(latest_version)
+                expected_name = _get_platform_asset_name()
                 platform_url = None
 
                 if expected_name:
