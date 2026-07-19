@@ -4,7 +4,7 @@ Handles product/price sync, customer creation, checkout sessions, and portal ses
 """
 import json
 import logging
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 import stripe
 
