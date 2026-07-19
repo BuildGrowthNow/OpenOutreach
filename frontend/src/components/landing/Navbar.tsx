@@ -21,8 +21,17 @@ export function Navbar() {
             </Link>
           </div>
 
-          {/* Desktop Navigation - Empty */}
-          <nav className="hidden md:flex items-center gap-4">
+          {/* Desktop Navigation */}
+          <nav className="hidden md:flex items-center gap-6">
+            <Link href="/pricing" className="text-zinc-400 hover:text-emerald-400 transition-colors">
+              Pricing
+            </Link>
+            <Link href="/terms" className="text-zinc-400 hover:text-emerald-400 transition-colors text-sm">
+              Terms
+            </Link>
+            <Link href="/privacy" className="text-zinc-400 hover:text-emerald-400 transition-colors text-sm">
+              Privacy
+            </Link>
           </nav>
 
           {/* Desktop CTA */}

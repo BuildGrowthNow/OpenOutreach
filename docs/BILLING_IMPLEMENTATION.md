@@ -223,12 +223,12 @@
 **Goal**: Platform admins can manage users, view finance, approve/block accounts.
 
 ### 5.1 Admin Routes & Auth
-- [ ] `GET /api/admin/users` — paginated user list with filters (status, plan, search)
-- [ ] `GET /api/admin/users/:id` — full user detail (plan, subscription, LinkedIn profiles, campaigns, activity)
-- [ ] `PATCH /api/admin/users/:id` — update status (block/unblock), update plan override, add notes
-- [ ] `GET /api/admin/finance` — revenue dashboard data (MRR, churn, trial conversions)
-- [ ] `GET /api/admin/finance/invoices` — all platform invoices (Stripe API aggregate)
-- [ ] Admin auth: middleware checks `user.is_admin` + `admin_role` permissions
+- [x] `GET /api/admin/users` — paginated user list with filters (status, plan, search)
+- [x] `GET /api/admin/users/:id` — full user detail (plan, subscription, LinkedIn profiles, campaigns, activity)
+- [x] `PATCH /api/admin/users/:id` — update status (block/unblock), update plan override, add notes
+- [x] `GET /api/admin/finance` — revenue dashboard data (MRR, churn, trial conversions)
+- [x] `GET /api/admin/finance/invoices` — all platform invoices (Stripe API aggregate)
+- [x] Admin auth: middleware checks `user.is_admin` + `admin_role` permissions
 
 ### 5.2 Admin Frontend Pages
 - [ ] `/admin` — dashboard: active users, MRR, trials expiring soon, recent signups
@@ -238,11 +238,11 @@
 - [ ] `/admin/finance/invoices` — invoice list with status, filterable
 
 ### 5.3 Admin Actions
-- [ ] Block user: sets status=blocked, stops daemon, returns 403 on next API call
-- [ ] Unblock user: sets status=active, resumes normal operation
-- [ ] Force plan change: admin can override user's plan (e.g., gift an upgrade, handle disputes)
+- [x] Block user: sets status=blocked, stops daemon, returns 403 on next API call
+- [x] Unblock user: sets status=active, resumes normal operation
+- [x] Force plan change: admin can override user's plan (e.g., gift an upgrade, handle disputes)
 - [ ] Approve user: (if approval flow needed later)
-- [ ] Add internal notes to user record
+- [x] Add internal notes to user record
 - [ ] Impersonate user: admin can view app as user (read-only, for support)
 
 ### 5.4 Admin Notifications
@@ -256,40 +256,40 @@
 **Goal**: Public-facing pages for the marketing site.
 
 ### 6.1 Pricing Page (`/pricing`)
-- [ ] Monthly/Annual toggle (annual shows per-month price with "save 17%" badge)
-- [ ] 4 tier cards: Starter, Pro, Business, Agency
-- [ ] Feature comparison table (expandable)
-- [ ] "Start free trial" CTA on each card → sign up → checkout
-- [ ] FAQ section: trial details, what happens after trial, can I switch plans, refund policy
-- [ ] Enterprise/custom section: "Need more? Contact us"
+- [x] Monthly/Annual toggle (annual shows per-month price with "save 17%" badge)
+- [x] 4 tier cards: Starter, Pro, Business, Agency
+- [x] Feature comparison table (expandable)
+- [x] "Start free trial" CTA on each card → sign up → checkout
+- [x] FAQ section: trial details, what happens after trial, can I switch plans, refund policy
+- [x] Enterprise/custom section: "Need more? Contact us"
 
 ### 6.2 Terms of Service (`/terms`)
-- [ ] Acceptance of terms
-- [ ] Service description
-- [ ] User obligations (LinkedIn TOS compliance, no spam, no fake accounts)
-- [ ] Payment terms (auto-renewal, cancellation, refunds — none after 14 days)
-- [ ] Limitation of liability (LinkedIn account restrictions are user's risk)
-- [ ] Termination (we can terminate for abuse, user can cancel anytime)
-- [ ] Data handling (reference privacy policy)
-- [ ] Intellectual property
-- [ ] Governing law
+- [x] Acceptance of terms
+- [x] Service description
+- [x] User obligations (LinkedIn TOS compliance, no spam, no fake accounts)
+- [x] Payment terms (auto-renewal, cancellation, refunds — none after 14 days)
+- [x] Limitation of liability (LinkedIn account restrictions are user's risk)
+- [x] Termination (we can terminate for abuse, user can cancel anytime)
+- [x] Data handling (reference privacy policy)
+- [x] Intellectual property
+- [x] Governing law
 
 ### 6.3 Privacy Policy (`/privacy`)
-- [ ] What data we collect (LinkedIn credentials encrypted at rest, profile data, campaign data, usage analytics)
-- [ ] How data is used (provide service, improve product, never sold)
-- [ ] Data storage (MongoDB Atlas, encrypted, region)
-- [ ] Third parties (Stripe for payments, LLM providers for AI messages)
-- [ ] User rights (export data, delete account, GDPR if applicable)
-- [ ] Cookie policy
-- [ ] Data retention (deleted on account closure, 30-day grace period)
-- [ ] Security measures
+- [x] What data we collect (LinkedIn credentials encrypted at rest, profile data, campaign data, usage analytics)
+- [x] How data is used (provide service, improve product, never sold)
+- [x] Data storage (MongoDB Atlas, encrypted, region)
+- [x] Third parties (Stripe for payments, LLM providers for AI messages)
+- [x] User rights (export data, delete account, GDPR if applicable)
+- [x] Cookie policy
+- [x] Data retention (deleted on account closure, 30-day grace period)
+- [x] Security measures
 
 ### 6.4 Lifetime Deal Page (temporary, launch only)
-- [ ] `/lifetime` or modal on pricing page
-- [ ] Countdown timer (30 days from launch)
-- [ ] Limited quantity indicator
-- [ ] What's included (Pro-equivalent forever)
-- [ ] One-time payment CTA → Stripe Checkout
+- [x] `/lifetime` or modal on pricing page
+- [x] Countdown timer (30 days from launch)
+- [x] Limited quantity indicator
+- [x] What's included (Pro-equivalent forever)
+- [x] One-time payment CTA → Stripe Checkout
 
 ---
 

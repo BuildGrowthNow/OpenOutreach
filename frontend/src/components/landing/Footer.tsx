@@ -29,11 +29,16 @@ export function Footer() {
 
           {/* Links Column */}
           <div>
-            <h3 className="text-white font-semibold mb-4">Quick Links</h3>
+            <h3 className="text-white font-semibold mb-4">Product</h3>
             <ul className="space-y-2">
               <li>
-                <Link href="https://www.lengrowth.com" className="text-zinc-400 text-sm hover:text-emerald-400 transition-colors">
-                  Main Website
+                <Link href="/pricing" className="text-zinc-400 text-sm hover:text-emerald-400 transition-colors">
+                  Pricing
+                </Link>
+              </li>
+              <li>
+                <Link href="/lifetime" className="text-zinc-400 text-sm hover:text-emerald-400 transition-colors">
+                  Lifetime Deal
                 </Link>
               </li>
               <li>
@@ -56,18 +61,18 @@ export function Footer() {
             </ul>
           </div>
 
-          {/* Legal - Minimal */}
+          {/* Legal */}
           <div>
             <h3 className="text-white font-semibold mb-4">Legal</h3>
             <ul className="space-y-2">
               <li>
-                <Link href="https://www.lengrowth.com/privacy" className="text-zinc-400 text-sm hover:text-emerald-400 transition-colors">
-                  Privacy
+                <Link href="/privacy" className="text-zinc-400 text-sm hover:text-emerald-400 transition-colors">
+                  Privacy Policy
                 </Link>
               </li>
               <li>
-                <Link href="https://www.lengrowth.com/terms" className="text-zinc-400 text-sm hover:text-emerald-400 transition-colors">
-                  Terms
+                <Link href="/terms" className="text-zinc-400 text-sm hover:text-emerald-400 transition-colors">
+                  Terms of Service
                 </Link>
               </li>
             </ul>
