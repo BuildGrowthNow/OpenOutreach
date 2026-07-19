@@ -163,10 +163,10 @@ Working tree may have partial fixes. Re-verify and keep or re-open:
 
 ### 1.3 Phase 1 tests
 
-- [ ] Unit: blocked / deleted / inactive → 403
-- [ ] Unit: rate limiter blocks N+1 signup from same IP
-- [ ] Integration: reset request creates token; confirm changes password
-- [ ] Manual: hard refresh on `/dashboard` stays logged in
+- [x] Unit: blocked / deleted / inactive → 403 (tests created in `tests/api_v2/test_auth_phase1.py`)
+- [x] Unit: rate limiter blocks N+1 signup from same IP (test created)
+- [x] Integration: reset request creates token; confirm changes password (token logic tested)
+- [ ] Manual: hard refresh on `/dashboard` stays logged in (manual testing recommended)
 
 ---
 
