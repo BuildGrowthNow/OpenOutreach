@@ -74,3 +74,15 @@ For detailed module docs, see `ARCHITECTURE.md`.
 - **Data dir**: `data/` holds persistent state (MongoDB connection via Atlas or local). Docker users mount volumes at `/app/data` for local file storage.
 - **Docker**: Playwright base image. When `ENABLE_VNC=true`, starts x11vnc on port 5900 and noVNC websockify web viewer on port 6080. The frontend Settings → LinkedIn Connection tab embeds a live noVNC iframe viewer (`/components/settings/vnc-viewer.tsx`) so operators can interact with LinkedIn challenges, CAPTCHAs, or security verifications directly from the platform without needing an external VNC client or SSH tunnel. `BUILD_ENV` arg selects requirements.
 - **CI/CD**: `.github/workflows/tests.yml` (pytest), `deploy.yml` (build + push to ghcr.io).
+
+## Phase 6 — Deferred Secondary Surfaces
+
+For launch, the following features are **hidden from navigation** and **not supported**:
+- **Links**: Link tracking is deferred; stub API returns 501 if called. Users track engagement via UTM parameters.
+- **Campaign Templates**: Template CRUD is deferred; users create campaigns from scratch or duplicate manually.
+- **Ghost Mode**: Hidden from UI; daemon runs full connect→message flow only. `ghost_mode_enabled` field removed from Campaign schema.
+- **Email Channel**: Hidden from campaign UI; no EMAIL task type is executed. Settings do not expose email credentials.
+- **State Machine UI**: Gated behind `NEXT_PUBLIC_ENABLE_STATE_MACHINE=false` (default OFF). Daemon uses fixed DealState machine, ignores state graphs.
+- **Admin UI**: Not implemented for launch. Core team uses API endpoints (POST `/api/auth/block-user`, etc.) + Mongo CLI if needed.
+
+See `docs/PLATFORM_REMEDIATION_PLAN.md` Phase 6 for full rationale and re-enablement strategy.
