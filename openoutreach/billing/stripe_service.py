@@ -283,3 +283,106 @@ def construct_webhook_event(body: str, signature: str) -> Optional[dict[str, Any
     except (ValueError, stripe.error.SignatureVerificationError) as e:
         logger.error(f"Webhook signature verification failed: {e}")
         return None
+
+
+def update_subscription_price(
+    subscription_id: str,
+    new_price_id: str,
+    proration_behavior: str = "create_prorations",
+) -> Optional[stripe.Subscription]:
+    """
+    Update subscription to a new price ID.
+    proration_behavior: 'create_prorations' (upgrade), 'none' (downgrade at period end), 'always_invoice'
+    """
+    try:
+        subscription = stripe.Subscription.retrieve(subscription_id)
+        if not subscription or not subscription.items.data:
+            logger.error(f"Subscription {subscription_id} not found or has no items")
+            return None
+
+        item_id = subscription.items.data[0].id
+        updated_sub = stripe.Subscription.modify(
+            subscription_id,
+            items=[
+                {
+                    "id": item_id,
+                    "price": new_price_id,
+                }
+            ],
+            proration_behavior=proration_behavior,
+        )
+        logger.info(f"Updated subscription {subscription_id} with new price")
+        return updated_sub
+    except stripe.error.StripeError as e:
+        logger.error(f"Failed to update subscription {subscription_id}: {e}")
+        return None
+
+
+def cancel_subscription(subscription_id: str, immediate: bool = False) -> Optional[stripe.Subscription]:
+    """Cancel a subscription."""
+    try:
+        if immediate:
+            canceled_sub = stripe.Subscription.delete(subscription_id)
+        else:
+            canceled_sub = stripe.Subscription.modify(
+                subscription_id,
+                cancel_at_period_end=True,
+            )
+        logger.info(f"Canceled subscription {subscription_id}")
+        return canceled_sub
+    except stripe.error.StripeError as e:
+        logger.error(f"Failed to cancel subscription {subscription_id}: {e}")
+        return None
+
+
+def reactivate_subscription(subscription_id: str) -> Optional[stripe.Subscription]:
+    """Reactivate a subscription that was set to cancel at period end."""
+    try:
+        reactivated_sub = stripe.Subscription.modify(
+            subscription_id,
+            cancel_at_period_end=False,
+        )
+        logger.info(f"Reactivated subscription {subscription_id}")
+        return reactivated_sub
+    except stripe.error.StripeError as e:
+        logger.error(f"Failed to reactivate subscription {subscription_id}: {e}")
+        return None
+
+
+def list_invoices(customer_id: str, limit: int = 10) -> list[stripe.Invoice]:
+    """Get recent invoices for a customer."""
+    try:
+        invoices = stripe.Invoice.list(customer=customer_id, limit=limit)
+        return invoices.data if invoices else []
+    except stripe.error.StripeError as e:
+        logger.error(f"Failed to list invoices for {customer_id}: {e}")
+        return []
+
+
+def create_lifetime_checkout_session(
+    customer_id: str,
+    price_id: str,
+    success_url: str = "",
+    cancel_url: str = "",
+) -> Optional[str]:
+    """Create one-time checkout session for lifetime deal."""
+    try:
+        params: dict[str, Any] = {
+            "customer": customer_id,
+            "mode": "payment",
+            "line_items": [
+                {
+                    "price": price_id,
+                    "quantity": 1,
+                }
+            ],
+            "success_url": success_url,
+            "cancel_url": cancel_url,
+        }
+
+        session = stripe.checkout.Session.create(**params)
+        logger.info(f"Created lifetime deal checkout session: {session.id}")
+        return session.url
+    except stripe.error.StripeError as e:
+        logger.error(f"Failed to create lifetime checkout session: {e}")
+        return None

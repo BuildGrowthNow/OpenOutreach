@@ -72,8 +72,8 @@ def ensure_all_indexes():
         # LinkedIn Profiles
         ('linkedin_profiles', [
             ({'user_id': 1}, {'name': 'profile_user_idx'}),
-            ({'linkedin_username': 1}, {'name': 'profile_username_idx'}),
-            ({'is_active': 1}, {'name': 'profile_active_idx'}),
+            ({'linkedin_username': 1}, {'name': 'profile_username_unique_idx', 'unique': True, 'sparse': True}),
+            ({'active': 1}, {'name': 'profile_active_idx'}),
         ]),
 
         # Action Logs
@@ -190,6 +190,11 @@ def ensure_all_indexes():
 
         ('site_config', [
             ({'_id': 1}, {'name': 'site_config_idx', 'unique': True}),
+        ]),
+
+        ('webhook_events', [
+            ({'stripe_event_id': 1}, {'name': 'webhook_event_id_idx', 'unique': True}),
+            ({'processed_at': -1}, {'name': 'webhook_processed_time_idx'}),
         ]),
 
         # Lead Personas

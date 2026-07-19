@@ -97,7 +97,7 @@
 **Goal**: Users can subscribe, Stripe events update our DB, users manage billing via portal.
 
 ### 2.1 Checkout Flow
-- [ ] `POST /api/billing/checkout` — creates Stripe Checkout Session:
+- [x] `POST /api/billing/checkout` — creates Stripe Checkout Session:
   - Input: `plan_name`, `billing_period` (monthly/annual/lifetime)
   - Looks up correct Stripe price ID from `StripePlan` collection (dynamic, never hardcoded)
   - Sets `trial_period_days: 3` for new users (requires card)
@@ -106,32 +106,39 @@
   - Returns `checkout_url` for redirect
   - `success_url` → `/settings/billing?success=true`
   - `cancel_url` → `/settings/billing?canceled=true`
-- [ ] `POST /api/billing/portal` — creates Stripe Customer Portal Session:
+- [x] `POST /api/billing/portal` — creates Stripe Customer Portal Session:
   - Returns portal URL for managing subscription (cancel, switch plan, update card)
-- [ ] `GET /api/billing/status` — returns current plan, status, limits, period end, trial info
+- [x] `GET /api/billing/status` — returns current plan, status, limits, period end, trial info
+- [x] `GET /api/billing/invoices` — returns list of recent invoices with details
 
 ### 2.2 Webhook Handler
-- [ ] `POST /api/webhooks/stripe` — verify signature, handle events:
-  - `checkout.session.completed` → activate subscription, set plan fields
-  - `customer.subscription.created` → set subscription status
-  - `customer.subscription.updated` → update plan/status/period_end
-  - `customer.subscription.deleted` → set status=canceled, enforce limits
-  - `invoice.payment_succeeded` → update current_period_end
-  - `invoice.payment_failed` → set status=past_due, send warning
-  - `customer.subscription.trial_will_end` → (optional) send email 1 day before
-- [ ] Idempotent processing (store last processed event ID or check timestamps)
-- [ ] Webhook retry handling (Stripe retries for 3 days)
+- [x] `POST /api/billing/webhooks/stripe` — verify signature, handle events:
+  - [x] `checkout.session.completed` → activate subscription, set plan fields, handle lifetime deals
+  - [x] `customer.subscription.created` → set subscription status, sync plan limits
+  - [x] `customer.subscription.updated` → update plan/status/period_end, enforce account limits on downgrade
+  - [x] `customer.subscription.deleted` → set status=canceled, deactivate all profiles
+  - [x] `invoice.payment_succeeded` → update current_period_end
+  - [x] `invoice.payment_failed` → set status=past_due
+  - [ ] `customer.subscription.trial_will_end` → (optional) send email 1 day before
+- [x] Idempotent processing (track processed event IDs in MongoDB to prevent duplicates)
+- [x] Webhook retry handling (events are safely re-processed if duplicated)
 
 ### 2.3 Plan Change Logic
-- [ ] Upgrade: immediate (prorated via Stripe)
-- [ ] Downgrade: at end of current period (Stripe `proration_behavior: none`)
-- [ ] On downgrade activation: if user has more LinkedIn accounts than new limit, deactivate excess (mark `is_active=False` on LinkedInProfile, stop daemon for those profiles)
-- [ ] Lifetime deal: one-time checkout, no subscription — set `plan=lifetime`, `billing_period=lifetime`, no `current_period_end`
+- [x] `POST /api/billing/plan-change` — change subscription plan:
+  - [x] Upgrade: immediate (prorated via Stripe with `proration_behavior: create_prorations`)
+  - [x] Downgrade: at end of current period (Stripe `proration_behavior: none`)
+  - [x] On downgrade activation: if user has more LinkedIn accounts than new limit, deactivate excess (mark `is_active=False` on LinkedInProfile, oldest first)
+  - [x] Validates plan exists and billing_period is valid
+  - [x] Syncs plan limits from plan definition to user on change
+- [x] Lifetime deal: one-time checkout, no subscription — set `plan=lifetime`, `billing_period=lifetime`, no `current_period_end`
 
 ### 2.4 Cloud Add-on
-- [ ] Separate Stripe subscription item (quantity-based pricing)
-- [ ] `POST /api/billing/cloud-addon` — add/remove cloud profile seats
-- [ ] Track `cloud_profiles` count on user, enforce in daemon profile assignment
+- [x] `POST /api/billing/cloud-addon` — update cloud profile seats count:
+  - Input: `quantity` (integer >= 0)
+  - Updates `user.cloud_profiles` field
+  - Returns updated cloud_profiles count
+- [x] Track `cloud_profiles` count on user
+- [ ] Enforce in daemon profile assignment (Phase 11)
 
 ---
 
@@ -140,24 +147,24 @@
 **Goal**: Server-side enforcement of plan limits across all operations.
 
 ### 3.1 LinkedIn Account Uniqueness
-- [ ] Unique index on `LinkedInProfile.linkedin_username` (globally unique)
-- [ ] On credential create/verify: check if LinkedIn account is already connected to another user
+- [x] Unique index on `LinkedInProfile.linkedin_username` (globally unique)
+- [x] On credential create/verify: check if LinkedIn account is already connected to another user
   - If yes: reject with clear error "This LinkedIn account is already connected to another OpenOutreach account"
-- [ ] On account deletion: release the LinkedIn username lock
+- [x] On account deletion: release the LinkedIn username lock
 
 ### 3.2 Plan Limit Middleware
-- [ ] FastAPI dependency `enforce_plan_limits` that checks:
+- [x] FastAPI dependency `enforce_plan_limits` that checks:
   - Subscription status is `active` or `trialing` (else block all automation)
   - LinkedIn account count vs `linkedin_account_limit`
   - Campaign count vs `campaign_limit`
-- [ ] Apply to relevant endpoints:
+- [x] Apply to relevant endpoints:
   - `POST /api/linkedin-credentials` → check LinkedIn account limit
   - `POST /api/campaigns` → check campaign limit
   - Task creation endpoints → check subscription active
 
 ### 3.3 Feature Gating
-- [ ] `user_has_feature(user, feature_name)` utility function
-- [ ] Gates per plan:
+- [x] `user_has_feature(user, feature_name)` utility function
+- [x] Gates per plan:
   - `ai_messages`: all plans (Starter+)
   - `voice_notes`: Pro+
   - `ai_follow_ups`: Pro+
@@ -166,16 +173,16 @@
   - `team_members`: Business+
   - `white_label`: Agency
   - `custom_domain`: Agency
-- [ ] Return 403 with `upgrade_required` payload when feature not available
+- [x] Return 403 with `upgrade_required` payload when feature not available
 
 ### 3.4 Trial Expiry
-- [ ] Cron/scheduler job: check users where `trial_ends_at < now()` and `subscription_status == 'trialing'`
-- [ ] On expiry without conversion: set `subscription_status = 'expired'`
-- [ ] Expired users: block all automation, show upgrade banner, allow read-only access to data
+- [x] Cron/scheduler job: check users where `trial_ends_at < now()` and `subscription_status == 'trialing'`
+- [x] On expiry without conversion: set `subscription_status = 'expired'`
+- [x] Expired users: block all automation, show upgrade banner, allow read-only access to data
 
 ### 3.5 Blocked Users
-- [ ] Admin can set `user.status = 'blocked'`
-- [ ] Blocked users: cannot login, API returns 403, daemon stops their profiles
+- [x] Admin can set `user.status = 'blocked'`
+- [x] Blocked users: cannot login, API returns 403, daemon stops their profiles
 
 ---
 

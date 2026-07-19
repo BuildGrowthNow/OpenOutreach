@@ -24,7 +24,10 @@ from openoutreach.api_v2.schemas.linkedin import (
 )
 from openoutreach.mongodb.connection import get_mongodb_collection
 from openoutreach.mongodb.models import LinkedInCredentials, LinkedInCredentialLog
+from openoutreach.mongodb.models_user import User
 from openoutreach.linkedin.models import LinkedInProfile
+from openoutreach.billing.credential_validator import LinkedInCredentialValidator
+from openoutreach.billing.enforcement import PlanEnforcer
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -160,6 +163,20 @@ async def create_credential(
     and logs the creation event.
     """
     try:
+        user = User.get(user_id)
+        if not user:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+
+        can_create, error_msg = PlanEnforcer.can_create_linkedin_account(user)
+        if not can_create:
+            raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail=error_msg)
+
+        is_valid, error_msg = LinkedInCredentialValidator.validate_credential_for_user(
+            user_id, data.email
+        )
+        if not is_valid:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=error_msg)
+
         # Encrypt credentials
         email_encrypted = LinkedInCredentials.encrypt(data.email)
         password_encrypted = LinkedInCredentials.encrypt(data.password)
