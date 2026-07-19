@@ -225,15 +225,20 @@ class LinkedInProfile:
             cookies_updated_at=data.get("cookies_updated_at"),
         )
 
-    def save(self) -> str:
-        """Save the profile to MongoDB."""
+    def save(self, update_fields: Optional[list] = None) -> str:
+        """Save the profile to MongoDB. If update_fields given, partial update only."""
         collection = get_mongodb_collection("linkedin_profiles")
         if collection is None:
             raise RuntimeError("MongoDB collection 'linkedin_profiles' not available")
 
-        doc = self.to_dict()
-        result = collection.update_one({"_id": self._id}, {"$set": doc}, upsert=True)
-        return str(result.upserted_id or self._id)
+        if update_fields:
+            field_map = self.to_dict()
+            update_doc = {f: field_map[f] for f in update_fields if f in field_map}
+            collection.update_one({"_id": self._id}, {"$set": update_doc}, upsert=True)
+        else:
+            doc = self.to_dict()
+            result = collection.update_one({"_id": self._id}, {"$set": doc}, upsert=True)
+        return self._id
 
     @classmethod
     def get(cls, profile_id: str) -> Optional["LinkedInProfile"]:
@@ -246,6 +251,14 @@ class LinkedInProfile:
         if data:
             return cls.from_dict(data)
         return None
+
+    @classmethod
+    def find_by_user_id(cls, user_id: str) -> list["LinkedInProfile"]:
+        """Get all LinkedIn profiles for a user."""
+        collection = get_mongodb_collection("linkedin_profiles")
+        if collection is None:
+            return []
+        return [cls.from_dict(d) for d in collection.find({"user_id": user_id})]
 
     def refresh_from_db(self, fields=None):
         """Refresh the instance from the database."""

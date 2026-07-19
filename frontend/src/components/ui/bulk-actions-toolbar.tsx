@@ -71,7 +71,8 @@ export function BulkActionsToolbar({
           checked={allSelected}
           ref={(el) => {
             if (el) {
-              el.indeterminate = someSelected
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              (el as any).indeterminate = someSelected
             }
           }}
           onCheckedChange={(checked) => {

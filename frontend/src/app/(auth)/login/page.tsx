@@ -91,8 +91,26 @@ export default function LoginPage() {
               // Redirect back to desktop app with credentials
               window.location.href = `${callback}?token=${session.access_token}&profile_id=${profileId}`
             } else {
-              // No profiles - redirect to settings to set one up
-              router.push('/settings?setup-linkedin=true')
+              // No profiles - auto-create one for desktop setup
+              const createResponse = await fetch('/api/linkedin-profiles/', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${session.access_token}`
+                },
+                body: JSON.stringify({
+                  linkedin_username: '',
+                  active: true
+                })
+              })
+
+              if (!createResponse.ok) {
+                throw new Error('Failed to create profile')
+              }
+
+              const newProfile = await createResponse.json()
+              // Redirect back to desktop app with new profile
+              window.location.href = `${callback}?token=${session.access_token}&profile_id=${newProfile.id}`
             }
           } catch (err) {
             console.error('Failed to redirect to desktop:', err)

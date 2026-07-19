@@ -251,6 +251,7 @@ export interface Lead {
   campaignId?: string;
   campaignName?: string;
   disqualified?: boolean;
+  connectAttempts?: number;
   profile?: {
     firstName?: string;
     lastName?: string;

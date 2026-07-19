@@ -132,22 +132,57 @@ class RemoteDaemon:
 
         logger.info("Starting browser session...")
 
+        # Initialize MongoDB connection (required for rate limiting)
+        from openoutreach.mongodb.connection import initialize_mongodb_connection
+        if not initialize_mongodb_connection():
+            logger.warning("MongoDB connection failed - rate limiting will be bypassed")
+
         creds = await self.client.get_credentials(self.linkedin_profile_id)
 
-        # Create mock LinkedInProfile for session compatibility
+        # Load the real LinkedInProfile from database for rate limiting
+        from openoutreach.linkedin.models import LinkedInProfile as RealLinkedInProfile
+
+        real_profile = RealLinkedInProfile.get(self.linkedin_profile_id)
+        if not real_profile:
+            raise RuntimeError(f"LinkedIn profile {self.linkedin_profile_id} not found in database")
+
+        # Create mock wrapper that delegates to real profile for rate limiting
         class MockLinkedInProfile:
-            def __init__(self, profile_id: str):
+            def __init__(self, profile_id: str, real_profile: RealLinkedInProfile):
                 self._id = profile_id
                 self.linkedin_username = ""
                 self.linkedin_password = ""
                 self._cookie_data_json = None
                 self.user = None
+                self._real_profile = real_profile
 
             def refresh_from_db(self, fields: Optional[list] = None):
-                pass
+                """Refresh from database."""
+                self._real_profile.refresh_from_db(fields=fields)
 
             def save(self, update_fields: Optional[list] = None):
-                pass
+                """Save to database."""
+                self._real_profile.save(update_fields=update_fields)
+
+            def can_execute(self, action_type: str) -> bool:
+                """Delegate to real profile for rate limit checks."""
+                return self._real_profile.can_execute(action_type)
+
+            def record_action(self, action_type: str, campaign, details: Optional[dict] = None):
+                """Delegate to real profile for action logging."""
+                self._real_profile.record_action(action_type, campaign, details)
+
+            def mark_exhausted(self, action_type: str):
+                """Delegate to real profile."""
+                self._real_profile.mark_exhausted(action_type)
+
+            @property
+            def connect_daily_limit(self):
+                return self._real_profile.connect_daily_limit
+
+            @property
+            def follow_up_daily_limit(self):
+                return self._real_profile.follow_up_daily_limit
 
             @property
             def cookie_data(self):
@@ -169,8 +204,8 @@ class RemoteDaemon:
 
         # Create mock session object for linkedin_cli compatibility
         class RemoteSession:
-            def __init__(self, profile_id: str):
-                self.linkedin_profile = MockLinkedInProfile(profile_id)
+            def __init__(self, profile_id: str, real_profile: RealLinkedInProfile):
+                self.linkedin_profile = MockLinkedInProfile(profile_id, real_profile)
                 self.page: Any = None
                 self.context: Any = None
                 self.browser: Any = None
@@ -190,7 +225,7 @@ class RemoteDaemon:
                 """Compatibility method for task handlers."""
                 pass
 
-        self.session = RemoteSession(self.linkedin_profile_id)
+        self.session = RemoteSession(self.linkedin_profile_id, real_profile)
 
         # Load saved cookies if available
         # API returns cookie_data as JSON string (already decrypted)
@@ -204,6 +239,8 @@ class RemoteDaemon:
                 logger.warning("Invalid cookie data, will authenticate from scratch")
 
         # Launch browser
+        # TODO: Pass browser.channel to use native browser instead of Playwright's Chromium
+        # Requires upstream fix in linkedin_cli.browser.login.launch_browser()
         (
             self.session.page,
             self.session.context,
@@ -411,13 +448,17 @@ class RemoteDaemon:
                 logger.warning("Config refresh failed: %s", e)
 
     async def _sync_cookies(self):
-        """Sync cookies to backend."""
+        """Sync cookies to backend (encrypted)."""
         if not self.session or not self.session.context:
             return
         try:
+            from openoutreach.core.crypto import encrypt_text
+
             state = self.session.context.storage_state()
-            cookie_data = json.dumps(state)
-            await self.client.sync_cookies(self.linkedin_profile_id, cookie_data)
+            cookie_json = json.dumps(state)
+            # Encrypt before sending (matches LinkedInProfile.cookie_data property expectations)
+            encrypted_cookies = encrypt_text(cookie_json)
+            await self.client.sync_cookies(self.linkedin_profile_id, encrypted_cookies)
         except Exception as e:
             logger.warning("Cookie sync failed: %s", e)
 

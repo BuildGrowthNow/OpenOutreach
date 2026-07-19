@@ -3346,6 +3346,21 @@ class LinkedInCredentials:
 
     # ==================== Status Methods ====================
 
+    def mark_verified(self) -> None:
+        """Mark credentials as verified and active."""
+        self.status = self.STATUS_ACTIVE
+        self.last_verified = datetime.now(tz.utc)
+        self.verification_failures = 0
+        self.verification_failed_at = None
+        self.save(update_fields=["status", "last_verified", "verification_failures", "verification_failed_at"])
+
+    def mark_verification_failed(self) -> None:
+        """Mark verification as failed."""
+        self.status = self.STATUS_INVALID
+        self.verification_failed_at = datetime.now(tz.utc)
+        self.verification_failures += 1
+        self.save(update_fields=["status", "verification_failed_at", "verification_failures"])
+
     def mark_as_invalid(self, reason: str = "") -> None:
         self.status = self.STATUS_INVALID
         self.verification_failed_at = datetime.now(tz.utc)
