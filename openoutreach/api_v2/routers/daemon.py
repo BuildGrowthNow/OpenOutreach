@@ -11,7 +11,7 @@ Desktop app daemons use these to:
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 
 from openoutreach.api_v2.dependencies_v2 import get_current_user
@@ -82,7 +82,7 @@ async def daemon_heartbeat(
         {"_id": heartbeat.linkedin_profile_id},
         {
             "$set": {
-                "daemon_last_seen": datetime.utcnow(),
+                "daemon_last_seen": datetime.now(timezone.utc),
                 "daemon_version": heartbeat.version,
                 "daemon_platform": heartbeat.platform,
                 "daemon_browser": heartbeat.browser,
@@ -90,7 +90,7 @@ async def daemon_heartbeat(
         }
     )
 
-    return {"status": "ok", "server_time": datetime.utcnow().isoformat()}
+    return {"status": "ok", "server_time": datetime.now(timezone.utc).isoformat()}
 
 
 @router.post("/tasks/claim", response_model=TaskClaimResponse)
@@ -113,19 +113,19 @@ async def claim_task(
     if collection is None:
         raise HTTPException(503, "Database unavailable")
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
 
     # Atomically claim the next pending task
     task_data = collection.find_one_and_update(
         {
             "status": Task.Status.PENDING,
             "scheduled_at": {"$lte": now},
-            "payload.linkedin_profile_id": linkedin_profile_id,
+            "linkedin_profile_id": linkedin_profile_id,
         },
         {
             "$set": {
                 "status": Task.Status.RUNNING,
-                "started_at": datetime.utcnow(),
+                "started_at": datetime.now(timezone.utc),
             }
         },
         sort=[("scheduled_at", 1)],
@@ -202,7 +202,7 @@ async def sync_cookies(
         {
             "$set": {
                 "cookie_data_encrypted": request.cookie_data,
-                "cookies_updated_at": datetime.utcnow(),
+                "cookies_updated_at": datetime.now(timezone.utc),
             }
         }
     )
@@ -236,7 +236,7 @@ async def report_session_state(
                 "is_logged_in": request.is_logged_in,
                 "requires_verification": request.requires_verification,
                 "verification_type": request.verification_type,
-                "session_updated_at": datetime.utcnow(),
+                "session_updated_at": datetime.now(timezone.utc),
             }
         }
     )

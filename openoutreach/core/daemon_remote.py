@@ -168,8 +168,8 @@ class RemoteDaemon:
                 self.context: Any = None
                 self.browser: Any = None
                 self.playwright: Any = None
-                self.campaign: Any = None
-                self.user: Any = None
+                self.campaign: Optional[Any] = None  # Set before task execution
+                self.user: Optional[Any] = None
 
             def close(self):
                 if self.context and hasattr(self.context, "close"):
@@ -311,6 +311,7 @@ class RemoteDaemon:
         from openoutreach.linkedin.tasks.connect import handle_connect
         from openoutreach.linkedin.tasks.follow_up import handle_follow_up
         from openoutreach.linkedin.tasks.send_manual_message import handle_send_manual_message
+        from openoutreach.mongodb.models import Campaign
 
         # Map task types to handlers
         handlers = {
@@ -324,6 +325,22 @@ class RemoteDaemon:
         if not handler:
             raise ValueError(f"Unknown task type: {task['task_type']}")
 
+        # Validate campaign (same as local daemon does)
+        campaign_id = task.get("payload", {}).get("campaign_id")
+        if not campaign_id:
+            raise ValueError("Task missing campaign_id in payload")
+
+        campaign = Campaign.get(campaign_id)
+        if not campaign or campaign.status != Campaign.Status.ACTIVE:
+            raise ValueError(f"Campaign {campaign_id} not found or inactive")
+
+        # Verify session is initialized
+        if not self.session:
+            raise RuntimeError("Session not initialized")
+
+        # Set campaign on session (required by all handlers)
+        self.session.campaign = campaign
+
         # Build minimal task object for handler
         task_obj = type(
             "Task",
@@ -331,7 +348,7 @@ class RemoteDaemon:
             {
                 "task_type": task["task_type"],
                 "payload": task.get("payload", {}),
-                "campaign_id": task.get("campaign_id"),
+                "campaign_id": campaign_id,
             },
         )()
 
