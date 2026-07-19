@@ -1,7 +1,11 @@
 # Platform Remediation Plan
 
-**Status:** Phases 1–6 Complete (Phase 6 ✅ 2026-07-19)  
+**Status:** Phases 0–6 Complete (Phase 0 ✅ 2026-07-19 | Phase 1 ✅ 2026-07-19)  
 **Goal:** Make the full product path work end-to-end — signup → plan → LinkedIn connect → campaign → leads → follow-up — on web and desktop, with one auth system, one API contract, and hard billing enforcement.  
+**Latest Work:** 
+- Phase 0.3: Added smoke test harness (6 production-ready tests covering critical journeys)
+- Phase 0 & 1: All exit criteria met; remediation plan fully verified
+- Phases 2–6: Already complete (documented in prior commits)
 **Source:** Combined audits of auth, billing (Phases 7–12), LinkedIn/campaign/lead funnel, desktop, and frontend↔API mismatches (2026-07).
 
 Mark items `- [x]` as completed. Do not open parallel “mini plans” — update this document.
