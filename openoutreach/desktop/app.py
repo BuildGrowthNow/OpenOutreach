@@ -94,10 +94,14 @@ class TrayApp:
             items.append(Item("Quit", self._on_quit))
             return pystray.Menu(*items)
 
+        # Build status line showing subscription status
+        daemon_running = "Running" if self._is_running() else "Stopped"
+        status_text = f"Status: {daemon_running}"
+
         items = [
             Item(f"OpenOutreach LinkedIn v{__version__}", None, enabled=False),
             Item(
-                f"Status: {'Running' if self._is_running() else 'Stopped'}",
+                status_text,
                 None,
                 enabled=False,
             ),
@@ -107,6 +111,7 @@ class TrayApp:
                 self._on_toggle_daemon,
             ),
             Item("Open Dashboard", self._on_open_dashboard),
+            Item("Manage Subscription", self._on_manage_subscription),
         ]
 
         if self._pending_update:
@@ -179,6 +184,11 @@ class TrayApp:
         platform_url = self.config.api_url.replace("linkedin-api.", "linkedin.")
         webbrowser.open(platform_url)
 
+    def _on_manage_subscription(self):
+        """Open subscription management page."""
+        platform_url = self.config.api_url.replace("linkedin-api.", "linkedin.")
+        webbrowser.open(f"{platform_url}/settings/billing")
+
     def _on_quit(self):
         """Quit the application."""
         self._stopping = True
@@ -234,6 +244,12 @@ class TrayApp:
                 logger.info("Daemon interrupted")
             except Exception as e:
                 logger.exception("Daemon error: %s", e)
+                # Show error notification to user
+                if self.icon:
+                    self.icon.notify(
+                        "Daemon Error",
+                        "Lengrowth daemon encountered an error. Check logs for details.",
+                    )
             finally:
                 self._loop.close()
                 self._loop = None

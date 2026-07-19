@@ -411,22 +411,22 @@
 **Goal**: Desktop app respects plan limits and subscription status.
 
 ### 11.1 Desktop Daemon Plan Checks
-- [ ] Remote daemon checks subscription status on startup and every config refresh cycle
-- [ ] If subscription expired/canceled: daemon stops gracefully with user notification
-- [ ] If trial ended: daemon stops, shows system tray notification "Trial ended — subscribe to continue"
-- [ ] If user blocked by admin: daemon stops, shows reason
+- [x] Remote daemon checks subscription status on startup and every config refresh cycle
+- [x] If subscription expired/canceled: daemon stops gracefully with user notification
+- [x] If trial ended: daemon stops, shows system tray notification "Trial ended — subscribe to continue"
+- [x] If user blocked by admin: daemon stops, shows reason
 
 ### 11.2 Desktop App Plan UI
-- [ ] System tray tooltip shows current plan and status
-- [ ] Menu item "Manage Subscription" → opens browser to `/settings/billing`
-- [ ] Notification when trial is ending (1 day before)
-- [ ] Notification on payment failure
+- [x] System tray tooltip shows current plan and status
+- [x] Menu item "Manage Subscription" → opens browser to `/settings/billing`
+- [x] Notification when trial is ending (1 day before)
+- [x] Notification on payment failure
 
 ### 11.3 Desktop vs Web Licensing
-- [ ] Both desktop and web use same account/subscription
-- [ ] Desktop execution is included in all plans (it's the default/safe mode)
-- [ ] Cloud execution is the add-on (web-triggered, uses our infrastructure)
-- [ ] A user can run desktop AND have cloud profiles simultaneously (different LinkedIn accounts)
+- [x] Both desktop and web use same account/subscription
+- [x] Desktop execution is included in all plans (it's the default/safe mode)
+- [x] Cloud execution is the add-on (web-triggered, uses our infrastructure)
+- [x] A user can run desktop AND have cloud profiles simultaneously (different LinkedIn accounts)
 
 ---
 

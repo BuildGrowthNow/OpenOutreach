@@ -18,7 +18,11 @@ from pathlib import Path
 from typing import Any, Optional
 
 from openoutreach.core.browser_detect import BrowserInfo, get_preferred_browser
-from openoutreach.core.remote_client import DaemonConfig, RemoteClient
+from openoutreach.core.remote_client import (
+    DaemonConfig,
+    RemoteClient,
+    SubscriptionStatus,
+)
 from openoutreach.desktop.__version__ import __version__
 
 try:
@@ -91,6 +95,11 @@ class RemoteDaemon:
         self.running = True
         self.start_time = datetime.now(tz.utc)
 
+        # Check subscription status before starting
+        sub_status = await self.client.check_subscription_status()
+        if not self._check_subscription_status(sub_status):
+            return
+
         # Detect browser
         self.browser = get_preferred_browser()
         if not self.browser:
@@ -112,6 +121,7 @@ class RemoteDaemon:
                 self._heartbeat_loop(),
                 self._task_loop(),
                 self._config_refresh_loop(),
+                self._subscription_check_loop(),
                 return_exceptions=True,
             )
         except Exception as e:
@@ -288,8 +298,7 @@ class RemoteDaemon:
                     requires_verification=True,
                     verification_type="challenge",
                 )
-                # For desktop daemon, browser is already open locally - user can solve challenge directly
-                # Show notification to guide them
+                # Desktop daemon can show challenge directly in local browser
                 self._show_verification_notification(is_desktop=True)
             raise
 
@@ -502,53 +511,192 @@ class RemoteDaemon:
 
         return self.config.active_start_hour <= now.hour < self.config.active_end_hour
 
-    def _show_verification_notification(self, is_desktop: bool = True):
+    def _check_subscription_status(self, status: SubscriptionStatus) -> bool:
+        """Check subscription status and log if daemon cannot run.
+
+        Returns:
+            True if daemon can run, False otherwise.
+        """
+        if status.user_status == "blocked":
+            logger.error("Account is blocked: %s", status.block_reason or "Unknown reason")
+            self.running = False
+            self._show_block_notification(status.block_reason)
+            return False
+
+        if not status.is_active:
+            if status.subscription_status == "expired":
+                logger.error("Trial has expired")
+                self.running = False
+                self._show_trial_expired_notification()
+            elif status.subscription_status == "canceled":
+                logger.error("Subscription has been canceled")
+                self.running = False
+                self._show_subscription_canceled_notification()
+            elif status.subscription_status == "past_due":
+                logger.error("Payment is past due")
+                self.running = False
+                self._show_payment_failed_notification()
+            else:
+                logger.error("Subscription is not active: %s", status.subscription_status)
+                self.running = False
+            return False
+
+        return True
+
+    async def _subscription_check_loop(self) -> None:
+        """Periodically check subscription status and stop if needed."""
+        if not self.config:
+            return
+
+        last_trial_warning_sent: Optional[datetime] = None
+
+        while self.running:
+            try:
+                status = await self.client.check_subscription_status()
+                if not self._check_subscription_status(status):
+                    await self.stop()
+                    break
+
+                # Send trial ending notification (once per day, 1 day before expiry)
+                if status.subscription_status == "trialing" and status.trial_ends_at:
+                    trial_end = datetime.fromisoformat(status.trial_ends_at.replace("Z", "+00:00"))
+                    now = datetime.now(tz.utc)
+                    time_until_expiry = trial_end - now
+
+                    # If less than 24 hours and we haven't sent warning yet today
+                    if time_until_expiry.total_seconds() < 86400:
+                        seconds_since_last_warning = (
+                            (now - last_trial_warning_sent).total_seconds()
+                            if last_trial_warning_sent
+                            else 999999
+                        )
+                        if (
+                            not last_trial_warning_sent
+                            or seconds_since_last_warning > 86400
+                        ):
+                            hours_left = int(time_until_expiry.total_seconds() / 3600)
+                            self._show_trial_ending_notification(hours_left)
+                            last_trial_warning_sent = now
+
+            except Exception as e:
+                logger.warning("Subscription check failed: %s", e)
+
+            await asyncio.sleep(300)  # Check every 5 minutes
+
+    def _show_block_notification(self, reason: Optional[str] = None) -> None:
+        """Show system notification for blocked account."""
+        message_title = "Lengrowth - Account Blocked"
+        message_body = (
+            f"Your account has been blocked: {reason}\n"
+            "Please log in to the web platform or contact support for more information."
+        )
+
+        self._show_system_notification(message_title, message_body)
+
+    def _show_trial_ending_notification(self, hours_left: int) -> None:
+        """Show system notification for trial ending soon."""
+        if hours_left > 1:
+            time_text = f"{hours_left} hours"
+        else:
+            time_text = "1 hour"
+
+        message_title = "Lengrowth - Trial Ending Soon"
+        message_body = (
+            f"Your trial ends in {time_text}. Please log in to the web platform "
+            "to choose a plan and continue using Lengrowth."
+        )
+
+        self._show_system_notification(message_title, message_body)
+
+    def _show_trial_expired_notification(self) -> None:
+        """Show system notification for expired trial."""
+        message_title = "Lengrowth - Trial Expired"
+        message_body = (
+            "Your trial has ended. Please log in to the web platform to choose a plan "
+            "and continue using Lengrowth."
+        )
+
+        self._show_system_notification(message_title, message_body)
+
+    def _show_subscription_canceled_notification(self) -> None:
+        """Show system notification for canceled subscription."""
+        message_title = "Lengrowth - Subscription Canceled"
+        message_body = (
+            "Your subscription has been canceled. Please log in to the web platform "
+            "to reactivate or choose a new plan."
+        )
+
+        self._show_system_notification(message_title, message_body)
+
+    def _show_payment_failed_notification(self) -> None:
+        """Show system notification for payment failure."""
+        message_title = "Lengrowth - Payment Failed"
+        message_body = (
+            "Your payment has failed. Please log in to the web platform to update "
+            "your payment method."
+        )
+
+        self._show_system_notification(message_title, message_body)
+
+    def _show_system_notification(self, title: str, body: str) -> None:
+        """Show cross-platform system notification."""
+        try:
+            import subprocess
+            import platform
+
+            system = platform.system()
+            if system == "Darwin":  # macOS
+                subprocess.run([
+                    "osascript",
+                    "-e",
+                    f'display notification "{body}" with title "{title}"'
+                ], check=False, timeout=5)
+            elif system == "Windows":
+                ps_lines = [
+                    "[Windows.UI.Notifications.ToastNotificationManager, "
+                    "Windows.UI.Notifications] | Out-Null",
+                    "[Windows.Data.Xml.Dom.XmlDocument] | Out-Null",
+                    "$t = [Windows.UI.Notifications.ToastNotificationManager]"
+                    "::GetTemplateContent(0)",
+                    "$x = [xml]$t.GetXml()",
+                    f'$x.toast.visual.binding.text[0].InnerText = "{title}"',
+                    f'$x.toast.visual.binding.text[1].InnerText = "{body}"',
+                    "$x = [Windows.Data.Xml.Dom.XmlDocument]::new()",
+                    "$x.LoadXml($t.GetXml())",
+                    "$o = [Windows.UI.Notifications.ToastNotification]::new($x)",
+                    "[Windows.UI.Notifications.ToastNotificationManager]"
+                    '::CreateToastNotifier("Lengrowth").Show($o)',
+                ]
+                ps_script = ";".join(ps_lines)
+                subprocess.run(
+                    ["powershell", "-Command", ps_script],
+                    check=False,
+                    timeout=5,
+                )
+            logger.info("Notification shown: %s", title)
+        except Exception as e:
+            logger.debug("Could not show system notification: %s", e)
+
+    def _show_verification_notification(self, is_desktop: bool = True) -> None:
         """Show system notification for LinkedIn verification requirement.
 
         Args:
-            is_desktop: If True, user is running desktop daemon so browser is already open locally.
-                       If False, redirect to web platform VNC viewer.
+            is_desktop: If True, desktop daemon shows challenge in local browser.
+                       If False, redirect to web platform.
         """
+        message_title = "Lengrowth - Action Required"
         if is_desktop:
-            message_title = "Lengrowth - Action Required"
-            message_body = "LinkedIn requires verification. Please complete the challenge in the open browser window, then restart the daemon."
+            message_body = (
+                "LinkedIn requires verification. Complete the challenge in "
+                "the browser and restart the daemon."
+            )
         else:
-            message_title = "Lengrowth - Action Required"
-            message_body = "LinkedIn requires verification. Please log in to the web platform to complete the challenge."
+            message_body = (
+                "LinkedIn requires verification. Log in to the web platform "
+                "to complete the challenge."
+            )
 
-        try:
-            # Try to use desktop notification if available
-            try:
-                import subprocess
-                import platform
-
-                system = platform.system()
-                if system == "Darwin":  # macOS
-                    subprocess.run([
-                        "osascript",
-                        "-e",
-                        f'display notification "{message_body}" with title "{message_title}"'
-                    ], check=False)
-                elif system == "Windows":
-                    # Use PowerShell toast notification
-                    ps_script = f'''
-                    [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
-                    [Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime] | Out-Null
-                    $template = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02)
-                    $xml = [xml]$template.GetXml()
-                    $xml.toast.visual.binding.text[0].InnerText = "{message_title}"
-                    $xml.toast.visual.binding.text[1].InnerText = "{message_body}"
-                    $xml = [Windows.Data.Xml.Dom.XmlDocument]::new()
-                    $xml.LoadXml($template.GetXml())
-                    $toast = [Windows.UI.Notifications.ToastNotification]::new($xml)
-                    [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("Lengrowth").Show($toast)
-                    '''
-                    subprocess.run(["powershell", "-Command", ps_script], check=False)
-                logger.info("Verification notification shown to user")
-            except Exception as inner_e:
-                logger.debug("Could not show system notification: %s", inner_e)
-        except Exception as e:
-            logger.debug("Notification failed: %s", e)
+        self._show_system_notification(message_title, message_body)
 
     def _launch_browser_with_channel(
         self,

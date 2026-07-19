@@ -6,6 +6,7 @@ Desktop app daemons use these to:
 2. Report task results
 3. Sync cookies/session state
 4. Report health/status
+5. Check subscription status (Phase 11)
 """
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -17,6 +18,7 @@ import logging
 from openoutreach.api_v2.dependencies_v2 import get_current_user
 from openoutreach.linkedin.models import LinkedInProfile
 from openoutreach.core.models import Task, SiteConfig
+from openoutreach.mongodb.models_user import User
 
 logger = logging.getLogger(__name__)
 
@@ -321,4 +323,53 @@ async def get_credentials(
         "email": profile.linkedin_username,
         "password": profile.linkedin_password,
         "cookie_data": cookie_data_json,  # JSON string, not encrypted
+    }
+
+
+@router.get("/subscription/status")
+async def get_subscription_status(
+    user_id: str = Depends(get_current_user),
+):
+    """Get user subscription status for daemon operation.
+
+    Returns subscription info to determine if daemon should run.
+    Called on startup and periodically during operation.
+    """
+    user = User.get(user_id)
+    if not user:
+        raise HTTPException(404, "User not found")
+
+    is_active = False
+    block_reason = None
+
+    if user.status == "blocked":
+        is_active = False
+        block_reason = user.admin_notes or "Account blocked by administrator"
+    elif user.subscription_status in ("active", "trialing"):
+        is_active = True
+    elif user.subscription_status == "expired":
+        is_active = False
+    elif user.subscription_status == "canceled":
+        is_active = False
+    elif user.subscription_status == "past_due":
+        is_active = False
+    else:
+        is_active = False
+
+    return {
+        "is_active": is_active,
+        "plan": user.plan or "starter",
+        "subscription_status": user.subscription_status or "none",
+        "user_status": user.status or "active",
+        "trial_ends_at": (
+            user.trial_ends_at.isoformat()
+            if user.trial_ends_at
+            else None
+        ),
+        "current_period_end": (
+            user.current_period_end.isoformat()
+            if user.current_period_end
+            else None
+        ),
+        "block_reason": block_reason,
     }

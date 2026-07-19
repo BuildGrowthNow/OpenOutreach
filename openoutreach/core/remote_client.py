@@ -33,10 +33,29 @@ class DaemonConfig:
     heartbeat_interval_seconds: int
 
 
+@dataclass
+class SubscriptionStatus:
+    """Subscription status for daemon operation."""
+
+    is_active: bool
+    plan: str
+    subscription_status: str  # active, trialing, canceled, expired, past_due
+    user_status: str  # active, blocked
+    trial_ends_at: Optional[str] = None
+    current_period_end: Optional[str] = None
+    block_reason: Optional[str] = None
+
+
 class RemoteClient:
     """HTTP client for desktop daemon to communicate with backend."""
 
-    def __init__(self, api_url: str, token: str, daemon_id: str, refresh_token: Optional[str] = None):
+    def __init__(
+        self,
+        api_url: str,
+        token: str,
+        daemon_id: str,
+        refresh_token: Optional[str] = None,
+    ):
         self.api_url = api_url.rstrip("/")
         self.daemon_id = daemon_id
         self._token = token
@@ -54,7 +73,7 @@ class RemoteClient:
     async def __aenter__(self):
         return self
 
-    async def __aexit__(self, _exc_type, _exc_val, _exc_tb):
+    async def __aexit__(self, exc_type: object, exc_val: object, exc_tb: object) -> None:
         await self.close()
 
     async def heartbeat(
@@ -186,6 +205,28 @@ class RemoteClient:
         )
         response.raise_for_status()
         return response.json()
+
+    async def check_subscription_status(self) -> SubscriptionStatus:
+        """Check subscription status for daemon operation.
+
+        Returns:
+            SubscriptionStatus object indicating if daemon can run.
+        """
+        response = await self._client.get(
+            "/api/daemon/subscription/status",
+        )
+        response.raise_for_status()
+        data = response.json()
+
+        return SubscriptionStatus(
+            is_active=data["is_active"],
+            plan=data["plan"],
+            subscription_status=data["subscription_status"],
+            user_status=data["user_status"],
+            trial_ends_at=data.get("trial_ends_at"),
+            current_period_end=data.get("current_period_end"),
+            block_reason=data.get("block_reason"),
+        )
 
     async def refresh_access_token(self) -> Optional[str]:
         """Refresh the JWT access token using the refresh token.
