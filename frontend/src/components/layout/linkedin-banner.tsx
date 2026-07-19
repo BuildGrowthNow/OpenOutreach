@@ -48,7 +48,7 @@ export function LinkedinBanner({ alwaysShow = false, onConnect }: LinkedinBanner
     setIsVisible(false)
     // Optionally store in localStorage to persist dismissal
     if (typeof window !== 'undefined') {
-      localStorage.setItem('openoutreach_linkedin_banner_dismissed', 'true')
+      localStorage.setItem('lengrowth_linkedin_banner_dismissed', 'true')
     }
   }, [])
 
@@ -64,7 +64,7 @@ export function LinkedinBanner({ alwaysShow = false, onConnect }: LinkedinBanner
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const isDismissedLocal = localStorage.getItem('openoutreach_linkedin_banner_dismissed')
+      const isDismissedLocal = localStorage.getItem('lengrowth_linkedin_banner_dismissed')
       if (isDismissedLocal) {
         setIsDismissed(true)
       }
@@ -104,7 +104,7 @@ export function LinkedinBanner({ alwaysShow = false, onConnect }: LinkedinBanner
                 </button>
               </div>
               <p className="text-sm text-amber-50 mb-3 line-clamp-2">
-                Your OpenOutreach account requires LinkedIn configuration to function properly.
+                Your Lengrowth account requires LinkedIn configuration to function properly.
                 Without LinkedIn credentials, you cannot run campaigns or connect with leads.
               </p>
               <div className="flex flex-wrap gap-2">

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build script for OpenOutreach desktop app.
+"""Build script for Lengrowth desktop app.
 
 Usage:
     python desktop/build.py                  # Build for current platform
@@ -111,7 +111,7 @@ def check_prerequisites() -> bool:
 
 def build() -> bool:
     """Run PyInstaller build."""
-    print(f"\nBuilding OpenOutreach v{get_version()} for {sys.platform}...")
+    print(f"\nBuilding Lengrowth v{get_version()} for {sys.platform}...")
 
     if not check_prerequisites():
         return False
@@ -167,12 +167,12 @@ def create_dmg() -> bool:
 
     print("\nCreating DMG...")
 
-    app_path = DIST_DIR / "OpenOutreach.app"
+    app_path = DIST_DIR / "Lengrowth.app"
     if not app_path.exists():
         print(f"Error: {app_path} not found. Run build first.")
         return False
 
-    dmg_path = DIST_DIR / f"OpenOutreach-{get_version()}.dmg"
+    dmg_path = DIST_DIR / f"Lengrowth-{get_version()}.dmg"
     if dmg_path.exists():
         dmg_path.unlink()
 
@@ -181,13 +181,13 @@ def create_dmg() -> bool:
         result = subprocess.run(
             [
                 "create-dmg",
-                "--volname", "OpenOutreach",
+                "--volname", "Lengrowth",
                 "--volicon", str(ASSETS_DIR / "icon.icns"),
                 "--window-pos", "200", "120",
                 "--window-size", "600", "400",
                 "--icon-size", "100",
-                "--icon", "OpenOutreach.app", "150", "200",
-                "--hide-extension", "OpenOutreach.app",
+                "--icon", "Lengrowth.app", "150", "200",
+                "--hide-extension", "Lengrowth.app",
                 "--app-drop-link", "450", "200",
                 "--no-internet-enable",
                 str(dmg_path),
@@ -208,7 +208,7 @@ def create_dmg() -> bool:
     result = subprocess.run(
         [
             "hdiutil", "create",
-            "-volname", "OpenOutreach",
+            "-volname", "Lengrowth",
             "-srcfolder", str(app_path),
             "-ov",
             "-format", "UDZO",
@@ -242,7 +242,7 @@ def sign_macos_app() -> bool:
 
     print(f"\nSigning app with: {developer_id}")
 
-    app_path = DIST_DIR / "OpenOutreach.app"
+    app_path = DIST_DIR / "Lengrowth.app"
     if not app_path.exists():
         print(f"Error: {app_path} not found. Run build first.")
         return False
@@ -307,7 +307,7 @@ def notarize_macos_app() -> bool:
         return False
 
     dmg_path = None
-    for f in DIST_DIR.glob("OpenOutreach-*.dmg"):
+    for f in DIST_DIR.glob("Lengrowth-*.dmg"):
         dmg_path = f
         break
 
@@ -359,7 +359,7 @@ def create_msix() -> bool:
 
     print("\nCreating MSIX package...")
 
-    exe_path = DIST_DIR / "OpenOutreach.exe"
+    exe_path = DIST_DIR / "Lengrowth.exe"
     if not exe_path.exists():
         print(f"Error: {exe_path} not found. Run build first.")
         return False
@@ -388,7 +388,7 @@ def create_msix() -> bool:
     pkg_dir.mkdir(parents=True)
 
     # Copy executable
-    shutil.copy2(exe_path, pkg_dir / "OpenOutreach.exe")
+    shutil.copy2(exe_path, pkg_dir / "Lengrowth.exe")
 
     # Copy assets for MSIX
     assets_msix = pkg_dir / "Assets"
@@ -425,14 +425,14 @@ def create_msix() -> bool:
          xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
          xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities">
 
-  <Identity Name="OpenOutreach.Desktop"
-            Publisher="CN=OpenOutreach"
+  <Identity Name="io.lengrowth.linkedin"
+            Publisher="CN=Lengrowth"
             Version="{msix_version}"
             ProcessorArchitecture="x64" />
 
   <Properties>
-    <DisplayName>OpenOutreach</DisplayName>
-    <PublisherDisplayName>OpenOutreach</PublisherDisplayName>
+    <DisplayName>Lengrowth</DisplayName>
+    <PublisherDisplayName>Lengrowth</PublisherDisplayName>
     <Description>LinkedIn automation with your local IP</Description>
     <Logo>Assets\\Square150x150Logo.png</Logo>
   </Properties>
@@ -451,10 +451,10 @@ def create_msix() -> bool:
   </Capabilities>
 
   <Applications>
-    <Application Id="OpenOutreach"
-                 Executable="OpenOutreach.exe"
+    <Application Id="Lengrowth"
+                 Executable="Lengrowth.exe"
                  EntryPoint="Windows.FullTrustApplication">
-      <uap:VisualElements DisplayName="OpenOutreach"
+      <uap:VisualElements DisplayName="Lengrowth"
                           Description="LinkedIn automation"
                           BackgroundColor="#22c55e"
                           Square150x150Logo="Assets\\Square150x150Logo.png"
@@ -463,8 +463,8 @@ def create_msix() -> bool:
       </uap:VisualElements>
       <Extensions>
         <uap:Extension Category="windows.protocol">
-          <uap:Protocol Name="openoutreach">
-            <uap:DisplayName>OpenOutreach Auth</uap:DisplayName>
+          <uap:Protocol Name="lengrowth">
+            <uap:DisplayName>Lengrowth Auth</uap:DisplayName>
           </uap:Protocol>
         </uap:Extension>
       </Extensions>
@@ -475,7 +475,7 @@ def create_msix() -> bool:
     (pkg_dir / "AppxManifest.xml").write_text(manifest)
 
     # Create MSIX
-    msix_path = DIST_DIR / f"OpenOutreach-{version}.msix"
+    msix_path = DIST_DIR / f"Lengrowth-{version}.msix"
     result = subprocess.run(
         [str(makeappx), "pack", "/d", str(pkg_dir), "/p", str(msix_path), "/o"],
     )
@@ -497,7 +497,7 @@ def create_nsis_installer() -> bool:
 
     print("\nCreating NSIS installer...")
 
-    exe_path = DIST_DIR / "OpenOutreach.exe"
+    exe_path = DIST_DIR / "Lengrowth.exe"
     if not exe_path.exists():
         print(f"Error: {exe_path} not found. Run build first.")
         return False
@@ -527,10 +527,10 @@ def create_nsis_installer() -> bool:
 
     nsi_content = f'''!include "MUI2.nsh"
 
-Name "OpenOutreach"
-OutFile "{DIST_DIR}\\OpenOutreach-{version}-Setup.exe"
-InstallDir "$PROGRAMFILES64\\OpenOutreach"
-InstallDirRegKey HKLM "Software\\OpenOutreach" "InstallDir"
+Name "Lengrowth"
+OutFile "{DIST_DIR}\\Lengrowth-{version}-Setup.exe"
+InstallDir "$PROGRAMFILES64\\Lengrowth"
+InstallDirRegKey HKLM "Software\\Lengrowth" "InstallDir"
 RequestExecutionLevel admin
 
 !define MUI_ICON "{ASSETS_DIR}\\icon.ico"
@@ -552,43 +552,43 @@ Section "Install"
     File "{exe_path}"
 
     ; Create start menu shortcut
-    CreateDirectory "$SMPROGRAMS\\OpenOutreach"
-    CreateShortCut "$SMPROGRAMS\\OpenOutreach\\OpenOutreach.lnk" "$INSTDIR\\OpenOutreach.exe"
-    CreateShortCut "$SMPROGRAMS\\OpenOutreach\\Uninstall.lnk" "$INSTDIR\\Uninstall.exe"
+    CreateDirectory "$SMPROGRAMS\\Lengrowth"
+    CreateShortCut "$SMPROGRAMS\\Lengrowth\\Lengrowth.lnk" "$INSTDIR\\Lengrowth.exe"
+    CreateShortCut "$SMPROGRAMS\\Lengrowth\\Uninstall.lnk" "$INSTDIR\\Uninstall.exe"
 
     ; Create desktop shortcut
-    CreateShortCut "$DESKTOP\\OpenOutreach.lnk" "$INSTDIR\\OpenOutreach.exe"
+    CreateShortCut "$DESKTOP\\Lengrowth.lnk" "$INSTDIR\\Lengrowth.exe"
 
     ; Register protocol handler
-    WriteRegStr HKCR "openoutreach" "" "URL:OpenOutreach Protocol"
-    WriteRegStr HKCR "openoutreach" "URL Protocol" ""
-    WriteRegStr HKCR "openoutreach\\shell\\open\\command" "" '"$INSTDIR\\OpenOutreach.exe" "%1"'
+    WriteRegStr HKCR "lengrowth" "" "URL:Lengrowth Protocol"
+    WriteRegStr HKCR "lengrowth" "URL Protocol" ""
+    WriteRegStr HKCR "lengrowth\\shell\\open\\command" "" '"$INSTDIR\\Lengrowth.exe" "%1"'
 
     ; Write uninstall info
-    WriteRegStr HKLM "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\OpenOutreach" "DisplayName" "OpenOutreach"
-    WriteRegStr HKLM "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\OpenOutreach" "UninstallString" '"$INSTDIR\\Uninstall.exe"'
-    WriteRegStr HKLM "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\OpenOutreach" "DisplayVersion" "{version}"
-    WriteRegStr HKLM "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\OpenOutreach" "Publisher" "OpenOutreach"
-    WriteRegStr HKLM "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\OpenOutreach" "DisplayIcon" "$INSTDIR\\OpenOutreach.exe"
-    WriteRegDWORD HKLM "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\OpenOutreach" "NoModify" 1
-    WriteRegDWORD HKLM "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\OpenOutreach" "NoRepair" 1
+    WriteRegStr HKLM "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Lengrowth" "DisplayName" "Lengrowth"
+    WriteRegStr HKLM "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Lengrowth" "UninstallString" '"$INSTDIR\\Uninstall.exe"'
+    WriteRegStr HKLM "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Lengrowth" "DisplayVersion" "{version}"
+    WriteRegStr HKLM "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Lengrowth" "Publisher" "Lengrowth"
+    WriteRegStr HKLM "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Lengrowth" "DisplayIcon" "$INSTDIR\\Lengrowth.exe"
+    WriteRegDWORD HKLM "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Lengrowth" "NoModify" 1
+    WriteRegDWORD HKLM "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Lengrowth" "NoRepair" 1
 
     WriteUninstaller "$INSTDIR\\Uninstall.exe"
 SectionEnd
 
 Section "Uninstall"
-    Delete "$INSTDIR\\OpenOutreach.exe"
+    Delete "$INSTDIR\\Lengrowth.exe"
     Delete "$INSTDIR\\Uninstall.exe"
     RMDir "$INSTDIR"
 
-    Delete "$SMPROGRAMS\\OpenOutreach\\OpenOutreach.lnk"
-    Delete "$SMPROGRAMS\\OpenOutreach\\Uninstall.lnk"
-    RMDir "$SMPROGRAMS\\OpenOutreach"
-    Delete "$DESKTOP\\OpenOutreach.lnk"
+    Delete "$SMPROGRAMS\\Lengrowth\\Lengrowth.lnk"
+    Delete "$SMPROGRAMS\\Lengrowth\\Uninstall.lnk"
+    RMDir "$SMPROGRAMS\\Lengrowth"
+    Delete "$DESKTOP\\Lengrowth.lnk"
 
-    DeleteRegKey HKCR "openoutreach"
-    DeleteRegKey HKLM "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\OpenOutreach"
-    DeleteRegKey HKLM "Software\\OpenOutreach"
+    DeleteRegKey HKCR "lengrowth"
+    DeleteRegKey HKLM "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Lengrowth"
+    DeleteRegKey HKLM "Software\\Lengrowth"
 SectionEnd
 '''
     nsi_script.write_text(nsi_content)
@@ -599,13 +599,13 @@ SectionEnd
         print("NSIS installer creation failed!")
         return False
 
-    installer_path = DIST_DIR / f"OpenOutreach-{version}-Setup.exe"
+    installer_path = DIST_DIR / f"Lengrowth-{version}-Setup.exe"
     print(f"Installer created: {installer_path}")
     return True
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Build OpenOutreach desktop app")
+    parser = argparse.ArgumentParser(description="Build Lengrowth desktop app")
     parser.add_argument("--dmg", action="store_true", help="Create macOS DMG")
     parser.add_argument("--msix", action="store_true", help="Create Windows MSIX")
     parser.add_argument("--installer", action="store_true", help="Create Windows NSIS installer")

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Icons } from "@/lib/types/components";
 import { getDaemonStatus, type DaemonStatusResponse } from "@/lib/api/dashboard";
+import Link from "next/link";
 import { Monitor, Wifi, WifiOff, Clock, AlertCircle, CheckCircle2, Download } from "lucide-react";
 
 export function DaemonStatusCard() {
@@ -155,10 +156,10 @@ export function DaemonStatusCard() {
             </AlertDescription>
           </Alert>
           <Button variant="outline" asChild>
-            <a href="https://github.com/your-org/openoutreach/releases" target="_blank" rel="noopener noreferrer">
+            <Link href="/download">
               <Download className="mr-2 h-4 w-4" />
               Download Desktop App
-            </a>
+            </Link>
           </Button>
         </CardContent>
       </Card>

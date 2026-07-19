@@ -2,14 +2,12 @@ name: Build Desktop App
 
 on:
   push:
-    tags:
-      - 'desktop-v*'
+    paths:
+      - 'openoutreach/desktop/**'
+      - 'desktop/**'
+    branches:
+      - main
   workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version to build (e.g., 1.0.0)'
-        required: false
-        default: ''
 
 jobs:
   build-macos:
@@ -26,21 +24,18 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: |
-          pip install -r desktop/requirements.txt
+        run: pip install -r desktop/requirements.txt
 
-      - name: Generate icons (including .icns)
+      - name: Generate icons
         run: |
           cd openoutreach/desktop/assets
           python generate_icon.py
 
       - name: Build macOS app
-        run: |
-          python desktop/build.py
+        run: python desktop/build.py
 
       - name: Create DMG
         run: |
-          # Install create-dmg for better DMG creation
           brew install create-dmg || true
           python desktop/build.py --no-build --dmg
 
@@ -50,17 +45,16 @@ jobs:
           VERSION=$(python -c "exec(open('openoutreach/desktop/__version__.py').read()); print(__version__)")
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Upload macOS DMG
-        uses: actions/upload-artifact@v4
-        with:
-          name: OpenOutreach-macOS-${{ steps.version.outputs.version }}
-          path: desktop/dist/*.dmg
+      - name: Rename DMG for release
+        run: |
+          mv desktop/dist/Lengrowth-*.dmg desktop/dist/Lengrowth-macOS.dmg 2>/dev/null || \
+          mv desktop/dist/*.dmg desktop/dist/Lengrowth-macOS.dmg || true
 
-      - name: Upload macOS App
+      - name: Upload macOS DMG artifact
         uses: actions/upload-artifact@v4
         with:
-          name: OpenOutreach-macOS-App-${{ steps.version.outputs.version }}
-          path: desktop/dist/OpenOutreach.app
+          name: Lengrowth-macOS-${{ steps.version.outputs.version }}
+          path: desktop/dist/Lengrowth-macOS.dmg
 
   build-windows:
     name: Build Windows App
@@ -76,26 +70,19 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: |
-          pip install -r desktop/requirements.txt
+        run: pip install -r desktop/requirements.txt
 
       - name: Build Windows exe
-        run: |
-          python desktop/build.py
+        run: python desktop/build.py
 
-      - name: Create MSIX package
-        run: |
-          python desktop/build.py --no-build --msix
-        continue-on-error: true
-
-      - name: Install NSIS
+      - name: Install NSIS and create installer
         run: |
           choco install nsis -y
+          python desktop/build.py --no-build --installer
         continue-on-error: true
 
-      - name: Create NSIS installer
-        run: |
-          python desktop/build.py --no-build --installer
+      - name: Create MSIX package
+        run: python desktop/build.py --no-build --msix
         continue-on-error: true
 
       - name: Get version
@@ -105,31 +92,34 @@ jobs:
           VERSION=$(python -c "exec(open('openoutreach/desktop/__version__.py').read()); print(__version__)")
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Upload Windows exe
+      - name: Rename installer for release
+        shell: bash
+        run: mv desktop/dist/*-Setup.exe desktop/dist/Lengrowth-Windows-Setup.exe 2>/dev/null || true
+
+      - name: Upload Windows exe artifact
         uses: actions/upload-artifact@v4
         with:
-          name: OpenOutreach-Windows-${{ steps.version.outputs.version }}
-          path: desktop/dist/OpenOutreach.exe
+          name: Lengrowth-Windows-${{ steps.version.outputs.version }}
+          path: desktop/dist/Lengrowth.exe
 
-      - name: Upload Windows MSIX
+      - name: Upload Windows installer artifact
+        uses: actions/upload-artifact@v4
+        if: hashFiles('desktop/dist/Lengrowth-Windows-Setup.exe') != ''
+        with:
+          name: Lengrowth-Windows-Installer-${{ steps.version.outputs.version }}
+          path: desktop/dist/Lengrowth-Windows-Setup.exe
+
+      - name: Upload Windows MSIX artifact
         uses: actions/upload-artifact@v4
         if: hashFiles('desktop/dist/*.msix') != ''
         with:
-          name: OpenOutreach-Windows-MSIX-${{ steps.version.outputs.version }}
+          name: Lengrowth-Windows-MSIX-${{ steps.version.outputs.version }}
           path: desktop/dist/*.msix
 
-      - name: Upload Windows Installer
-        uses: actions/upload-artifact@v4
-        if: hashFiles('desktop/dist/*-Setup.exe') != ''
-        with:
-          name: OpenOutreach-Windows-Installer-${{ steps.version.outputs.version }}
-          path: desktop/dist/*-Setup.exe
-
   release:
-    name: Create Release
+    name: Publish to Lengrowth/outbound
     needs: [build-macos, build-windows]
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/desktop-v')
 
     steps:
       - name: Checkout code
@@ -139,79 +129,76 @@ jobs:
         id: version
         run: |
           VERSION=$(python3 -c "exec(open('openoutreach/desktop/__version__.py').read()); print(__version__)")
+          # Append short SHA so every push to main produces a unique tag
+          SHORT_SHA=$(git rev-parse --short HEAD)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=v${VERSION}-${SHORT_SHA}" >> $GITHUB_OUTPUT
 
       - name: Download macOS artifact
         uses: actions/download-artifact@v4
         with:
-          name: OpenOutreach-macOS-${{ steps.version.outputs.version }}
+          name: Lengrowth-macOS-${{ steps.version.outputs.version }}
           path: ./release/macos
 
       - name: Download Windows exe artifact
         uses: actions/download-artifact@v4
         with:
-          name: OpenOutreach-Windows-${{ steps.version.outputs.version }}
+          name: Lengrowth-Windows-${{ steps.version.outputs.version }}
+          path: ./release/windows
+
+      - name: Download Windows installer artifact
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: Lengrowth-Windows-Installer-${{ steps.version.outputs.version }}
           path: ./release/windows
 
       - name: Download Windows MSIX artifact
         uses: actions/download-artifact@v4
         continue-on-error: true
         with:
-          name: OpenOutreach-Windows-MSIX-${{ steps.version.outputs.version }}
+          name: Lengrowth-Windows-MSIX-${{ steps.version.outputs.version }}
           path: ./release/windows
 
-      - name: Download Windows Installer artifact
-        uses: actions/download-artifact@v4
-        continue-on-error: true
+      - name: Create release on Lengrowth/outbound
+        uses: softprops/action-gh-release@v2
         with:
-          name: OpenOutreach-Windows-Installer-${{ steps.version.outputs.version }}
-          path: ./release/windows
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v1
-        with:
-          name: OpenOutreach Desktop v${{ steps.version.outputs.version }}
+          repository: Lengrowth/outbound
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: Lengrowth Desktop v${{ steps.version.outputs.version }}
+          make_latest: true
           body: |
-            ## OpenOutreach Desktop v${{ steps.version.outputs.version }}
+            ## Lengrowth Desktop v${{ steps.version.outputs.version }}
 
             ### Installation
 
-            **macOS:**
-            1. Download `OpenOutreach-${{ steps.version.outputs.version }}.dmg`
-            2. Open the DMG and drag OpenOutreach to Applications
-            3. **First launch only:** Right-click OpenOutreach in Applications, click "Open", then "Open" again
-            4. Log in with your OpenOutreach account
+            **macOS (10.15 Catalina or later):**
+            1. Download `Lengrowth-macOS.dmg`
+            2. Open the DMG and drag Lengrowth to Applications
+            3. **First launch only:** Right-click Lengrowth in Applications → **"Open"** → **"Open"** again
+            4. Log in with your Lengrowth account
 
-            **Windows (Recommended - Installer):**
-            1. Download `OpenOutreach-${{ steps.version.outputs.version }}-Setup.exe`
-            2. Run the installer
-            3. If SmartScreen appears, click "More info" then "Run anyway"
-            4. Follow installation wizard
-            5. Log in with your OpenOutreach account
+            **Windows — Installer (recommended):**
+            1. Download `Lengrowth-Windows-Setup.exe`
+            2. Run the installer and follow the wizard
+            3. If SmartScreen appears, click **"More info" → "Run anyway"**
+            4. Log in with your Lengrowth account
 
-            **Windows (Alternative - Standalone):**
-            1. Download `OpenOutreach.exe`
-            2. Run the executable directly (no installation)
-            3. If SmartScreen appears, click "More info" then "Run anyway"
-            4. Log in with your OpenOutreach account
+            **Windows — Standalone (no install):**
+            1. Download `Lengrowth.exe`
+            2. Run directly from any folder
+            3. If SmartScreen appears, click **"More info" → "Run anyway"**
 
-            **Windows (Microsoft Store):**
-            - MSIX package available for sideloading or Store submission
-
-            ### Features
-            - Local IP automation (no proxy needed!)
-            - System tray integration
-            - Auto-start on login
-            - Secure credential storage
-
-            ### Changes
-            - See commit history for details
+            ### Why run locally?
+            - Use your own residential IP — no proxy costs ($25–75/mo saved)
+            - Your LinkedIn credentials never leave your machine
+            - Runs silently in the system tray, auto-starts on login
           files: |
-            ./release/macos/*.dmg
-            ./release/windows/OpenOutreach.exe
+            ./release/macos/Lengrowth-macOS.dmg
+            ./release/windows/Lengrowth.exe
+            ./release/windows/Lengrowth-Windows-Setup.exe
             ./release/windows/*.msix
-            ./release/windows/*-Setup.exe
           draft: false
           prerelease: false
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.OUTBOUND_RELEASE_TOKEN }}

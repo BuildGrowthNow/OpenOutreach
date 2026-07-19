@@ -41,7 +41,7 @@ export default function VerifyEmailPage() {
           setMessage(data.message || "Email verified successfully!")
 
           setTimeout(() => {
-            router.push("/login?success=email_verified")
+            router.push("/login?returnUrl=/download?welcome=1&success=email_verified")
           }, 2000)
         } else {
           setStatus("error")

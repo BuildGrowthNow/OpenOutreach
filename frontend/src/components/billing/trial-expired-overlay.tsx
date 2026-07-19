@@ -39,7 +39,7 @@ export function TrialExpiredOverlay({
             <div className="space-y-2">
               <h2 className="text-2xl font-bold">Trial Ended</h2>
               <p className="text-muted-foreground">
-                Your free trial has ended. To continue using OpenOutreach and keep your campaigns running, please choose a plan.
+                Your free trial has ended. To continue using Lengrowth and keep your campaigns running, please choose a plan.
               </p>
             </div>
 
