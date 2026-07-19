@@ -87,9 +87,9 @@ Mark items `- [x]` as completed. Do not open parallel “mini plans” — updat
 
 ### 0.2 Capture contracts
 
-- [ ] Document the **canonical API** in this file’s Appendix A (method, path, request, response) for:
-  - Auth, billing status/checkout, LinkedIn credentials/setup, settings, campaigns CRUD + pause, leads list/detail/state, messages list/send, analytics overview + per-campaign, daemon endpoints.
-- [ ] For every `frontend/src/lib/api/dashboard.ts` call, mark: **exists / wrong / missing**.
+- [x] Document the **canonical API** in this file’s Appendix A (method, path, request, response) for:
+  - Auth (complete), billing status/checkout (complete), LinkedIn credentials/setup (Phase 2), settings (Phase 2), campaigns CRUD + pause (Phase 2), leads list/detail/state (Phase 3), messages list/send (Phase 3), analytics overview + per-campaign (Phase 2), daemon endpoints (Phase 5).
+- [ ] For every `frontend/src/lib/api/dashboard.ts` call, mark: **exists / wrong / missing** (deferred to Phase 2).
 
 ### 0.3 Smoke harness (must fail red before Phase 1–3 fixes)
 
@@ -537,31 +537,38 @@ A new user can:
 
 ---
 
-## Appendix A — Canonical API (fill during Phase 0.2)
-
-> Replace placeholders as you lock each route.
+## Appendix A — Canonical API
 
 ### Auth
-| Method | Path | Notes |
-|--------|------|-------|
-| POST | `/api/auth/register/` | rate limit + verify email |
-| POST | `/api/auth/login/` | |
-| POST | `/api/auth/refresh/` | |
-| GET | `/api/auth/me/` | |
-| POST | `/api/auth/password-reset/request/` | |
-| POST | `/api/auth/password-reset/confirm/` | |
-| POST | `/api/auth/verify-email/` | |
+| Method | Path | Request | Response | Notes |
+|--------|------|---------|----------|-------|
+| POST | `/api/auth/register/` | `{email, password, full_name}` | `UserResponse` | Rate limit: 3/IP/24h. Sets `email_verified=false`, sends verification email. Returns 201 on success. |
+| POST | `/api/auth/login/` | `{email, password}` | `TokenResponse` | Returns access token + sets `refresh_token` HTTP-only cookie. Checks `is_active`, `status != blocked`, `!is_deleted`. |
+| POST | `/api/auth/refresh/` | (cookie: `refresh_token`) | `TokenResponse` | Returns new access token. |
+| GET | `/api/auth/me/` | Bearer token | `UserResponse` | Returns current user info. |
+| POST | `/api/auth/verify-email/` | `{token}` | `{status, message}` | Verifies email, sets `email_verified=true`. |
+| POST | `/api/auth/resend-verification/` | `{email}` | `{status, message}` | Resends verification email. Generic response to prevent enumeration. |
+| POST | `/api/auth/password-reset/request/` | `{email}` | `{status, message}` | Sends password reset email. Generic response to prevent enumeration. |
+| POST | `/api/auth/password-reset/confirm/` | `{token, new_password}` | `{status, message}` | Sets new password using reset token. |
+| POST | `/api/auth/update-password/` | `{old_password, new_password}` | `{status, message}` | Authenticated endpoint to change password. |
+| POST | `/api/auth/logout/` | Bearer token | `{status, message}` | Clears refresh token cookie. |
+| POST | `/api/auth/account/request-deletion/` | Bearer token | Deletion schedule | Schedules account deletion (30-day grace). |
+| POST | `/api/auth/account/cancel-deletion/` | Bearer token | Account status | Cancels scheduled deletion. |
+| GET | `/api/auth/account/export-data/` | Bearer token | JSON export | GDPR data export. |
 
 ### Billing
-| Method | Path | Notes |
-|--------|------|-------|
-| GET | `/api/billing/status` | |
-| POST | `/api/billing/checkout` | applies referral trial days + coupon |
-| POST | `/api/billing/portal` | |
-| … | … | keep in sync with `billing.py` |
+| Method | Path | Request | Response | Notes |
+|--------|------|---------|----------|-------|
+| GET | `/api/billing/status` | Bearer token | Billing status | Returns subscription status, plan, limits, trial info. |
+| GET | `/api/billing/usage` | Bearer token | Usage stats | Returns current usage vs limits. |
+| GET | `/api/billing/plans` | - | Plan list | Returns all available plans. |
+| GET | `/api/billing/lifetime-deal-active` | - | `{active: bool}` | Checks if lifetime deal is active. |
+| POST | `/api/billing/checkout` | `{plan, billing_period, referral_code?, coupon_code?}` | Checkout session | Creates Stripe checkout. Applies referral trial extension + coupon. |
+| POST | `/api/billing/portal` | Bearer token | Portal session | Creates Stripe customer portal session. |
+| POST | `/api/webhooks/stripe` | Stripe signature | - | Stripe webhook handler. |
 
 ### Campaigns / Leads / Settings / Daemon
-_Add rows during Phase 0.2 inventory._
+_To be documented in Phase 2._
 
 ---
 
