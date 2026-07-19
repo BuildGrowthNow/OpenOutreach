@@ -9,8 +9,11 @@ import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Icons } from '@/lib/types/components'
-import { getLinks, TrackedLink } from '@/lib/api/dashboard'
+import { getLinks, TrackedLink, deleteLink } from '@/lib/api/dashboard'
 import { Breadcrumb } from '@/components/layout/breadcrumb'
+import { BulkActionsToolbar, BulkAction } from '@/components/ui/bulk-actions-toolbar'
+import { useToast } from '@/components/ui/use-toast'
+import { cn } from '@/lib/utils'
 import LinkStats from '@/components/links/link-stats'
 
 const NOW = Date.now()
@@ -32,12 +35,15 @@ function getLinkMetrics(link: TrackedLink) {
 }
 
 export default function LinksPage() {
+  const { toast } = useToast()
   const [links, setLinks] = useState<TrackedLink[]>([])
   const [loading, setLoading] = useState(true)
+  const [bulkLoading, setBulkLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedType, setSelectedType] = useState<string>('all')
   const [showCreateTab, setShowCreateTab] = useState(false)
+  const [selectedLinkIds, setSelectedLinkIds] = useState<Set<string>>(new Set())
 
   const loadLinks = useCallback(async () => {
     try {
@@ -79,11 +85,55 @@ export default function LinksPage() {
     return matchesSearch
   }), [links, searchTerm, selectedType])
 
+  const handleBulkDelete = async (ids: string[]) => {
+    if (!window.confirm(`Delete ${ids.length} link(s)? This cannot be undone.`)) {
+      return
+    }
+
+    setBulkLoading(true)
+    let successCount = 0
+
+    try {
+      for (const id of ids) {
+        try {
+          await deleteLink(id)
+          successCount++
+        } catch (err) {
+          console.error(`Failed to delete link ${id}:`, err)
+        }
+      }
+
+      if (successCount > 0) {
+        toast({
+          title: 'Links deleted',
+          description: `Successfully deleted ${successCount} link${successCount !== 1 ? 's' : ''}.`,
+        })
+        loadLinks()
+        setSelectedLinkIds(new Set())
+      }
+    } catch (err) {
+      setError('An error occurred while deleting links')
+      console.error('Error deleting links:', err)
+    } finally {
+      setBulkLoading(false)
+    }
+  }
+
+  const bulkActions: BulkAction[] = [
+    {
+      id: 'delete',
+      label: 'Delete Selected',
+      icon: <Icons.Trash2 className="h-4 w-4" />,
+      variant: 'destructive',
+      onClick: handleBulkDelete,
+    },
+  ]
+
   const totalStats = {
     totalLinks: links.length,
     totalClicks: links.reduce((sum, link) => sum + (link.total_clicks || 0), 0),
     totalUniqueVisitors: links.reduce((sum, link) => sum + (link.unique_clicks || 0), 0),
-    averageClickThroughRate: links.length > 0 
+    averageClickThroughRate: links.length > 0
       ? (links.reduce((sum, link) => sum + ((link.total_clicks || 0) / Math.max(link.unique_clicks || 1, 1)), 0) / links.length * 100).toFixed(1)
       : '0.0'
   }
@@ -255,6 +305,23 @@ export default function LinksPage() {
         </Tabs>
       </div>
 
+      {selectedLinkIds.size > 0 && (
+        <BulkActionsToolbar
+          selectedIds={selectedLinkIds}
+          totalItems={filteredLinks.length}
+          onSelectAll={(selected) => {
+            if (selected) {
+              setSelectedLinkIds(new Set(filteredLinks.map((l) => l.id)))
+            } else {
+              setSelectedLinkIds(new Set())
+            }
+          }}
+          onSelectNone={() => setSelectedLinkIds(new Set())}
+          actions={bulkActions}
+          isLoading={bulkLoading}
+        />
+      )}
+
       <Tabs defaultValue={showCreateTab ? "create" : "overview"} onValueChange={(value) => {
         if (value === "create") {
           setShowCreateTab(true)
@@ -288,8 +355,41 @@ export default function LinksPage() {
                 {filteredLinks.length > 0 ? (
                   filteredLinks.map(link => {
                     const metrics = getLinkMetrics(link)
+                    const isSelected = selectedLinkIds.has(link.id)
                     return (
-                      <div key={link.id} className="flex items-center justify-between p-4 border border-border rounded-lg hover:bg-accent/50 hover:shadow-sm transition-all duration-200 cursor-pointer group">
+                      <div
+                        key={link.id}
+                        className={cn(
+                          "flex items-center justify-between p-4 border border-border rounded-lg hover:bg-accent/50 hover:shadow-sm transition-all duration-200 cursor-pointer group",
+                          isSelected && "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800"
+                        )}
+                      >
+                        <div
+                          className="flex-shrink-0 mr-3 cursor-pointer -ml-2 z-10"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            const newSelected = new Set(selectedLinkIds)
+                            if (newSelected.has(link.id)) {
+                              newSelected.delete(link.id)
+                            } else {
+                              newSelected.add(link.id)
+                            }
+                            setSelectedLinkIds(newSelected)
+                          }}
+                        >
+                          <div
+                            className={cn(
+                              "w-5 h-5 border-2 border-gray-300 rounded transition-all",
+                              isSelected
+                                ? "bg-blue-600 border-blue-600"
+                                : "hover:border-gray-400"
+                            )}
+                          >
+                            {isSelected && (
+                              <Icons.Check className="h-4 w-4 text-white" />
+                            )}
+                          </div>
+                        </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center space-x-2 mb-2">
                             <Badge variant="outline" className="text-xs">

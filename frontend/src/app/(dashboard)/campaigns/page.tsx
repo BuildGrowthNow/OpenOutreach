@@ -22,17 +22,22 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Breadcrumb } from "@/components/layout/breadcrumb";
+import { BulkActionsToolbar, BulkAction } from "@/components/ui/bulk-actions-toolbar";
+import { useToast } from "@/components/ui/use-toast";
 import { cn } from "@/lib/utils";
 
 export default function CampaignsPage() {
   const router = useRouter();
+  const { toast } = useToast();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
+  const [bulkLoading, setBulkLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedTab, setSelectedTab] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
+  const [selectedCampaignIds, setSelectedCampaignIds] = useState<Set<string>>(new Set());
 
   const fetchCampaigns = useCallback(async () => {
     try {
@@ -188,6 +193,139 @@ export default function CampaignsPage() {
     }
   };
 
+  const handleBulkDelete = async (ids: string[]) => {
+    if (!window.confirm(`Delete ${ids.length} campaign(s)? This cannot be undone.`)) {
+      return;
+    }
+
+    setBulkLoading(true);
+    let successCount = 0;
+    const errors: string[] = [];
+
+    try {
+      for (const id of ids) {
+        try {
+          await deleteCampaign(id);
+          successCount++;
+        } catch (err) {
+          errors.push(`Failed to delete campaign ${id}`);
+        }
+      }
+
+      if (successCount > 0) {
+        toast({
+          title: "Campaigns deleted",
+          description: `Successfully deleted ${successCount} campaign${successCount !== 1 ? 's' : ''}.`,
+        });
+        fetchCampaigns();
+        setSelectedCampaignIds(new Set());
+      }
+
+      if (errors.length > 0) {
+        setError(`${errors.length} deletion(s) failed. Please try again.`);
+      }
+    } catch (err) {
+      setError("An error occurred while deleting campaigns");
+      console.error("Error deleting campaigns:", err);
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
+  const handleBulkPause = async (ids: string[]) => {
+    setBulkLoading(true);
+    let successCount = 0;
+
+    try {
+      for (const id of ids) {
+        try {
+          const response = await updateCampaign(id, { status: "paused" });
+          if (response.data) {
+            successCount++;
+          }
+        } catch (err) {
+          console.error(`Failed to pause campaign ${id}:`, err);
+        }
+      }
+
+      if (successCount > 0) {
+        toast({
+          title: "Campaigns paused",
+          description: `Successfully paused ${successCount} campaign${successCount !== 1 ? 's' : ''}.`,
+        });
+        fetchCampaigns();
+        setSelectedCampaignIds(new Set());
+      }
+    } catch (err) {
+      setError("An error occurred while pausing campaigns");
+      console.error("Error pausing campaigns:", err);
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
+  const handleBulkStart = async (ids: string[]) => {
+    setBulkLoading(true);
+    let successCount = 0;
+
+    try {
+      for (const id of ids) {
+        try {
+          const response = await updateCampaign(id, { status: "active" });
+          if (response.data) {
+            successCount++;
+          }
+        } catch (err) {
+          console.error(`Failed to start campaign ${id}:`, err);
+        }
+      }
+
+      if (successCount > 0) {
+        toast({
+          title: "Campaigns started",
+          description: `Successfully started ${successCount} campaign${successCount !== 1 ? 's' : ''}.`,
+        });
+        fetchCampaigns();
+        setSelectedCampaignIds(new Set());
+      }
+    } catch (err) {
+      setError("An error occurred while starting campaigns");
+      console.error("Error starting campaigns:", err);
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
+  const bulkActions: BulkAction[] = [
+    {
+      id: "start",
+      label: "Start Selected",
+      icon: <Icons.Play className="h-4 w-4" />,
+      onClick: handleBulkStart,
+      disabled: (ids) => {
+        const selectedCampaigns = campaigns.filter((c) => ids.includes(c.id));
+        return selectedCampaigns.every((c) => c.status === "active");
+      },
+    },
+    {
+      id: "pause",
+      label: "Pause Selected",
+      icon: <Icons.Pause className="h-4 w-4" />,
+      onClick: handleBulkPause,
+      disabled: (ids) => {
+        const selectedCampaigns = campaigns.filter((c) => ids.includes(c.id));
+        return selectedCampaigns.every((c) => c.status === "paused");
+      },
+    },
+    {
+      id: "delete",
+      label: "Delete Selected",
+      icon: <Icons.Trash2 className="h-4 w-4" />,
+      variant: "destructive",
+      onClick: handleBulkDelete,
+    },
+  ];
+
   const getStats = () => {
     const activeCount = campaigns.filter((c) => c.status === "active").length;
     const pausedCount = campaigns.filter((c) => c.status === "paused").length;
@@ -272,6 +410,23 @@ export default function CampaignsPage() {
         </Alert>
       )}
 
+      {selectedCampaignIds.size > 0 && (
+        <BulkActionsToolbar
+          selectedIds={selectedCampaignIds}
+          totalItems={filteredCampaigns.length}
+          onSelectAll={(selected) => {
+            if (selected) {
+              setSelectedCampaignIds(new Set(filteredCampaigns.map((c) => c.id)));
+            } else {
+              setSelectedCampaignIds(new Set());
+            }
+          }}
+          onSelectNone={() => setSelectedCampaignIds(new Set())}
+          actions={bulkActions}
+          isLoading={bulkLoading}
+        />
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard title="Total Campaigns" value={stats.total} />
         <StatCard title="Active" value={stats.active} status="active" />
@@ -320,18 +475,47 @@ export default function CampaignsPage() {
           }
         />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredCampaigns.map((campaign) => (
-            <CampaignCard
-              key={campaign.id}
-              campaign={campaign}
-              onClick={() => handleCampaignClick(campaign)}
-              onEdit={handleEditCampaign}
-              onDelete={handleDeleteClick}
-              onStart={handleStartCampaign}
-              onPause={handlePauseCampaign}
-            />
-          ))}
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredCampaigns.map((campaign) => (
+              <div key={campaign.id} className="relative">
+                <CampaignCard
+                  campaign={campaign}
+                  onClick={() => handleCampaignClick(campaign)}
+                  onEdit={handleEditCampaign}
+                  onDelete={handleDeleteClick}
+                  onStart={handleStartCampaign}
+                  onPause={handlePauseCampaign}
+                />
+                <div
+                  className="absolute top-3 left-3 cursor-pointer z-10"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const newSelected = new Set(selectedCampaignIds);
+                    if (newSelected.has(campaign.id)) {
+                      newSelected.delete(campaign.id);
+                    } else {
+                      newSelected.add(campaign.id);
+                    }
+                    setSelectedCampaignIds(newSelected);
+                  }}
+                >
+                  <div
+                    className={cn(
+                      "w-5 h-5 border-2 border-gray-300 rounded transition-all",
+                      selectedCampaignIds.has(campaign.id)
+                        ? "bg-blue-600 border-blue-600"
+                        : "hover:border-gray-400",
+                    )}
+                  >
+                    {selectedCampaignIds.has(campaign.id) && (
+                      <Icons.Check className="h-4 w-4 text-white" />
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
