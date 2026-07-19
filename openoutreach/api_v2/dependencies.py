@@ -1,52 +1,14 @@
 """
-FastAPI Dependencies - Auth supports both Supabase JWT and local JWT
+FastAPI Dependencies - Auth delegates to dependencies_v2.py
+
+This module maintains backwards compatibility but all auth logic
+has been moved to dependencies_v2.py for JWT-only authentication.
 """
-import os
-import httpx
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from jose import jwt, JWTError, jwk
 from typing import Optional
-import logging
 
-from openoutreach.mongodb import models
-
-logger = logging.getLogger(__name__)
 security = HTTPBearer()
-
-# Settings from environment
-SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
-SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
-JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "")
-JWT_ALGORITHM = os.environ.get("JWT_ALGORITHM", "HS256")
-
-# JWKS cache for Supabase RS256 verification
-_jwks_cache = None
-
-
-async def _fetch_supabase_jwks():
-    """Fetch JWKS from Supabase for RS256/ES256 verification."""
-    global _jwks_cache
-    if _jwks_cache:
-        return _jwks_cache
-
-    urls_to_try = [
-        f"{SUPABASE_URL}/auth/v1/.well-known/jwks.json",
-        f"{SUPABASE_URL}/.well-known/jwks.json",
-    ]
-
-    async with httpx.AsyncClient() as client:
-        for url in urls_to_try:
-            try:
-                resp = await client.get(url, timeout=5.0)
-                if resp.status_code == 200:
-                    _jwks_cache = resp.json()
-                    logger.info(f"Fetched JWKS from {url}")
-                    return _jwks_cache
-            except Exception as e:
-                logger.debug(f"Failed to fetch JWKS from {url}: {e}")
-                continue
-    return None
 
 
 async def get_current_user(

@@ -86,10 +86,11 @@ def expire_trials() -> int:
     if expired_count > 0:
         logger.info(f"Expired {expired_count} user trials")
 
+    # Send trial expiry email within 24 hours of expiration
     users = users_collection.find(
         {
             "subscription_status": "expired",
-            "trial_ends_at": {"$gte": now - timedelta(minutes=5), "$lt": now},
+            "trial_ends_at": {"$gte": now - timedelta(hours=24), "$lt": now},
         }
     )
 

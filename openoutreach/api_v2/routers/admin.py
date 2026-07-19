@@ -108,7 +108,7 @@ class CampaignInfoResponse(BaseModel):
     leads_count: int
 
 
-def _get_plan_limits(plan_name: str) -> Optional[dict]:
+def _get_plan_limits(plan_name: str):
     """Get plan limits from billing plans."""
     try:
         from openoutreach.billing.plans import get_plan
@@ -117,15 +117,6 @@ def _get_plan_limits(plan_name: str) -> Optional[dict]:
         logger.warning("Failed to import billing plans")
         return None
 
-
-def _stripe_list_invoices(customer_id: str, limit: int = 100):
-    """List invoices from Stripe."""
-    try:
-        from openoutreach.billing.stripe_service import list_invoices
-        return list_invoices(customer_id, limit=limit)
-    except ImportError:
-        logger.warning("Failed to import stripe service")
-        return []
 
 
 @router.get("/users", dependencies=[Depends(get_admin_user)])
@@ -261,6 +252,10 @@ async def update_user(user_id: str, request: UserUpdateRequest) -> UserDetailRes
         user.admin_role = request.admin_role
         logger.info(f"Admin updated user {user_id} role to {request.admin_role}")
 
+    if request.notes is not None:
+        user.admin_notes = request.notes
+        logger.info(f"Admin updated notes for user {user_id}")
+
     user.save()
 
     return UserDetailResponse(
@@ -382,7 +377,6 @@ async def get_finance_metrics() -> FinanceMetricsResponse:
     )
 
     mrr = 0.0
-    arr = 0.0
     users_data = list(users_collection.find({"subscription_status": "active"}))
     for user_doc in users_data:
         user = User.from_dict(user_doc)
@@ -391,8 +385,9 @@ async def get_finance_metrics() -> FinanceMetricsResponse:
             if user.billing_period == "monthly":
                 mrr += plan["monthly_price"] / 100.0
             elif user.billing_period == "annual":
-                arr += plan["annual_price"]
                 mrr += (plan["annual_price"] / 12) / 100.0
+
+    arr = mrr * 12
 
     return FinanceMetricsResponse(
         total_users=total_users,
@@ -408,9 +403,11 @@ async def get_finance_metrics() -> FinanceMetricsResponse:
 @router.get("/finance/invoices", dependencies=[Depends(get_admin_user)])
 async def get_all_invoices(
     skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=500),
+    limit: int = Query(50, ge=1, le=100),
 ) -> dict:
-    """Get all platform invoices."""
+    """Get all platform invoices using Stripe's bulk list API."""
+    import stripe as _stripe
+
     users_collection = get_mongodb_collection("users")
     if users_collection is None:
         raise HTTPException(
@@ -418,55 +415,48 @@ async def get_all_invoices(
             detail="Database unavailable",
         )
 
-    users_with_customer = list(
-        users_collection.find(
-            {"stripe_customer_id": {"$ne": None}},
-            projection={"_id": 1, "email": 1, "stripe_customer_id": 1},
+    customer_email_map: dict[str, tuple[str, str]] = {}
+    for doc in users_collection.find(
+        {"stripe_customer_id": {"$ne": None}},
+        projection={"_id": 1, "email": 1, "stripe_customer_id": 1},
+    ):
+        customer_email_map[doc["stripe_customer_id"]] = (doc["_id"], doc["email"])
+
+    try:
+        params: dict = {"limit": limit}
+        if skip > 0:
+            earlier = _stripe.Invoice.list(limit=skip)
+            if earlier.data:
+                params["starting_after"] = earlier.data[-1].id
+
+        invoices_response = _stripe.Invoice.list(**params)
+        invoices_list = invoices_response.data if invoices_response else []
+    except Exception as e:
+        logger.error(f"Failed to list invoices from Stripe: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch invoices")
+
+    results = []
+    for inv in invoices_list:
+        user_id, user_email = customer_email_map.get(inv.customer, ("unknown", "unknown"))
+        results.append(
+            InvoiceDetailResponse(
+                id=inv.id,
+                user_id=user_id,
+                user_email=user_email,
+                amount=inv.amount_paid,
+                status=inv.status,
+                created=inv.created,
+                period_start=inv.period_start,
+                period_end=inv.period_end,
+                pdf_url=inv.invoice_pdf,
+            )
         )
-    )
-
-    all_invoices = []
-    for user_doc in users_with_customer:
-        try:
-            invoices = _stripe_list_invoices(user_doc["stripe_customer_id"], limit=100)
-            for inv in invoices:
-                all_invoices.append({
-                    "id": inv.id,
-                    "user_id": user_doc["_id"],
-                    "user_email": user_doc["email"],
-                    "amount": inv.amount_paid,
-                    "status": inv.status,
-                    "created": inv.created,
-                    "period_start": inv.period_start,
-                    "period_end": inv.period_end,
-                    "pdf_url": inv.invoice_pdf,
-                })
-        except Exception as e:
-            logger.warning(f"Failed to fetch invoices for customer {user_doc['stripe_customer_id']}: {e}")
-            continue
-
-    all_invoices.sort(key=lambda x: x["created"], reverse=True)
-    total = len(all_invoices)
-    paginated = all_invoices[skip : skip + limit]
 
     return {
-        "total": total,
+        "total": invoices_response.total_count if hasattr(invoices_response, "total_count") else len(results),
         "skip": skip,
         "limit": limit,
-        "invoices": [
-            InvoiceDetailResponse(
-                id=inv["id"],
-                user_id=inv["user_id"],
-                user_email=inv["user_email"],
-                amount=inv["amount"],
-                status=inv["status"],
-                created=inv["created"],
-                period_start=inv["period_start"],
-                period_end=inv["period_end"],
-                pdf_url=inv["pdf_url"],
-            )
-            for inv in paginated
-        ],
+        "invoices": results,
     }
 
 

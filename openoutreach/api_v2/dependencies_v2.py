@@ -8,7 +8,7 @@ import logging
 from typing import Optional
 
 import httpx
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import jwt, JWTError, jwk
 

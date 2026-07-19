@@ -2,6 +2,7 @@
 Configuration loading and management for billing.
 """
 import logging
+import time
 from datetime import datetime, timezone as tz
 
 from openoutreach.billing.models import SiteConfig
@@ -10,24 +11,29 @@ from openoutreach.config import settings
 logger = logging.getLogger(__name__)
 
 _site_config_cache: SiteConfig | None = None
+_site_config_cache_time: float = 0.0
+_CACHE_TTL_SECONDS = 30
 
 
 def get_site_config() -> SiteConfig:
-    """Get global site configuration, cached in memory."""
-    global _site_config_cache
+    """Get global site configuration, cached with 30s TTL."""
+    global _site_config_cache, _site_config_cache_time
 
-    if _site_config_cache is not None:
+    now = time.monotonic()
+    if _site_config_cache is not None and (now - _site_config_cache_time) < _CACHE_TTL_SECONDS:
         return _site_config_cache
 
     config = SiteConfig.load()
     _site_config_cache = config
+    _site_config_cache_time = now
     return config
 
 
 def invalidate_config_cache() -> None:
     """Invalidate the cached config."""
-    global _site_config_cache
+    global _site_config_cache, _site_config_cache_time
     _site_config_cache = None
+    _site_config_cache_time = 0.0
 
 
 def get_trial_duration_days() -> int:
@@ -56,7 +62,7 @@ def is_lifetime_deal_active() -> bool:
 
 def load_from_env() -> None:
     """Load billing config from environment variables."""
-    if settings.TRIAL_DURATION_DAYS:
+    if settings.TRIAL_DURATION_DAYS is not None:
         config = get_site_config()
         config.trial_duration_days = settings.TRIAL_DURATION_DAYS
         config.save()

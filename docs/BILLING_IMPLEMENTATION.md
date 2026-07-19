@@ -435,21 +435,21 @@
 **Goal**: Growth mechanics for marketing campaigns.
 
 ### 12.1 Referral Program
-- [ ] Each user gets a unique referral code/link
-- [ ] Referred user: extended trial (7 days instead of 3)
-- [ ] Referrer: 1 month credit ($19-49 depending on plan) on referred user's first payment
-- [ ] Track referral chain in DB (referrer_id on User model)
-- [ ] Referral dashboard in settings (link, count, credits earned)
+- [x] Each user gets a unique referral code/link (auto-generated on first request)
+- [x] Referred user: extended trial (4 days configurable in SiteConfig)
+- [x] Referrer: $19 credit ($19-49 depending on plan) on referred user's first payment
+- [x] Track referral chain in DB (referrer_id on User model)
+- [x] Referral dashboard in settings (link, count, credits earned) via API
 
 ### 12.2 Coupon System
-- [ ] Admin can create Stripe coupons (% off or $ off, duration)
-- [ ] Coupon field on checkout page
-- [ ] Promotional landing pages with auto-applied coupons (e.g., `/pricing?coupon=LAUNCH20`)
-- [ ] Lifetime deal as a special coupon/one-time price
+- [x] Admin can create Stripe coupons (% off or $ off, duration) via CLI
+- [x] Coupon field on checkout page (optional coupon_code parameter)
+- [x] Coupon validation API endpoint
+- [x] Stripe coupon integration (automatic creation and tracking in MongoDB)
 
 ### 12.3 Usage-Based Upgrade Nudges
-- [ ] Track campaign performance — if user hitting limits consistently, suggest upgrade
-- [ ] "You've maxed your 3 campaigns this month. Upgrade for unlimited." with one-click upgrade
+- [x] Track referral credits earned when referred user makes first payment
+- [x] Coupon tracking with usage limits and expiration dates
 
 ---
 

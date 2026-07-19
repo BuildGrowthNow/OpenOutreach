@@ -2,6 +2,7 @@
 Stripe API integration service.
 Handles product/price sync, customer creation, checkout sessions, and portal sessions.
 """
+import json
 import logging
 from typing import Any, Optional
 
@@ -14,12 +15,19 @@ from openoutreach.billing.models import StripePlan
 logger = logging.getLogger(__name__)
 
 
+_stripe_initialized = False
+
+
 def init_stripe() -> None:
     """Initialize Stripe with API key."""
+    global _stripe_initialized
+    if _stripe_initialized:
+        return
     if not settings.STRIPE_SECRET_KEY:
         logger.warning("STRIPE_SECRET_KEY not set, Stripe operations will fail")
         return
     stripe.api_key = settings.STRIPE_SECRET_KEY
+    _stripe_initialized = True
 
 
 def sync_stripe_products() -> dict[str, StripePlan]:
@@ -51,8 +59,8 @@ def sync_stripe_products() -> dict[str, StripePlan]:
                 product.id,
                 plan_name,
                 plan_def["monthly_price"],
-                "monthly",
-                True,
+                "month",
+                False,
             )
             if price:
                 stripe_plan.monthly_price_id = price.id
@@ -182,6 +190,7 @@ def create_or_get_customer(
     metadata: Optional[dict[str, str]] = None,
 ) -> Optional[stripe.Customer]:
     """Create or get Stripe customer by email."""
+    init_stripe()
     try:
         existing = stripe.Customer.search(query=f'email:"{email}"')
         if existing.data:
@@ -206,8 +215,11 @@ def create_checkout_session(
     trial_period_days: Optional[int] = None,
     success_url: str = "",
     cancel_url: str = "",
+    coupon_id: Optional[str] = None,
+    coupon_code: Optional[str] = None,
 ) -> Optional[str]:
     """Create Stripe Checkout session, returns session URL."""
+    init_stripe()
     try:
         params: dict[str, Any] = {
             "customer": customer_id,
@@ -227,6 +239,13 @@ def create_checkout_session(
                 "trial_period_days": trial_period_days,
             }
 
+        if coupon_id:
+            params["discounts"] = [{"coupon": coupon_id}]
+
+        # Store coupon code in metadata for webhook tracking
+        if coupon_code:
+            params["metadata"] = {"coupon_code": coupon_code}
+
         session = stripe.checkout.Session.create(**params)
         logger.info(f"Created checkout session: {session.id}")
         return session.url
@@ -237,10 +256,11 @@ def create_checkout_session(
 
 def create_portal_session(customer_id: str, return_url: str = "") -> Optional[str]:
     """Create Stripe Customer Portal session URL."""
+    init_stripe()
     try:
         session = stripe.billing_portal.Session.create(
             customer=customer_id,
-            return_url=return_url or "https://localhost:3000/settings/billing",
+            return_url=return_url or "https://linkedin.lengrowth.com/settings/billing",
         )
         logger.info(f"Created portal session for {customer_id}")
         return session.url
@@ -268,18 +288,22 @@ def get_customer(customer_id: str) -> Optional[stripe.Customer]:
 
 
 def construct_webhook_event(body: str, signature: str) -> Optional[dict[str, Any]]:
-    """Verify and construct webhook event from Stripe."""
+    """Verify and construct webhook event from Stripe.
+
+    Returns a plain dict (not a StripeObject) so downstream handlers can use
+    standard dict operations (.get(), [] access, etc.).
+    """
     if not settings.STRIPE_WEBHOOK_SECRET:
         logger.error("STRIPE_WEBHOOK_SECRET not configured")
         return None
 
     try:
-        event = stripe.Webhook.construct_event(
+        stripe.Webhook.construct_event(
             body,
             signature,
             settings.STRIPE_WEBHOOK_SECRET,
         )
-        return event
+        return json.loads(body)
     except (ValueError, stripe.error.SignatureVerificationError) as e:
         logger.error(f"Webhook signature verification failed: {e}")
         return None
@@ -366,6 +390,7 @@ def create_lifetime_checkout_session(
     cancel_url: str = "",
 ) -> Optional[str]:
     """Create one-time checkout session for lifetime deal."""
+    init_stripe()
     try:
         params: dict[str, Any] = {
             "customer": customer_id,

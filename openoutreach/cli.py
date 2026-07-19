@@ -356,5 +356,74 @@ def cleanup_deleted_accounts():
     click.echo("Cleanup completed")
 
 
+@cli.command()
+@click.option('--code', required=True, help='Coupon code (e.g., LAUNCH20)')
+@click.option('--type', 'discount_type', type=click.Choice(['percent', 'fixed']), required=True, help='Discount type')
+@click.option('--value', type=int, required=True, help='Discount value (percentage or cents)')
+@click.option('--duration', type=click.Choice(['once', 'repeating', 'forever']), default='once', help='Discount duration')
+@click.option('--duration-months', type=int, help='Months for repeating discount')
+@click.option('--max-uses', type=int, help='Maximum number of redemptions')
+@click.option('--valid-until', help='Expiration date (YYYY-MM-DD)')
+def create_coupon(code, discount_type, value, duration, duration_months, max_uses, valid_until):
+    """Create a promotional coupon code."""
+    from openoutreach.mongodb.connection import initialize_mongodb_connection
+    from openoutreach.billing.coupons import create_stripe_coupon
+    from datetime import datetime
+
+    initialize_mongodb_connection()
+
+    valid_until_dt = None
+    if valid_until:
+        try:
+            valid_until_dt = datetime.strptime(valid_until, '%Y-%m-%d')
+        except ValueError:
+            click.echo(f"❌ Invalid date format: {valid_until}. Use YYYY-MM-DD")
+            sys.exit(1)
+
+    coupon = create_stripe_coupon(
+        code=code,
+        discount_type=discount_type,
+        discount_value=value,
+        duration=duration,
+        duration_in_months=duration_months,
+        max_redemptions=max_uses,
+        valid_until=valid_until_dt,
+        metadata={"created_by": "cli"}
+    )
+
+    if coupon:
+        click.echo(f"✅ Created coupon: {code}")
+        click.echo(f"   Type: {discount_type}")
+        click.echo(f"   Value: {value}{'%' if discount_type == 'percent' else '¢'}")
+        click.echo(f"   Duration: {duration}")
+        if max_uses:
+            click.echo(f"   Max uses: {max_uses}")
+        if valid_until_dt:
+            click.echo(f"   Valid until: {valid_until_dt.date()}")
+    else:
+        click.echo("❌ Failed to create coupon")
+        sys.exit(1)
+
+
+@cli.command()
+def list_coupons():
+    """List all active promotional coupons."""
+    from openoutreach.mongodb.connection import initialize_mongodb_connection
+    from openoutreach.billing.coupons import Coupon
+
+    initialize_mongodb_connection()
+
+    coupons = Coupon.list_active()
+    if not coupons:
+        click.echo("No active coupons found")
+        return
+
+    click.echo(f"Active coupons ({len(coupons)}):")
+    for coupon in coupons:
+        status = "✅" if coupon.is_valid() else "❌"
+        discount_str = f"{coupon.discount_value}{'%' if coupon.discount_type == 'percent' else '¢'}"
+        click.echo(f"{status} {coupon.code:<15} {coupon.discount_type:<8} {discount_str:<6} Used: {coupon.redemptions_count}/{coupon.max_redemptions or '∞'}")
+
+
 if __name__ == '__main__':
     cli()

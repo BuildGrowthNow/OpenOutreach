@@ -318,15 +318,23 @@ def ensure_all_indexes():
             ({'created_at': 1}, {'name': 'signup_time_idx'}),
         ]),
 
-        ('webhook_events', [
-            ({'stripe_event_id': 1}, {'name': 'webhook_event_id_idx'}),
-            ({'processed_at': 1}, {'name': 'webhook_processed_time_idx'}),
-        ]),
 
         ('admin_audit_logs', [
             ({'admin_user_id': 1, 'created_at': -1}, {'name': 'audit_admin_time_idx'}),
             ({'target_user_id': 1, 'created_at': -1}, {'name': 'audit_target_time_idx'}),
             ({'action': 1, 'created_at': -1}, {'name': 'audit_action_time_idx'}),
+        ]),
+
+        # Referrals and Coupons
+        ('referral_codes', [
+            ({'user_id': 1}, {'name': 'referral_user_idx'}),
+            ({'code': 1}, {'name': 'referral_code_unique_idx', 'unique': True}),
+        ]),
+
+        ('coupons', [
+            ({'code': 1}, {'name': 'coupon_code_unique_idx', 'unique': True}),
+            ({'valid_from': 1, 'valid_until': 1}, {'name': 'coupon_valid_idx'}),
+            ({'stripe_coupon_id': 1}, {'name': 'coupon_stripe_id_idx'}),
         ]),
     ]
 

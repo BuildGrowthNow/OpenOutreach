@@ -54,7 +54,10 @@ class TestUserStatusChecks:
             assert "blocked" in exc_info.value.detail.lower()
         finally:
             # Cleanup
-            User.collection.delete_many({"_id": user._id})
+            from openoutreach.mongodb.connection import get_mongodb_collection
+            user_coll = get_mongodb_collection("users")
+            if user_coll is not None:
+                user_coll.delete_many({"_id": user._id})
 
     @pytest.mark.asyncio
     async def test_deleted_user_returns_403(self):
@@ -85,7 +88,10 @@ class TestUserStatusChecks:
             assert "deleted" in exc_info.value.detail.lower()
         finally:
             # Cleanup
-            User.collection.delete_many({"_id": user._id})
+            from openoutreach.mongodb.connection import get_mongodb_collection
+            user_coll = get_mongodb_collection("users")
+            if user_coll is not None:
+                user_coll.delete_many({"_id": user._id})
 
     @pytest.mark.asyncio
     async def test_inactive_user_returns_403(self):
@@ -114,7 +120,10 @@ class TestUserStatusChecks:
             assert "inactive" in exc_info.value.detail.lower()
         finally:
             # Cleanup
-            User.collection.delete_many({"_id": user._id})
+            from openoutreach.mongodb.connection import get_mongodb_collection
+            user_coll = get_mongodb_collection("users")
+            if user_coll is not None:
+                user_coll.delete_many({"_id": user._id})
 
     @pytest.mark.asyncio
     async def test_active_user_succeeds(self):
@@ -141,7 +150,10 @@ class TestUserStatusChecks:
             assert user_id == user._id
         finally:
             # Cleanup
-            User.collection.delete_many({"_id": user._id})
+            from openoutreach.mongodb.connection import get_mongodb_collection
+            user_coll = get_mongodb_collection("users")
+            if user_coll is not None:
+                user_coll.delete_many({"_id": user._id})
 
 
 class TestSignupRateLimit:
@@ -153,8 +165,8 @@ class TestSignupRateLimit:
 
         # Clear any existing rate limit records for this IP
         from openoutreach.mongodb.connection import get_mongodb_collection
-        rate_limit_coll = get_mongodb_collection("signup_rate_limits")
-        if rate_limit_coll:
+        rate_limit_coll = get_mongodb_collection("ip_signup_attempts")
+        if rate_limit_coll is not None:
             rate_limit_coll.delete_many({"ip_address": test_ip})
 
         try:
@@ -177,7 +189,7 @@ class TestSignupRateLimit:
             assert "rate limit" in error_msg.lower()
         finally:
             # Cleanup
-            if rate_limit_coll:
+            if rate_limit_coll is not None:
                 rate_limit_coll.delete_many({"ip_address": test_ip})
 
 
@@ -214,21 +226,26 @@ class TestPasswordResetLogic:
 
             # Verify token was stored
             stored_user = User.get(user._id)
+            assert stored_user is not None
             assert stored_user.password_reset_token == reset_token
             assert stored_user.password_reset_expires is not None
 
             # Change password
             new_password = "newpassword456"
-            user.set_password(new_password)
-            user.save()
+            stored_user.set_password(new_password)
+            stored_user.save()
 
             # Verify password was changed
             updated_user = User.get(user._id)
+            assert updated_user is not None
             assert updated_user.verify_password(new_password)
             assert not updated_user.verify_password("oldpassword123")
         finally:
             # Cleanup
-            User.collection.delete_many({"_id": user._id})
+            from openoutreach.mongodb.connection import get_mongodb_collection
+            user_coll = get_mongodb_collection("users")
+            if user_coll is not None:
+                user_coll.delete_many({"_id": user._id})
 
 
 class TestEmailVerificationLogic:
@@ -262,6 +279,7 @@ class TestEmailVerificationLogic:
         try:
             # Verify token was stored
             stored_user = User.get(user._id)
+            assert stored_user is not None
             assert stored_user.email_verification_token == verification_token
             assert stored_user.email_verified is False
 
@@ -273,8 +291,12 @@ class TestEmailVerificationLogic:
 
             # Verify user is now verified
             verified_user = User.get(user._id)
+            assert verified_user is not None
             assert verified_user.email_verified is True
             assert verified_user.email_verification_token is None
         finally:
             # Cleanup
-            User.collection.delete_many({"_id": user._id})
+            from openoutreach.mongodb.connection import get_mongodb_collection
+            user_coll = get_mongodb_collection("users")
+            if user_coll is not None:
+                user_coll.delete_many({"_id": user._id})

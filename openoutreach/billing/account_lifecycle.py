@@ -87,12 +87,36 @@ def cancel_account_deletion(user_id: str) -> dict:
         raise ValueError("Grace period has expired - account cannot be recovered")
 
     user.cancel_deletion()
+
+    # Reactivate subscription if it was canceled
+    if user.stripe_subscription_id and user.subscription_status == "canceled":
+        try:
+            from openoutreach.billing.stripe_service import reactivate_subscription
+            reactivate_subscription(user.stripe_subscription_id)
+            user.subscription_status = "active"
+            logger.info(f"Reactivated subscription for user: {user.email}")
+        except Exception as e:
+            logger.error(f"Failed to reactivate subscription: {e}")
+            # Continue with profile reactivation even if subscription fails
+
+    # Reactivate LinkedIn profiles
+    try:
+        profiles_collection = get_mongodb_collection("linkedin_profiles")
+        if profiles_collection is not None:
+            profiles_collection.update_many(
+                {"user_id": user_id},
+                {"$set": {"is_active": True}},
+            )
+            logger.info(f"Reactivated all profiles for user: {user.email}")
+    except Exception as e:
+        logger.error(f"Failed to reactivate profiles: {e}")
+
     logger.info(f"Account deletion canceled for: {user.email}")
 
     return {
         "status": "active",
         "subscription_status": user.subscription_status,
-        "message": "Your account has been reactivated",
+        "message": "Your account has been reactivated. Please resubscribe to resume using the service.",
     }
 
 
@@ -267,8 +291,11 @@ def cleanup_expired_deletions():
 
         deleted_users = users_collection.find(
             {
-                "deletion_scheduled_at": {"$exists": True, "$ne": None},
-                "deletion_scheduled_at": {"$lt": grace_period_threshold},
+                "deletion_scheduled_at": {
+                    "$exists": True,
+                    "$ne": None,
+                    "$lt": grace_period_threshold,
+                }
             }
         )
 

@@ -33,7 +33,6 @@ class PlanEnforcer:
 
         count = collection.count_documents({
             "user_id": user._id,
-            "active": True,
             "is_active": True,
         })
 
@@ -108,7 +107,6 @@ class PlanEnforcer:
         if profiles_collection is not None:
             stats["linkedin_accounts_used"] = profiles_collection.count_documents({
                 "user_id": user._id,
-                "active": True,
                 "is_active": True,
             })
 

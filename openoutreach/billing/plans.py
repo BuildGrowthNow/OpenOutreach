@@ -21,7 +21,7 @@ PLANS: list[PlanDefinition] = [
         "name": "starter",
         "display_name": "Starter",
         "monthly_price": 1900,
-        "annual_price": 16000,
+        "annual_price": 19200,
         "max_linkedin_accounts": 1,
         "max_campaigns": 3,
         "features": ["ai_messages", "follow_ups", "inbox", "analytics"],
@@ -30,7 +30,7 @@ PLANS: list[PlanDefinition] = [
         "name": "pro",
         "display_name": "Pro",
         "monthly_price": 4900,
-        "annual_price": 41000,
+        "annual_price": 49200,
         "max_linkedin_accounts": 1,
         "max_campaigns": None,
         "features": [
@@ -48,7 +48,7 @@ PLANS: list[PlanDefinition] = [
         "name": "business",
         "display_name": "Business",
         "monthly_price": 9900,
-        "annual_price": 82000,
+        "annual_price": 99600,
         "max_linkedin_accounts": 3,
         "max_campaigns": None,
         "features": [
@@ -69,7 +69,7 @@ PLANS: list[PlanDefinition] = [
         "name": "agency",
         "display_name": "Agency",
         "monthly_price": 24900,
-        "annual_price": 207000,
+        "annual_price": 249600,
         "max_linkedin_accounts": 10,
         "max_campaigns": None,
         "features": [

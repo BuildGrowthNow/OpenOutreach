@@ -110,6 +110,9 @@ class SiteConfig:
         trial_duration_days: int = 3,
         lifetime_deal_enabled: bool = True,
         lifetime_deal_ends_at: Optional[datetime] = None,
+        referral_program_enabled: bool = True,
+        referral_trial_extension_days: int = 4,
+        referral_credit_cents: int = 1900,
         created_at: Optional[datetime] = None,
         updated_at: Optional[datetime] = None,
     ):
@@ -117,6 +120,9 @@ class SiteConfig:
         self.trial_duration_days = trial_duration_days
         self.lifetime_deal_enabled = lifetime_deal_enabled
         self.lifetime_deal_ends_at = lifetime_deal_ends_at
+        self.referral_program_enabled = referral_program_enabled
+        self.referral_trial_extension_days = referral_trial_extension_days
+        self.referral_credit_cents = referral_credit_cents
         self.created_at = created_at or datetime.now(tz.utc)
         self.updated_at = updated_at or datetime.now(tz.utc)
 
@@ -127,6 +133,9 @@ class SiteConfig:
             "trial_duration_days": self.trial_duration_days,
             "lifetime_deal_enabled": self.lifetime_deal_enabled,
             "lifetime_deal_ends_at": self.lifetime_deal_ends_at,
+            "referral_program_enabled": self.referral_program_enabled,
+            "referral_trial_extension_days": self.referral_trial_extension_days,
+            "referral_credit_cents": self.referral_credit_cents,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
         }
@@ -139,6 +148,9 @@ class SiteConfig:
             trial_duration_days=data.get("trial_duration_days", 3),
             lifetime_deal_enabled=data.get("lifetime_deal_enabled", True),
             lifetime_deal_ends_at=data.get("lifetime_deal_ends_at"),
+            referral_program_enabled=data.get("referral_program_enabled", True),
+            referral_trial_extension_days=data.get("referral_trial_extension_days", 4),
+            referral_credit_cents=data.get("referral_credit_cents", 1900),
             created_at=data.get("created_at"),
             updated_at=data.get("updated_at"),
         )

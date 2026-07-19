@@ -31,7 +31,7 @@ def handle_plan_downgrade(user: User, new_limit: int) -> dict[str, int]:
 
     active_profiles = list(
         collection.find(
-            {"user_id": user._id, "active": True, "is_active": True},
+            {"user_id": user._id, "is_active": True},
             sort=[("created_at", 1)],
         )
     )

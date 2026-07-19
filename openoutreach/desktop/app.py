@@ -160,7 +160,15 @@ class TrayApp:
     def _on_login(self):
         """Open login page in browser."""
         # Open web platform (Next.js), not API backend
-        platform_url = self.config.api_url.replace("linkedin-api.", "linkedin.")
+        # Extract base URL properly (handles localhost, custom domains, etc.)
+        import urllib.parse
+        parsed = urllib.parse.urlparse(self.config.api_url)
+        # For production: replace linkedin-api subdomain with linkedin
+        # For localhost/custom: use as-is
+        if "linkedin-api." in parsed.netloc:
+            platform_url = self.config.api_url.replace("linkedin-api.", "linkedin.")
+        else:
+            platform_url = self.config.api_url
         login_url = f"{platform_url}/login?desktop=true&callback=openoutreach://auth"
         webbrowser.open(login_url)
 
@@ -181,12 +189,28 @@ class TrayApp:
     def _on_open_dashboard(self):
         """Open web dashboard."""
         # Open web platform (Next.js), not API backend
-        platform_url = self.config.api_url.replace("linkedin-api.", "linkedin.")
+        # Extract base URL properly (handles localhost, custom domains, etc.)
+        import urllib.parse
+        parsed = urllib.parse.urlparse(self.config.api_url)
+        # For production: replace linkedin-api subdomain with linkedin
+        # For localhost/custom: use as-is
+        if "linkedin-api." in parsed.netloc:
+            platform_url = self.config.api_url.replace("linkedin-api.", "linkedin.")
+        else:
+            platform_url = self.config.api_url
         webbrowser.open(platform_url)
 
     def _on_manage_subscription(self):
         """Open subscription management page."""
-        platform_url = self.config.api_url.replace("linkedin-api.", "linkedin.")
+        # Extract base URL properly (handles localhost, custom domains, etc.)
+        import urllib.parse
+        parsed = urllib.parse.urlparse(self.config.api_url)
+        # For production: replace linkedin-api subdomain with linkedin
+        # For localhost/custom: use as-is
+        if "linkedin-api." in parsed.netloc:
+            platform_url = self.config.api_url.replace("linkedin-api.", "linkedin.")
+        else:
+            platform_url = self.config.api_url
         webbrowser.open(f"{platform_url}/settings/billing")
 
     def _on_quit(self):

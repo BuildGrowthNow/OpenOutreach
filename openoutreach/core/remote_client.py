@@ -84,7 +84,8 @@ class RemoteClient:
         browser: str,
     ) -> dict:
         """Send daemon heartbeat to backend."""
-        response = await self._client.post(
+        response = await self._request_with_retry(
+            "POST",
             "/api/daemon/heartbeat",
             json={
                 "daemon_id": self.daemon_id,
@@ -95,16 +96,15 @@ class RemoteClient:
                 "browser": browser,
             },
         )
-        response.raise_for_status()
         return response.json()
 
     async def get_config(self, linkedin_profile_id: str) -> DaemonConfig:
         """Fetch daemon configuration from backend."""
-        response = await self._client.get(
+        response = await self._request_with_retry(
+            "GET",
             "/api/daemon/config",
             params={"linkedin_profile_id": linkedin_profile_id},
         )
-        response.raise_for_status()
         data = response.json()
 
         return DaemonConfig(
@@ -128,14 +128,14 @@ class RemoteClient:
             Task dict with task_id, task_type, payload, campaign_id if available.
             None if no tasks are ready.
         """
-        response = await self._client.post(
+        response = await self._request_with_retry(
+            "POST",
             "/api/daemon/tasks/claim",
             params={
                 "linkedin_profile_id": linkedin_profile_id,
                 "daemon_id": self.daemon_id,
             },
         )
-        response.raise_for_status()
         data = response.json()
         return data if data.get("task_id") else None
 
@@ -148,7 +148,8 @@ class RemoteClient:
         duration_ms: int = 0,
     ) -> dict:
         """Report task completion or failure to backend."""
-        response = await self._client.post(
+        response = await self._request_with_retry(
+            "POST",
             "/api/daemon/tasks/result",
             json={
                 "task_id": task_id,
@@ -158,19 +159,18 @@ class RemoteClient:
                 "duration_ms": duration_ms,
             },
         )
-        response.raise_for_status()
         return response.json()
 
     async def sync_cookies(self, linkedin_profile_id: str, cookie_data: str) -> dict:
         """Sync browser cookies from desktop daemon to backend."""
-        response = await self._client.post(
+        response = await self._request_with_retry(
+            "POST",
             "/api/daemon/cookies/sync",
             json={
                 "linkedin_profile_id": linkedin_profile_id,
                 "cookie_data": cookie_data,
             },
         )
-        response.raise_for_status()
         return response.json()
 
     async def report_session_state(
@@ -181,7 +181,8 @@ class RemoteClient:
         verification_type: Optional[str] = None,
     ) -> dict:
         """Report session state (login status, verification needed) to backend."""
-        response = await self._client.post(
+        response = await self._request_with_retry(
+            "POST",
             "/api/daemon/session/state",
             json={
                 "linkedin_profile_id": linkedin_profile_id,
@@ -190,7 +191,6 @@ class RemoteClient:
                 "verification_type": verification_type,
             },
         )
-        response.raise_for_status()
         return response.json()
 
     async def get_credentials(self, linkedin_profile_id: str) -> dict:
@@ -199,11 +199,11 @@ class RemoteClient:
         Returns:
             Dict with email, password, and optional cookie_data.
         """
-        response = await self._client.get(
+        response = await self._request_with_retry(
+            "GET",
             "/api/daemon/credentials",
             params={"linkedin_profile_id": linkedin_profile_id},
         )
-        response.raise_for_status()
         return response.json()
 
     async def check_subscription_status(self) -> SubscriptionStatus:
@@ -212,10 +212,10 @@ class RemoteClient:
         Returns:
             SubscriptionStatus object indicating if daemon can run.
         """
-        response = await self._client.get(
+        response = await self._request_with_retry(
+            "GET",
             "/api/daemon/subscription/status",
         )
-        response.raise_for_status()
         data = response.json()
 
         return SubscriptionStatus(

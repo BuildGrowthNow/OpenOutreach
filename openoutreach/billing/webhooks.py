@@ -11,6 +11,7 @@ from openoutreach.mongodb.models_user import User
 from openoutreach.mongodb.connection import get_mongodb_collection
 from openoutreach.billing.emails import (
     send_plan_upgraded,
+    send_plan_downgraded,
     send_payment_failed,
     send_trial_expiry_warning,
     send_welcome_email,
@@ -45,6 +46,16 @@ def handle_checkout_session_completed(event: dict[str, Any]) -> None:
         logger.warning(f"checkout.session.completed: user not found for customer {customer_id}")
         return
 
+    # Increment coupon redemptions if coupon was used
+    discount = session.get("total_details", {}).get("breakdown", {}).get("discounts", [])
+    if discount and payment_status == "paid":
+        from openoutreach.billing.coupons import increment_coupon_redemptions
+        # Stripe doesn't directly expose coupon code in session, but we can extract from discount metadata
+        # For now, we'll track this via metadata if coupon code was stored during checkout
+        coupon_code = session.get("metadata", {}).get("coupon_code")
+        if coupon_code:
+            increment_coupon_redemptions(coupon_code)
+
     mode = session.get("mode", "subscription")
 
     if mode == "payment":
@@ -62,11 +73,12 @@ def handle_checkout_session_completed(event: dict[str, Any]) -> None:
                 logger.error(f"Failed to send lifetime deal email: {e}")
     else:
         user.stripe_subscription_id = subscription_id
-        user.subscription_status = "trialing" if session.get("mode") == "subscription" else "active"
 
         if subscription_id:
             sub = stripe.Subscription.retrieve(subscription_id)
             if sub:
+                user.subscription_status = "trialing" if sub.status == "trialing" else "active"
+
                 plan_name = _get_plan_name_from_subscription(sub)
                 if plan_name:
                     user.plan = plan_name
@@ -77,8 +89,12 @@ def handle_checkout_session_completed(event: dict[str, Any]) -> None:
                 if sub.current_period_end:
                     user.current_period_end = datetime.fromtimestamp(sub.current_period_end, tz=tz.utc)
 
-                user.billing_period = "annual" if sub.items.data[0].price.recurring.interval == "year" else "monthly"
+                if sub.items and sub.items.data:
+                    user.billing_period = "annual" if sub.items.data[0].price.recurring.interval == "year" else "monthly"
+
                 _sync_plan_limits(user)
+        else:
+            user.subscription_status = "active"
 
         user.save()
         try:
@@ -183,9 +199,19 @@ def handle_customer_subscription_updated(event: dict[str, Any]) -> None:
         _enforce_linkedin_account_limit(user._id, user.linkedin_account_limit)
         if old_plan and plan_name:
             try:
-                send_plan_upgraded(user, old_plan, plan_name)
+                # Determine if upgrade or downgrade based on plan hierarchy
+                plan_hierarchy = ["starter", "pro", "business", "agency"]
+                old_idx = plan_hierarchy.index(old_plan) if old_plan in plan_hierarchy else -1
+                new_idx = plan_hierarchy.index(plan_name) if plan_name in plan_hierarchy else -1
+
+                if new_idx > old_idx:
+                    send_plan_upgraded(user, old_plan, plan_name)
+                elif new_idx < old_idx:
+                    # Downgrade - schedule for period end
+                    effective_date = datetime.fromtimestamp(subscription.get("current_period_end", 0), tz=tz.utc)
+                    send_plan_downgraded(user, old_plan, plan_name, effective_date)
             except Exception as e:
-                logger.error(f"Failed to send plan upgrade email: {e}")
+                logger.error(f"Failed to send plan change email: {e}")
 
     user.save()
     logger.info(f"Updated subscription for user {user._id}")
@@ -220,6 +246,55 @@ def handle_customer_subscription_deleted(event: dict[str, Any]) -> None:
     logger.info(f"Canceled subscription for user {user._id}")
 
 
+def _apply_referral_credit(user: User, invoice: dict[str, Any]) -> None:
+    """Apply referral credits when a referred user makes first payment."""
+    if not user.referrer_id:
+        return
+
+    # Only apply credit once - check if already credited
+    if user.referral_credit_applied:
+        return
+
+    # Only apply on first payment - check if this is NOT a renewal
+    billing_reason = invoice.get("billing_reason")
+    if billing_reason != "subscription_create":
+        logger.debug(f"Skipping referral credit for {user.email}: billing_reason={billing_reason}")
+        return
+
+    from openoutreach.billing.referrals import ReferralCode
+
+    referrer = User.get(user.referrer_id)
+    if not referrer:
+        logger.warning(f"Referrer not found: {user.referrer_id}")
+        return
+
+    ref_code = ReferralCode.get_by_user_id(referrer._id)
+    if not ref_code or not ref_code.code:
+        return
+
+    if not ReferralCode.increment_usage(ref_code.code):
+        return
+
+    if referrer.stripe_customer_id:
+        try:
+            stripe.Customer.create_balance_transaction(
+                referrer.stripe_customer_id,
+                amount=-1900,
+                currency="usd",
+                description=f"Referral credit from {user.email}",
+            )
+            logger.info(f"Applied $19 Stripe credit to {referrer.email} from new user {user.email}")
+        except stripe.error.StripeError as e:
+            logger.error(f"Failed to apply Stripe credit to {referrer.email}: {e}")
+            return
+    else:
+        logger.warning(f"Referrer {referrer.email} has no Stripe customer ID, credit tracked locally only")
+
+    # Mark credit as applied to prevent duplicate credits on renewals
+    user.referral_credit_applied = True
+    user.save()
+
+
 def handle_invoice_payment_succeeded(event: dict[str, Any]) -> None:
     """Handle invoice.payment_succeeded event."""
     invoice = event["data"]["object"]
@@ -242,6 +317,9 @@ def handle_invoice_payment_succeeded(event: dict[str, Any]) -> None:
 
     user.subscription_status = "active"
     user.save()
+
+    _apply_referral_credit(user, invoice)
+
     logger.info(f"Payment succeeded for user {user._id}")
 
 
@@ -410,14 +488,13 @@ def _enforce_linkedin_account_limit(user_id: str, limit: int) -> None:
         )
 
         if len(active_profiles) > limit:
-            excess_count = len(active_profiles) - limit
-            excess_profiles = active_profiles[:excess_count]
+            excess_profiles = active_profiles[limit:]
             excess_ids = [p["_id"] for p in excess_profiles]
 
             profiles_collection.update_many(
                 {"_id": {"$in": excess_ids}},
                 {"$set": {"is_active": False}},
             )
-            logger.info(f"Deactivated {excess_count} excess profiles for user {user_id}")
+            logger.info(f"Deactivated {len(excess_profiles)} excess profiles for user {user_id}")
     except Exception as e:
         logger.error(f"Failed to enforce account limits for user {user_id}: {e}")
