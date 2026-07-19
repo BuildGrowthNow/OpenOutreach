@@ -9,12 +9,14 @@ import { NextRequest, NextResponse } from 'next/server';
 const PUBLIC_PATHS = [
   '/',
   '/login',
-  '/login-v2',
   '/signup',
-  '/signup-v2',
   '/register',
   '/reset-password',
+  '/verify-email',
   '/pricing',
+  '/lifetime',
+  '/terms',
+  '/privacy',
   '/about',
 ];
 

@@ -23,9 +23,11 @@ export function PlanCard({
   onSelectPlan,
   isLoading = false,
 }: PlanCardProps) {
-  const displayPrice = isAnnual ? plan.annual_price : plan.monthly_price;
+  const monthlyPriceDollars = plan.monthly_price / 100;
+  const annualPricePerMonthDollars = plan.annual_price / 100 / 12;
+  const displayPrice = isAnnual ? annualPricePerMonthDollars : monthlyPriceDollars;
   const savingsPercent = plan.monthly_price > 0 && plan.annual_price > 0
-    ? Math.round((1 - plan.annual_price / plan.monthly_price) * 100)
+    ? Math.round((1 - plan.annual_price / (plan.monthly_price * 12)) * 100)
     : 0;
 
   return (
@@ -52,7 +54,7 @@ export function PlanCard({
       <CardContent className="flex flex-1 flex-col gap-6">
         <div>
           <div className="flex items-baseline gap-1">
-            <span className="text-4xl font-bold">${displayPrice}</span>
+            <span className="text-4xl font-bold">${Math.round(displayPrice)}</span>
             <span className="text-muted-foreground">/mo</span>
           </div>
           {isAnnual && savingsPercent > 0 && (

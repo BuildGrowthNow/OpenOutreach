@@ -9,6 +9,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Check, X } from "lucide-react";
+import { Fragment } from "react";
 import { Plan } from "@/lib/api/billing";
 
 interface PlanComparisonProps {
@@ -61,28 +62,28 @@ export function PlanComparison({ plans, currentPlan }: PlanComparisonProps) {
         </TableHeader>
         <TableBody>
           {featureCategories.map((category) => (
-            <TableRow key={category.name} className="bg-muted/50">
-              <TableCell colSpan={plans.length + 1} className="font-semibold">
-                {category.name}
-              </TableCell>
-            </TableRow>
-          ))}
-          {featureCategories.map((category) =>
-            category.features.map((feature) => (
-              <TableRow key={feature}>
-                <TableCell>{feature}</TableCell>
-                {plans.map((plan) => (
-                  <TableCell key={plan.name} className="text-center">
-                    {hasFeature(plan, feature) ? (
-                      <Check className="h-4 w-4 text-green-600 mx-auto" />
-                    ) : (
-                      <X className="h-4 w-4 text-gray-300 mx-auto" />
-                    )}
-                  </TableCell>
-                ))}
+            <Fragment key={category.name}>
+              <TableRow className="bg-muted/50">
+                <TableCell colSpan={plans.length + 1} className="font-semibold">
+                  {category.name}
+                </TableCell>
               </TableRow>
-            ))
-          )}
+              {category.features.map((feature) => (
+                <TableRow key={feature}>
+                  <TableCell>{feature}</TableCell>
+                  {plans.map((plan) => (
+                    <TableCell key={plan.name} className="text-center">
+                      {hasFeature(plan, feature) ? (
+                        <Check className="h-4 w-4 text-green-600 mx-auto" />
+                      ) : (
+                        <X className="h-4 w-4 text-gray-300 mx-auto" />
+                      )}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))}
+            </Fragment>
+          ))}
           <TableRow className="bg-muted/50">
             <TableCell className="font-semibold">LinkedIn Accounts</TableCell>
             {plans.map((plan) => (

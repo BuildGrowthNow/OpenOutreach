@@ -1,12 +1,12 @@
 /**
- * Reset Password Page - Supabase Integration
- * 
- * A page for password reset functionality using Supabase.
+ * Reset Password Page - JWT Integration
+ *
+ * Handles both password reset request (no token) and confirmation (with token).
  */
 
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Image from "next/image"
 
@@ -20,31 +20,56 @@ import {
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { useAuthStore } from "@/lib/authStore"
 
-export default function ResetPasswordPage() {
+function ResetPasswordContent() {
+  const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
-  const updatePassword = useAuthStore((state) => state.updatePassword)
+  const [mode, setMode] = useState<"request" | "confirm">("request")
   const router = useRouter()
   const searchParams = useSearchParams()
 
-  // Check if user has a session (i.e., they came from email link)
+  // Check if we have a token (confirm mode) or not (request mode)
   useEffect(() => {
-    const checkAuth = async () => {
-      const { session } = useAuthStore.getState()
-      if (!session) {
-        // Redirect to login if no session
-        router.push("/login")
-      }
+    const token = searchParams.get("token")
+    if (token) {
+      setMode("confirm")
+    } else {
+      setMode("request")
     }
-    checkAuth()
-  }, [router])
+  }, [searchParams])
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleRequestReset = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsLoading(true)
+    setError(null)
+
+    try {
+      const response = await fetch("/api/auth/password-reset/request/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+        setError(data.detail || "Failed to send reset email")
+        setIsLoading(false)
+        return
+      }
+
+      setSuccess(true)
+    } catch (err) {
+      setError("An unexpected error occurred. Please try again.")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleConfirmReset = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
     setError(null)
@@ -63,17 +88,25 @@ export default function ResetPasswordPage() {
     }
 
     try {
-      const result = await updatePassword(password)
+      const token = searchParams.get("token")
+      const response = await fetch("/api/auth/password-reset/confirm/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, new_password: password }),
+      })
 
-      if (result.error) {
-        setError(result.error)
-      } else {
-        setSuccess(true)
-        // Redirect to login after successful password reset
-        setTimeout(() => {
-          router.push("/login?password-reset=success")
-        }, 2000)
+      if (!response.ok) {
+        const data = await response.json()
+        setError(data.detail || "Failed to reset password")
+        setIsLoading(false)
+        return
       }
+
+      setSuccess(true)
+      // Redirect to login after successful password reset
+      setTimeout(() => {
+        router.push("/login?password-reset=success")
+      }, 2000)
     } catch (err) {
       setError("An unexpected error occurred. Please try again.")
     } finally {
@@ -81,12 +114,45 @@ export default function ResetPasswordPage() {
     }
   }
 
-  if (success) {
+  if (success && mode === "request") {
     return (
       <div className="flex items-center justify-center min-h-screen px-4">
         <Card className="w-full max-w-md">
           <CardHeader className="space-y-6">
-            {/* Logo - Replace src with actual logo path */}
+            <div className="flex justify-center items-center py-4">
+              <div className="relative h-24 w-64">
+                <Image
+                  src="/logo-white-small.png"
+                  alt="Lengrowth Logo"
+                  fill
+                  className="object-contain"
+                />
+              </div>
+            </div>
+            <div className="text-center space-y-2">
+              <CardTitle className="text-2xl text-green-600">Check your email!</CardTitle>
+              <CardDescription className="text-lg">
+                If an account exists with that email, we've sent password reset instructions.
+              </CardDescription>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="mt-6 text-center text-base">
+              <a href="/login" className="underline underline-offset-4 hover:text-primary font-medium transition-colors">
+                Back to login
+              </a>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  if (success && mode === "confirm") {
+    return (
+      <div className="flex items-center justify-center min-h-screen px-4">
+        <Card className="w-full max-w-md">
+          <CardHeader className="space-y-6">
             <div className="flex justify-center items-center py-4">
               <div className="relative h-24 w-64">
                 <Image
@@ -115,11 +181,68 @@ export default function ResetPasswordPage() {
     )
   }
 
+  // Request mode - ask for email
+  if (mode === "request") {
+    return (
+      <div className="flex items-center justify-center min-h-screen px-4">
+        <Card className="w-full max-w-md">
+          <CardHeader className="space-y-6">
+            <div className="flex justify-center items-center py-4">
+              <div className="relative h-24 w-64">
+                <Image
+                  src="/logo-white-small.png"
+                  alt="Lengrowth Logo"
+                  fill
+                  className="object-contain"
+                />
+              </div>
+            </div>
+            <div className="text-center space-y-2">
+              <CardTitle className="text-3xl">Reset Password</CardTitle>
+              <CardDescription className="text-lg">
+                Enter your email to receive reset instructions
+              </CardDescription>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <form onSubmit={handleRequestReset} className="space-y-5">
+              {error && (
+                <div className="text-sm text-red-500 text-center bg-red-500/10 py-3 rounded-lg border border-red-500/20">
+                  {error}
+                </div>
+              )}
+              <div className="space-y-3">
+                <Label htmlFor="email" className="text-base font-medium">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Enter your email"
+                  required
+                  className="h-11 px-4"
+                />
+              </div>
+              <Button type="submit" className="w-full h-11 text-base font-medium" disabled={isLoading}>
+                {isLoading ? "Sending..." : "Send Reset Link"}
+              </Button>
+            </form>
+            <div className="mt-6 text-center text-base">
+              <a href="/login" className="underline underline-offset-4 hover:text-primary font-medium transition-colors">
+                Back to login
+              </a>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  // Confirm mode - ask for new password
   return (
     <div className="flex items-center justify-center min-h-screen px-4">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-6">
-          {/* Logo - Replace src with actual logo path */}
           <div className="flex justify-center items-center py-4">
             <div className="relative h-24 w-64">
               <Image
@@ -138,7 +261,7 @@ export default function ResetPasswordPage() {
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleConfirmReset} className="space-y-5">
             {error && (
               <div className="text-sm text-red-500 text-center bg-red-500/10 py-3 rounded-lg border border-red-500/20">
                 {error}
@@ -182,5 +305,17 @@ export default function ResetPasswordPage() {
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    }>
+      <ResetPasswordContent />
+    </Suspense>
   )
 }

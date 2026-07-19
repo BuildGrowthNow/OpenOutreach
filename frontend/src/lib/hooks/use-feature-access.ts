@@ -18,14 +18,17 @@ export function useFeatureAccess(featureName: string): { hasAccess: boolean; req
     custom_domain: "agency",
   };
 
-  const planHierarchy = ["starter", "pro", "business", "agency", "lifetime"];
+  const planHierarchy = ["starter", "pro", "business", "agency"];
   const requiredPlan = featureMap[featureName];
 
   if (!requiredPlan) {
     return { hasAccess: true, requiredPlan: null };
   }
 
-  const currentPlanIndex = planHierarchy.indexOf(billingStatus.plan);
+  // Lifetime plan is equivalent to Pro tier
+  const userPlan = billingStatus.plan === "lifetime" ? "pro" : billingStatus.plan;
+
+  const currentPlanIndex = planHierarchy.indexOf(userPlan);
   const requiredPlanIndex = planHierarchy.indexOf(requiredPlan);
 
   const hasAccess =

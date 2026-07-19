@@ -106,7 +106,7 @@ export const useAuthStore = create<AuthState>()(
         set({ token: null, user: null });
         localStorage.removeItem('token');
         localStorage.removeItem('selected_profile_id');
-        window.location.href = '/login-v2';
+        window.location.href = '/login';
       },
 
       fetchUser: async () => {

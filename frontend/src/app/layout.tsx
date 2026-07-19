@@ -1,7 +1,6 @@
 import type { Metadata } from "next"
 import { Geist, Geist_Mono, Roboto_Slab, Lato } from "next/font/google"
 import "./globals.css"
-import { AuthProvider } from "./auth-provider"
 import { AuthProviderV2 } from "@/components/auth/auth-provider-v2"
 import { BillingProvider } from "@/lib/contexts/billing-context"
 import { ToastProvider } from "@/components/ui/toast"
@@ -49,7 +48,7 @@ export default function RootLayout({
         <ToastProvider>
           <AuthProviderV2>
             <BillingProvider>
-              <AuthProvider>{children}</AuthProvider>
+              {children}
             </BillingProvider>
           </AuthProviderV2>
           <Toaster />

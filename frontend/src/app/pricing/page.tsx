@@ -65,7 +65,7 @@ const plans: Plan[] = [
     name: 'business',
     displayName: 'Business',
     monthlyPrice: 99,
-    annualPrice: 82,
+    annualPrice: 83,
     maxLinkedInAccounts: 3,
     maxCampaigns: null,
     features: [
@@ -80,7 +80,7 @@ const plans: Plan[] = [
     name: 'agency',
     displayName: 'Agency',
     monthlyPrice: 249,
-    annualPrice: 207,
+    annualPrice: 208,
     maxLinkedInAccounts: 10,
     maxCampaigns: null,
     features: [
@@ -116,7 +116,7 @@ const comparisonFeatures: ComparisonFeature[] = [
 const faqs = [
   {
     question: 'What is included in the free trial?',
-    answer: 'Your free trial includes full Pro plan access for 3 days. No credit card required to cancel—if you don\'t upgrade, your account simply expires.',
+    answer: 'Your free trial includes full Pro plan access for 3 days. A credit card is required to start the trial, but you can cancel anytime—if you cancel before the trial ends, you won\'t be charged.',
   },
   {
     question: 'Can I change my plan later?',
@@ -173,7 +173,7 @@ export default function PricingPage() {
               Simple, <span className="text-emerald-400">Transparent Pricing</span>
             </h1>
             <p className="text-xl text-zinc-400 mb-8">
-              Choose the plan that fits your LinkedIn growth goals. Start free for 3 days, no credit card required to cancel.
+              Choose the plan that fits your LinkedIn growth goals. Start with a 3-day free trial—cancel anytime before it ends.
             </p>
 
             {/* Billing Toggle */}

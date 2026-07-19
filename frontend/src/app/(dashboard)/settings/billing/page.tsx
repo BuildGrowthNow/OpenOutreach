@@ -20,6 +20,7 @@ import {
   getBillingStatus,
   getInvoices,
   getPlans,
+  getUsage,
   isLifetimeDealActive,
   createPortalSession,
   Invoice,
@@ -48,6 +49,7 @@ export default function BillingPage() {
   const [billingStatus, setBillingStatus] = useState<BillingStatus | null>(null);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [usage, setUsage] = useState<{ linkedin_accounts_used: number; campaigns_used: number }>({ linkedin_accounts_used: 0, campaigns_used: 0 });
   const [lifetimeDealActive, setLifetimeDealActive] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -59,17 +61,19 @@ export default function BillingPage() {
       setLoading(true);
       setError(null);
 
-      const [statusRes, plansRes, invoicesRes, dealRes] = await Promise.all([
+      const [statusRes, plansRes, invoicesRes, dealRes, usageRes] = await Promise.all([
         getBillingStatus(),
         getPlans(),
         getInvoices(),
         isLifetimeDealActive(),
+        getUsage(),
       ]);
 
       if (statusRes.data) setBillingStatus(statusRes.data);
       if (plansRes.data) setPlans(plansRes.data);
       if (invoicesRes.data) setInvoices(invoicesRes.data);
       if (dealRes.data) setLifetimeDealActive(dealRes.data.active);
+      if (usageRes.data) setUsage(usageRes.data);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to load billing information"
@@ -202,12 +206,12 @@ export default function BillingPage() {
           <CardContent className="space-y-6">
             <UsageIndicator
               label="LinkedIn Accounts"
-              used={0}
+              used={usage.linkedin_accounts_used}
               limit={billingStatus.linkedin_account_limit}
             />
             <UsageIndicator
               label="Campaigns"
-              used={0}
+              used={usage.campaigns_used}
               limit={billingStatus.campaign_limit}
             />
           </CardContent>
