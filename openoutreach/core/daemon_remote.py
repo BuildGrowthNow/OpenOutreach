@@ -20,6 +20,11 @@ from openoutreach.core.browser_detect import BrowserInfo, get_preferred_browser
 from openoutreach.core.remote_client import DaemonConfig, RemoteClient
 from openoutreach.desktop.__version__ import __version__
 
+try:
+    import numpy as np  # Required for BayesianQualifier
+except ImportError:
+    np = None  # type: ignore
+
 logger = logging.getLogger(__name__)
 
 
@@ -135,7 +140,7 @@ class RemoteDaemon:
                 self._id = profile_id
                 self.linkedin_username = ""
                 self.linkedin_password = ""
-                self.cookie_data_encrypted = None
+                self._cookie_data_json = None
                 self.user = None
 
             def refresh_from_db(self, fields: Optional[list] = None):
@@ -146,19 +151,21 @@ class RemoteDaemon:
 
             @property
             def cookie_data(self):
-                if not self.cookie_data_encrypted:
+                """Return parsed cookie dict from JSON string."""
+                if not self._cookie_data_json:
                     return None
                 try:
-                    return json.loads(self.cookie_data_encrypted)
+                    return json.loads(self._cookie_data_json)
                 except (json.JSONDecodeError, TypeError):
                     return None
 
             @cookie_data.setter
             def cookie_data(self, value):
+                """Store cookie dict as JSON string."""
                 if value is None:
-                    self.cookie_data_encrypted = None
+                    self._cookie_data_json = None
                 else:
-                    self.cookie_data_encrypted = json.dumps(value)
+                    self._cookie_data_json = json.dumps(value)
 
         # Create mock session object for linkedin_cli compatibility
         class RemoteSession:
@@ -186,10 +193,13 @@ class RemoteDaemon:
         self.session = RemoteSession(self.linkedin_profile_id)
 
         # Load saved cookies if available
+        # API returns cookie_data as JSON string (already decrypted)
         storage_state = None
         if creds.get("cookie_data"):
             try:
                 storage_state = json.loads(creds["cookie_data"])
+                # Store in mock profile for session compatibility
+                self.session.linkedin_profile._cookie_data_json = creds["cookie_data"]
             except (json.JSONDecodeError, TypeError):
                 logger.warning("Invalid cookie data, will authenticate from scratch")
 
@@ -341,6 +351,11 @@ class RemoteDaemon:
         # Set campaign on session (required by all handlers)
         self.session.campaign = campaign
 
+        # Set user on session (required for some operations)
+        from openoutreach.mongodb.models_user import User
+        if campaign.user_id:
+            self.session.user = User.get(campaign.user_id)
+
         # Build minimal task object for handler
         task_obj = type(
             "Task",
@@ -352,10 +367,39 @@ class RemoteDaemon:
             },
         )()
 
+        # Build qualifiers for this campaign (same as local daemon does)
+        qualifiers = self._build_qualifiers_for_campaign(campaign)
+
         # Execute handler synchronously (handlers are not async)
-        # qualifiers=None is acceptable for remote daemon - handlers will skip ML features
-        result = handler(task=task_obj, session=self.session, qualifiers=None)
+        result = handler(task=task_obj, session=self.session, qualifiers=qualifiers)
         return result if isinstance(result, dict) else None
+
+    def _build_qualifiers_for_campaign(self, campaign) -> dict:
+        """Build qualifiers dict with a single campaign's qualifier.
+
+        Remote daemon builds qualifiers lazily per task to avoid loading
+        all campaigns upfront. Returns {campaign.pk: qualifier}.
+        """
+        from openoutreach.core.conf import CAMPAIGN_CONFIG
+        from openoutreach.linkedin.ml.qualifier import BayesianQualifier
+        from openoutreach.crm.models import Lead
+
+        q = BayesianQualifier(
+            seed=42,
+            n_mc_samples=CAMPAIGN_CONFIG["qualification_n_mc_samples"],
+            campaign=campaign,
+        )
+
+        # Warm-start if we have labeled data
+        X, y = Lead.get_labeled_arrays(campaign)
+        if len(X) > 0:
+            q.warm_start(X, y)
+            logger.debug(
+                "GP qualifier warm-started on %d samples (%d+, %d-) for campaign %s",
+                len(y), int((y == 1).sum()), int((y == 0).sum()), campaign.pk,
+            )
+
+        return {campaign.pk: q}
 
     async def _config_refresh_loop(self):
         """Periodically refresh config from backend."""

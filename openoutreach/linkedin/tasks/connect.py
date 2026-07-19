@@ -44,10 +44,10 @@ class ConnectStrategy:
 def strategy_for(campaign, qualifiers):
     """Build the right ConnectStrategy based on campaign type."""
     qualifier = qualifiers.get(campaign.pk)
-    
+
     if qualifier is None:
         logger.error(
-            "No qualifier found for campaign %s (pk=%d). Available qualifiers: %s",
+            "No qualifier found for campaign %s (pk=%s). Available qualifiers: %s",
             campaign,
             campaign.pk,
             list(qualifiers.keys()),

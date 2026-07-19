@@ -183,7 +183,10 @@ async def sync_cookies(
     request: CookieSyncRequest,
     user_id: str = Depends(get_current_user),
 ):
-    """Sync browser cookies from desktop daemon to backend."""
+    """Sync browser cookies from desktop daemon to backend.
+
+    Expects cookie_data as a JSON string (not encrypted). Server handles encryption.
+    """
     profile = LinkedInProfile.objects.get(
         _id=request.linkedin_profile_id,
         user_id=user_id,
@@ -191,7 +194,18 @@ async def sync_cookies(
     if not profile:
         raise HTTPException(404, "LinkedIn profile not found")
 
-    # Update cookies
+    # Parse and encrypt the cookie data
+    import json
+    try:
+        cookie_dict = json.loads(request.cookie_data)
+    except (json.JSONDecodeError, TypeError):
+        raise HTTPException(400, "Invalid cookie_data format")
+
+    # Use the model's cookie_data setter to handle encryption
+    profile.cookie_data = cookie_dict
+    profile.save()
+
+    # Update metadata
     from openoutreach.mongodb.connection import get_mongodb_collection
     collection = get_mongodb_collection("linkedin_profiles")
     if collection is None:
@@ -201,7 +215,6 @@ async def sync_cookies(
         {"_id": request.linkedin_profile_id},
         {
             "$set": {
-                "cookie_data_encrypted": request.cookie_data,
                 "cookies_updated_at": datetime.now(timezone.utc),
             }
         }
@@ -286,7 +299,10 @@ async def get_credentials(
     linkedin_profile_id: str,
     user_id: str = Depends(get_current_user),
 ):
-    """Get LinkedIn credentials for daemon login."""
+    """Get LinkedIn credentials for daemon login.
+
+    Returns decrypted cookie_data as JSON string for remote daemon consumption.
+    """
     profile = LinkedInProfile.objects.get(
         _id=linkedin_profile_id,
         user_id=user_id,
@@ -294,9 +310,15 @@ async def get_credentials(
     if not profile:
         raise HTTPException(404, "LinkedIn profile not found")
 
-    # Return credentials
+    # Return credentials with DECRYPTED cookie_data
+    # profile.cookie_data property handles decryption automatically
+    import json
+    cookie_data_json = None
+    if profile.cookie_data:
+        cookie_data_json = json.dumps(profile.cookie_data)
+
     return {
         "email": profile.linkedin_username,
         "password": profile.linkedin_password,
-        "cookie_data": profile.cookie_data_encrypted,
+        "cookie_data": cookie_data_json,  # JSON string, not encrypted
     }

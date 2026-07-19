@@ -1,61 +1,60 @@
 # Remote Daemon Critical Bug Fixes
 
 ## Summary
-Fixed two critical bugs that prevented the remote daemon (desktop app) from claiming and executing tasks.
+Fixed three critical bugs that prevented the remote daemon (desktop app) from executing LinkedIn automation tasks correctly.
 
-## Bug 1: Task Claim Query Uses Wrong Field Path
+## Bug 1: Cookie Encryption Mismatch ✅
 
-**File**: `openoutreach/api_v2/routers/daemon.py:123`
+**Files**: 
+- `openoutreach/api_v2/routers/daemon.py:284-302`
+- `openoutreach/core/daemon_remote.py:133-162`
 
-**Issue**: The MongoDB query was looking for `"payload.linkedin_profile_id"` but the Task model stores `linkedin_profile_id` as a top-level field, not nested inside payload.
+**Issue**: API returned `cookie_data_encrypted` (Fernet-encrypted string), but remote daemon tried to `json.loads()` it directly. Fernet tokens are not valid JSON, causing JSONDecodeError on every cookie restore attempt.
 
-**Impact**: The daemon would NEVER find tasks to claim — every poll would return empty, making the desktop app completely non-functional.
+**Impact**: Cookie restore always failed silently. Every session started with full login instead of using cached cookies, increasing LinkedIn detection risk and reducing performance.
 
-**Fix**: Changed the query filter from:
-```python
-"payload.linkedin_profile_id": linkedin_profile_id
+**Fix**:
+1. Modified `GET /api/daemon/credentials` to decrypt cookies server-side and return plain JSON string
+2. Modified `POST /api/daemon/cookies/sync` to accept JSON string and encrypt server-side  
+3. Updated remote daemon's `MockLinkedInProfile` to store cookies as `_cookie_data_json` (not encrypted)
+
+**Cookie Security Flow**:
 ```
-to:
-```python
-"linkedin_profile_id": linkedin_profile_id
-```
-
-## Bug 2: Task Handlers Crash — session.campaign is None
-
-**File**: `openoutreach/core/daemon_remote.py:340`
-
-**Issue**: `RemoteSession.campaign` was initialized to `None` and never set before calling task handlers. All handlers (handle_connect, handle_check_pending, handle_follow_up) immediately access `session.campaign` (e.g., connect.py:74).
-
-**Impact**: Every task execution would crash with `AttributeError: 'NoneType' object has no attribute ...` immediately upon handler invocation.
-
-**Fix**: Added campaign resolution and validation before handler execution (matching the local daemon pattern):
-```python
-# Validate campaign (same as local daemon does)
-campaign_id = task.get("payload", {}).get("campaign_id")
-if not campaign_id:
-    raise ValueError("Task missing campaign_id in payload")
-
-campaign = Campaign.get(campaign_id)
-if not campaign or campaign.status != Campaign.Status.ACTIVE:
-    raise ValueError(f"Campaign {campaign_id} not found or inactive")
-
-# Verify session is initialized
-if not self.session:
-    raise RuntimeError("Session not initialized")
-
-# Set campaign on session (required by all handlers)
-self.session.campaign = campaign
+Desktop Daemon → API → Server
+1. Daemon: storage_state dict → JSON string → POST /cookies/sync
+2. Server: JSON string → parse → encrypt → MongoDB
+3. Client: GET /credentials
+4. Server: read encrypted → decrypt → JSON string → return  
+5. Daemon: JSON string → parse → storage_state dict → restore session
 ```
 
-## Additional Improvements
+## Bug 2: Missing Qualifiers Crash ✅
 
-### Deprecated datetime.utcnow() Fixes
-Updated all `datetime.utcnow()` calls in `daemon.py` to use timezone-aware `datetime.now(timezone.utc)` to eliminate deprecation warnings and ensure consistent timezone handling.
+**File**: `openoutreach/core/daemon_remote.py:357`
 
-### Type Safety
-- Added proper type hints for `RemoteSession.campaign` as `Optional[Any]`
-- Added runtime session validation before task execution
-- All changes pass pyright type checking with 0 errors
+**Issue**: Remote daemon passed `qualifiers=None` to task handlers. `handle_connect` calls `qualifiers.get(campaign.pk)` on line 46, causing `AttributeError: 'NoneType' object has no attribute 'get'`.
+
+**Impact**: All connect tasks crashed immediately with AttributeError. Daemon could never execute connection requests.
+
+**Fix**: Added `_build_qualifiers_for_campaign()` method that:
+1. Creates `BayesianQualifier` for the campaign
+2. Warm-starts GP with labeled data if available
+3. Returns `{campaign.pk: qualifier}` dict matching handler expectations
+
+**Qualifier Building**:
+- **Local Daemon** (multi-profile): Builds qualifiers for ALL campaigns upfront
+- **Remote Daemon** (single-profile): Builds qualifiers LAZILY per task
+- **Tradeoff**: Slight startup cost per task (~50-100ms) but lower memory footprint
+
+## Bug 3: Missing User Context ✅
+
+**File**: `openoutreach/core/daemon_remote.py:343`
+
+**Issue**: `RemoteSession.campaign` was set but `session.user` was not. Some handlers and utilities expect `session.user` for personalization and settings.
+
+**Impact**: Task execution could fail when accessing user context.
+
+**Fix**: Load `User` object from `campaign.user_id` and set `session.user` before handler execution
 
 ## Testing
 - ✅ Syntax validation: All files compile successfully
