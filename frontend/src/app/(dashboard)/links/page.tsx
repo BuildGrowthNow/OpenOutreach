@@ -37,6 +37,7 @@ export default function LinksPage() {
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedType, setSelectedType] = useState<string>('all')
+  const [showCreateTab, setShowCreateTab] = useState(false)
 
   const loadLinks = useCallback(async () => {
     try {
@@ -147,22 +148,22 @@ export default function LinksPage() {
         ]}
       />
 
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Link Tracking</h1>
           <p className="text-muted-foreground">
             Monitor click-through rates and engagement for tracked links
           </p>
         </div>
-        
+
         <div className="flex items-center space-x-4">
           <Button variant="outline" onClick={loadLinks}>
             <Icons.RefreshCw className="h-4 w-4 mr-2" />
             Refresh
           </Button>
-          <Button>
+          <Button onClick={() => setShowCreateTab(true)}>
             <Icons.Plus className="h-4 w-4 mr-2" />
-            Add Link
+            Create Link
           </Button>
         </div>
       </div>
@@ -254,7 +255,11 @@ export default function LinksPage() {
         </Tabs>
       </div>
 
-      <Tabs defaultValue="overview" className="space-y-6">
+      <Tabs defaultValue={showCreateTab ? "create" : "overview"} onValueChange={(value) => {
+        if (value === "create") {
+          setShowCreateTab(true)
+        }
+      }} className="space-y-6">
         <TabsList>
           <TabsTrigger value="overview">
             <Icons.Link className="h-4 w-4 mr-2" />
@@ -267,10 +272,6 @@ export default function LinksPage() {
           <TabsTrigger value="analytics">
             <Icons.BarChart3 className="h-4 w-4 mr-2" />
             Analytics
-          </TabsTrigger>
-          <TabsTrigger value="create">
-            <Icons.Plus className="h-4 w-4 mr-2" />
-            Create
           </TabsTrigger>
         </TabsList>
 
@@ -288,7 +289,7 @@ export default function LinksPage() {
                   filteredLinks.map(link => {
                     const metrics = getLinkMetrics(link)
                     return (
-                      <div key={link.id} className="flex items-center justify-between p-4 border border-zinc-800 rounded-lg hover:bg-zinc-900/50 dark:hover:bg-zinc-900/50">
+                      <div key={link.id} className="flex items-center justify-between p-4 border border-border rounded-lg hover:bg-accent/50 hover:shadow-sm transition-all duration-200 cursor-pointer group">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center space-x-2 mb-2">
                             <Badge variant="outline" className="text-xs">
@@ -428,44 +429,54 @@ export default function LinksPage() {
           )}
         </TabsContent>
 
-        <TabsContent value="create" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Create New Tracked Link</CardTitle>
-              <CardDescription>
-                Create a new tracked link with UTM parameters
-              </CardDescription>
+      </Tabs>
+
+      {showCreateTab && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <CardHeader className="sticky top-0 bg-background border-b">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Create New Tracked Link</CardTitle>
+                  <CardDescription>
+                    Create a new tracked link with UTM parameters
+                  </CardDescription>
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => setShowCreateTab(false)}>
+                  <Icons.X className="h-4 w-4" />
+                </Button>
+              </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="pt-6">
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium mb-2">Destination URL</label>
                   <Input placeholder="https://example.com/product" />
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-xs text-muted-foreground mt-1">
                     The URL you want to track clicks for
                   </p>
                 </div>
-                
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium mb-2">Campaign</label>
-                    <select className="w-full border rounded-md px-3 py-2 text-sm">
+                    <select className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background">
                       <option value="">Select Campaign</option>
                       {Array.from(new Set(links.map(l => l.campaign?.name || ''))).filter(name => name).map(name => (
                         <option key={name} value={name}>{name}</option>
                       ))}
                     </select>
                   </div>
-                  
+
                   <div>
                     <label className="block text-sm font-medium mb-2">Custom Short URL</label>
                     <Input placeholder="Optional custom identifier" />
-                    <p className="text-xs text-gray-500 mt-1">
+                    <p className="text-xs text-muted-foreground mt-1">
                       Leave blank for auto-generated
                     </p>
                   </div>
                 </div>
-                
+
                 <div>
                   <h4 className="font-semibold mb-2">UTM Parameters (Optional)</h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -487,10 +498,10 @@ export default function LinksPage() {
                     </div>
                   </div>
                 </div>
-                
+
                 <div className="pt-4 border-t">
                   <div className="flex justify-end space-x-4">
-                    <Button variant="outline">Cancel</Button>
+                    <Button variant="outline" onClick={() => setShowCreateTab(false)}>Cancel</Button>
                     <Button>
                       <Icons.Plus className="h-4 w-4 mr-2" />
                       Create Tracked Link
@@ -500,8 +511,8 @@ export default function LinksPage() {
               </div>
             </CardContent>
           </Card>
-        </TabsContent>
-      </Tabs>
+        </div>
+      )}
     </div>
   )
 }

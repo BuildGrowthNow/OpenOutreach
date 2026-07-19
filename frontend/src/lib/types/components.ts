@@ -81,6 +81,10 @@ import {
   Save,
   Terminal,
   Bell,
+  Target,
+  MessageCircle,
+  Inbox,
+  InboxIcon,
 } from "lucide-react";
 
 export type Icon = React.FC<React.SVGProps<SVGSVGElement>>;
@@ -166,6 +170,10 @@ export const Icons = {
   Info,
   Save,
   Terminal,
+  Target,
+  MessageCircle,
+  Inbox,
+  InboxIcon,
 };
 
 // Campaign status variants

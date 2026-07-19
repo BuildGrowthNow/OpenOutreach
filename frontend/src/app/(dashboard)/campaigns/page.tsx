@@ -21,6 +21,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Badge } from "@/components/ui/badge";
+import { Breadcrumb } from "@/components/layout/breadcrumb";
 import { cn } from "@/lib/utils";
 
 export default function CampaignsPage() {
@@ -242,17 +243,26 @@ export default function CampaignsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Campaigns</h1>
-          <p className="text-muted-foreground">
-            Manage your outreach campaigns and track performance
-          </p>
+      <div className="space-y-4">
+        <Breadcrumb
+          items={[
+            { label: 'Dashboard', href: '/dashboard' },
+            { label: 'Campaigns', href: '/campaigns', isActive: true }
+          ]}
+        />
+
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Campaigns</h1>
+            <p className="text-muted-foreground">
+              Manage your outreach campaigns and track performance
+            </p>
+          </div>
+          <Button onClick={() => setShowCreateForm(true)}>
+            <Icons.Plus className="mr-2 h-4 w-4" />
+            New Campaign
+          </Button>
         </div>
-        <Button onClick={() => setShowCreateForm(true)}>
-          <Icons.Plus className="mr-2 h-4 w-4" />
-          New Campaign
-        </Button>
       </div>
 
       {error && (

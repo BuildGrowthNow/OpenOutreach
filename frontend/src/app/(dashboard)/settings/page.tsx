@@ -13,6 +13,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { Breadcrumb } from "@/components/layout/breadcrumb";
 import { Icons } from "@/lib/types/components";
 import {
   getDailyUsage,
@@ -114,19 +115,28 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="space-y-1">
-          <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
-          <p className="text-muted-foreground">
-            Manage your LinkedIn connection, profile defaults, sending limits,
-            and LLM behavior in one place.
-          </p>
-        </div>
+      <div className="space-y-4">
+        <Breadcrumb
+          items={[
+            { label: 'Dashboard', href: '/dashboard' },
+            { label: 'Settings', href: '/settings', isActive: true }
+          ]}
+        />
 
-        <Button variant="outline" onClick={loadSettings}>
-          <Icons.RefreshCw className="mr-2 h-4 w-4" />
-          Refresh
-        </Button>
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="space-y-1">
+            <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
+            <p className="text-muted-foreground">
+              Manage your LinkedIn connection, profile defaults, sending limits,
+              and LLM behavior in one place.
+            </p>
+          </div>
+
+          <Button variant="outline" onClick={loadSettings}>
+            <Icons.RefreshCw className="mr-2 h-4 w-4" />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
