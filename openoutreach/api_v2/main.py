@@ -1,10 +1,11 @@
 """
 FastAPI Application Entry Point
 """
+import logging
+import os
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import os
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -111,10 +112,15 @@ app.include_router(messages.router, prefix="/api/messages", tags=["messages"])
 # Analytics
 app.include_router(analytics.router, prefix="/api/analytics", tags=["analytics"])
 
-# Link tracking
+# Phase 6 Secondary Surfaces (deferred features - hidden from launch)
+# These routers are included but not exposed via frontend nav or public CTAs.
+# Features exist in API but are unsupported post-launch: links, templates, ghost mode, email channel, state machine UI.
+# Admin is API-only; no UI for launch phase. See PLATFORM_REMEDIATION_PLAN.md Phase 6 for full rationale.
+
+# Link tracking (Phase 6: deferred; stub returns 501 if called)
 app.include_router(links.router, prefix="/api/links", tags=["links"])
 
-# State machine
+# State machine (Phase 6: gated behind NEXT_PUBLIC_ENABLE_STATE_MACHINE=false; daemon ignores state graphs)
 app.include_router(state_machine.router, prefix="/api/state-machines", tags=["state-machine"])
 
 # Rate limiting

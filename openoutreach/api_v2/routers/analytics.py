@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field
 from openoutreach.api_v2.dependencies_v2 import get_current_user
 from openoutreach.mongodb.connection import get_mongodb_collection
 from openoutreach.mongodb import models
-from openoutreach.mongodb.dal import CampaignDAL
+from openoutreach.crm.models.deal import DealState
 
 logger = logging.getLogger(__name__)
 
@@ -282,31 +282,31 @@ async def get_analytics_overview(
     # Pipeline totals (all deals, not time-filtered)
     total_qualified = deals_collection.count_documents({
         "campaign_id": {"$in": campaign_ids},
-        "state": "QUALIFIED"
+        "state": DealState.QUALIFIED.value
     })
     total_ready_to_connect = deals_collection.count_documents({
         "campaign_id": {"$in": campaign_ids},
-        "state": "READY_TO_CONNECT"
+        "state": DealState.READY_TO_CONNECT.value
     })
     total_pending = deals_collection.count_documents({
         "campaign_id": {"$in": campaign_ids},
-        "state": "PENDING"
+        "state": DealState.PENDING.value
     })
     total_connected = deals_collection.count_documents({
         "campaign_id": {"$in": campaign_ids},
-        "state": "CONNECTED"
+        "state": DealState.CONNECTED.value
     })
     total_completed = deals_collection.count_documents({
         "campaign_id": {"$in": campaign_ids},
-        "state": "COMPLETED"
+        "state": DealState.COMPLETED.value
     })
     total_failed = deals_collection.count_documents({
         "campaign_id": {"$in": campaign_ids},
-        "state": "FAILED"
+        "state": DealState.FAILED.value
     })
     total_no_email = deals_collection.count_documents({
         "campaign_id": {"$in": campaign_ids},
-        "state": "NO_EMAIL"
+        "state": DealState.NO_EMAIL.value
     })
 
     # Stats totals (time-filtered)
@@ -317,7 +317,7 @@ async def get_analytics_overview(
     })
     total_connections_accepted = deals_collection.count_documents({
         "campaign_id": {"$in": campaign_ids},
-        "state": "CONNECTED",
+        "state": DealState.CONNECTED.value,
         "creation_date": {"$gte": since}
     })
     total_messages_sent = action_logs_collection.count_documents({
@@ -366,7 +366,7 @@ async def get_analytics_overview(
 
     total_conversions = deals_collection.count_documents({
         "campaign_id": {"$in": campaign_ids},
-        "state": "COMPLETED",
+        "state": DealState.COMPLETED.value,
         "creation_date": {"$gte": since}
     })
 
@@ -380,13 +380,13 @@ async def get_analytics_overview(
     campaigns_data = []
     for campaign in campaigns:
         # Pipeline counts (not time-filtered)
-        qualified = _get_deals_by_state(campaign._id, "QUALIFIED")
-        ready_to_connect = _get_deals_by_state(campaign._id, "READY_TO_CONNECT")
-        pending = _get_deals_by_state(campaign._id, "PENDING")
-        connected_current = _get_deals_by_state(campaign._id, "CONNECTED")
-        completed_current = _get_deals_by_state(campaign._id, "COMPLETED")
-        failed = _get_deals_by_state(campaign._id, "FAILED")
-        no_email = _get_deals_by_state(campaign._id, "NO_EMAIL")
+        qualified = _get_deals_by_state(campaign._id, DealState.QUALIFIED.value)
+        ready_to_connect = _get_deals_by_state(campaign._id, DealState.READY_TO_CONNECT.value)
+        pending = _get_deals_by_state(campaign._id, DealState.PENDING.value)
+        connected_current = _get_deals_by_state(campaign._id, DealState.CONNECTED.value)
+        completed_current = _get_deals_by_state(campaign._id, DealState.COMPLETED.value)
+        failed = _get_deals_by_state(campaign._id, DealState.FAILED.value)
+        no_email = _get_deals_by_state(campaign._id, DealState.NO_EMAIL.value)
 
         total_leads = deals_collection.count_documents({"campaign_id": campaign._id})
         active_leads = qualified + ready_to_connect + pending + connected_current
@@ -395,14 +395,14 @@ async def get_analytics_overview(
         connections_sent = _get_action_logs_count(campaign._id, "connect", since)
         connections_accepted = deals_collection.count_documents({
             "campaign_id": campaign._id,
-            "state": "CONNECTED",
+            "state": DealState.CONNECTED.value,
             "creation_date": {"$gte": since}
         })
         messages_sent = _get_action_logs_count(campaign._id, "follow_up", since)
         messages_replied = _get_messages_replied_count(campaign._id, since)
         conversions = deals_collection.count_documents({
             "campaign_id": campaign._id,
-            "state": "COMPLETED",
+            "state": DealState.COMPLETED.value,
             "creation_date": {"$gte": since}
         })
 

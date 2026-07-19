@@ -2,7 +2,7 @@
 
 Each active LinkedInProfile gets its own:
 - Xvfb display (:100 + profile_index)
-- x11vnc server (5900 + profile_index)
+- x11vnc server (5900 + profile_index) with per-session password
 - websockify proxy (6080 + profile_index)
 
 This allows multiple users to view their own browser sessions without cross-contamination.
@@ -11,7 +11,9 @@ from __future__ import annotations
 
 import logging
 import os
+import secrets
 import subprocess
+import tempfile
 import time
 from typing import Optional
 
@@ -36,6 +38,8 @@ class VNCSession:
         self.vnc_port = VNC_PORT_BASE + profile_index
         self.websockify_port = WEBSOCKIFY_PORT_BASE + profile_index
         self.display = f":{self.display_num}"
+        self.password = secrets.token_urlsafe(16)
+        self._passwd_file: Optional[str] = None
 
         self.xvfb_proc: Optional[subprocess.Popen] = None
         self.x11vnc_proc: Optional[subprocess.Popen] = None
@@ -84,6 +88,13 @@ class VNCSession:
                 except Exception as e:
                     logger.debug("Error stopping VNC process: %s", e)
 
+        # Clean up password file if x11vnc didn't delete it (rm: prefix does auto-delete)
+        if self._passwd_file and os.path.exists(self._passwd_file):
+            try:
+                os.remove(self._passwd_file)
+            except OSError:
+                pass
+
         if self.profile_id in _vnc_processes:
             del _vnc_processes[self.profile_id]
 
@@ -119,7 +130,15 @@ class VNCSession:
             raise RuntimeError(f"Xvfb failed to start on {self.display}")
 
     def _start_x11vnc(self) -> None:
-        """Start VNC server."""
+        """Start VNC server with per-session password."""
+        # Write password to a temp file for x11vnc -passwdfile
+        passwd_fd = tempfile.NamedTemporaryFile(
+            mode="w", prefix="vnc_pw_", suffix=".txt", delete=False
+        )
+        passwd_fd.write(self.password)
+        passwd_fd.close()
+        self._passwd_file = passwd_fd.name
+
         self.x11vnc_proc = subprocess.Popen(
             [
                 "x11vnc",
@@ -127,7 +146,7 @@ class VNCSession:
                 "-rfbport", str(self.vnc_port),
                 "-forever",
                 "-shared",
-                "-nopw",
+                "-passwdfile", f"rm:{self._passwd_file}",
             ],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,

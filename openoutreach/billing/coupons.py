@@ -165,7 +165,7 @@ class Coupon:
             return False
 
         # Atomic increment with max_redemptions guard
-        query = {"_id": self._id}
+        query: dict[str, object] = {"_id": self._id}
         if self.max_redemptions:
             query["redemptions_count"] = {"$lt": self.max_redemptions}
 

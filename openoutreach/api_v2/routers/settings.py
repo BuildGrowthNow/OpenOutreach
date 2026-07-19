@@ -1,8 +1,210 @@
 """
-Settings Router (stub)
+Settings Router - FastAPI implementation for SiteConfig management
+
+Provides endpoints for managing per-user site configuration including
+LLM settings, rate limits, active hours, and AI behavior rules.
 """
-from fastapi import APIRouter
 
-router = APIRouter()
+import logging
+from datetime import datetime, timezone as tz, timedelta
+from typing import Optional
 
-# TODO: Implement settings endpoints
+from fastapi import APIRouter, Depends, HTTPException, Query
+
+from openoutreach.api_v2.dependencies_v2 import get_current_user
+from openoutreach.api_v2.schemas.settings import SiteConfigResponse, SiteConfigUpdate
+from openoutreach.mongodb.models import SiteConfig
+from openoutreach.mongodb.connection import get_mongodb_collection
+
+logger = logging.getLogger(__name__)
+router = APIRouter(tags=["Settings"])
+
+
+@router.get("/", response_model=SiteConfigResponse)
+async def get_settings(
+    user_id: str = Depends(get_current_user),
+):
+    """
+    Get site configuration for the current user.
+
+    Returns all SiteConfig fields including LLM settings, rate limits,
+    active hours configuration, and AI behavior rules.
+    """
+    config = SiteConfig.load(user_id=user_id)
+
+    # Map active_days list to comma-separated string if needed
+    active_days_str = config.active_days
+    if isinstance(active_days_str, list):
+        active_days_str = ",".join(map(str, active_days_str))
+
+    return SiteConfigResponse(
+        id=config._id,
+        llm_provider=config.llm_provider or "",
+        llm_api_key=config.llm_api_key or "",
+        ai_model=config.ai_model or "",
+        llm_api_base=config.llm_api_base or "",
+        ai_writing_style=getattr(config, "ai_writing_style", "") or "",
+        ai_say_rules=getattr(config, "ai_say_rules", "") or "",
+        ai_avoid_rules=getattr(config, "ai_avoid_rules", "") or "",
+        finder_api_key=config.finder_api_key or "",
+        linkedin_username=config.linkedin_username or "",
+        linkedin_campaign=config.linkedin_campaign or "",
+        enable_smart_rate_limiting=getattr(config, "enable_smart_rate_limiting", False),
+        aggressiveness_preset=getattr(config, "aggressiveness_preset", "average") or "average",
+        daily_connection_limit=config.daily_connection_limit,
+        daily_follow_up_limit=config.daily_follow_up_limit,
+        velocity=config.velocity,
+        cooldown_minutes=getattr(config, "cooldown_minutes", 0),
+        enable_active_hours=getattr(config, "enable_active_hours", False),
+        active_start_hour=getattr(config, "active_start_hour", 9),
+        active_end_hour=getattr(config, "active_end_hour", 18),
+        active_timezone=getattr(config, "active_timezone", "UTC") or "UTC",
+        active_days=active_days_str or "0,1,2,3,4",
+        bettercontact_api_key=config.bettercontact_api_key or "",
+        contacts_api_token=config.contacts_api_token or "",
+        contacts_api_url=config.contacts_api_url or "",
+    )
+
+
+@router.patch("/")
+async def update_settings(
+    updates: SiteConfigUpdate,
+    user_id: str = Depends(get_current_user),
+):
+    """
+    Update site configuration for the current user.
+
+    Only provided fields will be updated. All fields are optional.
+    """
+    config = SiteConfig.load(user_id=user_id)
+
+    # Update only provided fields
+    update_data = updates.model_dump(exclude_unset=True)
+
+    for field, value in update_data.items():
+        if hasattr(config, field):
+            setattr(config, field, value)
+
+    # Save updates
+    config.save()
+
+    # Return updated config
+    active_days_str = config.active_days
+    if isinstance(active_days_str, list):
+        active_days_str = ",".join(map(str, active_days_str))
+
+    return {
+        "success": True,
+        "message": "Settings updated successfully",
+        "config": SiteConfigResponse(
+            id=config._id,
+            llm_provider=config.llm_provider or "",
+            llm_api_key=config.llm_api_key or "",
+            ai_model=config.ai_model or "",
+            llm_api_base=config.llm_api_base or "",
+            ai_writing_style=getattr(config, "ai_writing_style", "") or "",
+            ai_say_rules=getattr(config, "ai_say_rules", "") or "",
+            ai_avoid_rules=getattr(config, "ai_avoid_rules", "") or "",
+            finder_api_key=config.finder_api_key or "",
+            linkedin_username=config.linkedin_username or "",
+            linkedin_campaign=config.linkedin_campaign or "",
+            enable_smart_rate_limiting=getattr(config, "enable_smart_rate_limiting", False),
+            aggressiveness_preset=getattr(config, "aggressiveness_preset", "average") or "average",
+            daily_connection_limit=config.daily_connection_limit,
+            daily_follow_up_limit=config.daily_follow_up_limit,
+            velocity=config.velocity,
+            cooldown_minutes=getattr(config, "cooldown_minutes", 0),
+            enable_active_hours=getattr(config, "enable_active_hours", False),
+            active_start_hour=getattr(config, "active_start_hour", 9),
+            active_end_hour=getattr(config, "active_end_hour", 18),
+            active_timezone=getattr(config, "active_timezone", "UTC") or "UTC",
+            active_days=active_days_str or "0,1,2,3,4",
+            bettercontact_api_key=config.bettercontact_api_key or "",
+            contacts_api_token=config.contacts_api_token or "",
+            contacts_api_url=config.contacts_api_url or "",
+        )
+    }
+
+
+@router.get("/daily-usage/")
+async def get_daily_usage(
+    user_id: str = Depends(get_current_user),
+    date: Optional[str] = Query(default=None, description="Date in YYYY-MM-DD format (default: today)"),
+):
+    """
+    Get daily action usage counts for the current user.
+
+    Returns connection requests and follow-up messages sent today,
+    along with configured daily limits and percentage used.
+    """
+    # Parse date
+    if date:
+        try:
+            target_date = datetime.strptime(date, "%Y-%m-%d").replace(tzinfo=tz.utc)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
+    else:
+        target_date = datetime.now(tz.utc)
+
+    # Calculate day boundaries
+    day_start = target_date.replace(hour=0, minute=0, second=0, microsecond=0)
+    day_end = day_start + timedelta(days=1)
+
+    # Get user's LinkedIn profiles
+    profiles_collection = get_mongodb_collection("linkedin_profiles")
+    if profiles_collection is None:
+        raise HTTPException(status_code=500, detail="Database not available")
+
+    # Get all active profiles for this user
+    profile_ids = [
+        doc["_id"]
+        for doc in profiles_collection.find(
+            {"user_id": user_id, "is_active": True},
+            {"_id": 1}
+        )
+    ]
+
+    # Count actions across all user's profiles
+    collection = get_mongodb_collection("action_logs")
+    if collection is None:
+        raise HTTPException(status_code=500, detail="Database not available")
+
+    connect_count = collection.count_documents({
+        "linkedin_profile_id": {"$in": profile_ids},
+        "action_type": "connect",
+        "created_at": {"$gte": day_start, "$lt": day_end}
+    })
+
+    follow_up_count = collection.count_documents({
+        "linkedin_profile_id": {"$in": profile_ids},
+        "action_type": "follow_up",
+        "created_at": {"$gte": day_start, "$lt": day_end}
+    })
+
+    # Get user's configured limits
+    config = SiteConfig.load(user_id=user_id)
+
+    # Calculate percentage used
+    connect_percentage = 0
+    if config.daily_connection_limit > 0:
+        connect_percentage = round((connect_count / config.daily_connection_limit) * 100, 1)
+
+    follow_up_percentage = 0
+    if config.daily_follow_up_limit > 0:
+        follow_up_percentage = round((follow_up_count / config.daily_follow_up_limit) * 100, 1)
+
+    return {
+        "date": target_date.strftime("%Y-%m-%d"),
+        "counts": {
+            "connect": connect_count,
+            "follow_up": follow_up_count,
+        },
+        "limits": {
+            "connect": config.daily_connection_limit,
+            "follow_up": config.daily_follow_up_limit,
+        },
+        "percentage_used": {
+            "connect": connect_percentage,
+            "follow_up": follow_up_percentage,
+        }
+    }

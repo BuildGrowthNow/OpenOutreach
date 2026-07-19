@@ -46,7 +46,7 @@ def create_enriched_lead(session, url: str, profile: Dict[str, Any]) -> Optional
         deal = Deal(
             lead_id=existing_lead.pk,
             campaign_id=session.campaign.pk,
-            state=DealState.QUALIFIED,  # Start as QUALIFIED, awaiting LLM decision
+            state=DealState.DISCOVERED,
             reason="Discovered via search"
         )
         deal.save()
@@ -74,7 +74,7 @@ def create_enriched_lead(session, url: str, profile: Dict[str, Any]) -> Optional
     deal = Deal(
         lead_id=lead.pk,
         campaign_id=session.campaign.pk,
-        state=DealState.QUALIFIED,  # Start as QUALIFIED, awaiting LLM decision
+        state=DealState.DISCOVERED,
         reason="Discovered via search"
     )
     deal.save()
@@ -104,7 +104,7 @@ def create_enriched_lead(session, url: str, profile: Dict[str, Any]) -> Optional
 def promote_lead_to_deal(session, public_id: str, reason: str = ""):
     """Update or create a QUALIFIED Deal for a Lead after LLM approval.
 
-    If a Deal already exists from discovery, it's updated with the qualification reason.
+    If a Deal already exists from discovery, it's promoted to QUALIFIED with the reason.
     Returns the Deal.
     """
     from openoutreach.mongodb.models import Lead, Deal
@@ -116,7 +116,8 @@ def promote_lead_to_deal(session, public_id: str, reason: str = ""):
     # Check if deal already exists from discovery
     deal = Deal.get_by_lead_and_campaign(public_id, session.campaign.pk)
     if deal:
-        # Update existing deal with qualification reason
+        # Promote existing deal to QUALIFIED with qualification reason
+        deal.state = DealState.QUALIFIED
         deal.reason = reason
         deal.save()
     else:

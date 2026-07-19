@@ -3,7 +3,7 @@ Leads Router - Multi-tenant lead management endpoints
 """
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import Optional
 from datetime import datetime
 
 from openoutreach.mongodb import models
@@ -97,7 +97,7 @@ async def list_leads(
     leads_collection = get_mongodb_collection("leads")
     if leads_collection is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
-    leads_data = {str(l["_id"]): l for l in leads_collection.find({"_id": {"$in": lead_ids}})}
+    leads_data = {str(doc["_id"]): doc for doc in leads_collection.find({"_id": {"$in": lead_ids}})}
 
     # Build response
     results = []
@@ -203,3 +203,307 @@ async def list_campaign_leads(
 
     # Use the main list endpoint logic
     return await list_leads(user_id=user_id, campaign_id=campaign_id, state=state, limit=limit, offset=offset)
+
+
+@router.get("/{lead_id}/messages", response_model=dict)
+async def get_lead_messages(
+    lead_id: str,
+    user_id: str = Depends(get_current_user),
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+):
+    """
+    Get messages for a lead across all campaigns user has access to.
+    Returns all messages from deals linking this lead to accessible campaigns.
+    """
+    # Check if user has access to this lead via any campaign
+    deals_collection = get_mongodb_collection("deals")
+    if deals_collection is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    deals = list(deals_collection.find({"lead_id": lead_id}))
+
+    if not deals:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    # Verify user has access to at least one campaign
+    accessible_deal_ids = []
+    for deal in deals:
+        campaign = models.Campaign.get(str(deal["campaign_id"]))
+        if campaign and campaign.has_access(user_id):
+            accessible_deal_ids.append(str(deal["_id"]))
+
+    if not accessible_deal_ids:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    # Get messages for accessible deals
+    messages_collection = get_mongodb_collection("chat_messages")
+    if messages_collection is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+
+    query = {"deal_id": {"$in": accessible_deal_ids}}
+    total = messages_collection.count_documents(query)
+    messages = list(messages_collection.find(query).skip(offset).limit(limit).sort("creation_date", -1))
+
+    results = []
+    for msg in messages:
+        results.append({
+            "id": str(msg["_id"]),
+            "deal_id": str(msg["deal_id"]),
+            "sender_name": msg.get("sender_name"),
+            "content": msg.get("content", ""),
+            "is_outgoing": msg.get("is_outgoing", False),
+            "creation_date": msg.get("creation_date"),
+            "event_urn": msg.get("event_urn"),
+        })
+
+    return {
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        "results": results,
+    }
+
+
+class SendMessageRequest(BaseModel):
+    content: str
+    campaign_id: Optional[str] = None
+
+
+@router.post("/{lead_id}/messages", response_model=dict)
+async def send_message_to_lead(
+    lead_id: str,
+    body: SendMessageRequest,
+    user_id: str = Depends(get_current_user),
+):
+    """
+    Send a message to a lead.
+    Creates a Message record and enqueues a send_manual_message task for the daemon.
+    The message is not sent synchronously — the daemon picks it up and sends via Playwright.
+    """
+    deals_collection = get_mongodb_collection("deals")
+    if deals_collection is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+
+    # If campaign_id specified, look for deal in that campaign; otherwise find any accessible deal
+    if body.campaign_id:
+        campaign = models.Campaign.get(body.campaign_id)
+        if not campaign or not campaign.has_access(user_id):
+            raise HTTPException(status_code=403, detail="Campaign access denied")
+        deal_doc = deals_collection.find_one({"lead_id": lead_id, "campaign_id": body.campaign_id})
+        if not deal_doc:
+            raise HTTPException(status_code=404, detail="Deal not found for this lead in the specified campaign")
+    else:
+        deals = list(deals_collection.find({"lead_id": lead_id}))
+        if not deals:
+            raise HTTPException(status_code=404, detail="Lead not found")
+
+        deal_doc = None
+        campaign = None
+        for d in deals:
+            c = models.Campaign.get(str(d["campaign_id"]))
+            if c and c.has_access(user_id):
+                deal_doc = d
+                campaign = c
+                break
+
+        if not deal_doc or not campaign:
+            raise HTTPException(status_code=403, detail="Access denied")
+
+    deal_id = str(deal_doc["_id"])
+    campaign_id = str(deal_doc["campaign_id"])
+
+    # Create the Message record (pending send)
+    msg = models.Message(
+        deal_id=deal_id,
+        content=body.content,
+        is_outgoing=True,
+        user_id=user_id,
+    )
+    msg.save()
+
+    # Find the LinkedIn profile for this campaign to scope the task
+    campaign_obj = campaign or models.Campaign.get(campaign_id)
+    linkedin_profile_id = campaign_obj.linkedin_profile_id if campaign_obj else None
+    if not linkedin_profile_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Campaign has no linked LinkedIn profile — cannot send messages"
+        )
+
+    # Enqueue a send_manual_message task for the daemon
+    task = models.Task(
+        task_type=models.Task.TaskType.SEND_MANUAL_MESSAGE,
+        payload={
+            "campaign_id": campaign_id,
+            "message_id": msg.pk,
+            "lead_id": lead_id,
+        },
+        user_id=user_id,
+        linkedin_profile_id=linkedin_profile_id,
+    )
+    task.save()
+
+    return {
+        "success": True,
+        "message_id": msg.pk,
+        "task_id": task.pk,
+        "status": "queued",
+    }
+
+
+class StateUpdate(BaseModel):
+    state: str
+
+
+@router.patch("/{lead_id}/campaigns/{campaign_id}/state", response_model=dict)
+async def update_deal_state(
+    lead_id: str,
+    campaign_id: str,
+    state_update: StateUpdate,
+    user_id: str = Depends(get_current_user),
+):
+    """
+    Update the deal state for a lead in a specific campaign.
+    Validates state against DealState enum.
+    """
+    from openoutreach.crm.models.deal import DealState
+
+    # Verify campaign access
+    campaign = models.Campaign.get(campaign_id)
+    if not campaign or not campaign.has_access(user_id):
+        raise HTTPException(status_code=403, detail="Campaign access denied")
+
+    # Validate state
+    try:
+        new_state = DealState(state_update.state)
+    except ValueError:
+        valid_states = [s.value for s in DealState]
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid state: {state_update.state}. Valid states: {', '.join(valid_states)}"
+        )
+
+    # Find the deal
+    deals_collection = get_mongodb_collection("deals")
+    if deals_collection is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+
+    deal = deals_collection.find_one({"lead_id": lead_id, "campaign_id": campaign_id})
+    if not deal:
+        raise HTTPException(status_code=404, detail="Deal not found")
+
+    # Update the state
+    deals_collection.update_one(
+        {"_id": deal["_id"]},
+        {"$set": {"state": new_state.value}}
+    )
+
+    return {
+        "success": True,
+        "message": f"Deal state updated to {new_state.value}",
+        "deal_id": str(deal["_id"]),
+        "state": new_state.value
+    }
+
+
+class LeadUpdate(BaseModel):
+    notes: Optional[str] = None
+    disqualified: Optional[bool] = None
+
+
+@router.patch("/{lead_id}", response_model=dict)
+async def update_lead(
+    lead_id: str,
+    body: LeadUpdate,
+    user_id: str = Depends(get_current_user),
+):
+    """
+    Update editable fields on a lead (notes, disqualified status).
+    User must have access via at least one campaign.
+    """
+    deals_collection = get_mongodb_collection("deals")
+    if deals_collection is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    deals = list(deals_collection.find({"lead_id": lead_id}))
+
+    if not deals:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    has_access = False
+    for deal in deals:
+        campaign = models.Campaign.get(str(deal["campaign_id"]))
+        if campaign and campaign.has_access(user_id):
+            has_access = True
+            break
+
+    if not has_access:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    leads_collection = get_mongodb_collection("leads")
+    if leads_collection is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+
+    update_doc = {}
+    if body.notes is not None:
+        update_doc["notes"] = body.notes
+    if body.disqualified is not None:
+        update_doc["disqualified"] = body.disqualified
+
+    if not update_doc:
+        raise HTTPException(status_code=400, detail="No fields to update")
+
+    leads_collection.update_one({"_id": lead_id}, {"$set": update_doc})
+
+    return {"success": True, "lead_id": lead_id, "updated": list(update_doc.keys())}
+
+
+class AddToCampaignRequest(BaseModel):
+    campaign_id: str
+
+
+@router.post("/{lead_id}/add-to-campaign", response_model=dict)
+async def add_lead_to_campaign(
+    lead_id: str,
+    body: AddToCampaignRequest,
+    user_id: str = Depends(get_current_user),
+):
+    """
+    Add an existing lead to a campaign by creating a Deal linking them.
+    The deal starts in DISCOVERED state for qualification.
+    """
+    from openoutreach.crm.models.deal import DealState
+
+    campaign = models.Campaign.get(body.campaign_id)
+    if not campaign or not campaign.has_access(user_id):
+        raise HTTPException(status_code=403, detail="Campaign access denied")
+
+    leads_collection = get_mongodb_collection("leads")
+    if leads_collection is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+
+    lead_doc = leads_collection.find_one({"_id": lead_id})
+    if not lead_doc:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    deals_collection = get_mongodb_collection("deals")
+    if deals_collection is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+
+    # Check if already linked
+    existing = deals_collection.find_one({"lead_id": lead_id, "campaign_id": body.campaign_id})
+    if existing:
+        raise HTTPException(status_code=409, detail="Lead already in this campaign")
+
+    deal = models.Deal(
+        lead_id=lead_id,
+        campaign_id=body.campaign_id,
+        state=DealState.DISCOVERED,
+        reason="Added manually by operator",
+    )
+    deal.save()
+
+    return {
+        "success": True,
+        "deal_id": deal.pk,
+        "state": DealState.DISCOVERED,
+    }

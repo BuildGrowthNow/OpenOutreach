@@ -267,12 +267,19 @@ class TrayApp:
             except KeyboardInterrupt:
                 logger.info("Daemon interrupted")
             except Exception as e:
+                from openoutreach.core.daemon_remote import BrowserNotFoundError
+
                 logger.exception("Daemon error: %s", e)
-                # Show error notification to user
+                # Show specific error for missing browser
+                if isinstance(e, BrowserNotFoundError):
+                    error_msg = "No supported browser found. Please install Chrome or Edge."
+                else:
+                    error_msg = "OpenOutreach daemon encountered an error. Check logs for details."
+
                 if self.icon:
                     self.icon.notify(
                         "Daemon Error",
-                        "Lengrowth daemon encountered an error. Check logs for details.",
+                        error_msg,
                     )
             finally:
                 self._loop.close()
@@ -372,7 +379,7 @@ def main():
     logging.getLogger("urllib3").setLevel(logging.WARNING)
     logging.getLogger("httpx").setLevel(logging.WARNING)
 
-    logger.info("Starting Lengrowth Linkedin desktop app v%s", __version__)
+    logger.info("Starting OpenOutreach desktop app v%s", __version__)
 
     # Register protocol handler on Windows
     register_protocol_handler()

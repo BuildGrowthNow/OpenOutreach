@@ -47,10 +47,10 @@ logger = logging.getLogger(__name__)
 # ── Working-hours arithmetic ──────────────────────────────────────────
 
 
-def _get_active_hours_config():
-    """Load active hours configuration from SiteConfig DB singleton."""
+def _get_active_hours_config(user_id: str | None = None):
+    """Load active hours configuration from SiteConfig for the given user."""
     from openoutreach.mongodb.models import SiteConfig
-    config = SiteConfig.load()
+    config = SiteConfig.load(user_id=user_id)
     return {
         'enabled': config.enable_active_hours,
         'start_hour': config.active_start_hour,
@@ -192,7 +192,6 @@ def _distribute_weighted(n: int, weighted_intervals: list, velocity: int) -> lis
 
     # Allocate slots proportionally by weight
     for start, end, weight in weighted_intervals:
-        interval_seconds = (end - start).total_seconds()
         slot_count = int(n * (weight / total_weight))
 
         cursor = start
@@ -489,7 +488,7 @@ def plan_check_pending_window(session, campaign) -> int:
     """Plan the next 24h of check_pending slots for *campaign*. Slot count
     matches the PENDING deals whose backoff has expired (or expires
     within the horizon), capped by ``CHECK_PENDING_DAILY_CAP``."""
-    from openoutreach.mongodb.models import Deal, SiteConfig
+    from openoutreach.mongodb.models import SiteConfig
     from openoutreach.core.rate_limit_presets import get_preset
 
     if _has_pending(Task.TaskType.CHECK_PENDING, campaign.pk):
@@ -587,19 +586,28 @@ def on_deal_state_entered(deal) -> None:
 # ── Reconciliation ────────────────────────────────────────────────────
 
 
-def _recover_stale_running_tasks() -> int:
-    """Reset RUNNING tasks to PENDING. RUNNING rows can only linger if the
-    daemon crashed mid-task, so they are always stale at reconcile time.
+STALE_RUNNING_THRESHOLD_MINUTES = 30
 
-    Also logs detailed information about recovered tasks for debugging.
+
+def _recover_stale_running_tasks() -> int:
+    """Reset RUNNING tasks older than 30 minutes to PENDING.
+
+    Only tasks that have been RUNNING longer than the threshold are considered
+    stale (daemon crash). Fresh RUNNING tasks are left alone.
     """
     running_tasks = list(Task.objects.filter(status=Task.Status.RUNNING))
     if not running_tasks:
         return 0
 
-    # Update all RUNNING tasks to PENDING
+    now = Datetime.now(tz.utc)
+    threshold = now - timedelta(minutes=STALE_RUNNING_THRESHOLD_MINUTES)
+
     count = 0
     for task in running_tasks:
+        started = task.started_at or task.scheduled_at or task.created_at
+        if started and started > threshold:
+            continue  # Still fresh — do not reset
+
         task.status = Task.Status.PENDING
         task.save()
         count += 1
@@ -611,7 +619,8 @@ def _recover_stale_running_tasks() -> int:
             task.scheduled_at,
         )
 
-    logger.info("Recovered %d stale running tasks from previous daemon crash", count)
+    if count:
+        logger.info("Recovered %d stale running tasks (>%dm old)", count, STALE_RUNNING_THRESHOLD_MINUTES)
     return count
 
 

@@ -4,9 +4,10 @@ FastAPI Dependencies - Auth delegates to dependencies_v2.py
 This module maintains backwards compatibility but all auth logic
 has been moved to dependencies_v2.py for JWT-only authentication.
 """
+from typing import Optional
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from typing import Optional
 
 security = HTTPBearer()
 

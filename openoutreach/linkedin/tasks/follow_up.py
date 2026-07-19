@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import TYPE_CHECKING, Dict, Optional
 
 from openoutreach.mongodb import models
 from openoutreach.mongodb.connection import get_mongodb_collection
@@ -16,9 +15,6 @@ from openoutreach.linkedin.services.smart_rate_limits import (
 )
 
 logger = logging.getLogger(__name__)
-
-if TYPE_CHECKING:
-    from openoutreach.linkedin.browser.session import AccountSession
 
 # Required silence between nudges scales with unanswered count:
 # 1 unanswered → 3d, 2 → 6d, 3 → 9d. Skips the LLM call while open.
@@ -234,10 +230,8 @@ def handle_follow_up(task, session, qualifiers):
         logger.info("[%s] follow_up message for %s: %s", campaign, public_id, message)
         sent = send_raw_message(session, profile, message)
         if not sent:
-            from openoutreach.crm.models import DealState
-            set_profile_state(session, public_id, DealState.QUALIFIED)
             logger.warning(
-                "follow_up for %s: send failed — moving to QUALIFIED for re-connection",
+                "follow_up for %s: send failed — keeping CONNECTED, will retry next cycle",
                 public_id,
             )
             return

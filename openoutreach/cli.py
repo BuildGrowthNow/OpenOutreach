@@ -3,9 +3,10 @@
 Click CLI for OpenOutreach - replaces Django's manage.py.
 Pure Python command-line interface with no Django dependencies.
 """
-import click
 import logging
 import sys
+
+import click
 
 
 @click.group()
@@ -426,4 +427,4 @@ def list_coupons():
 
 
 if __name__ == '__main__':
-    cli()
+    cli()  # pylint: disable=no-value-for-parameter

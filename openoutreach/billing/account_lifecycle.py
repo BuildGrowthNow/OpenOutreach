@@ -89,34 +89,46 @@ def cancel_account_deletion(user_id: str) -> dict:
     user.cancel_deletion()
 
     # Reactivate subscription if it was canceled
+    subscription_reactivated = False
     if user.stripe_subscription_id and user.subscription_status == "canceled":
         try:
             from openoutreach.billing.stripe_service import reactivate_subscription
             reactivate_subscription(user.stripe_subscription_id)
             user.subscription_status = "active"
+            subscription_reactivated = True
             logger.info(f"Reactivated subscription for user: {user.email}")
         except Exception as e:
             logger.error(f"Failed to reactivate subscription: {e}")
             # Continue with profile reactivation even if subscription fails
 
-    # Reactivate LinkedIn profiles
-    try:
-        profiles_collection = get_mongodb_collection("linkedin_profiles")
-        if profiles_collection is not None:
-            profiles_collection.update_many(
-                {"user_id": user_id},
-                {"$set": {"is_active": True}},
-            )
-            logger.info(f"Reactivated all profiles for user: {user.email}")
-    except Exception as e:
-        logger.error(f"Failed to reactivate profiles: {e}")
+    # Save user state
+    user.save()
+
+    # Reactivate LinkedIn profiles only if subscription is active/trialing
+    if user.subscription_status in ("active", "trialing"):
+        try:
+            profiles_collection = get_mongodb_collection("linkedin_profiles")
+            if profiles_collection is not None:
+                profiles_collection.update_many(
+                    {"user_id": user_id},
+                    {"$set": {"is_active": True}},
+                )
+                logger.info(f"Reactivated all profiles for user: {user.email}")
+        except Exception as e:
+            logger.error(f"Failed to reactivate profiles: {e}")
 
     logger.info(f"Account deletion canceled for: {user.email}")
+
+    message = "Your account has been reactivated."
+    if subscription_reactivated:
+        message += " Your subscription has been restored and is now active."
+    elif user.subscription_status in ("none", "expired", "canceled"):
+        message += " Please resubscribe to resume using the service."
 
     return {
         "status": "active",
         "subscription_status": user.subscription_status,
-        "message": "Your account has been reactivated. Please resubscribe to resume using the service.",
+        "message": message,
     }
 
 
@@ -189,13 +201,13 @@ def export_user_data(user_id: str) -> dict:
             leads = list(leads_collection.find({"user_id": user_id}).limit(100))
             data["leads"] = [
                 {
-                    "id": str(l.get("_id")),
-                    "public_identifier": l.get("public_identifier"),
-                    "discovered_at": l.get("created_at").isoformat()
-                    if l.get("created_at")
+                    "id": str(lead_doc.get("_id")),
+                    "public_identifier": lead_doc.get("public_identifier"),
+                    "discovered_at": lead_doc.get("created_at").isoformat()
+                    if lead_doc.get("created_at")
                     else None,
                 }
-                for l in leads
+                for lead_doc in leads
             ]
     except Exception as e:
         logger.warning(f"Failed to export leads: {e}")

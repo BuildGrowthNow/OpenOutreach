@@ -19,8 +19,11 @@ interface SidebarItem {
   icon: SidebarIcon
 }
 
-// Feature flag for state machine (disabled - incomplete feature)
+// Phase 6: Feature flags for deferred secondary surfaces
+// These surfaces exist but are hidden from nav until post-launch
 const ENABLE_STATE_MACHINE = process.env.NEXT_PUBLIC_ENABLE_STATE_MACHINE === 'true'
+const ENABLE_LINKS = false // Phase 6: hidden; link tracking is post-launch
+const ENABLE_TEMPLATES = false // Phase 6: hidden; templates are post-launch
 
 const dashboardItems: SidebarItem[] = [
   {
@@ -43,9 +46,8 @@ const dashboardItems: SidebarItem[] = [
     href: '/messages',
     icon: 'MessageSquare'
   },
-  // State Machine temporarily hidden - incomplete feature
+  // State Machine temporarily hidden - incomplete feature (Phase 6)
   // Missing: edge editing, node configuration, daemon integration
-  // Uncomment or set NEXT_PUBLIC_ENABLE_STATE_MACHINE=true to re-enable
   ...(ENABLE_STATE_MACHINE ? [{
     title: 'State Machine',
     href: '/state-machine',
@@ -56,11 +58,13 @@ const dashboardItems: SidebarItem[] = [
     href: '/analytics',
     icon: 'BarChartBig'
   },
-  {
+  // Links hidden until post-launch (Phase 6)
+  // Users can track via UTM parameters; full link tracking deferred
+  ...(ENABLE_LINKS ? [{
     title: 'Links',
     href: '/links',
-    icon: 'Link'
-  },
+    icon: 'Link' as SidebarIcon
+  }] : []),
   {
     title: 'Settings',
     href: '/settings',

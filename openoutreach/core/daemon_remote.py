@@ -17,6 +17,8 @@ from datetime import datetime, timezone as tz
 from pathlib import Path
 from typing import Any, Optional
 
+import httpx
+
 from openoutreach.core.browser_detect import BrowserInfo, get_preferred_browser
 from openoutreach.core.remote_client import (
     DaemonConfig,
@@ -60,7 +62,9 @@ class RemoteDaemon:
         self.daemon_id = self._get_or_create_daemon_id()
         self.on_token_refresh = on_token_refresh
 
-        self.client = RemoteClient(api_url, token, self.daemon_id, refresh_token)
+        self.client = RemoteClient(
+            api_url, token, self.daemon_id, refresh_token, on_token_refresh=on_token_refresh
+        )
         self.config: Optional[DaemonConfig] = None
         self.session = None
         self.browser: Optional[BrowserInfo] = None
@@ -73,10 +77,10 @@ class RemoteDaemon:
     def _default_data_dir(self) -> Path:
         """Get platform-specific data directory."""
         if sys.platform == "darwin":
-            return Path.home() / "Library/Application Support/Lengrowth"
+            return Path.home() / "Library/Application Support/OpenOutreach"
         elif sys.platform == "win32":
-            return Path.home() / "AppData/Local/Lengrowth"
-        return Path.home() / ".lengrowth"
+            return Path.home() / "AppData/Local/OpenOutreach"
+        return Path.home() / ".openoutreach"
 
     def _get_or_create_daemon_id(self) -> str:
         """Get or create persistent daemon ID."""
@@ -95,8 +99,33 @@ class RemoteDaemon:
         self.running = True
         self.start_time = datetime.now(tz.utc)
 
-        # Check subscription status before starting
-        sub_status = await self.client.check_subscription_status()
+        # Check subscription status before starting (with retry on 401)
+        try:
+            sub_status = await self.client.check_subscription_status()
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 401 and self.client._refresh_token:
+                logger.info("Got 401 on subscription check, attempting token refresh")
+                new_token = await self.client.refresh_access_token()
+                if new_token:
+                    try:
+                        sub_status = await self.client.check_subscription_status()
+                    except Exception as e2:
+                        logger.error("Subscription check failed after token refresh: %s", e2)
+                        self.running = False
+                        return
+                else:
+                    logger.error("Token refresh failed, cannot start daemon")
+                    self.running = False
+                    return
+            else:
+                logger.error("Subscription check failed: %s", e)
+                self.running = False
+                return
+        except Exception as e:
+            logger.error("Subscription check failed: %s", e)
+            self.running = False
+            return
+
         if not self._check_subscription_status(sub_status):
             return
 
@@ -585,7 +614,7 @@ class RemoteDaemon:
 
     def _show_block_notification(self, reason: Optional[str] = None) -> None:
         """Show system notification for blocked account."""
-        message_title = "Lengrowth - Account Blocked"
+        message_title = "OpenOutreach - Account Blocked"
         message_body = (
             f"Your account has been blocked: {reason}\n"
             "Please log in to the web platform or contact support for more information."
@@ -600,27 +629,27 @@ class RemoteDaemon:
         else:
             time_text = "1 hour"
 
-        message_title = "Lengrowth - Trial Ending Soon"
+        message_title = "OpenOutreach - Trial Ending Soon"
         message_body = (
             f"Your trial ends in {time_text}. Please log in to the web platform "
-            "to choose a plan and continue using Lengrowth."
+            "to choose a plan and continue using OpenOutreach."
         )
 
         self._show_system_notification(message_title, message_body)
 
     def _show_trial_expired_notification(self) -> None:
         """Show system notification for expired trial."""
-        message_title = "Lengrowth - Trial Expired"
+        message_title = "OpenOutreach - Trial Expired"
         message_body = (
             "Your trial has ended. Please log in to the web platform to choose a plan "
-            "and continue using Lengrowth."
+            "and continue using OpenOutreach."
         )
 
         self._show_system_notification(message_title, message_body)
 
     def _show_subscription_canceled_notification(self) -> None:
         """Show system notification for canceled subscription."""
-        message_title = "Lengrowth - Subscription Canceled"
+        message_title = "OpenOutreach - Subscription Canceled"
         message_body = (
             "Your subscription has been canceled. Please log in to the web platform "
             "to reactivate or choose a new plan."
@@ -630,7 +659,7 @@ class RemoteDaemon:
 
     def _show_payment_failed_notification(self) -> None:
         """Show system notification for payment failure."""
-        message_title = "Lengrowth - Payment Failed"
+        message_title = "OpenOutreach - Payment Failed"
         message_body = (
             "Your payment has failed. Please log in to the web platform to update "
             "your payment method."
@@ -665,7 +694,7 @@ class RemoteDaemon:
                     "$x.LoadXml($t.GetXml())",
                     "$o = [Windows.UI.Notifications.ToastNotification]::new($x)",
                     "[Windows.UI.Notifications.ToastNotificationManager]"
-                    '::CreateToastNotifier("Lengrowth").Show($o)',
+                    '::CreateToastNotifier("OpenOutreach").Show($o)',
                 ]
                 ps_script = ";".join(ps_lines)
                 subprocess.run(
@@ -684,7 +713,7 @@ class RemoteDaemon:
             is_desktop: If True, desktop daemon shows challenge in local browser.
                        If False, redirect to web platform.
         """
-        message_title = "Lengrowth - Action Required"
+        message_title = "OpenOutreach - Action Required"
         if is_desktop:
             message_body = (
                 "LinkedIn requires verification. Complete the challenge in "

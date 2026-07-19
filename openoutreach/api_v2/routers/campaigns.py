@@ -7,9 +7,8 @@ and team access control.
 
 import logging
 from typing import List, Optional
-from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, status, Body
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from pydantic import BaseModel
 
 from openoutreach.api_v2.dependencies_v2 import get_current_user, get_campaign_with_access
@@ -30,6 +29,8 @@ class CampaignCreate(BaseModel):
     booking_link: Optional[str] = ""
     velocity: int = 20
     team_member_ids: Optional[List[str]] = None  # Optional: share with team
+    icp_titles: Optional[List[str]] = None  # ICP job titles
+    follow_up_strategy: Optional[str] = None  # Follow-up strategy text
 
     class Config:
         json_schema_extra = {
@@ -40,7 +41,9 @@ class CampaignCreate(BaseModel):
                 "linkedin_profile_id": "profile_123",
                 "booking_link": "https://calendly.com/user/discovery",
                 "velocity": 20,
-                "team_member_ids": ["user_456"]
+                "team_member_ids": ["user_456"],
+                "icp_titles": ["CEO", "CTO", "VP of Engineering"],
+                "follow_up_strategy": "Send personalized follow-up after 3 days"
             }
         }
 
@@ -54,7 +57,10 @@ class CampaignUpdate(BaseModel):
     booking_link: Optional[str] = None
     velocity: Optional[int] = None
     is_paused: Optional[bool] = None
+    status: Optional[str] = None  # "active", "paused", or "draft"
     team_member_ids: Optional[List[str]] = None
+    icp_titles: Optional[List[str]] = None
+    follow_up_strategy: Optional[str] = None
 
 
 class CampaignResponse(BaseModel):
@@ -67,8 +73,11 @@ class CampaignResponse(BaseModel):
     booking_link: str
     velocity: int
     is_paused: bool
+    status: str  # "active", "paused", or "draft"
     user_id: str
     team_member_ids: List[str]
+    icp_titles: List[str]
+    follow_up_strategy: Optional[str]
     created_at: str
 
 
@@ -120,8 +129,11 @@ async def list_campaigns(
                 booking_link=doc.get("booking_link", ""),
                 velocity=doc.get("velocity", 20),
                 is_paused=doc.get("is_paused", False),
+                status=doc.get("status", "active"),
                 user_id=doc.get("user_id", ""),
                 team_member_ids=doc.get("team_member_ids", []),
+                icp_titles=doc.get("icp_titles", []),
+                follow_up_strategy=doc.get("follow_up_strategy"),
                 created_at=doc.get("created_at").isoformat() if doc.get("created_at") else "",
             ))
 
@@ -147,8 +159,10 @@ async def create_campaign(
 
     Multi-tenant: user must own the specified LinkedIn profile.
     Validates profile ownership and team member existence.
+    Enforces plan limits before creation.
     """
-    from openoutreach.linkedin.models import LinkedInProfile
+    from openoutreach.mongodb.models_user import User
+    from openoutreach.billing.enforcement import PlanEnforcer
 
     profiles_collection = get_mongodb_collection("linkedin_profiles")
     campaigns_collection = get_mongodb_collection("campaigns")
@@ -160,6 +174,21 @@ async def create_campaign(
         )
 
     try:
+        # Enforce plan limits before creation
+        user = User.get(user_id)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User not found"
+            )
+
+        can_create, error_msg = PlanEnforcer.can_create_campaign(user)
+        if not can_create:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=error_msg or "Cannot create campaign - plan limit reached"
+            )
+
         # Verify user owns the LinkedIn profile
         if profiles_collection is not None:
             profile_doc = profiles_collection.find_one({
@@ -197,6 +226,10 @@ async def create_campaign(
             velocity=data.velocity,
             user_id=user_id,
             team_member_ids=team_ids,
+            icp_titles=data.icp_titles or [],
+            follow_up_strategy=data.follow_up_strategy,
+            status="draft",  # New campaigns start as draft
+            is_paused=True,  # Keep is_paused in sync with draft status
         )
         campaign.save()
 
@@ -211,8 +244,11 @@ async def create_campaign(
             booking_link=campaign.booking_link,
             velocity=campaign.velocity,
             is_paused=campaign.is_paused,
+            status=campaign.status,
             user_id=campaign.user_id,
             team_member_ids=campaign.team_member_ids,
+            icp_titles=campaign.icp_titles,
+            follow_up_strategy=campaign.follow_up_strategy,
             created_at=campaign.created_at.isoformat() if campaign.created_at else "",
         )
 
@@ -244,8 +280,11 @@ async def get_campaign(
         booking_link=campaign.booking_link,
         velocity=campaign.velocity,
         is_paused=campaign.is_paused,
+        status=campaign.status,
         user_id=campaign.user_id,
         team_member_ids=campaign.team_member_ids,
+        icp_titles=campaign.icp_titles,
+        follow_up_strategy=campaign.follow_up_strategy,
         created_at=campaign.created_at.isoformat() if campaign.created_at else "",
     )
 
@@ -310,8 +349,28 @@ async def update_campaign(
             updates["booking_link"] = data.booking_link
         if data.velocity is not None:
             updates["velocity"] = data.velocity
-        if data.is_paused is not None:
+        if data.icp_titles is not None:
+            updates["icp_titles"] = data.icp_titles
+        if data.follow_up_strategy is not None:
+            updates["follow_up_strategy"] = data.follow_up_strategy
+
+        # Handle status/is_paused synchronization
+        # Priority: if status is provided, use it; otherwise use is_paused
+        if data.status is not None:
+            # Validate status
+            if data.status not in ["active", "paused", "draft"]:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Status must be 'active', 'paused', or 'draft'"
+                )
+            updates["status"] = data.status
+            # Sync is_paused with status
+            updates["is_paused"] = data.status in ["paused", "draft"]
+        elif data.is_paused is not None:
+            # If only is_paused is provided, sync status
             updates["is_paused"] = data.is_paused
+            updates["status"] = "paused" if data.is_paused else "active"
+
         if data.team_member_ids is not None:
             # Only campaign owner can update team members
             if user_id != campaign.user_id:
@@ -352,8 +411,11 @@ async def update_campaign(
             booking_link=updated_campaign.booking_link,
             velocity=updated_campaign.velocity,
             is_paused=updated_campaign.is_paused,
+            status=updated_campaign.status,
             user_id=updated_campaign.user_id,
             team_member_ids=updated_campaign.team_member_ids,
+            icp_titles=updated_campaign.icp_titles,
+            follow_up_strategy=updated_campaign.follow_up_strategy,
             created_at=updated_campaign.created_at.isoformat() if updated_campaign.created_at else "",
         )
 
@@ -430,3 +492,266 @@ async def delete_campaign(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to delete campaign: {str(e)}"
         )
+
+
+@router.post("/{campaign_id}/pause", response_model=CampaignResponse)
+async def pause_campaign(
+    campaign_id: str,
+    user_id: str = Depends(get_current_user),
+):
+    """
+    Pause a campaign.
+
+    Helper endpoint that sets status="paused" and is_paused=True.
+    Multi-tenant: verifies user has access (owner OR team member).
+    """
+    collection = get_mongodb_collection("campaigns")
+    if collection is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Campaigns database unavailable"
+        )
+
+    try:
+        # Get campaign and verify access
+        campaign = models.Campaign.get(campaign_id)
+        if not campaign:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Campaign not found"
+            )
+
+        if not campaign.has_access(user_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied"
+            )
+
+        # Update to paused
+        collection.update_one(
+            {"_id": campaign_id},
+            {"$set": {"status": "paused", "is_paused": True}}
+        )
+
+        # Fetch updated campaign
+        updated_campaign = models.Campaign.get(campaign_id)
+        if updated_campaign is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Campaign not found after update"
+            )
+
+        logger.info(f"Paused campaign {campaign_id} by user {user_id}")
+
+        return CampaignResponse(
+            id=updated_campaign._id,
+            name=updated_campaign.name,
+            product_pitch=updated_campaign.product_pitch,
+            campaign_objective=updated_campaign.campaign_objective,
+            linkedin_profile_id=updated_campaign.linkedin_profile_id,
+            booking_link=updated_campaign.booking_link,
+            velocity=updated_campaign.velocity,
+            is_paused=updated_campaign.is_paused,
+            status=updated_campaign.status,
+            user_id=updated_campaign.user_id,
+            team_member_ids=updated_campaign.team_member_ids,
+            icp_titles=updated_campaign.icp_titles,
+            follow_up_strategy=updated_campaign.follow_up_strategy,
+            created_at=updated_campaign.created_at.isoformat() if updated_campaign.created_at else "",
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Failed to pause campaign")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to pause campaign: {str(e)}"
+        )
+
+
+@router.post("/{campaign_id}/resume", response_model=CampaignResponse)
+async def resume_campaign(
+    campaign_id: str,
+    user_id: str = Depends(get_current_user),
+):
+    """
+    Resume a paused campaign.
+
+    Helper endpoint that sets status="active" and is_paused=False.
+    Multi-tenant: verifies user has access (owner OR team member).
+    """
+    collection = get_mongodb_collection("campaigns")
+    if collection is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Campaigns database unavailable"
+        )
+
+    try:
+        # Get campaign and verify access
+        campaign = models.Campaign.get(campaign_id)
+        if not campaign:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Campaign not found"
+            )
+
+        if not campaign.has_access(user_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied"
+            )
+
+        # Update to active
+        collection.update_one(
+            {"_id": campaign_id},
+            {"$set": {"status": "active", "is_paused": False}}
+        )
+
+        # Fetch updated campaign
+        updated_campaign = models.Campaign.get(campaign_id)
+        if updated_campaign is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Campaign not found after update"
+            )
+
+        logger.info(f"Resumed campaign {campaign_id} by user {user_id}")
+
+        return CampaignResponse(
+            id=updated_campaign._id,
+            name=updated_campaign.name,
+            product_pitch=updated_campaign.product_pitch,
+            campaign_objective=updated_campaign.campaign_objective,
+            linkedin_profile_id=updated_campaign.linkedin_profile_id,
+            booking_link=updated_campaign.booking_link,
+            velocity=updated_campaign.velocity,
+            is_paused=updated_campaign.is_paused,
+            status=updated_campaign.status,
+            user_id=updated_campaign.user_id,
+            team_member_ids=updated_campaign.team_member_ids,
+            icp_titles=updated_campaign.icp_titles,
+            follow_up_strategy=updated_campaign.follow_up_strategy,
+            created_at=updated_campaign.created_at.isoformat() if updated_campaign.created_at else "",
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Failed to resume campaign")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to resume campaign: {str(e)}"
+        )
+
+
+class LeadResponse(BaseModel):
+    id: str
+    public_identifier: str
+    url: str
+    full_name: Optional[str] = None
+    headline: Optional[str] = None
+    location: Optional[str] = None
+    disqualified: bool = False
+    created_at: Optional[str] = None
+
+
+class DealResponse(BaseModel):
+    id: str
+    lead_id: str
+    campaign_id: str
+    state: str
+    outcome: Optional[str] = None
+    reason: Optional[str] = None
+    creation_date: Optional[str] = None
+
+
+@router.get("/{campaign_id}/leads", response_model=dict)
+async def get_campaign_leads(
+    campaign_id: str,
+    user_id: str = Depends(get_current_user),
+    state: Optional[str] = Query(None),
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+):
+    """
+    Get leads for a specific campaign.
+
+    Multi-tenant: verifies user has access (owner OR team member).
+    """
+    # Verify campaign access
+    campaign = models.Campaign.get(campaign_id)
+    if not campaign:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Campaign not found"
+        )
+
+    if not campaign.has_access(user_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied"
+        )
+
+    collection = get_mongodb_collection("deals")
+    if collection is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database unavailable"
+        )
+
+    # Build query
+    query = {"campaign_id": campaign_id}
+    if state:
+        query["state"] = state
+
+    # Get deals
+    total = collection.count_documents(query)
+    deals = list(collection.find(query).skip(offset).limit(limit).sort("creation_date", -1))
+
+    # Get unique lead IDs
+    lead_ids = list(set(str(d["lead_id"]) for d in deals))
+
+    # Fetch leads
+    leads_collection = get_mongodb_collection("leads")
+    if leads_collection is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database unavailable"
+        )
+    leads_data = {str(lead_doc["_id"]): lead_doc for lead_doc in leads_collection.find({"_id": {"$in": lead_ids}})}
+
+    # Build response
+    results = []
+    for deal in deals:
+        lead_data = leads_data.get(str(deal["lead_id"]))
+        if lead_data:
+            results.append({
+                "lead": LeadResponse(
+                    id=str(lead_data["_id"]),
+                    public_identifier=lead_data.get("public_identifier", ""),
+                    url=lead_data.get("url", ""),
+                    full_name=lead_data.get("full_name"),
+                    headline=lead_data.get("headline"),
+                    location=lead_data.get("location"),
+                    disqualified=lead_data.get("disqualified", False),
+                    created_at=lead_data.get("creation_date").isoformat() if lead_data.get("creation_date") else None,
+                ),
+                "deal": DealResponse(
+                    id=str(deal["_id"]),
+                    lead_id=str(deal["lead_id"]),
+                    campaign_id=str(deal["campaign_id"]),
+                    state=deal.get("state", "Discovered"),
+                    outcome=deal.get("outcome"),
+                    reason=deal.get("reason"),
+                    creation_date=deal.get("creation_date").isoformat() if deal.get("creation_date") else None,
+                )
+            })
+
+    return {
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        "results": results,
+    }

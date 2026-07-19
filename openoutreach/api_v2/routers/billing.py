@@ -33,7 +33,6 @@ from openoutreach.billing.referrals import (
 from openoutreach.billing.coupons import (
     Coupon,
     validate_coupon_for_checkout,
-    increment_coupon_redemptions,
 )
 from openoutreach.config import settings
 
@@ -41,7 +40,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/billing", tags=["billing"])
 
-PLAN_HIERARCHY = ["starter", "pro", "business", "agency", "lifetime"]
+PLAN_HIERARCHY = ["starter", "pro", "business", "agency"]  # lifetime equals pro in hierarchy
 
 
 def _is_plan_upgrade(current_plan: str, new_plan: str) -> bool:
@@ -328,20 +327,26 @@ async def create_checkout(
                 detail="Plan price not available",
             )
 
+        # Use APP_URL from settings for checkout URLs
+        app_url = getattr(settings, 'APP_URL', None) or settings.CORS_ALLOWED_ORIGINS.split(',')[0]
+
         if request.plan_name == "lifetime":
             url = create_lifetime_checkout_session(
                 customer_id=customer.id,
                 price_id=price_id,
-                success_url=request.success_url or f"{settings.CORS_ALLOWED_ORIGINS.split(',')[0]}/settings/billing?success=true",
-                cancel_url=request.cancel_url or f"{settings.CORS_ALLOWED_ORIGINS.split(',')[0]}/settings/billing?canceled=true",
+                success_url=request.success_url or f"{app_url}/settings/billing?success=true",
+                cancel_url=request.cancel_url or f"{app_url}/settings/billing?canceled=true",
             )
         else:
             config = get_site_config()
-            trial_days = (
-                config.trial_duration_days
-                if user.subscription_status == "none"
-                else None
-            )
+            trial_days = None
+            if user.subscription_status == "none":
+                # Base trial duration
+                trial_days = config.trial_duration_days
+                # Add referral extension if user was referred
+                if user.referrer_id:
+                    trial_days += config.referral_trial_extension_days
+                    logger.info(f"Applied referral trial extension: {trial_days} days total for {user.email}")
 
             coupon_id = None
             if request.coupon_code:
@@ -356,8 +361,8 @@ async def create_checkout(
                 customer_id=customer.id,
                 price_id=price_id,
                 trial_period_days=trial_days,
-                success_url=request.success_url or f"{settings.CORS_ALLOWED_ORIGINS.split(',')[0]}/settings/billing?success=true",
-                cancel_url=request.cancel_url or f"{settings.CORS_ALLOWED_ORIGINS.split(',')[0]}/settings/billing?canceled=true",
+                success_url=request.success_url or f"{app_url}/settings/billing?success=true",
+                cancel_url=request.cancel_url or f"{app_url}/settings/billing?canceled=true",
                 coupon_id=coupon_id,
                 coupon_code=request.coupon_code if coupon_id else None,
             )
@@ -397,9 +402,11 @@ async def create_portal(
         )
 
     try:
+        # Use APP_URL from settings for portal return URL
+        app_url = getattr(settings, 'APP_URL', None) or settings.CORS_ALLOWED_ORIGINS.split(',')[0]
         url = create_portal_session(
             customer_id=user.stripe_customer_id,
-            return_url=return_url or f"{settings.CORS_ALLOWED_ORIGINS.split(',')[0]}/settings/billing",
+            return_url=return_url or f"{app_url}/settings/billing",
         )
 
         if not url:

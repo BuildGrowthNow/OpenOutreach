@@ -16,7 +16,6 @@ class CampaignCreate(BaseModel):
     cooldown_minutes: int = Field(default=0, ge=0, description="Cooldown between actions")
     icp_titles: Optional[List[str]] = Field(None, description="Ideal customer profile job titles")
     follow_up_strategy: Optional[str] = Field(None, description="Follow-up strategy")
-    ghost_mode_enabled: bool = Field(default=False, description="Enable ghost/simulation mode")
     linkedin_profile_id: Optional[str] = Field(None, description="LinkedIn profile to use")
 
 
@@ -31,7 +30,6 @@ class CampaignUpdate(BaseModel):
     cooldown_minutes: Optional[int] = Field(None, ge=0)
     icp_titles: Optional[List[str]] = None
     follow_up_strategy: Optional[str] = None
-    ghost_mode_enabled: Optional[bool] = None
 
 
 class CampaignResponse(BaseModel):
@@ -49,7 +47,6 @@ class CampaignResponse(BaseModel):
     linkedin_profile_id: Optional[str] = None
     icp_titles: Optional[List[str]] = None
     follow_up_strategy: Optional[str] = None
-    ghost_mode_enabled: bool = False
     created_at: datetime
     updated_at: datetime
 

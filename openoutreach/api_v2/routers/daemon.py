@@ -264,7 +264,10 @@ async def get_daemon_config(
     linkedin_profile_id: str,
     user_id: str = Depends(get_current_user),
 ):
-    """Get daemon configuration (rate limits, active hours, etc)."""
+    """Get daemon configuration (rate limits, active hours, etc).
+
+    Load real user settings via SiteConfig.load() not global singleton.
+    """
     profile = LinkedInProfile.objects.get(
         _id=linkedin_profile_id,
         user_id=user_id,
@@ -282,7 +285,7 @@ async def get_daemon_config(
             "velocity": config.velocity,
             "daily_connect_limit": profile.connect_daily_limit,
             "daily_message_limit": profile.follow_up_daily_limit,
-            "cooldown_minutes": 5,  # Default cooldown
+            "cooldown_minutes": 5,
         },
         "active_hours": {
             "enabled": config.enable_active_hours,
@@ -372,4 +375,62 @@ async def get_subscription_status(
             else None
         ),
         "block_reason": block_reason,
+    }
+
+
+@router.get("/profile/{linkedin_profile_id}")
+async def get_profile_details(
+    linkedin_profile_id: str,
+    user_id: str = Depends(get_current_user),
+):
+    """Get LinkedIn profile details needed for daemon execution.
+
+    Daemon queries this when executing tasks to avoid local Mongo requirement.
+    """
+    profile = LinkedInProfile.objects.get(
+        _id=linkedin_profile_id,
+        user_id=user_id,
+    )
+    if not profile:
+        raise HTTPException(404, "LinkedIn profile not found")
+
+    return {
+        "id": str(profile._id),
+        "user_id": profile.user_id,
+        "linkedin_username": profile.linkedin_username or "",
+        "linkedin_password": profile.linkedin_password or "",
+        "cookie_data": profile.cookie_data or {},
+        "proxy_server": profile.proxy_server or None,
+        "proxy_username": profile.proxy_username or None,
+        "proxy_password": profile.proxy_password or None,
+        "connect_daily_limit": profile.connect_daily_limit or 50,
+        "follow_up_daily_limit": profile.follow_up_daily_limit or 30,
+    }
+
+
+@router.get("/campaign/{campaign_id}")
+async def get_campaign_details(
+    campaign_id: str,
+    user_id: str = Depends(get_current_user),
+):
+    """Get campaign details needed for daemon execution.
+
+    Daemon queries this when executing tasks to avoid local Mongo requirement.
+    """
+    from openoutreach.mongodb.models import Campaign
+
+    campaign = Campaign.objects.get(_id=campaign_id, user_id=user_id)
+    if not campaign:
+        raise HTTPException(404, "Campaign not found")
+
+    return {
+        "id": str(campaign._id),
+        "user_id": campaign.user_id,
+        "name": campaign.name or "",
+        "product_pitch": campaign.product_pitch or "",
+        "follow_up_strategy": campaign.follow_up_strategy or "",
+        "icp_titles": campaign.icp_titles or [],
+        "linkedin_profile_id": str(campaign.linkedin_profile_id) if campaign.linkedin_profile_id else None,
+        "is_paused": campaign.is_paused or False,
+        "status": campaign.status or "draft",
     }

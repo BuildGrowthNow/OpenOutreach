@@ -1,0 +1,61 @@
+name: Billing Cron Jobs
+
+on:
+  schedule:
+    # Run trial expiry check every 6 hours
+    - cron: '0 */6 * * *'
+    # Run cleanup of expired deletions once daily at 3 AM UTC
+    - cron: '0 3 * * *'
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  trial-expiry:
+    name: Expire Trials
+    runs-on: ubuntu-latest
+    if: github.event.schedule == '0 */6 * * *' || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Execute trial expiry on server
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.AWS_HOST }}
+          username: ubuntu
+          key: ${{ secrets.AWS_SSH_KEY }}
+          script: |
+            cd /home/ubuntu/openoutreach
+            docker-compose exec -T app python -m openoutreach.cli expire-trials
+            echo "Trial expiry check completed"
+
+  cleanup-deletions:
+    name: Cleanup Expired Deletions
+    runs-on: ubuntu-latest
+    if: github.event.schedule == '0 3 * * *' || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Execute deletion cleanup on server
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.AWS_HOST }}
+          username: ubuntu
+          key: ${{ secrets.AWS_SSH_KEY }}
+          script: |
+            cd /home/ubuntu/openoutreach
+            docker-compose exec -T app python -m openoutreach.cli cleanup-deletions
+            echo "Deletion cleanup completed"
+
+  trial-warnings:
+    name: Send Trial Warnings
+    runs-on: ubuntu-latest
+    if: github.event.schedule == '0 */6 * * *' || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Execute trial warning emails on server
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.AWS_HOST }}
+          username: ubuntu
+          key: ${{ secrets.AWS_SSH_KEY }}
+          script: |
+            cd /home/ubuntu/openoutreach
+            docker-compose exec -T app python -m openoutreach.cli send-trial-warnings
+            echo "Trial warning emails sent"

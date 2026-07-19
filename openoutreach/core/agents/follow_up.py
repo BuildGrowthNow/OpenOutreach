@@ -187,11 +187,14 @@ def _load_recent_messages(deal, limit: int = RECENT_MESSAGES_WINDOW) -> list:
 def _render_system_prompt(session, deal, recent_messages: list) -> str:
     """Render the agent system prompt from the Jinja2 template."""
     from datetime import datetime, timezone as tz
+    from openoutreach.mongodb.models import Campaign
 
     env = jinja2.Environment(loader=jinja2.FileSystemLoader(str(PROMPTS_DIR)))
     template = env.get_template("follow_up_agent.j2")
 
-    campaign = deal.campaign
+    campaign = Campaign.get(deal.campaign_id)
+    if not campaign:
+        raise RuntimeError(f"Campaign {deal.campaign_id} not found for deal {deal._id}")
     self_prof = session.self_profile
     self_name = (
         f"{self_prof.get('first_name', '')} {self_prof.get('last_name', '')}".strip()
@@ -200,7 +203,8 @@ def _render_system_prompt(session, deal, recent_messages: list) -> str:
 
     from openoutreach.mongodb.models import SiteConfig
 
-    config = SiteConfig.load()
+    user_id = getattr(session.linkedin_profile, 'user_id', None)
+    config = SiteConfig.load(user_id=user_id)
 
     # Get persona context if available
     persona = get_lead_persona(deal)
@@ -234,8 +238,12 @@ def run_follow_up_agent(session, deal) -> FollowUpDecision:
     recency window of verbatim messages, and ask the LLM to decide.
     """
     from openoutreach.linkedin.db.chat import sync_conversation
+    from openoutreach.mongodb.models import Lead
 
-    public_id = deal.lead.public_identifier
+    lead = deal.lead if deal.lead else Lead.get(deal.lead_id)
+    if not lead:
+        raise RuntimeError(f"Lead {deal.lead_id} not found for deal {deal._id}")
+    public_id = lead.public_identifier
     sync_conversation(session, public_id)
     deal.refresh_from_db(fields=["chat_summary", "profile_summary"])
     _log_chat_facts(public_id, deal)

@@ -616,31 +616,35 @@ async def verify_credential(
             display_override=display_override,
         )
 
-        # Create mock profile for session
-        class MockProfile:
-            def __init__(self, cred: LinkedInCredentials):
-                self._id = cred.linkedin_profile_id or str(uuid4())
-                self.linkedin_username = email
-                self.linkedin_password = password
-                self._cookie_data_json = None
+        # Use the real LinkedInProfile for cookie persistence
+        verify_profile = profile if profile else None
+        if not verify_profile:
+            # Create a minimal mock only when no real profile exists (shouldn't happen)
+            class _FallbackProfile:
+                def __init__(self, cred: LinkedInCredentials):
+                    self._id = cred.linkedin_profile_id or str(uuid4())
+                    self.linkedin_username = email
+                    self.linkedin_password = password
 
-            def save(self, update_fields: Optional[List[str]] = None):
-                pass
+                def save(self, update_fields: Optional[List[str]] = None):
+                    pass
 
-            def refresh_from_db(self, fields: Optional[List[str]] = None):
-                pass
+                def refresh_from_db(self, fields: Optional[List[str]] = None):
+                    pass
 
-            @property
-            def cookie_data(self):
-                return None
+                @property
+                def cookie_data(self):
+                    return None
 
-            @cookie_data.setter
-            def cookie_data(self, value):
-                pass
+                @cookie_data.setter
+                def cookie_data(self, value):
+                    pass
 
-            @property
-            def pk(self):
-                return self._id
+                @property
+                def pk(self):
+                    return self._id
+
+            verify_profile = _FallbackProfile(credential)
 
         # Create session
         class MockSession:
@@ -661,12 +665,21 @@ async def verify_credential(
                 if playwright:
                     playwright.stop()
 
-        mock_profile = MockProfile(credential)
-        session = MockSession(mock_profile)
+        session = MockSession(verify_profile)
 
         try:
             # Attempt authentication
             authenticate(session, username=email, password=password)
+
+            # Persist cookies to the real profile
+            if profile and session.context:
+                try:
+                    state = dict(session.context.storage_state())
+                    profile.cookie_data = state
+                    profile.cookies_updated_at = datetime.now(tz.utc)
+                    profile.save(update_fields=["cookie_data_encrypted", "cookies_updated_at"])
+                except Exception as e:
+                    logger.error("Failed to save cookies after verification: %s", e)
 
             # Success
             credential.mark_verified()

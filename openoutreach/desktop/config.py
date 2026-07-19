@@ -16,11 +16,11 @@ class AppConfig:
     def _config_path(cls) -> Path:
         """Get platform-specific config file path."""
         if sys.platform == "darwin":
-            base = Path.home() / "Library/Application Support/Lengrowth"
+            base = Path.home() / "Library/Application Support/OpenOutreach"
         elif sys.platform == "win32":
-            base = Path.home() / "AppData/Local/Lengrowth"
+            base = Path.home() / "AppData/Local/OpenOutreach"
         else:
-            base = Path.home() / ".lengrowth"
+            base = Path.home() / ".openoutreach"
 
         base.mkdir(parents=True, exist_ok=True)
         return base / "config.json"

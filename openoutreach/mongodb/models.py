@@ -11,15 +11,12 @@ from typing import Any, ClassVar, Dict, List, Optional, TypeVar
 from uuid import uuid4
 
 from pymongo.collection import Collection
-from pymongo.results import InsertOneResult, UpdateResult
 
 from .connection import (
     get_mongodb,
     get_mongodb_collection,
     check_mongodb_connection,
-    mongodb_connection,
 )
-from .models_user import User
 
 logger = logging.getLogger(__name__)
 
@@ -885,6 +882,8 @@ class Campaign:
         user_id: str = "",
         linkedin_profile_id: Optional[str] = None,
         team_member_ids: Optional[List[str]] = None,
+        icp_titles: Optional[List[str]] = None,
+        follow_up_strategy: Optional[str] = None,
         created_at: Optional[datetime] = None,
     ):
         self._id = _id or str(uuid4())
@@ -903,6 +902,8 @@ class Campaign:
         self.user_id = user_id
         self.linkedin_profile_id = linkedin_profile_id
         self.team_member_ids = team_member_ids or []
+        self.icp_titles = icp_titles or []
+        self.follow_up_strategy = follow_up_strategy
         self.created_at = created_at or datetime.now(tz.utc)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -923,10 +924,13 @@ class Campaign:
             "user_id": self.user_id,
             "linkedin_profile_id": self.linkedin_profile_id,
             "team_member_ids": self.team_member_ids,
+            "icp_titles": self.icp_titles,
             "created_at": self.created_at,
         }
         if self.model_blob:
             data["model_blob"] = self.model_blob
+        if self.follow_up_strategy is not None:
+            data["follow_up_strategy"] = self.follow_up_strategy
         return data
 
     @classmethod
@@ -949,6 +953,8 @@ class Campaign:
             user_id=data.get("user_id", ""),
             linkedin_profile_id=data.get("linkedin_profile_id"),
             team_member_ids=data.get("team_member_ids", []),
+            icp_titles=data.get("icp_titles", []),
+            follow_up_strategy=data.get("follow_up_strategy"),
             created_at=data.get("created_at"),
         )
 

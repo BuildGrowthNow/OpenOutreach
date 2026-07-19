@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import platform
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Optional
 
@@ -55,11 +56,13 @@ class RemoteClient:
         token: str,
         daemon_id: str,
         refresh_token: Optional[str] = None,
+        on_token_refresh: Optional[Callable[[str], None]] = None,
     ):
         self.api_url = api_url.rstrip("/")
         self.daemon_id = daemon_id
         self._token = token
         self._refresh_token = refresh_token
+        self._on_token_refresh = on_token_refresh
         self._client = httpx.AsyncClient(
             base_url=self.api_url,
             headers={"Authorization": f"Bearer {token}"},
@@ -250,11 +253,41 @@ class RemoteClient:
                 self._token = new_token
                 self._client.headers["Authorization"] = f"Bearer {new_token}"
                 logger.info("Access token refreshed successfully")
+                # Notify callback (e.g., desktop app to update keychain)
+                if self._on_token_refresh:
+                    try:
+                        self._on_token_refresh(new_token)
+                    except Exception as e:
+                        logger.warning("Token refresh callback failed: %s", e)
                 return new_token
             return None
         except Exception as e:
             logger.error("Token refresh failed: %s", e)
             return None
+
+    async def get_profile_details(self, linkedin_profile_id: str) -> dict:
+        """Get LinkedIn profile details from backend.
+
+        Returns:
+            Profile dict with all data needed for task execution.
+        """
+        response = await self._request_with_retry(
+            "GET",
+            f"/api/daemon/profile/{linkedin_profile_id}",
+        )
+        return response.json()
+
+    async def get_campaign_details(self, campaign_id: str) -> dict:
+        """Get campaign details from backend.
+
+        Returns:
+            Campaign dict with all data needed for task execution.
+        """
+        response = await self._request_with_retry(
+            "GET",
+            f"/api/daemon/campaign/{campaign_id}",
+        )
+        return response.json()
 
     async def _request_with_retry(self, method: str, url: str, **kwargs):
         """Make HTTP request with automatic token refresh on 401."""
