@@ -811,11 +811,7 @@ const LeadDetailsPage = () => {
                                 <Badge variant="outline" className="text-xs">
                                   {campaign.status || 'Draft'}
                                 </Badge>
-                                {campaign.ghostModeEnabled && (
-                                  <Badge variant="secondary" className="text-xs">
-                                    Ghost Mode
-                                  </Badge>
-                                )}
+
                               </div>
                             </div>
                           </div>

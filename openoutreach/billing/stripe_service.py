@@ -121,7 +121,7 @@ def _get_or_create_product(
             metadata={"plan_name": plan_name},
         )
         return product
-    except stripe.error.StripeError as e:
+    except stripe.StripeError as e:
         logger.error(f"Failed to get/create product for {plan_name}: {e}")
         return None
 
@@ -130,7 +130,7 @@ def _create_or_update_price(
     product_id: str,
     price_key: str,
     amount_cents: int,
-    interval: str,
+    interval: Literal["day", "month", "week", "year", "one_time"],
     metered: bool = False,
 ) -> Optional[stripe.Price]:
     """Create or find Stripe price, matching by product + metadata."""
@@ -153,7 +153,6 @@ def _create_or_update_price(
         if interval == "one_time":
             price = stripe.Price.create(
                 product=product_id,
-                type="one_time",
                 unit_amount=amount_cents,
                 currency="usd",
                 metadata={"price_key": price_key},
@@ -161,7 +160,6 @@ def _create_or_update_price(
         elif metered:
             price = stripe.Price.create(
                 product=product_id,
-                type="recurring",
                 recurring={
                     "interval": interval,
                     "usage_type": "metered",
@@ -172,14 +170,13 @@ def _create_or_update_price(
         else:
             price = stripe.Price.create(
                 product=product_id,
-                type="recurring",
                 unit_amount=amount_cents,
                 currency="usd",
                 recurring={"interval": interval},
                 metadata={"price_key": price_key},
             )
         return price
-    except stripe.error.StripeError as e:
+    except stripe.StripeError as e:
         logger.error(f"Failed to create price for {price_key}: {e}")
         return None
 
@@ -204,7 +201,7 @@ def create_or_get_customer(
             metadata=metadata or {},
         )
         return customer
-    except stripe.error.StripeError as e:
+    except stripe.StripeError as e:
         logger.error(f"Failed to get/create customer for {email}: {e}")
         return None
 
@@ -249,7 +246,7 @@ def create_checkout_session(
         session = stripe.checkout.Session.create(**params)
         logger.info(f"Created checkout session: {session.id}")
         return session.url
-    except stripe.error.StripeError as e:
+    except stripe.StripeError as e:
         logger.error(f"Failed to create checkout session: {e}")
         return None
 
@@ -264,7 +261,7 @@ def create_portal_session(customer_id: str, return_url: str = "") -> Optional[st
         )
         logger.info(f"Created portal session for {customer_id}")
         return session.url
-    except stripe.error.StripeError as e:
+    except stripe.StripeError as e:
         logger.error(f"Failed to create portal session: {e}")
         return None
 
@@ -273,7 +270,7 @@ def get_subscription(subscription_id: str) -> Optional[stripe.Subscription]:
     """Get Stripe subscription by ID."""
     try:
         return stripe.Subscription.retrieve(subscription_id)
-    except stripe.error.StripeError as e:
+    except stripe.StripeError as e:
         logger.error(f"Failed to get subscription {subscription_id}: {e}")
         return None
 
@@ -282,7 +279,7 @@ def get_customer(customer_id: str) -> Optional[stripe.Customer]:
     """Get Stripe customer by ID."""
     try:
         return stripe.Customer.retrieve(customer_id)
-    except stripe.error.StripeError as e:
+    except stripe.StripeError as e:
         logger.error(f"Failed to get customer {customer_id}: {e}")
         return None
 
@@ -304,15 +301,17 @@ def construct_webhook_event(body: str, signature: str) -> Optional[dict[str, Any
             settings.STRIPE_WEBHOOK_SECRET,
         )
         return json.loads(body)
-    except (ValueError, stripe.error.SignatureVerificationError) as e:
+    except (ValueError, stripe.SignatureVerificationError) as e:
         logger.error(f"Webhook signature verification failed: {e}")
         return None
 
 
+from typing import Literal
+
 def update_subscription_price(
     subscription_id: str,
     new_price_id: str,
-    proration_behavior: str = "create_prorations",
+    proration_behavior: Literal["always_invoice", "create_prorations", "none"] = "create_prorations",
 ) -> Optional[stripe.Subscription]:
     """
     Update subscription to a new price ID.
@@ -337,7 +336,7 @@ def update_subscription_price(
         )
         logger.info(f"Updated subscription {subscription_id} with new price")
         return updated_sub
-    except stripe.error.StripeError as e:
+    except stripe.StripeError as e:
         logger.error(f"Failed to update subscription {subscription_id}: {e}")
         return None
 
@@ -346,7 +345,7 @@ def cancel_subscription(subscription_id: str, immediate: bool = False) -> Option
     """Cancel a subscription."""
     try:
         if immediate:
-            canceled_sub = stripe.Subscription.delete(subscription_id)
+            canceled_sub = stripe.Subscription.delete(subscription_id)  # type: ignore
         else:
             canceled_sub = stripe.Subscription.modify(
                 subscription_id,
@@ -354,7 +353,7 @@ def cancel_subscription(subscription_id: str, immediate: bool = False) -> Option
             )
         logger.info(f"Canceled subscription {subscription_id}")
         return canceled_sub
-    except stripe.error.StripeError as e:
+    except stripe.StripeError as e:
         logger.error(f"Failed to cancel subscription {subscription_id}: {e}")
         return None
 
@@ -368,7 +367,7 @@ def reactivate_subscription(subscription_id: str) -> Optional[stripe.Subscriptio
         )
         logger.info(f"Reactivated subscription {subscription_id}")
         return reactivated_sub
-    except stripe.error.StripeError as e:
+    except stripe.StripeError as e:
         logger.error(f"Failed to reactivate subscription {subscription_id}: {e}")
         return None
 
@@ -378,7 +377,7 @@ def list_invoices(customer_id: str, limit: int = 10) -> list[stripe.Invoice]:
     try:
         invoices = stripe.Invoice.list(customer=customer_id, limit=limit)
         return invoices.data if invoices else []
-    except stripe.error.StripeError as e:
+    except stripe.StripeError as e:
         logger.error(f"Failed to list invoices for {customer_id}: {e}")
         return []
 
@@ -408,6 +407,6 @@ def create_lifetime_checkout_session(
         session = stripe.checkout.Session.create(**params)
         logger.info(f"Created lifetime deal checkout session: {session.id}")
         return session.url
-    except stripe.error.StripeError as e:
+    except stripe.StripeError as e:
         logger.error(f"Failed to create lifetime checkout session: {e}")
         return None

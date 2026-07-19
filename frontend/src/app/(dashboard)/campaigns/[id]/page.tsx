@@ -35,9 +35,7 @@ import {
   getDailyUsage,
   uploadCampaignLeads,
   getCampaignStatus,
-  getGhostModeSimulations,
-  startGhostMode,
-  stopGhostMode,
+
   createCampaignTemplate,
   addLeadToCampaign,
 } from "@/lib/api/dashboard";
@@ -75,20 +73,7 @@ interface CampaignAnalyticsResponse {
   };
 }
 
-interface GhostSimulationLog {
-  id: number;
-  action_type: string;
-  target_name?: string;
-  target_url?: string;
-  result_data?: Record<string, unknown>;
-  rating?: number;
-  score?: number;
-  started_at?: string;
-  completed_at?: string;
-  simulated_action?: {
-    type?: string;
-  };
-}
+
 
 export default function CampaignDetailsPage() {
   const params = useParams();
@@ -123,14 +108,6 @@ export default function CampaignDetailsPage() {
     rateLimitStatus: "normal",
     warningLevel: "low",
   });
-  const [ghostModeSimulations, setGhostModeSimulations] = useState<
-    GhostSimulationLog[]
-  >([]);
-  const [ghostModeLoading, setGhostModeLoading] = useState(false);
-  const [ghostModeMode, setGhostModeMode] = useState<
-    "simulation" | "validation" | "dry_run"
-  >("simulation");
-  const [ghostModeActive, setGhostModeActive] = useState<boolean>(false);
 
   // Lead upload and play/pause states
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -159,7 +136,6 @@ export default function CampaignDetailsPage() {
         name: newTemplateName.trim() || `${campaign.name} (Template)`,
         description: newTemplateDescription.trim() || campaign.description,
         campaign_objective: campaign.campaignObjective,
-        ghost_mode_enabled: campaign.ghostModeEnabled,
         velocity: campaign.velocity,
         cooldown_minutes: campaign.cooldownMinutes,
         is_public: newTemplateIsPublic,
@@ -268,26 +244,7 @@ export default function CampaignDetailsPage() {
     }
   }, []);
 
-  const fetchGhostModeSimulations = useCallback(async () => {
-    if (!campaignId) return;
-    try {
-      setGhostModeLoading(true);
-      const response = await getGhostModeSimulations(campaignId);
-      if (response.data && Array.isArray(response.data.simulations)) {
-        const simulations = response.data.simulations as GhostSimulationLog[];
-        setGhostModeSimulations(simulations);
-        // Only show as active if there are actual simulation entries
-        if (simulations.length > 0) {
-          setGhostModeActive(true);
-        }
-      }
-    } catch (err) {
-      console.error("Error fetching ghost mode simulations:", err);
-    } finally {
-      setGhostModeLoading(false);
-    }
-  }, [campaignId]);
-
+  // Only show as active if there are actual simulation entries
   useEffect(() => {
     void (async () => {
       await fetchCampaignData(false);
@@ -644,13 +601,12 @@ export default function CampaignDetailsPage() {
 
       {/* Tabs Navigation */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid grid-cols-6 w-full md:w-auto">
+        <TabsList className="grid grid-cols-5 w-full md:w-auto">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="leads">Leads</TabsTrigger>
           <TabsTrigger value="analytics">Analytics</TabsTrigger>
           <TabsTrigger value="links">Links</TabsTrigger>
           <TabsTrigger value="settings">Settings</TabsTrigger>
-          <TabsTrigger value="ghost-mode">Safe Test Mode</TabsTrigger>
         </TabsList>
 
         {/* Overview Tab */}
@@ -1052,160 +1008,6 @@ export default function CampaignDetailsPage() {
           </Card>
         </TabsContent>
 
-        {/* Ghost Mode Tab */}
-        <TabsContent value="ghost-mode" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Ghost Mode Simulation</CardTitle>
-              <CardDescription>
-                Simulate campaign behavior without actually connecting to
-                LinkedIn
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-6">
-                {/* Toggle for Ghost Mode */}
-                <div className="flex items-center justify-between p-4 border rounded-lg">
-                  <div className="space-y-1">
-                    <h4 className="font-medium">Ghost Mode Status</h4>
-                    <p className="text-sm text-muted-foreground">
-                      {ghostModeActive
-                        ? "Ghost mode is currently active"
-                        : "Ghost mode is currently inactive"}
-                    </p>
-                  </div>
-                  <Button
-                    variant={ghostModeActive ? "destructive" : "default"}
-                    onClick={async () => {
-                      if (ghostModeActive) {
-                        await stopGhostMode(campaignId);
-                        setGhostModeActive(false);
-                        fetchGhostModeSimulations();
-                      } else {
-                        await startGhostMode(campaignId);
-                        setGhostModeActive(true);
-                        fetchGhostModeSimulations();
-                      }
-                    }}
-                    disabled={ghostModeLoading}
-                  >
-                    {ghostModeActive ? (
-                      <>
-                        <Icons.X className="mr-2 h-4 w-4" />
-                        Stop Simulation
-                      </>
-                    ) : (
-                      <>
-                        <Icons.Zap className="mr-2 h-4 w-4" />
-                        Start Simulation
-                      </>
-                    )}
-                  </Button>
-                </div>
-
-                {/* Simulations Data */}
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h4 className="font-medium">Simulation Logs</h4>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => fetchGhostModeSimulations()}
-                      disabled={ghostModeLoading}
-                    >
-                      <Icons.RefreshCw
-                        className={`mr-2 h-4 w-4 ${ghostModeLoading ? "animate-spin" : ""}`}
-                      />
-                      Refresh
-                    </Button>
-                  </div>
-
-                  {ghostModeLoading ? (
-                    <div className="space-y-2">
-                      <Skeleton className="h-12 w-full" />
-                      <Skeleton className="h-12 w-full" />
-                      <Skeleton className="h-12 w-full" />
-                    </div>
-                  ) : ghostModeSimulations.length > 0 ? (
-                    <div className="space-y-3">
-                      {ghostModeSimulations
-                        .slice(0, 10)
-                        .map((sim: GhostSimulationLog) => (
-                          <div
-                            key={sim.id}
-                            className="p-4 border rounded-lg bg-muted/30 space-y-2"
-                          >
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <Badge variant="outline" className="text-xs">
-                                  {sim.action_type}
-                                </Badge>
-                                {sim.rating && (
-                                  <Badge
-                                    className="text-xs"
-                                    variant={
-                                      sim.rating >= 4
-                                        ? "default"
-                                        : sim.rating >= 3
-                                          ? "secondary"
-                                          : "destructive"
-                                    }
-                                  >
-                                    Rating: {sim.rating}/5
-                                  </Badge>
-                                )}
-                              </div>
-                              <span className="text-xs text-muted-foreground">
-                                {new Date(
-                                  sim.completed_at || "",
-                                ).toLocaleString()}
-                              </span>
-                            </div>
-                            <div className="text-sm">
-                              {sim.target_name && (
-                                <div className="font-medium">
-                                  {sim.target_name}
-                                </div>
-                              )}
-                              {sim.target_url && (
-                                <a
-                                  href={sim.target_url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-sm text-blue-500 hover:underline"
-                                >
-                                  {sim.target_url}
-                                </a>
-                              )}
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              {sim.simulated_action?.type && (
-                                <div>Action: {sim.simulated_action.type}</div>
-                              )}
-                              {typeof sim.score === "number" && (
-                                <div>Score: {sim.score}</div>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                    </div>
-                  ) : (
-                    <div className="text-center py-12 border border-dashed rounded-lg">
-                      <Icons.Activity className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                      <h3 className="text-lg font-semibold mb-2">
-                        No Simulation Data
-                      </h3>
-                      <p className="text-sm text-muted-foreground mb-4">
-                        Start a ghost mode simulation to see simulated activity
-                        logs here.
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
 
         {/* Links Tab */}
         <TabsContent value="links" className="space-y-6">

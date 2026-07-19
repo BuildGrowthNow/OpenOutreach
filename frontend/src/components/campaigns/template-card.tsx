@@ -99,13 +99,7 @@ const TemplateCard = ({
             </div>
           )}
 
-          <div className="flex items-center gap-2 text-sm">
-            <Icons.Shield className="h-3 w-3 text-muted-foreground" />
-            <span className="text-muted-foreground">Ghost mode:</span>
-            <span className={cn('font-medium', template.ghost_mode_enabled ? 'text-emerald-600' : 'text-muted-foreground')}>
-              {template.ghost_mode_enabled ? 'Enabled' : 'Disabled'}
-            </span>
-          </div>
+
         </div>
 
         <div className="mt-4 pt-3 border-t flex items-center justify-between">

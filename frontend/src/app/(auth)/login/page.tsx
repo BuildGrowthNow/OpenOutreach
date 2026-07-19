@@ -10,22 +10,22 @@ export default function LoginPage() {
   const searchParams = useSearchParams()
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
   const isLoading = useAuthStore((state) => state.isLoading)
-  const token = useAuthStore((state) => state.token)
+  const accessToken = useAuthStore((state) => state.accessToken)
 
   // Handle desktop app callback
   useEffect(() => {
-    if (!isLoading && isAuthenticated && token) {
+    if (!isLoading && isAuthenticated && accessToken) {
       const isDesktop = searchParams.get("desktop") === "true"
       const callback = searchParams.get("callback")
 
       if (isDesktop && callback) {
         // Desktop app login - redirect back with token
         // Profile ID will be fetched by desktop app using the token
-        window.location.href = `${callback}?token=${token}`
+        window.location.href = `${callback}?token=${accessToken}`
         return
       }
     }
-  }, [isAuthenticated, isLoading, token, searchParams])
+  }, [isAuthenticated, isLoading, accessToken, searchParams])
 
   // Redirect if already authenticated (non-desktop)
   useEffect(() => {

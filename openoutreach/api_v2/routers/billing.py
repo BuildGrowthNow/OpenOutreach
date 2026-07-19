@@ -651,14 +651,14 @@ async def get_invoices(
             InvoiceResponse(
                 id=inv.id,
                 number=inv.number,
-                status=inv.status,
+                status=inv.status or "unknown",
                 amount_paid=inv.amount_paid,
                 amount_due=inv.amount_due,
                 currency=inv.currency,
                 created=inv.created,
                 period_start=inv.period_start,
                 period_end=inv.period_end,
-                paid=inv.paid,
+                paid=getattr(inv, "paid", inv.status == "paid"),
                 pdf_url=inv.invoice_pdf,
             )
             for inv in invoices

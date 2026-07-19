@@ -255,7 +255,7 @@ def create_stripe_coupon(
         logger.info(f"Created coupon {code} with Stripe ID {stripe_coupon.id}")
         return coupon
 
-    except stripe.error.StripeError as e:
+    except stripe.StripeError as e:
         logger.error(f"Failed to create Stripe coupon {code}: {e}")
         return None
 

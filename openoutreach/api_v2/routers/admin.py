@@ -437,14 +437,15 @@ async def get_all_invoices(
 
     results = []
     for inv in invoices_list:
-        user_id, user_email = customer_email_map.get(inv.customer, ("unknown", "unknown"))
+        customer_id = inv.customer.id if hasattr(inv.customer, "id") else inv.customer  # type: ignore
+        user_id, user_email = customer_email_map.get(customer_id, ("unknown", "unknown"))  # type: ignore[arg-type]
         results.append(
             InvoiceDetailResponse(
                 id=inv.id,
                 user_id=user_id,
                 user_email=user_email,
                 amount=inv.amount_paid,
-                status=inv.status,
+                status=inv.status or "unknown",
                 created=inv.created,
                 period_start=inv.period_start,
                 period_end=inv.period_end,
@@ -453,7 +454,7 @@ async def get_all_invoices(
         )
 
     return {
-        "total": invoices_response.total_count if hasattr(invoices_response, "total_count") else len(results),
+        "total": invoices_response.total_count if hasattr(invoices_response, "total_count") else len(results),  # type: ignore
         "skip": skip,
         "limit": limit,
         "invoices": results,

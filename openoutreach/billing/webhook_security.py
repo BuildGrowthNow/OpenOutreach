@@ -32,7 +32,7 @@ class WebhookSignatureValidator:
                 settings.STRIPE_WEBHOOK_SECRET,
             )
             return True, None
-        except stripe.error.SignatureVerificationError as e:
+        except stripe.SignatureVerificationError as e:
             logger.warning(f"Invalid webhook signature: {e}")
             return False, f"Invalid signature: {e}"
         except Exception as e:
@@ -55,7 +55,7 @@ class WebhookSignatureValidator:
                 settings.STRIPE_WEBHOOK_SECRET,
             )
             return event, None
-        except stripe.error.SignatureVerificationError as e:
+        except stripe.SignatureVerificationError as e:
             logger.warning(f"Invalid webhook signature: {e}")
             return None, f"Invalid signature"
         except Exception as e:

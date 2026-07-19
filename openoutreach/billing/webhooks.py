@@ -86,10 +86,10 @@ def handle_checkout_session_completed(event: dict[str, Any]) -> None:
                 if sub.trial_start and sub.trial_end:
                     user.trial_ends_at = datetime.fromtimestamp(sub.trial_end, tz=tz.utc)
 
-                if sub.current_period_end:
-                    user.current_period_end = datetime.fromtimestamp(sub.current_period_end, tz=tz.utc)
+                if getattr(sub, "current_period_end", None):
+                    user.current_period_end = datetime.fromtimestamp(sub.current_period_end, tz=tz.utc)  # type: ignore
 
-                if sub.items and sub.items.data:
+                if sub.items and sub.items.data and sub.items.data[0].price.recurring:
                     user.billing_period = "annual" if sub.items.data[0].price.recurring.interval == "year" else "monthly"
 
                 _sync_plan_limits(user)
@@ -284,7 +284,7 @@ def _apply_referral_credit(user: User, invoice: dict[str, Any]) -> None:
                 description=f"Referral credit from {user.email}",
             )
             logger.info(f"Applied $19 Stripe credit to {referrer.email} from new user {user.email}")
-        except stripe.error.StripeError as e:
+        except stripe.StripeError as e:
             logger.error(f"Failed to apply Stripe credit to {referrer.email}: {e}")
             return
     else:
@@ -312,8 +312,8 @@ def handle_invoice_payment_succeeded(event: dict[str, Any]) -> None:
 
     if subscription_id:
         sub = stripe.Subscription.retrieve(subscription_id)
-        if sub and sub.current_period_end:
-            user.current_period_end = datetime.fromtimestamp(sub.current_period_end, tz=tz.utc)
+        if sub and getattr(sub, "current_period_end", None):
+            user.current_period_end = datetime.fromtimestamp(sub.current_period_end, tz=tz.utc)  # type: ignore
 
     user.subscription_status = "active"
     user.save()
@@ -415,7 +415,7 @@ def process_webhook_event(event: dict[str, Any]) -> bool:
         return False
 
 
-def _get_plan_name_from_subscription(subscription: dict[str, Any]) -> Optional[str]:
+def _get_plan_name_from_subscription(subscription: Any) -> Optional[str]:
     """Extract plan name from Stripe subscription object."""
     items = subscription.get("items", {}).get("data", [])
     if not items:
@@ -427,8 +427,8 @@ def _get_plan_name_from_subscription(subscription: dict[str, Any]) -> Optional[s
 
     try:
         product = stripe.Product.retrieve(product_id)
-        return product.metadata.get("plan_name")
-    except stripe.error.StripeError as e:
+        return product.metadata.get("plan_name")  # type: ignore
+    except stripe.StripeError as e:
         logger.error(f"Failed to retrieve product {product_id}: {e}")
         return None
 

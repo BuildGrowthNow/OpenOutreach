@@ -76,7 +76,6 @@ const formSchema = z.object({
   icpTitles: z.string().optional(),
   followUpStrategy: z.string().optional(),
   isFreemium: z.boolean(),
-  ghostModeEnabled: z.boolean(),
   velocity: z.number().min(1).max(100),
   cooldownMinutes: z.number().min(1).max(1440),
   status: z.enum(["draft", "active", "paused"]),
@@ -148,7 +147,6 @@ export function CampaignForm({
       icpTitles: undefined,
       followUpStrategy: undefined,
       isFreemium: false,
-      ghostModeEnabled: false,
       velocity: 10,
       cooldownMinutes: 60,
       status: "draft",
@@ -205,7 +203,6 @@ export function CampaignForm({
         searchKeywords: formatSearchKeywords(selectedTemplate.search_keywords),
         icpTitles: formatIcpTitles(selectedTemplate.icp_titles),
         followUpStrategy: selectedTemplate.follow_up_strategy || undefined,
-        ghostModeEnabled: selectedTemplate.ghost_mode_enabled,
         velocity: selectedTemplate.velocity,
         cooldownMinutes: selectedTemplate.cooldown_minutes,
         status: "draft",
@@ -226,7 +223,6 @@ export function CampaignForm({
         icpTitles: formatIcpTitles(campaign.icpTitles),
         followUpStrategy: campaign.followUpStrategy || undefined,
         isFreemium: campaign.isFreemium,
-        ghostModeEnabled: campaign.ghostModeEnabled || false,
         velocity: campaign.velocity,
         cooldownMinutes: campaign.cooldownMinutes,
         status: campaign.status as "draft" | "active" | "paused",
@@ -242,7 +238,6 @@ export function CampaignForm({
         icpTitles: undefined,
         followUpStrategy: undefined,
         isFreemium: false,
-        ghostModeEnabled: false,
         velocity: 10,
         cooldownMinutes: 60,
         status: "draft",
@@ -719,28 +714,6 @@ export function CampaignForm({
                     )}
                   />
 
-                  <FormField
-                    control={form.control}
-                    name="ghostModeEnabled"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-row items-center justify-between rounded-xl border border-zinc-800/80 bg-zinc-900/50 p-4">
-                        <div className="space-y-0.5">
-                          <FormLabel className="text-base">
-                            Ghost Mode
-                          </FormLabel>
-                          <FormDescription>
-                            Test campaign without sending real LinkedIn actions
-                          </FormDescription>
-                        </div>
-                        <FormControl>
-                          <Switch
-                            checked={field.value}
-                            onCheckedChange={field.onChange}
-                          />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
                 </TabsContent>
 
                 <TabsContent
