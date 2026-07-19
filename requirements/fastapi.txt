@@ -33,3 +33,6 @@ python-json-logger>=2.0.7
 
 # Billing & Payments
 stripe>=10.0.0
+
+# Email
+resend>=0.15.0

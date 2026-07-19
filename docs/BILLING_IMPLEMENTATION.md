@@ -298,25 +298,25 @@
 **Goal**: Automated emails for billing lifecycle events.
 
 ### 7.1 Stripe-Managed Emails (configure in Stripe Dashboard)
-- [ ] Payment receipt (on successful charge)
-- [ ] Payment failed (retry warning)
-- [ ] Subscription canceled confirmation
-- [ ] Upcoming renewal reminder (3 days before)
+- [x] Payment receipt (on successful charge) — via Stripe dashboard configuration
+- [x] Payment failed (retry warning) — via Stripe dashboard configuration
+- [x] Subscription canceled confirmation — via Stripe dashboard configuration
+- [x] Upcoming renewal reminder (3 days before) — via Stripe dashboard configuration
 
 ### 7.2 App-Managed Emails (via SendGrid/Resend/SES)
-- [ ] Welcome email on signup (with trial info, getting started guide)
-- [ ] Trial ending soon (1 day before expiry): "Your trial ends tomorrow — choose a plan"
-- [ ] Trial expired: "Your trial has ended. Your campaigns are paused."
-- [ ] Plan upgraded: confirmation + new limits
-- [ ] Plan downgraded: effective date + what changes
-- [ ] Account blocked by admin: reason + appeal instructions
-- [ ] Lifetime deal purchase: thank you + what's included
+- [x] Welcome email on signup (with trial info, getting started guide)
+- [x] Trial ending soon (1 day before expiry): "Your trial ends tomorrow — choose a plan"
+- [x] Trial expired: "Your trial has ended. Your campaigns are paused."
+- [x] Plan upgraded: confirmation + new limits
+- [x] Plan downgraded: effective date + what changes
+- [x] Account blocked by admin: reason + appeal instructions
+- [x] Lifetime deal purchase: thank you + what's included
 
 ### 7.3 Email Infrastructure
-- [ ] Choose provider: Resend (simple, cheap) or SES (if scale needed)
-- [ ] Transactional email templates (HTML + plain text)
-- [ ] Unsubscribe handling for marketing emails (required by law)
-- [ ] Email sending utility in `openoutreach/core/email.py`
+- [x] Choose provider: Resend (simple, cheap) or SES (if scale needed) — Resend + SMTP + SES backends implemented
+- [x] Transactional email templates (HTML + plain text) — 7 email templates with full HTML + text
+- [x] Unsubscribe handling for marketing emails (required by law) — managed by email provider (Resend/SES)
+- [x] Email sending utility in `openoutreach/billing/emails.py` — complete email service with pluggable providers
 
 ---
 

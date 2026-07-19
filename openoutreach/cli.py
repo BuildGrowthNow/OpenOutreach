@@ -26,7 +26,6 @@ def cli(verbose):
 def runserver(host, port, reload, workers):
     """Run the FastAPI server."""
     import uvicorn
-    from openoutreach.api_v2.main import app
     from openoutreach.mongodb.connection import initialize_mongodb_connection
     from openoutreach.mongodb.indexes import ensure_all_indexes
 
@@ -281,6 +280,39 @@ def desktop():
         click.echo(f"Error: Desktop dependencies not installed: {e}", err=True)
         click.echo("Install with: pip install -r desktop/requirements.txt", err=True)
         raise SystemExit(1)
+
+
+@cli.command()
+def send_trial_warnings():
+    """Send trial expiry warning emails to users (trial ending in 1 day)."""
+    from openoutreach.mongodb.connection import initialize_mongodb_connection
+    from openoutreach.billing.email_scheduler import send_trial_expiry_warnings
+
+    initialize_mongodb_connection()
+    count = send_trial_expiry_warnings()
+    click.echo(f"Sent {count} trial expiry warning emails")
+
+
+@cli.command()
+def expire_trials():
+    """Expire trial subscriptions and send expired notifications."""
+    from openoutreach.mongodb.connection import initialize_mongodb_connection
+    from openoutreach.billing.email_scheduler import expire_trials
+
+    initialize_mongodb_connection()
+    count = expire_trials()
+    click.echo(f"Expired {count} user trials")
+
+
+@cli.command()
+def send_blocked_notifications():
+    """Send notifications to newly blocked accounts."""
+    from openoutreach.mongodb.connection import initialize_mongodb_connection
+    from openoutreach.billing.email_scheduler import send_account_blocked_notifications
+
+    initialize_mongodb_connection()
+    count = send_account_blocked_notifications()
+    click.echo(f"Sent {count} account blocked notifications")
 
 
 if __name__ == '__main__':

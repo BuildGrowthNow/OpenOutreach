@@ -9,6 +9,13 @@ import stripe
 
 from openoutreach.mongodb.models_user import User
 from openoutreach.mongodb.connection import get_mongodb_collection
+from openoutreach.billing.emails import (
+    send_plan_upgraded,
+    send_payment_failed,
+    send_trial_expiry_warning,
+    send_welcome_email,
+    send_lifetime_deal_purchase,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +55,11 @@ def handle_checkout_session_completed(event: dict[str, Any]) -> None:
             user.current_period_end = None
             user.trial_ends_at = None
             _sync_plan_limits(user)
+            user.save()
+            try:
+                send_lifetime_deal_purchase(user)
+            except Exception as e:
+                logger.error(f"Failed to send lifetime deal email: {e}")
     else:
         user.stripe_subscription_id = subscription_id
         user.subscription_status = "trialing" if session.get("mode") == "subscription" else "active"
@@ -68,7 +80,12 @@ def handle_checkout_session_completed(event: dict[str, Any]) -> None:
                 user.billing_period = "annual" if sub.items.data[0].price.recurring.interval == "year" else "monthly"
                 _sync_plan_limits(user)
 
-    user.save()
+        user.save()
+        try:
+            send_welcome_email(user)
+        except Exception as e:
+            logger.error(f"Failed to send welcome email: {e}")
+
     logger.info(f"Activated subscription for user {user._id}")
 
 
@@ -164,12 +181,21 @@ def handle_customer_subscription_updated(event: dict[str, Any]) -> None:
 
     if old_plan != plan_name and plan_name:
         _enforce_linkedin_account_limit(user._id, user.linkedin_account_limit)
+        if old_plan and plan_name:
+            try:
+                send_plan_upgraded(user, old_plan, plan_name)
+            except Exception as e:
+                logger.error(f"Failed to send plan upgrade email: {e}")
 
     user.save()
     logger.info(f"Updated subscription for user {user._id}")
 
     if status == "past_due":
         logger.warning(f"Subscription past due for user {user._id}")
+        try:
+            send_payment_failed(user)
+        except Exception as e:
+            logger.error(f"Failed to send payment failed email: {e}")
 
 
 def handle_customer_subscription_deleted(event: dict[str, Any]) -> None:
@@ -237,6 +263,11 @@ def handle_invoice_payment_failed(event: dict[str, Any]) -> None:
     user.save()
     logger.warning(f"Payment failed for user {user._id}")
 
+    try:
+        send_payment_failed(user)
+    except Exception as e:
+        logger.error(f"Failed to send payment failed email: {e}")
+
 
 def _is_event_processed(event_id: str) -> bool:
     """Check if a webhook event has already been processed (idempotency)."""
@@ -286,6 +317,7 @@ def process_webhook_event(event: dict[str, Any]) -> bool:
         "customer.subscription.created": handle_customer_subscription_created,
         "customer.subscription.updated": handle_customer_subscription_updated,
         "customer.subscription.deleted": handle_customer_subscription_deleted,
+        "customer.subscription.trial_will_end": handle_customer_subscription_trial_will_end,
         "invoice.payment_succeeded": handle_invoice_payment_succeeded,
         "invoice.payment_failed": handle_invoice_payment_failed,
     }
@@ -321,6 +353,28 @@ def _get_plan_name_from_subscription(subscription: dict[str, Any]) -> Optional[s
     except stripe.error.StripeError as e:
         logger.error(f"Failed to retrieve product {product_id}: {e}")
         return None
+
+
+def handle_customer_subscription_trial_will_end(event: dict[str, Any]) -> None:
+    """Handle customer.subscription.trial_will_end event (1 day before trial end)."""
+    subscription = event["data"]["object"]
+    customer_id = subscription.get("customer")
+
+    if not customer_id:
+        logger.warning("customer.subscription.trial_will_end: no customer_id")
+        return
+
+    user = _get_user_by_stripe_customer(customer_id)
+    if not user:
+        logger.warning(f"customer.subscription.trial_will_end: user not found for customer {customer_id}")
+        return
+
+    try:
+        send_trial_expiry_warning(user, 1)
+    except Exception as e:
+        logger.error(f"Failed to send trial expiry warning email: {e}")
+
+    logger.info(f"Sent trial expiry warning for user {user._id}")
 
 
 def _deactivate_user_profiles(user_id: str) -> None:

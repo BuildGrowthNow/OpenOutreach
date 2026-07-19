@@ -109,6 +109,18 @@ class Settings(BaseSettings):
     LIFETIME_DEAL_ENDS_AT: Optional[str] = None
 
     # =========================================================================
+    # Email Configuration
+    # =========================================================================
+    EMAIL_PROVIDER: str = "resend"  # "resend", "ses", or "smtp"
+    RESEND_API_KEY: Optional[str] = None
+    EMAIL_FROM_ADDRESS: str = "noreply@openoutreach.ai"
+    EMAIL_FROM_NAME: str = "OpenOutreach"
+    SMTP_HOST: Optional[str] = None
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: Optional[str] = None
+    SMTP_PASSWORD: Optional[str] = None
+
+    # =========================================================================
     # Environment Detection
     # =========================================================================
     DOCKER_ENV: bool = False
