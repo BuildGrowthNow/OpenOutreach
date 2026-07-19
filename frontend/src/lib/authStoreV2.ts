@@ -130,9 +130,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         return { error: errorMessage }
       }
 
-      // Registration successful - now login
+      // Registration successful - email verification required
       set({ isLoading: false, error: null })
-      return await get().login(email, password)
+      return { error: null }
     } catch (error) {
       console.error('Register error:', error)
       const errorMessage = 'Network error. Please try again.'

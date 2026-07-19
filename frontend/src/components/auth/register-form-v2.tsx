@@ -14,6 +14,7 @@ export function RegisterFormV2() {
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
   const [localError, setLocalError] = useState("")
+  const [showSuccess, setShowSuccess] = useState(false)
 
   const validatePassword = (pwd: string): string | null => {
     if (pwd.length < 8) {
@@ -59,12 +60,41 @@ export function RegisterFormV2() {
     if (result.error) {
       setLocalError(result.error)
     } else {
-      // Success - redirect to dashboard
-      router.push("/dashboard")
+      // Success - show verification message
+      setShowSuccess(true)
     }
   }
 
   const displayError = localError || error
+
+  if (showSuccess) {
+    return (
+      <div className="w-full max-w-md space-y-8 p-8 bg-white rounded-lg shadow-lg">
+        <div className="text-center space-y-4">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
+            <svg className="h-6 w-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <h1 className="text-2xl font-bold text-gray-900">Check Your Email</h1>
+          <p className="text-sm text-gray-600">
+            We've sent a verification link to <strong>{email}</strong>
+          </p>
+          <p className="text-sm text-gray-600">
+            Click the link in your email to verify your account and start your trial.
+          </p>
+          <div className="pt-4">
+            <Link
+              href="/login"
+              className="text-sm font-medium text-blue-600 hover:text-blue-500"
+            >
+              Back to login
+            </Link>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="w-full max-w-md space-y-8 p-8 bg-white rounded-lg shadow-lg">

@@ -85,8 +85,20 @@ async def get_current_user(
 
                     # Verify user exists and is active
                     user = User.get(user_id)
-                    if not user or not user.is_active:
-                        raise HTTPException(status_code=401, detail="User not found or inactive")
+                    if not user:
+                        raise HTTPException(status_code=401, detail="User not found")
+
+                    # Check if user is blocked
+                    if user.status == "blocked":
+                        raise HTTPException(status_code=403, detail="Account blocked")
+
+                    # Check if user is deleted
+                    if user.is_deleted or user.deletion_scheduled_at:
+                        raise HTTPException(status_code=403, detail="Account has been deleted")
+
+                    # Check if user is inactive
+                    if not user.is_active:
+                        raise HTTPException(status_code=403, detail="Account is inactive")
 
                     logger.debug("Token verified with local JWT secret")
                     return user._id

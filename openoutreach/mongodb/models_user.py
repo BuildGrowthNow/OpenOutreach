@@ -55,6 +55,15 @@ class User:
         is_deleted: bool = False,
         deleted_at: Optional[datetime] = None,
         deletion_scheduled_at: Optional[datetime] = None,
+        referral_code: Optional[str] = None,
+        referrer_id: Optional[str] = None,
+        referral_credits_earned: int = 0,
+        referral_credit_applied: bool = False,
+        email_verified: bool = False,
+        email_verification_token: Optional[str] = None,
+        email_verification_expires: Optional[datetime] = None,
+        password_reset_token: Optional[str] = None,
+        password_reset_expires: Optional[datetime] = None,
     ):
         self._id = _id or str(uuid4())
         self.email = email.lower().strip()
@@ -84,6 +93,15 @@ class User:
         self.is_deleted = is_deleted
         self.deleted_at = deleted_at
         self.deletion_scheduled_at = deletion_scheduled_at
+        self.referral_code = referral_code
+        self.referrer_id = referrer_id
+        self.referral_credits_earned = referral_credits_earned
+        self.referral_credit_applied = referral_credit_applied
+        self.email_verified = email_verified
+        self.email_verification_token = email_verification_token
+        self.email_verification_expires = email_verification_expires
+        self.password_reset_token = password_reset_token
+        self.password_reset_expires = password_reset_expires
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to MongoDB document."""
@@ -116,6 +134,15 @@ class User:
             "is_deleted": self.is_deleted,
             "deleted_at": self.deleted_at,
             "deletion_scheduled_at": self.deletion_scheduled_at,
+            "referral_code": self.referral_code,
+            "referrer_id": self.referrer_id,
+            "referral_credits_earned": self.referral_credits_earned,
+            "referral_credit_applied": self.referral_credit_applied,
+            "email_verified": self.email_verified,
+            "email_verification_token": self.email_verification_token,
+            "email_verification_expires": self.email_verification_expires,
+            "password_reset_token": self.password_reset_token,
+            "password_reset_expires": self.password_reset_expires,
         }
 
     @classmethod
@@ -150,6 +177,15 @@ class User:
             is_deleted=data.get("is_deleted", False),
             deleted_at=data.get("deleted_at"),
             deletion_scheduled_at=data.get("deletion_scheduled_at"),
+            referral_code=data.get("referral_code"),
+            referrer_id=data.get("referrer_id"),
+            referral_credits_earned=data.get("referral_credits_earned", 0),
+            referral_credit_applied=data.get("referral_credit_applied", False),
+            email_verified=data.get("email_verified", False),
+            email_verification_token=data.get("email_verification_token"),
+            email_verification_expires=data.get("email_verification_expires"),
+            password_reset_token=data.get("password_reset_token"),
+            password_reset_expires=data.get("password_reset_expires"),
         )
 
     def save(self) -> str:
@@ -222,6 +258,7 @@ class User:
     def schedule_deletion(self) -> datetime:
         """Schedule account for deletion (30-day soft delete window)."""
         self.deletion_scheduled_at = datetime.now(tz.utc)
+        self.is_deleted = True
         self.save()
         logger.info(f"Account deletion scheduled for: {self.email}")
         return self.deletion_scheduled_at

@@ -685,3 +685,101 @@ Your receipt has been sent to your email. If you didn't receive it, reply to thi
 """
 
     return _send_billing_email(user, "Your Lifetime Deal is active! 🎉", html, text)
+
+
+def send_email_verification(user: User, verification_url: str) -> bool:
+    """Send email verification link to new user."""
+    html = f"""
+<html>
+  <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333;">
+    <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+      <h1 style="color: #0066cc; margin-bottom: 20px;">Verify Your Email</h1>
+
+      <p>Hi {user.full_name or 'there'},</p>
+
+      <p>Thanks for signing up for OpenOutreach! Please verify your email address to start your trial.</p>
+
+      <p><a href="{verification_url}" style="display: inline-block; background-color: #0066cc; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 10px;">Verify Email Address</a></p>
+
+      <p style="margin-top: 20px; color: #666; font-size: 14px;">
+        Or copy and paste this link into your browser:<br>
+        <a href="{verification_url}" style="color: #0066cc; word-break: break-all;">{verification_url}</a>
+      </p>
+
+      <p style="margin-top: 20px; color: #666; font-size: 14px;">
+        This link will expire in 24 hours.
+      </p>
+
+      <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+
+      <p style="color: #666; font-size: 12px;">
+        If you didn't create an account, you can safely ignore this email.
+      </p>
+    </div>
+  </body>
+</html>
+"""
+
+    text = f"""Verify Your Email
+
+Hi {user.full_name or 'there'},
+
+Thanks for signing up for OpenOutreach! Please verify your email address to start your trial.
+
+Verify your email: {verification_url}
+
+This link will expire in 24 hours.
+
+If you didn't create an account, you can safely ignore this email.
+"""
+
+    return _send_billing_email(user, "Verify your OpenOutreach email address", html, text)
+
+
+def send_password_reset(user: User, reset_url: str) -> bool:
+    """Send password reset link to user."""
+    html = f"""
+<html>
+  <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333;">
+    <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+      <h1 style="color: #0066cc; margin-bottom: 20px;">Reset Your Password</h1>
+
+      <p>Hi {user.full_name or 'there'},</p>
+
+      <p>We received a request to reset your password. Click the button below to create a new password:</p>
+
+      <p><a href="{reset_url}" style="display: inline-block; background-color: #0066cc; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 10px;">Reset Password</a></p>
+
+      <p style="margin-top: 20px; color: #666; font-size: 14px;">
+        Or copy and paste this link into your browser:<br>
+        <a href="{reset_url}" style="color: #0066cc; word-break: break-all;">{reset_url}</a>
+      </p>
+
+      <p style="margin-top: 20px; color: #666; font-size: 14px;">
+        This link will expire in 24 hours.
+      </p>
+
+      <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+
+      <p style="color: #666; font-size: 12px;">
+        If you didn't request a password reset, you can safely ignore this email. Your password will remain unchanged.
+      </p>
+    </div>
+  </body>
+</html>
+"""
+
+    text = f"""Reset Your Password
+
+Hi {user.full_name or 'there'},
+
+We received a request to reset your password. Click the link below to create a new password:
+
+{reset_url}
+
+This link will expire in 24 hours.
+
+If you didn't request a password reset, you can safely ignore this email. Your password will remain unchanged.
+"""
+
+    return _send_billing_email(user, "Reset your OpenOutreach password", html, text)

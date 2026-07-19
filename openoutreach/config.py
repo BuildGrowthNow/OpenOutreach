@@ -48,6 +48,7 @@ class Settings(BaseSettings):
     API_PORT: int = 8001
     API_WORKERS: int = 1
     API_RELOAD: bool = False
+    APP_URL: str = "http://localhost:3000"
 
     # =========================================================================
     # CORS Configuration

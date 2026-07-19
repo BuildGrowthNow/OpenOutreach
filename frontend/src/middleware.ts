@@ -42,8 +42,8 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Check for auth token in cookies or localStorage (via header)
-  const token = request.cookies.get('auth_token')?.value;
+  // Check for auth token in cookies (refresh_token for JWT auth)
+  const token = request.cookies.get('refresh_token')?.value;
   const authHeader = request.headers.get('authorization');
 
   // Protected routes - require authentication
@@ -60,7 +60,7 @@ export function middleware(request: NextRequest) {
 
   if (isProtectedRoute && !token && !authHeader) {
     // Redirect to login with return URL
-    const loginUrl = new URL('/login-v2', request.url);
+    const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('returnUrl', pathname);
     return NextResponse.redirect(loginUrl);
   }

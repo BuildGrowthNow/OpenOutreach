@@ -33,6 +33,7 @@ from openoutreach.billing.account_lifecycle import (
     cancel_account_deletion,
     export_user_data,
 )
+from openoutreach.billing.emails import send_email_verification, send_password_reset
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -73,13 +74,24 @@ def create_refresh_token(user_id: str) -> str:
 
 
 @router.post("/register/", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-async def register(data: RegisterRequest):
+async def register(data: RegisterRequest, request: Request):
     """
     Register a new user account.
 
     Creates user + default SiteConfig.
     Returns user info (client must call /login to get tokens).
     """
+    # Check IP rate limit
+    from openoutreach.billing.rate_limiter import SignupRateLimiter
+
+    client_ip = request.client.host if request.client else "unknown"
+    allowed, error_msg = SignupRateLimiter.check_ip_limit(client_ip)
+    if not allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=error_msg or "Rate limit exceeded"
+        )
+
     # Check if email already exists
     existing_user = User.get_by_email(data.email)
     if existing_user:
@@ -89,14 +101,32 @@ async def register(data: RegisterRequest):
         )
 
     # Create user with subscription_status=none (no subscription until checkout)
+    # Email verification required before trial
+    verification_token = jwt.encode(
+        {
+            "sub": data.email,
+            "exp": datetime.now(tz.utc) + timedelta(hours=24),
+            "type": "email_verification",
+        },
+        settings.jwt_secret,
+        algorithm=settings.JWT_ALGORITHM,
+    )
+
     user = User(
         email=data.email,
         full_name=data.full_name,
         is_active=True,
         subscription_status="none",
+        email_verified=False,
+        email_verification_token=verification_token,
+        email_verification_expires=datetime.now(tz.utc) + timedelta(hours=24),
     )
     user.set_password(data.password)
     user.save()
+
+    # Record signup attempt for IP tracking
+    from openoutreach.billing.rate_limiter import SignupRateLimiter
+    SignupRateLimiter.record_signup_attempt(client_ip, user._id, user.email)
 
     # Create default SiteConfig for user
     try:
@@ -104,6 +134,14 @@ async def register(data: RegisterRequest):
         site_config.save()
     except Exception as e:
         logger.warning(f"Failed to create SiteConfig for {user.email}: {e}")
+
+    # Send verification email
+    app_url = settings.APP_URL or "http://localhost:3000"
+    verification_url = f"{app_url}/verify-email?token={verification_token}"
+    email_sent = send_email_verification(user, verification_url)
+
+    if not email_sent:
+        logger.error(f"Failed to send verification email to {user.email}")
 
     logger.info(f"New user registered: {user.email}")
 
@@ -307,6 +345,110 @@ async def logout(response: Response, user_id: str = Depends(get_current_user)):
     return {"status": "success", "message": "Successfully logged out"}
 
 
+# ==================== EMAIL VERIFICATION ====================
+
+
+@router.post("/verify-email/")
+async def verify_email(token: str):
+    """
+    Verify user email with token from verification link.
+    """
+    try:
+        payload = jwt.decode(
+            token,
+            settings.jwt_secret,
+            algorithms=[settings.JWT_ALGORITHM]
+        )
+
+        if payload.get("type") != "email_verification":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid token type"
+            )
+
+        email = payload.get("sub")
+        if not email:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid token"
+            )
+
+        user = User.get_by_email(email)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User not found"
+            )
+
+        if user.email_verified:
+            return {"status": "success", "message": "Email already verified"}
+
+        user.email_verified = True
+        user.email_verification_token = None
+        user.email_verification_expires = None
+        user.save()
+
+        logger.info(f"Email verified for user: {email}")
+
+        return {"status": "success", "message": "Email verified successfully"}
+
+    except JWTError as e:
+        logger.warning(f"Email verification failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired verification token"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Email verification error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An error occurred. Please try again."
+        )
+
+
+@router.post("/resend-verification/")
+async def resend_verification(email: str):
+    """
+    Resend email verification link.
+
+    Always returns success to prevent email enumeration.
+    """
+    try:
+        user = User.get_by_email(email)
+
+        if user and not user.email_verified:
+            verification_token = jwt.encode(
+                {
+                    "sub": user.email,
+                    "exp": datetime.now(tz.utc) + timedelta(hours=24),
+                    "type": "email_verification",
+                },
+                settings.jwt_secret,
+                algorithm=settings.JWT_ALGORITHM,
+            )
+
+            user.email_verification_token = verification_token
+            user.email_verification_expires = datetime.now(tz.utc) + timedelta(hours=24)
+            user.save()
+
+            app_url = settings.APP_URL or "http://localhost:3000"
+            verification_url = f"{app_url}/verify-email?token={verification_token}"
+            email_sent = send_email_verification(user, verification_url)
+
+            if not email_sent:
+                logger.error(f"Failed to resend verification email to {user.email}")
+
+            logger.info(f"Verification email resent to: {email}")
+
+        return {"status": "success", "message": "If an unverified account exists, a verification link has been sent"}
+
+    except Exception as e:
+        logger.error(f"Resend verification error: {e}")
+        return {"status": "success", "message": "If an unverified account exists, a verification link has been sent"}
+
+
 # ==================== PASSWORD RESET REQUEST ====================
 
 
@@ -316,14 +458,13 @@ async def password_reset_request(request: PasswordResetRequest):
     Request a password reset.
 
     Always returns success to prevent email enumeration attacks.
-    TODO: Send email with reset link.
+    Sends email with reset link.
     """
     try:
         user = User.get_by_email(request.email)
 
         if user and user.hashed_password:
-            # Generate reset token (expires in 24 hours)
-            _ = jwt.encode(
+            reset_token = jwt.encode(
                 {
                     "sub": user.email,
                     "exp": datetime.now(tz.utc) + timedelta(hours=24),
@@ -333,18 +474,23 @@ async def password_reset_request(request: PasswordResetRequest):
                 algorithm=settings.JWT_ALGORITHM,
             )
 
-            # TODO: Send email with reset link
-            # reset_url = f"{FRONTEND_URL}/reset-password?token={reset_token}"
-            # send_password_reset_email(user.email, reset_url)
+            user.password_reset_token = reset_token
+            user.password_reset_expires = datetime.now(tz.utc) + timedelta(hours=24)
+            user.save()
+
+            app_url = settings.APP_URL or "http://localhost:3000"
+            reset_url = f"{app_url}/reset-password?token={reset_token}"
+            email_sent = send_password_reset(user, reset_url)
+
+            if not email_sent:
+                logger.error(f"Failed to send password reset email to {user.email}")
 
             logger.info(f"Password reset requested for: {request.email}")
 
-        # Always return success
         return {"status": "success", "message": "If an account exists, a reset link has been sent"}
 
     except Exception as e:
         logger.error(f"Password reset request error: {e}")
-        # Return success even on error
         return {"status": "success", "message": "If an account exists, a reset link has been sent"}
 
 
