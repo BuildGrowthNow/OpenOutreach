@@ -48,6 +48,8 @@ class UserResponse(BaseModel):
     full_name: str = Field(..., description="Full name")
     is_active: bool = Field(..., description="Whether user is active")
     created_at: datetime = Field(..., description="User creation timestamp")
+    status: str = Field(default="active", description="User status (active/blocked/inactive)")
+    admin_notes: Optional[str] = Field(None, description="Admin notes for the user")
 
     class Config:
         populate_by_name = True
@@ -76,3 +78,16 @@ class SupabaseUserLink(BaseModel):
     supabase_user_id: str = Field(..., description="Supabase user ID")
     email: EmailStr = Field(..., description="User email")
     full_name: Optional[str] = Field(None, description="Full name")
+
+
+class DeletionScheduledResponse(BaseModel):
+    """Schema for account deletion request response."""
+    deletion_scheduled_at: str = Field(..., description="Timestamp when deletion was scheduled")
+    grace_period_ends_at: str = Field(..., description="Timestamp when 30-day grace period ends")
+
+
+class AccountStatusResponse(BaseModel):
+    """Schema for account recovery response."""
+    status: str = Field(..., description="Account status")
+    subscription_status: str = Field(..., description="Subscription status")
+    message: str = Field(..., description="Status message")

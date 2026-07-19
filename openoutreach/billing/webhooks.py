@@ -378,18 +378,18 @@ def handle_customer_subscription_trial_will_end(event: dict[str, Any]) -> None:
 
 
 def _deactivate_user_profiles(user_id: str) -> None:
-    """Deactivate all LinkedIn profiles for a user."""
+    """Deactivate all LinkedIn profiles for a user on subscription cancel/expire."""
     profiles_collection = get_mongodb_collection("linkedin_profiles")
     if profiles_collection is None:
         logger.warning("Could not deactivate profiles: collection not available")
         return
 
     try:
-        profiles_collection.update_many(
-            {"user_id": user_id},
+        result = profiles_collection.update_many(
+            {"user_id": user_id, "is_active": True},
             {"$set": {"is_active": False}},
         )
-        logger.info(f"Deactivated all profiles for user {user_id}")
+        logger.info(f"Deactivated {result.modified_count} profiles for user {user_id}")
     except Exception as e:
         logger.error(f"Failed to deactivate profiles for user {user_id}: {e}")
 

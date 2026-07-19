@@ -325,29 +325,29 @@
 **Goal**: Ensure plan integrity can't be bypassed.
 
 ### 8.1 LinkedIn Profile Activation Control
-- [ ] `LinkedInProfile.is_active` field (boolean, default True)
-- [ ] Daemon only runs profiles where `is_active=True` AND user subscription is active
-- [ ] On plan downgrade below current count: prompt user to choose which profiles to deactivate
-- [ ] On subscription cancel/expire: all profiles set `is_active=False`, daemon stops
+- [x] `LinkedInProfile.is_active` field (boolean, default True)
+- [x] Daemon only runs profiles where `is_active=True` AND user subscription is active
+- [x] On plan downgrade below current count: prompt user to choose which profiles to deactivate
+- [x] On subscription cancel/expire: all profiles set `is_active=False`, daemon stops
 
 ### 8.2 Anti-Abuse
-- [ ] Rate limit on account creation (IP-based, 3 accounts per IP per day)
-- [ ] LinkedIn uniqueness enforcement (Phase 3.1) prevents multi-account abuse
-- [ ] Email verification required before trial starts (prevent throwaway signups)
-- [ ] Stripe radar for card fraud detection (built-in)
-- [ ] Webhook signature verification (prevent fake events)
+- [x] Rate limit on account creation (IP-based, 3 accounts per IP per day)
+- [x] LinkedIn uniqueness enforcement (Phase 3.1) prevents multi-account abuse
+- [x] Email verification required before trial starts (prevent throwaway signups)
+- [x] Stripe radar for card fraud detection (built-in)
+- [x] Webhook signature verification (prevent fake events)
 
 ### 8.3 API Security
-- [ ] All billing endpoints require authenticated user
-- [ ] Admin endpoints require `is_admin=True`
-- [ ] Plan enforcement cannot be bypassed by direct API calls
-- [ ] Webhook endpoint validates Stripe signature, rejects otherwise
-- [ ] No plan data in JWT (always fetch fresh from DB to prevent stale tokens)
+- [x] All billing endpoints require authenticated user
+- [x] Admin endpoints require `is_admin=True`
+- [x] Plan enforcement cannot be bypassed by direct API calls
+- [x] Webhook endpoint validates Stripe signature, rejects otherwise
+- [x] No plan data in JWT (always fetch fresh from DB to prevent stale tokens)
 
 ### 8.4 Data Isolation
-- [ ] Users cannot access other users' data (existing multi-tenant auth)
-- [ ] Admin impersonation is read-only (no write actions as another user)
-- [ ] Stripe customer IDs are private (never exposed in API responses to non-owner)
+- [x] Users cannot access other users' data (existing multi-tenant auth)
+- [x] Admin impersonation is read-only (no write actions as another user)
+- [x] Stripe customer IDs are private (never exposed in API responses to non-owner)
 
 ---
 
@@ -356,21 +356,21 @@
 **Goal**: Clear communication to users about their plan state.
 
 ### 9.1 In-App Banners
-- [ ] Trial banner (global, dismissible daily): countdown + CTA
-- [ ] Past-due banner (global, non-dismissible): "Payment failed. Update your card to avoid service interruption."
-- [ ] Approaching limit banner (contextual): "You've used 3/3 campaigns. Upgrade for unlimited."
-- [ ] Feature-locked state: grayed out UI + tooltip "Available on Pro plan" + upgrade link
+- [x] Trial banner (global, dismissible daily): countdown + CTA
+- [x] Past-due banner (global, non-dismissible): "Payment failed. Update your card to avoid service interruption."
+- [x] Approaching limit banner (contextual): "You've used 3/3 campaigns. Upgrade for unlimited."
+- [x] Feature-locked state: grayed out UI + tooltip "Available on Pro plan" + upgrade link
 
 ### 9.2 Blocking Overlays
-- [ ] Trial expired: full-page overlay, only billing settings accessible
-- [ ] Account blocked: full-page overlay with reason + support contact
-- [ ] Subscription canceled: full-page overlay after current_period_end, read-only data access for 30 days
+- [x] Trial expired: full-page overlay, only billing settings accessible
+- [x] Account blocked: full-page overlay with reason + support contact
+- [x] Subscription canceled: full-page overlay after current_period_end, read-only data access for 30 days
 
 ### 9.3 Contextual Upgrade Prompts
-- [ ] "Create Campaign" button shows limit if at max
-- [ ] "Connect LinkedIn" shows limit if at max
-- [ ] Feature buttons (voice notes, API) show "Pro" badge if locked
-- [ ] Smooth in-app upgrade flow (comparison → Stripe Checkout → return)
+- [x] "Create Campaign" button shows limit if at max
+- [x] "Connect LinkedIn" shows limit if at max
+- [x] Feature buttons (voice notes, API) show "Pro" badge if locked
+- [x] Smooth in-app upgrade flow (comparison → Stripe Checkout → return)
 
 ---
 
@@ -379,30 +379,30 @@
 **Goal**: Handle the full user lifecycle — signup, trial, subscription, cancellation, deletion.
 
 ### 10.1 Signup Flow Changes
-- [ ] Signup creates user with `status=active`, `subscription_status=none`
-- [ ] After signup, redirect to plan selection / checkout (credit card required)
-- [ ] On checkout complete: set `subscription_status=trialing`, `trial_ends_at=now+3days`
-- [ ] User cannot access dashboard until checkout is complete (force billing page)
-- [ ] Desktop app login: same flow — after auth callback, check if subscription exists, redirect to billing if not
+- [x] Signup creates user with `status=active`, `subscription_status=none`
+- [x] After signup, redirect to plan selection / checkout (credit card required)
+- [x] On checkout complete: set `subscription_status=trialing`, `trial_ends_at=now+3days`
+- [x] User cannot access dashboard until checkout is complete (force billing page)
+- [x] Desktop app login: same flow — after auth callback, check if subscription exists, redirect to billing if not
 
 ### 10.2 Account Deletion
-- [ ] User can request account deletion from settings
-- [ ] Deletion process: cancel Stripe subscription → deactivate all profiles → 30-day soft delete → permanent delete
-- [ ] During 30-day window: user can reactivate by logging in + subscribing
-- [ ] Permanent delete: remove all user data, LinkedIn credentials, campaigns, leads (GDPR compliance)
-- [ ] Release LinkedIn username lock on permanent delete
+- [x] User can request account deletion from settings
+- [x] Deletion process: cancel Stripe subscription → deactivate all profiles → 30-day soft delete → permanent delete
+- [x] During 30-day window: user can reactivate by logging in + subscribing
+- [x] Permanent delete: remove all user data, LinkedIn credentials, campaigns, leads (GDPR compliance)
+- [x] Release LinkedIn username lock on permanent delete
 
 ### 10.3 Subscription Recovery
-- [ ] Past-due: 3 retry attempts by Stripe (days 1, 3, 5)
-- [ ] After all retries fail: cancel subscription, block account
-- [ ] "Reactivate" flow: user goes to billing → redirected to new checkout
-- [ ] Preserve all data on reactivation (campaigns, leads, analytics)
+- [x] Past-due: 3 retry attempts by Stripe (days 1, 3, 5)
+- [x] After all retries fail: cancel subscription, block account
+- [x] "Reactivate" flow: user goes to billing → redirected to new checkout
+- [x] Preserve all data on reactivation (campaigns, leads, analytics)
 
 ### 10.4 Plan Migration (for existing users at launch)
-- [ ] Existing users (pre-billing) get grandfathered into Pro plan free until they're notified
-- [ ] Or: existing users get a 30-day window to choose a plan before enforcement kicks in
-- [ ] Migration script to set `subscription_status=active` and plan for grandfathered users
-- [ ] Email notification to existing users about new billing (2 weeks before enforcement)
+- [x] Existing users (pre-billing) get grandfathered into Pro plan free until they're notified
+- [x] Or: existing users get a 30-day window to choose a plan before enforcement kicks in
+- [x] Migration script to set `subscription_status=active` and plan for grandfathered users
+- [x] Email notification to existing users about new billing (2 weeks before enforcement)
 
 ---
 

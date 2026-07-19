@@ -34,6 +34,7 @@ class PlanEnforcer:
         count = collection.count_documents({
             "user_id": user._id,
             "active": True,
+            "is_active": True,
         })
 
         if count >= user.linkedin_account_limit:
@@ -108,6 +109,7 @@ class PlanEnforcer:
             stats["linkedin_accounts_used"] = profiles_collection.count_documents({
                 "user_id": user._id,
                 "active": True,
+                "is_active": True,
             })
 
         campaigns_collection = get_mongodb_collection("campaigns")

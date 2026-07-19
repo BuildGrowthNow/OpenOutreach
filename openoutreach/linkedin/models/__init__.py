@@ -60,6 +60,7 @@ class LinkedInProfile:
         linkedin_password: str = "",
         subscribe_newsletter: bool = True,
         active: bool = True,
+        is_active: bool = True,
         connect_daily_limit: int = 20,
         follow_up_daily_limit: int = 25,
         legal_accepted: bool = False,
@@ -89,6 +90,7 @@ class LinkedInProfile:
         self.linkedin_password = linkedin_password
         self.subscribe_newsletter = subscribe_newsletter
         self.active = active
+        self.is_active = is_active
         self.connect_daily_limit = connect_daily_limit
         self.follow_up_daily_limit = follow_up_daily_limit
         self.legal_accepted = legal_accepted
@@ -184,6 +186,7 @@ class LinkedInProfile:
             "linkedin_password": self.linkedin_password,
             "subscribe_newsletter": self.subscribe_newsletter,
             "active": self.active,
+            "is_active": self.is_active,
             "connect_daily_limit": self.connect_daily_limit,
             "follow_up_daily_limit": self.follow_up_daily_limit,
             "legal_accepted": self.legal_accepted,
@@ -218,6 +221,7 @@ class LinkedInProfile:
             linkedin_password=data.get("linkedin_password", ""),
             subscribe_newsletter=data.get("subscribe_newsletter", True),
             active=data.get("active", True),
+            is_active=data.get("is_active", True),
             connect_daily_limit=data.get("connect_daily_limit", 20),
             follow_up_daily_limit=data.get("follow_up_daily_limit", 25),
             legal_accepted=data.get("legal_accepted", False),

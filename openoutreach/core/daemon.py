@@ -350,9 +350,31 @@ PROFILE_REFRESH_INTERVAL = 300  # Re-scan for new/removed profiles every 5 min
 
 
 def _get_all_active_profiles() -> list:
-    """Return all active LinkedIn profiles with valid cookie data."""
+    """Return all active LinkedIn profiles with valid cookie data.
+    Profiles must be active and not plan-deactivated to run.
+    """
     from openoutreach.linkedin.models import LinkedInProfile
-    return [p for p in LinkedInProfile.objects.filter(active=True) if p.cookie_data_encrypted]
+    from openoutreach.billing.enforcement import PlanEnforcer
+
+    active_profiles = LinkedInProfile.objects.filter(active=True)
+    result = []
+    for p in active_profiles:
+        if not p.cookie_data_encrypted:
+            continue
+        if not p.is_active:
+            continue
+
+        user = p.user
+        if not user:
+            continue
+
+        can_run, _ = PlanEnforcer.can_run_tasks(user)
+        if not can_run:
+            continue
+
+        result.append(p)
+
+    return result
 
 
 def run_daemon():

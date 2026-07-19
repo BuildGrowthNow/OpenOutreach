@@ -13,6 +13,8 @@ export interface User {
   full_name: string
   is_active: boolean
   created_at: string
+  status: string
+  admin_notes: string | null
 }
 
 interface AuthState {

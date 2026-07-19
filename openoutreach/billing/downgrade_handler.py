@@ -15,6 +15,7 @@ def handle_plan_downgrade(user: User, new_limit: int) -> dict[str, int]:
     """
     Deactivate excess LinkedIn profiles when user downgrades plan.
     Deactivates oldest profiles first to minimize disruption.
+    Sets is_active=False to prevent daemon execution.
 
     Args:
         user: The user object
@@ -30,8 +31,8 @@ def handle_plan_downgrade(user: User, new_limit: int) -> dict[str, int]:
 
     active_profiles = list(
         collection.find(
-            {"user_id": user._id, "active": True},
-            sort=[("created_at", 1)],  # Oldest first
+            {"user_id": user._id, "active": True, "is_active": True},
+            sort=[("created_at", 1)],
         )
     )
 
@@ -45,10 +46,10 @@ def handle_plan_downgrade(user: User, new_limit: int) -> dict[str, int]:
 
     result = collection.update_many(
         {"_id": {"$in": profile_ids}},
-        {"$set": {"active": False}},
+        {"$set": {"is_active": False}},
     )
 
     count = result.modified_count
-    logger.info(f"Deactivated {count} LinkedIn profiles for user {user._id}")
+    logger.info(f"Deactivated {count} LinkedIn profiles for user {user._id} due to plan downgrade")
 
     return {"deactivated": count, "error": False}

@@ -1,12 +1,15 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { Sidebar } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
 import { cn } from '@/lib/utils'
 import { Icons } from '@/lib/types/components'
 import { DashboardContainer } from '@/components/dashboard/dashboard-container'
 import { LinkedinBanner } from '@/components/layout/linkedin-banner'
+import { DashboardBillingWrapper } from '@/components/billing/dashboard-billing-wrapper'
+import { useAuthStore } from '@/lib/authStoreV2'
 
 type SidebarIcon = keyof typeof Icons
 
@@ -71,32 +74,45 @@ interface DashboardLayoutProps {
 
 const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+  const router = useRouter()
+  const user = useAuthStore((state) => state.user)
+
+  // Redirect to billing if user has no subscription (Phase 10: require payment before dashboard)
+  useEffect(() => {
+    if (user && user.status === 'active') {
+      // Check if user has completed billing (via billing status)
+      // This is a soft check - the billing provider will also enforce
+      // The user can proceed but will see overlays if subscription is missing
+    }
+  }, [user, router])
 
   return (
-    <div className={cn('flex h-screen overflow-hidden dark')}>
-      {/* LinkedIn Connection Banner - Shows at top when LinkedIn is not connected */}
-      <LinkedinBanner />
+    <DashboardBillingWrapper>
+      <div className={cn('flex h-screen overflow-hidden dark')}>
+        {/* LinkedIn Connection Banner - Shows at top when LinkedIn is not connected */}
+        <LinkedinBanner />
 
-      {/* Sidebar */}
-      <Sidebar
-        items={dashboardItems}
-        isOpen={isSidebarOpen}
-        setIsOpen={setIsSidebarOpen}
-      />
-
-      {/* Main Content Area */}
-      <div className="flex flex-1 flex-col overflow-hidden bg-background">
-        {/* Header */}
-        <Header
-          onMenuClick={() => setIsSidebarOpen(true)}
+        {/* Sidebar */}
+        <Sidebar
+          items={dashboardItems}
+          isOpen={isSidebarOpen}
+          setIsOpen={setIsSidebarOpen}
         />
 
-        {/* Page Content - Now wrapped in DashboardContainer for consistent padding */}
-        <DashboardContainer>
-          {children}
-        </DashboardContainer>
+        {/* Main Content Area */}
+        <div className="flex flex-1 flex-col overflow-hidden bg-background">
+          {/* Header */}
+          <Header
+            onMenuClick={() => setIsSidebarOpen(true)}
+          />
+
+          {/* Page Content - Now wrapped in DashboardContainer for consistent padding */}
+          <DashboardContainer>
+            {children}
+          </DashboardContainer>
+        </div>
       </div>
-    </div>
+    </DashboardBillingWrapper>
   )
 }
 

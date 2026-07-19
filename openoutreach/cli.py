@@ -315,5 +315,46 @@ def send_blocked_notifications():
     click.echo(f"Sent {count} account blocked notifications")
 
 
+@cli.command()
+@click.option('--dry-run', is_flag=True, help='Preview changes without applying')
+def migrate_existing_users(dry_run):
+    """Migrate existing users to Pro plan with 90-day grace period.
+
+    For Phase 10: Grandfather existing users (pre-billing) into Pro plan.
+    This gives them 90 days before subscription enforcement kicks in.
+    """
+    from openoutreach.mongodb.connection import initialize_mongodb_connection
+    from openoutreach.billing.migration import migrate_existing_users_to_billing
+
+    initialize_mongodb_connection()
+
+    click.echo("Starting user migration...")
+    result = migrate_existing_users_to_billing(dry_run=dry_run)
+
+    click.echo(f"\nStatus: {result['status']}")
+    click.echo(f"Users found: {result['users_found']}")
+    click.echo(f"Users updated: {result['users_updated']}")
+
+    if result['errors']:
+        click.echo(f"\nErrors ({len(result['errors'])}):")
+        for err in result['errors']:
+            click.echo(f"  - {err}")
+
+
+@cli.command()
+def cleanup_deleted_accounts():
+    """Clean up users whose 30-day deletion grace period has expired.
+
+    Permanently deletes all data for users who requested deletion > 30 days ago.
+    """
+    from openoutreach.mongodb.connection import initialize_mongodb_connection
+    from openoutreach.billing.account_lifecycle import cleanup_expired_deletions
+
+    initialize_mongodb_connection()
+    click.echo("Running account deletion cleanup...")
+    cleanup_expired_deletions()
+    click.echo("Cleanup completed")
+
+
 if __name__ == '__main__':
     cli()

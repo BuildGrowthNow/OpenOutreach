@@ -6,7 +6,7 @@ Replaces SupabaseUser with proper multi-tenant User model.
 """
 
 import logging
-from datetime import datetime, timezone as tz
+from datetime import datetime, timedelta, timezone as tz
 from typing import Any, Dict, Optional
 from uuid import uuid4
 
@@ -51,6 +51,10 @@ class User:
         linkedin_account_limit: int = 1,
         campaign_limit: Optional[int] = None,
         cloud_profiles: int = 0,
+        admin_notes: Optional[str] = None,
+        is_deleted: bool = False,
+        deleted_at: Optional[datetime] = None,
+        deletion_scheduled_at: Optional[datetime] = None,
     ):
         self._id = _id or str(uuid4())
         self.email = email.lower().strip()
@@ -76,6 +80,10 @@ class User:
         self.linkedin_account_limit = linkedin_account_limit
         self.campaign_limit = campaign_limit
         self.cloud_profiles = cloud_profiles
+        self.admin_notes = admin_notes
+        self.is_deleted = is_deleted
+        self.deleted_at = deleted_at
+        self.deletion_scheduled_at = deletion_scheduled_at
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to MongoDB document."""
@@ -104,6 +112,10 @@ class User:
             "linkedin_account_limit": self.linkedin_account_limit,
             "campaign_limit": self.campaign_limit,
             "cloud_profiles": self.cloud_profiles,
+            "admin_notes": self.admin_notes,
+            "is_deleted": self.is_deleted,
+            "deleted_at": self.deleted_at,
+            "deletion_scheduled_at": self.deletion_scheduled_at,
         }
 
     @classmethod
@@ -134,6 +146,10 @@ class User:
             linkedin_account_limit=data.get("linkedin_account_limit", 1),
             campaign_limit=data.get("campaign_limit"),
             cloud_profiles=data.get("cloud_profiles", 0),
+            admin_notes=data.get("admin_notes"),
+            is_deleted=data.get("is_deleted", False),
+            deleted_at=data.get("deleted_at"),
+            deletion_scheduled_at=data.get("deletion_scheduled_at"),
         )
 
     def save(self) -> str:
@@ -202,3 +218,39 @@ class User:
                 {"_id": self._id},
                 {"$set": {"last_login": self.last_login}}
             )
+
+    def schedule_deletion(self) -> datetime:
+        """Schedule account for deletion (30-day soft delete window)."""
+        self.deletion_scheduled_at = datetime.now(tz.utc)
+        self.save()
+        logger.info(f"Account deletion scheduled for: {self.email}")
+        return self.deletion_scheduled_at
+
+    def cancel_deletion(self):
+        """Cancel scheduled deletion (user reactivates during grace period)."""
+        self.deletion_scheduled_at = None
+        self.is_deleted = False
+        self.deleted_at = None
+        self.save()
+        logger.info(f"Account deletion canceled for: {self.email}")
+
+    def is_deletion_grace_period_expired(self) -> bool:
+        """Check if 30-day deletion grace period has expired."""
+        if not self.deletion_scheduled_at:
+            return False
+        grace_period_end = self.deletion_scheduled_at + timedelta(days=30)
+        return datetime.now(tz.utc) >= grace_period_end
+
+    def permanently_delete(self):
+        """Permanently delete all user data."""
+        collection = get_mongodb_collection("users")
+        if collection is not None:
+            collection.delete_one({"_id": self._id})
+            logger.info(f"User permanently deleted: {self.email}")
+
+    def soft_delete(self):
+        """Soft delete - mark as deleted but retain data for 30 days."""
+        self.is_deleted = True
+        self.deleted_at = datetime.now(tz.utc)
+        self.save()
+        logger.info(f"User soft deleted: {self.email}")

@@ -66,6 +66,8 @@ class BillingStatusResponse(BaseModel):
     linkedin_account_limit: int
     campaign_limit: Optional[int]
     cloud_profiles: int
+    user_status: str
+    admin_notes: Optional[str]
 
 
 class CheckoutSessionRequest(BaseModel):
@@ -157,7 +159,51 @@ async def billing_status(
         linkedin_account_limit=user.linkedin_account_limit,
         campaign_limit=user.campaign_limit,
         cloud_profiles=user.cloud_profiles,
+        user_status=user.status,
+        admin_notes=user.admin_notes,
     )
+
+
+@router.get("/usage")
+async def get_current_usage(
+    user_id: str = Depends(get_current_user),
+) -> dict[str, int]:
+    """Get current usage stats for the user."""
+    user = User.get(user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+
+    from openoutreach.mongodb.connection import get_mongodb_collection
+
+    try:
+        profiles_coll = get_mongodb_collection("linkedin_profiles")
+        campaigns_coll = get_mongodb_collection("campaigns")
+
+        linkedin_accounts_used = 0
+        campaigns_used = 0
+
+        if profiles_coll is not None:
+            linkedin_accounts_used = profiles_coll.count_documents({
+                "user_id": user_id,
+                "is_active": True,
+            })
+
+        if campaigns_coll is not None:
+            campaigns_used = campaigns_coll.count_documents({
+                "user_id": user_id,
+                "archived": {"$ne": True},
+            })
+
+        return {
+            "linkedin_accounts_used": linkedin_accounts_used,
+            "campaigns_used": campaigns_used,
+        }
+    except Exception as e:
+        logger.error(f"Failed to get usage: {e}")
+        return {
+            "linkedin_accounts_used": 0,
+            "campaigns_used": 0,
+        }
 
 
 @router.post("/checkout")
@@ -165,7 +211,13 @@ async def create_checkout(
     request: CheckoutSessionRequest,
     user_id: str = Depends(get_current_user),
 ) -> CheckoutSessionResponse:
-    """Create Stripe Checkout session."""
+    """
+    Create Stripe Checkout session.
+
+    For new users (subscription_status=none), this initiates a trial.
+    For existing users upgrading, prorations are applied.
+    Success redirects to /settings/billing?success=true
+    """
     user = User.get(user_id)
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")

@@ -28,6 +28,11 @@ from openoutreach.api_v2.schemas.auth import (
 )
 from openoutreach.mongodb.models_user import User
 from openoutreach.mongodb import models
+from openoutreach.billing.account_lifecycle import (
+    request_account_deletion,
+    cancel_account_deletion,
+    export_user_data,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -83,11 +88,12 @@ async def register(data: RegisterRequest):
             detail="Email already registered"
         )
 
-    # Create user
+    # Create user with subscription_status=none (no subscription until checkout)
     user = User(
         email=data.email,
         full_name=data.full_name,
         is_active=True,
+        subscription_status="none",
     )
     user.set_password(data.password)
     user.save()
@@ -107,6 +113,8 @@ async def register(data: RegisterRequest):
         full_name=user.full_name,
         is_active=user.is_active,
         created_at=user.created_at or datetime.now(tz.utc),
+        status=user.status,
+        admin_notes=user.admin_notes,
     )
 
 
@@ -149,6 +157,13 @@ async def login(credentials: LoginRequest, response: Response):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Account is inactive"
+        )
+
+    # Check if user is deleted
+    if user.is_deleted:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account has been deleted"
         )
 
     # Update last login
@@ -269,6 +284,8 @@ async def get_current_user_info(user_id: str = Depends(get_current_user)):
         full_name=user.full_name,
         is_active=user.is_active,
         created_at=user.created_at or datetime.now(tz.utc),
+        status=user.status,
+        admin_notes=user.admin_notes,
     )
 
 
@@ -434,3 +451,69 @@ async def update_password(
     logger.info(f"Password updated for user: {user.email}")
 
     return {"status": "success", "message": "Password successfully updated"}
+
+
+# ==================== ACCOUNT LIFECYCLE ====================
+
+
+@router.post("/account/request-deletion/")
+async def request_deletion(user_id: str = Depends(get_current_user)):
+    """
+    Request account deletion with 30-day grace period.
+
+    Cancels subscription and deactivates all profiles immediately.
+    User can recover account by logging in within 30 days.
+    """
+    try:
+        result = request_account_deletion(user_id)
+        logger.info(f"Deletion requested for user: {user_id}")
+        return result
+    except Exception as e:
+        logger.error(f"Deletion request error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to process deletion request"
+        )
+
+
+@router.post("/account/cancel-deletion/")
+async def cancel_deletion(user_id: str = Depends(get_current_user)):
+    """
+    Cancel account deletion during 30-day grace period.
+
+    Reactivates account and user data.
+    """
+    try:
+        result = cancel_account_deletion(user_id)
+        logger.info(f"Deletion canceled for user: {user_id}")
+        return result
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.error(f"Cancel deletion error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to cancel deletion"
+        )
+
+
+@router.get("/account/export-data/")
+async def export_data(user_id: str = Depends(get_current_user)):
+    """
+    Export all user data in JSON format (GDPR compliance).
+
+    Returns user profile, billing info, campaigns, leads, messages, etc.
+    """
+    try:
+        data = export_user_data(user_id)
+        logger.info(f"Data exported for user: {user_id}")
+        return data
+    except Exception as e:
+        logger.error(f"Export data error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to export data"
+        )

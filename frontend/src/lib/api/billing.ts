@@ -19,6 +19,8 @@ export interface BillingStatus {
   linkedin_account_limit: number;
   campaign_limit: number | null;
   cloud_profiles: number;
+  user_status: string;
+  admin_notes: string | null;
   stripe_subscription_id?: string;
 }
 
@@ -59,8 +61,8 @@ export async function getInvoices(): Promise<ApiResponse<Invoice[]>> {
   return get<Invoice[]>("/api/billing/invoices");
 }
 
-export async function getUsage(): Promise<ApiResponse<BillingUsage>> {
-  return get<BillingUsage>("/api/billing/usage");
+export async function getUsage(): Promise<ApiResponse<{ linkedin_accounts_used: number; campaigns_used: number }>> {
+  return get<{ linkedin_accounts_used: number; campaigns_used: number }>("/api/billing/usage");
 }
 
 export async function createCheckoutSession(

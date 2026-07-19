@@ -80,6 +80,7 @@ from openoutreach.api_v2.routers import (
     daemon,
     vnc,
     billing,
+    admin,
 )
 
 # Import rate limiting and campaign health routers
@@ -137,3 +138,6 @@ app.include_router(vnc.router, prefix="/api", tags=["vnc"])
 # Billing
 from openoutreach.api_v2.routers.billing import router as billing_router
 app.include_router(billing_router, tags=["billing"])
+
+# Admin
+app.include_router(admin.router, tags=["admin"])

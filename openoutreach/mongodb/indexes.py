@@ -74,6 +74,8 @@ def ensure_all_indexes():
             ({'user_id': 1}, {'name': 'profile_user_idx'}),
             ({'linkedin_username': 1}, {'name': 'profile_username_unique_idx', 'unique': True, 'sparse': True}),
             ({'active': 1}, {'name': 'profile_active_idx'}),
+            ({'is_active': 1}, {'name': 'profile_is_active_idx'}),
+            ({'user_id': 1, 'is_active': 1}, {'name': 'profile_user_active_idx'}),
         ]),
 
         # Action Logs
@@ -309,6 +311,22 @@ def ensure_all_indexes():
         ('recovery_actions', [
             ({'campaign_id': 1, 'executed_at': -1}, {'name': 'recovery_campaign_time_idx'}),
             ({'alert_id': 1}, {'name': 'recovery_alert_idx'}),
+        ]),
+
+        ('ip_signup_attempts', [
+            ({'ip_address': 1, 'created_at': -1}, {'name': 'ip_signup_time_idx'}),
+            ({'created_at': 1}, {'name': 'signup_time_idx'}),
+        ]),
+
+        ('webhook_events', [
+            ({'stripe_event_id': 1}, {'name': 'webhook_event_id_idx'}),
+            ({'processed_at': 1}, {'name': 'webhook_processed_time_idx'}),
+        ]),
+
+        ('admin_audit_logs', [
+            ({'admin_user_id': 1, 'created_at': -1}, {'name': 'audit_admin_time_idx'}),
+            ({'target_user_id': 1, 'created_at': -1}, {'name': 'audit_target_time_idx'}),
+            ({'action': 1, 'created_at': -1}, {'name': 'audit_action_time_idx'}),
         ]),
     ]
 
