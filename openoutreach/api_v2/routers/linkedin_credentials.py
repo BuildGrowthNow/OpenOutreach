@@ -167,6 +167,27 @@ async def create_credential(
         if not user:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
 
+        # Validate execution mode
+        execution_mode = data.execution_mode if hasattr(data, 'execution_mode') else "desktop"
+        if execution_mode not in ("desktop", "cloud"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid execution_mode. Must be 'desktop' or 'cloud'"
+            )
+
+        # If cloud execution requested, validate access
+        if execution_mode == "cloud":
+            can_use_cloud, error_msg = PlanEnforcer.can_use_cloud_execution(user)
+            if not can_use_cloud:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail={
+                        "error": error_msg,
+                        "upgrade_required": True,
+                        "recommended_action": "use_desktop",
+                    }
+                )
+
         can_create, error_msg = PlanEnforcer.can_create_linkedin_account(user)
         if not can_create:
             raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail=error_msg)
@@ -201,6 +222,7 @@ async def create_credential(
                 user_id=user_id,
                 linkedin_username=data.email,
                 active=True,
+                execution_mode=execution_mode,
             )
             profile.save()
 
@@ -220,10 +242,11 @@ async def create_credential(
         )
         credential.save()
 
-        # Sync login fields to profile
+        # Sync login fields and execution mode to profile
         profile.linkedin_username = data.email
         profile.linkedin_password = data.password
-        profile.save(update_fields=["linkedin_username", "linkedin_password"])
+        profile.execution_mode = execution_mode
+        profile.save(update_fields=["linkedin_username", "linkedin_password", "execution_mode"])
 
         # Log creation
         log_entry = LinkedInCredentialLog(

@@ -107,7 +107,7 @@ class SiteConfig:
     def __init__(
         self,
         _id: str = "site_config",
-        trial_duration_days: int = 3,
+        trial_duration_days: int = 7,
         lifetime_deal_enabled: bool = True,
         lifetime_deal_ends_at: Optional[datetime] = None,
         lifetime_deal_max_buyers: int = 100,
@@ -151,7 +151,7 @@ class SiteConfig:
         """Create from MongoDB document."""
         return cls(
             _id=data.get("_id", "site_config"),
-            trial_duration_days=data.get("trial_duration_days", 3),
+            trial_duration_days=data.get("trial_duration_days", 7),
             lifetime_deal_enabled=data.get("lifetime_deal_enabled", True),
             lifetime_deal_ends_at=data.get("lifetime_deal_ends_at"),
             lifetime_deal_max_buyers=data.get("lifetime_deal_max_buyers", 100),

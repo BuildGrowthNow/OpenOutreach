@@ -306,8 +306,6 @@ def construct_webhook_event(body: str, signature: str) -> Optional[dict[str, Any
         return None
 
 
-from typing import Literal
-
 def update_subscription_price(
     subscription_id: str,
     new_price_id: str,

@@ -82,6 +82,10 @@ class LinkedInProfile:
         proxy_server: Optional[str] = None,
         proxy_username: Optional[str] = None,
         proxy_password: Optional[str] = None,
+        # Execution mode
+        execution_mode: str = "desktop",
+        last_heartbeat: Optional[datetime] = None,
+        daemon_status: str = "unknown",
     ):
         self._id = _id or str(uuid4())
         self.user_id = user_id
@@ -112,6 +116,10 @@ class LinkedInProfile:
         self.proxy_server = proxy_server
         self.proxy_username = proxy_username
         self.proxy_password = proxy_password
+        # Execution mode
+        self.execution_mode = execution_mode
+        self.last_heartbeat = last_heartbeat
+        self.daemon_status = daemon_status
         self._exhausted: dict[str, date] = {}
         self._user_cache = None  # Cache for lazy-loaded user
 
@@ -208,6 +216,10 @@ class LinkedInProfile:
             "proxy_server": self.proxy_server,
             "proxy_username": self.proxy_username,
             "proxy_password": self.proxy_password,
+            # Execution mode
+            "execution_mode": self.execution_mode,
+            "last_heartbeat": self.last_heartbeat,
+            "daemon_status": self.daemon_status,
         }
 
     @classmethod
@@ -243,6 +255,10 @@ class LinkedInProfile:
             proxy_server=data.get("proxy_server"),
             proxy_username=data.get("proxy_username"),
             proxy_password=data.get("proxy_password"),
+            # Execution mode
+            execution_mode=data.get("execution_mode", "desktop"),
+            last_heartbeat=data.get("last_heartbeat"),
+            daemon_status=data.get("daemon_status", "unknown"),
         )
 
     def save(self, update_fields: Optional[list] = None) -> str:
