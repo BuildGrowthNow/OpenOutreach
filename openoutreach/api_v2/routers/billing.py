@@ -226,7 +226,6 @@ async def get_current_usage(
         if campaigns_coll is not None:
             campaigns_used = campaigns_coll.count_documents({
                 "user_id": user_id,
-                "archived": {"$ne": True},
             })
 
         return {

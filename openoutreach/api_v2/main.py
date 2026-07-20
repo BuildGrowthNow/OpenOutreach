@@ -80,12 +80,14 @@ from openoutreach.api_v2.routers import (
     websocket,
     daemon,
     vnc,
-    billing,
     admin,
 )
 
 # Import rate limiting and campaign health routers
 from openoutreach.api_v2.routers import rate_limits, campaign_health
+
+# Import desktop daemon router
+from openoutreach.api_v2.routers import desktop_daemon as desktop_daemon_router
 
 # Health check (no auth required)
 app.include_router(health.router, prefix="/api", tags=["health"])
@@ -131,6 +133,9 @@ app.include_router(campaign_health.router, prefix="/api", tags=["campaign-health
 
 # Notifications
 app.include_router(notifications.router, prefix="/api/notifications", tags=["notifications"])
+
+# Desktop daemon status and heartbeat
+app.include_router(desktop_daemon_router.router)
 
 # WebSocket routes
 app.include_router(websocket.router, tags=["websocket"])

@@ -72,6 +72,7 @@ class LinkedInCredentialCreate(BaseModel):
     is_backup: bool = Field(default=False, description="Whether this is a backup credential set")
     backup_of_id: Optional[str] = Field(None, description="ID of the primary credential if this is a backup")
     rotation_required_days: int = Field(default=90, description="Days until credential rotation is required")
+    execution_mode: str = Field(default="desktop", description="Execution mode: 'desktop' or 'cloud'")
 
     class Config:
         json_schema_extra = {

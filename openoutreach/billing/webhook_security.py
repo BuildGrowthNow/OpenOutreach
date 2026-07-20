@@ -57,7 +57,7 @@ class WebhookSignatureValidator:
             return event, None
         except stripe.SignatureVerificationError as e:
             logger.warning(f"Invalid webhook signature: {e}")
-            return None, f"Invalid signature"
+            return None, "Invalid signature"
         except Exception as e:
             logger.error(f"Webhook construction error: {e}")
-            return None, f"Failed to construct event"
+            return None, "Failed to construct event"

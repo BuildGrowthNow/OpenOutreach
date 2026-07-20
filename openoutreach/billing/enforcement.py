@@ -59,13 +59,50 @@ class PlanEnforcer:
 
         count = collection.count_documents({
             "user_id": user._id,
-            "is_paused": False,
         })
 
         if count >= user.campaign_limit:
             return False, f"Campaign limit reached ({count}/{user.campaign_limit})"
 
         return True, None
+
+    @staticmethod
+    def can_use_cloud_execution(user: User) -> tuple[bool, Optional[str]]:
+        """
+        Check if user can add a cloud-executed LinkedIn credential.
+
+        Cloud execution means the server-side daemon will run the browser session.
+        Users without cloud_execution access must use the desktop daemon instead.
+        Returns (allowed, error_message).
+        """
+        if not PlanEnforcer._is_subscription_active(user):
+            return False, "Subscription is not active"
+
+        # Block trial users from using cloud execution
+        if user.subscription_status == "trialing":
+            return False, "Cloud execution is not available during trial. Please upgrade to a paid plan and add the Cloud Add-on."
+
+        # Plans with cloud_execution in their features have it included
+        plan = get_plan(user.plan)
+        if plan and "cloud_execution" in plan.get("features", []):
+            return True, None
+
+        # The cloud_addon purchase grants seats tracked in cloud_profiles
+        if user.cloud_profiles > 0:
+            # Count how many active profiles are already using cloud seats
+            collection = get_mongodb_collection("linkedin_profiles")
+            if collection is None:
+                return False, "Database error"
+            active_cloud = collection.count_documents({
+                "user_id": user._id,
+                "is_active": True,
+                "execution_mode": "cloud",
+            })
+            if active_cloud < user.cloud_profiles:
+                return True, None
+            return False, f"Cloud execution seat limit reached ({active_cloud}/{user.cloud_profiles})"
+
+        return False, "Cloud execution requires a Cloud Add-on or eligible plan. Use the desktop app instead."
 
     @staticmethod
     def can_run_tasks(user: User) -> tuple[bool, Optional[str]]:
@@ -114,7 +151,6 @@ class PlanEnforcer:
         if campaigns_collection is not None:
             stats["campaigns_used"] = campaigns_collection.count_documents({
                 "user_id": user._id,
-                "is_paused": False,
             })
 
         return stats
