@@ -105,7 +105,7 @@ class Settings(BaseSettings):
     # =========================================================================
     # Billing Configuration
     # =========================================================================
-    TRIAL_DURATION_DAYS: int = 3
+    TRIAL_DURATION_DAYS: int = 7
     LIFETIME_DEAL_ENABLED: bool = True
     LIFETIME_DEAL_ENDS_AT: Optional[str] = None
 
