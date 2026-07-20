@@ -30,7 +30,7 @@ def ensure_all_indexes():
         # Users
         ('users', [
             ({'email': 1}, {'name': 'user_email_idx', 'unique': True}),
-            ({'supabase_user_id': 1}, {'name': 'user_supabase_idx', 'unique': True, 'sparse': True}),
+            ({'supabase_user_id': 1}, {'name': 'user_supabase_idx', 'unique': True, 'partialFilterExpression': {'supabase_user_id': {'$type': 'string'}}}),
             ({'is_active': 1}, {'name': 'user_active_idx'}),
         ]),
 
@@ -180,8 +180,8 @@ def ensure_all_indexes():
         ]),
 
         # Site Config
-        ('site_configs', [
-            ({'user_id': 1}, {'name': 'config_user_unique', 'unique': True}),
+        ('site_config', [
+            ({'user_id': 1}, {'name': 'config_user_unique', 'unique': True, 'sparse': True}),
         ]),
 
         # Billing

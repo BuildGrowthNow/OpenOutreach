@@ -105,14 +105,13 @@ class User:
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to MongoDB document."""
-        return {
+        doc: Dict[str, Any] = {
             "_id": self._id,
             "email": self.email,
             "hashed_password": self.hashed_password,
             "full_name": self.full_name,
             "is_active": self.is_active,
             "is_superuser": self.is_superuser,
-            "supabase_user_id": self.supabase_user_id,
             "org_id": self.org_id,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
@@ -144,6 +143,9 @@ class User:
             "password_reset_token": self.password_reset_token,
             "password_reset_expires": self.password_reset_expires,
         }
+        if self.supabase_user_id is not None:
+            doc["supabase_user_id"] = self.supabase_user_id
+        return doc
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "User":
@@ -196,7 +198,10 @@ class User:
 
         self.updated_at = datetime.now(tz.utc)
         doc = self.to_dict()
-        collection.update_one({"_id": self._id}, {"$set": doc}, upsert=True)
+        update: Dict[str, Any] = {"$set": doc}
+        if self.supabase_user_id is None:
+            update["$unset"] = {"supabase_user_id": ""}
+        collection.update_one({"_id": self._id}, update, upsert=True)
         logger.info(f"Saved user: {self.email}")
         return self._id
 

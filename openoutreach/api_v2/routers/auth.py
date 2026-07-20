@@ -131,7 +131,7 @@ async def register(data: RegisterRequest, request: Request):
 
     # Create default SiteConfig for user
     try:
-        site_config = models.SiteConfig()
+        site_config = models.SiteConfig(user_id=user._id)
         site_config.save()
     except Exception as e:
         logger.warning(f"Failed to create SiteConfig for {user.email}: {e}")
