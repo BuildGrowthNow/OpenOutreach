@@ -150,7 +150,7 @@ export async function get<T>(
   path: string,
   params?: Record<string, string>,
 ): Promise<ApiResponse<T>> {
-  const url = new URL(path, API_URL);
+  const url = new URL(path, getApiBase());
   if (params) {
     // Map params keys to snake_case if they are camelCase
     Object.entries(params).forEach(([key, value]) => {
@@ -176,7 +176,7 @@ export async function put<T>(
   path: string,
   body?: Record<string, unknown>,
 ): Promise<ApiResponse<T>> {
-  const url = new URL(path, API_URL);
+  const url = new URL(path, getApiBase());
   const headers = await getHeaders();
   const response = await fetch(url.toString(), {
     method: "PUT",
@@ -196,7 +196,7 @@ export async function post<T>(
   path: string,
   body?: Record<string, unknown> | FormData,
 ): Promise<ApiResponse<T>> {
-  const url = new URL(path, API_URL);
+  const url = new URL(path, getApiBase());
   const headers = await getHeaders();
 
   let finalBody: BodyInit | undefined = undefined;
@@ -227,7 +227,7 @@ export async function patch<T>(
   path: string,
   body?: Record<string, unknown>,
 ): Promise<ApiResponse<T>> {
-  const url = new URL(path, API_URL);
+  const url = new URL(path, getApiBase());
   const headers = await getHeaders();
   const response = await fetch(url.toString(), {
     method: "PATCH",
@@ -244,7 +244,7 @@ export async function patch<T>(
 }
 
 export async function del<T>(path: string): Promise<ApiResponse<T>> {
-  const url = new URL(path, API_URL);
+  const url = new URL(path, getApiBase());
   const headers = await getHeaders();
   const response = await fetch(url.toString(), {
     method: "DELETE",
