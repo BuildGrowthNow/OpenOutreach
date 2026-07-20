@@ -74,7 +74,6 @@ def ensure_all_indexes():
             ({'user_id': 1}, {'name': 'profile_user_idx'}),
             ({'linkedin_username': 1}, {'name': 'profile_username_unique_idx', 'unique': True, 'sparse': True}),
             ({'active': 1}, {'name': 'profile_active_idx'}),
-            ({'is_active': 1}, {'name': 'profile_is_active_idx'}),
             ({'user_id': 1, 'is_active': 1}, {'name': 'profile_user_active_idx'}),
         ]),
 
@@ -190,9 +189,6 @@ def ensure_all_indexes():
             ({'plan_name': 1}, {'name': 'stripe_plan_name_idx', 'unique': True}),
         ]),
 
-        ('site_config', [
-            ({'_id': 1}, {'name': 'site_config_idx', 'unique': True}),
-        ]),
 
         ('webhook_events', [
             ({'stripe_event_id': 1}, {'name': 'webhook_event_id_idx', 'unique': True}),
@@ -258,21 +254,17 @@ def ensure_all_indexes():
             ({'created_by_id': 1}, {'name': 'ghost_scenario_creator_idx'}),
         ]),
 
-        # Smart Rate Limiting
+        # Smart Rate Limiting (additional indexes)
         ('smart_rate_limit_contexts', [
-            ({'linkedin_profile_id': 1}, {'name': 'rate_context_profile_idx', 'unique': True}),
             ({'detectability_score': 1}, {'name': 'rate_context_detect_idx'}),
-            ({'last_action_at': -1}, {'name': 'rate_context_last_action_idx'}),
         ]),
 
         ('rate_limit_warnings', [
-            ({'linkedin_profile_id': 1, 'at_time': -1}, {'name': 'rate_warn_profile_time_idx'}),
             ({'resolved': 1, 'warning_level': 1}, {'name': 'rate_warn_status_idx'}),
         ]),
 
-        # State Machine
+        # State Machine (additional indexes)
         ('campaign_state_graphs', [
-            ({'campaign_id': 1}, {'name': 'state_graph_campaign_idx', 'unique': True}),
             ({'is_active': 1, 'is_valid': 1}, {'name': 'state_graph_active_valid_idx'}),
         ]),
 
@@ -283,8 +275,6 @@ def ensure_all_indexes():
 
         ('state_transitions', [
             ({'state_graph_id': 1, 'order': 1}, {'name': 'state_trans_graph_order_idx'}),
-            ({'source_node_id': 1}, {'name': 'state_trans_source_idx'}),
-            ({'target_node_id': 1}, {'name': 'state_trans_target_idx'}),
         ]),
 
         ('campaign_states', [
@@ -297,9 +287,8 @@ def ensure_all_indexes():
             ({'node_id': 1, 'result': 1}, {'name': 'exec_log_node_result_idx'}),
         ]),
 
-        # Campaign Health Monitoring
+        # Campaign Health Monitoring (additional indexes)
         ('campaign_health_metrics', [
-            ({'campaign_id': 1, 'timestamp': -1}, {'name': 'health_metric_campaign_time_idx'}),
             ({'errors_total': 1, 'timestamp': -1}, {'name': 'health_metric_errors_idx'}),
         ]),
 
