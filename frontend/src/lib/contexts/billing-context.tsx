@@ -1,7 +1,8 @@
 "use client";
 
-import { createContext, useContext, ReactNode, useEffect, useState } from "react";
+import { createContext, useContext, ReactNode, useEffect, useState, useCallback } from "react";
 import { BillingStatus, getBillingStatus, getUsage } from "@/lib/api/billing";
+import { useAuthStore } from "@/lib/authStoreV2";
 
 interface BillingContextType {
   billingStatus: BillingStatus | null;
@@ -16,8 +17,13 @@ export function BillingProvider({ children }: { children: ReactNode }) {
   const [billingStatus, setBillingStatus] = useState<BillingStatus | null>(null);
   const [usage, setUsage] = useState<{ linkedin_accounts_used: number; campaigns_used: number } | null>(null);
   const [loading, setLoading] = useState(true);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
-  const refetch = async () => {
+  const refetch = useCallback(async () => {
+    if (!isAuthenticated) {
+      setLoading(false);
+      return;
+    }
     try {
       setLoading(true);
       const [statusRes, usageRes] = await Promise.all([
@@ -35,13 +41,14 @@ export function BillingProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [isAuthenticated]);
 
   useEffect(() => {
     void refetch();
-    const interval = setInterval(() => void refetch(), 60000); // Refresh every minute
+    if (!isAuthenticated) return;
+    const interval = setInterval(() => void refetch(), 60000);
     return () => clearInterval(interval);
-  }, []);
+  }, [isAuthenticated, refetch]);
 
   return (
     <BillingContext.Provider value={{ billingStatus, usage, loading, refetch }}>

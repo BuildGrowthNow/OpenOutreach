@@ -6,7 +6,7 @@
 
 import { useAuthStore } from './authStoreV2'
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api'
+const API_BASE = '/api'
 
 export interface ApiResponse<T = any> {
   data?: T

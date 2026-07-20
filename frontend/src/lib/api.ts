@@ -1,5 +1,11 @@
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL || "https://linkedin-api.lengrowth.com";
+// Use window.location.origin at call time for absolute URL (required by new URL())
+// Falls back to empty string (relative) in non-browser contexts like SSR
+function getApiBase(): string {
+  if (typeof window !== 'undefined') {
+    return `${window.location.origin}/api`
+  }
+  return '/api'
+}
 
 import { supabase } from "./supabase/client";
 

@@ -38,8 +38,9 @@ interface AuthState {
   resendVerification: (email: string) => Promise<{ error: string | null }>
 }
 
-// API base URL
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api'
+// API base URL — use relative path so requests go through the Next.js proxy
+// (avoids CORS issues when the backend is on a different domain)
+const API_BASE = '/api'
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   // Initial state

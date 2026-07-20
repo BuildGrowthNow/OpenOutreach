@@ -33,6 +33,11 @@ jobs:
           DEBUG: ${{ secrets.DEBUG }}
           SSH_AUTH_SOCK: /dev/null
         run: |
+          # Ensure lingering is enabled so rootless Docker survives SSH disconnect
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o IdentitiesOnly=yes "${EC2_USER}@${EC2_HOST}" "
+            sudo loginctl enable-linger ${EC2_USER}
+          "
+
           # Clone or update the repository on the server (force reset to avoid merge conflicts)
           ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o IdentitiesOnly=yes "${EC2_USER}@${EC2_HOST}" "
             set -e
