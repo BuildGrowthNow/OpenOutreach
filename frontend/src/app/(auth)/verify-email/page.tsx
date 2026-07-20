@@ -3,8 +3,7 @@
 import { useEffect, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Logo } from "@/components/ui/logo"
 import { CheckCircle2, XCircle, Loader2, Mail } from "lucide-react"
 
 const API_BASE = '/api'
@@ -31,9 +30,7 @@ export default function VerifyEmailPage() {
       try {
         const response = await fetch(`${API_BASE}/auth/verify-email/`, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ token }),
         })
 
@@ -42,7 +39,6 @@ export default function VerifyEmailPage() {
         if (response.ok) {
           setStatus("success")
           setMessage(data.message || "Email verified successfully!")
-
           setTimeout(() => {
             router.push("/login?returnUrl=" + encodeURIComponent("/download?welcome=1&success=email_verified"))
           }, 2000)
@@ -66,7 +62,6 @@ export default function VerifyEmailPage() {
     try {
       const url = `${API_BASE}/auth/resend-verification/?email=${encodeURIComponent(resendEmail.trim())}`
       await fetch(url, { method: "POST" })
-      // Backend always returns 200 to prevent enumeration — treat as success
       setResendStatus("sent")
     } catch {
       setResendStatus("error")
@@ -74,42 +69,41 @@ export default function VerifyEmailPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl">Email Verification</CardTitle>
-          <CardDescription>
-            Verifying your email address
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
+    <div className="dark min-h-screen flex items-center justify-center bg-background p-4">
+      <div className="w-full max-w-md space-y-6 p-8 bg-zinc-900 border border-zinc-800 rounded-lg shadow-xl">
+        <div className="flex justify-center">
+          <Logo variant="dark" iconSize={40} className="text-lg" />
+        </div>
+
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-foreground">Email Verification</h1>
+          <p className="mt-1 text-sm text-zinc-400">Verifying your email address</p>
+        </div>
+
+        <div className="space-y-4">
           {status === "loading" && (
             <div className="text-center py-8">
-              <Loader2 className="h-12 w-12 animate-spin mx-auto text-blue-600 mb-4" />
-              <p className="text-gray-600">Verifying your email...</p>
+              <Loader2 className="h-12 w-12 animate-spin mx-auto text-primary mb-4" />
+              <p className="text-zinc-400">Verifying your email...</p>
             </div>
           )}
 
           {status === "success" && (
-            <Alert className="bg-green-50 border-green-200">
-              <CheckCircle2 className="h-5 w-5 text-green-600" />
-              <AlertDescription className="text-green-800 ml-2">
-                {message}
-              </AlertDescription>
-            </Alert>
+            <div className="bg-green-500/10 border border-green-500/20 rounded-md p-4 flex items-start gap-3">
+              <CheckCircle2 className="h-5 w-5 text-green-400 shrink-0 mt-0.5" />
+              <p className="text-green-400 text-sm">{message}</p>
+            </div>
           )}
 
           {status === "error" && (
             <>
-              <Alert className="bg-red-50 border-red-200">
-                <XCircle className="h-5 w-5 text-red-600" />
-                <AlertDescription className="text-red-800 ml-2">
-                  {message}
-                </AlertDescription>
-              </Alert>
+              <div className="bg-red-500/10 border border-red-500/20 rounded-md p-4 flex items-start gap-3">
+                <XCircle className="h-5 w-5 text-red-400 shrink-0 mt-0.5" />
+                <p className="text-red-400 text-sm">{message}</p>
+              </div>
 
               <div className="space-y-3 pt-2">
-                <p className="text-sm text-gray-600 text-center">
+                <p className="text-sm text-zinc-400 text-center">
                   Didn&apos;t receive the email or link expired?
                 </p>
                 <div className="flex gap-2">
@@ -118,7 +112,7 @@ export default function VerifyEmailPage() {
                     value={resendEmail}
                     onChange={(e) => setResendEmail(e.target.value)}
                     placeholder="Your email address"
-                    className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="flex-1 rounded-md bg-zinc-800 border border-zinc-700 px-3 py-2 text-sm text-foreground placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
                   />
                   <Button
                     onClick={handleResend}
@@ -137,12 +131,12 @@ export default function VerifyEmailPage() {
                   </Button>
                 </div>
                 {resendStatus === "sent" && (
-                  <p className="text-xs text-green-700 text-center">
+                  <p className="text-xs text-green-400 text-center">
                     If an unverified account exists for that email, a new link has been sent.
                   </p>
                 )}
                 {resendStatus === "error" && (
-                  <p className="text-xs text-red-600 text-center">
+                  <p className="text-xs text-red-400 text-center">
                     Failed to send. Please try again.
                   </p>
                 )}
@@ -156,8 +150,8 @@ export default function VerifyEmailPage() {
               </div>
             </>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   )
 }

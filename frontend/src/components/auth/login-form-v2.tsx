@@ -4,6 +4,7 @@ import { useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { useAuthStore } from "@/lib/authStoreV2"
+import { Logo } from "@/components/ui/logo"
 
 export function LoginFormV2() {
   const router = useRouter()
@@ -41,11 +42,14 @@ export function LoginFormV2() {
 
   return (
     <div className="w-full max-w-md space-y-8 p-8 bg-zinc-900 border border-zinc-800 rounded-lg shadow-xl">
-      <div className="text-center">
-        <h1 className="text-3xl font-bold text-foreground">Welcome Back</h1>
-        <p className="mt-2 text-sm text-zinc-400">
-          Sign in to your Lengrowth account
-        </p>
+      <div className="flex flex-col items-center gap-4">
+        <Logo variant="dark" iconSize={40} className="text-lg" />
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-foreground">Welcome Back</h1>
+          <p className="mt-1 text-sm text-zinc-400">
+            Sign in to your Lengrowth account
+          </p>
+        </div>
       </div>
 
       <form onSubmit={handleSubmit} className="mt-8 space-y-6">

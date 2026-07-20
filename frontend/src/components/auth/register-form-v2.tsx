@@ -4,6 +4,7 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { useAuthStore } from "@/lib/authStoreV2"
+import { Logo } from "@/components/ui/logo"
 
 export function RegisterFormV2() {
   const router = useRouter()
@@ -71,6 +72,9 @@ export function RegisterFormV2() {
     return (
       <div className="w-full max-w-md space-y-8 p-8 bg-zinc-900 border border-zinc-800 rounded-lg shadow-xl">
         <div className="text-center space-y-4">
+          <div className="flex justify-center mb-2">
+            <Logo variant="dark" iconSize={40} className="text-lg" />
+          </div>
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-green-500/10 border border-green-500/20">
             <svg className="h-6 w-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -98,11 +102,14 @@ export function RegisterFormV2() {
 
   return (
     <div className="w-full max-w-md space-y-8 p-8 bg-zinc-900 border border-zinc-800 rounded-lg shadow-xl">
-      <div className="text-center">
-        <h1 className="text-3xl font-bold text-foreground">Create Account</h1>
-        <p className="mt-2 text-sm text-zinc-400">
-          Start automating your LinkedIn outreach
-        </p>
+      <div className="flex flex-col items-center gap-4">
+        <Logo variant="dark" iconSize={40} className="text-lg" />
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-foreground">Create Account</h1>
+          <p className="mt-1 text-sm text-zinc-400">
+            Start automating your LinkedIn outreach
+          </p>
+        </div>
       </div>
 
       <form onSubmit={handleSubmit} className="mt-8 space-y-6">

@@ -1,10 +1,10 @@
 "use client"
 
-import { useState, useEffect, Suspense } from "react"
+import { useState, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Logo } from "@/components/ui/logo"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { CheckCircle2, Loader2 } from "lucide-react"
 
@@ -48,7 +48,6 @@ function ResetPasswordInner() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim() }),
       })
-      // Backend always returns success to prevent enumeration
       setRequestStatus("sent")
     } catch {
       setRequestError("Network error. Please try again.")
@@ -91,81 +90,83 @@ function ResetPasswordInner() {
     }
   }
 
+  const inputClass = "block w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-md text-foreground placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary text-sm"
+  const labelClass = "block text-sm font-medium text-zinc-300"
+  const linkClass = "text-sm font-medium text-primary hover:text-primary/80"
+
   // ── Confirm flow (token present) ──────────────────────────────────────────
 
   if (token) {
     if (confirmStatus === "success") {
       return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-          <Card className="w-full max-w-md">
-            <CardContent className="pt-8 text-center space-y-4">
-              <CheckCircle2 className="h-12 w-12 text-green-600 mx-auto" />
-              <h2 className="text-xl font-semibold">Password updated</h2>
-              <p className="text-sm text-gray-600">Redirecting you to login…</p>
-            </CardContent>
-          </Card>
+        <div className="dark min-h-screen flex items-center justify-center bg-background px-4">
+          <div className="w-full max-w-md p-8 bg-zinc-900 border border-zinc-800 rounded-lg shadow-xl text-center space-y-4">
+            <div className="flex justify-center">
+              <Logo variant="dark" iconSize={40} className="text-lg" />
+            </div>
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-green-500/10 border border-green-500/20">
+              <CheckCircle2 className="h-6 w-6 text-green-400" />
+            </div>
+            <h2 className="text-xl font-semibold text-foreground">Password updated</h2>
+            <p className="text-sm text-zinc-400">Redirecting you to login…</p>
+          </div>
         </div>
       )
     }
 
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <CardTitle className="text-2xl">Set new password</CardTitle>
-            <CardDescription>Enter a new password for your account</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleConfirmSubmit} className="space-y-4">
-              {confirmError && (
-                <Alert variant="destructive">
-                  <AlertDescription>{confirmError}</AlertDescription>
-                </Alert>
-              )}
-              <div className="space-y-1">
-                <label htmlFor="new-password" className="block text-sm font-medium text-gray-700">
-                  New password
-                </label>
-                <input
-                  id="new-password"
-                  type="password"
-                  autoComplete="new-password"
-                  required
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm"
-                  placeholder="••••••••"
-                />
-                <p className="text-xs text-gray-500">8+ characters, uppercase, lowercase, number</p>
-              </div>
-              <div className="space-y-1">
-                <label htmlFor="confirm-password" className="block text-sm font-medium text-gray-700">
-                  Confirm password
-                </label>
-                <input
-                  id="confirm-password"
-                  type="password"
-                  autoComplete="new-password"
-                  required
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm"
-                  placeholder="••••••••"
-                />
-              </div>
-              <Button type="submit" disabled={confirmStatus === "loading"} className="w-full">
-                {confirmStatus === "loading" ? (
-                  <><Loader2 className="h-4 w-4 animate-spin mr-2" />Updating…</>
-                ) : "Update password"}
-              </Button>
-              <div className="text-center text-sm">
-                <Link href="/login" className="text-blue-600 hover:text-blue-500">
-                  Back to login
-                </Link>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
+      <div className="dark min-h-screen flex items-center justify-center bg-background px-4">
+        <div className="w-full max-w-md space-y-6 p-8 bg-zinc-900 border border-zinc-800 rounded-lg shadow-xl">
+          <div className="flex justify-center">
+            <Logo variant="dark" iconSize={40} className="text-lg" />
+          </div>
+          <div className="text-center">
+            <h1 className="text-2xl font-bold text-foreground">Set new password</h1>
+            <p className="mt-1 text-sm text-zinc-400">Enter a new password for your account</p>
+          </div>
+          <form onSubmit={handleConfirmSubmit} className="space-y-4">
+            {confirmError && (
+              <Alert variant="destructive">
+                <AlertDescription>{confirmError}</AlertDescription>
+              </Alert>
+            )}
+            <div className="space-y-1">
+              <label htmlFor="new-password" className={labelClass}>New password</label>
+              <input
+                id="new-password"
+                type="password"
+                autoComplete="new-password"
+                required
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className={inputClass}
+                placeholder="••••••••"
+              />
+              <p className="text-xs text-zinc-500">8+ characters, uppercase, lowercase, number</p>
+            </div>
+            <div className="space-y-1">
+              <label htmlFor="confirm-password" className={labelClass}>Confirm password</label>
+              <input
+                id="confirm-password"
+                type="password"
+                autoComplete="new-password"
+                required
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className={inputClass}
+                placeholder="••••••••"
+              />
+            </div>
+            <Button type="submit" disabled={confirmStatus === "loading"} className="w-full">
+              {confirmStatus === "loading" ? (
+                <><Loader2 className="h-4 w-4 animate-spin mr-2" />Updating…</>
+              ) : "Update password"}
+            </Button>
+            <div className="text-center">
+              <Link href="/login" className={linkClass}>Back to login</Link>
+            </div>
+          </form>
+        </div>
       </div>
     )
   }
@@ -174,70 +175,68 @@ function ResetPasswordInner() {
 
   if (requestStatus === "sent") {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-        <Card className="w-full max-w-md">
-          <CardContent className="pt-8 text-center space-y-4">
-            <CheckCircle2 className="h-12 w-12 text-green-600 mx-auto" />
-            <h2 className="text-xl font-semibold">Check your email</h2>
-            <p className="text-sm text-gray-600">
-              If an account exists for <strong>{email}</strong>, a reset link has been sent.
-            </p>
-            <p className="text-sm text-gray-600">The link expires in 24 hours.</p>
-            <div className="pt-2">
-              <Link href="/login" className="text-sm font-medium text-blue-600 hover:text-blue-500">
-                Back to login
-              </Link>
-            </div>
-          </CardContent>
-        </Card>
+      <div className="dark min-h-screen flex items-center justify-center bg-background px-4">
+        <div className="w-full max-w-md p-8 bg-zinc-900 border border-zinc-800 rounded-lg shadow-xl text-center space-y-4">
+          <div className="flex justify-center">
+            <Logo variant="dark" iconSize={40} className="text-lg" />
+          </div>
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-green-500/10 border border-green-500/20">
+            <CheckCircle2 className="h-6 w-6 text-green-400" />
+          </div>
+          <h2 className="text-xl font-semibold text-foreground">Check your email</h2>
+          <p className="text-sm text-zinc-400">
+            If an account exists for <strong className="text-foreground">{email}</strong>, a reset link has been sent.
+          </p>
+          <p className="text-sm text-zinc-400">The link expires in 24 hours.</p>
+          <div className="pt-2">
+            <Link href="/login" className={linkClass}>Back to login</Link>
+          </div>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl">Reset your password</CardTitle>
-          <CardDescription>
+    <div className="dark min-h-screen flex items-center justify-center bg-background px-4">
+      <div className="w-full max-w-md space-y-6 p-8 bg-zinc-900 border border-zinc-800 rounded-lg shadow-xl">
+        <div className="flex justify-center">
+          <Logo variant="dark" iconSize={40} className="text-lg" />
+        </div>
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-foreground">Reset your password</h1>
+          <p className="mt-1 text-sm text-zinc-400">
             Enter your email and we&apos;ll send a reset link
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleRequestSubmit} className="space-y-4">
-            {requestError && (
-              <Alert variant="destructive">
-                <AlertDescription>{requestError}</AlertDescription>
-              </Alert>
-            )}
-            <div className="space-y-1">
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                Email address
-              </label>
-              <input
-                id="email"
-                type="email"
-                autoComplete="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm"
-                placeholder="you@example.com"
-              />
-            </div>
-            <Button type="submit" disabled={requestStatus === "loading"} className="w-full">
-              {requestStatus === "loading" ? (
-                <><Loader2 className="h-4 w-4 animate-spin mr-2" />Sending…</>
-              ) : "Send reset link"}
-            </Button>
-            <div className="text-center text-sm">
-              <Link href="/login" className="text-blue-600 hover:text-blue-500">
-                Back to login
-              </Link>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
+          </p>
+        </div>
+        <form onSubmit={handleRequestSubmit} className="space-y-4">
+          {requestError && (
+            <Alert variant="destructive">
+              <AlertDescription>{requestError}</AlertDescription>
+            </Alert>
+          )}
+          <div className="space-y-1">
+            <label htmlFor="email" className={labelClass}>Email address</label>
+            <input
+              id="email"
+              type="email"
+              autoComplete="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className={inputClass}
+              placeholder="you@example.com"
+            />
+          </div>
+          <Button type="submit" disabled={requestStatus === "loading"} className="w-full">
+            {requestStatus === "loading" ? (
+              <><Loader2 className="h-4 w-4 animate-spin mr-2" />Sending…</>
+            ) : "Send reset link"}
+          </Button>
+          <div className="text-center">
+            <Link href="/login" className={linkClass}>Back to login</Link>
+          </div>
+        </form>
+      </div>
     </div>
   )
 }
@@ -245,8 +244,8 @@ function ResetPasswordInner() {
 export default function ResetPasswordPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+      <div className="dark min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     }>
       <ResetPasswordInner />
