@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useAuth } from "@/app/auth-provider";
+import { useAuthStore } from "@/lib/authStoreV2";
 
 export interface ProfileDaemonStatus {
   id: string;
@@ -21,22 +21,21 @@ export interface DaemonStatusResponse {
  * Polls /api/desktop-daemon/status every 30 seconds
  */
 export function useDesktopDaemonStatus() {
-  const { getAccessToken } = useAuth();
+  const accessToken = useAuthStore((s) => s.accessToken);
   const [status, setStatus] = useState<DaemonStatusResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchStatus = async () => {
     try {
-      const token = await getAccessToken();
-      if (!token) {
+      if (!accessToken) {
         setError("Not authenticated");
         return;
       }
 
       const response = await fetch("/api/desktop-daemon/status", {
         headers: {
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${accessToken}`,
         },
       });
 
@@ -55,14 +54,14 @@ export function useDesktopDaemonStatus() {
   };
 
   useEffect(() => {
-    // Initial fetch
+    if (!accessToken) return;
+
     fetchStatus();
 
-    // Poll every 30 seconds
     const interval = setInterval(fetchStatus, 30000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [accessToken]);
 
   const getProfileStatus = (profileId: string): ProfileDaemonStatus | null => {
     if (!status) return null;
