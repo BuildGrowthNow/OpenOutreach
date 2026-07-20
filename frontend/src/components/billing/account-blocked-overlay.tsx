@@ -53,8 +53,8 @@ export function AccountBlockedOverlay({
             <div className="space-y-3">
               <p className="text-sm text-muted-foreground">
                 For assistance, please contact our support team at{" "}
-                <a href="mailto:support@openoutreach.ai" className="font-medium text-blue-600 hover:underline">
-                  support@openoutreach.ai
+                <a href="mailto:support@lengrowth.com" className="font-medium text-blue-600 hover:underline">
+                  support@lengrowth.com
                 </a>
               </p>
             </div>

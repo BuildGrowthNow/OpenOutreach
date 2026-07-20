@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, ArrowRight, Sparkles } from 'lucide-react';
-import { useAuthStore } from '@/lib/authStore';
+import { useAuthStore } from '@/lib/authStoreV2';
 
 interface CreateCampaignWizardProps {
   onSuccess?: (campaignId: string) => void;
@@ -17,7 +17,7 @@ interface CreateCampaignWizardProps {
 
 export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWizardProps) {
   const router = useRouter();
-  const session = useAuthStore((state) => state.session);
+  const accessToken = useAuthStore((state) => state.accessToken);
 
   const [name, setName] = useState('');
   const [productPitch, setProductPitch] = useState('');
@@ -53,7 +53,7 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${session?.access_token}`,
+          Authorization: `Bearer ${accessToken}`,
         },
         body: JSON.stringify({
           name: name.trim(),

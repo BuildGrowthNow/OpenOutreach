@@ -40,7 +40,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/billing", tags=["billing"])
 
-PLAN_HIERARCHY = ["starter", "pro", "business", "agency"]  # lifetime equals pro in hierarchy
+PLAN_HIERARCHY = ["starter", "pro", "business", "agency", "cloud"]  # lifetime equals pro in hierarchy
 
 
 def _is_plan_upgrade(current_plan: str, new_plan: str) -> bool:
@@ -224,9 +224,10 @@ async def get_current_usage(
             })
 
         if campaigns_coll is not None:
+            # Count active (non-paused) campaigns — must match PlanEnforcer.can_create_campaign
             campaigns_used = campaigns_coll.count_documents({
                 "user_id": user_id,
-                "archived": {"$ne": True},
+                "is_paused": False,
             })
 
         return {

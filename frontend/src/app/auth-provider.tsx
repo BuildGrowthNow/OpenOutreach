@@ -1,19 +1,17 @@
 /**
- * Authentication Provider - Supabase Integration
- * 
- * This provider manages authentication state using Supabase as the canonical identity provider.
- * It handles:
- * - Session initialization on app load
- * - Route protection and redirects
- * - Periodic token refresh
+ * Authentication Provider
+ *
+ * Exposes auth context (user, login, logout) consumed by the Header.
+ * Route protection and redirects are handled here; initialization is
+ * done by AuthProviderV2 in the root layout.
  */
 
 "use client"
 
 import { createContext, useContext, useEffect, Suspense } from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
-import { useAuthStore } from "@/lib/authStore"
-import type { User } from "@supabase/supabase-js"
+import { useAuthStore } from "@/lib/authStoreV2"
+import type { User } from "@/lib/authStoreV2"
 
 interface AuthContextType {
   isAuthenticated: boolean
@@ -21,28 +19,20 @@ interface AuthContextType {
   user: User | null
   login: (email: string, password: string) => Promise<{ error: string | null }>
   logout: () => Promise<void>
-  signup: (email: string, password: string, fullName: string) => Promise<{ error: string | null; user?: User }>
-  resetPassword: (email: string) => Promise<{ error: string | null }>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 const AuthProviderImpl = ({ children }: { children: React.ReactNode }) => {
-  const { 
-    isLoading, 
-    user, 
-    initialize: initializeAuth,
+  const {
+    isLoading,
+    user,
     logout: storeLogout,
   } = useAuthStore()
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const callbackUrl = searchParams.get("callbackUrl") || "/dashboard"
-
-  // Initialize auth state on component mount
-  useEffect(() => {
-    initializeAuth()
-  }, [initializeAuth])
 
   // Redirect to login if not authenticated (but allow auth pages to pass through)
   useEffect(() => {
@@ -67,24 +57,6 @@ const AuthProviderImpl = ({ children }: { children: React.ReactNode }) => {
       router.push(callbackUrl)
     }
   }, [user, isLoading, pathname, searchParams, router, callbackUrl])
-
-  // Check for email verification token in URL (Sent from Supabase)
-  useEffect(() => {
-    const type = searchParams.get("type")
-    const token = searchParams.get("token")
-    
-    if (type === "email" && token) {
-      // Handle email verification
-      useAuthStore.getState().verifyEmail(token).then(({ error }) => {
-        if (error) {
-          console.error("Email verification failed:", error)
-          router.push(`/login?error=verification_failed`)
-        } else {
-          router.push(`/login?success=email_verified`)
-        }
-      })
-    }
-  }, [searchParams, router])
 
   const login = async (email: string, password: string) => {
     try {
@@ -111,24 +83,6 @@ const AuthProviderImpl = ({ children }: { children: React.ReactNode }) => {
     }
   }
 
-  const signup = async (email: string, password: string, fullName: string) => {
-    try {
-      return await useAuthStore.getState().signup(email, password, fullName)
-    } catch (error) {
-      console.error("Signup error:", error)
-      return { error: "An unexpected error occurred" }
-    }
-  }
-
-  const resetPassword = async (email: string) => {
-    try {
-      return await useAuthStore.getState().resetPassword(email)
-    } catch (error) {
-      console.error("Reset password error:", error)
-      return { error: "An unexpected error occurred" }
-    }
-  }
-
   // For public pages (landing page), render immediately without waiting for auth
   const publicPages = ["/"]
   const authPages = ["/login", "/signup", "/reset-password", "/verify-email"]
@@ -148,7 +102,7 @@ const AuthProviderImpl = ({ children }: { children: React.ReactNode }) => {
   }
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated: !!user, isLoading, user, login, logout, signup, resetPassword }}>
+    <AuthContext.Provider value={{ isAuthenticated: !!user, isLoading, user, login, logout }}>
       {children}
     </AuthContext.Provider>
   )

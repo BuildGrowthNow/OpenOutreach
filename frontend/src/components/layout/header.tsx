@@ -16,7 +16,6 @@ import { useAuth } from '@/app/auth-provider'
 import { useRouter } from 'next/navigation'
 import { Badge } from '@/components/ui/badge'
 import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase/client'
 import { getLinkedInProfileHealth } from '@/lib/api/dashboard'
 import { LinkedInProfileHealthResponse } from '@/lib/types/components'
 import { AlertCircle } from 'lucide-react'
@@ -29,11 +28,10 @@ interface HeaderProps {
 }
 
 const Header = ({ onMenuClick, className }: HeaderProps) => {
-  const { isAuthenticated, user } = useAuth()
+  const { isAuthenticated, user, logout } = useAuth()
   const router = useRouter()
-  
-  // Get user's display name from Supabase user_metadata or derive from email
-  const userName = user?.user_metadata?.full_name || (user?.email ? user.email.split('@')[0] : 'User')
+
+  const userName = user?.full_name || (user?.email ? user.email.split('@')[0] : 'User')
   const userEmail = user?.email || 'user@example.com'
   const [linkedinHealth, setLinkedinHealth] = useState<LinkedInProfileHealthResponse | null>(null)
   const [loadingHealth, setLoadingHealth] = useState(true)
@@ -410,12 +408,10 @@ const Header = ({ onMenuClick, className }: HeaderProps) => {
               <DropdownMenuSeparator className="bg-zinc-200/20 my-2" />
              <DropdownMenuItem className="gap-2 rounded-md px-2 py-1.5 transition-colors cursor-pointer" onClick={async () => {
                try {
-                 await supabase.auth.signOut()
-                 window.location.href = '/'
+                 await logout()
                } catch (error) {
                  console.error('Logout error:', error)
-                 // Still redirect to home even if signOut fails
-                 window.location.href = '/'
+                 window.location.href = '/login'
                }
              }}>
                <LogOut className="h-4 w-4" />

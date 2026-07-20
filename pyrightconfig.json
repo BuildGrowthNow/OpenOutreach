@@ -1,5 +1,6 @@
 {
   "include": ["openoutreach"],
+  "exclude": ["openoutreach/desktop"],
   "venvPath": ".",
   "venv": ".venv",
   "pythonVersion": "3.11",

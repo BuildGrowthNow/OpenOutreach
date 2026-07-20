@@ -7,13 +7,13 @@ import { formatDistanceToNow } from 'date-fns'
 import { cn } from '@/lib/utils'
 
 interface HealthStatusProps {
-  status: 'healthy' | 'degraded' | 'unhealthy'
+  status: 'healthy' | 'degraded' | 'unhealthy' | 'unknown'
   services: {
     database: {
       status: 'connected' | 'disconnected' | 'degraded'
       latency_ms: number
     }
-    cache: {
+    cache?: {
       status: 'connected' | 'disconnected' | 'degraded'
       latency_ms: number
     }
@@ -76,24 +76,26 @@ const HealthStatus = ({
             </div>
           </div>
 
-          <div className="space-y-1">
-            <div className="flex items-center gap-2 text-sm font-medium">
-              <Icons.Server className="h-4 w-4 text-muted-foreground" />
-              <span>Cache</span>
+          {services.cache && (
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <Icons.Server className="h-4 w-4 text-muted-foreground" />
+                <span>Cache</span>
+              </div>
+              <Badge
+                variant="outline"
+                className={cn(
+                  'text-xs mt-1',
+                  serviceStatusColors[services.cache.status] || serviceStatusColors.unknown
+                )}
+              >
+                {services.cache.status}
+              </Badge>
+              <div className="text-xs text-muted-foreground mt-1">
+                Latency: {services.cache.latency_ms}ms
+              </div>
             </div>
-            <Badge
-              variant="outline"
-              className={cn(
-                'text-xs mt-1',
-                serviceStatusColors[services.cache.status] || serviceStatusColors.unknown
-              )}
-            >
-              {services.cache.status}
-            </Badge>
-            <div className="text-xs text-muted-foreground mt-1">
-              Latency: {services.cache.latency_ms}ms
-            </div>
-          </div>
+          )}
         </div>
 
         {lastCheck && (

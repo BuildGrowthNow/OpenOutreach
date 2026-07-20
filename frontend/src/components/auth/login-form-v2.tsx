@@ -1,12 +1,13 @@
 "use client"
 
 import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { useAuthStore } from "@/lib/authStoreV2"
 
 export function LoginFormV2() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { login, isLoading, error, clearError } = useAuthStore()
 
   const [email, setEmail] = useState("")
@@ -30,26 +31,37 @@ export function LoginFormV2() {
     if (result.error) {
       setLocalError(result.error)
     } else {
-      // Success - redirect to dashboard
-      router.push("/dashboard")
+      const returnUrl = searchParams.get("returnUrl") || "/dashboard"
+      router.push(returnUrl)
     }
   }
 
   const displayError = localError || error
+  const isUnverifiedError = displayError?.toLowerCase().includes("verify your email")
 
   return (
     <div className="w-full max-w-md space-y-8 p-8 bg-white rounded-lg shadow-lg">
       <div className="text-center">
         <h1 className="text-3xl font-bold text-gray-900">Welcome Back</h1>
         <p className="mt-2 text-sm text-gray-600">
-          Sign in to your OpenOutreach account
+          Sign in to your Lengrowth account
         </p>
       </div>
 
       <form onSubmit={handleSubmit} className="mt-8 space-y-6">
         {displayError && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-            {displayError}
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded text-sm">
+            <p>{displayError}</p>
+            {isUnverifiedError && (
+              <p className="mt-2">
+                <a
+                  href={`/verify-email?email=${encodeURIComponent(email)}`}
+                  className="underline font-medium hover:text-red-800"
+                >
+                  Resend verification email
+                </a>
+              </p>
+            )}
           </div>
         )}
 

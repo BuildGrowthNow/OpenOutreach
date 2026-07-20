@@ -27,7 +27,7 @@ import {
 import { PlanCard } from "@/components/billing/plan-card";
 import { PlanComparison } from "@/components/billing/plan-comparison";
 
-const PLAN_HIERARCHY = ["starter", "pro", "business", "agency", "lifetime"];
+const PLAN_HIERARCHY = ["starter", "pro", "business", "agency", "cloud", "lifetime"];
 
 function PlanPageLoadingSkeleton() {
   return (

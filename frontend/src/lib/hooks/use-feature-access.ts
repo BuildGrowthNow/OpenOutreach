@@ -18,7 +18,7 @@ export function useFeatureAccess(featureName: string): { hasAccess: boolean; req
     custom_domain: "agency",
   };
 
-  const planHierarchy = ["starter", "pro", "business", "agency"];
+  const planHierarchy = ["starter", "pro", "business", "agency", "cloud"];
   const requiredPlan = featureMap[featureName];
 
   if (!requiredPlan) {

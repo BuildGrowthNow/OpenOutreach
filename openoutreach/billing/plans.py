@@ -24,7 +24,7 @@ PLANS: list[PlanDefinition] = [
         "annual_price": 19200,
         "max_linkedin_accounts": 1,
         "max_campaigns": 3,
-        "features": ["ai_messages", "follow_ups", "inbox", "analytics"],
+        "features": ["ai_messages", "follow_ups", "inbox", "analytics", "cloud_execution"],
     },
     {
         "name": "pro",
@@ -42,6 +42,7 @@ PLANS: list[PlanDefinition] = [
             "ai_follow_ups",
             "sales_navigator",
             "api_access",
+            "cloud_execution",
         ],
     },
     {
@@ -63,6 +64,7 @@ PLANS: list[PlanDefinition] = [
             "team_members",
             "workspace_management",
             "priority_support",
+            "cloud_execution",
         ],
     },
     {
@@ -86,6 +88,28 @@ PLANS: list[PlanDefinition] = [
             "priority_support",
             "white_label",
             "custom_domain",
+            "cloud_execution",
+        ],
+    },
+    {
+        "name": "cloud",
+        "display_name": "Cloud",
+        "monthly_price": 29900,
+        "annual_price": 0,
+        "max_linkedin_accounts": 1,
+        "max_campaigns": None,
+        "features": [
+            "ai_messages",
+            "follow_ups",
+            "inbox",
+            "analytics",
+            "voice_notes",
+            "ai_follow_ups",
+            "sales_navigator",
+            "api_access",
+            "cloud_execution",
+            "priority_support",
+            "campaign_management",
         ],
     },
     {
@@ -127,8 +151,8 @@ def get_plan(plan_name: str) -> PlanDefinition | None:
 
 
 def get_all_plans() -> list[PlanDefinition]:
-    """Get all plans (excluding internal ones like cloud_addon)."""
-    return [p for p in PLANS if p["name"] not in ("cloud_addon", "lifetime")]
+    """Get all plans (excluding internal ones like cloud_addon and cloud)."""
+    return [p for p in PLANS if p["name"] not in ("cloud_addon", "cloud", "lifetime")]
 
 
 def get_plan_by_display_name(display_name: str) -> PlanDefinition | None:

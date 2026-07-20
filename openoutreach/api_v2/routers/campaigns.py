@@ -580,7 +580,11 @@ async def resume_campaign(
 
     Helper endpoint that sets status="active" and is_paused=False.
     Multi-tenant: verifies user has access (owner OR team member).
+    Enforces plan campaign limit — resuming counts the same as creating.
     """
+    from openoutreach.mongodb.models_user import User
+    from openoutreach.billing.enforcement import PlanEnforcer
+
     collection = get_mongodb_collection("campaigns")
     if collection is None:
         raise HTTPException(
@@ -602,6 +606,21 @@ async def resume_campaign(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied"
             )
+
+        # Only check limit when campaign is currently paused/draft (would add to active count)
+        if campaign.is_paused:
+            user = User.get(user_id)
+            if not user:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="User not found"
+                )
+            can_resume, error_msg = PlanEnforcer.can_create_campaign(user)
+            if not can_resume:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=error_msg or "Cannot resume campaign - active campaign limit reached"
+                )
 
         # Update to active
         collection.update_one(

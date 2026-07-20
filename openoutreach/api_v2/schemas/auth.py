@@ -91,3 +91,7 @@ class AccountStatusResponse(BaseModel):
     status: str = Field(..., description="Account status")
     subscription_status: str = Field(..., description="Subscription status")
     message: str = Field(..., description="Status message")
+
+
+class EmailVerifyRequest(BaseModel):
+    token: str = Field(..., description="Email verification token")

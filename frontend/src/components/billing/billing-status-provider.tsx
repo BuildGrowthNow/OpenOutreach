@@ -77,7 +77,7 @@ export function BillingStatusProvider({
             )}
 
             {/* Approaching Limits Banners - Contextual */}
-            {billingStatus && linkedInAccountsUsed >= billingStatus.linkedin_account_limit * 0.8 && (
+            {billingStatus && (
               <ApproachingLimitBanner
                 resourceType="linkedin_accounts"
                 used={linkedInAccountsUsed}
@@ -86,7 +86,7 @@ export function BillingStatusProvider({
               />
             )}
 
-            {billingStatus && billingStatus.campaign_limit && campaignsUsed >= billingStatus.campaign_limit * 0.8 && (
+            {billingStatus && billingStatus.campaign_limit && (
               <ApproachingLimitBanner
                 resourceType="campaigns"
                 used={campaignsUsed}

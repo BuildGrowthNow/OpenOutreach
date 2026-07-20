@@ -43,6 +43,8 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
 import { Separator } from "@/components/ui/separator";
+import { PlanLimitButton } from "@/components/billing/plan-limit-button";
+import { useUpgradeToast } from "@/lib/hooks/use-upgrade-toast";
 import {
   Plus,
   RefreshCw,
@@ -104,6 +106,7 @@ export function LinkedInConnectionTab({
     useState<LinkedInCredentials | null>(null);
 
   const { toast } = useToast();
+  const handleUpgradeError = useUpgradeToast();
 
   // Check if desktop daemon is actively running
   const isDesktopDaemonActive = (): boolean => {
@@ -235,12 +238,14 @@ export function LinkedInConnectionTab({
         });
       }
     } catch (err) {
-      toast({
-        title: "Error",
-        description:
-          err instanceof Error ? err.message : "An unexpected error occurred",
-        variant: "destructive",
-      });
+      if (!handleUpgradeError(err)) {
+        toast({
+          title: "Error",
+          description:
+            err instanceof Error ? err.message : "An unexpected error occurred",
+          variant: "destructive",
+        });
+      }
     }
   };
 
@@ -540,13 +545,14 @@ export function LinkedInConnectionTab({
               automatic rotation alerts.
             </p>
             <div className="flex items-center gap-2">
-              <Button
+              <PlanLimitButton
+                resource="linkedin_accounts"
                 variant="outline"
                 onClick={() => setIsAddDialogOpen(true)}
               >
                 <Plus className="h-4 w-4 mr-2" />
                 Add Credential
-              </Button>
+              </PlanLimitButton>
               <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
                 <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto border border-zinc-800 bg-zinc-950 text-zinc-100 shadow-2xl">
                   <DialogHeader className="border-b border-zinc-800/80 pb-4">
@@ -586,13 +592,14 @@ export function LinkedInConnectionTab({
                 Add your first LinkedIn account to start managing campaigns.
                 Your credentials are securely encrypted and never shared.
               </p>
-              <Button
+              <PlanLimitButton
+                resource="linkedin_accounts"
                 variant="outline"
                 onClick={() => setIsAddDialogOpen(true)}
               >
                 <Plus className="h-4 w-4 mr-2" />
                 Add Your First Credential
-              </Button>
+              </PlanLimitButton>
               <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
                 <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto border border-zinc-800 bg-zinc-950 text-zinc-100 shadow-2xl">
                   <DialogHeader className="border-b border-zinc-800/80 pb-4">

@@ -941,3 +941,8 @@
 .content-with-bottom-banner {
   margin-bottom: 250px !important;
 }
+
+/* Safe area for mobile bottom CTA (iPhone home indicator) */
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0.5rem);
+}

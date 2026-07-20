@@ -12,10 +12,11 @@ def parse_auth_callback(url: str) -> Optional[dict]:
     """Parse openoutreach://auth callback URL.
 
     Args:
-        url: URL like "openoutreach://auth?token=xxx&profile_id=yyy"
+        url: URL like "openoutreach://auth?token=xxx" or with optional
+             "&refresh_token=yyy&profile_id=zzz"
 
     Returns:
-        Dict with token and profile_id, or None if invalid
+        Dict with at least token, or None if invalid
     """
     try:
         parsed = urllib.parse.urlparse(url)
@@ -24,12 +25,15 @@ def parse_auth_callback(url: str) -> Optional[dict]:
 
         params = urllib.parse.parse_qs(parsed.query)
         token = params.get("token", [None])[0]
-        profile_id = params.get("profile_id", [None])[0]
 
-        if not token or not profile_id:
+        if not token:
             return None
 
-        return {"token": token, "profile_id": profile_id}
+        return {
+            "token": token,
+            "refresh_token": params.get("refresh_token", [None])[0],
+            "profile_id": params.get("profile_id", [None])[0],
+        }
 
     except Exception as e:
         logger.error("Failed to parse auth callback: %s", e)
@@ -87,7 +91,11 @@ def handle_protocol_url(url: str, auth_manager) -> bool:
         return False
 
     try:
-        auth_manager.login(creds["token"], creds["profile_id"])
+        auth_manager.login(
+            creds["token"],
+            creds.get("profile_id") or "",
+            refresh_token=creds.get("refresh_token"),
+        )
         logger.info("Login successful via protocol callback")
         return True
     except Exception as e:

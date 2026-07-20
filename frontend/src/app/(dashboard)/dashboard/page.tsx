@@ -243,7 +243,7 @@ const Dashboard = () => {
                 <LayoutDashboard className="h-8 w-8" />
                 <span className="text-sm font-medium">Campaign Stats</span>
               </Button>
-              <Button variant="outline" className="flex flex-col gap-2 h-auto  py-4" onClick={() => router.push('/dashboard/health')}>
+              <Button variant="outline" className="flex flex-col gap-2 h-auto  py-4" onClick={() => router.push('/health')}>
                 <Activity className="h-8 w-8" />
                 <span className="text-sm font-medium">View Health</span>
               </Button>

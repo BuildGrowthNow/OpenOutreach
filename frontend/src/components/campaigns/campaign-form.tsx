@@ -35,12 +35,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Icons } from "@/lib/types/components";
-import { Campaign, CampaignTemplate } from "@/lib/types/components";
+import { Campaign } from "@/lib/types/components";
 import type { LinkedInSetupStatus } from "@/lib/api/dashboard";
-import {
-  getLinkedInSetupStatus,
-  getCampaignTemplates,
-} from "@/lib/api/dashboard";
+import { getLinkedInSetupStatus } from "@/lib/api/dashboard";
 import {
   zincDialogContentClassName,
   zincDialogFooterClassName,
@@ -129,11 +126,6 @@ export function CampaignForm({
   const [linkedinSetupStatus, setLinkedinSetupStatus] =
     useState<LinkedInSetupStatus | null>(null);
   const [checkingLinkedin, setCheckingLinkedin] = useState(false);
-  const [templates, setTemplates] = useState<CampaignTemplate[]>([]);
-  const [templateLoading, setTemplateLoading] = useState(false);
-  const [selectedTemplate, setSelectedTemplate] =
-    useState<CampaignTemplate | null>(null);
-  const [showTemplateList, setShowTemplateList] = useState(!isEditing);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -173,43 +165,6 @@ export function CampaignForm({
       setCheckingLinkedin(false);
     }
   }, [open, isEditing, campaign]);
-
-  useEffect(() => {
-    if (!isEditing && !campaign && !templates.length) {
-      void (async () => {
-        try {
-          setTemplateLoading(true);
-          const response = await getCampaignTemplates();
-          if (response.data && response.data.data) {
-            setTemplates(response.data.data);
-          }
-        } catch (err) {
-          console.error("Error fetching templates:", err);
-        } finally {
-          setTemplateLoading(false);
-        }
-      })();
-    }
-  }, [isEditing, campaign, templates.length]);
-
-  useEffect(() => {
-    if (selectedTemplate && !campaign) {
-      form.reset({
-        name: selectedTemplate.name,
-        description: selectedTemplate.description || undefined,
-        productPitch: selectedTemplate.product_pitch || undefined,
-        campaignObjective: selectedTemplate.campaign_objective || undefined,
-        bookingLink: selectedTemplate.booking_link || undefined,
-        searchKeywords: formatSearchKeywords(selectedTemplate.search_keywords),
-        icpTitles: formatIcpTitles(selectedTemplate.icp_titles),
-        followUpStrategy: selectedTemplate.follow_up_strategy || undefined,
-        velocity: selectedTemplate.velocity,
-        cooldownMinutes: selectedTemplate.cooldown_minutes,
-        status: "draft",
-        isFreemium: false,
-      });
-    }
-  }, [selectedTemplate, campaign, form]);
 
   useEffect(() => {
     if (campaign) {
@@ -378,12 +333,6 @@ export function CampaignForm({
                   value="settings"
                 >
                   Settings
-                </TabsTrigger>
-                <TabsTrigger
-                  className={zincTabsTriggerClassName}
-                  value="templates"
-                >
-                  Templates
                 </TabsTrigger>
               </TabsList>
 
@@ -716,110 +665,6 @@ export function CampaignForm({
 
                 </TabsContent>
 
-                <TabsContent
-                  value="templates"
-                  className={`${zincSectionClassName} space-y-4`}
-                >
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-1">
-                        <h4 className="font-medium text-zinc-100">
-                          Use Template
-                        </h4>
-                        <p className="text-sm text-zinc-400">
-                          Select a campaign template to clone its configuration
-                        </p>
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="border-zinc-800 bg-zinc-900 text-zinc-100 hover:bg-zinc-800"
-                        onClick={() => setShowTemplateList(!showTemplateList)}
-                      >
-                        Browse Templates
-                      </Button>
-                    </div>
-
-                    {showTemplateList && (
-                      <div className="rounded-xl border border-dashed border-zinc-800 bg-zinc-950/40 p-6">
-                        {templateLoading ? (
-                          <div className="py-4 text-center">
-                            <Icons.RefreshCw className="mx-auto h-8 w-8 animate-spin text-zinc-400" />
-                            <p className="mt-2 text-sm text-zinc-400">
-                              Loading templates...
-                            </p>
-                          </div>
-                        ) : templates.length === 0 ? (
-                          <div className="py-6 text-center">
-                            <p className="text-sm text-zinc-400">
-                              No templates found
-                            </p>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="mt-2 border-zinc-800 bg-zinc-900 text-zinc-100 hover:bg-zinc-800"
-                              onClick={() =>
-                                router.push("/campaigns/templates")
-                              }
-                            >
-                              Create Template
-                            </Button>
-                          </div>
-                        ) : (
-                          <div className="space-y-2 max-h-60 overflow-y-auto">
-                            {templates.map((template) => (
-                              <div
-                                key={template.id}
-                                className={`flex cursor-pointer items-center justify-between rounded-xl border p-3 transition-colors ${
-                                  selectedTemplate?.id === template.id
-                                    ? "border-zinc-600 bg-zinc-900"
-                                    : "border-zinc-800 bg-zinc-950/60 hover:bg-zinc-900/70"
-                                }`}
-                                onClick={() => setSelectedTemplate(template)}
-                              >
-                                <div className="space-y-1">
-                                  <div className="font-medium text-zinc-100">
-                                    {template.name}
-                                  </div>
-                                  <div className="line-clamp-1 text-xs text-zinc-400">
-                                    {template.description || "No description"}
-                                  </div>
-                                </div>
-                                {selectedTemplate?.id === template.id && (
-                                  <Icons.CheckCircle className="h-5 w-5 text-zinc-100" />
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {selectedTemplate && (
-                      <div className="rounded-xl border border-zinc-700 bg-zinc-900/70 p-4">
-                        <div className="flex items-center justify-between">
-                          <div className="space-y-1">
-                            <p className="text-sm font-medium text-zinc-100">
-                              Template Selected: {selectedTemplate.name}
-                            </p>
-                            <p className="text-xs text-zinc-400">
-                              Click &quot;Create Campaign&quot; to apply template
-                              settings
-                            </p>
-                          </div>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"
-                            onClick={() => setSelectedTemplate(null)}
-                          >
-                            Remove
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </TabsContent>
               </div>
             </Tabs>
 

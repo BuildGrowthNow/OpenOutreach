@@ -43,10 +43,13 @@ def get_trial_duration_days() -> int:
 
 
 def is_lifetime_deal_active() -> bool:
-    """Check if lifetime deal is still active."""
+    """Check if lifetime deal is still active (enabled, within window, and under buyer cap)."""
     config = get_site_config()
 
     if not config.lifetime_deal_enabled:
+        return False
+
+    if config.lifetime_deal_buyer_count >= config.lifetime_deal_max_buyers:
         return False
 
     if config.lifetime_deal_ends_at is None:
@@ -58,6 +61,27 @@ def is_lifetime_deal_active() -> bool:
         ends_at = config.lifetime_deal_ends_at
 
     return datetime.now(tz.utc) < ends_at
+
+
+def increment_lifetime_buyer_count() -> int:
+    """Atomically increment lifetime deal buyer count. Returns new count."""
+    collection_name = "site_config"
+    from openoutreach.mongodb.connection import get_mongodb_collection
+    collection = get_mongodb_collection(collection_name)
+    if collection is None:
+        logger.error("MongoDB collection 'site_config' not available for buyer count increment")
+        return 0
+
+    result = collection.find_one_and_update(
+        {"_id": "site_config"},
+        {"$inc": {"lifetime_deal_buyer_count": 1}},
+        return_document=True,
+        upsert=False,
+    )
+    invalidate_config_cache()
+    count = result.get("lifetime_deal_buyer_count", 0) if result else 0
+    logger.info(f"Lifetime deal buyer count incremented to {count}")
+    return count
 
 
 def load_from_env() -> None:

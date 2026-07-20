@@ -24,6 +24,7 @@ interface AuthState {
   error: string | null
   user: User | null
   accessToken: string | null
+  refreshTokenValue: string | null
 
   // Actions
   initialize: () => Promise<void>
@@ -33,6 +34,8 @@ interface AuthState {
   refreshToken: () => Promise<boolean>
   clearError: () => void
   updateUser: (user: User) => void
+  resetPassword: (email: string) => Promise<{ error: string | null }>
+  resendVerification: (email: string) => Promise<{ error: string | null }>
 }
 
 // API base URL
@@ -45,6 +48,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   error: null,
   user: null,
   accessToken: null,
+  refreshTokenValue: null,
 
   /**
    * Initialize auth state - fetch current user if token exists
@@ -53,52 +57,32 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       set({ isLoading: true, error: null })
 
-      // Try to get current user (will use refresh token cookie if access token expired)
+      // Step 1: try to get a fresh access token via the refresh cookie
+      const refreshed = await get().refreshToken()
+      if (!refreshed) {
+        set({ isAuthenticated: false, user: null, accessToken: null, isLoading: false, error: null })
+        return
+      }
+
+      // Step 2: fetch user with the newly-obtained access token
+      const accessToken = get().accessToken
       const response = await fetch(`${API_BASE}/auth/me/`, {
-        credentials: 'include', // Send cookies
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
+          ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {}),
         },
       })
 
       if (response.ok) {
         const user = await response.json()
-
-        // Get token from Authorization header if returned
-        const token = response.headers.get('Authorization')?.replace('Bearer ', '')
-
-        set({
-          isAuthenticated: true,
-          user,
-          accessToken: token || null,
-          isLoading: false,
-          error: null,
-        })
+        set({ isAuthenticated: true, user, isLoading: false, error: null })
       } else {
-        // Not authenticated - try refresh
-        const refreshed = await get().refreshToken()
-        if (refreshed) {
-          // Retry getting user
-          await get().initialize()
-        } else {
-          set({
-            isAuthenticated: false,
-            user: null,
-            accessToken: null,
-            isLoading: false,
-            error: null,
-          })
-        }
+        set({ isAuthenticated: false, user: null, accessToken: null, isLoading: false, error: null })
       }
     } catch (error) {
       console.error('Initialize error:', error)
-      set({
-        isLoading: false,
-        isAuthenticated: false,
-        user: null,
-        accessToken: null,
-        error: null, // Silent failure on init
-      })
+      set({ isLoading: false, isAuthenticated: false, user: null, accessToken: null, error: null })
     }
   },
 
@@ -165,8 +149,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         return { error: errorMessage }
       }
 
-      // Store access token
+      // Store tokens
       const accessToken = data.access_token
+      const refreshTokenValue = data.refresh_token || null
 
       // Fetch user info
       const userResponse = await fetch(`${API_BASE}/auth/me/`, {
@@ -184,6 +169,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           isAuthenticated: true,
           user,
           accessToken,
+          refreshTokenValue: refreshTokenValue,
           isLoading: false,
           error: null,
         })
@@ -228,6 +214,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       isAuthenticated: false,
       user: null,
       accessToken: null,
+      refreshTokenValue: null,
       error: null,
       isLoading: false,
     })
@@ -276,6 +263,31 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   updateUser: (user: User) => {
     set({ user })
   },
+
+  resetPassword: async (email: string) => {
+    try {
+      await fetch(`${API_BASE}/auth/password-reset/request/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      })
+      // Backend always returns success to prevent enumeration
+      return { error: null }
+    } catch {
+      return { error: 'Network error. Please try again.' }
+    }
+  },
+
+  resendVerification: async (email: string) => {
+    try {
+      await fetch(`${API_BASE}/auth/resend-verification/?email=${encodeURIComponent(email)}`, {
+        method: 'POST',
+      })
+      return { error: null }
+    } catch {
+      return { error: 'Network error. Please try again.' }
+    }
+  },
 }))
 
 // Axios interceptor helper - auto-refresh on 401
@@ -308,4 +320,6 @@ export const authActions = {
   logout: () => useAuthStore.getState().logout(),
   refreshToken: () => useAuthStore.getState().refreshToken(),
   clearError: () => useAuthStore.getState().clearError(),
+  resetPassword: (email: string) => useAuthStore.getState().resetPassword(email),
+  resendVerification: (email: string) => useAuthStore.getState().resendVerification(email),
 }

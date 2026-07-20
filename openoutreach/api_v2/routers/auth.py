@@ -25,6 +25,7 @@ from openoutreach.api_v2.schemas.auth import (
     PasswordResetRequest,
     PasswordResetConfirm,
     PasswordUpdate,
+    EmailVerifyRequest,
 )
 from openoutreach.mongodb.models_user import User
 from openoutreach.mongodb import models
@@ -190,6 +191,13 @@ async def login(credentials: LoginRequest, response: Response):
             detail="Incorrect email or password"
         )
 
+    # Reject unverified users
+    if not user.email_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Please verify your email before logging in"
+        )
+
     # Check if user is active
     if not user.is_active:
         raise HTTPException(
@@ -222,6 +230,18 @@ async def login(credentials: LoginRequest, response: Response):
         path="/",
     )
 
+    # Set readable billing_status cookie so Next.js middleware can gate pages
+    # without a network round-trip. Not HTTP-only — intentionally readable by JS.
+    response.set_cookie(
+        key="billing_status",
+        value=user.subscription_status or "none",
+        httponly=False,
+        secure=not settings.DEBUG,
+        samesite="lax",
+        max_age=settings.JWT_REFRESH_TOKEN_LIFETIME_DAYS * 24 * 60 * 60,
+        path="/",
+    )
+
     logger.info(f"User login successful: {user.email}")
 
     return TokenResponse(
@@ -236,14 +256,21 @@ async def login(credentials: LoginRequest, response: Response):
 
 
 @router.post("/refresh/", response_model=TokenResponse)
-async def refresh_token(request: Request):
+async def refresh_token(request: Request, response: Response):
     """
-    Refresh access token using HTTP-only refresh token cookie.
+    Refresh access token.
 
-    Returns new access token.
+    Accepts refresh token from HTTP-only cookie (web) or JSON body (desktop daemon).
     """
-    # Get refresh token from cookie
+    # Prefer cookie (web); fall back to JSON body (desktop)
     refresh_token = request.cookies.get("refresh_token")
+
+    if not refresh_token:
+        try:
+            body = await request.json()
+            refresh_token = body.get("refresh_token")
+        except Exception:
+            pass
 
     if not refresh_token:
         raise HTTPException(
@@ -283,6 +310,17 @@ async def refresh_token(request: Request):
 
         # Create new access token
         access_token = create_access_token(user._id, user.email)
+
+        # Keep billing_status cookie in sync with current subscription state
+        response.set_cookie(
+            key="billing_status",
+            value=user.subscription_status or "none",
+            httponly=False,
+            secure=not settings.DEBUG,
+            samesite="lax",
+            max_age=settings.JWT_REFRESH_TOKEN_LIFETIME_DAYS * 24 * 60 * 60,
+            path="/",
+        )
 
         return TokenResponse(
             access_token=access_token,
@@ -337,8 +375,9 @@ async def logout(response: Response, user_id: str = Depends(get_current_user)):
 
     Access token remains valid until expiration (client should discard it).
     """
-    # Clear refresh token cookie
+    # Clear auth and billing cookies
     response.delete_cookie(key="refresh_token", path="/")
+    response.delete_cookie(key="billing_status", path="/")
 
     logger.info(f"User logged out: {user_id}")
 
@@ -349,10 +388,11 @@ async def logout(response: Response, user_id: str = Depends(get_current_user)):
 
 
 @router.post("/verify-email/")
-async def verify_email(token: str):
+async def verify_email(body: EmailVerifyRequest):
     """
     Verify user email with token from verification link.
     """
+    token = body.token
     try:
         payload = jwt.decode(
             token,

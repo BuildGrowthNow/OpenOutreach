@@ -240,9 +240,24 @@ class TrayApp:
         refresh_token = self.auth.get_refresh_token()
         profile_id = self.auth.get_profile_id()
 
-        if not token or not profile_id:
-            logger.error("Missing credentials")
+        if not token:
+            logger.error("Missing access token")
             return
+
+        # profile_id may be empty when the web callback didn't include it;
+        # resolve it from the API and persist for next time
+        if not profile_id:
+            profile_id = self._resolve_profile_id(token)
+            if profile_id:
+                self.auth.login(token, profile_id, refresh_token=refresh_token)
+            else:
+                logger.error("No LinkedIn profile found for this account")
+                if self.icon:
+                    self.icon.notify(
+                        "No LinkedIn Profile",
+                        "Add a LinkedIn profile in the dashboard before starting automation.",
+                    )
+                return
 
         def on_token_refresh(new_token: str):
             """Callback when token is refreshed."""
@@ -290,6 +305,26 @@ class TrayApp:
 
         logger.info("Daemon started")
         self._update_menu()
+
+    def _resolve_profile_id(self, token: str) -> Optional[str]:
+        """Fetch the first active LinkedIn profile ID from the backend."""
+        import urllib.request
+
+        api_url = self.config.api_url.rstrip("/")
+        req = urllib.request.Request(
+            f"{api_url}/api/linkedin/profiles",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                import json
+                data = json.loads(resp.read())
+                profiles = data if isinstance(data, list) else data.get("profiles", [])
+                if profiles:
+                    return str(profiles[0].get("id") or profiles[0].get("_id") or "")
+        except Exception as e:
+            logger.error("Failed to resolve profile_id: %s", e)
+        return None
 
     def _stop_daemon(self):
         """Stop the daemon."""

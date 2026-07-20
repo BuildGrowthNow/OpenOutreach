@@ -4,6 +4,7 @@ import React from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Button } from '@/components/ui/button'
+import { Logo } from '@/components/ui/logo'
 import { Icons } from '@/lib/types/components'
 import { supabase } from '@/lib/supabase/client'
 
@@ -43,12 +44,7 @@ const Sidebar = ({ items, isOpen, setIsOpen }: SidebarProps) => {
       >
         {/* Logo */}
         <div className="flex h-16 items-center border-b px-6">
-          <div className="flex items-center gap-2 font-bold text-xl">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              {React.createElement(Icons.Sparkles, { className: "h-5 w-5" })}
-            </div>
-            <span>Lengrowth</span>
-          </div>
+          <Logo variant="dark" iconSize={32} className="text-base" />
         </div>
 
         {/* Navigation */}

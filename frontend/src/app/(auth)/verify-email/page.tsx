@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { CheckCircle2, XCircle, Loader2 } from "lucide-react"
+import { CheckCircle2, XCircle, Loader2, Mail } from "lucide-react"
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api'
 
@@ -13,9 +13,12 @@ export default function VerifyEmailPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const token = searchParams.get("token")
+  const emailParam = searchParams.get("email") || ""
 
   const [status, setStatus] = useState<"loading" | "success" | "error">("loading")
   const [message, setMessage] = useState("")
+  const [resendEmail, setResendEmail] = useState(emailParam)
+  const [resendStatus, setResendStatus] = useState<"idle" | "sending" | "sent" | "error">("idle")
 
   useEffect(() => {
     if (!token) {
@@ -41,7 +44,7 @@ export default function VerifyEmailPage() {
           setMessage(data.message || "Email verified successfully!")
 
           setTimeout(() => {
-            router.push("/login?returnUrl=/download?welcome=1&success=email_verified")
+            router.push("/login?returnUrl=" + encodeURIComponent("/download?welcome=1&success=email_verified"))
           }, 2000)
         } else {
           setStatus("error")
@@ -56,6 +59,19 @@ export default function VerifyEmailPage() {
 
     verifyEmail()
   }, [token, router])
+
+  const handleResend = async () => {
+    if (!resendEmail.trim()) return
+    setResendStatus("sending")
+    try {
+      const url = `${API_BASE}/auth/resend-verification/?email=${encodeURIComponent(resendEmail.trim())}`
+      await fetch(url, { method: "POST" })
+      // Backend always returns 200 to prevent enumeration — treat as success
+      setResendStatus("sent")
+    } catch {
+      setResendStatus("error")
+    }
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
@@ -92,7 +108,44 @@ export default function VerifyEmailPage() {
                 </AlertDescription>
               </Alert>
 
-              <div className="space-y-2">
+              <div className="space-y-3 pt-2">
+                <p className="text-sm text-gray-600 text-center">
+                  Didn&apos;t receive the email or link expired?
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    type="email"
+                    value={resendEmail}
+                    onChange={(e) => setResendEmail(e.target.value)}
+                    placeholder="Your email address"
+                    className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <Button
+                    onClick={handleResend}
+                    disabled={resendStatus === "sending" || resendStatus === "sent" || !resendEmail.trim()}
+                    size="sm"
+                    className="shrink-0"
+                  >
+                    {resendStatus === "sending" ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Mail className="h-4 w-4" />
+                    )}
+                    <span className="ml-1">
+                      {resendStatus === "sent" ? "Sent!" : "Resend"}
+                    </span>
+                  </Button>
+                </div>
+                {resendStatus === "sent" && (
+                  <p className="text-xs text-green-700 text-center">
+                    If an unverified account exists for that email, a new link has been sent.
+                  </p>
+                )}
+                {resendStatus === "error" && (
+                  <p className="text-xs text-red-600 text-center">
+                    Failed to send. Please try again.
+                  </p>
+                )}
                 <Button
                   onClick={() => router.push("/login")}
                   className="w-full"

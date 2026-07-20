@@ -58,17 +58,12 @@ const Health = () => {
         latency_ms: 15,
         lastCheck: timestamp,
       })
-      services.push({ name: 'Search', status: 'connected', latency_ms: 8, lastCheck: timestamp })
-      services.push({ name: 'Email', status: 'connected', latency_ms: 25, lastCheck: timestamp })
       return services
     }
 
     return [
-      { name: 'Database', status: 'connected', latency_ms: 5, lastCheck: timestamp },
-      { name: 'Cache', status: 'connected', latency_ms: 1, lastCheck: timestamp },
-      { name: 'API', status: 'connected', latency_ms: 15, lastCheck: timestamp },
-      { name: 'Search', status: 'connected', latency_ms: 8, lastCheck: timestamp },
-      { name: 'Email', status: 'connected', latency_ms: 25, lastCheck: timestamp },
+      { name: 'Database', status: 'disconnected', latency_ms: 0, lastCheck: timestamp },
+      { name: 'API', status: 'disconnected', latency_ms: 0, lastCheck: timestamp },
     ]
   }, [healthStatus])
 
@@ -123,31 +118,23 @@ const Health = () => {
         </div>
       ) : healthStatus ? (
         <HealthStatus
-          status={healthStatus.status === 'operational' ? 'healthy' : (healthStatus.status || 'healthy')}
+          status={healthStatus.status === 'operational' ? 'healthy' : (healthStatus.status || 'unknown')}
           services={{
             database: {
               status: healthStatus.services.database === 'operational' ? 'connected' : (healthStatus.services.database === 'degraded' ? 'degraded' : 'disconnected'),
               latency_ms: 12
             },
-            cache: {
-              status: 'connected',
-              latency_ms: 1
-            }
           }}
           lastCheck={lastCheck}
         />
       ) : (
         <HealthStatus
-          status="healthy"
+          status="unknown"
           services={{
             database: {
-              status: 'connected',
-              latency_ms: 12
+              status: 'disconnected',
+              latency_ms: 0
             },
-            cache: {
-              status: 'connected',
-              latency_ms: 1
-            }
           }}
           lastCheck={lastCheck}
         />
@@ -198,112 +185,33 @@ const Health = () => {
           </CardContent>
         </Card>
 
-        {/* API Endpoint Checks */}
+      </div>
+
+      {/* Database Connection */}
+      {healthStatus && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">API Endpoint Status</CardTitle>
+            <CardTitle className="text-base">Database Status</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Icons.CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                  <span className="text-sm font-medium">/api/health</span>
-                </div>
-                <Badge variant="outline" className="text-emerald-600">
-                  Operational
-                </Badge>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <div className="text-sm text-muted-foreground">Database Type</div>
+                <div className="text-lg font-medium">MongoDB</div>
               </div>
-              <div className="flex items-center justify-between">
+              <div className="space-y-2">
+                <div className="text-sm text-muted-foreground">Connection Status</div>
                 <div className="flex items-center gap-2">
-                  <Icons.CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                  <span className="text-sm font-medium">/api/campaigns</span>
+                  <div className={`h-2 w-2 rounded-full ${healthStatus.services?.database === 'operational' ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`} />
+                  <span className="text-lg font-medium">
+                    {healthStatus.services?.database === 'operational' ? 'Connected' : 'Disconnected'}
+                  </span>
                 </div>
-                <Badge variant="outline" className="text-emerald-600">
-                  Operational
-                </Badge>
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Icons.CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                  <span className="text-sm font-medium">/api/leads</span>
-                </div>
-                <Badge variant="outline" className="text-emerald-600">
-                  Operational
-                </Badge>
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Icons.CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                  <span className="text-sm font-medium">/api/messages</span>
-                </div>
-                <Badge variant="outline" className="text-emerald-600">
-                  Operational
-                </Badge>
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Icons.CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                  <span className="text-sm font-medium">/api/settings</span>
-                </div>
-                <Badge variant="outline" className="text-emerald-600">
-                  Operational
-                </Badge>
               </div>
             </div>
           </CardContent>
         </Card>
-      </div>
-
-      {/* Database Connection */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Database Status</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="space-y-2">
-              <div className="text-sm text-muted-foreground">Database Type</div>
-              <div className="text-lg font-medium">MongoDB Atlas</div>
-            </div>
-            <div className="space-y-2">
-              <div className="text-sm text-muted-foreground">Connection Status</div>
-              <div className="flex items-center gap-2">
-                <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span className="text-lg font-medium">Connected</span>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <div className="text-sm text-muted-foreground">Last Query</div>
-              <div className="text-lg font-medium">5ms ago</div>
-            </div>
-          </div>
-          <div className="mt-6 p-4 bg-muted rounded-lg">
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-sm font-medium">Database Operations</div>
-              <div className="text-xs text-muted-foreground">Last 24 hours</div>
-            </div>
-            <div className="grid grid-cols-4 gap-4 text-center">
-              <div className="space-y-1">
-                <div className="text-lg font-bold">12,450</div>
-                <div className="text-xs text-muted-foreground">Queries</div>
-              </div>
-              <div className="space-y-1">
-                <div className="text-lg font-bold">99.9%</div>
-                <div className="text-xs text-muted-foreground">Success</div>
-              </div>
-              <div className="space-y-1">
-                <div className="text-lg font-bold">15ms</div>
-                <div className="text-xs text-muted-foreground">Avg Latency</div>
-              </div>
-              <div className="space-y-1">
-                <div className="text-lg font-bold">2</div>
-                <div className="text-xs text-muted-foreground">Errors</div>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      )}
     </div>
   )
 }

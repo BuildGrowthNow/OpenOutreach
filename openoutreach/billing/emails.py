@@ -30,7 +30,7 @@ class ResendProvider(EmailProvider):
         self.from_address = from_address
         self.from_name = from_name
         try:
-            import resend
+            import resend  # type: ignore
             self.resend = resend
             self.resend.api_key = api_key
         except ImportError:
@@ -282,6 +282,7 @@ def send_trial_expiry_warning(user: User, days_remaining: int) -> bool:
         <li><strong>Pro - $49/month</strong>: 1 LinkedIn account, unlimited campaigns, voice notes, API access</li>
         <li><strong>Business - $99/month</strong>: 3 LinkedIn accounts, team members, priority support</li>
         <li><strong>Agency - $249/month</strong>: 10 LinkedIn accounts, white-label branding, unlimited team members</li>
+        <li><strong>Cloud - $299/month</strong>: Fully managed cloud execution + AI on Sonnet, priority support included</li>
       </ul>
 
       <p><a href="https://app.openoutreach.ai/settings/plan" style="display: inline-block; background-color: #ff6600; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 10px;">Choose a Plan</a></p>
@@ -632,12 +633,17 @@ def send_lifetime_deal_purchase(user: User) -> bool:
       <ul>
         <li>1 LinkedIn account</li>
         <li>Unlimited campaigns</li>
-        <li>AI-powered messaging</li>
+        <li>AI-powered messaging (requires your own LLM API key)</li>
         <li>Voice notes</li>
         <li>Sales Navigator access</li>
         <li>Full API access</li>
+        <li>Desktop daemon execution (runs on your machine)</li>
         <li><strong>No recurring charges — ever</strong></li>
       </ul>
+
+      <p style="color: #666; font-size: 14px;">
+        <strong>Note:</strong> The lifetime deal uses the desktop daemon for campaign execution — automation runs on your computer using your own residential IP. The Cloud tier ($299/month) is not included. To set up your desktop daemon, download the app from the dashboard.
+      </p>
 
       <p>You're all set. Your campaigns are ready to launch!</p>
 
@@ -665,11 +671,14 @@ Thank you for your purchase! You've activated the OpenOutreach Lifetime Deal wit
 What's included:
 - 1 LinkedIn account
 - Unlimited campaigns
-- AI-powered messaging
+- AI-powered messaging (requires your own LLM API key)
 - Voice notes
 - Sales Navigator access
 - Full API access
+- Desktop daemon execution (runs on your machine)
 - No recurring charges — ever
+
+Note: The lifetime deal uses the desktop daemon for execution. The Cloud tier ($299/month) is not included.
 
 You're all set. Your campaigns are ready to launch!
 

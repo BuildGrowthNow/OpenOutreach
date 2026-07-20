@@ -2,86 +2,110 @@
 
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Calendar, Menu, X } from 'lucide-react';
-import { useState } from 'react';
+import { Logo } from '@/components/ui/logo';
+import { Menu, X } from 'lucide-react';
+import { useState, useEffect } from 'react';
 
 export function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const handler = () => setScrolled(window.scrollY > 16);
+    window.addEventListener('scroll', handler, { passive: true });
+    return () => window.removeEventListener('scroll', handler);
+  }, []);
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-zinc-800 bg-zinc-950/80 backdrop-blur-sm">
+    <header
+      className={`fixed top-0 z-50 w-full transition-all duration-500 ${
+        scrolled
+          ? 'border-b border-zinc-800/60 bg-zinc-950/80 backdrop-blur-xl shadow-2xl shadow-black/20'
+          : 'border-b border-transparent bg-transparent'
+      }`}
+    >
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex h-16 items-center justify-between">
           {/* Logo */}
-          <div className="flex items-center gap-2">
-            <Link href="https://www.lengrowth.com" className="flex items-center gap-2">
-              <span className="text-2xl font-bold bg-gradient-to-r from-emerald-500 to-emerald-400 bg-clip-text text-transparent">
-                Lengrowth Outreach
-              </span>
-            </Link>
-          </div>
+          <Link href="/" className="shrink-0">
+            <Logo variant="dark" iconSize={28} className="text-sm text-white" />
+          </Link>
 
-          {/* Desktop Navigation */}
-          <nav className="hidden md:flex items-center gap-6">
-            <Link href="/pricing" className="text-zinc-400 hover:text-emerald-400 transition-colors">
+          {/* Desktop Nav */}
+          <nav className="hidden md:flex items-center gap-8 text-sm">
+            <Link href="/pricing" className="text-zinc-400 hover:text-white transition-colors duration-200">
               Pricing
             </Link>
-            <Link href="/terms" className="text-zinc-400 hover:text-emerald-400 transition-colors text-sm">
-              Terms
+            <Link href="/lifetime" className="text-zinc-400 hover:text-white transition-colors duration-200">
+              Lifetime Deal
             </Link>
-            <Link href="/privacy" className="text-zinc-400 hover:text-emerald-400 transition-colors text-sm">
-              Privacy
+            <Link href="/download" className="text-zinc-400 hover:text-white transition-colors duration-200">
+              Download
             </Link>
           </nav>
 
-          {/* Desktop CTA */}
-          <div className="hidden md:flex items-center gap-4">
+          {/* Desktop CTAs */}
+          <div className="hidden md:flex items-center gap-3">
             <Link href="/login">
-              <Button variant="ghost" className="text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800">
+              <Button variant="ghost" size="sm" className="text-zinc-400 hover:text-white hover:bg-zinc-800/60 transition-all duration-200">
                 Log in
               </Button>
             </Link>
             <Link href="/signup">
-              <Button className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-600/20">
-                Sign Up
-              </Button>
-            </Link>
-            <Link href="https://calendly.com/lengrowth/lengrowth" target="_blank" className="ml-2">
-              <Button variant="outline" className="border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300 border-zinc-700">
-                <Calendar className="mr-2 h-4 w-4" />
-                Book a Demo
+              <Button size="sm" className="bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/20 font-semibold transition-all duration-300 hover:-translate-y-0.5">
+                Start Free Trial
               </Button>
             </Link>
           </div>
 
-          {/* Mobile Menu Button */}
+          {/* Mobile toggle */}
           <button
-            className="md:hidden text-zinc-300 hover:text-white"
+            className="md:hidden p-2 text-zinc-400 hover:text-white transition-colors"
             onClick={() => setIsOpen(!isOpen)}
+            aria-label="Toggle menu"
           >
-            {isOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+            {isOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
         </div>
       </div>
 
-      {/* Mobile Navigation */}
+      {/* Mobile drawer */}
       {isOpen && (
-        <div className="md:hidden border-t border-zinc-800 bg-zinc-950">
-          <div className="container mx-auto px-4 py-4 flex flex-col gap-4">
-            <Link href="/login" className="text-center text-zinc-300" onClick={() => setIsOpen(false)}>
-              Log in
+        <div className="md:hidden border-t border-zinc-800/60 bg-zinc-950/95 backdrop-blur-xl">
+          <div className="container mx-auto px-4 py-6 flex flex-col gap-4">
+            <Link
+              href="/pricing"
+              className="text-zinc-300 text-sm hover:text-white transition-colors"
+              onClick={() => setIsOpen(false)}
+            >
+              Pricing
             </Link>
-            <Link href="/signup" className="text-center" onClick={() => setIsOpen(false)}>
-              <Button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white">
-                Sign Up
-              </Button>
+            <Link
+              href="/lifetime"
+              className="text-zinc-300 text-sm hover:text-white transition-colors"
+              onClick={() => setIsOpen(false)}
+            >
+              Lifetime Deal
             </Link>
-            <Link href="https://calendly.com/lengrowth/lengrowth" target="_blank" onClick={() => setIsOpen(false)}>
-              <Button variant="outline" className="w-full border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10">
-                <Calendar className="mr-2 h-4 w-4" />
-                Book a Demo
-              </Button>
+            <Link
+              href="/download"
+              className="text-zinc-300 text-sm hover:text-white transition-colors"
+              onClick={() => setIsOpen(false)}
+            >
+              Download
             </Link>
+            <div className="pt-4 flex flex-col gap-3 border-t border-zinc-800/60">
+              <Link href="/login" onClick={() => setIsOpen(false)}>
+                <Button variant="outline" className="w-full border-zinc-700 text-zinc-300 hover:bg-zinc-800">
+                  Log in
+                </Button>
+              </Link>
+              <Link href="/signup" onClick={() => setIsOpen(false)}>
+                <Button className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold">
+                  Start Free Trial
+                </Button>
+              </Link>
+            </div>
           </div>
         </div>
       )}

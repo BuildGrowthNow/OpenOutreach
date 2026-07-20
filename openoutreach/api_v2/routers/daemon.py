@@ -102,6 +102,16 @@ async def claim_task(
     user_id: str = Depends(get_current_user),
 ):
     """Atomically claim the next available task for this profile."""
+    from openoutreach.billing.enforcement import PlanEnforcer
+
+    user = User.get(user_id)
+    if not user:
+        raise HTTPException(401, "User not found")
+
+    can_run, block_reason = PlanEnforcer.can_run_tasks(user)
+    if not can_run:
+        raise HTTPException(402, block_reason or "Subscription inactive")
+
     profile = LinkedInProfile.objects.get(
         _id=linkedin_profile_id,
         user_id=user_id,

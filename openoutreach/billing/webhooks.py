@@ -68,6 +68,11 @@ def handle_checkout_session_completed(event: dict[str, Any]) -> None:
             _sync_plan_limits(user)
             user.save()
             try:
+                from openoutreach.billing.config import increment_lifetime_buyer_count
+                increment_lifetime_buyer_count()
+            except Exception as e:
+                logger.error(f"Failed to increment lifetime buyer count: {e}")
+            try:
                 send_lifetime_deal_purchase(user)
             except Exception as e:
                 logger.error(f"Failed to send lifetime deal email: {e}")
@@ -200,7 +205,7 @@ def handle_customer_subscription_updated(event: dict[str, Any]) -> None:
         if old_plan and plan_name:
             try:
                 # Determine if upgrade or downgrade based on plan hierarchy
-                plan_hierarchy = ["starter", "pro", "business", "agency"]
+                plan_hierarchy = ["starter", "pro", "business", "agency", "cloud"]
                 old_idx = plan_hierarchy.index(old_plan) if old_plan in plan_hierarchy else -1
                 new_idx = plan_hierarchy.index(plan_name) if plan_name in plan_hierarchy else -1
 

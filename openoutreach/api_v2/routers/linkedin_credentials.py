@@ -573,7 +573,18 @@ async def verify_credential(
             status=LinkedInCredentials.STATUS_TESTED
         )
 
-    # Actual browser-based verification
+    # Actual browser-based verification — requires cloud execution access
+    # (desktop-only users must verify via their local desktop app instead)
+    verify_user = User.get(user_id)
+    if not verify_user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    can_cloud, cloud_error = PlanEnforcer.can_use_cloud_execution(verify_user)
+    if not can_cloud:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Server-side verification not available: {cloud_error}. "
+                   "Please verify credentials using the desktop app.",
+        )
     from linkedin_cli.auth import authenticate
     from linkedin_cli.browser.login import launch_browser
     from linkedin_cli.page_state import IllegalPageTransition

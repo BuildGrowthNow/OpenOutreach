@@ -25,10 +25,13 @@ import { Breadcrumb } from "@/components/layout/breadcrumb";
 import { BulkActionsToolbar, BulkAction } from "@/components/ui/bulk-actions-toolbar";
 import { useToast } from "@/components/ui/use-toast";
 import { cn } from "@/lib/utils";
+import { PlanLimitButton } from "@/components/billing/plan-limit-button";
+import { useUpgradeToast } from "@/lib/hooks/use-upgrade-toast";
 
 export default function CampaignsPage() {
   const router = useRouter();
   const { toast } = useToast();
+  const handleUpgradeError = useUpgradeToast();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
   const [bulkLoading, setBulkLoading] = useState(false);
@@ -107,8 +110,10 @@ export default function CampaignsPage() {
         );
       }
     } catch (error) {
-      setError("An error occurred while creating the campaign");
-      console.error("Error creating campaign:", error);
+      if (!handleUpgradeError(error)) {
+        setError("An error occurred while creating the campaign");
+        console.error("Error creating campaign:", error);
+      }
     }
   };
 
@@ -171,8 +176,10 @@ export default function CampaignsPage() {
         );
       }
     } catch (err) {
-      setError("An error occurred while starting the campaign");
-      console.error("Error starting campaign:", err);
+      if (!handleUpgradeError(err)) {
+        setError("An error occurred while starting the campaign");
+        console.error("Error starting campaign:", err);
+      }
     }
   };
 
@@ -396,10 +403,10 @@ export default function CampaignsPage() {
               Manage your outreach campaigns and track performance
             </p>
           </div>
-          <Button onClick={() => setShowCreateForm(true)}>
+          <PlanLimitButton resource="campaigns" onClick={() => setShowCreateForm(true)}>
             <Icons.Plus className="mr-2 h-4 w-4" />
             New Campaign
-          </Button>
+          </PlanLimitButton>
         </div>
       </div>
 
@@ -468,10 +475,10 @@ export default function CampaignsPage() {
               : "Create your first campaign to get started"
           }
           action={
-            <Button onClick={() => setShowCreateForm(true)}>
+            <PlanLimitButton resource="campaigns" onClick={() => setShowCreateForm(true)}>
               <Icons.Plus className="mr-2 h-4 w-4" />
               Create Campaign
-            </Button>
+            </PlanLimitButton>
           }
         />
       ) : (
