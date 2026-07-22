@@ -4,7 +4,8 @@ from typing import Optional
 
 import keyring
 
-SERVICE_NAME = "OpenOutreach"
+SERVICE_NAME = "Lengrowth"
+_LEGACY_SERVICE_NAME = "OpenOutreach"
 
 
 class AuthManager:
@@ -18,9 +19,25 @@ class AuthManager:
         return self.get_token() is not None
 
     def get_token(self) -> Optional[str]:
-        """Get stored JWT token."""
+        """Get stored JWT token, migrating from legacy service name if needed."""
         try:
-            return keyring.get_password(SERVICE_NAME, "token")
+            token = keyring.get_password(SERVICE_NAME, "token")
+            if token:
+                return token
+            # Migrate credentials stored under the old "OpenOutreach" service name
+            legacy_token = keyring.get_password(_LEGACY_SERVICE_NAME, "token")
+            if legacy_token:
+                refresh = keyring.get_password(_LEGACY_SERVICE_NAME, "refresh_token")
+                profile = keyring.get_password(_LEGACY_SERVICE_NAME, "profile_id")
+                self.login(legacy_token, profile or "", refresh_token=refresh)
+                try:
+                    keyring.delete_password(_LEGACY_SERVICE_NAME, "token")
+                    keyring.delete_password(_LEGACY_SERVICE_NAME, "refresh_token")
+                    keyring.delete_password(_LEGACY_SERVICE_NAME, "profile_id")
+                except Exception:
+                    pass
+                return legacy_token
+            return None
         except Exception:
             return None
 

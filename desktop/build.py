@@ -536,6 +536,8 @@ RequestExecutionLevel admin
 !define MUI_ICON "{ASSETS_DIR}\\icon.ico"
 !define MUI_UNICON "{ASSETS_DIR}\\icon.ico"
 !define MUI_ABORTWARNING
+!define MUI_FINISHPAGE_RUN "$INSTDIR\\Lengrowth.exe"
+!define MUI_FINISHPAGE_RUN_TEXT "Launch Lengrowth now"
 
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_DIRECTORY

@@ -142,7 +142,11 @@ class TrayApp:
 
     def _create_icon(self) -> Image.Image:
         """Create tray icon."""
-        icon_path = Path(__file__).parent / "assets" / "icon.png"
+        # sys._MEIPASS is set by PyInstaller; fall back to source tree for dev
+        base = Path(getattr(sys, "_MEIPASS", Path(__file__).parent.parent.parent))
+        icon_path = base / "openoutreach" / "desktop" / "assets" / "icon.png"
+        if not icon_path.exists():
+            icon_path = Path(__file__).parent / "assets" / "icon.png"
         if icon_path.exists():
             try:
                 return Image.open(icon_path)
@@ -457,6 +461,32 @@ class TrayApp:
         self._update_check_thread.start()
 
 
+def _acquire_single_instance_lock():
+    """Return a lock handle that prevents a second instance from starting.
+
+    On Windows uses a named mutex; on other platforms a lock file.
+    Returns the handle (must stay alive for the lifetime of the process).
+    Returns None if another instance is already running.
+    """
+    if sys.platform == "win32":
+        import ctypes
+        handle = ctypes.windll.kernel32.CreateMutexW(None, True, "LengrowthOutreachSingleInstance")
+        if ctypes.windll.kernel32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
+            return None
+        return handle
+    else:
+        import fcntl
+        lock_path = Path.home() / ".lengrowth" / "app.lock"
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        fh = open(lock_path, "w")
+        try:
+            fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return fh
+        except OSError:
+            fh.close()
+            return None
+
+
 def main():
     """Entry point for desktop application."""
     logging.basicConfig(
@@ -468,6 +498,12 @@ def main():
     logging.getLogger("httpx").setLevel(logging.WARNING)
 
     logger.info("Starting Lengrowth Outreach desktop app v%s", __version__)
+
+    # Prevent multiple instances — if a second process starts, exit immediately
+    _lock = _acquire_single_instance_lock()
+    if _lock is None:
+        logger.info("Another instance is already running. Exiting.")
+        sys.exit(0)
 
     # Register protocol handler on Windows
     register_protocol_handler()

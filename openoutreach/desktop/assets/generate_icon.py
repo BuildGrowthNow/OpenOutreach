@@ -17,7 +17,6 @@ from PIL import Image, ImageDraw
 
 def load_source_logo() -> Image.Image:
     """Load the source logo from logos/icon.png."""
-    # Try to load from project logos directory
     script_dir = Path(__file__).parent
     project_root = script_dir.parent.parent.parent
     logo_path = project_root / "logos" / "icon.png"
@@ -28,38 +27,31 @@ def load_source_logo() -> Image.Image:
             "Please ensure logos/icon.png exists."
         )
 
-    return Image.open(logo_path)
+    return Image.open(logo_path).convert("RGBA")
 
 
 def create_icon(size: int = 256) -> Image.Image:
-    """Create desktop icon from source logo with green circle background."""
-    # Load source logo
+    """Resize source logo to a square icon with a circular mask.
+
+    The source logo already has the correct brand background, so we just
+    resize it to a square and clip it to a circle so it looks clean in the
+    Windows/macOS system tray.
+    """
     source = load_source_logo()
 
-    # Create output image with transparent background
-    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    # Resize to a square (the source is nearly square already)
+    resized = source.resize((size, size), Image.Resampling.LANCZOS)
 
-    # Draw green circle background
-    draw = ImageDraw.Draw(img)
-    color = (34, 197, 94, 255)  # Lengrowth green
-    padding = int(size * 0.05)  # 5% padding
-    draw.ellipse(
-        [padding, padding, size - padding, size - padding],
-        fill=color
-    )
+    # Apply a circular mask so it looks like a proper app icon
+    mask = Image.new("L", (size, size), 0)
+    draw = ImageDraw.Draw(mask)
+    draw.ellipse([0, 0, size - 1, size - 1], fill=255)
 
-    # Calculate logo size (should fit inside circle with some margin)
-    logo_size = int(size * 0.7)  # Logo takes 70% of icon size
-    logo_resized = source.resize((logo_size, logo_size), Image.Resampling.LANCZOS)
+    result = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    result.paste(resized, (0, 0))
+    result.putalpha(mask)
 
-    # Center the logo
-    x = (size - logo_size) // 2
-    y = (size - logo_size) // 2
-
-    # Paste logo on top of circle
-    img.paste(logo_resized, (x, y), logo_resized if logo_resized.mode == 'RGBA' else None)
-
-    return img
+    return result
 
 
 def create_ico(output_path: Path, sizes: list[int] | None = None):
