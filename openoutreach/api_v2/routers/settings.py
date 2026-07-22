@@ -66,6 +66,26 @@ async def get_settings(
     )
 
 
+@router.get("/rate-limits")
+async def get_rate_limits(
+    user_id: str = Depends(get_current_user),
+):
+    """
+    Get rate limit configuration for the current user.
+
+    Returns the camelCase shape expected by the frontend Settings["rateLimits"] type:
+    dailyConnectionLimit, dailyFollowUpLimit, velocity, enableSmartRateLimiting, aggressivenessPreset.
+    """
+    config = SiteConfig.load(user_id=user_id)
+    return {
+        "dailyConnectionLimit": config.daily_connection_limit,
+        "dailyFollowUpLimit": config.daily_follow_up_limit,
+        "velocity": config.velocity,
+        "enableSmartRateLimiting": getattr(config, "enable_smart_rate_limiting", False),
+        "aggressivenessPreset": getattr(config, "aggressiveness_preset", "average") or "average",
+    }
+
+
 @router.patch("/")
 async def update_settings(
     updates: SiteConfigUpdate,
@@ -183,28 +203,42 @@ async def get_daily_usage(
 
     # Get user's configured limits
     config = SiteConfig.load(user_id=user_id)
+    connect_limit = config.daily_connection_limit
+    follow_up_limit = config.daily_follow_up_limit
 
-    # Calculate percentage used
-    connect_percentage = 0
-    if config.daily_connection_limit > 0:
-        connect_percentage = round((connect_count / config.daily_connection_limit) * 100, 1)
+    connect_remaining = max(0, connect_limit - connect_count)
+    total_remaining = connect_remaining + max(0, follow_up_limit - follow_up_count)
 
-    follow_up_percentage = 0
-    if config.daily_follow_up_limit > 0:
-        follow_up_percentage = round((follow_up_count / config.daily_follow_up_limit) * 100, 1)
+    # Determine rate limit status
+    connect_pct = (connect_count / connect_limit * 100) if connect_limit > 0 else 0
+    if connect_pct >= 100:
+        rate_limit_status = "exceeded"
+    elif connect_pct >= 80:
+        rate_limit_status = "warning"
+    elif connect_pct >= 60:
+        rate_limit_status = "caution"
+    else:
+        rate_limit_status = "normal"
 
     return {
         "date": target_date.strftime("%Y-%m-%d"),
+        "daily_connections_sent": connect_count,
+        "daily_messages_sent": follow_up_count,
+        "daily_limit": connect_limit,
+        "effective_limit": connect_limit,
+        "remaining": total_remaining,
+        "rate_limit_status": rate_limit_status,
+        "warning_message": None,
+        "last_reset": target_date.strftime("%Y-%m-%dT00:00:00Z"),
+        "reset_frequency": "daily",
+        "linkedin_profiles": [],
+        # Legacy nested fields kept for any backend consumers
         "counts": {
             "connect": connect_count,
             "follow_up": follow_up_count,
         },
         "limits": {
-            "connect": config.daily_connection_limit,
-            "follow_up": config.daily_follow_up_limit,
+            "connect": connect_limit,
+            "follow_up": follow_up_limit,
         },
-        "percentage_used": {
-            "connect": connect_percentage,
-            "follow_up": follow_up_percentage,
-        }
     }

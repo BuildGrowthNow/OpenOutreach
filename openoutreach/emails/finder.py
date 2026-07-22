@@ -37,7 +37,7 @@ class FinderResult:
     status: str
 
 
-def resolve_email(query: FinderQuery) -> FinderResult | None:
+def resolve_email(query: FinderQuery, user_id: str | None = None) -> FinderResult | None:
     """Resolve one lead's work email.
 
     Returns the result on a hit, None on a genuine miss (finder ran, found
@@ -47,7 +47,7 @@ def resolve_email(query: FinderQuery) -> FinderResult | None:
     from openoutreach.core.models import SiteConfig
     from openoutreach.emails import bettercontact
 
-    api_key = SiteConfig.load().finder_api_key
+    api_key = SiteConfig.load(user_id=user_id).finder_api_key
     if not api_key:
         raise FinderUnavailable("no finder API key configured")
     return bettercontact.find_email(api_key, query)

@@ -54,6 +54,7 @@ def qualify_with_llm(
     product_pitch: str,
     campaign_objective: str,
     icp_titles: list[str] | None = None,
+    user_id: str | None = None,
 ) -> tuple[int, str]:
     """Call LLM to qualify a profile. Returns (label, reason).
 
@@ -74,7 +75,7 @@ def qualify_with_llm(
     )
 
     agent = Agent(
-        get_llm_model(),
+        get_llm_model(user_id=user_id),
         output_type=QualificationDecision,
         model_settings={"temperature": 0.7, "timeout": 60},
     )

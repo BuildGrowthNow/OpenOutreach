@@ -111,6 +111,7 @@ async def list_credentials(
                     for doc in log_docs
                 ]
 
+            profile = LinkedInProfile.objects.get(_id=cred.linkedin_profile_id) if cred.linkedin_profile_id else None
             credential_responses.append(
                 LinkedInCredentialResponse(
                     id=cred._id,
@@ -134,6 +135,7 @@ async def list_credentials(
                     is_backup=cred.is_backup,
                     backup_of_id=cred.backup_of_id,
                     security_alert_sent_at=cred.security_alert_sent_at,
+                    execution_mode=profile.execution_mode if profile else "desktop",
                     logs=recent_logs if recent_logs else None,
                 )
             )
@@ -280,6 +282,7 @@ async def create_credential(
             is_backup=credential.is_backup,
             backup_of_id=credential.backup_of_id,
             security_alert_sent_at=credential.security_alert_sent_at,
+            execution_mode=profile.execution_mode,
             logs=None,
         )
     except HTTPException:
@@ -335,6 +338,7 @@ async def get_credential(
             for doc in log_docs
         ]
 
+    profile = LinkedInProfile.objects.get(_id=credential.linkedin_profile_id) if credential.linkedin_profile_id else None
     return LinkedInCredentialResponse(
         id=credential._id,
         linkedin_profile_id=credential.linkedin_profile_id,
@@ -357,6 +361,7 @@ async def get_credential(
         is_backup=credential.is_backup,
         backup_of_id=credential.backup_of_id,
         security_alert_sent_at=credential.security_alert_sent_at,
+        execution_mode=profile.execution_mode if profile else "desktop",
         logs=recent_logs if recent_logs else None,
     )
 
@@ -462,6 +467,7 @@ async def update_credential(
             )
             log_entry.save()
 
+        updated_profile = LinkedInProfile.objects.get(_id=credential.linkedin_profile_id) if credential.linkedin_profile_id else None
         return LinkedInCredentialResponse(
             id=credential._id,
             linkedin_profile_id=credential.linkedin_profile_id,
@@ -484,6 +490,7 @@ async def update_credential(
             is_backup=credential.is_backup,
             backup_of_id=credential.backup_of_id,
             security_alert_sent_at=credential.security_alert_sent_at,
+            execution_mode=updated_profile.execution_mode if updated_profile else "desktop",
             logs=None,
         )
     except Exception as e:

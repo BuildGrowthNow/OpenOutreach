@@ -99,6 +99,7 @@ def extract_facts(
     *,
     seller_name: str,
     context: str = "",
+    user_id: str | None = None,
 ) -> list[str]:
     """Extract a flat list of atomic facts from `text`.
 
@@ -119,7 +120,7 @@ def extract_facts(
         system = f"{system}\n\nContext for relevance:\n{context}"
 
     agent = Agent(
-        get_llm_model(),
+        get_llm_model(user_id=user_id),
         system_prompt=system,
         output_type=FactList,
         model_settings={"temperature": 0.0, "timeout": 60},
@@ -166,6 +167,7 @@ def materialize_profile_summary_if_missing(deal, session) -> None:
         profile_text,
         seller_name=seller_name_from(session),
         context=context,
+        user_id=session.user_id,
     )
     deal.profile_summary = {"facts": facts}
     deal.save(update_fields=["profile_summary"])
@@ -206,7 +208,7 @@ def _format_messages_for_extraction(messages: Iterable) -> str:
     return "\n".join(lines)
 
 
-def update_chat_summary(deal, new_messages, *, seller_name: str) -> None:
+def update_chat_summary(deal, new_messages, *, seller_name: str, user_id: str | None = None) -> None:
     """Fold newly-synced ChatMessages into `deal.chat_summary` incrementally.
 
     Existing facts are preserved; only new messages are sent to the LLM.
@@ -223,12 +225,12 @@ def update_chat_summary(deal, new_messages, *, seller_name: str) -> None:
     if not formatted:
         return
 
-    new_facts = extract_facts(formatted, seller_name=seller_name)
+    new_facts = extract_facts(formatted, seller_name=seller_name, user_id=user_id)
     if not new_facts:
         return
 
     existing = (deal.chat_summary or {}).get("facts", [])
-    reconciled = reconcile_facts(existing, new_facts, seller_name=seller_name)
+    reconciled = reconcile_facts(existing, new_facts, seller_name=seller_name, user_id=user_id)
     deal.chat_summary = {"facts": reconciled}
     deal.save(update_fields=["chat_summary"])
     logger.info(
@@ -252,6 +254,7 @@ def reconcile_facts(
     new_facts: list[str],
     *,
     seller_name: str,
+    user_id: str | None = None,
 ) -> list[str]:
     """Reconcile `new_facts` against `existing` via mem0's UPDATE prompt.
 
@@ -261,7 +264,7 @@ def reconcile_facts(
     """
     if not new_facts:
         return list(existing)
-    actions = _request_memory_actions(existing, new_facts, seller_name)
+    actions = _request_memory_actions(existing, new_facts, seller_name, user_id=user_id)
     return _apply_memory_actions(existing, actions)
 
 
@@ -269,6 +272,7 @@ def _request_memory_actions(
     existing: list[str],
     new_facts: list[str],
     seller_name: str,
+    user_id: str | None = None,
 ) -> list[_MemoryAction]:
     """Run mem0's UPDATE prompt and return the parsed event list.
 
@@ -289,7 +293,7 @@ def _request_memory_actions(
         f"are contamination — issue a DELETE for them.\n\n{base}"
     )
 
-    agent = Agent(get_llm_model(), model_settings={"temperature": 0.0, "timeout": 60})
+    agent = Agent(get_llm_model(user_id=user_id), model_settings={"temperature": 0.0, "timeout": 60})
     text = run_agent_sync(agent.run(prompt)).output
     return _ReconcileResponse.model_validate(_parse_memory_response(text)).memory
 

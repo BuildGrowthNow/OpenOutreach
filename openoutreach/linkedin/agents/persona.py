@@ -102,7 +102,7 @@ def generate_lead_persona(session, deal: "Deal") -> LeadPersonaOutput | None:
 
     # Call LLM
     agent = Agent(
-        get_llm_model(),
+        get_llm_model(user_id=session.user_id),
         output_type=LeadPersonaOutput,
         model_settings={"temperature": 0.7, "timeout": 60},
     )

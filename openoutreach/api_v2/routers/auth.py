@@ -426,6 +426,20 @@ async def verify_email(body: EmailVerifyRequest):
         user.email_verified = True
         user.email_verification_token = None
         user.email_verification_expires = None
+
+        # Auto-start trial so verified users can use the app immediately
+        if user.subscription_status == "none":
+            from openoutreach.billing.config import get_trial_duration_days
+            from openoutreach.billing.plans import get_plan
+            trial_days = get_trial_duration_days()
+            user.subscription_status = "trialing"
+            user.plan = user.plan or "starter"
+            user.trial_ends_at = datetime.now(tz.utc) + timedelta(days=trial_days)
+            plan_def = get_plan(user.plan)
+            if plan_def:
+                user.linkedin_account_limit = plan_def["max_linkedin_accounts"]
+                user.campaign_limit = plan_def["max_campaigns"]
+
         user.save()
 
         logger.info(f"Email verified for user: {email}")

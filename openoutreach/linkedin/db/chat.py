@@ -46,7 +46,7 @@ def _update_deal_chat_summary(session, deal, new_messages):
         return
     from openoutreach.core.db.summaries import seller_name_from, update_chat_summary
 
-    update_chat_summary(deal, new_messages, seller_name=seller_name_from(session))
+    update_chat_summary(deal, new_messages, seller_name=seller_name_from(session), user_id=session.user_id)
 
 
 def _sync_from_api(session, public_identifier: str, deal) -> list:

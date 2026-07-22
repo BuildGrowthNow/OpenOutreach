@@ -35,7 +35,7 @@ ORIGIN_PROFILE_INFO = "profile_info"  # 1st-degree contact-info overlay
 def resolve(lead) -> str | None:
     """A stored email for *lead*, or ``None`` — a miss, no token yet, or an
     outage all return ``None``, so the caller falls back to BetterContact."""
-    config = SiteConfig.load()
+    config = SiteConfig.load(user_id=getattr(lead, "user_id", None))
     if not config.contacts_api_token:
         return None
     try:
@@ -104,7 +104,7 @@ def contribute(session, lead, emails: list[str], origin: str) -> None:
         )
         return
 
-    config = SiteConfig.load()
+    config = SiteConfig.load(user_id=session.user_id)
     record = {
         "public_identifier": lead.public_identifier,
         "country_code": lead.country_code,

@@ -31,6 +31,88 @@ from openoutreach.desktop.updater import check_for_updates, prompt_update
 
 logger = logging.getLogger(__name__)
 
+_AUTOSTART_NAME = "LengrowthOutreach"
+_MACOS_LAUNCHAGENT_LABEL = "io.lengrowth.linkedin"
+
+
+def _register_autostart() -> None:
+    """Register the app to start on login (Windows registry / macOS LaunchAgent)."""
+    if sys.platform == "win32":
+        _autostart_windows(enable=True)
+    elif sys.platform == "darwin":
+        _autostart_macos(enable=True)
+
+
+def _unregister_autostart() -> None:
+    """Remove the auto-start entry."""
+    if sys.platform == "win32":
+        _autostart_windows(enable=False)
+    elif sys.platform == "darwin":
+        _autostart_macos(enable=False)
+
+
+def _autostart_windows(enable: bool) -> None:
+    import winreg
+
+    run_key = r"Software\Microsoft\Windows\CurrentVersion\Run"
+    try:
+        with winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER, run_key, 0, winreg.KEY_SET_VALUE
+        ) as key:
+            if enable:
+                exe = sys.executable
+                winreg.SetValueEx(key, _AUTOSTART_NAME, 0, winreg.REG_SZ, f'"{exe}"')
+                logger.info("Auto-start registered")
+            else:
+                try:
+                    winreg.DeleteValue(key, _AUTOSTART_NAME)
+                    logger.info("Auto-start removed")
+                except FileNotFoundError:
+                    pass
+    except Exception as e:
+        logger.warning("Auto-start (Windows) failed: %s", e)
+
+
+def _autostart_macos(enable: bool) -> None:
+    plist_path = (
+        Path.home()
+        / "Library"
+        / "LaunchAgents"
+        / f"{_MACOS_LAUNCHAGENT_LABEL}.plist"
+    )
+    if enable:
+        exe = sys.executable
+        plist = f"""<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>{_MACOS_LAUNCHAGENT_LABEL}</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>{exe}</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <false/>
+</dict>
+</plist>
+"""
+        try:
+            plist_path.parent.mkdir(parents=True, exist_ok=True)
+            plist_path.write_text(plist)
+            logger.info("Auto-start LaunchAgent written")
+        except Exception as e:
+            logger.warning("Auto-start (macOS) failed: %s", e)
+    else:
+        try:
+            plist_path.unlink(missing_ok=True)
+            logger.info("Auto-start LaunchAgent removed")
+        except Exception as e:
+            logger.warning("Auto-start removal (macOS) failed: %s", e)
+
 
 class TrayApp:
     """System tray application."""
@@ -44,14 +126,15 @@ class TrayApp:
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._stopping = False
         self._pending_update: Optional[dict] = None
-        self._update_check_task: Optional[asyncio.Task] = None
+        self._update_check_thread: Optional[threading.Thread] = None
+        self._pending_login_notification = False
 
     def run(self):
         """Run the tray application."""
         icon = pystray.Icon(
-            "OpenOutreach",
+            "Lengrowth Outreach",
             self._create_icon(),
-            "OpenOutreach LinkedIn",
+            "Lengrowth Outreach",
             menu=self._create_menu(),
         )
         self.icon = icon
@@ -66,7 +149,6 @@ class TrayApp:
             except Exception as e:
                 logger.warning("Failed to load icon: %s", e)
 
-        # Fallback: create simple colored circle
         img = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
         draw = ImageDraw.Draw(img)
         color = (34, 197, 94) if self._is_running() else (156, 163, 175)
@@ -77,9 +159,9 @@ class TrayApp:
         """Create tray menu based on auth state."""
         if not self.auth.is_logged_in():
             items = [
-                Item(f"OpenOutreach LinkedIn v{__version__}", None, enabled=False),
+                Item(f"Lengrowth Outreach v{__version__}", None, enabled=False),
                 pystray.Menu.SEPARATOR,
-                Item("Login to OpenOutreach", self._on_login),
+                Item("Login to Lengrowth", self._on_login),
             ]
 
             if self._pending_update:
@@ -94,17 +176,11 @@ class TrayApp:
             items.append(Item("Quit", self._on_quit))
             return pystray.Menu(*items)
 
-        # Build status line showing subscription status
         daemon_running = "Running" if self._is_running() else "Stopped"
-        status_text = f"Status: {daemon_running}"
 
         items = [
-            Item(f"OpenOutreach LinkedIn v{__version__}", None, enabled=False),
-            Item(
-                status_text,
-                None,
-                enabled=False,
-            ),
+            Item(f"Lengrowth Outreach v{__version__}", None, enabled=False),
+            Item(f"Status: {daemon_running}", None, enabled=False),
             pystray.Menu.SEPARATOR,
             Item(
                 "Stop Automation" if self._is_running() else "Start Automation",
@@ -146,36 +222,43 @@ class TrayApp:
             and self.daemon_thread.is_alive()
         )
 
+    def _get_platform_url(self) -> str:
+        """Resolve the Next.js platform URL from the configured API URL."""
+        import urllib.parse
+        parsed = urllib.parse.urlparse(self.config.api_url)
+        if "linkedin-api." in parsed.netloc:
+            return self.config.api_url.replace("linkedin-api.", "linkedin.")
+        return self.config.api_url
+
     def _on_setup(self, icon):
         """Called when tray icon is ready."""
         icon.visible = True
 
+        # Fire deferred login notification (protocol callback arrived before icon existed)
+        if self._pending_login_notification:
+            self._pending_login_notification = False
+            icon.notify("Login successful", "You can now start automation")
+
         # Auto-start daemon if logged in
         if self.auth.is_logged_in():
             self._start_daemon()
+
+        # Register auto-start on first-ever launch (idempotent)
+        _register_autostart()
 
         # Start periodic update checks
         self._start_update_checker()
 
     def _on_login(self):
         """Open login page in browser."""
-        # Open web platform (Next.js), not API backend
-        # Extract base URL properly (handles localhost, custom domains, etc.)
-        import urllib.parse
-        parsed = urllib.parse.urlparse(self.config.api_url)
-        # For production: replace linkedin-api subdomain with linkedin
-        # For localhost/custom: use as-is
-        if "linkedin-api." in parsed.netloc:
-            platform_url = self.config.api_url.replace("linkedin-api.", "linkedin.")
-        else:
-            platform_url = self.config.api_url
-        login_url = f"{platform_url}/login?desktop=true&callback=openoutreach://auth"
+        login_url = f"{self._get_platform_url()}/login?desktop=true&callback=lengrowth://auth"
         webbrowser.open(login_url)
 
     def _on_logout(self):
         """Log out and stop daemon."""
         self._stop_daemon()
         self.auth.logout()
+        _unregister_autostart()
         self._update_menu()
 
     def _on_toggle_daemon(self):
@@ -188,36 +271,16 @@ class TrayApp:
 
     def _on_open_dashboard(self):
         """Open web dashboard."""
-        # Open web platform (Next.js), not API backend
-        # Extract base URL properly (handles localhost, custom domains, etc.)
-        import urllib.parse
-        parsed = urllib.parse.urlparse(self.config.api_url)
-        # For production: replace linkedin-api subdomain with linkedin
-        # For localhost/custom: use as-is
-        if "linkedin-api." in parsed.netloc:
-            platform_url = self.config.api_url.replace("linkedin-api.", "linkedin.")
-        else:
-            platform_url = self.config.api_url
-        webbrowser.open(platform_url)
+        webbrowser.open(self._get_platform_url())
 
     def _on_manage_subscription(self):
         """Open subscription management page."""
-        # Extract base URL properly (handles localhost, custom domains, etc.)
-        import urllib.parse
-        parsed = urllib.parse.urlparse(self.config.api_url)
-        # For production: replace linkedin-api subdomain with linkedin
-        # For localhost/custom: use as-is
-        if "linkedin-api." in parsed.netloc:
-            platform_url = self.config.api_url.replace("linkedin-api.", "linkedin.")
-        else:
-            platform_url = self.config.api_url
-        webbrowser.open(f"{platform_url}/settings/billing")
+        webbrowser.open(f"{self._get_platform_url()}/settings/billing")
 
     def _on_quit(self):
         """Quit the application."""
         self._stopping = True
         self._stop_daemon()
-        self._stop_update_checker()
         if self.icon:
             self.icon.stop()
 
@@ -260,12 +323,10 @@ class TrayApp:
                 return
 
         def on_token_refresh(new_token: str):
-            """Callback when token is refreshed."""
             logger.info("Access token refreshed, updating keychain")
             self.auth.update_token(new_token)
 
         def run_daemon():
-            """Background thread entry point."""
             self._loop = asyncio.new_event_loop()
             asyncio.set_event_loop(self._loop)
 
@@ -285,17 +346,13 @@ class TrayApp:
                 from openoutreach.core.daemon_remote import BrowserNotFoundError
 
                 logger.exception("Daemon error: %s", e)
-                # Show specific error for missing browser
                 if isinstance(e, BrowserNotFoundError):
                     error_msg = "No supported browser found. Please install Chrome or Edge."
                 else:
-                    error_msg = "OpenOutreach daemon encountered an error. Check logs for details."
+                    error_msg = "Lengrowth daemon encountered an error. Check logs for details."
 
                 if self.icon:
-                    self.icon.notify(
-                        "Daemon Error",
-                        error_msg,
-                    )
+                    self.icon.notify("Daemon Error", error_msg)
             finally:
                 self._loop.close()
                 self._loop = None
@@ -308,20 +365,21 @@ class TrayApp:
 
     def _resolve_profile_id(self, token: str) -> Optional[str]:
         """Fetch the first active LinkedIn profile ID from the backend."""
+        import json
         import urllib.request
 
         api_url = self.config.api_url.rstrip("/")
         req = urllib.request.Request(
-            f"{api_url}/api/linkedin/profiles",
+            f"{api_url}/api/linkedin-profiles/",
             headers={"Authorization": f"Bearer {token}"},
         )
         try:
             with urllib.request.urlopen(req, timeout=10) as resp:
-                import json
                 data = json.loads(resp.read())
                 profiles = data if isinstance(data, list) else data.get("profiles", [])
                 if profiles:
-                    return str(profiles[0].get("id") or profiles[0].get("_id") or "")
+                    pid = profiles[0].get("id") or profiles[0].get("_id")
+                    return str(pid) if pid else None
         except Exception as e:
             logger.error("Failed to resolve profile_id: %s", e)
         return None
@@ -341,7 +399,6 @@ class TrayApp:
             except Exception as e:
                 logger.warning("Error stopping daemon: %s", e)
 
-        # Wait for thread to finish
         if self.daemon_thread and self.daemon_thread.is_alive():
             self.daemon_thread.join(timeout=5)
 
@@ -352,13 +409,15 @@ class TrayApp:
         self._update_menu()
 
     def _start_update_checker(self):
-        """Start background update checker."""
-        if self._update_check_task is not None:
+        """Start background update checker (no-op if already running)."""
+        if (
+            self._update_check_thread is not None
+            and self._update_check_thread.is_alive()
+        ):
             return
 
         async def update_checker_loop():
-            """Periodically check for updates."""
-            await asyncio.sleep(10)  # Initial delay
+            await asyncio.sleep(10)
 
             while not self._stopping:
                 try:
@@ -382,10 +441,9 @@ class TrayApp:
                 except Exception as e:
                     logger.warning("Update check failed: %s", e)
 
-                await asyncio.sleep(3600 * 6)  # Check every 6 hours
+                await asyncio.sleep(3600 * 6)
 
         def run_update_checker():
-            """Run update checker in background thread."""
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
@@ -393,14 +451,10 @@ class TrayApp:
             finally:
                 loop.close()
 
-        update_thread = threading.Thread(target=run_update_checker, daemon=True)
-        update_thread.start()
-
-    def _stop_update_checker(self):
-        """Stop the update checker."""
-        if self._update_check_task:
-            self._update_check_task.cancel()
-            self._update_check_task = None
+        self._update_check_thread = threading.Thread(
+            target=run_update_checker, daemon=True
+        )
+        self._update_check_thread.start()
 
 
 def main():
@@ -410,23 +464,26 @@ def main():
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
 
-    # Reduce noise from third-party loggers
     logging.getLogger("urllib3").setLevel(logging.WARNING)
     logging.getLogger("httpx").setLevel(logging.WARNING)
 
-    logger.info("Starting OpenOutreach desktop app v%s", __version__)
+    logger.info("Starting Lengrowth Outreach desktop app v%s", __version__)
 
     # Register protocol handler on Windows
     register_protocol_handler()
 
     app = TrayApp()
 
-    # Handle protocol URL if passed as argument
-    if len(sys.argv) > 1 and sys.argv[1].startswith("openoutreach://"):
-        if handle_protocol_url(sys.argv[1], app.auth):
+    # Capture pending protocol URL to handle after the icon is ready
+    pending_protocol_url = None
+    if len(sys.argv) > 1 and sys.argv[1].startswith("lengrowth://"):
+        pending_protocol_url = sys.argv[1]
+
+    if pending_protocol_url:
+        if handle_protocol_url(pending_protocol_url, app.auth):
             app._update_menu()
-            if app.icon:
-                app.icon.notify("Login successful", "You can now start automation")
+            # Notification deferred to _on_setup since icon isn't ready yet
+            app._pending_login_notification = True
 
     try:
         app.run()

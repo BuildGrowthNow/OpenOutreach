@@ -180,7 +180,7 @@ _PROVIDER_BUILDERS: dict[str, Callable] = {
 # ── Model factory ────────────────────────────────────────────────────
 
 
-def _validated_site_config():
+def _validated_site_config(user_id: str | None = None):
     """Load `SiteConfig` and assert the required LLM fields are populated.
 
     Falls back to .env values (via settings) when the user hasn't configured
@@ -189,7 +189,7 @@ def _validated_site_config():
     from openoutreach.core.models import SiteConfig
     from openoutreach.config import settings
 
-    cfg = SiteConfig.load()
+    cfg = SiteConfig.load(user_id=user_id)
 
     if not cfg.llm_api_key and settings.LLM_API_KEY:
         cfg.llm_api_key = settings.LLM_API_KEY
@@ -207,9 +207,9 @@ def _validated_site_config():
     return cfg
 
 
-def get_llm_model():
+def get_llm_model(user_id: str | None = None):
     """Return a configured pydantic-ai `Model` for the current `SiteConfig`."""
-    cfg = _validated_site_config()
+    cfg = _validated_site_config(user_id=user_id)
     builder = _PROVIDER_BUILDERS.get(cfg.llm_provider)
     if builder is None:
         raise ValueError(f"Unknown LLM provider: {cfg.llm_provider!r}")

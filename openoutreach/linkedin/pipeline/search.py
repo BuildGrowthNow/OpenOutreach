@@ -27,6 +27,7 @@ def run_search(session) -> str | None:
             campaign_objective=campaign.campaign_objective,
             icp_titles=campaign.icp_titles or None,
             exclude_keywords=used if used else None,
+            user_id=session.user_id,
         )
 
         if not fresh:

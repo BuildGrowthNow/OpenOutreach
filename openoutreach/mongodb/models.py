@@ -540,7 +540,7 @@ class Lead:
         )
 
         try:
-            result = resolve_email(FinderQuery(linkedin_url=self.linkedin_url))
+            result = resolve_email(FinderQuery(linkedin_url=self.linkedin_url), user_id=self.user_id)
         except FinderUnavailable:
             return None
         if result:
@@ -4104,6 +4104,16 @@ class SiteConfig:
             "bettercontact_api_key": self.bettercontact_api_key,
             "contacts_api_token": self.contacts_api_token,
             "contacts_api_url": self.contacts_api_url,
+            "enable_active_hours": self.enable_active_hours,
+            "active_start_hour": self.active_start_hour,
+            "active_end_hour": self.active_end_hour,
+            "active_timezone": self.active_timezone,
+            "active_days": self.active_days,
+            "enable_smart_rate_limiting": self.enable_smart_rate_limiting,
+            "aggressiveness_preset": self.aggressiveness_preset,
+            "ai_writing_style": self.ai_writing_style,
+            "ai_say_rules": self.ai_say_rules,
+            "ai_avoid_rules": self.ai_avoid_rules,
         }
         return data
 

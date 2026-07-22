@@ -120,6 +120,8 @@ class LinkedInCredentialResponse(BaseModel):
     backup_of_id: Optional[str] = Field(None, description="ID of the primary credential if this is a backup")
     security_alert_sent_at: Optional[datetime] = Field(None, description="Last security alert notification timestamp")
 
+    execution_mode: str = Field(default="desktop", description="Execution mode of the linked profile: 'desktop' or 'cloud'")
+
     # Audit log entries (if included)
     logs: Optional[List[Dict[str, Any]]] = Field(None, description="Recent audit log entries")
 

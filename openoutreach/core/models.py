@@ -166,7 +166,7 @@ class SiteConfig:
         return str(result.upserted_id or self._id)
 
     @classmethod
-    def load(cls) -> "SiteConfig":
+    def load(cls, user_id: Optional[str] = None) -> "SiteConfig":
         """Load the singleton site config from MongoDB."""
         from openoutreach.mongodb.connection import get_mongodb_collection
 

@@ -959,6 +959,7 @@ export interface LinkedInCredentials {
     };
   };
   linkedinProfileId?: number | null;
+  executionMode?: "desktop" | "cloud";
 }
 
 export interface LinkedInCredentialsHealth {
@@ -1011,6 +1012,7 @@ export interface CreateLinkedInCredentialsData {
   password: string;
   username?: string;
   linkedin_profile_id?: number | null;
+  execution_mode?: "desktop" | "cloud";
 }
 
 export async function createLinkedInCredentials(

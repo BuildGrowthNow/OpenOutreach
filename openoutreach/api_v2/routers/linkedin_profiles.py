@@ -317,6 +317,8 @@ async def create_profile(
     Creates SmartRateLimitContext for the new profile.
     """
     from openoutreach.linkedin.models import LinkedInProfile
+    from openoutreach.mongodb.models_user import User
+    from openoutreach.billing.enforcement import PlanEnforcer
 
     collection = get_mongodb_collection("linkedin_profiles")
     if collection is None:
@@ -324,6 +326,14 @@ async def create_profile(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="LinkedIn profiles database unavailable"
         )
+
+    # Enforce plan limit
+    user = User.get(user_id)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    allowed, error_msg = PlanEnforcer.can_create_linkedin_account(user)
+    if not allowed:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=error_msg)
 
     # Check for duplicate
     existing = collection.find_one({
@@ -382,6 +392,224 @@ async def create_profile(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to create profile: {str(e)}"
+        )
+
+
+# Static routes MUST be registered before /{profile_id} to prevent FastAPI
+# from matching "health" or "daemon" as a profile_id path parameter.
+
+@router.get("/health")
+async def get_profile_health(
+    user_id: str = Depends(get_current_user),
+):
+    """
+    Get health status for all user's LinkedIn profiles.
+
+    Returns aggregated health metrics including:
+    - Overall profile status
+    - Credential verification status
+    - Health scores and recommendations
+    - Active alerts
+
+    Multi-tenant: filters by user_id from authenticated token.
+    """
+    profiles_collection = get_mongodb_collection("linkedin_profiles")
+    credentials_collection = get_mongodb_collection("linkedin_credentials")
+    logs_collection = get_mongodb_collection("linkedin_credential_logs")
+
+    if profiles_collection is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="LinkedIn profiles database unavailable"
+        )
+
+    try:
+        # Get all profiles for this user
+        profiles_cursor = profiles_collection.find({"user_id": user_id})
+        profiles = list(profiles_cursor)
+        total_profiles = len(profiles)
+
+        profile_health_data = []
+
+        for profile in profiles:
+            profile_id = str(profile.get("_id"))
+            linkedin_username = profile.get("linkedin_username", "")
+            active = profile.get("active", True)
+
+            # Get associated credentials
+            credentials_status = "unknown"
+            health_score = 100
+            last_error = None
+            last_verification = None
+
+            if credentials_collection is not None:
+                credential = credentials_collection.find_one({
+                    "linkedin_profile_id": profile_id
+                })
+
+                if credential:
+                    credentials_status = credential.get("status", "unknown")
+
+                    # Calculate health score based on credential status
+                    if credentials_status == "invalid":
+                        health_score = 0
+                    elif credentials_status == "locked":
+                        health_score = 40
+                    elif credentials_status == "expired":
+                        health_score = 60
+                    elif credentials_status == "tested":
+                        health_score = 80
+                    elif credentials_status == "active":
+                        health_score = 100
+
+                    # Get last verification timestamp
+                    last_verified = credential.get("last_verified")
+                    if last_verified:
+                        last_verification = last_verified.isoformat()
+
+                    # Get last error from logs
+                    if logs_collection is not None:
+                        try:
+                            error_log = logs_collection.find_one(
+                                {
+                                    "credential_id": str(credential.get("_id")),
+                                    "action": {"$nin": ["verified", "usage"]}
+                                },
+                                sort=[("created_at", -1)]
+                            )
+
+                            if error_log:
+                                details = error_log.get("details", {})
+                                last_error = (
+                                    details.get("error_message") or
+                                    details.get("message") or
+                                    details.get("reason")
+                                )
+                        except Exception as e:
+                            logger.error(f"Failed to get error logs: {e}")
+                            last_error = None
+
+            # Determine overall health status
+            if not active:
+                health_status = "inactive"
+            elif credentials_status == "active":
+                health_status = "active"
+            elif credentials_status == "invalid":
+                health_status = "invalid"
+            elif credentials_status == "expired":
+                health_status = "expired"
+            elif credentials_status == "locked":
+                health_status = "locked"
+            elif credentials_status == "tested":
+                health_status = "tested"
+            elif credentials_status == "stored":
+                health_status = "stored"
+            else:
+                health_status = "active" if active else "inactive"
+
+            needs_attention = credentials_status in ["invalid", "locked", "expired"]
+
+            profile_health_data.append({
+                "id": profile_id,
+                "linkedin_username": linkedin_username,
+                "status": active,
+                "credentials_status": credentials_status,
+                "health_score": health_score,
+                "health_status": health_status,
+                "needs_attention": needs_attention,
+                "last_error": last_error,
+                "last_verification": last_verification,
+            })
+
+        needs_attention_count = sum(
+            1 for p in profile_health_data if p["needs_attention"]
+        )
+
+        return {
+            "profiles": profile_health_data,
+            "count": len(profile_health_data),
+            "total_profiles": total_profiles,
+            "needs_attention_count": needs_attention_count,
+        }
+
+    except Exception as e:
+        logger.exception("Failed to get profile health")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve profile health: {str(e)}"
+        )
+
+
+@router.get("/daemon/status")
+async def get_daemon_status(user_id: str = Depends(get_current_user)):
+    """Get desktop daemon status for the current user.
+
+    Returns daemon health, session state, and verification requirements.
+    """
+    from datetime import datetime, timezone
+    from openoutreach.linkedin.models import LinkedInProfile
+
+    try:
+        profiles = LinkedInProfile.objects.filter(user_id=user_id, active=True)
+
+        if not profiles:
+            return {
+                "has_daemon": False,
+                "profiles": [],
+            }
+
+        daemon_statuses = []
+        for profile in profiles:
+            daemon_info = {
+                "profile_id": profile.pk,
+                "username": profile.linkedin_username,
+                "daemon_active": False,
+                "last_seen": None,
+                "version": None,
+                "platform": None,
+                "browser": None,
+                "is_logged_in": profile.is_logged_in,
+                "requires_verification": profile.requires_verification,
+                "verification_type": profile.verification_type,
+                "session_updated_at": profile.session_updated_at.isoformat() if profile.session_updated_at else None,
+                "status": "offline",
+            }
+
+            # Check if daemon was seen recently (within 2 minutes = 2 heartbeats)
+            if profile.daemon_last_seen:
+                now = datetime.now(timezone.utc)
+                # Handle timezone-naive datetime
+                last_seen = profile.daemon_last_seen
+                if last_seen.tzinfo is None:
+                    from datetime import timezone as tz
+                    last_seen = last_seen.replace(tzinfo=tz.utc)
+
+                seconds_since_seen = (now - last_seen).total_seconds()
+                daemon_info["last_seen"] = last_seen.isoformat()
+                daemon_info["version"] = profile.daemon_version
+                daemon_info["platform"] = profile.daemon_platform
+                daemon_info["browser"] = profile.daemon_browser
+
+                if seconds_since_seen < 120:  # 2 minutes
+                    daemon_info["daemon_active"] = True
+                    daemon_info["status"] = "online"
+                elif seconds_since_seen < 600:  # 10 minutes
+                    daemon_info["status"] = "stale"
+                else:
+                    daemon_info["status"] = "offline"
+
+            daemon_statuses.append(daemon_info)
+
+        return {
+            "has_daemon": len(daemon_statuses) > 0,
+            "profiles": daemon_statuses,
+        }
+
+    except Exception as e:
+        logger.exception("Failed to get daemon status")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve daemon status: {str(e)}"
         )
 
 
@@ -476,6 +704,7 @@ async def update_profile(
             updates["linkedin_username"] = linkedin_username
         if active is not None:
             updates["active"] = active
+            updates["is_active"] = active  # keep both fields in sync
         if connect_daily_limit is not None:
             updates["connect_daily_limit"] = connect_daily_limit
         if follow_up_daily_limit is not None:
@@ -745,219 +974,4 @@ async def delete_profile(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to delete profile: {str(e)}"
-        )
-
-
-@router.get("/health")
-async def get_profile_health(
-    user_id: str = Depends(get_current_user),
-):
-    """
-    Get health status for all user's LinkedIn profiles.
-
-    Returns aggregated health metrics including:
-    - Overall profile status
-    - Credential verification status
-    - Health scores and recommendations
-    - Active alerts
-
-    Multi-tenant: filters by user_id from authenticated token.
-    """
-    profiles_collection = get_mongodb_collection("linkedin_profiles")
-    credentials_collection = get_mongodb_collection("linkedin_credentials")
-    logs_collection = get_mongodb_collection("linkedin_credential_logs")
-
-    if profiles_collection is None:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="LinkedIn profiles database unavailable"
-        )
-
-    try:
-        # Get all profiles for this user
-        profiles_cursor = profiles_collection.find({"user_id": user_id})
-        profiles = list(profiles_cursor)
-        total_profiles = len(profiles)
-
-        profile_health_data = []
-
-        for profile in profiles:
-            profile_id = str(profile.get("_id"))
-            linkedin_username = profile.get("linkedin_username", "")
-            active = profile.get("active", True)
-
-            # Get associated credentials
-            credentials_status = "unknown"
-            health_score = 100
-            last_error = None
-            last_verification = None
-
-            if credentials_collection is not None:
-                credential = credentials_collection.find_one({
-                    "linkedin_profile_id": profile_id
-                })
-
-                if credential:
-                    credentials_status = credential.get("status", "unknown")
-
-                    # Calculate health score based on credential status
-                    if credentials_status == "invalid":
-                        health_score = 0
-                    elif credentials_status == "locked":
-                        health_score = 40
-                    elif credentials_status == "expired":
-                        health_score = 60
-                    elif credentials_status == "tested":
-                        health_score = 80
-                    elif credentials_status == "active":
-                        health_score = 100
-
-                    # Get last verification timestamp
-                    last_verified = credential.get("last_verified")
-                    if last_verified:
-                        last_verification = last_verified.isoformat()
-
-                    # Get last error from logs
-                    if logs_collection is not None:
-                        try:
-                            error_log = logs_collection.find_one(
-                                {
-                                    "credential_id": str(credential.get("_id")),
-                                    "action": {"$nin": ["verified", "usage"]}
-                                },
-                                sort=[("created_at", -1)]
-                            )
-
-                            if error_log:
-                                details = error_log.get("details", {})
-                                last_error = (
-                                    details.get("error_message") or
-                                    details.get("message") or
-                                    details.get("reason")
-                                )
-                        except Exception as e:
-                            logger.error(f"Failed to get error logs: {e}")
-                            last_error = None
-
-            # Determine overall health status
-            if not active:
-                health_status = "inactive"
-            elif credentials_status == "active":
-                health_status = "active"
-            elif credentials_status == "invalid":
-                health_status = "invalid"
-            elif credentials_status == "expired":
-                health_status = "expired"
-            elif credentials_status == "locked":
-                health_status = "locked"
-            elif credentials_status == "tested":
-                health_status = "tested"
-            elif credentials_status == "stored":
-                health_status = "stored"
-            else:
-                health_status = "active" if active else "inactive"
-
-            needs_attention = credentials_status in ["invalid", "locked", "expired"]
-
-            profile_health_data.append({
-                "id": profile_id,
-                "linkedin_username": linkedin_username,
-                "status": active,
-                "credentials_status": credentials_status,
-                "health_score": health_score,
-                "health_status": health_status,
-                "needs_attention": needs_attention,
-                "last_error": last_error,
-                "last_verification": last_verification,
-            })
-
-        needs_attention_count = sum(
-            1 for p in profile_health_data if p["needs_attention"]
-        )
-
-        return {
-            "profiles": profile_health_data,
-            "count": len(profile_health_data),
-            "total_profiles": total_profiles,
-            "needs_attention_count": needs_attention_count,
-        }
-
-    except Exception as e:
-        logger.exception("Failed to get profile health")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve profile health: {str(e)}"
-        )
-
-
-@router.get("/daemon/status")
-async def get_daemon_status(user_id: str = Depends(get_current_user)):
-    """Get desktop daemon status for the current user.
-
-    Returns daemon health, session state, and verification requirements.
-    """
-    from datetime import datetime, timezone
-    from openoutreach.linkedin.models import LinkedInProfile
-
-    try:
-        profiles = LinkedInProfile.objects.filter(user_id=user_id, active=True)
-
-        if not profiles:
-            return {
-                "has_daemon": False,
-                "profiles": [],
-            }
-
-        daemon_statuses = []
-        for profile in profiles:
-            daemon_info = {
-                "profile_id": profile.pk,
-                "username": profile.linkedin_username,
-                "daemon_active": False,
-                "last_seen": None,
-                "version": None,
-                "platform": None,
-                "browser": None,
-                "is_logged_in": profile.is_logged_in,
-                "requires_verification": profile.requires_verification,
-                "verification_type": profile.verification_type,
-                "session_updated_at": profile.session_updated_at.isoformat() if profile.session_updated_at else None,
-                "status": "offline",
-            }
-
-            # Check if daemon was seen recently (within 2 minutes = 2 heartbeats)
-            if profile.daemon_last_seen:
-                now = datetime.now(timezone.utc)
-                # Handle timezone-naive datetime
-                last_seen = profile.daemon_last_seen
-                if last_seen.tzinfo is None:
-                    from datetime import timezone as tz
-                    last_seen = last_seen.replace(tzinfo=tz.utc)
-
-                seconds_since_seen = (now - last_seen).total_seconds()
-                daemon_info["last_seen"] = last_seen.isoformat()
-                daemon_info["version"] = profile.daemon_version
-                daemon_info["platform"] = profile.daemon_platform
-                daemon_info["browser"] = profile.daemon_browser
-
-                if seconds_since_seen < 120:  # 2 minutes
-                    daemon_info["daemon_active"] = True
-                    daemon_info["status"] = "online"
-                elif seconds_since_seen < 600:  # 10 minutes
-                    daemon_info["status"] = "stale"
-                else:
-                    daemon_info["status"] = "offline"
-
-            daemon_statuses.append(daemon_info)
-
-        return {
-            "has_daemon": len(daemon_statuses) > 0,
-            "profiles": daemon_statuses,
-        }
-
-    except Exception as e:
-        logger.exception("Failed to get daemon status")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve daemon status: {str(e)}"
         )

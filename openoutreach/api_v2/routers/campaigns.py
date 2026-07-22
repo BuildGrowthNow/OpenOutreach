@@ -290,6 +290,7 @@ async def get_campaign(
 
 
 @router.put("/{campaign_id}", response_model=CampaignResponse)
+@router.patch("/{campaign_id}", response_model=CampaignResponse)
 async def update_campaign(
     campaign_id: str,
     data: CampaignUpdate,

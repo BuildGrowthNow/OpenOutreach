@@ -25,6 +25,7 @@ def generate_search_keywords(
     icp_titles: list[str] | None = None,
     n_keywords: int = 10,
     exclude_keywords: list[str] | None = None,
+    user_id: str | None = None,
 ) -> list[str]:
     """Call LLM to generate LinkedIn search keywords from campaign context.
 
@@ -46,7 +47,7 @@ def generate_search_keywords(
     )
 
     agent = Agent(
-        get_llm_model(),
+        get_llm_model(user_id=user_id),
         output_type=SearchKeywords,
         model_settings={"temperature": 0.9},
     )

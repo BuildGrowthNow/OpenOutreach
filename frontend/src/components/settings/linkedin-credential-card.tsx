@@ -551,32 +551,29 @@ export default function LinkedInCredentialCard({
         </Dialog>
 
         <Dialog open={showChallengeModal} onOpenChange={setShowChallengeModal}>
-          <DialogContent className="max-w-[95vw] h-[90vh] border border-zinc-800 bg-zinc-950 text-zinc-100 shadow-2xl flex flex-col p-0">
-            <DialogHeader className="p-6 pb-4 border-b border-zinc-800">
-              <DialogTitle className="flex items-center gap-2">
-                <Shield className="h-5 w-5 text-amber-500" />
-                Complete LinkedIn Challenge
-              </DialogTitle>
-              <DialogDescription className="space-y-2">
-                <p>LinkedIn requires additional verification. Follow these steps:</p>
-                <ol className="list-decimal list-inside space-y-1 text-sm">
-                  <li>Complete the CAPTCHA or security challenge in the browser viewer below</li>
-                  <li>Wait for LinkedIn to redirect you to the feed page</li>
-                  <li>Click "Confirm Login" to verify your credentials</li>
+          {credential.executionMode !== "cloud" ? (
+            <DialogContent className="max-w-lg border border-zinc-800 bg-zinc-950 text-zinc-100 shadow-2xl">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Shield className="h-5 w-5 text-amber-500" />
+                  LinkedIn Challenge Detected
+                </DialogTitle>
+                <DialogDescription>
+                  LinkedIn requires additional verification on your computer.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-2">
+                <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-300">
+                  The desktop app opened LinkedIn in your browser to complete the challenge.
+                  Check your default browser or LinkedIn app to finish verification.
+                </div>
+                <ol className="space-y-2 text-sm text-zinc-300">
+                  <li className="flex gap-2"><span className="text-zinc-500">1.</span>Complete the CAPTCHA or enter the verification code in your browser.</li>
+                  <li className="flex gap-2"><span className="text-zinc-500">2.</span>Wait until you see the LinkedIn feed page.</li>
+                  <li className="flex gap-2"><span className="text-zinc-500">3.</span>Come back here and click &quot;Confirm Login&quot;.</li>
                 </ol>
-              </DialogDescription>
-            </DialogHeader>
-            <div className="flex-1 overflow-hidden min-h-0">
-              <VncViewer
-                profileId={String(credential.linkedinProfileId || "")}
-                embedded
-              />
-            </div>
-            <div className="flex items-center justify-between gap-2 p-4 border-t border-zinc-800 bg-zinc-950/80">
-              <p className="text-sm text-zinc-400">
-                Complete the challenge, then confirm your login
-              </p>
-              <div className="flex gap-2">
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
                 <Button
                   variant="outline"
                   onClick={() => setShowChallengeModal(false)}
@@ -623,8 +620,83 @@ export default function LinkedInCredentialCard({
                   )}
                 </Button>
               </div>
-            </div>
-          </DialogContent>
+            </DialogContent>
+          ) : (
+            <DialogContent className="max-w-[95vw] h-[90vh] border border-zinc-800 bg-zinc-950 text-zinc-100 shadow-2xl flex flex-col p-0">
+              <DialogHeader className="p-6 pb-4 border-b border-zinc-800">
+                <DialogTitle className="flex items-center gap-2">
+                  <Shield className="h-5 w-5 text-amber-500" />
+                  Complete LinkedIn Challenge
+                </DialogTitle>
+                <DialogDescription className="space-y-2">
+                  <p>LinkedIn requires additional verification. Follow these steps:</p>
+                  <ol className="list-decimal list-inside space-y-1 text-sm">
+                    <li>Complete the CAPTCHA or security challenge in the browser viewer below</li>
+                    <li>Wait for LinkedIn to redirect you to the feed page</li>
+                    <li>Click &quot;Confirm Login&quot; to verify your credentials</li>
+                  </ol>
+                </DialogDescription>
+              </DialogHeader>
+              <div className="flex-1 overflow-hidden min-h-0">
+                <VncViewer
+                  profileId={String(credential.linkedinProfileId || "")}
+                  embedded
+                />
+              </div>
+              <div className="flex items-center justify-between gap-2 p-4 border-t border-zinc-800 bg-zinc-950/80">
+                <p className="text-sm text-zinc-400">
+                  Complete the challenge, then confirm your login
+                </p>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowChallengeModal(false)}
+                    className="border-zinc-700 hover:bg-zinc-900"
+                  >
+                    Close
+                  </Button>
+                  <Button
+                    onClick={async () => {
+                      setIsVerifying(true);
+                      try {
+                        const resp = await confirmLinkedInCredentials(credential.id);
+                        const data = resp.data as { success?: boolean; error?: string; details?: { errorType?: string } } | undefined;
+                        if (data?.success) {
+                          setShowChallengeModal(false);
+                          toast({ title: "Success", description: "Credentials verified successfully" });
+                          onRefresh();
+                        } else if (data?.details?.errorType === "challenge_incomplete") {
+                          toast({ title: "Not done yet", description: "Complete the challenge first, then click Confirm again." });
+                        } else {
+                          setShowChallengeModal(false);
+                          toast({ title: "Error", description: data?.error || "Confirmation failed", variant: "destructive" });
+                        }
+                      } catch (err) {
+                        setShowChallengeModal(false);
+                        toast({ title: "Error", description: err instanceof Error ? err.message : "Confirmation failed", variant: "destructive" });
+                      } finally {
+                        setIsVerifying(false);
+                      }
+                    }}
+                    disabled={isVerifying}
+                    className="bg-emerald-600 hover:bg-emerald-700"
+                  >
+                    {isVerifying ? (
+                      <>
+                        <Icons.RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                        Checking...
+                      </>
+                    ) : (
+                      <>
+                        <Icons.CheckCircle className="mr-2 h-4 w-4" />
+                        Confirm Login
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          )}
         </Dialog>
       </CardContent>
     </Card>

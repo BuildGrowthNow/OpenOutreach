@@ -177,28 +177,25 @@ export default function DownloadPage() {
               </div>
 
               <div className="space-y-3">
-                <Button
-                  className="w-full h-11 font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/20"
-                  asChild
+                <a
+                  href={DOWNLOADS.windowsInstaller}
+                  download
+                  className="flex items-center justify-center gap-2 w-full h-11 rounded-lg px-4 font-semibold text-sm text-white bg-emerald-600 hover:bg-emerald-500 shadow-lg shadow-emerald-600/20 transition-colors"
                 >
-                  <a href={DOWNLOADS.windowsInstaller} download>
-                    <Download className="mr-2 h-4 w-4" />
-                    Download Installer (.exe)
-                  </a>
-                </Button>
+                  <Download className="h-4 w-4 shrink-0" />
+                  Download Installer (.exe)
+                </a>
                 <p className="text-center text-xs text-zinc-600">
                   Recommended — start menu shortcut &amp; auto-start included
                 </p>
-                <Button
-                  variant="outline"
-                  className="w-full border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-white"
-                  asChild
+                <a
+                  href={DOWNLOADS.windowsStandalone}
+                  download
+                  className="flex items-center justify-center gap-2 w-full h-10 rounded-lg px-4 font-medium text-sm text-zinc-300 border border-zinc-700 hover:bg-zinc-800 hover:text-white transition-colors"
                 >
-                  <a href={DOWNLOADS.windowsStandalone} download>
-                    <Download className="mr-2 h-4 w-4" />
-                    Standalone (.exe)
-                  </a>
-                </Button>
+                  <Download className="h-4 w-4 shrink-0" />
+                  Standalone (.exe)
+                </a>
                 <p className="text-center text-xs text-zinc-600">
                   No installation — run directly from any folder
                 </p>
@@ -234,15 +231,14 @@ export default function DownloadPage() {
               </div>
 
               <div className="space-y-3">
-                <Button
-                  className="w-full h-11 font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/20"
-                  asChild
+                <a
+                  href={DOWNLOADS.macos}
+                  download
+                  className="flex items-center justify-center gap-2 w-full h-11 rounded-lg px-4 font-semibold text-sm text-white bg-emerald-600 hover:bg-emerald-500 shadow-lg shadow-emerald-600/20 transition-colors"
                 >
-                  <a href={DOWNLOADS.macos} download>
-                    <Download className="mr-2 h-4 w-4" />
-                    Download for macOS (.dmg)
-                  </a>
-                </Button>
+                  <Download className="h-4 w-4 shrink-0" />
+                  Download for macOS (.dmg)
+                </a>
                 <p className="text-center text-xs text-zinc-600">
                   Open the DMG and drag Lengrowth to Applications
                 </p>

@@ -80,11 +80,13 @@ async def daemon_heartbeat(
     if collection is None:
         raise HTTPException(503, "Database unavailable")
 
+    now = datetime.now(timezone.utc)
     collection.update_one(
         {"_id": heartbeat.linkedin_profile_id},
         {
             "$set": {
-                "daemon_last_seen": datetime.now(timezone.utc),
+                "daemon_last_seen": now,
+                "last_heartbeat": now,
                 "daemon_version": heartbeat.version,
                 "daemon_platform": heartbeat.platform,
                 "daemon_browser": heartbeat.browser,
@@ -285,7 +287,7 @@ async def get_daemon_config(
     if not profile:
         raise HTTPException(404, "LinkedIn profile not found")
 
-    config = SiteConfig.load()
+    config = SiteConfig.load(user_id=user_id)
 
     # Parse active days string to list
     active_days = [int(d.strip()) for d in config.active_days.split(",") if d.strip()]

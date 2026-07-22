@@ -27,8 +27,9 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/components/ui/use-toast";
 import { Icons } from "@/lib/types/components";
-import { Shield } from "lucide-react";
+import { Cloud, Monitor, Shield } from "lucide-react";
 import VncViewer from "./vnc-viewer";
+import { useBilling } from "@/lib/contexts/billing-context";
 import {
   confirmLinkedInCredentials,
   createLinkedInCredentials,
@@ -65,8 +66,13 @@ export default function LinkedInCredentialForm({
   const [showChallengeModal, setShowChallengeModal] = useState(false);
   const [challengeCredentialId, setChallengeCredentialId] = useState<number | null>(null);
   const [challengeProfileId, setChallengeProfileId] = useState<string | null>(null);
+  const [executionMode, setExecutionMode] = useState<"desktop" | "cloud">(
+    initialData?.executionMode ?? "desktop"
+  );
   const { toast } = useToast();
   const countdownRef = useRef<NodeJS.Timeout | null>(null);
+  const { billingStatus } = useBilling();
+  const hasCloudAddon = (billingStatus?.cloud_profiles ?? 0) > 0;
 
   useEffect(() => {
     if (isSubmitting) {
@@ -106,6 +112,7 @@ export default function LinkedInCredentialForm({
       const formData: CreateLinkedInCredentialsData = {
         email: values.email,
         password: values.password,
+        execution_mode: executionMode,
       };
 
       let credentialId = initialData?.id ?? null;
@@ -343,6 +350,46 @@ export default function LinkedInCredentialForm({
                 </CardContent>
               </Card>
 
+              {hasCloudAddon && (
+                <Card className="border-zinc-800/80 bg-zinc-950/50 shadow-none">
+                  <CardContent className="pt-6">
+                    <h3 className="mb-3 text-sm font-semibold text-zinc-100">Execution Mode</h3>
+                    <div className="flex gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setExecutionMode("desktop")}
+                        className={`flex flex-1 items-center gap-2 rounded-lg border px-4 py-3 text-sm transition-colors ${
+                          executionMode === "desktop"
+                            ? "border-blue-500/60 bg-blue-500/10 text-blue-300"
+                            : "border-zinc-800 bg-zinc-900/40 text-zinc-400 hover:border-zinc-700"
+                        }`}
+                      >
+                        <Monitor className="h-4 w-4 shrink-0" />
+                        <div className="text-left">
+                          <div className="font-medium">Desktop</div>
+                          <div className="text-xs opacity-70">Your computer · Free</div>
+                        </div>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setExecutionMode("cloud")}
+                        className={`flex flex-1 items-center gap-2 rounded-lg border px-4 py-3 text-sm transition-colors ${
+                          executionMode === "cloud"
+                            ? "border-emerald-500/60 bg-emerald-500/10 text-emerald-300"
+                            : "border-zinc-800 bg-zinc-900/40 text-zinc-400 hover:border-zinc-700"
+                        }`}
+                      >
+                        <Cloud className="h-4 w-4 shrink-0" />
+                        <div className="text-left">
+                          <div className="font-medium">Cloud</div>
+                          <div className="text-xs opacity-70">Our servers · $299/mo</div>
+                        </div>
+                      </button>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
               <div className="flex flex-wrap items-center justify-end gap-3 border-t border-zinc-800/80 pt-6">
                 <div className="flex flex-wrap items-center gap-3">
                   {onCancel ? (
@@ -434,32 +481,85 @@ export default function LinkedInCredentialForm({
       </Form>
 
       <Dialog open={showChallengeModal} onOpenChange={setShowChallengeModal}>
-        <DialogContent className="max-w-[95vw] h-[90vh] border border-zinc-800 bg-zinc-950 text-zinc-100 shadow-2xl flex flex-col p-0">
-          <DialogHeader className="p-6 pb-4 border-b border-zinc-800">
-            <DialogTitle className="flex items-center gap-2">
-              <Shield className="h-5 w-5 text-amber-500" />
-              Complete LinkedIn Verification
-            </DialogTitle>
-            <DialogDescription className="space-y-2">
-              <p>LinkedIn sent a verification code to your email. Complete it below:</p>
-              <ol className="list-decimal list-inside space-y-1 text-sm">
-                <li>Check your email for the LinkedIn verification code</li>
-                <li>Enter the code in the browser viewer below</li>
-                <li>Once you see the LinkedIn feed, click &quot;Confirm Login&quot;</li>
+        {executionMode === "cloud" ? (
+          <DialogContent className="max-w-[95vw] h-[90vh] border border-zinc-800 bg-zinc-950 text-zinc-100 shadow-2xl flex flex-col p-0">
+            <DialogHeader className="p-6 pb-4 border-b border-zinc-800">
+              <DialogTitle className="flex items-center gap-2">
+                <Shield className="h-5 w-5 text-amber-500" />
+                Complete LinkedIn Verification
+              </DialogTitle>
+              <DialogDescription className="space-y-2">
+                <p>LinkedIn sent a verification code to your email. Complete it below:</p>
+                <ol className="list-decimal list-inside space-y-1 text-sm">
+                  <li>Check your email for the LinkedIn verification code</li>
+                  <li>Enter the code in the browser viewer below</li>
+                  <li>Once you see the LinkedIn feed, click &quot;Confirm Login&quot;</li>
+                </ol>
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex-1 overflow-hidden min-h-0">
+              <VncViewer
+                profileId={challengeProfileId || undefined}
+                embedded
+              />
+            </div>
+            <div className="flex items-center justify-between gap-2 p-4 border-t border-zinc-800 bg-zinc-950/80">
+              <p className="text-sm text-zinc-400">
+                Enter the code, wait for the feed to load, then confirm
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowChallengeModal(false)}
+                  className="border-zinc-700 hover:bg-zinc-900"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleConfirmChallenge}
+                  disabled={isSubmitting}
+                  className="bg-emerald-600 hover:bg-emerald-700"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Icons.RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                      Checking...
+                    </>
+                  ) : (
+                    <>
+                      <Icons.CheckCircle className="mr-2 h-4 w-4" />
+                      Confirm Login
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        ) : (
+          <DialogContent className="max-w-lg border border-zinc-800 bg-zinc-950 text-zinc-100 shadow-2xl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Shield className="h-5 w-5 text-amber-500" />
+                LinkedIn Challenge Detected
+              </DialogTitle>
+              <DialogDescription>
+                LinkedIn requires additional verification on your computer.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              <Alert className="border-amber-500/40 bg-amber-500/10">
+                <AlertDescription className="text-amber-300 text-sm">
+                  The desktop app opened LinkedIn in your browser to complete the challenge.
+                  Check your default browser or LinkedIn app to finish verification.
+                </AlertDescription>
+              </Alert>
+              <ol className="space-y-2 text-sm text-zinc-300">
+                <li className="flex gap-2"><span className="text-zinc-500">1.</span>Complete the CAPTCHA or enter the verification code in your browser.</li>
+                <li className="flex gap-2"><span className="text-zinc-500">2.</span>Wait until you see the LinkedIn feed page.</li>
+                <li className="flex gap-2"><span className="text-zinc-500">3.</span>Come back here and click &quot;Confirm Login&quot;.</li>
               </ol>
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex-1 overflow-hidden min-h-0">
-            <VncViewer
-              profileId={challengeProfileId || undefined}
-              embedded
-            />
-          </div>
-          <div className="flex items-center justify-between gap-2 p-4 border-t border-zinc-800 bg-zinc-950/80">
-            <p className="text-sm text-zinc-400">
-              Enter the code, wait for the feed to load, then confirm
-            </p>
-            <div className="flex gap-2">
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
               <Button
                 variant="outline"
                 onClick={() => setShowChallengeModal(false)}
@@ -485,8 +585,8 @@ export default function LinkedInCredentialForm({
                 )}
               </Button>
             </div>
-          </div>
-        </DialogContent>
+          </DialogContent>
+        )}
       </Dialog>
     </div>
   );

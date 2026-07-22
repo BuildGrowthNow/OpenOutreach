@@ -60,11 +60,11 @@ def _get_active_hours_config(user_id: str | None = None):
     }
 
 
-def _working_intervals(start, end) -> list[tuple]:
+def _working_intervals(start, end, user_id: str | None = None) -> list[tuple]:
     """Return ``[(s, e), ...]`` UTC datetimes for the working portions of
     ``[start, end]``. When ``enable_active_hours`` is False the only
     interval is ``[(start, end)]``."""
-    cfg = _get_active_hours_config()
+    cfg = _get_active_hours_config(user_id=user_id)
     if not cfg['enabled']:
         return [(start, end)]
 
@@ -104,17 +104,18 @@ def _working_intervals(start, end) -> list[tuple]:
     return intervals
 
 
-def working_seconds_in_window(start, end) -> float:
+def working_seconds_in_window(start, end, user_id: str | None = None) -> float:
     """Sum of seconds inside active hours between ``start`` and ``end``.
     Returns ``(end - start).total_seconds()`` when active hours are disabled."""
-    cfg = _get_active_hours_config()
+    cfg = _get_active_hours_config(user_id=user_id)
     if not cfg['enabled']:
         return max(0.0, (end - start).total_seconds())
-    return sum((e - s).total_seconds() for s, e in _working_intervals(start, end))
+    return sum((e - s).total_seconds() for s, e in _working_intervals(start, end, user_id=user_id))
 
 
 def smart_velocity_slot_times(
-    now, n: int, velocity: int, limiter_context=None, time_aware: bool = True, horizon_hours: float = 24
+    now, n: int, velocity: int, limiter_context=None, time_aware: bool = True, horizon_hours: float = 24,
+    user_id: str | None = None,
 ) -> list:
     """Return ``n`` timestamps spaced with smart rate limiting awareness.
 
@@ -133,6 +134,7 @@ def smart_velocity_slot_times(
         limiter_context: SmartRateLimitContext instance (optional)
         time_aware: Whether to use time-of-day weighting
         horizon_hours: Planning window (default 24h)
+        user_id: Owner's user_id for per-user active hours config
 
     Returns:
         List of strictly-increasing timestamps
@@ -146,10 +148,10 @@ def smart_velocity_slot_times(
 
     # Fall back to simple velocity spacing if no smart context
     if not time_aware or limiter_context is None:
-        return velocity_slot_times(now, n, velocity, horizon_hours)
+        return velocity_slot_times(now, n, velocity, horizon_hours, user_id=user_id)
 
     end = now + timedelta(hours=horizon_hours)
-    intervals = _working_intervals(now, end)
+    intervals = _working_intervals(now, end, user_id=user_id)
     if not intervals:
         return []
 
@@ -222,7 +224,7 @@ def _add_detectability_jitter(times: list, detectability_score: int) -> list:
     return jittered
 
 
-def velocity_slot_times(now, n: int, velocity: int, horizon_hours: float = 24) -> list:
+def velocity_slot_times(now, n: int, velocity: int, horizon_hours: float = 24, user_id: str | None = None) -> list:
     """Return ``n`` timestamps spaced according to velocity (actions/hour).
 
     When velocity is high (>= 30 actions/hr, i.e., <= 2min spacing), tasks
@@ -234,6 +236,7 @@ def velocity_slot_times(now, n: int, velocity: int, horizon_hours: float = 24) -
         n: Number of slots to create
         velocity: Target actions per hour (from SiteConfig)
         horizon_hours: Planning window (default 24h)
+        user_id: Owner's user_id for per-user active hours config
 
     Returns:
         List of strictly-increasing timestamps
@@ -242,7 +245,7 @@ def velocity_slot_times(now, n: int, velocity: int, horizon_hours: float = 24) -
         return []
 
     end = now + timedelta(hours=horizon_hours)
-    intervals = _working_intervals(now, end)
+    intervals = _working_intervals(now, end, user_id=user_id)
     total_seconds = sum((e - s).total_seconds() for s, e in intervals)
     if total_seconds <= 0:
         return []
@@ -361,9 +364,9 @@ def _plan_slots(
     now = Datetime.now(tz.utc)
 
     if time_aware and limiter_context:
-        times = smart_velocity_slot_times(now, n, velocity, limiter_context, time_aware=True)
+        times = smart_velocity_slot_times(now, n, velocity, limiter_context, time_aware=True, user_id=user_id)
     else:
-        times = velocity_slot_times(now, n, velocity)
+        times = velocity_slot_times(now, n, velocity, user_id=user_id)
 
     return _create_lazy_slots(
         task_type, campaign_id, times,

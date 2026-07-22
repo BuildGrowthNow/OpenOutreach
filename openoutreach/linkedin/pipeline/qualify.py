@@ -121,6 +121,7 @@ def run_qualification(session, qualifier: BayesianQualifier) -> str | None:
         product_pitch=campaign.product_pitch,
         campaign_objective=campaign.campaign_objective,
         icp_titles=campaign.icp_titles or None,
+        user_id=session.user_id,
     )
     _save_qualification_result(
         session, qualifier, lead_id, public_id, embedding, label, reason

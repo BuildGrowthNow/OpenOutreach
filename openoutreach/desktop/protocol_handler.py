@@ -1,4 +1,4 @@
-"""URL protocol handler for openoutreach:// callback."""
+"""URL protocol handler for lengrowth:// callback."""
 
 import logging
 import sys
@@ -9,10 +9,10 @@ logger = logging.getLogger(__name__)
 
 
 def parse_auth_callback(url: str) -> Optional[dict]:
-    """Parse openoutreach://auth callback URL.
+    """Parse lengrowth://auth callback URL.
 
     Args:
-        url: URL like "openoutreach://auth?token=xxx" or with optional
+        url: URL like "lengrowth://auth?token=xxx" or with optional
              "&refresh_token=yyy&profile_id=zzz"
 
     Returns:
@@ -20,7 +20,7 @@ def parse_auth_callback(url: str) -> Optional[dict]:
     """
     try:
         parsed = urllib.parse.urlparse(url)
-        if parsed.scheme != "openoutreach" or parsed.netloc != "auth":
+        if parsed.scheme != "lengrowth" or parsed.netloc != "auth":
             return None
 
         params = urllib.parse.parse_qs(parsed.query)
@@ -41,7 +41,7 @@ def parse_auth_callback(url: str) -> Optional[dict]:
 
 
 def register_protocol_handler():
-    """Register openoutreach:// protocol handler (Windows only).
+    """Register lengrowth:// protocol handler (Windows only).
 
     On macOS, this is handled by the app bundle's Info.plist.
     On Windows, this must be called on first launch to write registry entries.
@@ -53,22 +53,34 @@ def register_protocol_handler():
     from pathlib import Path
 
     try:
-        # Get executable path
         if getattr(sys, "frozen", False):
             exe_path = sys.executable
         else:
             exe_path = f'{sys.executable} "{Path(__file__).parent / "app.py"}"'
 
-        # Create registry entries
-        key_path = r"Software\Classes\openoutreach"
+        desired_command = f'"{exe_path}" "%1"'
+        cmd_key_path = r"Software\Classes\lengrowth\shell\open\command"
+
+        # Only write if the command value is missing or points to a different exe
+        try:
+            with winreg.OpenKey(
+                winreg.HKEY_CURRENT_USER, cmd_key_path
+            ) as key:
+                current, _ = winreg.QueryValueEx(key, "")
+                if current == desired_command:
+                    return  # Already registered correctly
+        except FileNotFoundError:
+            pass  # Key doesn't exist yet — proceed with creation
+
+        key_path = r"Software\Classes\lengrowth"
         with winreg.CreateKey(winreg.HKEY_CURRENT_USER, key_path) as key:
-            winreg.SetValue(key, "", winreg.REG_SZ, "URL:OpenOutreach Protocol")
+            winreg.SetValue(key, "", winreg.REG_SZ, "URL:Lengrowth Protocol")
             winreg.SetValueEx(key, "URL Protocol", 0, winreg.REG_SZ, "")
 
         with winreg.CreateKey(
-            winreg.HKEY_CURRENT_USER, key_path + r"\shell\open\command"
+            winreg.HKEY_CURRENT_USER, cmd_key_path
         ) as key:
-            winreg.SetValue(key, "", winreg.REG_SZ, f'"{exe_path}" "%1"')
+            winreg.SetValue(key, "", winreg.REG_SZ, desired_command)
 
         logger.info("Protocol handler registered")
 
@@ -77,7 +89,7 @@ def register_protocol_handler():
 
 
 def handle_protocol_url(url: str, auth_manager) -> bool:
-    """Handle openoutreach:// protocol URL.
+    """Handle lengrowth:// protocol URL.
 
     Args:
         url: Protocol URL from command line

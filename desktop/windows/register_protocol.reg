@@ -1,19 +1,19 @@
 Windows Registry Editor Version 5.00
 
-; Register openoutreach:// protocol handler
+; Register lengrowth:// protocol handler
 ; This file is for manual registration only
 ; The NSIS installer handles this automatically
 
-[HKEY_CLASSES_ROOT\openoutreach]
-@="URL:OpenOutreach Protocol"
+[HKEY_CLASSES_ROOT\lengrowth]
+@="URL:Lengrowth Protocol"
 "URL Protocol"=""
 
-[HKEY_CLASSES_ROOT\openoutreach\DefaultIcon]
-@="\"C:\\Program Files\\OpenOutreach\\OpenOutreach.exe\",0"
+[HKEY_CLASSES_ROOT\lengrowth\DefaultIcon]
+@="\"C:\\Program Files\\Lengrowth\\Lengrowth.exe\",0"
 
-[HKEY_CLASSES_ROOT\openoutreach\shell]
+[HKEY_CLASSES_ROOT\lengrowth\shell]
 
-[HKEY_CLASSES_ROOT\openoutreach\shell\open]
+[HKEY_CLASSES_ROOT\lengrowth\shell\open]
 
-[HKEY_CLASSES_ROOT\openoutreach\shell\open\command]
-@="\"C:\\Program Files\\OpenOutreach\\OpenOutreach.exe\" \"%1\""
+[HKEY_CLASSES_ROOT\lengrowth\shell\open\command]
+@="\"C:\\Program Files\\Lengrowth\\Lengrowth.exe\" \"%1\""

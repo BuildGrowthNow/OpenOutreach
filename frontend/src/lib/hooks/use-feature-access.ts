@@ -9,26 +9,30 @@ export function useFeatureAccess(featureName: string): { hasAccess: boolean; req
 
   const featureMap: Record<string, string> = {
     ai_messages: "starter",
+    follow_ups: "starter",
+    inbox: "starter",
+    analytics: "starter",
     voice_notes: "pro",
     ai_follow_ups: "pro",
     sales_navigator: "pro",
     api_access: "pro",
     team_members: "business",
+    workspace_management: "business",
+    priority_support: "business",
     white_label: "agency",
     custom_domain: "agency",
+    cloud_execution: "cloud",
+    campaign_management: "cloud",
   };
 
-  const planHierarchy = ["starter", "pro", "business", "agency", "cloud"];
+  const planHierarchy = ["starter", "lifetime", "pro", "business", "agency", "cloud"];
   const requiredPlan = featureMap[featureName];
 
   if (!requiredPlan) {
     return { hasAccess: true, requiredPlan: null };
   }
 
-  // Lifetime plan is equivalent to Pro tier
-  const userPlan = billingStatus.plan === "lifetime" ? "pro" : billingStatus.plan;
-
-  const currentPlanIndex = planHierarchy.indexOf(userPlan);
+  const currentPlanIndex = planHierarchy.indexOf(billingStatus.plan);
   const requiredPlanIndex = planHierarchy.indexOf(requiredPlan);
 
   const hasAccess =
