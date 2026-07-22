@@ -267,7 +267,7 @@ class TrayApp:
 
     def _start_window(self):
         """Create and show the pywebview window. Blocks until the window closes."""
-        url = self._app_url() if self.auth.is_logged_in() else self._app_url("login")
+        url = self._app_url("dashboard") if self.auth.is_logged_in() else self._app_url("login")
         logger.info("Opening window: %s", url)
 
         api = DesktopAPI(self)
