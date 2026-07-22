@@ -15,5 +15,9 @@ __pycache__/
 .cache/
 tests/fixtures/pages/**/*.html
 
+# Desktop build artifacts
+desktop/build/
+desktop/dist/
+
 # Note: Dockerfile and docker-compose.yml are NOT ignored
 # They are needed for deployment - push them to your repository

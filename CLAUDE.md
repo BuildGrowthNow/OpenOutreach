@@ -81,6 +81,35 @@ For detailed module docs, see `ARCHITECTURE.md`.
 - **Docker**: Playwright base image. When `ENABLE_VNC=true`, starts x11vnc on port 5900 and noVNC websockify web viewer on port 6080. The frontend Settings → LinkedIn Connection tab embeds a live noVNC iframe viewer (`/components/settings/vnc-viewer.tsx`) so operators can interact with LinkedIn challenges, CAPTCHAs, or security verifications directly from the platform without needing an external VNC client or SSH tunnel. `BUILD_ENV` arg selects requirements.
 - **CI/CD**: `.github/workflows/tests.yml` (pytest), `deploy.yml` (build + push to ghcr.io).
 
+## Desktop App — GitHub Release Workflow
+
+The exe is **never committed to git**. Distribution is via GitHub Releases on the `desktop-v*` tag pattern (handled by `.github/workflows/desktop-build.yml`).
+
+### Releasing a new desktop version
+
+1. **Bump the version** in `openoutreach/desktop/__version__.py` (e.g. `"1.0.7"`).
+2. **Commit** the version bump and any other changes: `git commit -am "chore: desktop v1.0.7"`.
+3. **Push** to `main`: `git push origin main`.
+4. **Create and push a tag** matching `desktop-v<version>`:
+   ```bash
+   git tag desktop-v1.0.7
+   git push origin desktop-v1.0.7
+   ```
+5. GitHub Actions (`.github/workflows/desktop-build.yml`) will:
+   - Build the Windows exe via PyInstaller.
+   - Create a GitHub Release named `Desktop v1.0.7`.
+   - Attach `Lengrowth.exe` (Windows standalone) as a release asset.
+6. **Share the release URL** with users — they download and run the exe directly.
+
+### Why exe size grew from ~20 MB to ~75 MB
+
+`pywebview` requires `pythonnet` (the .NET/CLR bridge, ~50 MB) on Windows to drive the Edge WebView2 control. There is no pywebview backend on Windows that avoids pythonnet. Alternatives if size is critical:
+- **`webview2` (raw)**: use `pywin32` + WebView2 COM API directly — no pythonnet, ~25 MB total, but requires more boilerplate.
+- **CEF (Chromium Embedded)**: `cefpython3` bundles Chromium (~100 MB+) — larger, not smaller.
+- **Keep pywebview**: 75 MB is acceptable for a desktop app that ships via GitHub Releases (no bandwidth constraint). UPX compression (already enabled in the spec) shaves ~20%.
+
+Current decision: keep pywebview for the faster iteration speed; revisit if 75 MB becomes a hard constraint.
+
 ## Phase 6 — Deferred Secondary Surfaces
 
 For launch, the following features are **hidden from navigation** and **not supported**:

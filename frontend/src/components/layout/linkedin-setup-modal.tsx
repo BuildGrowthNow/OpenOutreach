@@ -8,7 +8,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { Linkedin } from "lucide-react";
+import { Link2 } from "lucide-react";
 import { getLinkedInSetupStatus } from "@/lib/api/dashboard";
 import { useAuthStore } from "@/lib/authStoreV2";
 import LinkedInCredentialForm from "@/components/settings/linkedin-credential-form";
@@ -49,7 +49,7 @@ export function LinkedInSetupModal() {
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto border border-zinc-800 bg-zinc-950 text-zinc-100 shadow-2xl">
         <DialogHeader className="border-b border-zinc-800/80 pb-4">
           <DialogTitle className="flex items-center gap-2 text-lg">
-            <Linkedin className="h-5 w-5 text-[#0A66C2]" />
+            <Link2 className="h-5 w-5 text-[#0A66C2]" />
             Connect your LinkedIn account
           </DialogTitle>
           <DialogDescription className="text-zinc-400">
