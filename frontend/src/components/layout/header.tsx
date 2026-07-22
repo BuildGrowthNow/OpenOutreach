@@ -1,6 +1,6 @@
 'use client'
 
-import { Menu, Bell, Search, Settings, LogOut, User } from 'lucide-react'
+import { Menu, Bell, Search, Settings, LogOut, Monitor } from 'lucide-react'
 import { Icons } from '@/lib/types/components'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -35,6 +35,11 @@ const Header = ({ onMenuClick, className }: HeaderProps) => {
   const userEmail = user?.email || 'user@example.com'
   const [linkedinHealth, setLinkedinHealth] = useState<LinkedInProfileHealthResponse | null>(null)
   const [loadingHealth, setLoadingHealth] = useState(true)
+  const [isDesktop, setIsDesktop] = useState(false)
+
+  useEffect(() => {
+    setIsDesktop(!!(window as unknown as Record<string, unknown>)['__LENGROWTH_DESKTOP__'])
+  }, [])
   
   // Notification state
   const [notifications, setNotifications] = useState<Notification[]>([])
@@ -272,6 +277,18 @@ const Header = ({ onMenuClick, className }: HeaderProps) => {
 
       <div className="flex items-center gap-3">
         <div className="hidden md:flex items-center gap-3">
+          {isDesktop ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-xs font-medium text-emerald-400">
+              <Monitor className="h-3 w-3" />
+              Desktop App
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-zinc-700 bg-zinc-800/50 px-2.5 py-0.5 text-xs font-medium text-zinc-400">
+              <span className="h-1.5 w-1.5 rounded-full bg-zinc-400" />
+              Web
+            </span>
+          )}
+
           <ProfileSwitcher />
 
           {loadingHealth ? (

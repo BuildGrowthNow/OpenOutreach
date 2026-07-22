@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils'
 import { Icons } from '@/lib/types/components'
 import { DashboardContainer } from '@/components/dashboard/dashboard-container'
 import { LinkedinBanner } from '@/components/layout/linkedin-banner'
+import { LinkedInSetupModal } from '@/components/layout/linkedin-setup-modal'
 import { DashboardBillingWrapper } from '@/components/billing/dashboard-billing-wrapper'
 
 type SidebarIcon = keyof typeof Icons
@@ -84,6 +85,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
 
   return (
     <DashboardBillingWrapper>
+      <LinkedInSetupModal />
       <div className={cn('flex h-screen overflow-hidden dark')}>
         {/* LinkedIn Connection Banner - Shows at top when LinkedIn is not connected */}
         <LinkedinBanner />
