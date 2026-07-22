@@ -36,6 +36,39 @@ _WINDOW_TITLE = "Lengrowth"
 _WINDOW_W = 1280
 _WINDOW_H = 820
 
+# Injected into every page load:
+# 1. Sets window.__LENGROWTH_DESKTOP__ so the frontend badge persists across navigation
+# 2. Intercepts window.location.href = 'lengrowth://...' so the auth callback is
+#    handled by Python instead of causing a failed navigation inside the webview
+_INJECT_JS = """
+(function() {
+    window.__LENGROWTH_DESKTOP__ = true;
+
+    var _origDesc = Object.getOwnPropertyDescriptor(Location.prototype, 'href');
+    if (_origDesc && _origDesc.set) {
+        Object.defineProperty(Location.prototype, 'href', {
+            get: _origDesc.get,
+            set: function(url) {
+                if (typeof url === 'string' && url.indexOf('lengrowth://') === 0) {
+                    var _poll = function(tries) {
+                        if (window.pywebview && window.pywebview.api) {
+                            window.pywebview.api.handle_lengrowth_url(url);
+                        } else if (tries > 0) {
+                            setTimeout(function() { _poll(tries - 1); }, 50);
+                        }
+                    };
+                    _poll(20);
+                    return;
+                }
+                _origDesc.set.call(this, url);
+            },
+            configurable: true,
+            enumerable: true
+        });
+    }
+})();
+"""
+
 
 # ---------------------------------------------------------------------------
 # Auto-start helpers
@@ -126,6 +159,24 @@ def _acquire_single_instance_lock():
 # TrayApp
 # ---------------------------------------------------------------------------
 
+class DesktopAPI:
+    """Python API exposed to the webview via window.pywebview.api.*"""
+
+    def __init__(self, app: "TrayApp"):
+        self._app = app
+
+    def handle_lengrowth_url(self, url: str) -> None:
+        """Called by JS when window.location.href is set to lengrowth://..."""
+        logger.info("Protocol callback received: %s", url[:80])
+        if handle_protocol_url(url, self._app.auth):
+            self._app._update_menu()
+            self._app._pending_login_notification = False
+            if self._app.icon:
+                self._app.icon.notify("Login successful", "Lengrowth is ready")
+            if self._app.auth.is_logged_in():
+                self._app._start_daemon()
+
+
 class TrayApp:
     def __init__(self):
         self.config = AppConfig.load()
@@ -173,7 +224,7 @@ class TrayApp:
     def _app_url(self, path: str = "") -> str:
         base = self._platform_url().rstrip("/")
         suffix = f"/{path.lstrip('/')}" if path else ""
-        return f"{base}{suffix}?desktop=true"
+        return f"{base}{suffix}"
 
     # ------------------------------------------------------------------
     # Tray menu
@@ -189,7 +240,7 @@ class TrayApp:
             pystray.Menu.SEPARATOR,
             Item("Open Lengrowth", self._on_show_window),
             pystray.Menu.SEPARATOR,
-            Item(daemon_label, self._on_toggle_daemon),
+            Item(daemon_label, self._on_toggle_daemon, enabled=self.auth.is_logged_in()),
         ]
 
         if self._pending_update:
@@ -219,6 +270,8 @@ class TrayApp:
         url = self._app_url()
         logger.info("Opening window: %s", url)
 
+        api = DesktopAPI(self)
+
         self._window = webview.create_window(
             title=_WINDOW_TITLE,
             url=url,
@@ -228,11 +281,21 @@ class TrayApp:
             resizable=True,
             on_top=False,
             background_color="#09090b",  # zinc-950 matches the dark theme
+            js_api=api,
         )
         self._window.events.closed += self._on_window_closed
+        self._window.events.loaded += self._on_loaded
 
         # pywebview.start() is blocking — run in current thread
         webview.start(debug=False)
+
+    def _on_loaded(self):
+        """Called after each page navigation — re-inject the desktop globals."""
+        if self._window:
+            try:
+                self._window.evaluate_js(_INJECT_JS)
+            except Exception as e:
+                logger.debug("JS inject failed: %s", e)
 
     def _on_window_closed(self):
         """Called when the user closes the window — hide it, don't quit."""
