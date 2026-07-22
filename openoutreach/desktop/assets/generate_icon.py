@@ -55,17 +55,16 @@ def create_icon(size: int = 256) -> Image.Image:
 
 
 def create_ico(output_path: Path, sizes: list[int] | None = None):
-    """Create Windows .ico file with multiple resolutions."""
+    """Create Windows .ico file with multiple resolutions.
+
+    PIL ICO save requires a single source image; it handles resizing internally.
+    Always downscale from the largest size for best quality.
+    """
     if sizes is None:
         sizes = [16, 24, 32, 48, 64, 128, 256]
 
-    images = [create_icon(size) for size in sizes]
-    images[0].save(
-        output_path,
-        format="ICO",
-        sizes=[(s, s) for s in sizes],
-        append_images=images[1:],
-    )
+    source = create_icon(max(sizes))
+    source.save(output_path, format="ICO", sizes=[(s, s) for s in sizes])
 
 
 def create_icns(output_path: Path):
