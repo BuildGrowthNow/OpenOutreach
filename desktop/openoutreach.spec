@@ -57,6 +57,11 @@ hiddenimports = [
     "anyio",
     "anyio._backends",
     "anyio._backends._asyncio",
+    # pywebview
+    "webview",
+    "webview.platforms.winforms" if sys.platform == "win32" else "webview.platforms.cocoa",
+    "clr",
+    "pythonnet",
 ]
 
 # Packages to completely exclude (heavy/unused)
