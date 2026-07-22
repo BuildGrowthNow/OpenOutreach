@@ -25,7 +25,7 @@ export function useFeatureAccess(featureName: string): { hasAccess: boolean; req
     campaign_management: "cloud",
   };
 
-  const planHierarchy = ["starter", "lifetime", "pro", "business", "agency", "cloud"];
+  const planHierarchy = ["starter", "pro", "business", "agency", "cloud", "lifetime"];
   const requiredPlan = featureMap[featureName];
 
   if (!requiredPlan) {

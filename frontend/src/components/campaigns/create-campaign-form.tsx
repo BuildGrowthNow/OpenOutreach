@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth-store';
 import { Button } from '@/components/ui/button';
@@ -46,11 +46,7 @@ export function CreateCampaignForm({ onSuccess, onCancel }: CreateCampaignFormPr
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    loadProfiles();
-  }, []);
-
-  const loadProfiles = async () => {
+  const loadProfiles = useCallback(async () => {
     try {
       setLoadingProfiles(true);
       const response = await fetch('/api/linkedin-profiles', {
@@ -74,7 +70,11 @@ export function CreateCampaignForm({ onSuccess, onCancel }: CreateCampaignFormPr
     } finally {
       setLoadingProfiles(false);
     }
-  };
+  }, [getHeaders]);
+
+  useEffect(() => {
+    loadProfiles();
+  }, [loadProfiles]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -118,9 +118,9 @@ export function CreateCampaignForm({ onSuccess, onCancel }: CreateCampaignFormPr
       } else {
         router.push(`/campaigns/${campaign.id}`);
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('Failed to create campaign:', err);
-      setError(err.message || 'Failed to create campaign');
+      setError(err instanceof Error ? err.message : 'Failed to create campaign');
     } finally {
       setSubmitting(false);
     }

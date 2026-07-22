@@ -1,7 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState } from 'react'
 import { Sidebar } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
 import { cn } from '@/lib/utils'
@@ -9,7 +8,6 @@ import { Icons } from '@/lib/types/components'
 import { DashboardContainer } from '@/components/dashboard/dashboard-container'
 import { LinkedinBanner } from '@/components/layout/linkedin-banner'
 import { DashboardBillingWrapper } from '@/components/billing/dashboard-billing-wrapper'
-import { useAuthStore } from '@/lib/authStoreV2'
 
 type SidebarIcon = keyof typeof Icons
 
@@ -83,17 +81,6 @@ interface DashboardLayoutProps {
 
 const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
-  const router = useRouter()
-  const user = useAuthStore((state) => state.user)
-
-  // Redirect to billing if user has no subscription (Phase 10: require payment before dashboard)
-  useEffect(() => {
-    if (user && user.status === 'active') {
-      // Check if user has completed billing (via billing status)
-      // This is a soft check - the billing provider will also enforce
-      // The user can proceed but will see overlays if subscription is missing
-    }
-  }, [user, router])
 
   return (
     <DashboardBillingWrapper>

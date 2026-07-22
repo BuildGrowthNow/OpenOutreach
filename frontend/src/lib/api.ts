@@ -131,12 +131,6 @@ async function getHeaders() {
 
   if (session?.access_token) {
     headers["Authorization"] = `Bearer ${session.access_token}`;
-    console.log(
-      "[API] Authorization header set:",
-      headers["Authorization"].substring(0, 50) + "...",
-    );
-  } else {
-    console.log("[API] No session found - auth will fail");
   }
 
   return headers;

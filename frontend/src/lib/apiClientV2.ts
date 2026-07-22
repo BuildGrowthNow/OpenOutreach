@@ -8,7 +8,7 @@ import { useAuthStore } from './authStoreV2'
 
 const API_BASE = '/api'
 
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   data?: T
   error?: string
   status: number
@@ -37,7 +37,7 @@ class ApiClient {
   /**
    * Make authenticated request with auto-refresh
    */
-  private async request<T = any>(
+  private async request<T = unknown>(
     endpoint: string,
     options: RequestInit = {}
   ): Promise<ApiResponse<T>> {
@@ -86,7 +86,7 @@ class ApiClient {
 
       // Parse response
       const contentType = response.headers.get('content-type')
-      let data: any = null
+      let data: unknown = null
 
       if (contentType?.includes('application/json')) {
         data = await response.json()
@@ -95,15 +95,16 @@ class ApiClient {
       }
 
       if (!response.ok) {
+        const errData = data as Record<string, string> | null
         return {
           status: response.status,
-          error: data?.detail || data?.message || `Request failed with status ${response.status}`,
+          error: errData?.detail || errData?.message || `Request failed with status ${response.status}`,
         }
       }
 
       return {
         status: response.status,
-        data,
+        data: data as T,
       }
     } catch (error) {
       console.error('API request error:', error)
@@ -117,14 +118,14 @@ class ApiClient {
   /**
    * GET request
    */
-  async get<T = any>(endpoint: string): Promise<ApiResponse<T>> {
+  async get<T = unknown>(endpoint: string): Promise<ApiResponse<T>> {
     return this.request<T>(endpoint, { method: 'GET' })
   }
 
   /**
    * POST request
    */
-  async post<T = any>(endpoint: string, data?: any): Promise<ApiResponse<T>> {
+  async post<T = unknown>(endpoint: string, data?: unknown): Promise<ApiResponse<T>> {
     return this.request<T>(endpoint, {
       method: 'POST',
       body: data ? JSON.stringify(data) : undefined,
@@ -134,7 +135,7 @@ class ApiClient {
   /**
    * PUT request
    */
-  async put<T = any>(endpoint: string, data?: any): Promise<ApiResponse<T>> {
+  async put<T = unknown>(endpoint: string, data?: unknown): Promise<ApiResponse<T>> {
     return this.request<T>(endpoint, {
       method: 'PUT',
       body: data ? JSON.stringify(data) : undefined,
@@ -144,7 +145,7 @@ class ApiClient {
   /**
    * PATCH request
    */
-  async patch<T = any>(endpoint: string, data?: any): Promise<ApiResponse<T>> {
+  async patch<T = unknown>(endpoint: string, data?: unknown): Promise<ApiResponse<T>> {
     return this.request<T>(endpoint, {
       method: 'PATCH',
       body: data ? JSON.stringify(data) : undefined,
@@ -154,14 +155,14 @@ class ApiClient {
   /**
    * DELETE request
    */
-  async delete<T = any>(endpoint: string): Promise<ApiResponse<T>> {
+  async delete<T = unknown>(endpoint: string): Promise<ApiResponse<T>> {
     return this.request<T>(endpoint, { method: 'DELETE' })
   }
 
   /**
    * Upload file (multipart/form-data)
    */
-  async upload<T = any>(endpoint: string, formData: FormData): Promise<ApiResponse<T>> {
+  async upload<T = unknown>(endpoint: string, formData: FormData): Promise<ApiResponse<T>> {
     const url = `${this.baseUrl}${endpoint}`
 
     try {
@@ -177,18 +178,19 @@ class ApiClient {
         credentials: 'include',
       })
 
-      const data = await response.json()
+      const data: unknown = await response.json()
 
       if (!response.ok) {
+        const errData = data as Record<string, string> | null
         return {
           status: response.status,
-          error: data?.detail || data?.message || `Upload failed with status ${response.status}`,
+          error: errData?.detail || errData?.message || `Upload failed with status ${response.status}`,
         }
       }
 
       return {
         status: response.status,
-        data,
+        data: data as T,
       }
     } catch (error) {
       console.error('Upload error:', error)

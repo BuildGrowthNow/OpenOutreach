@@ -27,8 +27,6 @@ import {
 import { PlanCard } from "@/components/billing/plan-card";
 import { PlanComparison } from "@/components/billing/plan-comparison";
 
-const PLAN_HIERARCHY = ["starter", "pro", "business", "agency", "cloud", "lifetime"];
-
 function PlanPageLoadingSkeleton() {
   return (
     <div className="space-y-6">
@@ -96,7 +94,7 @@ export default function PlanPage() {
         return;
       }
 
-      if (billingStatus?.stripe_subscription_id && billingStatus.plan !== planName) {
+      if (billingStatus?.stripe_subscription_id) {
         await changePlan(planName, billingPeriod);
         setError(null);
         router.push("/settings/billing?success=true");
@@ -125,15 +123,6 @@ export default function PlanPage() {
   }
 
   const currentPlan = billingStatus?.plan || "starter";
-  const isUpgrade = (newPlan: string) => {
-    try {
-      const currentIdx = PLAN_HIERARCHY.indexOf(currentPlan);
-      const newIdx = PLAN_HIERARCHY.indexOf(newPlan);
-      return newIdx > currentIdx;
-    } catch {
-      return false;
-    }
-  };
 
   const displayPlans = isAnnual
     ? plans

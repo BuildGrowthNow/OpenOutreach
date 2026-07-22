@@ -47,7 +47,6 @@ export function FeatureLockedButton({
         <TooltipTrigger asChild>
           <Button
             onClick={handleClick}
-            disabled={true}
             variant="outline"
             className="relative opacity-50"
             {...props}

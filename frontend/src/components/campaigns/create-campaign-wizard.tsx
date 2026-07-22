@@ -77,9 +77,9 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
       } else {
         router.push(`/campaigns/${campaign.id}`);
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('Failed to create campaign:', err);
-      setError(err.message || 'Failed to create campaign');
+      setError(err instanceof Error ? err.message : 'Failed to create campaign');
     } finally {
       setSubmitting(false);
     }

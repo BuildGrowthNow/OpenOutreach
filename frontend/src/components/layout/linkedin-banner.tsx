@@ -53,7 +53,7 @@ export function LinkedinBanner({ alwaysShow = false, onConnect }: LinkedinBanner
   }, [])
 
   const handleConnect = () => {
-    // Navigate to settings page with LinkedIn tab
+    onConnect?.()
     if (typeof window !== 'undefined') {
       window.location.href = '/settings?tab=linkedin-credentials'
     }

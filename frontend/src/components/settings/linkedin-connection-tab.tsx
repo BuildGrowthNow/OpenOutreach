@@ -319,12 +319,7 @@ export function LinkedInConnectionTab({
   };
 
   const handleStartSetup = () => {
-    // The setup is done through the credentials form
-    toast({
-      title: "LinkedIn Setup",
-      description:
-        "Add your LinkedIn credentials to configure LinkedIn for your outreach campaigns",
-    });
+    setIsAddDialogOpen(true);
   };
 
   if (loading) {

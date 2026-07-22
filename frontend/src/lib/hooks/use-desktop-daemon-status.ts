@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useAuthStore } from "@/lib/authStoreV2";
 
 export interface ProfileDaemonStatus {
@@ -26,7 +26,7 @@ export function useDesktopDaemonStatus() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchStatus = async () => {
+  const fetchStatus = useCallback(async () => {
     try {
       if (!accessToken) {
         setError("Not authenticated");
@@ -51,7 +51,7 @@ export function useDesktopDaemonStatus() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [accessToken]);
 
   useEffect(() => {
     if (!accessToken) return;
@@ -61,7 +61,7 @@ export function useDesktopDaemonStatus() {
     const interval = setInterval(fetchStatus, 30000);
 
     return () => clearInterval(interval);
-  }, [accessToken]);
+  }, [accessToken, fetchStatus]);
 
   const getProfileStatus = (profileId: string): ProfileDaemonStatus | null => {
     if (!status) return null;
@@ -73,10 +73,10 @@ export function useDesktopDaemonStatus() {
     return profile?.is_connected ?? false;
   };
 
-  const refresh = () => {
+  const refresh = useCallback(() => {
     setLoading(true);
     fetchStatus();
-  };
+  }, [fetchStatus]);
 
   return {
     status,

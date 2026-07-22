@@ -25,7 +25,6 @@ export function useUpgradeToast(): (err: unknown) => boolean {
   return useCallback(
     (err: unknown): boolean => {
       if (err instanceof ApiError && err.status === 402) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const action = React.createElement(
           ToastAction,
           { altText: "Upgrade", onClick: () => router.push("/settings/plan") },
