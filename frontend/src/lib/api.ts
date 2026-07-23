@@ -162,6 +162,9 @@ export async function get<T>(
   if (!response.ok) {
     throw new ApiError(response.status, await readErrorMessage(response));
   }
+  if (response.status === 204 || response.headers.get("content-length") === "0") {
+    return handleResponse<T>({} as T);
+  }
   const data = await response.json();
   return handleResponse<T>(keysToCamelDeep(data));
 }
@@ -181,6 +184,9 @@ export async function put<T>(
   });
   if (!response.ok) {
     throw new ApiError(response.status, await readErrorMessage(response));
+  }
+  if (response.status === 204 || response.headers.get("content-length") === "0") {
+    return handleResponse<T>({} as T);
   }
   const data = await response.json();
   return handleResponse<T>(keysToCamelDeep(data));
@@ -213,6 +219,9 @@ export async function post<T>(
   if (!response.ok) {
     throw new ApiError(response.status, await readErrorMessage(response));
   }
+  if (response.status === 204 || response.headers.get("content-length") === "0") {
+    return handleResponse<T>({} as T);
+  }
   const data = await response.json();
   return handleResponse<T>(keysToCamelDeep(data));
 }
@@ -232,6 +241,9 @@ export async function patch<T>(
   });
   if (!response.ok) {
     throw new ApiError(response.status, await readErrorMessage(response));
+  }
+  if (response.status === 204 || response.headers.get("content-length") === "0") {
+    return handleResponse<T>({} as T);
   }
   const data = await response.json();
   return handleResponse<T>(keysToCamelDeep(data));

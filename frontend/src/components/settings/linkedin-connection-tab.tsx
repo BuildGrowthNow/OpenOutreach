@@ -95,6 +95,9 @@ export function LinkedInConnectionTab({
   >([]);
   const [linkedinProfiles, setLinkedinProfiles] = useState<LinkedInProfile[]>([]);
   const [daemonStatus, setDaemonStatus] = useState<DaemonStatusResponse | null>(null);
+  const [isDesktopApp] = useState(() =>
+    typeof window !== "undefined" && !!(window as unknown as Record<string, unknown>)["__LENGROWTH_DESKTOP__"]
+  );
 
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -635,8 +638,8 @@ export function LinkedInConnectionTab({
         </CardContent>
       </Card>
 
-      {/* Desktop Daemon Status */}
-      <DaemonStatusCard />
+      {/* Desktop Daemon Status — shown on web only; redundant on the desktop app */}
+      {!isDesktopApp && <DaemonStatusCard />}
 
       {/* Proxy Configuration - Show only for cloud daemon (not desktop daemon) */}
       {linkedinProfiles.length > 0 && linkedinProfiles[0].id && !isDesktopDaemonActive() && (
