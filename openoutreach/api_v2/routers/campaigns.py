@@ -96,6 +96,48 @@ class CampaignListResponse(BaseModel):
     pagination: PaginationInfo
 
 
+def _on_campaign_activated(campaign: models.Campaign, user_id: str) -> None:
+    """Schedule tasks and log a 'campaign_started' event when a campaign goes active."""
+    from openoutreach.linkedin.models import LinkedInProfile
+    from openoutreach.mongodb.models_extended import ActionLog
+
+    profile = LinkedInProfile.objects.get(_id=campaign.linkedin_profile_id)
+    if not profile:
+        return
+
+    # Log the campaign_started event
+    ActionLog(
+        linkedin_profile_id=campaign.linkedin_profile_id,
+        campaign_id=campaign._id,
+        action_type="campaign_started",
+        status="completed",
+        user_id=user_id,
+        details={"campaign_name": campaign.name},
+    ).save()
+
+    # Schedule tasks (reconcile)
+    try:
+        from openoutreach.core.scheduler import (
+            plan_connect_window,
+            plan_follow_up_window,
+            plan_check_pending_window,
+        )
+
+        class _Session:
+            def __init__(self, uid: str, prof: LinkedInProfile):
+                self.user_id = uid
+                self.linkedin_profile = prof
+                self.linkedin_profile_id = prof._id
+
+        session = _Session(user_id, profile)
+        created = plan_connect_window(session, campaign)
+        created += plan_follow_up_window(session, campaign)
+        created += plan_check_pending_window(session, campaign)
+        logger.info("Campaign %s activated: %d tasks scheduled", campaign._id, created)
+    except Exception as e:
+        logger.warning("Failed to schedule tasks on activation: %s", e)
+
+
 # Endpoints
 
 @router.get("", response_model=CampaignListResponse)
@@ -415,6 +457,14 @@ async def update_campaign(
                 detail="Campaign not found after update"
             )
 
+        # When campaign becomes active, schedule tasks and log the event
+        became_active = (
+            updates.get("status") == "active"
+            and campaign.status != "active"
+        )
+        if became_active and updated_campaign.linkedin_profile_id:
+            _on_campaign_activated(updated_campaign, user_id)
+
         logger.info(f"Updated campaign {campaign_id} by user {user_id}")
 
         return CampaignResponse(
@@ -650,6 +700,10 @@ async def resume_campaign(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Campaign not found after update"
             )
+
+        # Schedule tasks and log event
+        if updated_campaign.linkedin_profile_id:
+            _on_campaign_activated(updated_campaign, user_id)
 
         logger.info(f"Resumed campaign {campaign_id} by user {user_id}")
 
