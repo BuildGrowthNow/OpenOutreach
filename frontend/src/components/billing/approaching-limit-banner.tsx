@@ -17,13 +17,14 @@ export function ApproachingLimitBanner({
   limit,
   onUpgradeClick,
 }: ApproachingLimitBannerProps) {
-  // Render at 80% usage (matching the trigger in BillingStatusProvider) through at-limit
-  if (limit === null || limit === 0 || used < limit * 0.8) {
+  // Show "approaching" warning at 80%+, but only show "at limit" when strictly over —
+  // being at exactly the plan limit (e.g. 1/1) is normal operation, not a warning state.
+  if (limit === null || limit === 0 || used < limit * 0.8 || used === limit) {
     return null;
   }
 
   const resourceLabel = resourceType === "campaigns" ? "campaigns" : "LinkedIn accounts";
-  const atLimit = used >= limit;
+  const atLimit = used > limit;
 
   return (
     <Alert className={atLimit ? "bg-red-50 border-red-200" : "bg-amber-50 border-amber-200"}>
