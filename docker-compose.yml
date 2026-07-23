@@ -57,6 +57,9 @@ services:
       # Finder API
       - FINDER_API_KEY=${FINDER_API_KEY:-}
 
+      # App URL (used in email links)
+      - APP_URL=${APP_URL:-http://localhost:3000}
+
       # Email
       - EMAIL_PROVIDER=${EMAIL_PROVIDER:-}
       - RESEND_API_KEY=${RESEND_API_KEY:-}
