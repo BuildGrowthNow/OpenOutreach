@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Settings"])
 
 
-@router.get("", response_model=SiteConfigResponse)
+@router.get("")
 async def get_settings(
     user_id: str = Depends(get_current_user),
 ):
@@ -37,33 +37,40 @@ async def get_settings(
     if isinstance(active_days_str, list):
         active_days_str = ",".join(map(str, active_days_str))
 
-    return SiteConfigResponse(
-        id=config._id,
-        llm_provider=config.llm_provider or "",
-        llm_api_key=config.llm_api_key or "",
-        ai_model=config.ai_model or "",
-        llm_api_base=config.llm_api_base or "",
-        ai_writing_style=getattr(config, "ai_writing_style", "") or "",
-        ai_say_rules=getattr(config, "ai_say_rules", "") or "",
-        ai_avoid_rules=getattr(config, "ai_avoid_rules", "") or "",
-        finder_api_key=config.finder_api_key or "",
-        linkedin_username=config.linkedin_username or "",
-        linkedin_campaign=config.linkedin_campaign or "",
-        enable_smart_rate_limiting=getattr(config, "enable_smart_rate_limiting", False),
-        aggressiveness_preset=getattr(config, "aggressiveness_preset", "average") or "average",
-        daily_connection_limit=config.daily_connection_limit,
-        daily_follow_up_limit=config.daily_follow_up_limit,
-        velocity=config.velocity,
-        cooldown_minutes=getattr(config, "cooldown_minutes", 0),
-        enable_active_hours=getattr(config, "enable_active_hours", False),
-        active_start_hour=getattr(config, "active_start_hour", 9),
-        active_end_hour=getattr(config, "active_end_hour", 18),
-        active_timezone=getattr(config, "active_timezone", "UTC") or "UTC",
-        active_days=active_days_str or "0,1,2,3,4",
-        bettercontact_api_key=config.bettercontact_api_key or "",
-        contacts_api_token=config.contacts_api_token or "",
-        contacts_api_url=config.contacts_api_url or "",
-    )
+    return {
+        "llm": {
+            "provider": config.llm_provider or "",
+            "apiKey": config.llm_api_key or "",
+            "model": config.ai_model or "",
+            "apiBase": config.llm_api_base or "",
+            "writingStyle": getattr(config, "ai_writing_style", "") or "",
+            "sayRules": getattr(config, "ai_say_rules", "") or "",
+            "avoidRules": getattr(config, "ai_avoid_rules", "") or "",
+        },
+        "rateLimits": {
+            "dailyConnectionLimit": config.daily_connection_limit,
+            "dailyFollowUpLimit": config.daily_follow_up_limit,
+            "velocity": config.velocity,
+            "cooldownMinutes": getattr(config, "cooldown_minutes", 0),
+            "enableSmartRateLimiting": getattr(config, "enable_smart_rate_limiting", False),
+            "aggressivenessPreset": getattr(config, "aggressiveness_preset", "average") or "average",
+        },
+        "activeHours": {
+            "enableActiveHours": getattr(config, "enable_active_hours", False),
+            "activeStartHour": getattr(config, "active_start_hour", 9),
+            "activeEndHour": getattr(config, "active_end_hour", 18),
+            "activeTimezone": getattr(config, "active_timezone", "UTC") or "UTC",
+            "activeDays": active_days_str or "0,1,2,3,4",
+        },
+        "linkedinProfile": {
+            "username": config.linkedin_username or "",
+            "campaign": config.linkedin_campaign or "",
+        },
+        "finder": {
+            "apiKey": config.finder_api_key or "",
+            "bettercontactApiKey": config.bettercontact_api_key or "",
+        },
+    }
 
 
 @router.get("/rate-limits")

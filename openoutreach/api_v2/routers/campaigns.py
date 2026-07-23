@@ -81,10 +81,17 @@ class CampaignResponse(BaseModel):
     created_at: str
 
 
+class PaginationInfo(BaseModel):
+    total: int
+    page: int
+    limit: int
+    pages: int
+
+
 class CampaignListResponse(BaseModel):
-    """Response schema for campaign list."""
-    campaigns: List[CampaignResponse]
-    count: int
+    """Response schema for campaign list — matches frontend { data, pagination } shape."""
+    data: List[CampaignResponse]
+    pagination: PaginationInfo
 
 
 # Endpoints
@@ -138,8 +145,13 @@ async def list_campaigns(
             ))
 
         count = collection.count_documents(query)
+        page = (skip // limit) + 1 if limit else 1
+        pages = (count + limit - 1) // limit if limit else 1
 
-        return CampaignListResponse(campaigns=campaigns, count=count)
+        return CampaignListResponse(
+            data=campaigns,
+            pagination=PaginationInfo(total=count, page=page, limit=limit, pages=pages),
+        )
 
     except Exception as e:
         logger.exception("Failed to list campaigns")

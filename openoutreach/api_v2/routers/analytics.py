@@ -37,28 +37,34 @@ class PipelineStats(BaseModel):
 
 class OverviewStats(BaseModel):
     """Overview statistics."""
-    connections_sent: int = 0
-    connections_accepted: int = 0
-    connection_accept_rate: float = 0.0
-    messages_sent: int = 0
-    messages_replied: int = 0
-    response_rate: float = 0.0
+    connections_sent: int = Field(0, alias="connectionsSent")
+    connections_accepted: int = Field(0, alias="connectionsAccepted")
+    connection_accept_rate: float = Field(0.0, alias="connectionAcceptRate")
+    messages_sent: int = Field(0, alias="messagesSent")
+    messages_replied: int = Field(0, alias="messagesReplied")
+    response_rate: float = Field(0.0, alias="responseRate")
     conversions: int = 0
-    conversion_rate: float = 0.0
+    conversion_rate: float = Field(0.0, alias="conversionRate")
+
+    class Config:
+        populate_by_name = True
 
 
 class OverviewTotals(BaseModel):
     """Overview totals."""
     leads: int = 0
     qualified: int = 0
-    ready_to_connect: int = 0
+    ready_to_connect: int = Field(0, alias="readyToConnect")
     connected: int = 0
     pending: int = 0
     failed: int = 0
-    no_email: int = 0
-    connection_accept_rate: float = 0.0
-    response_rate: float = 0.0
-    conversion_rate: float = 0.0
+    no_email: int = Field(0, alias="noEmail")
+    connection_accept_rate: float = Field(0.0, alias="connectionAcceptRate")
+    response_rate: float = Field(0.0, alias="responseRate")
+    conversion_rate: float = Field(0.0, alias="conversionRate")
+
+    class Config:
+        populate_by_name = True
 
 
 class CampaignStats(BaseModel):
@@ -208,7 +214,7 @@ def _get_messages_replied_count(campaign_id: str, since: datetime) -> int:
 
 # ========== Endpoints ==========
 
-@router.get("/overview", response_model=AnalyticsOverviewResponse)
+@router.get("/overview", response_model=AnalyticsOverviewResponse, response_model_by_alias=True)
 async def get_analytics_overview(
     user_id: str = Depends(get_current_user),
     campaign_id: Optional[str] = Query(None, description="Filter by specific campaign ID"),
@@ -452,27 +458,27 @@ async def get_analytics_overview(
     )
 
     stats = OverviewStats(
-        connections_sent=total_connections_sent,
-        connections_accepted=total_connections_accepted,
-        connection_accept_rate=connection_accept_rate,
-        messages_sent=total_messages_sent,
-        messages_replied=total_messages_replied,
-        response_rate=response_rate,
+        connectionsSent=total_connections_sent,
+        connectionsAccepted=total_connections_accepted,
+        connectionAcceptRate=connection_accept_rate,
+        messagesSent=total_messages_sent,
+        messagesReplied=total_messages_replied,
+        responseRate=response_rate,
         conversions=total_conversions,
-        conversion_rate=conversion_rate,
+        conversionRate=conversion_rate,
     )
 
     totals = OverviewTotals(
         leads=total_qualified + total_ready_to_connect + total_pending + total_connected,
         qualified=total_qualified,
-        ready_to_connect=total_ready_to_connect,
+        readyToConnect=total_ready_to_connect,
         connected=total_connected,
         pending=total_pending,
         failed=total_failed,
-        no_email=total_no_email,
-        connection_accept_rate=connection_accept_rate,
-        response_rate=response_rate,
-        conversion_rate=conversion_rate,
+        noEmail=total_no_email,
+        connectionAcceptRate=connection_accept_rate,
+        responseRate=response_rate,
+        conversionRate=conversion_rate,
     )
 
     # Duplicate data at root level for backward compatibility

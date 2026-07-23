@@ -99,38 +99,33 @@ async def list_leads(
         raise HTTPException(status_code=503, detail="Database unavailable")
     leads_data = {str(doc["_id"]): doc for doc in leads_collection.find({"_id": {"$in": lead_ids}})}
 
-    # Build response
-    results = []
+    # Build response — flat Lead shape matching frontend Lead interface
+    data = []
     for deal in deals:
         lead_data = leads_data.get(str(deal["lead_id"]))
         if lead_data:
-            results.append({
-                "lead": LeadResponse(
-                    id=str(lead_data["_id"]),
-                    public_identifier=lead_data.get("public_identifier", ""),
-                    url=lead_data.get("url", ""),
-                    full_name=lead_data.get("full_name"),
-                    headline=lead_data.get("headline"),
-                    location=lead_data.get("location"),
-                    disqualified=lead_data.get("disqualified", False),
-                    created_at=lead_data.get("creation_date"),
-                ),
-                "deal": DealResponse(
-                    id=str(deal["_id"]),
-                    lead_id=str(deal["lead_id"]),
-                    campaign_id=str(deal["campaign_id"]),
-                    state=deal.get("state", "Discovered"),
-                    outcome=deal.get("outcome"),
-                    reason=deal.get("reason"),
-                    creation_date=deal.get("creation_date"),
-                )
+            created = lead_data.get("creation_date")
+            updated = lead_data.get("updated_at") or created
+            data.append({
+                "id": str(lead_data["_id"]),
+                "publicIdentifier": lead_data.get("public_identifier", ""),
+                "linkedinUrl": lead_data.get("url", ""),
+                "name": lead_data.get("full_name"),
+                "title": lead_data.get("headline"),
+                "company": None,
+                "state": deal.get("state", "DISCOVERED"),
+                "outcome": deal.get("outcome"),
+                "campaignId": str(deal["campaign_id"]),
+                "creationDate": created.isoformat() if hasattr(created, "isoformat") else (created or ""),
+                "updateDate": updated.isoformat() if hasattr(updated, "isoformat") else (updated or ""),
+                "disqualified": lead_data.get("disqualified", False),
             })
 
+    page = (offset // limit) + 1 if limit else 1
+    pages = (total + limit - 1) // limit if limit else 1
     return {
-        "total": total,
-        "limit": limit,
-        "offset": offset,
-        "results": results,
+        "data": data,
+        "pagination": {"total": total, "page": page, "limit": limit, "pages": pages},
     }
 
 
