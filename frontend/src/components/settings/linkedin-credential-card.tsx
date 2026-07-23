@@ -190,7 +190,7 @@ export default function LinkedInCredentialCard({
       setIsDeleting(true);
       const response = await deleteLinkedInCredentials(credential.id);
 
-      if (!response.error && (response.status === 204 || response.status === 200)) {
+      if (!response.error) {
         toast({
           title: "Success",
           description: "Credential deleted successfully",
