@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2 } from 'lucide-react';
+import { apiClient } from '@/lib/apiClientV2';
 
 interface LinkedInProfile {
   id: string;
@@ -24,23 +25,13 @@ export function ProfileSwitcher() {
       setLoading(true);
       setError('');
 
-      const token = localStorage.getItem('token');
-      if (!token) {
-        setError('Not authenticated');
-        return;
+      const response = await apiClient.get<{ profiles: LinkedInProfile[]; count: number }>('/linkedin-profiles');
+
+      if (response.error || !response.data) {
+        throw new Error(response.error || 'Failed to load profiles');
       }
 
-      const response = await fetch('/api/linkedin-profiles', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to load profiles');
-      }
-
-      const data = await response.json();
+      const data = response.data;
       setProfiles(data.profiles || []);
 
       // Load saved selection or use first profile
