@@ -22,12 +22,6 @@ interface CreateCampaignWizardProps {
   onCancel?: () => void;
 }
 
-const PACING_OPTIONS = [
-  { value: '10', label: 'Conservative', description: '10 connections/day — safest for new accounts' },
-  { value: '20', label: 'Normal', description: '20 connections/day — recommended default' },
-  { value: '30', label: 'Aggressive', description: '30 connections/day — for established accounts' },
-] as const;
-
 export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWizardProps) {
   const router = useRouter();
 
@@ -42,7 +36,6 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
   const [icpTitles, setIcpTitles] = useState<string[]>([]);
   const [icpInput, setIcpInput] = useState('');
   const [bookingLink, setBookingLink] = useState('');
-  const [velocity, setVelocity] = useState('20');
 
   // UI state
   const [step, setStep] = useState(1);
@@ -126,7 +119,7 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
         campaign_objective: campaignObjective.trim(),
         linkedin_profile_id: profileId,
         booking_link: bookingLink.trim(),
-        velocity: parseInt(velocity, 10),
+        velocity: 20,
         icp_titles: icpTitles,
       });
 
@@ -172,7 +165,7 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
         </div>
         <h2 className="text-2xl font-semibold">Create Campaign</h2>
         <p className="text-sm text-muted-foreground">
-          Step {step} of 2 — {step === 1 ? 'Define your offer' : 'Configure targeting'}
+          Step {step} of 2 — {step === 1 ? 'Define your offer' : 'Who are you targeting?'}
         </p>
         {/* Step indicator */}
         <div className="flex items-center justify-center gap-2 pt-2">
@@ -272,7 +265,7 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
         </div>
       )}
 
-      {/* Step 2: Targeting & pacing */}
+      {/* Step 2: Targeting */}
       {step === 2 && (
         <form onSubmit={handleSubmit} className="space-y-5">
           <div className="space-y-2">
@@ -301,7 +294,7 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              Press Enter to add each title. The AI searches LinkedIn for people with these roles.
+              Press Enter to add. The AI generates LinkedIn search queries from these titles combined with your pitch and goal.
             </p>
             {icpTitles.length > 0 && (
               <div className="flex flex-wrap gap-2 pt-1">
@@ -340,25 +333,6 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
             <p className="text-xs text-muted-foreground">
               Calendly, Cal.com, or similar — the AI includes this when a lead shows interest
             </p>
-          </div>
-
-          <div className="space-y-2">
-            <Label className="text-base">
-              Pacing
-            </Label>
-            <Select value={velocity} onValueChange={(v) => v && setVelocity(v)}>
-              <SelectTrigger className="h-11 text-base">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {PACING_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    <span className="font-medium">{opt.label}</span>
-                    <span className="text-muted-foreground ml-2 text-sm">— {opt.description}</span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
           </div>
 
           <div className="flex gap-3 pt-4 border-t">
