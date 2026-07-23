@@ -47,16 +47,16 @@ export function TrialBanner({
   const isDayOf = daysRemaining === 0;
 
   return (
-    <Alert className={isLastDay ? "bg-red-50 border-red-200" : "bg-blue-50 border-blue-200"}>
+    <Alert className={isLastDay ? "bg-red-600 border-red-700" : "bg-emerald-600 border-emerald-700"}>
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-start gap-3">
           {isDayOf ? (
-            <AlertTriangle className="h-5 w-5 text-red-600 mt-0.5" />
+            <AlertTriangle className="h-5 w-5 text-white mt-0.5" />
           ) : (
-            <Clock className="h-5 w-5 text-blue-600 mt-0.5" />
+            <Clock className="h-5 w-5 text-white mt-0.5" />
           )}
           <div className="space-y-2">
-            <AlertDescription className={isDayOf ? "text-red-800" : "text-blue-900"}>
+            <AlertDescription className="text-white">
               {isDayOf ? (
                 <>
                   <span className="font-semibold">Your trial ends today.</span>{" "}
@@ -73,7 +73,7 @@ export function TrialBanner({
                   <Button
                     variant="link"
                     size="sm"
-                    className="h-auto p-0 ml-2"
+                    className="h-auto p-0 ml-2 text-white underline hover:text-white/80"
                     onClick={onUpgradeClick}
                   >
                     Choose a plan
@@ -86,7 +86,7 @@ export function TrialBanner({
         {!isDayOf && (
           <button
             onClick={() => setDismissed(true)}
-            className="text-muted-foreground hover:text-foreground mt-0.5"
+            className="text-white/70 hover:text-white mt-0.5"
           >
             <X className="h-4 w-4" />
           </button>
@@ -94,7 +94,7 @@ export function TrialBanner({
       </div>
       {(isDayOf || isLastDay) && (
         <div className="mt-3 ml-8">
-          <Button onClick={onUpgradeClick} className="w-full">
+          <Button onClick={onUpgradeClick} variant="secondary" className="w-full">
             Choose a Plan
           </Button>
         </div>

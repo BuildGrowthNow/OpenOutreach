@@ -69,11 +69,6 @@ const dashboardItems: SidebarItem[] = [
     href: '/settings',
     icon: 'Settings'
   },
-  {
-    title: 'Get Desktop App',
-    href: '/download',
-    icon: 'Download'
-  },
 ]
 
 interface DashboardLayoutProps {

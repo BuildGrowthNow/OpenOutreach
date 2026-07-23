@@ -33,8 +33,8 @@ _AUTOSTART_NAME = "LengrowthOutreach"
 _MACOS_LAUNCHAGENT_LABEL = "io.lengrowth.linkedin"
 
 _WINDOW_TITLE = "Lengrowth"
-_WINDOW_W = 1280
-_WINDOW_H = 820
+_WINDOW_W = 1480
+_WINDOW_H = 1020
 
 # Injected into every page load:
 # 1. Sets window.__LENGROWTH_DESKTOP__ so the frontend badge persists across navigation

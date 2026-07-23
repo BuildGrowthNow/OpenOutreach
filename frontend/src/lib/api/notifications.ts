@@ -1,6 +1,19 @@
 'use client'
 
-import { get, post, patch, del, ApiResponse } from '../api'
+import { ApiResponse } from '../api'
+import { apiClient } from '../apiClientV2'
+
+const stripApi = (path: string) => path.replace(/^\/api/, '');
+const get = <T>(path: string, params?: Record<string, string>) => {
+  const base = stripApi(path);
+  const url = params && Object.keys(params).length
+    ? `${base}?${new URLSearchParams(params).toString()}`
+    : base;
+  return apiClient.get<T>(url);
+};
+const post = <T>(path: string, data?: unknown) => apiClient.post<T>(stripApi(path), data);
+const patch = <T>(path: string, data?: unknown) => apiClient.patch<T>(stripApi(path), data);
+const del = <T>(path: string) => apiClient.delete<T>(stripApi(path));
 
 // Notification types
 export type NotificationType = 

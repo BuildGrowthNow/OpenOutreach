@@ -130,16 +130,17 @@ const Dashboard = () => {
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
         <div className="flex items-center gap-2">
-          <Badge 
-            variant="outline" 
-            className={`px-3 py-1 ${
+          <Badge
+            variant="outline"
+            className={`px-3 py-1 cursor-pointer ${
               systemStatus === 'operational' ? 'text-emerald-600 border-emerald-200' :
               systemStatus === 'degraded' ? 'text-amber-600 border-amber-200' :
               'text-red-600 border-red-200'
             }`}
+            onClick={() => router.push('/health')}
           >
             <Activity className="mr-2 h-3.5 w-3.5" />
-            {systemStatus === 'operational' ? 'System Operational' : 
+            {systemStatus === 'operational' ? 'System Operational' :
              systemStatus === 'degraded' ? 'System Degraded' : 'System Maintenance'}
           </Badge>
           <Button 

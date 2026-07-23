@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2 } from 'lucide-react';
 
 interface LinkedInProfile {
@@ -83,22 +82,17 @@ export function ProfileSwitcher() {
 
   if (error) {
     return (
-      <Alert variant="destructive" className="max-w-sm">
-        <AlertDescription>{error}</AlertDescription>
-      </Alert>
+      <a href="/settings?tab=linkedin-credentials" className="inline-flex items-center gap-1.5 text-xs text-amber-500 hover:text-amber-400">
+        <span>⚠️ Connect your profile</span>
+      </a>
     );
   }
 
   if (profiles.length === 0) {
     return (
-      <Alert className="max-w-sm bg-yellow-50 border-yellow-200">
-        <AlertDescription className="text-yellow-800">
-          ⚠️ No LinkedIn profiles found.{' '}
-          <a href="/settings" className="underline font-medium">
-            Add one in Settings
-          </a>
-        </AlertDescription>
-      </Alert>
+      <a href="/settings?tab=linkedin-credentials" className="inline-flex items-center gap-1.5 text-xs text-amber-500 hover:text-amber-400">
+        <span>⚠️ Connect your profile</span>
+      </a>
     );
   }
 
