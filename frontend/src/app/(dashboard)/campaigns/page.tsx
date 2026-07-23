@@ -9,7 +9,6 @@ import { Input } from "@/components/ui/input";
 import { Icons } from "@/lib/types/components";
 import {
   getCampaigns,
-  createCampaign,
   updateCampaign,
   deleteCampaign,
 } from "@/lib/api/dashboard";
@@ -89,31 +88,6 @@ export default function CampaignsPage() {
     return filtered;
   }, [campaigns, selectedTab, searchQuery]);
 
-  const handleCreateCampaign = async (data: Partial<Campaign>) => {
-    try {
-      setError(null);
-      const response = await createCampaign(data);
-      if (response.data) {
-        setShowCreateForm(false);
-        localStorage.setItem('first_campaign_banner_dismissed', '1');
-        try {
-          const id = response.data?.id || '';
-          router.push(`/campaigns/${id}`);
-        } catch (e) {
-          fetchCampaigns();
-        }
-      } else {
-        setError(
-          response.error || response.message || "Failed to create campaign",
-        );
-      }
-    } catch (error) {
-      if (!handleUpgradeError(error)) {
-        setError("An error occurred while creating the campaign");
-        console.error("Error creating campaign:", error);
-      }
-    }
-  };
 
   const handleUpdateCampaign = async (id: string, data: Partial<Campaign>) => {
     try {
@@ -529,6 +503,7 @@ export default function CampaignsPage() {
           <CreateCampaignWizard
             onSuccess={(campaignId) => {
               setShowCreateForm(false);
+              localStorage.setItem('first_campaign_banner_dismissed', '1');
               router.push(`/campaigns/${campaignId}`);
             }}
             onCancel={() => setShowCreateForm(false)}
