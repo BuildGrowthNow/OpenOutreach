@@ -376,7 +376,7 @@ async def create_profile(
         return LinkedInProfileResponse(
             id=profile._id,
             user_id=profile.user_id or "",
-            linkedin_username=profile.linkedin_username,
+            linkedin_username=profile.linkedin_username or "",
             active=profile.active,
             connect_daily_limit=profile.connect_daily_limit,
             follow_up_daily_limit=profile.follow_up_daily_limit,

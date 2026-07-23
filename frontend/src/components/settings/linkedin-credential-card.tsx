@@ -140,7 +140,9 @@ export default function LinkedInCredentialCard({
     try {
       setIsVerifying(true);
 
-      const response = await verifyLinkedInCredentials(credential.id);
+      const response = await verifyLinkedInCredentials(credential.id, {
+        testLogin: credential.executionMode === "cloud",
+      });
       const data = response.data as {
         success?: boolean;
         error?: string;

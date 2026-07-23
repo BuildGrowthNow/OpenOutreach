@@ -475,14 +475,14 @@ async def delete_credential(
                 )
                 other_creds = [c for c in remaining if str(c._id) != str(credential_id)]
                 if other_creds:
-                    profile.linkedin_username = ""
-                    profile.linkedin_password = ""
+                    profile.linkedin_username = None
+                    profile.linkedin_password = None
                     profile.cookie_data_encrypted = None
                     profile.save(update_fields=["linkedin_username", "linkedin_password", "cookie_data_encrypted"])
                 else:
                     # No credentials left — deactivate so it no longer counts toward account limit
-                    profile.linkedin_username = ""
-                    profile.linkedin_password = ""
+                    profile.linkedin_username = None
+                    profile.linkedin_password = None
                     profile.cookie_data_encrypted = None
                     profile.active = False
                     profile.is_active = False
