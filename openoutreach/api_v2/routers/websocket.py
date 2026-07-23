@@ -1,10 +1,8 @@
 """
 WebSocket Router - Real-time notifications and campaign status
 """
-import asyncio
-import json
 from datetime import datetime
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, HTTPException
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 from typing import Dict, Optional, Set
 import logging
 

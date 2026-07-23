@@ -11,8 +11,6 @@ from openoutreach.api_v2.dependencies_v2 import get_current_user
 from openoutreach.linkedin.models import (
     SmartRateLimitContext,
     RateLimitWarning,
-    EngagementLevel,
-    LinkedInDetectability,
 )
 from openoutreach.linkedin.models import LinkedInProfile
 from openoutreach.mongodb.connection import get_mongodb_collection

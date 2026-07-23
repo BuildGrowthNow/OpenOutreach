@@ -12,7 +12,6 @@ from openoutreach.linkedin.models import (
     CampaignStateGraph,
     StateNode,
     StateTransition,
-    CampaignState,
 )
 from openoutreach.mongodb.connection import get_mongodb_collection
 
@@ -143,7 +142,7 @@ async def get_campaign_state_graph(
     Returns the workflow definition including all nodes and transitions.
     """
     # Verify campaign access
-    campaign = await get_campaign_with_access(campaign_id, user_id)
+    await get_campaign_with_access(campaign_id, user_id)
 
     # Get state graph
     graph = CampaignStateGraph.get_by_campaign(campaign_id)

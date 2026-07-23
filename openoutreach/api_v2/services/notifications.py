@@ -11,7 +11,7 @@ Replaces Django signals:
 - campaign status change -> on_campaign_status_change
 """
 import logging
-from typing import Optional, Any, List
+from typing import Optional, List
 from openoutreach.mongodb.dal import NotificationDAL
 from openoutreach.mongodb import models
 from openoutreach.mongodb.models_extended import Notification, ChatMessage, ActionLog

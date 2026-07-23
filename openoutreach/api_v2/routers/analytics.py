@@ -37,58 +37,49 @@ class PipelineStats(BaseModel):
 
 class OverviewStats(BaseModel):
     """Overview statistics."""
-    connections_sent: int = Field(0, alias="connectionsSent")
-    connections_accepted: int = Field(0, alias="connectionsAccepted")
-    connection_accept_rate: float = Field(0.0, alias="connectionAcceptRate")
-    messages_sent: int = Field(0, alias="messagesSent")
-    messages_replied: int = Field(0, alias="messagesReplied")
-    response_rate: float = Field(0.0, alias="responseRate")
+    connections_sent: int = Field(default=0, serialization_alias="connectionsSent")
+    connections_accepted: int = Field(default=0, serialization_alias="connectionsAccepted")
+    connection_accept_rate: float = Field(default=0.0, serialization_alias="connectionAcceptRate")
+    messages_sent: int = Field(default=0, serialization_alias="messagesSent")
+    messages_replied: int = Field(default=0, serialization_alias="messagesReplied")
+    response_rate: float = Field(default=0.0, serialization_alias="responseRate")
     conversions: int = 0
-    conversion_rate: float = Field(0.0, alias="conversionRate")
-
-    class Config:
-        populate_by_name = True
+    conversion_rate: float = Field(default=0.0, serialization_alias="conversionRate")
 
 
 class OverviewTotals(BaseModel):
     """Overview totals."""
     leads: int = 0
     qualified: int = 0
-    ready_to_connect: int = Field(0, alias="readyToConnect")
+    ready_to_connect: int = Field(default=0, serialization_alias="readyToConnect")
     connected: int = 0
     pending: int = 0
     failed: int = 0
-    no_email: int = Field(0, alias="noEmail")
-    connection_accept_rate: float = Field(0.0, alias="connectionAcceptRate")
-    response_rate: float = Field(0.0, alias="responseRate")
-    conversion_rate: float = Field(0.0, alias="conversionRate")
-
-    class Config:
-        populate_by_name = True
+    no_email: int = Field(default=0, serialization_alias="noEmail")
+    connection_accept_rate: float = Field(default=0.0, serialization_alias="connectionAcceptRate")
+    response_rate: float = Field(default=0.0, serialization_alias="responseRate")
+    conversion_rate: float = Field(default=0.0, serialization_alias="conversionRate")
 
 
 class CampaignStats(BaseModel):
     """Campaign-specific statistics."""
-    total_leads: int = Field(0, alias="totalLeads")
-    active_leads: int = Field(0, alias="activeLeads")
+    total_leads: int = Field(default=0, serialization_alias="totalLeads")
+    active_leads: int = Field(default=0, serialization_alias="activeLeads")
     qualified: int = 0
-    ready_to_connect: int = Field(0, alias="readyToConnect")
+    ready_to_connect: int = Field(default=0, serialization_alias="readyToConnect")
     pending: int = 0
     connected: int = 0
     completed: int = 0
     failed: int = 0
-    no_email: int = Field(0, alias="noEmail")
-    connections_sent: int = Field(0, alias="connectionsSent")
-    connections_accepted: int = Field(0, alias="connectionsAccepted")
-    messages_sent: int = Field(0, alias="messagesSent")
-    messages_replied: int = Field(0, alias="messagesReplied")
+    no_email: int = Field(default=0, serialization_alias="noEmail")
+    connections_sent: int = Field(default=0, serialization_alias="connectionsSent")
+    connections_accepted: int = Field(default=0, serialization_alias="connectionsAccepted")
+    messages_sent: int = Field(default=0, serialization_alias="messagesSent")
+    messages_replied: int = Field(default=0, serialization_alias="messagesReplied")
     responses: int = 0
-    connection_accept_rate: float = Field(0.0, alias="connectionAcceptRate")
-    response_rate: float = Field(0.0, alias="responseRate")
-    conversion_rate: float = Field(0.0, alias="conversionRate")
-
-    class Config:
-        populate_by_name = True
+    connection_accept_rate: float = Field(default=0.0, serialization_alias="connectionAcceptRate")
+    response_rate: float = Field(default=0.0, serialization_alias="responseRate")
+    conversion_rate: float = Field(default=0.0, serialization_alias="conversionRate")
 
 
 class CampaignOverview(BaseModel):
@@ -424,23 +415,23 @@ async def get_analytics_overview(
                 description=campaign.description or "",
                 status=campaign.status,
                 stats=CampaignStats(
-                    totalLeads=total_leads,
-                    activeLeads=active_leads,
+                    total_leads=total_leads,
+                    active_leads=active_leads,
                     qualified=qualified,
-                    readyToConnect=ready_to_connect,
+                    ready_to_connect=ready_to_connect,
                     pending=pending,
                     connected=connected_current,
                     completed=completed_current,
                     failed=failed,
-                    noEmail=no_email,
-                    connectionsSent=connections_sent,
-                    connectionsAccepted=connections_accepted,
-                    messagesSent=messages_sent,
-                    messagesReplied=messages_replied,
+                    no_email=no_email,
+                    connections_sent=connections_sent,
+                    connections_accepted=connections_accepted,
+                    messages_sent=messages_sent,
+                    messages_replied=messages_replied,
                     responses=messages_replied,
-                    connectionAcceptRate=campaign_connection_rate,
-                    responseRate=campaign_response_rate,
-                    conversionRate=campaign_conversion_rate,
+                    connection_accept_rate=campaign_connection_rate,
+                    response_rate=campaign_response_rate,
+                    conversion_rate=campaign_conversion_rate,
                 )
             )
         )
@@ -458,27 +449,27 @@ async def get_analytics_overview(
     )
 
     stats = OverviewStats(
-        connectionsSent=total_connections_sent,
-        connectionsAccepted=total_connections_accepted,
-        connectionAcceptRate=connection_accept_rate,
-        messagesSent=total_messages_sent,
-        messagesReplied=total_messages_replied,
-        responseRate=response_rate,
+        connections_sent=total_connections_sent,
+        connections_accepted=total_connections_accepted,
+        connection_accept_rate=connection_accept_rate,
+        messages_sent=total_messages_sent,
+        messages_replied=total_messages_replied,
+        response_rate=response_rate,
         conversions=total_conversions,
-        conversionRate=conversion_rate,
+        conversion_rate=conversion_rate,
     )
 
     totals = OverviewTotals(
         leads=total_qualified + total_ready_to_connect + total_pending + total_connected,
         qualified=total_qualified,
-        readyToConnect=total_ready_to_connect,
+        ready_to_connect=total_ready_to_connect,
         connected=total_connected,
         pending=total_pending,
         failed=total_failed,
-        noEmail=total_no_email,
-        connectionAcceptRate=connection_accept_rate,
-        responseRate=response_rate,
-        conversionRate=conversion_rate,
+        no_email=total_no_email,
+        connection_accept_rate=connection_accept_rate,
+        response_rate=response_rate,
+        conversion_rate=conversion_rate,
     )
 
     # Duplicate data at root level for backward compatibility

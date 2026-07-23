@@ -25,6 +25,9 @@ exclude = [
     "*.ipynb",
 ]
 
+[tool.ruff.lint.per-file-ignores]
+"openoutreach/api_v2/main.py" = ["E402"]
+
 [tool.pylint]
 max-line-length = 100
 disable = [

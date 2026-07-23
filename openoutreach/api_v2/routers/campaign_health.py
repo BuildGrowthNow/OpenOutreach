@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from openoutreach.api_v2.dependencies_v2 import get_current_user, get_campaign_with_access
 from openoutreach.linkedin.models import CampaignHealthMetric, HealthAlert, RecoveryAction
@@ -93,7 +93,7 @@ async def get_campaign_health(
     Returns health score, status, active alerts, and recent metrics.
     """
     # Verify campaign access
-    campaign = await get_campaign_with_access(campaign_id, user_id)
+    await get_campaign_with_access(campaign_id, user_id)
 
     # Get most recent metric
     collection = get_mongodb_collection("campaign_health_metrics")

@@ -8,7 +8,7 @@ in the FastAPI v2 API, mapping to MongoDB Lead model fields.
 from datetime import datetime
 from typing import Any, Dict, Optional
 
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel, Field
 
 
 class LeadCreate(BaseModel):
