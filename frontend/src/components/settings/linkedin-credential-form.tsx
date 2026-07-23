@@ -131,8 +131,10 @@ export default function LinkedInCredentialForm({
       credentialId = response.data.id;
       if (!initialData) createdCredentialId = credentialId;
 
-      // 2. Verify immediately
-      const verifyResp = await verifyLinkedInCredentials(credentialId);
+      // 2. Verify immediately — desktop mode: just mark stored, daemon does real login
+      const verifyResp = await verifyLinkedInCredentials(credentialId, {
+        testLogin: executionMode !== "desktop",
+      });
       const verifyData = verifyResp.data as {
         success?: boolean;
         error?: string;

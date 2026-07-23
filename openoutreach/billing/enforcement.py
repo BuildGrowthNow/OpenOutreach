@@ -27,14 +27,27 @@ class PlanEnforcer:
         if not PlanEnforcer._is_subscription_active(user):
             return False, "Subscription is not active"
 
-        collection = get_mongodb_collection("linkedin_profiles")
-        if collection is None:
+        profiles_col = get_mongodb_collection("linkedin_profiles")
+        creds_col = get_mongodb_collection("linkedin_credentials")
+        if profiles_col is None or creds_col is None:
             return False, "Database error"
 
-        count = collection.count_documents({
-            "user_id": user._id,
-            "is_active": True,
-        })
+        # Only count profiles that have at least one credential — orphaned profiles
+        # (auto-created but credential deleted after failed verification) must not consume a slot.
+        active_profile_ids = [
+            doc["_id"]
+            for doc in profiles_col.find({"user_id": user._id, "is_active": True}, {"_id": 1})
+        ]
+        if active_profile_ids:
+            count = len(set(
+                doc["linkedin_profile_id"]
+                for doc in creds_col.find(
+                    {"user_id": user._id, "linkedin_profile_id": {"$in": active_profile_ids}},
+                    {"linkedin_profile_id": 1},
+                )
+            ))
+        else:
+            count = 0
 
         if count >= user.linkedin_account_limit:
             return False, f"LinkedIn account limit reached ({count}/{user.linkedin_account_limit})"

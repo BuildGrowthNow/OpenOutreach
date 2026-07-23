@@ -1074,14 +1074,19 @@ export async function deleteLinkedInCredentials(
   return del(`/api/linkedin-credentials/${id}`);
 }
 
-export async function verifyLinkedInCredentials(id: number): Promise<
+export async function verifyLinkedInCredentials(
+  id: number,
+  options?: { testLogin?: boolean },
+): Promise<
   ApiResponse<{
     success: boolean;
     message: string;
     credentials: LinkedInCredentials;
   }>
 > {
-  return post(`/api/linkedin-credentials/${id}/verify`, {});
+  return post(`/api/linkedin-credentials/${id}/verify`, {
+    test_login: options?.testLogin ?? true,
+  });
 }
 
 export async function confirmLinkedInCredentials(id: number): Promise<
