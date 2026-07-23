@@ -114,7 +114,7 @@ def encrypt_cookie_data(storage_state: Dict) -> str:
 
 # Endpoints
 
-@router.get("/", response_model=ProfileListResponse)
+@router.get("", response_model=ProfileListResponse)
 async def list_linkedin_profiles(
     skip: int = 0,
     limit: int = 100,
@@ -303,7 +303,7 @@ async def upload_profile_cookies(
         )
 
 
-@router.post("/", response_model=LinkedInProfileResponse, status_code=201)
+@router.post("", response_model=LinkedInProfileResponse, status_code=201)
 async def create_profile(
     linkedin_username: str = Body(...),
     connect_daily_limit: int = Body(20),

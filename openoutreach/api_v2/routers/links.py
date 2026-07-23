@@ -9,7 +9,7 @@ from fastapi import APIRouter, HTTPException
 router = APIRouter(tags=["Links"])
 
 
-@router.get("/")
+@router.get("")
 async def list_links():
     raise HTTPException(
         status_code=501,
@@ -17,7 +17,7 @@ async def list_links():
     )
 
 
-@router.post("/")
+@router.post("")
 async def create_link():
     raise HTTPException(
         status_code=501,

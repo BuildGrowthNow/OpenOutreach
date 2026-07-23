@@ -44,7 +44,7 @@ def _notification_to_response(notification: Notification) -> NotificationRespons
     )
 
 
-@router.get("/", response_model=NotificationListResponse)
+@router.get("", response_model=NotificationListResponse)
 async def list_notifications(
     user_id: str = Depends(get_current_user),
     skip: int = Query(0, ge=0, description="Number of notifications to skip"),
@@ -247,7 +247,7 @@ async def mark_all_notifications_read(
     )
 
 
-@router.get("/sse/")
+@router.get("/sse")
 async def sse_notification_stream(
     request: Request,
     user_id: str = Depends(get_current_user),

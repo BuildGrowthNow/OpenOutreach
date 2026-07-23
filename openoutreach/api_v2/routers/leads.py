@@ -41,7 +41,7 @@ class DealResponse(BaseModel):
     creation_date: Optional[datetime] = None
 
 
-@router.get("/", response_model=dict)
+@router.get("", response_model=dict)
 async def list_leads(
     user_id: str = Depends(get_current_user),
     campaign_id: Optional[str] = None,

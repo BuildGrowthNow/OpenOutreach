@@ -176,7 +176,7 @@ export default function LinkedInCredentialForm({
         setError("Verification is taking longer than expected. Check the credential card status — it may still complete.");
         toast({
           title: "Connection issue",
-          description: "The verification may still be in progress. Refresh in a moment.",
+          description: "The verification may still be in progress. Check the credential card status in a moment.",
           variant: "default",
         });
         if (onSuccess) onSuccess();

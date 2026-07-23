@@ -133,9 +133,9 @@ const Dashboard = () => {
           <Badge
             variant="outline"
             className={`px-3 py-1 cursor-pointer ${
-              systemStatus === 'operational' ? 'text-emerald-600 border-emerald-200' :
-              systemStatus === 'degraded' ? 'text-amber-600 border-amber-200' :
-              'text-red-600 border-red-200'
+              systemStatus === 'operational' ? 'text-emerald-600 border-emerald-600' :
+              systemStatus === 'degraded' ? 'text-amber-600 border-amber-600' :
+              'text-red-600 border-red-600'
             }`}
             onClick={() => router.push('/health')}
           >

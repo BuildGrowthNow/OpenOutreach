@@ -89,7 +89,7 @@ class CampaignListResponse(BaseModel):
 
 # Endpoints
 
-@router.get("/", response_model=CampaignListResponse)
+@router.get("", response_model=CampaignListResponse)
 async def list_campaigns(
     skip: int = 0,
     limit: int = 100,
@@ -149,7 +149,7 @@ async def list_campaigns(
         )
 
 
-@router.post("/", response_model=CampaignResponse, status_code=201)
+@router.post("", response_model=CampaignResponse, status_code=201)
 async def create_campaign(
     data: CampaignCreate,
     user_id: str = Depends(get_current_user),

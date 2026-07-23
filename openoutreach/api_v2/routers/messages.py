@@ -29,7 +29,7 @@ class MessageCreate(BaseModel):
     content: str
 
 
-@router.get("/", response_model=dict)
+@router.get("", response_model=dict)
 async def list_messages(
     user_id: str = Depends(get_current_user),
     campaign_id: Optional[str] = None,

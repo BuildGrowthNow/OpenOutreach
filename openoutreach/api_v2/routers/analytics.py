@@ -208,7 +208,7 @@ def _get_messages_replied_count(campaign_id: str, since: datetime) -> int:
 
 # ========== Endpoints ==========
 
-@router.get("/overview/", response_model=AnalyticsOverviewResponse)
+@router.get("/overview", response_model=AnalyticsOverviewResponse)
 async def get_analytics_overview(
     user_id: str = Depends(get_current_user),
     campaign_id: Optional[str] = Query(None, description="Filter by specific campaign ID"),

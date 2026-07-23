@@ -75,7 +75,7 @@ class LogsResponse(BaseModel):
 
 # Endpoints
 
-@router.get("/", response_model=CredentialListResponse)
+@router.get("", response_model=CredentialListResponse)
 async def list_credentials(
     user_id: str = Depends(get_current_user),
 ):
@@ -152,7 +152,7 @@ async def list_credentials(
         )
 
 
-@router.post("/", response_model=LinkedInCredentialResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=LinkedInCredentialResponse, status_code=status.HTTP_201_CREATED)
 async def create_credential(
     data: LinkedInCredentialCreate,
     request: Request,

@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Settings"])
 
 
-@router.get("/", response_model=SiteConfigResponse)
+@router.get("", response_model=SiteConfigResponse)
 async def get_settings(
     user_id: str = Depends(get_current_user),
 ):
@@ -86,7 +86,7 @@ async def get_rate_limits(
     }
 
 
-@router.patch("/")
+@router.patch("")
 async def update_settings(
     updates: SiteConfigUpdate,
     user_id: str = Depends(get_current_user),
@@ -146,7 +146,7 @@ async def update_settings(
     }
 
 
-@router.get("/daily-usage/")
+@router.get("/daily-usage")
 async def get_daily_usage(
     user_id: str = Depends(get_current_user),
     date: Optional[str] = Query(default=None, description="Date in YYYY-MM-DD format (default: today)"),
