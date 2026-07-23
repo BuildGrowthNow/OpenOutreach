@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Sidebar } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
 import { cn } from '@/lib/utils'
@@ -77,6 +77,20 @@ interface DashboardLayoutProps {
 
 const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+  const [isDesktop, setIsDesktop] = useState(false)
+
+  useEffect(() => {
+    setIsDesktop(!!(window as unknown as Record<string, unknown>)['__LENGROWTH_DESKTOP__'])
+  }, [])
+
+  const navItems = [
+    ...dashboardItems,
+    ...(!isDesktop ? [{
+      title: 'Get Desktop App',
+      href: '/download',
+      icon: 'Download' as SidebarIcon,
+    }] : []),
+  ]
 
   return (
     <DashboardBillingWrapper>
@@ -87,7 +101,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
 
         {/* Sidebar */}
         <Sidebar
-          items={dashboardItems}
+          items={navItems}
           isOpen={isSidebarOpen}
           setIsOpen={setIsSidebarOpen}
         />
