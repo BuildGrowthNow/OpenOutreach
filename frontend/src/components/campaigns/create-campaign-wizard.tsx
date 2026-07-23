@@ -9,7 +9,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2, ArrowRight, Sparkles } from 'lucide-react';
-import { useAuthStore } from '@/lib/authStoreV2';
 import { apiClient } from '@/lib/apiClientV2';
 
 interface LinkedInProfile {
@@ -24,7 +23,6 @@ interface CreateCampaignWizardProps {
 
 export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWizardProps) {
   const router = useRouter();
-  const accessToken = useAuthStore((state) => state.accessToken);
 
   const [name, setName] = useState('');
   const [productPitch, setProductPitch] = useState('');
@@ -70,27 +68,19 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
     try {
       setSubmitting(true);
 
-      const response = await fetch('/api/campaigns', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({
-          name: name.trim(),
-          product_pitch: productPitch.trim(),
-          campaign_objective: campaignObjective.trim(),
-          linkedin_profile_id: profileId,
-          velocity: 20,
-        }),
+      const res = await apiClient.post<{ id: string }>('/campaigns', {
+        name: name.trim(),
+        product_pitch: productPitch.trim(),
+        campaign_objective: campaignObjective.trim(),
+        linkedin_profile_id: profileId,
+        velocity: 20,
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Failed to create campaign');
+      if (res.error || !res.data) {
+        throw new Error(res.error || 'Failed to create campaign');
       }
 
-      const campaign = await response.json();
+      const campaign = res.data;
 
       if (onSuccess) {
         onSuccess(campaign.id);
