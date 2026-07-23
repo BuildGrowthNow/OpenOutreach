@@ -63,6 +63,8 @@ def _build_credential_response(
         backup_of_id=cred.backup_of_id,
         security_alert_sent_at=cred.security_alert_sent_at,
         executionMode=profile.execution_mode if profile else "desktop",
+        linkedinProfileUsername=profile.linkedin_username if profile else None,
+        daemonIp=getattr(profile, "daemon_ip", None) if profile else None,
         logs=logs,
     )
 

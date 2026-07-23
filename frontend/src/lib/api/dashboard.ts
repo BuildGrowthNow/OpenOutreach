@@ -974,6 +974,8 @@ export interface LinkedInCredentials {
   };
   linkedinProfileId?: number | null;
   executionMode?: "desktop" | "cloud";
+  linkedinProfileUsername?: string | null;
+  daemonIp?: string | null;
 }
 
 export interface LinkedInCredentialsHealth {

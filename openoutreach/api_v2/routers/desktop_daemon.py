@@ -6,7 +6,7 @@ import logging
 from datetime import datetime, timezone as tz, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 
 from openoutreach.api_v2.dependencies import get_current_user
@@ -49,6 +49,7 @@ class DaemonStatusResponse(BaseModel):
 @router.post("/heartbeat", response_model=HeartbeatResponse)
 async def desktop_heartbeat(
     request: HeartbeatRequest,
+    http_request: Request,
     user_id: str = Depends(get_current_user),
 ) -> HeartbeatResponse:
     """
@@ -73,6 +74,13 @@ async def desktop_heartbeat(
             profile.daemon_platform = request.platform
         if request.browser:
             profile.daemon_browser = request.browser
+
+        # Capture the IP the daemon is connecting from (useful for debugging and transparency)
+        client_ip = http_request.headers.get("x-forwarded-for", "").split(",")[0].strip() or (
+            http_request.client.host if http_request.client else None
+        )
+        if client_ip:
+            profile.daemon_ip = client_ip
 
         profile.save()
 

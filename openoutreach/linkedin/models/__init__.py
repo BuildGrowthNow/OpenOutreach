@@ -86,6 +86,7 @@ class LinkedInProfile:
         execution_mode: str = "desktop",
         last_heartbeat: Optional[datetime] = None,
         daemon_status: str = "unknown",
+        daemon_ip: Optional[str] = None,
     ):
         self._id = _id or str(uuid4())
         self.user_id = user_id
@@ -120,6 +121,7 @@ class LinkedInProfile:
         self.execution_mode = execution_mode
         self.last_heartbeat = last_heartbeat
         self.daemon_status = daemon_status
+        self.daemon_ip = daemon_ip
         self._exhausted: dict[str, date] = {}
         self._user_cache = None  # Cache for lazy-loaded user
 
@@ -220,6 +222,7 @@ class LinkedInProfile:
             "execution_mode": self.execution_mode,
             "last_heartbeat": self.last_heartbeat,
             "daemon_status": self.daemon_status,
+            "daemon_ip": self.daemon_ip,
         }
 
     @classmethod
@@ -259,6 +262,7 @@ class LinkedInProfile:
             execution_mode=data.get("execution_mode", "desktop"),
             last_heartbeat=data.get("last_heartbeat"),
             daemon_status=data.get("daemon_status", "unknown"),
+            daemon_ip=data.get("daemon_ip"),
         )
 
     def save(self, update_fields: Optional[list] = None) -> str:

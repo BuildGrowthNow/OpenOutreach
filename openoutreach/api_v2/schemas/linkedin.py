@@ -123,6 +123,8 @@ class LinkedInCredentialResponse(BaseModel):
     security_alert_sent_at: Optional[datetime] = Field(None, description="Last security alert notification timestamp")
 
     execution_mode: str = Field(default="desktop", alias="executionMode", description="Execution mode of the linked profile: 'desktop' or 'cloud'")
+    linkedin_profile_username: Optional[str] = Field(None, alias="linkedinProfileUsername", description="LinkedIn username from the linked profile")
+    daemon_ip: Optional[str] = Field(None, alias="daemonIp", description="IP address last reported by the desktop daemon")
 
     # Audit log entries (if included)
     logs: Optional[List[Dict[str, Any]]] = Field(None, description="Recent audit log entries")

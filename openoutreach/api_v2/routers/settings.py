@@ -20,6 +20,19 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Settings"])
 
 
+def _get_linkedin_profile_username(user_id: str) -> str:
+    """Return the linkedin_username from the user's first active profile, or empty string."""
+    try:
+        from openoutreach.linkedin.models import LinkedInProfile
+        profiles = LinkedInProfile.find_by_user_id(user_id)
+        for p in profiles:
+            if p.active and p.linkedin_username:
+                return p.linkedin_username
+    except Exception:
+        pass
+    return ""
+
+
 @router.get("")
 async def get_settings(
     user_id: str = Depends(get_current_user),
@@ -63,7 +76,7 @@ async def get_settings(
             "activeDays": active_days_str or "0,1,2,3,4",
         },
         "linkedinProfile": {
-            "username": config.linkedin_username or "",
+            "username": _get_linkedin_profile_username(user_id),
             "campaign": config.linkedin_campaign or "",
         },
         "finder": {

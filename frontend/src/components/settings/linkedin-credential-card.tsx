@@ -276,7 +276,7 @@ export default function LinkedInCredentialCard({
     }
   };
 
-  const displayUsername = getDisplayUsername(credential.username);
+  const displayUsername = getDisplayUsername(credential.linkedinProfileUsername ?? credential.username);
   const displayEmail = credential.publicEmail?.trim() || "Email not available";
   const lastVerified = formatTimestamp(
     healthData?.lastVerified ?? credential.lastVerified,
@@ -320,6 +320,12 @@ export default function LinkedInCredentialCard({
                   />
                   <span className="text-zinc-300">{statusLabel}</span>
                 </div>
+                {credential.daemonIp ? (
+                  <div className="flex items-center gap-1.5 text-xs text-zinc-500">
+                    <Icons.Globe className="h-3 w-3" />
+                    <span>IP: {credential.daemonIp}</span>
+                  </div>
+                ) : null}
               </div>
             </div>
             <div className="text-left lg:text-right">
