@@ -181,7 +181,7 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
         {profiles.length > 1 && (
           <div className="space-y-2">
             <Label className="text-base">LinkedIn Profile</Label>
-            <Select value={profileId} onValueChange={setProfileId}>
+            <Select value={profileId} onValueChange={(v) => v && setProfileId(v)}>
               <SelectTrigger className="h-11">
                 <SelectValue placeholder="Select a profile" />
               </SelectTrigger>
