@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuthStore } from '@/lib/auth-store';
+import { apiClient } from '@/lib/apiClientV2';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -31,7 +31,6 @@ interface CreateCampaignFormProps {
 
 export function CreateCampaignForm({ onSuccess, onCancel }: CreateCampaignFormProps) {
   const router = useRouter();
-  const { getHeaders } = useAuthStore();
 
   const [profiles, setProfiles] = useState<LinkedInProfile[]>([]);
   const [loadingProfiles, setLoadingProfiles] = useState(true);
@@ -49,20 +48,15 @@ export function CreateCampaignForm({ onSuccess, onCancel }: CreateCampaignFormPr
   const loadProfiles = useCallback(async () => {
     try {
       setLoadingProfiles(true);
-      const response = await fetch('/api/linkedin-profiles', {
-        headers: getHeaders(),
-      });
+      const res = await apiClient.get<{ profiles: LinkedInProfile[] }>('/linkedin-profiles');
 
-      if (!response.ok) {
-        throw new Error('Failed to load profiles');
+      if (res.error || !res.data) {
+        throw new Error(res.error || 'Failed to load profiles');
       }
 
-      const data = await response.json();
-      setProfiles(data.profiles || []);
-
-      // Auto-select first profile if available
-      if (data.profiles && data.profiles.length > 0) {
-        setSelectedProfileId(data.profiles[0].id);
+      setProfiles(res.data.profiles || []);
+      if (res.data.profiles?.length > 0) {
+        setSelectedProfileId(res.data.profiles[0].id);
       }
     } catch (err) {
       console.error('Failed to load profiles:', err);
@@ -70,7 +64,7 @@ export function CreateCampaignForm({ onSuccess, onCancel }: CreateCampaignFormPr
     } finally {
       setLoadingProfiles(false);
     }
-  }, [getHeaders]);
+  }, []);
 
   useEffect(() => {
     loadProfiles();
@@ -89,28 +83,20 @@ export function CreateCampaignForm({ onSuccess, onCancel }: CreateCampaignFormPr
     try {
       setSubmitting(true);
 
-      const response = await fetch('/api/campaigns', {
-        method: 'POST',
-        headers: {
-          ...getHeaders(),
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          name,
-          product_pitch: productPitch,
-          campaign_objective: campaignObjective,
-          linkedin_profile_id: selectedProfileId,
-          booking_link: bookingLink,
-          velocity: parseInt(velocity, 10),
-        }),
+      const res = await apiClient.post<{ id: string }>('/campaigns', {
+        name,
+        product_pitch: productPitch,
+        campaign_objective: campaignObjective,
+        linkedin_profile_id: selectedProfileId,
+        booking_link: bookingLink,
+        velocity: parseInt(velocity, 10),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Failed to create campaign');
+      if (res.error || !res.data) {
+        throw new Error(res.error || 'Failed to create campaign');
       }
 
-      const campaign = await response.json();
+      const campaign = res.data;
 
       // Success
       if (onSuccess) {

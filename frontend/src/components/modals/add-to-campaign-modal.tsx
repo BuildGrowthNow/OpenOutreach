@@ -14,6 +14,7 @@ import { Icons } from "@/lib/types/components";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getCampaigns } from "@/lib/api/dashboard";
+import { apiClient } from "@/lib/apiClientV2";
 import { Campaign } from "@/lib/types/components";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -80,23 +81,18 @@ export function AddToCampaignModal({
       setAdding(true);
       setError(null);
 
-      const response = await fetch(`/api/leads/${leadId}/add-to-campaign/`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ campaign_id: selectedCampaignId }),
-      });
+      const res = await apiClient.post<{ success: boolean; error?: string }>(
+        `/leads/${leadId}/add-to-campaign/`,
+        { campaign_id: selectedCampaignId },
+      );
 
-      const data = await response.json();
-
-      if (response.ok && data.success) {
+      if (!res.error && res.data?.success) {
         onOpenChange(false);
         if (onSuccess) {
           onSuccess();
         }
       } else {
-        setError(data.error || "Failed to add lead to campaign");
+        setError(res.error || res.data?.error || "Failed to add lead to campaign");
       }
     } catch (err) {
       setError("An error occurred while adding lead to campaign");
