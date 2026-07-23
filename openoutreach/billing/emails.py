@@ -202,19 +202,31 @@ def _send_billing_email(user: User, subject: str, html: str, text: str) -> bool:
     return provider.send(user.email, subject, html, text)
 
 
+def _settings_ctx() -> tuple[str, str, str, str]:
+    """Return (brand_name, app_url, support_email, docs_url) from settings."""
+    s = Settings()
+    brand = s.EMAIL_FROM_NAME or "Lengrowth"
+    app_url = s.APP_URL or "http://localhost:3000"
+    support = s.SUPPORT_EMAIL or f"support@{brand.lower().replace(' ', '')}.com"
+    docs_url = f"https://docs.{brand.lower().replace(' ', '')}.com"
+    return brand, app_url, support, docs_url
+
+
 def send_welcome_email(user: User) -> bool:
     """Send welcome email on signup with trial info."""
-    trial_days = Settings().TRIAL_DURATION_DAYS
+    s = Settings()
+    trial_days = s.TRIAL_DURATION_DAYS
+    brand, app_url, support, _ = _settings_ctx()
 
     html = f"""
 <html>
   <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333;">
     <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-      <h1 style="color: #0066cc; margin-bottom: 20px;">Welcome to OpenOutreach!</h1>
+      <h1 style="color: #0066cc; margin-bottom: 20px;">Welcome to {brand}!</h1>
 
       <p>Hi {user.full_name or 'there'},</p>
 
-      <p>Your free trial has started! You now have <strong>{trial_days} days</strong> of full access to OpenOutreach Pro.</p>
+      <p>Your free trial has started! You now have <strong>{trial_days} days</strong> of full access to {brand} Pro.</p>
 
       <h3>Your trial includes:</h3>
       <ul>
@@ -226,25 +238,25 @@ def send_welcome_email(user: User) -> bool:
         <li>Full API access</li>
       </ul>
 
-      <p><strong>No credit card will be charged during your trial.</strong> When your trial ends, you'll need to choose a plan to continue using OpenOutreach.</p>
+      <p><strong>No credit card will be charged during your trial.</strong> When your trial ends, you'll need to choose a plan to continue using {brand}.</p>
 
-      <p><a href="https://app.openoutreach.ai/settings/billing" style="display: inline-block; background-color: #0066cc; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 10px;">View Your Trial</a></p>
+      <p><a href="{app_url}/settings/billing" style="display: inline-block; background-color: #0066cc; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 10px;">View Your Trial</a></p>
 
       <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
 
       <p style="color: #666; font-size: 12px;">
-        If you have any questions, reply to this email or contact us at support@openoutreach.ai
+        If you have any questions, reply to this email or contact us at {support}
       </p>
     </div>
   </body>
 </html>
 """
 
-    text = f"""Welcome to OpenOutreach!
+    text = f"""Welcome to {brand}!
 
 Hi {user.full_name or 'there'},
 
-Your free trial has started! You now have {trial_days} days of full access to OpenOutreach Pro.
+Your free trial has started! You now have {trial_days} days of full access to {brand} Pro.
 
 Your trial includes:
 - Up to 1 LinkedIn account
@@ -254,18 +266,20 @@ Your trial includes:
 - Sales Navigator access
 - Full API access
 
-No credit card will be charged during your trial. When your trial ends, you'll need to choose a plan to continue using OpenOutreach.
+No credit card will be charged during your trial. When your trial ends, you'll need to choose a plan to continue using {brand}.
 
-View your trial: https://app.openoutreach.ai/settings/billing
+View your trial: {app_url}/settings/billing
 
-If you have any questions, reply to this email or contact us at support@openoutreach.ai
+If you have any questions, reply to this email or contact us at {support}
 """
 
-    return _send_billing_email(user, "Welcome to OpenOutreach! Your trial has started.", html, text)
+    return _send_billing_email(user, f"Welcome to {brand}! Your trial has started.", html, text)
 
 
 def send_trial_expiry_warning(user: User, days_remaining: int) -> bool:
     """Send trial expiry warning email (1 day before expiry)."""
+    brand, app_url, support, _ = _settings_ctx()
+
     html = f"""
 <html>
   <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333;">
@@ -274,7 +288,7 @@ def send_trial_expiry_warning(user: User, days_remaining: int) -> bool:
 
       <p>Hi {user.full_name or 'there'},</p>
 
-      <p>Your OpenOutreach trial ends <strong>tomorrow</strong>. After that, your campaigns will pause and you won't be able to run new automations.</p>
+      <p>Your {brand} trial ends <strong>tomorrow</strong>. After that, your campaigns will pause and you won't be able to run new automations.</p>
 
       <h3>Choose a plan to keep going:</h3>
       <ul>
@@ -285,10 +299,10 @@ def send_trial_expiry_warning(user: User, days_remaining: int) -> bool:
         <li><strong>Cloud - $299/month</strong>: Fully managed cloud execution + AI on Sonnet, priority support included</li>
       </ul>
 
-      <p><a href="https://app.openoutreach.ai/settings/plan" style="display: inline-block; background-color: #ff6600; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 10px;">Choose a Plan</a></p>
+      <p><a href="{app_url}/settings/plan" style="display: inline-block; background-color: #ff6600; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 10px;">Choose a Plan</a></p>
 
       <p style="color: #666; margin-top: 20px; font-size: 14px;">
-        Questions? Our team is here to help. Reply to this email or contact support@openoutreach.ai
+        Questions? Our team is here to help. Reply to this email or contact {support}
       </p>
 
       <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
@@ -305,7 +319,7 @@ def send_trial_expiry_warning(user: User, days_remaining: int) -> bool:
 
 Hi {user.full_name or 'there'},
 
-Your OpenOutreach trial ends tomorrow. After that, your campaigns will pause and you won't be able to run new automations.
+Your {brand} trial ends tomorrow. After that, your campaigns will pause and you won't be able to run new automations.
 
 Choose a plan to keep going:
 - Starter - $19/month: 1 LinkedIn account, 3 campaigns
@@ -313,16 +327,18 @@ Choose a plan to keep going:
 - Business - $99/month: 3 LinkedIn accounts, team members, priority support
 - Agency - $249/month: 10 LinkedIn accounts, white-label branding, unlimited team members
 
-Choose a plan: https://app.openoutreach.ai/settings/plan
+Choose a plan: {app_url}/settings/plan
 
-Questions? Reply to this email or contact support@openoutreach.ai
+Questions? Reply to this email or contact {support}
 """
 
-    return _send_billing_email(user, "Your OpenOutreach trial ends tomorrow 🚀", html, text)
+    return _send_billing_email(user, f"Your {brand} trial ends tomorrow", html, text)
 
 
 def send_trial_expired(user: User) -> bool:
     """Send trial expired notification."""
+    brand, app_url, support, _ = _settings_ctx()
+
     html = f"""
 <html>
   <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333;">
@@ -331,15 +347,15 @@ def send_trial_expired(user: User) -> bool:
 
       <p>Hi {user.full_name or 'there'},</p>
 
-      <p>Your OpenOutreach trial has ended. Your campaigns are now paused and automations have been stopped.</p>
+      <p>Your {brand} trial has ended. Your campaigns are now paused and automations have been stopped.</p>
 
       <h3>Ready to continue?</h3>
       <p>Choose a plan to reactivate your campaigns and get back to work.</p>
 
-      <p><a href="https://app.openoutreach.ai/settings/plan" style="display: inline-block; background-color: #0066cc; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 10px;">Subscribe Now</a></p>
+      <p><a href="{app_url}/settings/plan" style="display: inline-block; background-color: #0066cc; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 10px;">Subscribe Now</a></p>
 
       <h3>Still deciding?</h3>
-      <p>Our team is here to answer questions about plans and help you choose the right option. <a href="mailto:support@openoutreach.ai">Get in touch</a>.</p>
+      <p>Our team is here to answer questions about plans and help you choose the right option. <a href="mailto:{support}">Get in touch</a>.</p>
 
       <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
 
@@ -355,26 +371,27 @@ def send_trial_expired(user: User) -> bool:
 
 Hi {user.full_name or 'there'},
 
-Your OpenOutreach trial has ended. Your campaigns are now paused and automations have been stopped.
+Your {brand} trial has ended. Your campaigns are now paused and automations have been stopped.
 
 Ready to continue?
 
 Choose a plan to reactivate your campaigns and get back to work.
 
-Subscribe now: https://app.openoutreach.ai/settings/plan
+Subscribe now: {app_url}/settings/plan
 
 Still deciding?
 
-Our team is here to answer questions about plans. Get in touch: support@openoutreach.ai
+Our team is here to answer questions about plans. Get in touch: {support}
 
 Your data will be preserved for 30 days. After that, it will be permanently deleted.
 """
 
-    return _send_billing_email(user, "Your OpenOutreach trial has ended", html, text)
+    return _send_billing_email(user, f"Your {brand} trial has ended", html, text)
 
 
 def send_plan_upgraded(user: User, old_plan: str, new_plan: str) -> bool:
     """Send plan upgrade confirmation email."""
+    brand, app_url, support, _ = _settings_ctx()
     plan_names = {
         "starter": "Starter",
         "pro": "Pro",
@@ -386,7 +403,7 @@ def send_plan_upgraded(user: User, old_plan: str, new_plan: str) -> bool:
 <html>
   <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333;">
     <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-      <h1 style="color: #0066cc; margin-bottom: 20px;">Welcome to the {plan_names.get(new_plan, new_plan)} Plan! 🎉</h1>
+      <h1 style="color: #0066cc; margin-bottom: 20px;">Welcome to the {plan_names.get(new_plan, new_plan)} Plan!</h1>
 
       <p>Hi {user.full_name or 'there'},</p>
 
@@ -398,14 +415,14 @@ def send_plan_upgraded(user: User, old_plan: str, new_plan: str) -> bool:
         <li>Campaigns: {user.campaign_limit if user.campaign_limit else "Unlimited"}</li>
       </ul>
 
-      <p>The prorated charge for this upgrade has been applied to your account. Any questions about your billing? <a href="https://app.openoutreach.ai/settings/billing">View your invoice</a>.</p>
+      <p>The prorated charge for this upgrade has been applied to your account. Any questions about your billing? <a href="{app_url}/settings/billing">View your invoice</a>.</p>
 
-      <p><a href="https://app.openoutreach.ai" style="display: inline-block; background-color: #0066cc; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 10px;">Back to Dashboard</a></p>
+      <p><a href="{app_url}" style="display: inline-block; background-color: #0066cc; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 10px;">Back to Dashboard</a></p>
 
       <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
 
       <p style="color: #666; font-size: 12px;">
-        If you have any questions, reply to this email or contact us at support@openoutreach.ai
+        If you have any questions, reply to this email or contact us at {support}
       </p>
     </div>
   </body>
@@ -422,18 +439,19 @@ Your new limits:
 - LinkedIn accounts: {user.linkedin_account_limit}
 - Campaigns: {user.campaign_limit if user.campaign_limit else "Unlimited"}
 
-The prorated charge for this upgrade has been applied to your account. View your invoice: https://app.openoutreach.ai/settings/billing
+The prorated charge for this upgrade has been applied to your account. View your invoice: {app_url}/settings/billing
 
-Back to dashboard: https://app.openoutreach.ai
+Back to dashboard: {app_url}
 
-If you have any questions, reply to this email or contact us at support@openoutreach.ai
+If you have any questions, reply to this email or contact us at {support}
 """
 
-    return _send_billing_email(user, f"You've upgraded to {plan_names.get(new_plan, new_plan)}! 🎉", html, text)
+    return _send_billing_email(user, f"You've upgraded to {plan_names.get(new_plan, new_plan)}!", html, text)
 
 
 def send_plan_downgraded(user: User, old_plan: str, new_plan: str, effective_date: datetime) -> bool:
     """Send plan downgrade notification email."""
+    brand, app_url, support, _ = _settings_ctx()
     plan_names = {
         "starter": "Starter",
         "pro": "Pro",
@@ -466,7 +484,7 @@ def send_plan_downgraded(user: User, old_plan: str, new_plan: str, effective_dat
         <strong>Note:</strong> If you currently have more LinkedIn accounts or campaigns than your new plan allows, we'll deactivate the excess profiles starting on {date_str}. You'll receive another email letting you know which profiles were deactivated.
       </p>
 
-      <p style="margin-top: 20px;"><a href="https://app.openoutreach.ai/settings/billing" style="display: inline-block; background-color: #0066cc; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">View Your Subscription</a></p>
+      <p style="margin-top: 20px;"><a href="{app_url}/settings/billing" style="display: inline-block; background-color: #0066cc; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">View Your Subscription</a></p>
 
       <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
 
@@ -494,7 +512,7 @@ Your new limits (starting {date_str}):
 
 Note: If you currently have more LinkedIn accounts or campaigns than your new plan allows, we'll deactivate the excess profiles starting on {date_str}. You'll receive another email letting you know which profiles were deactivated.
 
-View your subscription: https://app.openoutreach.ai/settings/billing
+View your subscription: {app_url}/settings/billing
 
 Changed your mind? You can upgrade anytime from your billing settings.
 """
@@ -504,11 +522,13 @@ Changed your mind? You can upgrade anytime from your billing settings.
 
 def send_payment_failed(user: User, retry_count: int = 1) -> bool:
     """Send payment failed notification with retry information."""
+    brand, app_url, support, _ = _settings_ctx()
+
     html = f"""
 <html>
   <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333;">
     <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-      <h1 style="color: #cc0000; margin-bottom: 20px;">Payment Failed ⚠️</h1>
+      <h1 style="color: #cc0000; margin-bottom: 20px;">Payment Failed</h1>
 
       <p>Hi {user.full_name or 'there'},</p>
 
@@ -520,7 +540,7 @@ def send_payment_failed(user: User, retry_count: int = 1) -> bool:
       <h3>Fix it now</h3>
       <p>Update your payment method to avoid service interruption.</p>
 
-      <p><a href="https://app.openoutreach.ai/settings/billing" style="display: inline-block; background-color: #0066cc; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 10px;">Update Payment Method</a></p>
+      <p><a href="{app_url}/settings/billing" style="display: inline-block; background-color: #0066cc; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 10px;">Update Payment Method</a></p>
 
       <p style="margin-top: 20px; color: #666; font-size: 14px;">
         <strong>Common reasons for payment failures:</strong>
@@ -535,7 +555,7 @@ def send_payment_failed(user: User, retry_count: int = 1) -> bool:
       <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
 
       <p style="color: #666; font-size: 12px;">
-        Need help? Reply to this email or contact us at support@openoutreach.ai
+        Need help? Reply to this email or contact us at {support}
       </p>
     </div>
   </body>
@@ -556,7 +576,7 @@ Fix it now
 
 Update your payment method to avoid service interruption.
 
-Update payment method: https://app.openoutreach.ai/settings/billing
+Update payment method: {app_url}/settings/billing
 
 Common reasons for payment failures:
 - Card has expired
@@ -564,14 +584,16 @@ Common reasons for payment failures:
 - Card issuer declined the transaction
 - Billing address mismatch
 
-Need help? Reply to this email or contact us at support@openoutreach.ai
+Need help? Reply to this email or contact us at {support}
 """
 
-    return _send_billing_email(user, "Payment failed for your OpenOutreach subscription ⚠️", html, text)
+    return _send_billing_email(user, f"Payment failed for your {brand} subscription", html, text)
 
 
 def send_account_blocked(user: User, reason: str = "violation of our terms of service") -> bool:
     """Send account blocked notification."""
+    brand, _, support, _ = _settings_ctx()
+
     html = f"""
 <html>
   <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333;">
@@ -580,12 +602,12 @@ def send_account_blocked(user: User, reason: str = "violation of our terms of se
 
       <p>Hi {user.full_name or 'there'},</p>
 
-      <p>Your OpenOutreach account has been suspended due to: <strong>{reason}</strong></p>
+      <p>Your {brand} account has been suspended due to: <strong>{reason}</strong></p>
 
       <p>You will no longer be able to log in or run automations.</p>
 
       <h3>What now?</h3>
-      <p>If you believe this is a mistake or have questions about this decision, please reply to this email or contact our support team at support@openoutreach.ai with your account email and a brief explanation.</p>
+      <p>If you believe this is a mistake or have questions about this decision, please reply to this email or contact our support team at {support} with your account email and a brief explanation.</p>
 
       <p>Our team will review your account within 24 hours.</p>
 
@@ -603,31 +625,33 @@ def send_account_blocked(user: User, reason: str = "violation of our terms of se
 
 Hi {user.full_name or 'there'},
 
-Your OpenOutreach account has been suspended due to: {reason}
+Your {brand} account has been suspended due to: {reason}
 
 You will no longer be able to log in or run automations.
 
 What now?
 
-If you believe this is a mistake or have questions about this decision, please reply to this email or contact our support team at support@openoutreach.ai with your account email and a brief explanation.
+If you believe this is a mistake or have questions about this decision, please reply to this email or contact our support team at {support} with your account email and a brief explanation.
 
 Our team will review your account within 24 hours.
 """
 
-    return _send_billing_email(user, "Your OpenOutreach account has been suspended", html, text)
+    return _send_billing_email(user, f"Your {brand} account has been suspended", html, text)
 
 
 def send_lifetime_deal_purchase(user: User) -> bool:
     """Send lifetime deal purchase confirmation email."""
+    brand, app_url, support, docs_url = _settings_ctx()
+
     html = f"""
 <html>
   <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333;">
     <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-      <h1 style="color: #0066cc; margin-bottom: 20px;">Lifetime Deal Activated! 🎉</h1>
+      <h1 style="color: #0066cc; margin-bottom: 20px;">Lifetime Deal Activated!</h1>
 
       <p>Hi {user.full_name or 'there'},</p>
 
-      <p>Thank you for your purchase! You've activated the OpenOutreach Lifetime Deal with Pro-equivalent access <strong>forever</strong>.</p>
+      <p>Thank you for your purchase! You've activated the {brand} Lifetime Deal with Pro-equivalent access <strong>forever</strong>.</p>
 
       <h3>What's included:</h3>
       <ul>
@@ -647,10 +671,10 @@ def send_lifetime_deal_purchase(user: User) -> bool:
 
       <p>You're all set. Your campaigns are ready to launch!</p>
 
-      <p><a href="https://app.openoutreach.ai" style="display: inline-block; background-color: #0066cc; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 10px;">Go to Dashboard</a></p>
+      <p><a href="{app_url}" style="display: inline-block; background-color: #0066cc; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 10px;">Go to Dashboard</a></p>
 
       <h3>Need help getting started?</h3>
-      <p>Check out our <a href="https://docs.openoutreach.ai">documentation</a> or reach out to support@openoutreach.ai if you have any questions.</p>
+      <p>Check out our <a href="{docs_url}">documentation</a> or reach out to {support} if you have any questions.</p>
 
       <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
 
@@ -666,7 +690,7 @@ def send_lifetime_deal_purchase(user: User) -> bool:
 
 Hi {user.full_name or 'there'},
 
-Thank you for your purchase! You've activated the OpenOutreach Lifetime Deal with Pro-equivalent access forever.
+Thank you for your purchase! You've activated the {brand} Lifetime Deal with Pro-equivalent access forever.
 
 What's included:
 - 1 LinkedIn account
@@ -682,22 +706,24 @@ Note: The lifetime deal uses the desktop daemon for execution. The Cloud tier ($
 
 You're all set. Your campaigns are ready to launch!
 
-Go to dashboard: https://app.openoutreach.ai
+Go to dashboard: {app_url}
 
 Need help getting started?
 
-Check out our documentation: https://docs.openoutreach.ai
+Check out our documentation: {docs_url}
 
-Or reach out to support@openoutreach.ai if you have any questions.
+Or reach out to {support} if you have any questions.
 
 Your receipt has been sent to your email. If you didn't receive it, reply to this email.
 """
 
-    return _send_billing_email(user, "Your Lifetime Deal is active! 🎉", html, text)
+    return _send_billing_email(user, f"Your {brand} Lifetime Deal is active!", html, text)
 
 
 def send_email_verification(user: User, verification_url: str) -> bool:
     """Send email verification link to new user."""
+    brand, _, _, _ = _settings_ctx()
+
     html = f"""
 <html>
   <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333;">
@@ -706,7 +732,7 @@ def send_email_verification(user: User, verification_url: str) -> bool:
 
       <p>Hi {user.full_name or 'there'},</p>
 
-      <p>Thanks for signing up for OpenOutreach! Please verify your email address to start your trial.</p>
+      <p>Thanks for signing up for {brand}! Please verify your email address to start your trial.</p>
 
       <p><a href="{verification_url}" style="display: inline-block; background-color: #0066cc; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 10px;">Verify Email Address</a></p>
 
@@ -733,7 +759,7 @@ def send_email_verification(user: User, verification_url: str) -> bool:
 
 Hi {user.full_name or 'there'},
 
-Thanks for signing up for OpenOutreach! Please verify your email address to start your trial.
+Thanks for signing up for {brand}! Please verify your email address to start your trial.
 
 Verify your email: {verification_url}
 
@@ -742,11 +768,13 @@ This link will expire in 24 hours.
 If you didn't create an account, you can safely ignore this email.
 """
 
-    return _send_billing_email(user, "Verify your OpenOutreach email address", html, text)
+    return _send_billing_email(user, f"Verify your {brand} email address", html, text)
 
 
 def send_password_reset(user: User, reset_url: str) -> bool:
     """Send password reset link to user."""
+    brand, _, _, _ = _settings_ctx()
+
     html = f"""
 <html>
   <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333;">
@@ -755,7 +783,7 @@ def send_password_reset(user: User, reset_url: str) -> bool:
 
       <p>Hi {user.full_name or 'there'},</p>
 
-      <p>We received a request to reset your password. Click the button below to create a new password:</p>
+      <p>We received a request to reset your {brand} password. Click the button below to create a new password:</p>
 
       <p><a href="{reset_url}" style="display: inline-block; background-color: #0066cc; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 10px;">Reset Password</a></p>
 
@@ -782,7 +810,7 @@ def send_password_reset(user: User, reset_url: str) -> bool:
 
 Hi {user.full_name or 'there'},
 
-We received a request to reset your password. Click the link below to create a new password:
+We received a request to reset your {brand} password. Click the link below to create a new password:
 
 {reset_url}
 
@@ -791,4 +819,4 @@ This link will expire in 24 hours.
 If you didn't request a password reset, you can safely ignore this email. Your password will remain unchanged.
 """
 
-    return _send_billing_email(user, "Reset your OpenOutreach password", html, text)
+    return _send_billing_email(user, f"Reset your {brand} password", html, text)

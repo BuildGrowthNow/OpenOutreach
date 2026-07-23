@@ -1,4 +1,5 @@
-import { get, post, ApiResponse } from "../api";
+import { apiClient } from "../apiClientV2";
+import { ApiResponse } from "../api";
 
 export interface Plan {
   name: string;
@@ -46,45 +47,45 @@ export interface BillingUsage {
 }
 
 export async function getPlans(): Promise<ApiResponse<Plan[]>> {
-  return get<Plan[]>("/api/billing/plans");
+  return apiClient.get<Plan[]>("/billing/plans");
 }
 
 export async function isLifetimeDealActive(): Promise<ApiResponse<{ active: boolean }>> {
-  return get<{ active: boolean }>("/api/billing/lifetime-deal-active");
+  return apiClient.get<{ active: boolean }>("/billing/lifetime-deal-active");
 }
 
 export async function getBillingStatus(): Promise<ApiResponse<BillingStatus>> {
-  return get<BillingStatus>("/api/billing/status");
+  return apiClient.get<BillingStatus>("/billing/status");
 }
 
 export async function getInvoices(): Promise<ApiResponse<Invoice[]>> {
-  return get<Invoice[]>("/api/billing/invoices");
+  return apiClient.get<Invoice[]>("/billing/invoices");
 }
 
 export async function getUsage(): Promise<ApiResponse<{ linkedin_accounts_used: number; campaigns_used: number }>> {
-  return get<{ linkedin_accounts_used: number; campaigns_used: number }>("/api/billing/usage");
+  return apiClient.get<{ linkedin_accounts_used: number; campaigns_used: number }>("/billing/usage");
 }
 
 export async function createCheckoutSession(
   planName: string,
   billingPeriod: string
 ): Promise<ApiResponse<{ url: string }>> {
-  return post<{ url: string }>("/api/billing/checkout", {
+  return apiClient.post<{ url: string }>("/billing/checkout", {
     plan_name: planName,
     billing_period: billingPeriod,
   });
 }
 
 export async function createPortalSession(): Promise<ApiResponse<{ url: string }>> {
-  return post<{ url: string }>("/api/billing/portal", {});
+  return apiClient.post<{ url: string }>("/billing/portal", {});
 }
 
 export async function changePlan(
   planName: string,
   billingPeriod: string
 ): Promise<ApiResponse<{ status: string; message: string }>> {
-  return post<{ status: string; message: string }>(
-    "/api/billing/plan-change",
+  return apiClient.post<{ status: string; message: string }>(
+    "/billing/plan-change",
     {
       plan_name: planName,
       billing_period: billingPeriod,
@@ -95,18 +96,18 @@ export async function changePlan(
 export async function updateCloudAddon(
   quantity: number
 ): Promise<ApiResponse<{ cloud_profiles: number }>> {
-  return post<{ cloud_profiles: number }>("/api/billing/cloud-addon", {
+  return apiClient.post<{ cloud_profiles: number }>("/billing/cloud-addon", {
     quantity,
   });
 }
 
 export async function cancelSubscription(): Promise<ApiResponse<{ status: string }>> {
-  return post<{ status: string }>("/api/billing/cancel-subscription", {});
+  return apiClient.post<{ status: string }>("/billing/cancel-subscription", {});
 }
 
 export async function reactivateSubscription(): Promise<ApiResponse<{ status: string }>> {
-  return post<{ status: string }>(
-    "/api/billing/reactivate-subscription",
+  return apiClient.post<{ status: string }>(
+    "/billing/reactivate-subscription",
     {}
   );
 }
@@ -114,7 +115,7 @@ export async function reactivateSubscription(): Promise<ApiResponse<{ status: st
 export async function checkFeature(
   featureName: string
 ): Promise<ApiResponse<{ has_access: boolean }>> {
-  return get<{ has_access: boolean }>(
-    `/api/billing/feature-check/${featureName}`
+  return apiClient.get<{ has_access: boolean }>(
+    `/billing/feature-check/${featureName}`
   );
 }
