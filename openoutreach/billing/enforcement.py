@@ -161,7 +161,10 @@ class PlanEnforcer:
             return False
 
         if status == "trialing" and user.trial_ends_at:
-            if datetime.now(tz.utc) > user.trial_ends_at:
+            trial_ends = user.trial_ends_at
+            if trial_ends.tzinfo is None:
+                trial_ends = trial_ends.replace(tzinfo=tz.utc)
+            if datetime.now(tz.utc) > trial_ends:
                 return False
 
         return True
@@ -172,7 +175,10 @@ class PlanEnforcer:
         if user.subscription_status != "trialing" or not user.trial_ends_at:
             return None
 
-        delta = user.trial_ends_at - datetime.now(tz.utc)
+        trial_ends = user.trial_ends_at
+        if trial_ends.tzinfo is None:
+            trial_ends = trial_ends.replace(tzinfo=tz.utc)
+        delta = trial_ends - datetime.now(tz.utc)
         days = delta.days
         return max(0, days)
 
