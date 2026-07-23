@@ -236,7 +236,6 @@ async def create_credential(
             # Auto-create profile for this user
             profile = LinkedInProfile(
                 user_id=user_id,
-                linkedin_username=data.email,
                 active=True,
                 execution_mode=execution_mode,
             )
@@ -258,11 +257,11 @@ async def create_credential(
         )
         credential.save()
 
-        # Sync login fields and execution mode to profile
-        profile.linkedin_username = data.email
+        # Sync login credentials and execution mode to profile — username is
+        # left as-is and only updated after a real login discovers the /in handle
         profile.linkedin_password = data.password
         profile.execution_mode = execution_mode
-        profile.save(update_fields=["linkedin_username", "linkedin_password", "execution_mode"])
+        profile.save(update_fields=["linkedin_password", "execution_mode"])
 
         # Log creation
         log_entry = LinkedInCredentialLog(

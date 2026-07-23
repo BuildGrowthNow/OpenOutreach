@@ -276,7 +276,10 @@ export default function LinkedInCredentialCard({
     }
   };
 
-  const displayUsername = getDisplayUsername(credential.linkedinProfileUsername ?? credential.username);
+  const hasRealUsername = !!(credential.linkedinProfileUsername?.trim() || credential.username?.trim());
+  const displayUsername = hasRealUsername
+    ? getDisplayUsername(credential.linkedinProfileUsername ?? credential.username)
+    : (credential.publicEmail?.trim() || "Email not available");
   const displayEmail = credential.publicEmail?.trim() || "Email not available";
   const lastVerified = formatTimestamp(
     healthData?.lastVerified ?? credential.lastVerified,
@@ -312,9 +315,13 @@ export default function LinkedInCredentialCard({
                   ) : null}
                 </div>
                 <div className="flex flex-wrap items-center gap-2 text-sm text-zinc-400">
-                  <Icons.Mail className="h-3.5 w-3.5" />
-                  <span>{displayEmail}</span>
-                  <span className="text-zinc-600">•</span>
+                  {hasRealUsername && (
+                    <>
+                      <Icons.Mail className="h-3.5 w-3.5" />
+                      <span>{displayEmail}</span>
+                      <span className="text-zinc-600">•</span>
+                    </>
+                  )}
                   <span
                     className={`h-2 w-2 rounded-full ${getStatusColor(credential.status)}`}
                   />
