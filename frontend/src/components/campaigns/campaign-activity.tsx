@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -169,10 +169,12 @@ export function CampaignActivity({ campaignId, compact = false }: CampaignActivi
 
   const limit = compact ? 10 : 20;
 
+  const initialLoadDone = useRef(false);
+
   const fetchActivity = useCallback(
     async (pageNum: number, append = false) => {
-      if (pageNum === 1) setLoading(true);
-      else setLoadingMore(true);
+      if (!initialLoadDone.current && pageNum === 1) setLoading(true);
+      if (pageNum > 1) setLoadingMore(true);
 
       try {
         const resp = await getCampaignActivity(campaignId, pageNum, limit);
@@ -187,6 +189,7 @@ export function CampaignActivity({ campaignId, compact = false }: CampaignActivi
       } finally {
         setLoading(false);
         setLoadingMore(false);
+        initialLoadDone.current = true;
       }
     },
     [campaignId, limit],

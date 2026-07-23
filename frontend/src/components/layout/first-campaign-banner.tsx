@@ -17,6 +17,8 @@ export function FirstCampaignBanner() {
       const res = await apiClient.get<{ data: unknown[]; pagination: { total: number } }>('/campaigns?limit=1')
       if (res.data && (res.data.pagination?.total === 0 || res.data.data?.length === 0)) {
         setVisible(true)
+      } else if (res.data) {
+        localStorage.setItem('first_campaign_banner_dismissed', '1')
       }
     }
     void check()

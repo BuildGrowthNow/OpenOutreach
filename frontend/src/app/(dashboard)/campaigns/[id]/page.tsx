@@ -634,34 +634,14 @@ export default function CampaignDetailsPage() {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-sm text-muted-foreground">
-                        Cooldown
-                      </span>
-                      <span className="font-medium">
-                        {campaign.cooldownMinutes} minutes
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm text-muted-foreground">
-                        Freemium
-                      </span>
-                      <span className="font-medium">
-                        {campaign.isFreemium ? "Yes" : "No"}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm text-muted-foreground">
                         Created
                       </span>
                       <span className="font-medium">
-                        {new Date(campaign.createdAt).toLocaleDateString()}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm text-muted-foreground">
-                        Last Updated
-                      </span>
-                      <span className="font-medium">
-                        {new Date(campaign.updatedAt).toLocaleDateString()}
+                        {(() => {
+                          const raw = (campaign as unknown as Record<string, string>).created_at || campaign.createdAt;
+                          const d = raw ? new Date(raw) : null;
+                          return d && !isNaN(d.getTime()) ? d.toLocaleDateString() : "—";
+                        })()}
                       </span>
                     </div>
                   </div>
