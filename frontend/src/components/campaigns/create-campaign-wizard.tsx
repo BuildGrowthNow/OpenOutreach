@@ -1,14 +1,21 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2, ArrowRight, Sparkles } from 'lucide-react';
 import { useAuthStore } from '@/lib/authStoreV2';
+import { apiClient } from '@/lib/apiClientV2';
+
+interface LinkedInProfile {
+  id: string;
+  linkedin_username: string;
+}
 
 interface CreateCampaignWizardProps {
   onSuccess?: (campaignId: string) => void;
@@ -22,27 +29,41 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
   const [name, setName] = useState('');
   const [productPitch, setProductPitch] = useState('');
   const [campaignObjective, setCampaignObjective] = useState('');
+  const [profileId, setProfileId] = useState('');
+  const [profiles, setProfiles] = useState<LinkedInProfile[]>([]);
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    const load = async () => {
+      const res = await apiClient.get<{ profiles: LinkedInProfile[] }>('/linkedin-profiles')
+      if (res.data?.profiles?.length) {
+        setProfiles(res.data.profiles)
+        setProfileId(res.data.profiles[0].id)
+      }
+    }
+    void load()
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
-    // Validation
     if (!name.trim()) {
       setError('Campaign name is required');
       return;
     }
-
     if (!productPitch.trim()) {
       setError('Please describe what problem you solve');
       return;
     }
-
     if (!campaignObjective.trim()) {
       setError('Please describe your campaign goal');
+      return;
+    }
+    if (!profileId) {
+      setError('No LinkedIn profile found. Please connect your LinkedIn account in Settings first.');
       return;
     }
 
@@ -59,7 +80,7 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
           name: name.trim(),
           product_pitch: productPitch.trim(),
           campaign_objective: campaignObjective.trim(),
-          // Defaults - user can configure in settings
+          linkedin_profile_id: profileId,
           velocity: 20,
         }),
       });
@@ -71,7 +92,6 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
 
       const campaign = await response.json();
 
-      // Success - redirect to campaign settings for configuration
       if (onSuccess) {
         onSuccess(campaign.id);
       } else {
@@ -99,7 +119,7 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
         </div>
         <h2 className="text-2xl font-semibold">Create Campaign</h2>
         <p className="text-sm text-muted-foreground">
-          Get started in 3 quick steps. Configure targeting & pacing after creation.
+          Get started in 3 quick steps. Configure targeting &amp; pacing after creation.
         </p>
       </div>
 
@@ -157,6 +177,24 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
             Be specific about what success looks like
           </p>
         </div>
+
+        {profiles.length > 1 && (
+          <div className="space-y-2">
+            <Label className="text-base">LinkedIn Profile</Label>
+            <Select value={profileId} onValueChange={setProfileId}>
+              <SelectTrigger className="h-11">
+                <SelectValue placeholder="Select a profile" />
+              </SelectTrigger>
+              <SelectContent>
+                {profiles.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.linkedin_username}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
       </div>
 
       <div className="flex gap-3 pt-4 border-t">
@@ -167,7 +205,7 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
         )}
         <Button
           type="submit"
-          disabled={submitting}
+          disabled={submitting || !profileId}
           className="flex-1 h-11 text-base gap-2"
         >
           {submitting ? (
@@ -177,15 +215,11 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
             </>
           ) : (
             <>
-              Create & Configure
+              Create &amp; Configure
               <ArrowRight className="h-4 w-4" />
             </>
           )}
         </Button>
-      </div>
-
-      <div className="text-xs text-center text-muted-foreground pt-2">
-        After creation, you'll configure targeting, pacing, and LinkedIn profile
       </div>
     </form>
   );
