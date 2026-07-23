@@ -6,7 +6,8 @@ and team access control.
 """
 
 import logging
-from typing import List, Optional
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from pydantic import BaseModel
@@ -14,6 +15,7 @@ from pydantic import BaseModel
 from openoutreach.api_v2.dependencies_v2 import get_current_user, get_campaign_with_access
 from openoutreach.mongodb.connection import get_mongodb_collection
 from openoutreach.mongodb import models
+from openoutreach.crm.models.deal import DealState
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -786,4 +788,223 @@ async def get_campaign_leads(
         "limit": limit,
         "offset": offset,
         "results": results,
+    }
+
+
+@router.get("/{campaign_id}/status")
+async def get_campaign_status(
+    campaign_id: str,
+    user_id: str = Depends(get_current_user),
+):
+    """Get lightweight campaign status for polling."""
+    campaign = models.Campaign.get(campaign_id)
+    if not campaign:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Campaign not found"
+        )
+    if not campaign.has_access(user_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied"
+        )
+    return {"status": campaign.status, "is_paused": campaign.is_paused}
+
+
+@router.get("/{campaign_id}/analytics")
+async def get_campaign_analytics(
+    campaign_id: str,
+    user_id: str = Depends(get_current_user),
+    period: str = Query("30d", pattern="^(7d|30d|90d|all)$"),
+):
+    """Get analytics for a specific campaign."""
+    campaign = models.Campaign.get(campaign_id)
+    if not campaign:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Campaign not found"
+        )
+    if not campaign.has_access(user_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied"
+        )
+
+    deals_collection = get_mongodb_collection("deals")
+    action_logs_collection = get_mongodb_collection("action_logs")
+    messages_collection = get_mongodb_collection("chat_messages")
+
+    period_days = {"7d": 7, "30d": 30, "90d": 90}.get(period, 0)
+    since = datetime.utcnow() - timedelta(days=period_days) if period_days else datetime(2000, 1, 1)
+
+    connections_sent = 0
+    connections_accepted = 0
+    messages_sent = 0
+    messages_replied = 0
+    conversions = 0
+    errors = 0
+
+    if action_logs_collection is not None:
+        connections_sent = action_logs_collection.count_documents({
+            "campaign_id": campaign_id,
+            "action_type": "connect",
+            "created_at": {"$gte": since},
+        })
+        messages_sent = action_logs_collection.count_documents({
+            "campaign_id": campaign_id,
+            "action_type": "follow_up",
+            "created_at": {"$gte": since},
+        })
+        errors = action_logs_collection.count_documents({
+            "campaign_id": campaign_id,
+            "status": "error",
+            "created_at": {"$gte": since},
+        })
+
+    if deals_collection is not None:
+        connections_accepted = deals_collection.count_documents({
+            "campaign_id": campaign_id,
+            "state": DealState.CONNECTED.value,
+        })
+        conversions = deals_collection.count_documents({
+            "campaign_id": campaign_id,
+            "state": DealState.COMPLETED.value,
+        })
+
+    if messages_collection is not None:
+        try:
+            pipeline = [
+                {"$match": {"is_outgoing": False, "creation_date": {"$gte": since}}},
+                {"$lookup": {"from": "deals", "localField": "deal_id", "foreignField": "_id", "as": "deal"}},
+                {"$unwind": "$deal"},
+                {"$match": {"deal.campaign_id": campaign_id}},
+                {"$group": {"_id": "$deal_id"}},
+                {"$count": "total"},
+            ]
+            result = list(messages_collection.aggregate(pipeline))
+            messages_replied = result[0]["total"] if result else 0
+        except Exception:
+            pass
+
+    connection_accept_rate = round((connections_accepted / connections_sent * 100), 2) if connections_sent else 0.0
+    response_rate = round((messages_replied / messages_sent * 100), 2) if messages_sent else 0.0
+    conversion_rate = round((conversions / connections_sent * 100), 2) if connections_sent else 0.0
+
+    # Pipeline counts
+    pipeline_stats: Dict[str, int] = {}
+    if deals_collection is not None:
+        for state in DealState:
+            pipeline_stats[state.value.lower()] = deals_collection.count_documents({
+                "campaign_id": campaign_id,
+                "state": state.value,
+            })
+
+    return {
+        "campaign_id": campaign_id,
+        "period": period,
+        "stats": {
+            "connections_sent": connections_sent,
+            "connections_accepted": connections_accepted,
+            "connection_accept_rate": connection_accept_rate,
+            "messages_sent": messages_sent,
+            "messages_replied": messages_replied,
+            "responses": messages_replied,
+            "response_rate": response_rate,
+            "conversions": conversions,
+            "conversion_rate": conversion_rate,
+            "errors": errors,
+            "rate_limit_warnings": 0,
+        },
+        "daily_breakdown": [],
+        "pipeline": pipeline_stats,
+    }
+
+
+@router.get("/{campaign_id}/activity")
+async def get_campaign_activity(
+    campaign_id: str,
+    user_id: str = Depends(get_current_user),
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+):
+    """Get activity log for a specific campaign."""
+    campaign = models.Campaign.get(campaign_id)
+    if not campaign:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Campaign not found"
+        )
+    if not campaign.has_access(user_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied"
+        )
+
+    action_logs_collection = get_mongodb_collection("action_logs")
+    tasks_collection = get_mongodb_collection("tasks")
+
+    entries: List[Dict[str, Any]] = []
+
+    if action_logs_collection is not None:
+        skip = (page - 1) * limit
+        total = action_logs_collection.count_documents({"campaign_id": campaign_id})
+        logs = list(
+            action_logs_collection.find({"campaign_id": campaign_id})
+            .sort("created_at", -1)
+            .skip(skip)
+            .limit(limit)
+        )
+        for log in logs:
+            entries.append({
+                "id": str(log.get("_id", "")),
+                "source": "action",
+                "type": log.get("action_type", ""),
+                "status": log.get("status", "completed"),
+                "error": log.get("error_message") or None,
+                "durationMs": log.get("duration_ms"),
+                "timestamp": log["created_at"].isoformat() if log.get("created_at") else "",
+                "details": log.get("details"),
+            })
+    else:
+        total = 0
+
+    # Get next scheduled task
+    next_task = None
+    if tasks_collection is not None:
+        upcoming = tasks_collection.find_one(
+            {"campaign_id": campaign_id, "status": "pending"},
+            sort=[("scheduled_at", 1)],
+        )
+        if upcoming:
+            scheduled_at = upcoming.get("scheduled_at")
+            eta = 0
+            if scheduled_at:
+                delta = (scheduled_at - datetime.utcnow()).total_seconds()
+                eta = max(0, int(delta))
+            next_task = {
+                "id": str(upcoming.get("_id", "")),
+                "taskType": upcoming.get("task_type", ""),
+                "scheduledAt": scheduled_at.isoformat() if scheduled_at else "",
+                "etaSeconds": eta,
+            }
+
+    pending_count = 0
+    if tasks_collection is not None:
+        pending_count = tasks_collection.count_documents({
+            "campaign_id": campaign_id,
+            "status": "pending",
+        })
+
+    has_more = (page * limit) < total
+
+    return {
+        "data": entries,
+        "nextTask": next_task,
+        "pendingCount": pending_count,
+        "pagination": {
+            "page": page,
+            "limit": limit,
+            "total": total,
+            "hasMore": has_more,
+        },
     }

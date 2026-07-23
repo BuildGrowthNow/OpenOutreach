@@ -95,13 +95,11 @@ export default function CampaignsPage() {
       const response = await createCampaign(data);
       if (response.data) {
         setShowCreateForm(false);
-        // Redirect to the newly created campaign detail page so users can continue setup
-        // (state-machine editor and other quick actions are available there)
+        localStorage.setItem('first_campaign_banner_dismissed', '1');
         try {
           const id = response.data?.id || '';
           router.push(`/campaigns/${id}`);
         } catch (e) {
-          // Fallback: refresh the list if navigation fails
           fetchCampaigns();
         }
       } else {
