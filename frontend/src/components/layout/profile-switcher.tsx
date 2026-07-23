@@ -93,9 +93,6 @@ export function ProfileSwitcher() {
       <div className="flex items-center gap-2 text-sm">
         <span className="text-gray-600">Profile:</span>
         <span className="font-medium">{profile.linkedin_username}</span>
-        {!profile.has_cookies && (
-          <span className="text-yellow-600">⚠️ No cookies</span>
-        )}
       </div>
     );
   }
@@ -111,7 +108,6 @@ export function ProfileSwitcher() {
           {profiles.map((profile) => (
             <SelectItem key={profile.id} value={profile.id}>
               {profile.linkedin_username}
-              {!profile.has_cookies && ' ⚠️'}
             </SelectItem>
           ))}
         </SelectContent>

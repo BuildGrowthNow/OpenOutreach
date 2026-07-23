@@ -477,21 +477,16 @@ async def delete_credential(
                 )
                 other_creds = [c for c in remaining if str(c._id) != str(credential_id)]
                 if other_creds:
-                    profile.linkedin_username = None
+                    # Other credentials still reference this profile — only clear secrets
                     profile.linkedin_password = None
                     profile.cookie_data_encrypted = None
-                    profile.save(update_fields=["linkedin_username", "linkedin_password", "cookie_data_encrypted"])
+                    profile.save(update_fields=["linkedin_password", "cookie_data_encrypted"])
                 else:
-                    # No credentials left — deactivate so it no longer counts toward account limit
-                    profile.linkedin_username = None
-                    profile.linkedin_password = None
-                    profile.cookie_data_encrypted = None
-                    profile.active = False
-                    profile.is_active = False
-                    profile.save(update_fields=[
-                        "linkedin_username", "linkedin_password",
-                        "cookie_data_encrypted", "active", "is_active",
-                    ])
+                    # Last credential — delete the profile entirely so it no longer
+                    # counts toward the account limit and avoids the null unique-index conflict
+                    profiles_col = get_mongodb_collection("linkedin_profiles")
+                    if profiles_col is not None:
+                        profiles_col.delete_one({"_id": str(profile._id)})
 
         # Log deletion
         log_entry = LinkedInCredentialLog(

@@ -145,6 +145,7 @@ async def list_linkedin_profiles(
                 "id": str(doc.get("_id")),
                 "linkedin_username": doc.get("linkedin_username", ""),
                 "active": doc.get("active", True),
+                "has_cookies": bool(doc.get("cookie_data_encrypted")),
                 "connect_daily_limit": doc.get("connect_daily_limit", 20),
                 "follow_up_daily_limit": doc.get("follow_up_daily_limit", 25),
             })
