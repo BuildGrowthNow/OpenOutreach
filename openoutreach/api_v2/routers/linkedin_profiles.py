@@ -139,11 +139,22 @@ async def list_linkedin_profiles(
             {"user_id": user_id}
         ).skip(skip).limit(limit)
 
+        # Build a profile_id -> credential email map for fallback display label
+        creds_collection = get_mongodb_collection("linkedin_credentials")
+        cred_email_by_profile: dict = {}
+        if creds_collection is not None:
+            for cred in creds_collection.find({"user_id": user_id}, {"linkedin_profile_id": 1, "email": 1}):
+                pid = cred.get("linkedin_profile_id")
+                if pid and "email" in cred:
+                    cred_email_by_profile[str(pid)] = cred["email"]
+
         profiles = []
         for doc in cursor:
+            profile_id = str(doc.get("_id"))
+            username = doc.get("linkedin_username") or cred_email_by_profile.get(profile_id, "")
             profiles.append({
-                "id": str(doc.get("_id")),
-                "linkedin_username": doc.get("linkedin_username", ""),
+                "id": profile_id,
+                "linkedin_username": username,
                 "active": doc.get("active", True),
                 "has_cookies": bool(doc.get("cookie_data_encrypted")),
                 "connect_daily_limit": doc.get("connect_daily_limit", 20),
