@@ -141,6 +141,14 @@ class RemoteDaemon:
         self.config = await self.client.get_config(self.linkedin_profile_id)
         logger.info("Config loaded: velocity=%d/hr", self.config.velocity)
 
+        # Schedule tasks for active campaigns
+        try:
+            result = await self.client.reconcile(self.linkedin_profile_id)
+            logger.info("Reconcile: %d tasks across %d campaigns",
+                        result.get("tasks_created", 0), result.get("campaigns", 0))
+        except Exception as e:
+            logger.warning("Initial reconcile failed: %s", e)
+
         # Start browser session
         await self._start_session()
 
@@ -501,13 +509,17 @@ class RemoteDaemon:
         return {campaign.pk: q}
 
     async def _config_refresh_loop(self):
-        """Periodically refresh config from backend."""
+        """Periodically refresh config and reconcile tasks."""
         while self.running:
             await asyncio.sleep(300)
             try:
                 self.config = await self.client.get_config(self.linkedin_profile_id)
             except Exception as e:
                 logger.warning("Config refresh failed: %s", e)
+            try:
+                await self.client.reconcile(self.linkedin_profile_id)
+            except Exception as e:
+                logger.warning("Reconcile failed: %s", e)
 
     async def _sync_cookies(self):
         """Sync cookies to backend.

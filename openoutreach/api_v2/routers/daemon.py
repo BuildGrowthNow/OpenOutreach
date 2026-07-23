@@ -311,6 +311,65 @@ async def get_daemon_config(
     }
 
 
+@router.post("/reconcile")
+async def reconcile_tasks(
+    linkedin_profile_id: str,
+    user_id: str = Depends(get_current_user),
+):
+    """Run task scheduler for all active campaigns owned by this user.
+
+    Creates pending tasks (connect, check_pending, follow_up) if the queue
+    is empty for a campaign. Called by the desktop daemon on startup and
+    periodically to ensure tasks exist for claiming.
+    """
+    from openoutreach.mongodb.connection import get_mongodb_collection
+    from openoutreach.core.scheduler import (
+        plan_connect_window,
+        plan_follow_up_window,
+        plan_check_pending_window,
+    )
+
+    profile = LinkedInProfile.objects.get(
+        _id=linkedin_profile_id,
+        user_id=user_id,
+    )
+    if not profile:
+        raise HTTPException(404, "LinkedIn profile not found")
+
+    campaigns_collection = get_mongodb_collection("campaigns")
+    if campaigns_collection is None:
+        raise HTTPException(503, "Database unavailable")
+
+    campaigns_data = list(campaigns_collection.find({
+        "user_id": user_id,
+        "linkedin_profile_id": linkedin_profile_id,
+        "status": "active",
+        "is_paused": False,
+    }))
+
+    from openoutreach.mongodb.models import Campaign
+
+    tasks_created = 0
+    for doc in campaigns_data:
+        campaign = Campaign.from_dict(doc)
+
+        class _FakeSession:
+            def __init__(self, uid, prof):
+                self.user_id = uid
+                self.linkedin_profile = prof
+                self.linkedin_profile_id = prof._id
+
+        session = _FakeSession(user_id, profile)
+        tasks_created += plan_connect_window(session, campaign)
+        tasks_created += plan_follow_up_window(session, campaign)
+        tasks_created += plan_check_pending_window(session, campaign)
+
+    logger.info("Reconcile for profile %s: %d tasks created across %d campaigns",
+                linkedin_profile_id, tasks_created, len(campaigns_data))
+
+    return {"tasks_created": tasks_created, "campaigns": len(campaigns_data)}
+
+
 @router.get("/credentials")
 async def get_credentials(
     linkedin_profile_id: str,

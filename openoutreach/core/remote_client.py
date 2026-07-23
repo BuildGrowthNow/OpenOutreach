@@ -124,6 +124,19 @@ class RemoteClient:
             heartbeat_interval_seconds=data["heartbeat_interval_seconds"],
         )
 
+    async def reconcile(self, linkedin_profile_id: str) -> dict:
+        """Ask backend to schedule tasks for all active campaigns.
+
+        Should be called on startup and periodically (every 5 min) to ensure
+        the task queue is populated for claiming.
+        """
+        response = await self._request_with_retry(
+            "POST",
+            "/api/daemon/reconcile",
+            params={"linkedin_profile_id": linkedin_profile_id},
+        )
+        return response.json()
+
     async def claim_task(self, linkedin_profile_id: str) -> Optional[dict]:
         """Atomically claim the next available task for this profile.
 
