@@ -33,17 +33,18 @@ import {
   getDailyUsage,
   uploadCampaignLeads,
   getCampaignStatus,
-  addLeadToCampaign,
 } from "@/lib/api/dashboard";
 import {
   Campaign,
   Lead,
 } from "@/lib/types/components";
-import { CampaignForm } from "@/components/campaigns/campaign-form";
 import { CampaignStats as CampaignStatsComponent } from "@/components/campaigns/campaign-stats";
 import { CampaignList as CampaignListComponent } from "@/components/campaigns/campaign-list";
 import { CampaignActivity } from "@/components/campaigns/campaign-activity";
 import { DailyProgress } from "@/components/campaigns/daily-progress";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import {
   zincDialogContentClassName,
@@ -82,9 +83,9 @@ export default function CampaignDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("overview");
-  const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [showCompletionModal, setShowCompletionModal] = useState(false);
+  const [settingsSaving, setSettingsSaving] = useState(false);
 
   const [dailyUsage, setDailyUsage] = useState<{
     dailyConnectionsSent: number;
@@ -230,28 +231,6 @@ export default function CampaignDetailsPage() {
     return () => clearInterval(interval);
   }, [campaignId, fetchCampaignStatus]);
 
-  const handleUpdateCampaign = async (data: Partial<Campaign>) => {
-    try {
-      if (!campaign) return;
-
-      setError(null);
-      const response = await updateCampaign(campaign.id, data);
-      if (response.data) {
-        // Update local state immediately with the response data
-        setCampaign(response.data);
-        setEditing(false);
-        // Also refresh to get any server-computed fields
-        fetchCampaignData();
-      } else {
-        setError(
-          response.error || response.message || "Failed to update campaign",
-        );
-      }
-    } catch (error) {
-      setError("An error occurred while updating the campaign");
-      console.error("Error updating campaign:", error);
-    }
-  };
 
   const handleDeleteCampaign = async () => {
     if (!campaign) return;
@@ -512,10 +491,6 @@ export default function CampaignDetailsPage() {
               Start
             </Button>
           ) : null}
-          <Button variant="outline" onClick={() => setEditing(true)}>
-            <Icons.Edit className="mr-2 h-4 w-4" />
-            Edit
-          </Button>
           <Button
             variant="destructive"
             onClick={handleDeleteCampaign}
@@ -1017,85 +992,255 @@ export default function CampaignDetailsPage() {
 
         {/* Settings Tab */}
         <TabsContent value="settings" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Campaign Settings</CardTitle>
-              <CardDescription>
-                Configure campaign parameters and behavior
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-4">
-                  <div>
-                    <h4 className="font-medium mb-2">Connection Settings</h4>
-                    <p className="text-sm text-muted-foreground">
-                      Daily: {campaign.velocity} connections
-                      <br />
-                      Cooldown: {campaign.cooldownMinutes} minutes
-                    </p>
-                  </div>
-                  <div>
-                    <h4 className="font-medium mb-2">Campaign Type</h4>
-                    <p className="text-sm text-muted-foreground">
-                      {campaign.isFreemium
-                        ? "Freemium Model"
-                        : "Standard Model"}
-                    </p>
-                  </div>
-                </div>
-                <div className="space-y-4">
-                  <div>
-                    <h4 className="font-medium mb-2">Links</h4>
-                    <p className="text-sm text-muted-foreground">
-                      {campaign.bookingLink ? (
-                        <a
-                          href={campaign.bookingLink}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-500 hover:underline"
-                        >
-                          Booking Link
-                        </a>
-                      ) : (
-                        "No booking link"
-                      )}
-                      <br />
-                      {campaign.productPitch ? (
-                        <span className="text-zinc-300">
-                          Product Pitch:{" "}
-                          {campaign.productPitch.length > 100
-                            ? campaign.productPitch.slice(0, 100) + "..."
-                            : campaign.productPitch}
-                        </span>
-                      ) : (
-                        "No product pitch"
-                      )}
-                    </p>
-                  </div>
-                  <div>
-                    <h4 className="font-medium mb-2">Objective</h4>
-                    <p className="text-sm text-muted-foreground">
-                      {campaign.campaignObjective || "No objective set"}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <CampaignSettingsForm
+            campaign={campaign}
+            saving={settingsSaving}
+            onSave={async (data) => {
+              setSettingsSaving(true);
+              setError(null);
+              try {
+                const response = await updateCampaign(campaign.id, data);
+                if (response.data) {
+                  setCampaign(response.data);
+                } else {
+                  setError(response.error || "Failed to save settings");
+                }
+              } catch {
+                setError("An error occurred while saving settings");
+              } finally {
+                setSettingsSaving(false);
+              }
+            }}
+          />
         </TabsContent>
       </Tabs>
 
-      {editing && (
-        <CampaignForm
-          open={editing}
-          onOpenChange={setEditing}
-          campaign={campaign}
-          onSubmit={handleUpdateCampaign}
-          isEditing
-        />
-      )}
+    </div>
+  );
+}
 
+
+function CampaignSettingsForm({
+  campaign,
+  saving,
+  onSave,
+}: {
+  campaign: Campaign;
+  saving: boolean;
+  onSave: (data: Partial<Campaign>) => Promise<void>;
+}) {
+  // API returns snake_case, TS interface declares camelCase — read both
+  const c = campaign as unknown as Record<string, unknown>;
+  const getStr = (camel: string, snake: string) => String(c[camel] || c[snake] || "");
+  const getArr = (camel: string, snake: string) => (c[camel] || c[snake] || []) as string[];
+
+  const [name, setName] = useState(campaign.name || "");
+  const [productPitch, setProductPitch] = useState(getStr("productPitch", "product_pitch"));
+  const [campaignObjective, setCampaignObjective] = useState(getStr("campaignObjective", "campaign_objective"));
+  const [bookingLink, setBookingLink] = useState(getStr("bookingLink", "booking_link"));
+  const [icpTitles, setIcpTitles] = useState<string[]>(getArr("icpTitles", "icp_titles"));
+  const [icpInput, setIcpInput] = useState("");
+  const [velocity, setVelocity] = useState(String(campaign.velocity || 20));
+  const [followUpStrategy, setFollowUpStrategy] = useState(getStr("followUpStrategy", "follow_up_strategy"));
+
+  useEffect(() => {
+    const c2 = campaign as unknown as Record<string, unknown>;
+    const s = (camel: string, snake: string) => String(c2[camel] || c2[snake] || "");
+    const a = (camel: string, snake: string) => (c2[camel] || c2[snake] || []) as string[];
+    setName(campaign.name || "");
+    setProductPitch(s("productPitch", "product_pitch"));
+    setCampaignObjective(s("campaignObjective", "campaign_objective"));
+    setBookingLink(s("bookingLink", "booking_link"));
+    setIcpTitles(a("icpTitles", "icp_titles"));
+    setVelocity(String(campaign.velocity || 20));
+    setFollowUpStrategy(s("followUpStrategy", "follow_up_strategy"));
+  }, [campaign]);
+
+  const handleAddTitle = () => {
+    const title = icpInput.trim();
+    if (title && !icpTitles.includes(title)) {
+      setIcpTitles([...icpTitles, title]);
+      setIcpInput("");
+    }
+  };
+
+  const handleSave = async () => {
+    // API expects snake_case field names
+    await onSave({
+      name: name.trim(),
+      product_pitch: productPitch.trim(),
+      campaign_objective: campaignObjective.trim(),
+      booking_link: bookingLink.trim(),
+      icp_titles: icpTitles,
+      velocity: parseInt(velocity, 10) || 20,
+      follow_up_strategy: followUpStrategy.trim() || undefined,
+    } as unknown as Partial<Campaign>);
+  };
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Campaign Info</CardTitle>
+          <CardDescription>Core campaign details and messaging</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="settings-name">Campaign Name</Label>
+            <Input
+              id="settings-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Campaign name"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="settings-pitch">Product Pitch</Label>
+            <Textarea
+              id="settings-pitch"
+              value={productPitch}
+              onChange={(e) => setProductPitch(e.target.value)}
+              placeholder="What problem do you solve?"
+              rows={4}
+              className="resize-none"
+            />
+            <p className="text-xs text-muted-foreground">
+              The AI uses this to personalize outreach messages
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="settings-objective">Campaign Goal</Label>
+            <Textarea
+              id="settings-objective"
+              value={campaignObjective}
+              onChange={(e) => setCampaignObjective(e.target.value)}
+              placeholder="What are you trying to achieve?"
+              rows={3}
+              className="resize-none"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="settings-booking">Booking Link</Label>
+            <Input
+              id="settings-booking"
+              value={bookingLink}
+              onChange={(e) => setBookingLink(e.target.value)}
+              placeholder="https://calendly.com/you/30min"
+              type="url"
+            />
+            <p className="text-xs text-muted-foreground">
+              The AI shares this when a lead shows interest
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="settings-strategy">Follow-Up Strategy <span className="text-muted-foreground font-normal">(optional)</span></Label>
+            <Textarea
+              id="settings-strategy"
+              value={followUpStrategy}
+              onChange={(e) => setFollowUpStrategy(e.target.value)}
+              placeholder="Additional instructions for how the AI should handle follow-up conversations..."
+              rows={3}
+              className="resize-none"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Targeting</CardTitle>
+          <CardDescription>Who should the AI search for on LinkedIn</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label>Target Job Titles</Label>
+            <div className="flex gap-2">
+              <Input
+                value={icpInput}
+                onChange={(e) => setIcpInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleAddTitle();
+                  }
+                }}
+                placeholder="Add a job title and press Enter"
+                className="flex-1"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleAddTitle}
+                disabled={!icpInput.trim()}
+              >
+                Add
+              </Button>
+            </div>
+            {icpTitles.length > 0 && (
+              <div className="flex flex-wrap gap-2 pt-1">
+                {icpTitles.map((title) => (
+                  <Badge key={title} variant="secondary" className="text-sm py-1 px-3 gap-1.5">
+                    {title}
+                    <button
+                      type="button"
+                      onClick={() => setIcpTitles(icpTitles.filter((t) => t !== title))}
+                      className="hover:text-destructive transition-colors"
+                    >
+                      <Icons.X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                ))}
+              </div>
+            )}
+            <p className="text-xs text-muted-foreground">
+              The AI generates LinkedIn search queries based on these titles
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Pacing</CardTitle>
+          <CardDescription>Control how fast the campaign runs</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label>Daily Connection Limit</Label>
+            <Select value={velocity} onValueChange={(v) => v && setVelocity(v)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="10">Conservative — 10 connections/day</SelectItem>
+                <SelectItem value="20">Normal — 20 connections/day</SelectItem>
+                <SelectItem value="30">Aggressive — 30 connections/day</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Higher values increase reach but may trigger LinkedIn restrictions on newer accounts
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="flex justify-end">
+        <Button onClick={handleSave} disabled={saving}>
+          {saving ? (
+            <>
+              <Icons.RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+              Saving...
+            </>
+          ) : (
+            "Save Settings"
+          )}
+        </Button>
+      </div>
     </div>
   );
 }
