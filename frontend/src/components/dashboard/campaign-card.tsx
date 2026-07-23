@@ -1,8 +1,15 @@
 'use client'
 
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Icons } from '@/lib/types/components'
 import { Campaign, DealState, CampaignStatus } from '@/lib/types/components'
 
@@ -36,6 +43,12 @@ const stateColorMapping: Record<DealState, string> = {
   NO_EMAIL: 'bg-gray-500/10 text-gray-600 dark:text-gray-400',
 }
 
+function getCreatedDate(campaign: Campaign): string {
+  const raw = (campaign as unknown as Record<string, string>).created_at || campaign.createdAt;
+  const d = raw ? new Date(raw) : null;
+  return d && !isNaN(d.getTime()) ? formatDistanceToNow(d, { addSuffix: true }) : "recently";
+}
+
 const CampaignCard = ({
   campaign,
   onClick,
@@ -54,29 +67,9 @@ const CampaignCard = ({
     messagesReplied: 0,
   }
 
-  const handleEdit = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    onEdit?.(campaign)
-  }
-
-  const handleDelete = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    onDelete?.(campaign)
-  }
-
-  const handleStartCampaign = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    onStart?.(campaign)
-  }
-
-  const handlePauseCampaign = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    onPause?.(campaign)
-  }
-
-  const isDraft = campaign.status === 'draft'
   const isActive = campaign.status === 'active'
   const isPaused = campaign.status === 'paused'
+  const isDraft = campaign.status === 'draft'
 
   return (
     <Card
@@ -87,16 +80,57 @@ const CampaignCard = ({
       onClick={onClick}
     >
       <CardHeader className="pb-3">
-        <div className="flex items-start justify-between">
-          <div className="space-y-1">
-            <CardTitle className="text-base">{campaign.name}</CardTitle>
-            <CardDescription className="line-clamp-2">
-              {campaign.description || 'No description'}
-            </CardDescription>
+        <div className="flex items-start justify-between gap-2">
+          <CardTitle className="text-base leading-tight">{campaign.name}</CardTitle>
+          <div className="flex items-center gap-2 shrink-0">
+            <Badge variant="outline" className={cn('text-xs', statusColors[campaign.status as keyof typeof statusColors])}>
+              {campaign.status.charAt(0).toUpperCase() + campaign.status.slice(1)}
+            </Badge>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Icons.MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                {isDraft && (
+                  <DropdownMenuItem onClick={() => onStart?.(campaign)}>
+                    <Icons.Play className="mr-2 h-4 w-4" />
+                    Start
+                  </DropdownMenuItem>
+                )}
+                {isActive && (
+                  <DropdownMenuItem onClick={() => onPause?.(campaign)}>
+                    <Icons.Pause className="mr-2 h-4 w-4" />
+                    Pause
+                  </DropdownMenuItem>
+                )}
+                {isPaused && (
+                  <DropdownMenuItem onClick={() => onStart?.(campaign)}>
+                    <Icons.Play className="mr-2 h-4 w-4" />
+                    Resume
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem onClick={() => onEdit?.(campaign)}>
+                  <Icons.Edit className="mr-2 h-4 w-4" />
+                  Edit Settings
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() => onDelete?.(campaign)}
+                  className="text-destructive focus:text-destructive"
+                >
+                  <Icons.Trash2 className="mr-2 h-4 w-4" />
+                  Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
-          <Badge variant="outline" className={cn('text-xs', statusColors[campaign.status as keyof typeof statusColors])}>
-            {campaign.status.charAt(0).toUpperCase() + campaign.status.slice(1)}
-          </Badge>
         </div>
       </CardHeader>
       <CardContent>
@@ -111,7 +145,7 @@ const CampaignCard = ({
           </div>
           <div className="text-center border-l">
             <div className="text-lg font-bold">{stats.completed}</div>
-            <div className="text-xs text-muted-foreground">Completed</div>
+            <div className="text-xs text-muted-foreground">Converted</div>
           </div>
         </div>
 
@@ -119,7 +153,7 @@ const CampaignCard = ({
           <div className="flex items-center justify-between text-sm">
             <div className="flex items-center gap-2">
               <Icons.BarChart3 className="h-3 w-3 text-muted-foreground" />
-              <span className="text-muted-foreground">Connection rate:</span>
+              <span className="text-muted-foreground">Connection rate</span>
             </div>
             <span className="font-medium">
               {stats.totalLeads > 0
@@ -131,7 +165,7 @@ const CampaignCard = ({
           <div className="flex items-center justify-between text-sm">
             <div className="flex items-center gap-2">
               <Icons.MessageSquare className="h-3 w-3 text-muted-foreground" />
-              <span className="text-muted-foreground">Response rate:</span>
+              <span className="text-muted-foreground">Response rate</span>
             </div>
             <span className="font-medium">
               {stats.connected > 0
@@ -141,42 +175,12 @@ const CampaignCard = ({
           </div>
         </div>
 
-         <div className="mt-4 pt-3 border-t flex items-center justify-between">
-           <div className="flex items-center gap-2 text-xs text-muted-foreground">
-             <Icons.Clock className="h-3 w-3" />
-             Created {(() => {
-               const raw = (campaign as unknown as Record<string, string>).created_at || campaign.createdAt;
-               const d = raw ? new Date(raw) : null;
-               return d && !isNaN(d.getTime()) ? formatDistanceToNow(d, { addSuffix: true }) : "recently";
-             })()}
-           </div>
-
-           <div className="flex gap-2">
-             {isDraft && (
-               <Button size="sm" variant="default" onClick={handleStartCampaign}>
-                 <Icons.Play className="h-4 w-4" />
-                 Start
-               </Button>
-             )}
-             {(isActive || isPaused) && (
-               <Button 
-                 size="sm" 
-                 variant={isActive ? 'outline' : 'default'} 
-                 onClick={handlePauseCampaign}
-                 className={isActive ? 'border-destructive text-destructive hover:bg-destructive/10' : ''}
-               >
-                 {isActive ? <Icons.Pause className="h-4 w-4" /> : <Icons.Play className="h-4 w-4" />}
-                 {isActive ? 'Pause' : 'Start'}
-               </Button>
-             )}
-             <Button size="sm" variant="ghost" onClick={handleEdit}>
-               <Icons.Edit className="h-4 w-4" />
-             </Button>
-             <Button size="sm" variant="ghost" onClick={handleDelete}>
-               <Icons.Trash2 className="h-4 w-4" />
-             </Button>
-           </div>
-         </div>
+        <div className="mt-4 pt-3 border-t">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Icons.Clock className="h-3 w-3" />
+            Created {getCreatedDate(campaign)}
+          </div>
+        </div>
       </CardContent>
     </Card>
   )
