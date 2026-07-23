@@ -35,7 +35,7 @@ const Health = () => {
   }, [fetchHealth])
 
   const [refreshing, setRefreshing] = useState(false)
-  const lastCheck = healthStatus?.system.timestamp || INITIAL_TIMESTAMP
+  const lastCheck = healthStatus?.system?.timestamp || INITIAL_TIMESTAMP
 
   const serviceHistory = useMemo<ServiceHealth[]>(() => {
     const timestamp = new Date(NOW - 10000).toISOString()

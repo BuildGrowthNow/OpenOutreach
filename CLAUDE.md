@@ -12,6 +12,7 @@
 - **Logging**: Default console logging is INFO-level; set `OPENOUTREACH_LOG_LEVEL=DEBUG` only when debugging. Noisy third-party loggers such as `pymongo` stay at WARNING to avoid heartbeat spam.
 - **No API backward compat**: Project has no external users yet — don't preserve old Python APIs, function signatures, or import paths. Rename, delete, and rewrite freely; no shims or re-export modules. MongoDB schema changes are additive by default — new fields can be added without migrations.
 - **Post-task linting**: After completing a task, always run `make lint` and `make pyright` (or equivalent), then fix any issues before reporting the task as done.
+- **Post-task commit**: After every task, commit all changes and push to `main`. Never stage or commit `build/` or `dist/` — these are desktop app release artifacts built by CI.
 - **Implementation docs**: When following a phased implementation document, don't create new docs — update the original with checkboxes (`- [x]`) to track completed steps.
 - **Production-ready code**: All code (frontend, backend, daemon, desktop) must be production-ready. Search the codebase before writing new code — reuse and improve existing utilities, components, and patterns instead of duplicating. Refactor shared logic into common modules.
 - **Frontend UI components**: Always use `shadcn@latest` components. Install new components with `npx shadcn@latest add <component> --yes`. Never implement custom UI components when shadcn has one available.
