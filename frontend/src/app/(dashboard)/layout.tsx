@@ -8,6 +8,7 @@ import { Icons } from '@/lib/types/components'
 import { DashboardContainer } from '@/components/dashboard/dashboard-container'
 import { LinkedInSetupModal } from '@/components/layout/linkedin-setup-modal'
 import { DashboardBillingWrapper } from '@/components/billing/dashboard-billing-wrapper'
+import { FirstCampaignBanner } from '@/components/layout/first-campaign-banner'
 
 type SidebarIcon = keyof typeof Icons
 
@@ -108,6 +109,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
           <Header
             onMenuClick={() => setIsSidebarOpen(true)}
           />
+          <FirstCampaignBanner />
 
           {/* Page Content - Now wrapped in DashboardContainer for consistent padding */}
           <DashboardContainer>
