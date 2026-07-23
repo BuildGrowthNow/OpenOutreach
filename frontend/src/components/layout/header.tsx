@@ -12,7 +12,7 @@ import {
   DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
-import { useAuth } from '@/app/auth-provider'
+import { useAuthStore } from '@/lib/authStoreV2'
 import { useRouter } from 'next/navigation'
 import { Badge } from '@/components/ui/badge'
 import { useEffect, useState } from 'react'
@@ -28,7 +28,7 @@ interface HeaderProps {
 }
 
 const Header = ({ onMenuClick, className }: HeaderProps) => {
-  const { isAuthenticated, user, logout } = useAuth()
+  const { isAuthenticated, user, logout } = useAuthStore()
   const router = useRouter()
 
   const userName = user?.full_name || (user?.email ? user.email.split('@')[0] : 'User')
