@@ -144,7 +144,11 @@ const CampaignCard = ({
          <div className="mt-4 pt-3 border-t flex items-center justify-between">
            <div className="flex items-center gap-2 text-xs text-muted-foreground">
              <Icons.Clock className="h-3 w-3" />
-             Created {formatDistanceToNow(new Date(campaign.createdAt), { addSuffix: true })}
+             Created {(() => {
+               const raw = (campaign as unknown as Record<string, string>).created_at || campaign.createdAt;
+               const d = raw ? new Date(raw) : null;
+               return d && !isNaN(d.getTime()) ? formatDistanceToNow(d, { addSuffix: true }) : "recently";
+             })()}
            </div>
 
            <div className="flex gap-2">
