@@ -96,18 +96,20 @@ class LinkedInCredentialResponse(BaseModel):
 
     Returns stored credential metadata with encrypted sensitive fields
     and audit tracking information. Password is never returned in responses.
+    Fields are serialized with camelCase aliases to match the frontend TypeScript types.
     """
 
     id: str = Field(..., description="Unique credential identifier (MongoDB _id)")
-    linkedin_profile_id: Optional[str] = Field(None, description="Associated LinkedIn profile ID")
+    linkedin_profile_id: Optional[str] = Field(None, alias="linkedinProfileId", description="Associated LinkedIn profile ID")
     email_encrypted: str = Field(..., description="Encrypted LinkedIn email address")
+    public_email: str = Field("", alias="publicEmail", description="Masked public email (e.g. u***@domain.com)")
     username: str = Field("", description="LinkedIn profile username (public identifier)")
     status: str = Field(default="active", description="Credential status (stored/tested/active/invalid/expired/locked/backup)")
-    last_verified: Optional[datetime] = Field(None, description="Last successful verification timestamp")
+    last_verified: Optional[datetime] = Field(None, alias="lastVerified", description="Last successful verification timestamp")
     verification_failed_at: Optional[datetime] = Field(None, description="Last verification failure timestamp")
     verification_failures: int = Field(default=0, description="Number of consecutive verification failures")
-    usage_count: int = Field(default=0, description="Number of times this credential has been used")
-    last_used: Optional[datetime] = Field(None, description="Last usage timestamp")
+    usage_count: int = Field(default=0, alias="usageCount", description="Number of times this credential has been used")
+    last_used: Optional[datetime] = Field(None, alias="lastUsed", description="Last usage timestamp")
     campaign_id: Optional[str] = Field(None, description="Associated campaign ID")
     user_id: Optional[str] = Field(None, description="Reference to the User who owns these credentials")
     created_at: datetime = Field(..., description="Credential creation timestamp")
@@ -115,17 +117,18 @@ class LinkedInCredentialResponse(BaseModel):
     expires_at: Optional[datetime] = Field(None, description="Credential expiration timestamp")
     rotated_at: Optional[datetime] = Field(None, description="Last rotation timestamp")
     rotation_required_days: int = Field(default=90, description="Days until credential rotation is required")
-    is_primary: bool = Field(default=True, description="Whether this is the primary credential set")
-    is_backup: bool = Field(default=False, description="Whether this is a backup credential set")
+    is_primary: bool = Field(default=True, alias="isPrimary", description="Whether this is the primary credential set")
+    is_backup: bool = Field(default=False, alias="isBackup", description="Whether this is a backup credential set")
     backup_of_id: Optional[str] = Field(None, description="ID of the primary credential if this is a backup")
     security_alert_sent_at: Optional[datetime] = Field(None, description="Last security alert notification timestamp")
 
-    execution_mode: str = Field(default="desktop", description="Execution mode of the linked profile: 'desktop' or 'cloud'")
+    execution_mode: str = Field(default="desktop", alias="executionMode", description="Execution mode of the linked profile: 'desktop' or 'cloud'")
 
     # Audit log entries (if included)
     logs: Optional[List[Dict[str, Any]]] = Field(None, description="Recent audit log entries")
 
     class Config:
+        populate_by_name = True
         json_schema_extra = {
             "example": {
                 "id": "507f1f77bcf86cd799439014",

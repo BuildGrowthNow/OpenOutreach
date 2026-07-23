@@ -156,7 +156,7 @@ async def get_cookie_instructions():
     )
 
 
-@router.get("/status", response_model=SetupStatusResponse)
+@router.get("/status")
 async def get_setup_status(
     user_id: str = Depends(get_current_user),
 ):
@@ -169,32 +169,6 @@ async def get_setup_status(
     profiles = LinkedInProfile.find_by_user_id(user_id)
     credentials_list = LinkedInCredentials.find_by_user_id(user_id)
 
-    # Serialize profiles
-    profile_data = None
-    if profiles:
-        profile = profiles[0]  # Use first profile
-        profile_data = {
-            "id": profile._id,
-            "user_id": profile.user_id,
-            "linkedin_username": profile.linkedin_username,
-            "active": profile.active,
-            "connect_daily_limit": profile.connect_daily_limit,
-            "follow_up_daily_limit": profile.follow_up_daily_limit,
-        }
-
-    # Serialize credentials
-    credentials_data = []
-    for cred in credentials_list:
-        credentials_data.append({
-            "id": cred._id,
-            "email": cred.get_public_email(),
-            "username": cred.username,
-            "status": cred.status,
-            "last_verified": cred.last_verified.isoformat() if cred.last_verified else None,
-            "is_primary": cred.is_primary,
-            "is_backup": cred.is_backup,
-        })
-
     # Calculate progress
     has_profile = len(profiles) > 0
     has_credentials = len(credentials_list) > 0
@@ -202,7 +176,6 @@ async def get_setup_status(
 
     completed_steps = sum([has_profile, has_credentials, has_verified])
     total_steps = 3
-    progress = (completed_steps / total_steps) * 100
 
     # Determine missing steps
     missing_steps = []
@@ -215,10 +188,24 @@ async def get_setup_status(
 
     setup_complete = len(missing_steps) == 0
 
-    return SetupStatusResponse(
-        setup_complete=setup_complete,
-        setup_progress=progress,
-        linkedin_profile=profile_data,
-        linkedin_credentials=credentials_data,
-        missing_steps=missing_steps
-    )
+    return {
+        "status": {
+            "linkedinProfile": {
+                "exists": has_profile,
+                "count": len(profiles),
+                "requiresAttention": not has_verified and has_profile,
+            },
+            "linkedinCredentials": {
+                "exists": has_credentials,
+                "count": len(credentials_list),
+                "activeCount": sum(1 for c in credentials_list if c.status == LinkedInCredentials.STATUS_ACTIVE),
+                "requiresAttention": has_credentials and not has_verified,
+            },
+            "setupComplete": setup_complete,
+            "setupProgress": {
+                "current": completed_steps,
+                "total": total_steps,
+            },
+        },
+        "missingSteps": missing_steps,
+    }

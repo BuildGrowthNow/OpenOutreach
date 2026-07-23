@@ -33,6 +33,40 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _build_credential_response(
+    cred: LinkedInCredentials,
+    profile: Optional[LinkedInProfile] = None,
+    logs: Optional[list] = None,
+) -> LinkedInCredentialResponse:
+    """Build a LinkedInCredentialResponse using camelCase alias names."""
+    return LinkedInCredentialResponse(
+        id=cred._id,
+        linkedinProfileId=cred.linkedin_profile_id,
+        email_encrypted=cred.email_encrypted,
+        publicEmail=cred.get_public_email(),
+        username=cred.username,
+        status=cred.status,
+        lastVerified=cred.last_verified,
+        verification_failed_at=cred.verification_failed_at,
+        verification_failures=cred.verification_failures,
+        usageCount=cred.usage_count,
+        lastUsed=cred.last_used,
+        campaign_id=cred.campaign_id,
+        user_id=cred.user_id,
+        created_at=cred.created_at,
+        updated_at=cred.updated_at,
+        expires_at=cred.expires_at,
+        rotated_at=cred.rotated_at,
+        rotation_required_days=cred.rotation_required_days,
+        isPrimary=cred.is_primary,
+        isBackup=cred.is_backup,
+        backup_of_id=cred.backup_of_id,
+        security_alert_sent_at=cred.security_alert_sent_at,
+        executionMode=profile.execution_mode if profile else "desktop",
+        logs=logs,
+    )
+
+
 # Request/Response schemas
 class CredentialListResponse(BaseModel):
     """Response schema for credential list."""
@@ -75,7 +109,7 @@ class LogsResponse(BaseModel):
 
 # Endpoints
 
-@router.get("", response_model=CredentialListResponse)
+@router.get("", response_model=CredentialListResponse, response_model_by_alias=True)
 async def list_credentials(
     user_id: str = Depends(get_current_user),
 ):
@@ -105,39 +139,17 @@ async def list_credentials(
                         "action": doc["action"],
                         "details": doc.get("details", {}),
                         "ip_address": doc.get("ip_address"),
+                        "ipAddress": doc.get("ip_address"),
                         "user_agent": doc.get("user_agent", ""),
                         "created_at": doc["created_at"],
+                        "createdAt": doc["created_at"].isoformat() if hasattr(doc["created_at"], "isoformat") else str(doc["created_at"]),
                     }
                     for doc in log_docs
                 ]
 
             profile = LinkedInProfile.objects.get(_id=cred.linkedin_profile_id) if cred.linkedin_profile_id else None
             credential_responses.append(
-                LinkedInCredentialResponse(
-                    id=cred._id,
-                    linkedin_profile_id=cred.linkedin_profile_id,
-                    email_encrypted=cred.email_encrypted,
-                    username=cred.username,
-                    status=cred.status,
-                    last_verified=cred.last_verified,
-                    verification_failed_at=cred.verification_failed_at,
-                    verification_failures=cred.verification_failures,
-                    usage_count=cred.usage_count,
-                    last_used=cred.last_used,
-                    campaign_id=cred.campaign_id,
-                    user_id=cred.user_id,
-                    created_at=cred.created_at,
-                    updated_at=cred.updated_at,
-                    expires_at=cred.expires_at,
-                    rotated_at=cred.rotated_at,
-                    rotation_required_days=cred.rotation_required_days,
-                    is_primary=cred.is_primary,
-                    is_backup=cred.is_backup,
-                    backup_of_id=cred.backup_of_id,
-                    security_alert_sent_at=cred.security_alert_sent_at,
-                    execution_mode=profile.execution_mode if profile else "desktop",
-                    logs=recent_logs if recent_logs else None,
-                )
+                _build_credential_response(cred, profile, recent_logs or None)
             )
 
         return CredentialListResponse(
@@ -152,7 +164,7 @@ async def list_credentials(
         )
 
 
-@router.post("", response_model=LinkedInCredentialResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=LinkedInCredentialResponse, status_code=status.HTTP_201_CREATED, response_model_by_alias=True)
 async def create_credential(
     data: LinkedInCredentialCreate,
     request: Request,
@@ -260,31 +272,7 @@ async def create_credential(
         )
         log_entry.save()
 
-        return LinkedInCredentialResponse(
-            id=credential._id,
-            linkedin_profile_id=credential.linkedin_profile_id,
-            email_encrypted=credential.email_encrypted,
-            username=credential.username,
-            status=credential.status,
-            last_verified=credential.last_verified,
-            verification_failed_at=credential.verification_failed_at,
-            verification_failures=credential.verification_failures,
-            usage_count=credential.usage_count,
-            last_used=credential.last_used,
-            campaign_id=credential.campaign_id,
-            user_id=credential.user_id,
-            created_at=credential.created_at,
-            updated_at=credential.updated_at,
-            expires_at=credential.expires_at,
-            rotated_at=credential.rotated_at,
-            rotation_required_days=credential.rotation_required_days,
-            is_primary=credential.is_primary,
-            is_backup=credential.is_backup,
-            backup_of_id=credential.backup_of_id,
-            security_alert_sent_at=credential.security_alert_sent_at,
-            execution_mode=profile.execution_mode,
-            logs=None,
-        )
+        return _build_credential_response(credential, profile)
     except HTTPException:
         raise
     except Exception as e:
@@ -295,7 +283,7 @@ async def create_credential(
         )
 
 
-@router.get("/{credential_id}", response_model=LinkedInCredentialResponse)
+@router.get("/{credential_id}", response_model=LinkedInCredentialResponse, response_model_by_alias=True)
 async def get_credential(
     credential_id: str,
     user_id: str = Depends(get_current_user),
@@ -339,34 +327,10 @@ async def get_credential(
         ]
 
     profile = LinkedInProfile.objects.get(_id=credential.linkedin_profile_id) if credential.linkedin_profile_id else None
-    return LinkedInCredentialResponse(
-        id=credential._id,
-        linkedin_profile_id=credential.linkedin_profile_id,
-        email_encrypted=credential.email_encrypted,
-        username=credential.username,
-        status=credential.status,
-        last_verified=credential.last_verified,
-        verification_failed_at=credential.verification_failed_at,
-        verification_failures=credential.verification_failures,
-        usage_count=credential.usage_count,
-        last_used=credential.last_used,
-        campaign_id=credential.campaign_id,
-        user_id=credential.user_id,
-        created_at=credential.created_at,
-        updated_at=credential.updated_at,
-        expires_at=credential.expires_at,
-        rotated_at=credential.rotated_at,
-        rotation_required_days=credential.rotation_required_days,
-        is_primary=credential.is_primary,
-        is_backup=credential.is_backup,
-        backup_of_id=credential.backup_of_id,
-        security_alert_sent_at=credential.security_alert_sent_at,
-        execution_mode=profile.execution_mode if profile else "desktop",
-        logs=recent_logs if recent_logs else None,
-    )
+    return _build_credential_response(credential, profile, recent_logs or None)
 
 
-@router.patch("/{credential_id}", response_model=LinkedInCredentialResponse)
+@router.patch("/{credential_id}", response_model=LinkedInCredentialResponse, response_model_by_alias=True)
 async def update_credential(
     credential_id: str,
     data: LinkedInCredentialUpdate,
@@ -468,31 +432,7 @@ async def update_credential(
             log_entry.save()
 
         updated_profile = LinkedInProfile.objects.get(_id=credential.linkedin_profile_id) if credential.linkedin_profile_id else None
-        return LinkedInCredentialResponse(
-            id=credential._id,
-            linkedin_profile_id=credential.linkedin_profile_id,
-            email_encrypted=credential.email_encrypted,
-            username=credential.username,
-            status=credential.status,
-            last_verified=credential.last_verified,
-            verification_failed_at=credential.verification_failed_at,
-            verification_failures=credential.verification_failures,
-            usage_count=credential.usage_count,
-            last_used=credential.last_used,
-            campaign_id=credential.campaign_id,
-            user_id=credential.user_id,
-            created_at=credential.created_at,
-            updated_at=credential.updated_at,
-            expires_at=credential.expires_at,
-            rotated_at=credential.rotated_at,
-            rotation_required_days=credential.rotation_required_days,
-            is_primary=credential.is_primary,
-            is_backup=credential.is_backup,
-            backup_of_id=credential.backup_of_id,
-            security_alert_sent_at=credential.security_alert_sent_at,
-            execution_mode=updated_profile.execution_mode if updated_profile else "desktop",
-            logs=None,
-        )
+        return _build_credential_response(credential, updated_profile)
     except Exception as e:
         logger.error(f"Failed to update credential: {e}")
         raise HTTPException(
@@ -599,15 +539,15 @@ async def verify_credential(
         )
 
     if not data.test_login:
-        # Just mark as tested without actual verification
-        credential.status = LinkedInCredentials.STATUS_TESTED
+        # Desktop mode: daemon handles real login — mark active immediately
+        credential.status = LinkedInCredentials.STATUS_ACTIVE
         credential.last_verified = datetime.now(tz.utc)
         credential.save(update_fields=["status", "last_verified"])
 
         log_entry = LinkedInCredentialLog(
             credential_id=credential._id,
             action="verified",
-            details={"method": "manual", "status": "success"},
+            details={"method": "desktop", "status": "success"},
             ip_address=request.client.host if request.client else None,
             user_agent=request.headers.get("user-agent", ""),
         )
@@ -615,8 +555,8 @@ async def verify_credential(
 
         return VerifyResponse(
             success=True,
-            message="Credentials marked as tested",
-            status=LinkedInCredentials.STATUS_TESTED
+            message="Credentials saved and active",
+            status=LinkedInCredentials.STATUS_ACTIVE
         )
 
     # Actual browser-based verification — requires cloud execution access
@@ -974,7 +914,7 @@ async def rotate_credential(
         )
 
 
-@router.get("/{credential_id}/health", response_model=LinkedInProfileHealthResponse)
+@router.get("/{credential_id}/health")
 async def get_credential_health(
     credential_id: str,
     user_id: str = Depends(get_current_user),
@@ -1126,7 +1066,7 @@ async def get_credential_health(
     elif credential.verification_failures > 0 or risk_score > 0.3:
         overall_status = "warning"
 
-    return LinkedInProfileHealthResponse(
+    health = LinkedInProfileHealthResponse(
         profile_id=profile._id,
         overall_status=overall_status,
         credential_status=credential.status,
@@ -1138,9 +1078,10 @@ async def get_credential_health(
         recommendations=recommendations,
         alerts=alerts,
     )
+    return {"healthStatus": health.model_dump()}
 
 
-@router.get("/{credential_id}/logs", response_model=LogsResponse)
+@router.get("/{credential_id}/logs")
 async def get_credential_logs(
     credential_id: str,
     limit: int = 50,
@@ -1172,17 +1113,17 @@ async def get_credential_logs(
         {"credential_id": credential._id}
     ).sort("created_at", -1).limit(limit)
 
-    logs = [
-        LinkedInCredentialLogResponse(
-            id=str(doc["_id"]),
-            credential_id=doc["credential_id"],
-            action=doc["action"],
-            details=doc.get("details", {}),
-            ip_address=doc.get("ip_address"),
-            user_agent=doc.get("user_agent", ""),
-            created_at=doc["created_at"],
-        )
-        for doc in log_docs
-    ]
+    logs = []
+    for doc in log_docs:
+        ts = doc["created_at"]
+        ts_str = ts.isoformat() if hasattr(ts, "isoformat") else str(ts)
+        logs.append({
+            "id": str(doc["_id"]),
+            "credentialId": doc["credential_id"],
+            "action": doc["action"],
+            "details": doc.get("details", {}),
+            "ipAddress": doc.get("ip_address"),
+            "createdAt": ts_str,
+        })
 
-    return LogsResponse(logs=logs, count=len(logs))
+    return {"logs": logs, "count": len(logs)}

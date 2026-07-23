@@ -218,10 +218,21 @@ async def get_current_usage(
         campaigns_used = 0
 
         if profiles_coll is not None:
-            linkedin_accounts_used = profiles_coll.count_documents({
-                "user_id": user_id,
-                "is_active": True,
-            })
+            creds_coll = get_mongodb_collection("linkedin_credentials")
+            active_profile_ids = [
+                doc["_id"]
+                for doc in profiles_coll.find({"user_id": user_id, "is_active": True}, {"_id": 1})
+            ]
+            if active_profile_ids and creds_coll is not None:
+                linkedin_accounts_used = len(set(
+                    doc["linkedin_profile_id"]
+                    for doc in creds_coll.find(
+                        {"user_id": user_id, "linkedin_profile_id": {"$in": active_profile_ids}},
+                        {"linkedin_profile_id": 1},
+                    )
+                ))
+            else:
+                linkedin_accounts_used = 0
 
         if campaigns_coll is not None:
             # Count active (non-paused) campaigns — must match PlanEnforcer.can_create_campaign
