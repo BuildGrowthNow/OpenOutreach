@@ -25,7 +25,13 @@ from openoutreach.desktop.protocol_handler import (
     handle_protocol_url,
     register_protocol_handler,
 )
-from openoutreach.desktop.updater import check_for_updates, prompt_update
+from openoutreach.desktop.updater import (
+    apply_update_windows,
+    can_auto_update,
+    check_for_updates,
+    download_update,
+    prompt_update,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -491,9 +497,42 @@ class TrayApp:
         if self._update_check_thread and self._update_check_thread.is_alive():
             return
 
-        async def loop():
-            await asyncio.sleep(10)
+        async def startup_check():
+            """Run once on launch: auto-apply on Windows, notify on other platforms."""
+            try:
+                info = await check_for_updates()
+                if not info:
+                    return
+                if can_auto_update():
+                    logger.info("Update v%s available — downloading automatically", info["version"])
+                    if self.icon:
+                        self.icon.notify("Updating Lengrowth…", f"Downloading v{info['version']}, please wait")
+                    path = await download_update(info["download_url"])
+                    if path:
+                        # apply_update_windows calls os._exit — this point is never reached
+                        apply_update_windows(path)
+                    else:
+                        # Download failed — fall back to tray notification
+                        self._pending_update = info
+                        self._update_menu()
+                        if self.icon:
+                            self.icon.notify(f"Update Available: v{info['version']}", "Click the tray icon to download")
+                else:
+                    self._pending_update = info
+                    self._update_menu()
+                    if self.icon:
+                        self.icon.notify(f"Update Available: v{info['version']}", "Click the tray icon to download")
+            except Exception as e:
+                logger.warning("Startup update check failed: %s", e)
+
+        async def periodic_loop():
+            # First iteration: startup check (runs immediately)
+            await startup_check()
+            # Subsequent checks every 6 hours — notify only (user is already running)
             while not self._stopping:
+                await asyncio.sleep(3600 * 6)
+                if self._stopping:
+                    break
                 try:
                     info = await check_for_updates()
                     if info and not self._pending_update:
@@ -502,14 +541,13 @@ class TrayApp:
                         if self.icon:
                             self.icon.notify(f"Update Available: v{info['version']}", "Click the tray icon to download")
                 except Exception as e:
-                    logger.warning("Update check failed: %s", e)
-                await asyncio.sleep(3600 * 6)
+                    logger.warning("Periodic update check failed: %s", e)
 
         def run():
             lp = asyncio.new_event_loop()
             asyncio.set_event_loop(lp)
             try:
-                lp.run_until_complete(loop())
+                lp.run_until_complete(periodic_loop())
             finally:
                 lp.close()
 

@@ -375,18 +375,26 @@ export async function getCampaignLeads(
     return raw as unknown as ApiResponse<{ data: Lead[]; pagination: Pagination; filters: LeadFilters }>;
   }
 
-  const leads: Lead[] = (raw.data.results || []).map(({ lead, deal }) => ({
-    id: lead.id,
-    publicIdentifier: lead.public_identifier,
-    linkedinUrl: lead.url,
-    name: lead.full_name || undefined,
-    title: lead.headline || undefined,
-    disqualified: lead.disqualified || false,
-    state: (normalizeState(deal.state) || 'DISCOVERED') as Lead["state"],
-    outcome: normalizeOutcome(deal.outcome) as Lead["outcome"] | undefined,
-    creationDate: deal.creation_date || lead.created_at || new Date().toISOString(),
-    updateDate: deal.creation_date || lead.created_at || new Date().toISOString(),
-  }));
+  const leads: Lead[] = (raw.data.results || []).map(({ lead, deal }) => {
+    // Extract company from headline if it contains " at " — e.g. "Founder at Acme Corp"
+    const headline = lead.headline || undefined;
+    const atIdx = headline ? headline.toLowerCase().indexOf(' at ') : -1;
+    const company = atIdx > -1 ? headline!.slice(atIdx + 4).trim() : undefined;
+
+    return {
+      id: lead.id,
+      publicIdentifier: lead.public_identifier,
+      linkedinUrl: lead.url,
+      name: lead.full_name || undefined,
+      title: headline,
+      company,
+      disqualified: lead.disqualified || false,
+      state: (normalizeState(deal.state) || 'DISCOVERED') as Lead["state"],
+      outcome: normalizeOutcome(deal.outcome) as Lead["outcome"] | undefined,
+      creationDate: deal.creation_date || lead.created_at || new Date().toISOString(),
+      updateDate: deal.creation_date || lead.created_at || new Date().toISOString(),
+    };
+  });
 
   return {
     ...raw,
