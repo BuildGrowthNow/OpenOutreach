@@ -20,17 +20,45 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Settings"])
 
 
-def _get_linkedin_profile_username(user_id: str) -> str:
-    """Return the linkedin_username from the user's first active profile, or empty string."""
+def _get_linkedin_profile_info(user_id: str) -> tuple[str, str]:
+    """Return (username, first_campaign_name) for the user's first active LinkedIn profile."""
+    username = ""
+    campaign_name = ""
     try:
         from openoutreach.linkedin.models import LinkedInProfile
+        from openoutreach.mongodb.models import Campaign
+
         profiles = LinkedInProfile.find_by_user_id(user_id)
-        for p in profiles:
-            if p.active and p.linkedin_username:
-                return p.linkedin_username
+        profile = next((p for p in profiles if p.active), None)
+
+        if profile:
+            raw = profile.linkedin_username or ""
+            # linkedin_username may hold the login email before first login — show it as-is
+            # but strip an email so the UI doesn't show "fern2gue@gmail.com" as the handle
+            if "@" in raw and "." in raw.split("@")[-1]:
+                username = ""  # not yet resolved to a real handle
+            else:
+                username = raw
+
+            if profile.campaign_id:
+                try:
+                    campaigns = Campaign.objects.filter(_id=profile.campaign_id)
+                    if campaigns:
+                        campaign_name = campaigns[0].name
+                except Exception:
+                    pass
+
+        if not campaign_name:
+            # fallback: first active campaign for the user
+            try:
+                campaigns = Campaign.objects.filter(user_id=user_id, active=True)
+                if campaigns:
+                    campaign_name = campaigns[0].name
+            except Exception:
+                pass
     except Exception:
         pass
-    return ""
+    return username, campaign_name
 
 
 @router.get("")
@@ -49,6 +77,8 @@ async def get_settings(
     active_days_str = config.active_days
     if isinstance(active_days_str, list):
         active_days_str = ",".join(map(str, active_days_str))
+
+    li_username, li_campaign = _get_linkedin_profile_info(user_id)
 
     return {
         "llm": {
@@ -76,8 +106,8 @@ async def get_settings(
             "activeDays": active_days_str or "0,1,2,3,4",
         },
         "linkedinProfile": {
-            "username": _get_linkedin_profile_username(user_id),
-            "campaign": config.linkedin_campaign or "",
+            "username": li_username,
+            "campaign": li_campaign,
         },
         "finder": {
             "apiKey": config.finder_api_key or "",

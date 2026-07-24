@@ -144,13 +144,15 @@ export default function SettingsPage() {
           <CardHeader>
             <CardDescription>LinkedIn profile</CardDescription>
               <CardTitle className="flex items-center gap-2">
-                <Icons.User className="h-4 w-4 text-blue-500" />@
-                {settings.linkedinProfile?.username || "not set"}
+                <Icons.User className="h-4 w-4 text-blue-500" />
+                {settings.linkedinProfile?.username
+                  ? `@${settings.linkedinProfile.username}`
+                  : "Not connected yet"}
               </CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">
-              Campaign: {settings.linkedinProfile?.campaign || "Not configured"}
+              Campaign: {settings.linkedinProfile?.campaign || "None yet"}
             </p>
           </CardContent>
         </Card>
@@ -176,12 +178,14 @@ export default function SettingsPage() {
             <CardDescription>LLM configuration</CardDescription>
             <CardTitle className="flex items-center gap-2">
               <Icons.Sparkles className="h-4 w-4 text-blue-500" />
-              {settings.llm.provider || "No provider"}
+              {settings.llm.apiKey ? (settings.llm.provider || "Custom") : "Lengrowth AI"}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
             <p className="truncate text-sm text-muted-foreground">
-              Model: {settings.llm.model || "Not configured"}
+              {settings.llm.apiKey
+                ? `Model: ${settings.llm.model || "Not configured"}`
+                : "Platform default — no setup needed"}
             </p>
             <div className="flex flex-wrap gap-2">
               {settings.llm.writingStyle && (
