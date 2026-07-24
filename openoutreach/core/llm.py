@@ -191,14 +191,20 @@ def _validated_site_config(user_id: str | None = None):
 
     cfg = SiteConfig.load(user_id=user_id)
 
-    if not cfg.llm_api_key and settings.LLM_API_KEY:
+    if not cfg.llm_api_key:
+        # No custom key — use the full platform LLM config (key, provider, model, base).
+        # Always override provider here: core/models.py defaults it to "openai" even when
+        # the DB has no value, so `not cfg.llm_provider` would never be true.
         cfg.llm_api_key = settings.LLM_API_KEY
-    if not cfg.ai_model and settings.AI_MODEL:
-        cfg.ai_model = settings.AI_MODEL
-    if not cfg.llm_provider and settings.LLM_PROVIDER:
         cfg.llm_provider = settings.LLM_PROVIDER
-    if not cfg.llm_api_base and settings.LLM_API_BASE:
-        cfg.llm_api_base = settings.LLM_API_BASE
+        cfg.ai_model = cfg.ai_model or settings.AI_MODEL
+        cfg.llm_api_base = cfg.llm_api_base or settings.LLM_API_BASE or ""
+    else:
+        # Custom key set — fill in any missing fields from platform defaults
+        if not cfg.ai_model and settings.AI_MODEL:
+            cfg.ai_model = settings.AI_MODEL
+        if not cfg.llm_api_base and settings.LLM_API_BASE:
+            cfg.llm_api_base = settings.LLM_API_BASE
 
     if not cfg.llm_api_key:
         raise ValueError("LLM_API_KEY is not set in Site Configuration or .env")
