@@ -380,20 +380,28 @@ class TrayApp:
 
         token = self.auth.get_token()
         refresh_token = self.auth.get_refresh_token()
-        profile_id = self.auth.get_profile_id()
 
         if not token:
             return
 
+        # Always resolve fresh profile_id so a credential delete+recreate doesn't
+        # leave a stale ID in the keychain causing 404s on every daemon start.
+        resolved = self._resolve_profile_id(token)
+        if resolved:
+            cached = self.auth.get_profile_id()
+            if resolved != cached:
+                logger.info("Profile ID changed (%s → %s), updating keychain", cached, resolved)
+                self.auth.login(token, resolved, refresh_token=refresh_token)
+            profile_id = resolved
+        else:
+            # API unreachable — fall back to keychain so we can still start offline
+            profile_id = self.auth.get_profile_id()
+
         if not profile_id:
-            profile_id = self._resolve_profile_id(token)
-            if profile_id:
-                self.auth.login(token, profile_id, refresh_token=refresh_token)
-            else:
-                logger.error("No LinkedIn profile found")
-                if self.icon:
-                    self.icon.notify("No LinkedIn Profile", "Add a LinkedIn profile in the dashboard first.")
-                return
+            logger.error("No LinkedIn profile found")
+            if self.icon:
+                self.icon.notify("No LinkedIn Profile", "Add a LinkedIn profile in the dashboard first.")
+            return
 
         def on_token_refresh(new_token: str):
             self.auth.update_token(new_token)
