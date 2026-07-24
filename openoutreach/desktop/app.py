@@ -233,6 +233,7 @@ class TrayApp:
     def _create_menu(self) -> pystray.Menu:
         daemon_label = "Stop Automation" if self._is_running() else "Start Automation"
         status_label = f"Status: {'Running ●' if self._is_running() else 'Stopped ○'}"
+        autostart_label = "Start on Login ✓" if self.config.autostart else "Start on Login"
 
         items = [
             Item(f"Lengrowth v{__version__}", None, enabled=False),
@@ -241,6 +242,7 @@ class TrayApp:
             Item("Open Lengrowth", self._on_show_window),
             pystray.Menu.SEPARATOR,
             Item(daemon_label, self._on_toggle_daemon, enabled=self.auth.is_logged_in()),
+            Item(autostart_label, self._on_toggle_autostart),
         ]
 
         if self._pending_update:
@@ -343,6 +345,15 @@ class TrayApp:
         if self._pending_update:
             prompt_update(self._pending_update)
 
+    def _on_toggle_autostart(self):
+        self.config.autostart = not self.config.autostart
+        self.config.save()
+        if self.config.autostart:
+            _register_autostart()
+        else:
+            _unregister_autostart()
+        self._update_menu()
+
     # ------------------------------------------------------------------
     # Tray setup
     # ------------------------------------------------------------------
@@ -357,7 +368,10 @@ class TrayApp:
         if self.auth.is_logged_in():
             self._start_daemon()
 
-        _register_autostart()
+        if self.config.autostart:
+            _register_autostart()
+        else:
+            _unregister_autostart()
         self._start_update_checker()
 
     # ------------------------------------------------------------------

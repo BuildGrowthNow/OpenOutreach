@@ -14,6 +14,7 @@ class AppConfig:
     """Desktop application configuration."""
 
     api_url: str = _DEFAULT_API_URL
+    autostart: bool = True
 
     @classmethod
     def _config_path(cls) -> Path:

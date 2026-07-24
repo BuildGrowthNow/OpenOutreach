@@ -71,6 +71,7 @@ class RemoteDaemon:
         self.running = False
         self.start_time: Optional[datetime] = None
         self.last_task_at: Optional[datetime] = None
+        self._pending_cookie_state: Optional[dict] = None
 
         self.data_dir.mkdir(parents=True, exist_ok=True)
 
@@ -555,6 +556,14 @@ class RemoteDaemon:
 
         # Execute handler synchronously (handlers are not async)
         result = handler(task=task_obj, session=self.session, qualifiers=qualifiers)
+
+        # Snapshot cookies here — we're already on the Playwright thread so
+        # storage_state() won't raise the greenlet cross-thread error.
+        try:
+            self._pending_cookie_state = self.session.context.storage_state()
+        except Exception as e:
+            logger.debug("Cookie snapshot failed: %s", e)
+
         return result if isinstance(result, dict) else None
 
     def _build_qualifiers_for_campaign(self, campaign) -> dict:
@@ -600,15 +609,17 @@ class RemoteDaemon:
     async def _sync_cookies(self):
         """Sync cookies to backend.
 
-        Sends cookie data as JSON string (NOT encrypted).
-        The backend API handles encryption before storing in LinkedInProfile.cookie_data_encrypted.
-        storage_state() is a sync Playwright call — run in a thread.
+        storage_state() is a Playwright sync call that must run on the same
+        greenlet/thread where the browser was created.  _execute_task() already
+        runs there (via asyncio.to_thread), so it snapshots the state into
+        self._pending_cookie_state at the end of each task.  This coroutine just
+        ships that snapshot over HTTP — no thread crossing required.
         """
-        if not self.session or not self.session.context:
+        state = self._pending_cookie_state
+        if not state:
             return
+        self._pending_cookie_state = None
         try:
-            context = self.session.context
-            state = await asyncio.to_thread(context.storage_state)
             cookie_json = json.dumps(state)
             await self.client.sync_cookies(self.linkedin_profile_id, cookie_json)
         except Exception as e:
