@@ -1,94 +1,90 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { LayoutDashboard, Activity, Users, MessageSquare, RefreshCw, AlertCircle, Plus, Mail } from 'lucide-react'
+import { LayoutDashboard, Activity, RefreshCw, AlertCircle, Plus } from 'lucide-react'
 import { StatsCard } from '@/components/dashboard/stats-card'
 import { RecentActivity } from '@/components/dashboard/recent-activity'
+import { CampaignPipeline } from '@/components/dashboard/campaign-pipeline'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { useDashboard } from '@/hooks/use-dashboard'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { getAnalyticsOverview, AnalyticsOverviewResponse, RecentActivityEntry } from '@/lib/api/dashboard'
 
-const NOW = Date.now()
+function toActivityItems(entries: RecentActivityEntry[]) {
+  return entries.map((e) => {
+    const nameClause = e.leadName ? `: ${e.leadName}` : ''
+    const campaignClause = e.campaignName ? ` (${e.campaignName})` : ''
 
-// Card height class for consistent card heights
-const CARD_HEIGHT_CLASS = "min-h-[280px]"
+    let description = e.type.replace(/_/g, ' ')
+    if (e.type === 'connect') description = `Connection sent${nameClause}${campaignClause}`
+    else if (e.type === 'follow_up') description = `Follow-up sent${nameClause}${campaignClause}`
+    else if (e.type === 'check_pending') description = `Pending check${nameClause}${campaignClause}`
+    else if (e.type === 'lead_discovered') description = `Lead discovered${nameClause}${campaignClause}`
+    else if (e.type === 'lead_qualified') description = `Lead qualified${nameClause}${campaignClause}`
+    else if (e.type === 'lead_disqualified') description = `Lead disqualified${nameClause}${campaignClause}`
+    else if (e.type === 'campaign_started') description = `Campaign started${campaignClause}`
+    else if (e.type === 'campaign_paused') description = `Campaign paused${campaignClause}`
 
-// Helper to round to 1 decimal place
-function roundTo1Decimal(value: number): string {
-  return (Math.round(value * 10) / 10).toFixed(1)
+    const status: 'success' | 'pending' | 'failed' =
+      e.status === 'failed' || !!e.error ? 'failed'
+      : e.status === 'pending' ? 'pending'
+      : 'success'
+
+    const iconMap: Record<string, string> = {
+      connect: 'connection_sent',
+      follow_up: 'message_sent',
+      check_pending: 'connection_accepted',
+      lead_discovered: 'new_lead',
+      lead_qualified: 'deal_completed',
+      lead_disqualified: 'deal_failed',
+    }
+
+    return {
+      id: e.id,
+      type: iconMap[e.type] || e.type,
+      description,
+      timestamp: e.timestamp,
+      status,
+    }
+  })
 }
 
-interface ActivityItem {
-  id: string
-  type: string
-  description: string
-  timestamp: string
-  entity?: string
-  status?: 'success' | 'pending' | 'failed'
+// Helper to round to 1 decimal place
+function roundTo1(value: number): string {
+  return (Math.round(value * 10) / 10).toFixed(1)
 }
 
 const Dashboard = () => {
   const router = useRouter()
-  const { 
-    campaigns, 
-    campaignsLoading, 
-    campaignsError, 
+  const {
+    campaigns,
+    campaignsLoading,
+    campaignsError,
     fetchCampaigns,
-    leads, 
-    leadsLoading, 
-    leadsError, 
-    fetchLeads,
     healthStatus,
     healthLoading,
     fetchHealth,
-    fetchRateLimits 
+    recentActivity,
+    recentActivityLoading,
+    fetchRecentActivity,
   } = useDashboard()
 
   const [refreshing, setRefreshing] = useState(false)
-  // Fetch initial data
+  const [overview, setOverview] = useState<AnalyticsOverviewResponse | null>(null)
+  const [overviewLoading, setOverviewLoading] = useState(true)
+
   useEffect(() => {
     fetchHealth()
     fetchCampaigns('active')
-    fetchLeads() // Fetch all leads, not just QUALIFIED
-  }, [fetchHealth, fetchCampaigns, fetchLeads])
-  
-  // Note: Campaigns, leads, and rate limits require authentication
-  // They will be fetched in the useDashboard hook with proper error handling
-
-  const activity = useMemo<ActivityItem[]>(() => {
-    if (campaigns.length === 0 && leads.length === 0) {
-      return []
-    }
-
-    const processedActivity: ActivityItem[] = []
-
-    campaigns.slice(0, 2).forEach((campaign, index) => {
-      processedActivity.push({
-        id: `campaign-${campaign.id || index}`,
-        type: 'campaign_updated',
-        description: `Campaign "${campaign.name || 'Unnamed'}" is ${campaign.status}`,
-        timestamp: new Date(NOW - index * 3600000).toISOString(),
-        status: 'success',
-      })
-    })
-
-    leads.slice(0, 3).forEach((lead, index) => {
-      processedActivity.push({
-        id: `lead-${lead.id || index}`,
-        type: 'new_lead',
-        description: `New lead discovered${lead.name ? `: ${lead.name}` : ''}`,
-        timestamp: new Date(NOW - (index + 2) * 3600000).toISOString(),
-        entity: lead.state ? lead.state.toLowerCase().replace(/_/g, ' ') : undefined,
-        status: 'success',
-      })
-    })
-
-    return processedActivity
-  }, [campaigns, leads])
+    fetchRecentActivity()
+    getAnalyticsOverview(undefined, '30d').then((res) => {
+      if (res.data) setOverview(res.data)
+    }).finally(() => setOverviewLoading(false))
+  }, [fetchHealth, fetchCampaigns, fetchRecentActivity])
 
   const systemStatus = healthStatus
     ? (healthStatus.status === 'operational' ? 'operational' : 'degraded')
@@ -96,33 +92,38 @@ const Dashboard = () => {
 
   const handleRefresh = async () => {
     setRefreshing(true)
+    setOverviewLoading(true)
     try {
       await Promise.all([
         fetchCampaigns('active'),
-        fetchLeads(), // Fetch all leads, not just QUALIFIED
         fetchHealth(),
-        fetchRateLimits()
+        fetchRecentActivity(),
+        getAnalyticsOverview(undefined, '30d').then((res) => {
+          if (res.data) setOverview(res.data)
+        }),
       ])
     } finally {
       setRefreshing(false)
+      setOverviewLoading(false)
     }
   }
 
-  // Calculate dashboard statistics
-  const stats = {
-    totalCampaigns: campaigns.length || 0,
-    totalLeads: leads.length || 0,
-    connectedLeads: leads.filter(lead => lead.state === 'CONNECTED').length || 0,
-    messagesSent: leads.reduce((total, lead) => total + (lead.messagesCount || 0), 0),
-    activeCampaigns: campaigns.filter(c => c.status === 'active').length || 0,
-    dailyLeads: leads.filter(lead => {
-      const oneDayAgo = new Date(NOW - 86400000)
-      const leadDate = new Date(lead.creationDate || NOW)
-      return leadDate > oneDayAgo
-    }).length || 0
-  }
+  const totals = overview?.totals
+  const stats = overview?.stats
+  const pipeline = overview?.pipeline
 
-  const isLoading = campaignsLoading || leadsLoading || healthLoading
+  const totalLeads = totals?.leads ?? 0
+  const connected = totals?.connected ?? 0
+  const connectionsSent = stats?.connectionsSent ?? 0
+  const connectionsAccepted = stats?.connectionsAccepted ?? 0
+  const messagesSent = stats?.messagesSent ?? 0
+  const messagesReplied = stats?.messagesReplied ?? 0
+
+  const connectionRate = totalLeads > 0 ? `${roundTo1((connected / totalLeads) * 100)}%` : '—'
+  const acceptRate = connectionsSent > 0 ? `${roundTo1((connectionsAccepted / connectionsSent) * 100)}%` : '—'
+  const replyRate = messagesSent > 0 ? `${roundTo1((messagesReplied / messagesSent) * 100)}%` : '—'
+
+  const isLoading = campaignsLoading || healthLoading || overviewLoading
 
   return (
     <div className="space-y-6">
@@ -133,41 +134,32 @@ const Dashboard = () => {
             variant="outline"
             className={`px-3 py-1 cursor-pointer ${
               systemStatus === 'operational' ? 'text-emerald-600 border-emerald-600' :
-              systemStatus === 'degraded' ? 'text-amber-600 border-amber-600' :
-              'text-red-600 border-red-600'
+              'text-amber-600 border-amber-600'
             }`}
             onClick={() => router.push('/health')}
           >
             <Activity className="mr-2 h-3.5 w-3.5" />
-            {systemStatus === 'operational' ? 'System Operational' :
-             systemStatus === 'degraded' ? 'System Degraded' : 'System Maintenance'}
+            {systemStatus === 'operational' ? 'System Operational' : 'System Degraded'}
           </Badge>
-          <Button 
-            size="sm" 
-            onClick={handleRefresh} 
-            disabled={refreshing}
-            variant="outline"
-          >
+          <Button size="sm" onClick={handleRefresh} disabled={refreshing} variant="outline">
             <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
-           <Button size="sm" onClick={() => router.push('/campaigns')}>
-             <LayoutDashboard className="mr-2 h-4 w-4" />
-             New Campaign
-           </Button>
+          <Button size="sm" onClick={() => router.push('/campaigns')}>
+            <Plus className="mr-2 h-4 w-4" />
+            New Campaign
+          </Button>
         </div>
       </div>
 
-      {/* Error Alerts */}
-      {(campaignsError || leadsError) && (
+      {campaignsError && (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
-          <AlertDescription>
-            {campaignsError || leadsError}
-          </AlertDescription>
+          <AlertDescription>{campaignsError}</AlertDescription>
         </Alert>
       )}
 
+      {/* Stat cards */}
       {isLoading ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           {[...Array(4)].map((_, i) => (
@@ -184,112 +176,82 @@ const Dashboard = () => {
         </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <StatsCard
-              title="Total Campaigns"
-              value={stats.totalCampaigns}
-              trend={stats.totalCampaigns > 0 ? `+${Math.min(stats.totalCampaigns, 10)}` : undefined}
-              trendUp={stats.totalCampaigns > 0}
-              icon="LayoutDashboard"
-              description="Active campaigns"
-              className={CARD_HEIGHT_CLASS}
-            />
-            <StatsCard
-              title="Total Leads"
-              value={stats.totalLeads}
-              trend={stats.totalLeads > 0 ? `+${Math.min(Math.floor(stats.totalLeads * 0.12), 20)}%` : undefined}
-              trendUp={stats.totalLeads > 0}
-              icon="Users"
-              description="All time leads"
-              className={CARD_HEIGHT_CLASS}
-            />
-            <StatsCard
-              title="Connected"
-              value={stats.connectedLeads}
-              trend={stats.connectedLeads > 0 ? `+${Math.min(Math.floor(stats.connectedLeads * 0.08), 15)}%` : undefined}
-              trendUp={stats.connectedLeads > 0}
-              icon="Users"
-              description="Connection rate"
-              className={CARD_HEIGHT_CLASS}
-            />
-            <StatsCard
-              title="Messages Sent"
-              value={stats.messagesSent}
-              trend={stats.messagesSent > 0 ? `+${Math.min(Math.floor(stats.messagesSent * 0.05), 25)}%` : undefined}
-              trendUp={stats.messagesSent > 0}
-              icon="MessageSquare"
-              description="Total messages"
-              className={CARD_HEIGHT_CLASS}
-            />
+          <StatsCard
+            title="Active Campaigns"
+            value={campaigns.length}
+            icon="LayoutDashboard"
+            description="Running right now"
+          />
+          <StatsCard
+            title="Total Leads"
+            value={totalLeads}
+            icon="Users"
+            description="All campaigns, 30 days"
+          />
+          <StatsCard
+            title="Connected"
+            value={connected}
+            icon="Users"
+            description={`Connection rate ${connectionRate}`}
+          />
+          <StatsCard
+            title="Messages Sent"
+            value={messagesSent}
+            icon="MessageSquare"
+            description={`Reply rate ${replyRate}`}
+          />
         </div>
       )}
 
+      {/* Pipeline + Activity */}
       <div className="grid gap-6 md:grid-cols-2">
-        {/* Quick Actions */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Quick Actions</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 gap-3">
-              <Button variant="outline" className="flex flex-col gap-2 h-auto py-4" onClick={() => router.push('/leads')}>
-                <Plus className="h-8 w-8" />
-                <span className="text-sm font-medium">Add New Lead</span>
-              </Button>
-              <Button variant="outline" className="flex flex-col gap-2 h-auto  py-4" onClick={() => router.push('/leads')}>
-                <Mail className="h-8 w-8" />
-                <span className="text-sm font-medium">New Message</span>
-              </Button>
-              <Button variant="outline" className="flex flex-col gap-2 h-auto  py-4" onClick={() => router.push('/campaigns')}>
-                <LayoutDashboard className="h-8 w-8" />
-                <span className="text-sm font-medium">Campaign Stats</span>
-              </Button>
-              <Button variant="outline" className="flex flex-col gap-2 h-auto  py-4" onClick={() => router.push('/health')}>
-                <Activity className="h-8 w-8" />
-                <span className="text-sm font-medium">View Health</span>
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+        {overviewLoading ? (
+          <Card>
+            <CardHeader><Skeleton className="h-5 w-32" /></CardHeader>
+            <CardContent className="space-y-3">
+              {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-6 w-full" />)}
+            </CardContent>
+          </Card>
+        ) : pipeline ? (
+          <CampaignPipeline
+            qualified={pipeline.qualified}
+            readyToConnect={pipeline.ready_to_connect}
+            pending={pipeline.pending}
+            connected={pipeline.connected}
+            completed={pipeline.completed}
+            failed={pipeline.failed}
+            noEmail={pipeline.no_email}
+          />
+        ) : null}
 
-        {/* Recent Activity */}
-        <RecentActivity items={activity} />
+        <RecentActivity
+          items={recentActivityLoading ? [] : toActivityItems(recentActivity)}
+        />
       </div>
 
-      {/* Key Metrics */}
+      {/* Key metrics row */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Key Metrics</CardTitle>
+          <CardTitle className="text-base">30-Day Metrics</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 gap-6 md:grid-cols-4">
-             <div className="space-y-2">
-               <div className="text-sm text-muted-foreground">Active Campaigns</div>
-               <div className="text-2xl font-bold">{stats.activeCampaigns}</div>
-               <p className="text-xs text-muted-foreground">Real-time data</p>
-             </div>
-             <div className="space-y-2">
-               <div className="text-sm text-muted-foreground">Leads Today</div>
-               <div className="text-2xl font-bold">{stats.dailyLeads}</div>
-               <p className="text-xs text-muted-foreground">Real-time data</p>
-             </div>
-             <div className="space-y-2">
-               <div className="text-sm text-muted-foreground">Connection Rate</div>
-               <div className="text-2xl font-bold">
-                 {stats.totalLeads > 0 
-                   ? `${roundTo1Decimal((stats.connectedLeads / stats.totalLeads) * 100)}%` 
-                   : '0%'}
-               </div>
-               <p className="text-xs text-muted-foreground">Real-time data</p>
-             </div>
-             <div className="space-y-2">
-               <div className="text-sm text-muted-foreground">Response Rate</div>
-               <div className="text-2xl font-bold">
-                 {stats.messagesSent > 0 
-                   ? `${roundTo1Decimal((stats.connectedLeads / stats.messagesSent) * 100)}%` 
-                   : '0%'}
-               </div>
-               <p className="text-xs text-muted-foreground">Real-time data</p>
-             </div>
+            <div className="space-y-1">
+              <div className="text-sm text-muted-foreground">Connections Sent</div>
+              <div className="text-2xl font-bold">{connectionsSent}</div>
+            </div>
+            <div className="space-y-1">
+              <div className="text-sm text-muted-foreground">Accept Rate</div>
+              <div className="text-2xl font-bold">{acceptRate}</div>
+            </div>
+            <div className="space-y-1">
+              <div className="text-sm text-muted-foreground">Reply Rate</div>
+              <div className="text-2xl font-bold">{replyRate}</div>
+            </div>
+            <div className="space-y-1">
+              <div className="text-sm text-muted-foreground">Connection Rate</div>
+              <div className="text-2xl font-bold">{connectionRate}</div>
+            </div>
           </div>
         </CardContent>
       </Card>

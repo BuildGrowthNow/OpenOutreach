@@ -1479,6 +1479,33 @@ export async function patchMongoUserProfile(
   return patch("/api/mongodb/profile/update/", data);
 }
 
+// Global recent activity feed
+export interface RecentActivityEntry {
+  id: string;
+  type: string;
+  status: string;
+  error: string | null;
+  timestamp: string;
+  campaignId: string;
+  campaignName: string;
+  leadName: string;
+  details?: {
+    lead_name?: string;
+    public_identifier?: string;
+    lead_url?: string;
+    headline?: string;
+    reason?: string;
+    message_preview?: string;
+    state?: string;
+  };
+}
+
+export async function getRecentActivity(
+  limit = 10,
+): Promise<ApiResponse<{ data: RecentActivityEntry[] }>> {
+  return get("/api/analytics/activity", { limit: String(limit) });
+}
+
 // Campaign activity log
 export interface ActivityEntry {
   id: string;

@@ -10,7 +10,9 @@ import {
   getCampaigns as getCampaignsAPI,
   getLeads as getLeadsAPI,
   getDailyUsage,
-  getLinkedInProfileHealth
+  getLinkedInProfileHealth,
+  getRecentActivity,
+  RecentActivityEntry,
 } from '@/lib/api/dashboard'
 import {
   Campaign,
@@ -50,6 +52,9 @@ export function useDashboard() {
   const [linkedinProfileHealth, setLinkedinProfileHealth] = useState<LinkedInProfileHealthResponse | null>(null)
   const [linkedinProfileHealthLoading, setLinkedinProfileHealthLoading] = useState(true)
   const [linkedinProfileHealthError, setLinkedinProfileHealthError] = useState<string | null>(null)
+
+  const [recentActivity, setRecentActivity] = useState<RecentActivityEntry[]>([])
+  const [recentActivityLoading, setRecentActivityLoading] = useState(true)
 
   const fetchCampaigns = useCallback(async (status?: string) => {
     setCampaignsLoading(true)
@@ -126,6 +131,20 @@ export function useDashboard() {
     }
   }, [])
 
+  const fetchRecentActivity = useCallback(async () => {
+    setRecentActivityLoading(true)
+    try {
+      const response = await getRecentActivity(10)
+      if (response.data) {
+        setRecentActivity(response.data.data || [])
+      }
+    } catch {
+      // silently ignore — activity feed is non-critical
+    } finally {
+      setRecentActivityLoading(false)
+    }
+  }, [])
+
   const fetchLinkedInProfileHealth = useCallback(async () => {
     setLinkedinProfileHealthLoading(true)
     setLinkedinProfileHealthError(null)
@@ -165,7 +184,10 @@ export function useDashboard() {
      linkedinProfileHealth,
      linkedinProfileHealthLoading,
      linkedinProfileHealthError,
-     fetchLinkedInProfileHealth
+     fetchLinkedInProfileHealth,
+     recentActivity,
+     recentActivityLoading,
+     fetchRecentActivity,
    }
  }
 

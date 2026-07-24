@@ -489,3 +489,47 @@ async def get_analytics_overview(
         campaigns=campaigns_data,
         data=data_dict,
     )
+
+
+@router.get("/activity")
+async def get_recent_activity(
+    user_id: str = Depends(get_current_user),
+    limit: int = Query(10, ge=1, le=50),
+):
+    """Recent activity feed across all campaigns for the current user."""
+    action_logs_collection = get_mongodb_collection("action_logs")
+    if action_logs_collection is None:
+        return {"data": []}
+
+    logs = list(
+        action_logs_collection.find({"user_id": user_id})
+        .sort("created_at", -1)
+        .limit(limit)
+    )
+
+    # Build a campaign name lookup for the returned logs
+    campaign_ids = list({log.get("campaign_id") for log in logs if log.get("campaign_id")})
+    campaign_names: dict[str, str] = {}
+    if campaign_ids:
+        campaigns_collection = get_mongodb_collection("campaigns")
+        if campaigns_collection is not None:
+            for doc in campaigns_collection.find({"_id": {"$in": campaign_ids}}, {"_id": 1, "name": 1}):
+                campaign_names[str(doc["_id"])] = doc.get("name", "")
+
+    entries = []
+    for log in logs:
+        details = log.get("details") or {}
+        campaign_id = log.get("campaign_id", "")
+        entries.append({
+            "id": str(log.get("_id", "")),
+            "type": log.get("action_type", ""),
+            "status": log.get("status", "completed"),
+            "error": log.get("error_message") or None,
+            "timestamp": (log["created_at"].isoformat() + "Z") if log.get("created_at") else "",
+            "campaignId": campaign_id,
+            "campaignName": campaign_names.get(campaign_id, ""),
+            "leadName": details.get("lead_name") or details.get("public_identifier") or "",
+            "details": details,
+        })
+
+    return {"data": entries}
