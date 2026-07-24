@@ -265,7 +265,14 @@ class RemoteDaemon:
                 return True
 
             def record_action(self, action_type: str, campaign, details: Optional[dict] = None):
-                pass
+                from openoutreach.linkedin.models import ActionLog
+                action_log = ActionLog(
+                    linkedin_profile_id=self._id,
+                    campaign_id=campaign._id if campaign else "",
+                    action_type=action_type,
+                    details=details or {},
+                )
+                action_log.save()
 
             def mark_exhausted(self, action_type: str):
                 from datetime import date
@@ -305,6 +312,8 @@ class RemoteDaemon:
                 self.playwright: Any = None
                 self.campaign: Optional[Any] = None  # Set before task execution
                 self.user: Optional[Any] = None  # Set per-task in _execute_task
+                self.user_id: Optional[str] = None  # Set per-task in _execute_task
+                self.linkedin_profile_id: str = profile_id
 
             def close(self):
                 if self.context and hasattr(self.context, "close"):
@@ -523,9 +532,10 @@ class RemoteDaemon:
         # Set campaign on session (required by all handlers)
         self.session.campaign = campaign
 
-        # Set user on session (required for some operations)
+        # Set user and user_id on session (required by task handlers and LLM calls)
         from openoutreach.mongodb.models_user import User
         if campaign.user_id:
+            self.session.user_id = campaign.user_id
             self.session.user = User.get(campaign.user_id)
 
         # Build minimal task object for handler
