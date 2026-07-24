@@ -262,7 +262,7 @@ export function CampaignList({ leads, campaignId, className }: CampaignListProps
                       <div className="flex items-center gap-2">
                         <div>
                           <div className="font-medium">{lead.name || <span className="text-muted-foreground italic">Unknown</span>}</div>
-                          <div className="text-sm text-muted-foreground">{lead.title || <span className="text-muted-foreground">—</span>}</div>
+                          <div className="text-sm text-muted-foreground" title={lead.title || undefined}>{lead.title ? (lead.title.length > 25 ? lead.title.slice(0, 25) + '…' : lead.title) : <span className="text-muted-foreground">—</span>}</div>
                         </div>
                         {lead.state === 'QUALIFIED' && (
                           <Badge variant="outline" className="border-emerald-500/20 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10">
@@ -272,7 +272,7 @@ export function CampaignList({ leads, campaignId, className }: CampaignListProps
                         )}
                       </div>
                     </TableCell>
-                   <TableCell>{lead.company || <span className="text-muted-foreground">—</span>}</TableCell>
+                   <TableCell><span title={lead.company || undefined}>{lead.company ? (lead.company.length > 25 ? lead.company.slice(0, 25) + '…' : lead.company) : <span className="text-muted-foreground">—</span>}</span></TableCell>
                   <TableCell>
                     <Badge variant="outline" className={cn(stateColorMapping[lead.state])}>
                       {lead.state.replace(/_/g, ' ')}

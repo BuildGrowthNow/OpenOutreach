@@ -277,12 +277,16 @@ def velocity_slot_times(now, n: int, velocity: int, horizon_hours: float = 24, u
     # (if velocity allows 5min spacing but Poisson would give 10min, use 5min)
     effective_spacing = min(target_spacing_seconds, poisson_mean_spacing)
 
+    # Always fire the first slot immediately so a freshly-played campaign
+    # executes at least one action right away rather than waiting hours.
+    first_slot = now
+
     # If effective spacing is still aggressive, use deterministic spacing
     if effective_spacing < poisson_mean_spacing * 0.5:
-        # Linear spacing with jitter
-        times = []
+        # Linear spacing with jitter — first slot is now, rest follow
+        times = [first_slot]
         cursor_seconds = 0.0
-        for i in range(n):
+        for _ in range(n - 1):
             # Add jitter (±20% of spacing)
             jitter = random.uniform(-0.2, 0.2) * effective_spacing
             cursor_seconds += effective_spacing + jitter
@@ -292,8 +296,9 @@ def velocity_slot_times(now, n: int, velocity: int, horizon_hours: float = 24, u
         return times
 
     # Otherwise fall back to Poisson (uniform order statistics)
-    positions = sorted(random.uniform(0, total_seconds) for _ in range(n))
-    times: list = []
+    # Generate n-1 random positions for the remaining slots
+    positions = sorted(random.uniform(0, total_seconds) for _ in range(n - 1))
+    times: list = [first_slot]
     cursor_interval = 0
     cursor_offset = 0.0
     for pos in positions:

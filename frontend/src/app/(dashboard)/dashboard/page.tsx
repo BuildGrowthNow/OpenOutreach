@@ -3,10 +3,9 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { LayoutDashboard, Activity, RefreshCw, AlertCircle, Plus } from 'lucide-react'
+import { Activity, RefreshCw, AlertCircle, Plus } from 'lucide-react'
 import { StatsCard } from '@/components/dashboard/stats-card'
 import { RecentActivity } from '@/components/dashboard/recent-activity'
-import { CampaignPipeline } from '@/components/dashboard/campaign-pipeline'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { useDashboard } from '@/hooks/use-dashboard'
@@ -14,6 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { getAnalyticsOverview, AnalyticsOverviewResponse, RecentActivityEntry } from '@/lib/api/dashboard'
 import { QuickStats } from '@/components/dashboard/quick-stats'
+import { QuickLinks } from '@/components/dashboard/quick-links'
 
 function toActivityItems(entries: RecentActivityEntry[]) {
   return entries.map((e) => {
@@ -54,7 +54,6 @@ function toActivityItems(entries: RecentActivityEntry[]) {
   })
 }
 
-// Helper to round to 1 decimal place
 function roundTo1(value: number): string {
   return (Math.round(value * 10) / 10).toFixed(1)
 }
@@ -111,7 +110,6 @@ const Dashboard = () => {
 
   const totals = overview?.totals
   const stats = overview?.stats
-  const pipeline = overview?.pipeline
 
   const totalLeads = totals?.leads ?? 0
   const connected = totals?.connected ?? 0
@@ -204,27 +202,8 @@ const Dashboard = () => {
         </div>
       )}
 
-      {/* Pipeline + Activity + Quick Stats */}
+      {/* Recent Activity | Quick Stats | Quick Links */}
       <div className="grid gap-6 lg:grid-cols-3 md:grid-cols-1">
-        {overviewLoading ? (
-          <Card>
-            <CardHeader><Skeleton className="h-5 w-32" /></CardHeader>
-            <CardContent className="space-y-3">
-              {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-6 w-full" />)}
-            </CardContent>
-          </Card>
-        ) : pipeline ? (
-          <CampaignPipeline
-            qualified={pipeline.qualified}
-            readyToConnect={pipeline.ready_to_connect}
-            pending={pipeline.pending}
-            connected={pipeline.connected}
-            completed={pipeline.completed}
-            failed={pipeline.failed}
-            noEmail={pipeline.no_email}
-          />
-        ) : null}
-
         <RecentActivity
           items={recentActivityLoading ? [] : toActivityItems(recentActivity)}
         />
@@ -259,7 +238,7 @@ const Dashboard = () => {
               label: 'Total Leads',
               value: totalLeads,
               sub: 'all campaigns, 30 days',
-              highlight: totalLeads > 0 ? 'neutral' : 'neutral',
+              highlight: 'neutral',
             },
             {
               label: 'Connections Sent',
@@ -269,6 +248,8 @@ const Dashboard = () => {
             },
           ]}
         />
+
+        <QuickLinks />
       </div>
 
       {/* Key metrics row */}

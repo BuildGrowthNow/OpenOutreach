@@ -194,10 +194,14 @@ export function LeadTable({
                   <TableCell>
                     <div className="flex flex-col">
                       {lead.company && (
-                        <span className="font-medium">{lead.company}</span>
+                        <span className="font-medium" title={lead.company}>
+                          {lead.company.length > 25 ? lead.company.slice(0, 25) + '…' : lead.company}
+                        </span>
                       )}
                       {lead.title && (
-                        <span className="text-sm text-muted-foreground">{lead.title}</span>
+                        <span className="text-sm text-muted-foreground" title={lead.title}>
+                          {lead.title.length > 25 ? lead.title.slice(0, 25) + '…' : lead.title}
+                        </span>
                       )}
                     </div>
                   </TableCell>

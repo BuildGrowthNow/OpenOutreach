@@ -415,7 +415,7 @@ async def get_analytics_overview(
             CampaignOverview(
                 id=campaign._id,
                 name=campaign.name,
-                description=campaign.description or "",
+                description=getattr(campaign, 'description', '') or "",
                 status=campaign.status,
                 stats=CampaignStats(
                     total_leads=total_leads,

@@ -76,7 +76,8 @@ const STATUS_STYLES: Record<string, { variant: "default" | "secondary" | "destru
 };
 
 function formatEta(seconds: number): string {
-  if (seconds < 60) return "less than a minute";
+  if (seconds <= 0) return "now";
+  if (seconds < 60) return `${seconds}s`;
   if (seconds < 3600) return `${Math.round(seconds / 60)}m`;
   const h = Math.floor(seconds / 3600);
   const m = Math.round((seconds % 3600) / 60);

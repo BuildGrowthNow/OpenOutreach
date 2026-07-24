@@ -470,12 +470,12 @@ export default function CampaignDetailsPage() {
                 campaign.status.slice(1)}
             </Badge>
           </div>
-          <p className="text-muted-foreground line-clamp-1">
-            {campaign.description || (
-              <span className="text-muted-foreground italic">
-                No description
-              </span>
-            )}
+          <p className="text-muted-foreground">
+            {(() => {
+              const pitch = campaign.productPitch || (campaign as unknown as Record<string, string>).product_pitch || ''
+              if (!pitch) return <span className="italic">No description</span>
+              return pitch.length > 90 ? pitch.slice(0, 90) + '…' : pitch
+            })()}
           </p>
         </div>
         <div className="flex gap-2">

@@ -1100,7 +1100,7 @@ async def get_campaign_activity(
     next_task = None
     if tasks_collection is not None:
         upcoming = tasks_collection.find_one(
-            {"campaign_id": campaign_id, "status": "pending"},
+            {"payload.campaign_id": campaign_id, "status": "pending"},
             sort=[("scheduled_at", 1)],
         )
         if upcoming:
@@ -1119,7 +1119,7 @@ async def get_campaign_activity(
     pending_count = 0
     if tasks_collection is not None:
         pending_count = tasks_collection.count_documents({
-            "campaign_id": campaign_id,
+            "payload.campaign_id": campaign_id,
             "status": "pending",
         })
 

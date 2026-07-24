@@ -134,7 +134,7 @@ export function useDashboard() {
   const fetchRecentActivity = useCallback(async () => {
     setRecentActivityLoading(true)
     try {
-      const response = await getRecentActivity(5)
+      const response = await getRecentActivity(7)
       if (response.data) {
         setRecentActivity(response.data.data || [])
       }
