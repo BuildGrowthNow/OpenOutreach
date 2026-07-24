@@ -343,23 +343,28 @@ class RemoteDaemon:
         logger.info("Launching %s (channel: %s)", self.browser.name, self.browser.channel)
 
         # sync_playwright() cannot run inside an asyncio event loop — run in a thread
+        # Local aliases avoid Optional-type false positives inside the nested function.
+        session = self.session
+        browser_info = self.browser  # already asserted non-None above
+
         def _launch_and_auth():
             page, context, browser, playwright = self._launch_browser_with_channel(
                 storage_state,
-                self.browser.channel,
+                browser_info.channel,
                 proxy_server,
                 proxy_username,
                 proxy_password,
+                headless=bool(storage_state),
             )
-            self.session.page = page
-            self.session.context = context
-            self.session.browser = browser
-            self.session.playwright = playwright
+            session.page = page
+            session.context = context
+            session.browser = browser
+            session.playwright = playwright
 
             if not storage_state:
-                self.session.linkedin_profile.linkedin_username = creds["email"]
-                self.session.linkedin_profile.linkedin_password = creds["password"]
-                authenticate(self.session, username=creds["email"], password=creds["password"])
+                session.linkedin_profile.linkedin_username = creds["email"]
+                session.linkedin_profile.linkedin_password = creds["password"]
+                authenticate(session, username=creds["email"], password=creds["password"])
                 # Return fresh cookies so the async caller can sync them
                 return context.storage_state()
             return None
@@ -650,7 +655,9 @@ class RemoteDaemon:
 
                 # Send trial ending notification (once per day, 1 day before expiry)
                 if status.subscription_status == "trialing" and status.trial_ends_at:
-                    trial_end = datetime.fromisoformat(status.trial_ends_at.replace("Z", "+00:00"))
+                    trial_end = datetime.fromisoformat(status.trial_ends_at)
+                    if trial_end.tzinfo is None:
+                        trial_end = trial_end.replace(tzinfo=tz.utc)
                     now = datetime.now(tz.utc)
                     time_until_expiry = trial_end - now
 
@@ -796,6 +803,7 @@ class RemoteDaemon:
         proxy_server: Optional[str] = None,
         proxy_username: Optional[str] = None,
         proxy_password: Optional[str] = None,
+        headless: bool = False,
     ):
         """Launch browser using Playwright with specified channel (chrome/msedge/webkit).
 
@@ -817,16 +825,16 @@ class RemoteDaemon:
 
         # Launch with channel to use installed browser
         if channel == "webkit":
-            browser = playwright.webkit.launch(headless=False, slow_mo=BROWSER_SLOW_MO)
+            browser = playwright.webkit.launch(headless=headless, slow_mo=BROWSER_SLOW_MO)
         elif channel == "msedge":
             browser = playwright.chromium.launch(
-                headless=False,
+                headless=headless,
                 slow_mo=BROWSER_SLOW_MO,
                 channel="msedge",
             )
         else:  # chrome
             browser = playwright.chromium.launch(
-                headless=False,
+                headless=headless,
                 slow_mo=BROWSER_SLOW_MO,
                 channel="chrome",
             )

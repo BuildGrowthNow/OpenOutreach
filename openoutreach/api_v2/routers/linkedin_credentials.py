@@ -268,11 +268,13 @@ async def create_credential(
         )
         credential.save()
 
-        # Sync login credentials and execution mode to profile — username is
-        # left as-is and only updated after a real login discovers the /in handle
+        # Sync login credentials and execution mode to profile.
+        # Pre-populate linkedin_username with the email address so the UI shows something
+        # immediately; it gets replaced with the real /in handle after first successful login.
+        profile.linkedin_username = data.email
         profile.linkedin_password = data.password
         profile.execution_mode = execution_mode
-        profile.save(update_fields=["linkedin_password", "execution_mode"])
+        profile.save(update_fields=["linkedin_username", "linkedin_password", "execution_mode"])
 
         # Log creation
         log_entry = LinkedInCredentialLog(
@@ -493,10 +495,25 @@ async def delete_credential(
                     profile.save(update_fields=["linkedin_password", "cookie_data_encrypted"])
                 else:
                     # Last credential — delete the profile entirely so it no longer
-                    # counts toward the account limit and avoids the null unique-index conflict
+                    # counts toward the account limit and avoids the null unique-index conflict.
+                    # Also cascade: delete all pending tasks and pause all campaigns for this profile
+                    # so orphaned records don't pile up and confuse future profile IDs.
+                    profile_id_str = str(profile._id)
+                    tasks_col = get_mongodb_collection("tasks")
+                    if tasks_col is not None:
+                        tasks_col.delete_many({
+                            "linkedin_profile_id": profile_id_str,
+                            "status": {"$in": ["pending", "running"]},
+                        })
+                    campaigns_col = get_mongodb_collection("campaigns")
+                    if campaigns_col is not None:
+                        campaigns_col.update_many(
+                            {"linkedin_profile_id": profile_id_str},
+                            {"$set": {"is_paused": True, "status": "paused"}},
+                        )
                     profiles_col = get_mongodb_collection("linkedin_profiles")
                     if profiles_col is not None:
-                        profiles_col.delete_one({"_id": str(profile._id)})
+                        profiles_col.delete_one({"_id": profile_id_str})
 
         # Log deletion
         log_entry = LinkedInCredentialLog(
