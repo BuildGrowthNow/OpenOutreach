@@ -33,6 +33,17 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _get_client_ip(request: Request) -> str:
+    """Extract real client IP from proxy headers or direct connection."""
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    real_ip = request.headers.get("x-real-ip")
+    if real_ip:
+        return real_ip.strip()
+    return request.client.host if request.client else "unknown"
+
+
 def _build_credential_response(
     cred: LinkedInCredentials,
     profile: Optional[LinkedInProfile] = None,
@@ -268,7 +279,7 @@ async def create_credential(
             credential_id=credential._id,
             action="created",
             details={"email": data.email, "profile_id": profile._id},
-            ip_address=request.client.host if request.client else None,
+            ip_address=_get_client_ip(request),
             user_agent=request.headers.get("user-agent", ""),
         )
         log_entry.save()
@@ -427,7 +438,7 @@ async def update_credential(
                 credential_id=credential._id,
                 action="updated",
                 details=changes,
-                ip_address=request.client.host if request.client else None,
+                ip_address=_get_client_ip(request),
                 user_agent=request.headers.get("user-agent", ""),
             )
             log_entry.save()
@@ -492,7 +503,7 @@ async def delete_credential(
             credential_id=credential._id,
             action="deleted",
             details={"email": credential.get_public_email()},
-            ip_address=request.client.host if request.client else None,
+            ip_address=_get_client_ip(request),
             user_agent=request.headers.get("user-agent", ""),
         )
         log_entry.save()
@@ -544,7 +555,7 @@ async def verify_credential(
             credential_id=credential._id,
             action="verified",
             details={"method": "desktop", "status": "success"},
-            ip_address=request.client.host if request.client else None,
+            ip_address=_get_client_ip(request),
             user_agent=request.headers.get("user-agent", ""),
         )
         log_entry.save()
@@ -692,7 +703,7 @@ async def verify_credential(
                 credential_id=credential._id,
                 action="verified",
                 details={"method": "browser_login", "status": "success"},
-                ip_address=request.client.host if request.client else None,
+                ip_address=_get_client_ip(request),
                 user_agent=request.headers.get("user-agent", ""),
             )
             log_entry.save()
@@ -721,7 +732,7 @@ async def verify_credential(
             credential_id=credential._id,
             action="awaiting_challenge",
             details={"method": "browser_login", "message": str(e)},
-            ip_address=request.client.host if request.client else None,
+            ip_address=_get_client_ip(request),
             user_agent=request.headers.get("user-agent", ""),
         )
         log_entry.save()
@@ -744,7 +755,7 @@ async def verify_credential(
             credential_id=credential._id,
             action="failed",
             details={"method": "browser_login", "error": str(e)},
-            ip_address=request.client.host if request.client else None,
+            ip_address=_get_client_ip(request),
             user_agent=request.headers.get("user-agent", ""),
         )
         log_entry.save()
@@ -814,7 +825,7 @@ async def confirm_credential(
                 "method": "manual_confirmation" if not auto_verified else "auto_verified",
                 "notes": data.notes,
             },
-            ip_address=request.client.host if request.client else None,
+            ip_address=_get_client_ip(request),
             user_agent=request.headers.get("user-agent", ""),
         )
         log_entry.save()
@@ -842,7 +853,7 @@ async def confirm_credential(
             credential_id=credential._id,
             action="failed",
             details={"method": "manual_confirmation", "notes": data.notes},
-            ip_address=request.client.host if request.client else None,
+            ip_address=_get_client_ip(request),
             user_agent=request.headers.get("user-agent", ""),
         )
         log_entry.save()
@@ -891,7 +902,7 @@ async def rotate_credential(
             credential_id=credential._id,
             action="rotated",
             details={"backup_id": backup._id},
-            ip_address=request.client.host if request.client else None,
+            ip_address=_get_client_ip(request),
             user_agent=request.headers.get("user-agent", ""),
         )
         log_entry.save()
