@@ -48,16 +48,11 @@ jobs:
           VERSION=$(python -c "exec(open('openoutreach/desktop/__version__.py').read()); print(__version__)")
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Rename DMG for release
-        run: |
-          mv desktop/dist/Lengrowth-*.dmg desktop/dist/Lengrowth-macOS.dmg 2>/dev/null || \
-          mv desktop/dist/*.dmg desktop/dist/Lengrowth-macOS.dmg || true
-
       - name: Upload macOS DMG artifact
         uses: actions/upload-artifact@v4
         with:
           name: Lengrowth-macOS-${{ steps.version.outputs.version }}
-          path: desktop/dist/Lengrowth-macOS.dmg
+          path: desktop/dist/Lengrowth-${{ steps.version.outputs.version }}.dmg
 
   build-windows:
     name: Build Windows App
@@ -98,10 +93,6 @@ jobs:
           VERSION=$(python -c "exec(open('openoutreach/desktop/__version__.py').read()); print(__version__)")
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Rename installer for release
-        shell: bash
-        run: mv desktop/dist/*-Setup.exe desktop/dist/Lengrowth-Windows-Setup.exe 2>/dev/null || true
-
       - name: Upload Windows exe artifact
         uses: actions/upload-artifact@v4
         with:
@@ -110,10 +101,10 @@ jobs:
 
       - name: Upload Windows installer artifact
         uses: actions/upload-artifact@v4
-        if: hashFiles('desktop/dist/Lengrowth-Windows-Setup.exe') != ''
+        if: hashFiles('desktop/dist/Lengrowth-*-Setup.exe') != ''
         with:
           name: Lengrowth-Windows-Installer-${{ steps.version.outputs.version }}
-          path: desktop/dist/Lengrowth-Windows-Setup.exe
+          path: desktop/dist/Lengrowth-${{ steps.version.outputs.version }}-Setup.exe
 
       - name: Upload Windows MSIX artifact
         uses: actions/upload-artifact@v4
@@ -179,13 +170,13 @@ jobs:
             ### Installation
 
             **macOS (10.15 Catalina or later):**
-            1. Download `Lengrowth-macOS.dmg`
+            1. Download `Lengrowth-${{ steps.version.outputs.version }}.dmg`
             2. Open the DMG and drag Lengrowth to Applications
             3. **First launch only:** Right-click Lengrowth in Applications → **"Open"** → **"Open"** again
             4. Log in with your Lengrowth account
 
             **Windows — Installer (recommended):**
-            1. Download `Lengrowth-Windows-Setup.exe`
+            1. Download `Lengrowth-${{ steps.version.outputs.version }}-Setup.exe`
             2. Run the installer and follow the wizard
             3. If SmartScreen appears, click **"More info" → "Run anyway"**
             4. Log in with your Lengrowth account
@@ -200,9 +191,9 @@ jobs:
             - Your LinkedIn credentials never leave your machine
             - Runs silently in the system tray, auto-starts on login
           files: |
-            ./release/macos/Lengrowth-macOS.dmg
+            ./release/macos/Lengrowth-${{ steps.version.outputs.version }}.dmg
             ./release/windows/Lengrowth.exe
-            ./release/windows/Lengrowth-Windows-Setup.exe
+            ./release/windows/Lengrowth-${{ steps.version.outputs.version }}-Setup.exe
             ./release/windows/*.msix
           token: ${{ secrets.OUTBOUND_RELEASE_TOKEN }}
           draft: false

@@ -347,14 +347,14 @@ class RemoteDaemon:
         session = self.session
         browser_info = self.browser  # already asserted non-None above
 
-        def _launch_and_auth():
+        def _launch_and_auth(headless: bool = True):
             page, context, browser, playwright = self._launch_browser_with_channel(
                 storage_state,
                 browser_info.channel,
                 proxy_server,
                 proxy_username,
                 proxy_password,
-                headless=bool(storage_state),
+                headless=headless,
             )
             session.page = page
             session.context = context
@@ -370,18 +370,29 @@ class RemoteDaemon:
             return None
 
         try:
-            fresh_state = await asyncio.to_thread(_launch_and_auth)
+            fresh_state = await asyncio.to_thread(_launch_and_auth, True)
         except Exception as e:
-            logger.error("Login failed: %s", e)
-            if "verification" in str(e).lower() or "challenge" in str(e).lower():
-                await self.client.report_session_state(
-                    linkedin_profile_id=self.linkedin_profile_id,
-                    is_logged_in=False,
-                    requires_verification=True,
-                    verification_type="challenge",
-                )
-                self._show_verification_notification(is_desktop=True)
-            raise
+            from linkedin_cli.exceptions import CheckpointChallengeError
+            if isinstance(e, CheckpointChallengeError):
+                # Challenge detected in headless mode — close and relaunch headed
+                # so the user can interact with the verification in a visible window.
+                logger.warning("LinkedIn challenge detected — relaunching browser headed for user interaction")
+                session.close()
+                try:
+                    fresh_state = await asyncio.to_thread(_launch_and_auth, False)
+                except Exception as e2:
+                    logger.error("Login failed after challenge relaunch: %s", e2)
+                    await self.client.report_session_state(
+                        linkedin_profile_id=self.linkedin_profile_id,
+                        is_logged_in=False,
+                        requires_verification=True,
+                        verification_type="challenge",
+                    )
+                    self._show_verification_notification(is_desktop=True)
+                    raise
+            else:
+                logger.error("Login failed: %s", e)
+                raise
 
         if fresh_state:
             cookie_json = json.dumps(fresh_state)
