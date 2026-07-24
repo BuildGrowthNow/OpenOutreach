@@ -226,10 +226,10 @@ class SmartRateLimitContext:
             self.time_of_day_limit_multiplier = 0.3
 
         # Day of week multiplier
-        if day_of_week >= 5:  # Weekend
-            self.day_of_week_limit_multiplier = 0.5
-        elif day_of_week == 6:  # Sunday
+        if day_of_week == 6:  # Sunday
             self.day_of_week_limit_multiplier = 0.2
+        elif day_of_week == 5:  # Saturday
+            self.day_of_week_limit_multiplier = 0.5
         else:  # Weekday
             self.day_of_week_limit_multiplier = 1.0
 

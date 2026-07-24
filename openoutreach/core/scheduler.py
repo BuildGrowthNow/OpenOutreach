@@ -191,17 +191,22 @@ def _distribute_weighted(n: int, weighted_intervals: list, velocity: int) -> lis
 
     times = []
     target_spacing_seconds = 3600.0 / max(1, velocity)
+    remaining = n
 
-    # Allocate slots proportionally by weight
-    for start, end, weight in weighted_intervals:
-        slot_count = int(n * (weight / total_weight))
+    # Allocate slots proportionally by weight; use round() to avoid integer-truncation loss
+    for i, (start, end, weight) in enumerate(weighted_intervals):
+        if i == len(weighted_intervals) - 1:
+            slot_count = remaining  # give all leftover to the last interval
+        else:
+            slot_count = round(n * (weight / total_weight))
+        slot_count = min(slot_count, remaining)
 
         cursor = start
         for _ in range(slot_count):
             if cursor >= end:
                 break
             times.append(cursor)
-            # Add spacing with jitter
+            remaining -= 1
             jitter = random.uniform(-0.2, 0.2) * target_spacing_seconds
             cursor = cursor + timedelta(seconds=target_spacing_seconds + jitter)
 
