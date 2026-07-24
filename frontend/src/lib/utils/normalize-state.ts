@@ -7,6 +7,7 @@ export function normalizeState(state: string | null | undefined): string | null 
   if (!state) return null;
   
   const stateMap: Record<string, string> = {
+    'Discovered': 'DISCOVERED',
     'Qualified': 'QUALIFIED',
     'Ready to Connect': 'READY_TO_CONNECT',
     'Pending': 'PENDING',

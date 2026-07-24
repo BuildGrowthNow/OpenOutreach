@@ -361,19 +361,41 @@ export async function getCampaignLeads(
   if (search) params.search = search;
   if (page) params.page = page.toString();
   if (limit) params.limit = limit.toString();
-  
-  const response = await get<{ data: Lead[]; pagination: Pagination; filters: LeadFilters }>(`/api/campaigns/${id}/leads`, params);
-  
-  // Normalize state and outcome values
-  if (response.data?.data) {
-    response.data.data = response.data.data.map((lead: Lead) => ({
-      ...lead,
-      state: normalizeState(lead.state as string) as Lead["state"],
-      outcome: normalizeOutcome(lead.outcome as string) as Lead["outcome"],
-    }));
+
+  // API returns { total, limit, offset, results: [{lead, deal}] }
+  type RawLeadDeal = {
+    lead: { id: string; public_identifier: string; url: string; full_name?: string; headline?: string; location?: string; disqualified?: boolean; created_at?: string };
+    deal: { id: string; lead_id: string; campaign_id: string; state: string; outcome?: string; reason?: string; creation_date?: string };
+  };
+  type RawResponse = { total: number; limit: number; offset: number; results: RawLeadDeal[] };
+
+  const raw = await get<RawResponse>(`/api/campaigns/${id}/leads`, params);
+
+  if (!raw.data) {
+    return raw as unknown as ApiResponse<{ data: Lead[]; pagination: Pagination; filters: LeadFilters }>;
   }
-  
-  return response;
+
+  const leads: Lead[] = (raw.data.results || []).map(({ lead, deal }) => ({
+    id: lead.id,
+    publicIdentifier: lead.public_identifier,
+    linkedinUrl: lead.url,
+    name: lead.full_name || undefined,
+    title: lead.headline || undefined,
+    disqualified: lead.disqualified || false,
+    state: (normalizeState(deal.state) || 'DISCOVERED') as Lead["state"],
+    outcome: normalizeOutcome(deal.outcome) as Lead["outcome"] | undefined,
+    creationDate: deal.creation_date || lead.created_at || new Date().toISOString(),
+    updateDate: deal.creation_date || lead.created_at || new Date().toISOString(),
+  }));
+
+  return {
+    ...raw,
+    data: {
+      data: leads,
+      pagination: { page: 1, limit: raw.data.limit, total: raw.data.total, total_pages: Math.ceil(raw.data.total / raw.data.limit) },
+      filters: {},
+    },
+  };
 }
 
 // Campaign Messages API

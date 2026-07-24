@@ -17,6 +17,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Icons } from "@/lib/types/components";
 import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  Cell,
+  PieChart,
+  Pie,
+  Legend,
+} from "recharts";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -66,6 +78,7 @@ interface CampaignAnalyticsResponse {
     errors: number;
     rate_limit_warnings: number;
   };
+  pipeline?: Record<string, number>;
 }
 
 
@@ -910,50 +923,7 @@ export default function CampaignDetailsPage() {
         {/* Analytics Tab */}
         <TabsContent value="analytics" className="space-y-6">
           {analytics ? (
-            <div className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Performance Metrics</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="text-center">
-                      <div className="text-2xl font-bold">
-                        {analytics.stats?.connections_sent || 0}
-                      </div>
-                      <div className="text-sm text-muted-foreground">
-                        Connections Sent
-                      </div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-2xl font-bold">
-                        {analytics.stats?.connections_accepted || 0}
-                      </div>
-                      <div className="text-sm text-muted-foreground">
-                        Connections Accepted
-                      </div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-2xl font-bold">
-                        {analytics.stats?.messages_sent || 0}
-                      </div>
-                      <div className="text-sm text-muted-foreground">
-                        Messages Sent
-                      </div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-2xl font-bold">
-                        {analytics.stats?.conversions || 0}
-                      </div>
-                      <div className="text-sm text-muted-foreground">
-                        Conversions
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-            </div>
+            <CampaignAnalyticsCharts analytics={analytics} />
           ) : (
             <div className="text-center py-12">
               <p className="text-muted-foreground">
@@ -992,6 +962,179 @@ export default function CampaignDetailsPage() {
   );
 }
 
+
+const PIPELINE_COLORS: Record<string, string> = {
+  discovered: "#71717a",
+  qualified: "#3b82f6",
+  ready_to_connect: "#6366f1",
+  pending: "#a855f7",
+  connected: "#06b6d4",
+  completed: "#10b981",
+  failed: "#ef4444",
+  no_email: "#9ca3af",
+};
+
+const PIPELINE_LABELS: Record<string, string> = {
+  discovered: "Discovered",
+  qualified: "Qualified",
+  ready_to_connect: "Ready",
+  pending: "Pending",
+  connected: "Connected",
+  completed: "Completed",
+  failed: "Failed",
+  no_email: "No Email",
+};
+
+function CampaignAnalyticsCharts({ analytics }: { analytics: CampaignAnalyticsResponse }) {
+  const s = analytics.stats;
+
+  const funnelData = [
+    { name: "Sent", value: s.connections_sent },
+    { name: "Accepted", value: s.connections_accepted },
+    { name: "Messaged", value: s.messages_sent },
+    { name: "Replied", value: s.messages_replied },
+    { name: "Converted", value: s.conversions },
+  ];
+
+  const ratesData = [
+    { name: "Accept Rate", value: parseFloat(s.connection_accept_rate.toFixed(1)) },
+    { name: "Response Rate", value: parseFloat(s.response_rate.toFixed(1)) },
+    { name: "Conversion Rate", value: parseFloat(s.conversion_rate.toFixed(1)) },
+  ];
+
+  const pipelineData = analytics.pipeline
+    ? Object.entries(analytics.pipeline)
+        .filter(([, v]) => v > 0)
+        .map(([k, v]) => ({
+          name: PIPELINE_LABELS[k] || k,
+          value: v,
+          fill: PIPELINE_COLORS[k] || "#71717a",
+        }))
+    : [];
+
+  return (
+    <div className="space-y-6">
+      {/* KPI row */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[
+          { label: "Connections Sent", value: s.connections_sent },
+          { label: "Connections Accepted", value: s.connections_accepted },
+          { label: "Messages Sent", value: s.messages_sent },
+          { label: "Replies", value: s.messages_replied },
+        ].map(({ label, value }) => (
+          <Card key={label}>
+            <CardContent className="pt-6 text-center">
+              <div className="text-3xl font-bold">{value}</div>
+              <div className="text-sm text-muted-foreground mt-1">{label}</div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Funnel bar chart */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Outreach Funnel</CardTitle>
+            <CardDescription>Leads at each stage of the outreach flow</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={funnelData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+                <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
+                <Tooltip
+                  contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }}
+                  labelStyle={{ color: "hsl(var(--foreground))" }}
+                  itemStyle={{ color: "hsl(var(--foreground))" }}
+                />
+                <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                  {funnelData.map((_, i) => (
+                    <Cell key={i} fill={["#6366f1", "#06b6d4", "#3b82f6", "#a855f7", "#10b981"][i]} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        {/* Conversion rates bar chart */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Conversion Rates</CardTitle>
+            <CardDescription>Key performance percentages</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={ratesData} layout="vertical" margin={{ top: 4, right: 24, left: 10, bottom: 0 }}>
+                <XAxis type="number" domain={[0, 100]} tickFormatter={(v) => `${v}%`} tick={{ fontSize: 12 }} />
+                <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 12 }} />
+                <Tooltip
+                  formatter={(v) => [`${v}%`, ""]}
+                  contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }}
+                  labelStyle={{ color: "hsl(var(--foreground))" }}
+                  itemStyle={{ color: "hsl(var(--foreground))" }}
+                />
+                <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+                  <Cell fill="#6366f1" />
+                  <Cell fill="#3b82f6" />
+                  <Cell fill="#10b981" />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Pipeline breakdown */}
+      {pipelineData.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Lead Pipeline Breakdown</CardTitle>
+            <CardDescription>Current distribution of leads by deal state</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col lg:flex-row items-center gap-6">
+              <ResponsiveContainer width="100%" height={240}>
+                <PieChart>
+                  <Pie
+                    data={pipelineData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={100}
+                    paddingAngle={2}
+                    dataKey="value"
+                  >
+                    {pipelineData.map((entry, i) => (
+                      <Cell key={i} fill={entry.fill} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }}
+                    itemStyle={{ color: "hsl(var(--foreground))" }}
+                  />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="w-full lg:w-auto space-y-2 min-w-[180px]">
+                {pipelineData.map(({ name, value, fill }) => (
+                  <div key={name} className="flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-2">
+                      <span className="inline-block h-3 w-3 rounded-full" style={{ backgroundColor: fill }} />
+                      <span className="text-sm">{name}</span>
+                    </div>
+                    <span className="text-sm font-medium tabular-nums">{value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
 
 function CampaignSettingsForm({
   campaign,
