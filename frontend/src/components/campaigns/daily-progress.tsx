@@ -1,19 +1,18 @@
 'use client'
 
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Icons } from '@/lib/types/components'
 import { cn } from '@/lib/utils'
-import { formatDistanceToNow } from 'date-fns'
 
 interface DailyProgressProps {
   dailyConnectionsSent: number
+  dailyMessagesSent?: number
   dailyLimit: number
   effectiveLimit?: number
   className?: string
 }
 
-export function DailyProgress({ dailyConnectionsSent, dailyLimit, effectiveLimit, className }: DailyProgressProps) {
+export function DailyProgress({ dailyConnectionsSent, dailyMessagesSent = 0, dailyLimit, effectiveLimit, className }: DailyProgressProps) {
   // Use effective limit if provided, otherwise use dailyLimit
   const actualLimit = effectiveLimit ?? dailyLimit
   const percentage = actualLimit > 0 ? (dailyConnectionsSent / actualLimit) * 100 : 0
@@ -95,16 +94,14 @@ export function DailyProgress({ dailyConnectionsSent, dailyLimit, effectiveLimit
             <Icons.MessageSquare className="h-4 w-4" />
             <span>Messages sent</span>
           </div>
-          <div className="text-lg font-bold">0</div>
+          <div className="text-lg font-bold">{dailyMessagesSent}</div>
         </div>
         <div className="space-y-1">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Icons.RefreshCw className="h-4 w-4" />
-            <span>Next reset</span>
+            <span>Resets at</span>
           </div>
-           <div className="text-lg font-bold">
-             {formatDistanceToNow(new Date(), { addSuffix: true })}
-           </div>
+          <div className="text-lg font-bold">midnight</div>
         </div>
       </div>
     </div>

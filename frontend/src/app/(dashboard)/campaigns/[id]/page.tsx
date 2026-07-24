@@ -102,6 +102,7 @@ export default function CampaignDetailsPage() {
 
   const [dailyUsage, setDailyUsage] = useState<{
     dailyConnectionsSent: number;
+    dailyMessagesSent: number;
     dailyLimit: number;
     effectiveLimit: number;
     remaining: number;
@@ -110,6 +111,7 @@ export default function CampaignDetailsPage() {
     warningLevel?: "low" | "medium" | "high";
   }>({
     dailyConnectionsSent: 0,
+    dailyMessagesSent: 0,
     dailyLimit: 20,
     effectiveLimit: 20,
     remaining: 20,
@@ -166,6 +168,8 @@ export default function CampaignDetailsPage() {
           setDailyUsage({
             dailyConnectionsSent:
               dailyUsageResponse.data.daily_connections_sent || 0,
+            dailyMessagesSent:
+              dailyUsageResponse.data.daily_messages_sent || 0,
             dailyLimit: dailyUsageResponse.data.daily_limit || 20,
             effectiveLimit: dailyUsageResponse.data.effective_limit || 20,
             remaining: dailyUsageResponse.data.remaining || 20,
@@ -192,6 +196,8 @@ export default function CampaignDetailsPage() {
         setDailyUsage({
           dailyConnectionsSent:
             dailyUsageResponse.data.daily_connections_sent || 0,
+          dailyMessagesSent:
+            dailyUsageResponse.data.daily_messages_sent || 0,
           dailyLimit: dailyUsageResponse.data.daily_limit || 20,
           effectiveLimit: dailyUsageResponse.data.effective_limit || 20,
           remaining: dailyUsageResponse.data.remaining || 20,
@@ -580,6 +586,7 @@ export default function CampaignDetailsPage() {
                 <CardContent>
                   <DailyProgress
                     dailyConnectionsSent={dailyUsage.dailyConnectionsSent}
+                    dailyMessagesSent={dailyUsage.dailyMessagesSent}
                     dailyLimit={dailyUsage.dailyLimit}
                     effectiveLimit={dailyUsage.effectiveLimit}
                   />
@@ -810,21 +817,22 @@ export default function CampaignDetailsPage() {
                   All leads associated with this campaign
                 </CardDescription>
               </div>
-              <Dialog open={showUploadModal} onOpenChange={setShowUploadModal}>
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-zinc-800 bg-zinc-900 text-zinc-100 hover:bg-zinc-800"
+                onClick={() => setShowUploadModal(true)}
+              >
+                <Icons.Download className="mr-2 h-4 w-4 rotate-180" />
+                Import Connections (CSV)
+              </Button>
+              <Dialog open={showUploadModal} onOpenChange={(open) => {
+                setShowUploadModal(open);
+                if (!open) { setUploadStatus(null); setUploadFile(null); }
+              }}>
                 <DialogContent
                   className={`${zincDialogContentClassName} sm:max-w-[680px]`}
                 >
-                  <div className="mb-4 flex justify-center">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="border-zinc-800 bg-zinc-900 text-zinc-100 hover:bg-zinc-800"
-                      onClick={() => setShowUploadModal(true)}
-                    >
-                      <Icons.Download className="mr-2 h-4 w-4 rotate-180" />
-                      Import Connections (CSV)
-                    </Button>
-                  </div>
                   <DialogHeader className={zincDialogHeaderClassName}>
                     <DialogTitle>Import Connections (CSV)</DialogTitle>
                     <DialogDescription>
@@ -857,13 +865,6 @@ export default function CampaignDetailsPage() {
                         }
                       }}
                     />
-                    {uploadStatus && !uploadStatus.success && (
-                      <Alert variant="destructive">
-                        <AlertDescription>
-                          {uploadStatus.message}
-                        </AlertDescription>
-                      </Alert>
-                    )}
                   </div>
                   {uploadStatus && (
                     <Alert

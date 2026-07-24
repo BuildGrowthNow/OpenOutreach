@@ -46,11 +46,11 @@ export function CampaignStats({ stats, className }: CampaignStatsProps) {
   };
 
   const formatErrorStats = () => {
-    const warnings = stats.rate_limit_warnings ?? 0;
-    if (warnings === 0) {
-      return "No warnings";
+    const errors = stats.errors ?? 0;
+    if (errors === 0) {
+      return "No errors";
     }
-    return `${warnings} warning${warnings !== 1 ? 's' : ''}`;
+    return `${errors} task${errors !== 1 ? 's' : ''} failed`;
   };
 
   return (
@@ -78,7 +78,7 @@ export function CampaignStats({ stats, className }: CampaignStatsProps) {
           color="purple"
         />
         <StatCard
-          title="Error Rate"
+          title="Errors"
           value={`${stats.errors ?? 0}`}
           subtitle={formatErrorStats()}
           icon={<Icons.AlertTriangle className="h-4 w-4 text-amber-500" />}
