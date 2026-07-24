@@ -341,33 +341,31 @@ class RemoteDaemon:
         proxy_password = profile_details.get("proxy_password")
 
         logger.info("Launching %s (channel: %s)", self.browser.name, self.browser.channel)
-        (
-            self.session.page,
-            self.session.context,
-            self.session.browser,
-            self.session.playwright,
-        ) = self._launch_browser_with_channel(
-            storage_state,
-            self.browser.channel,
-            proxy_server,
-            proxy_username,
-            proxy_password,
-        )
 
-        try:
-            # Authenticate if no valid session
+        # sync_playwright() cannot run inside an asyncio event loop — run in a thread
+        def _launch_and_auth():
+            page, context, browser, playwright = self._launch_browser_with_channel(
+                storage_state,
+                self.browser.channel,
+                proxy_server,
+                proxy_username,
+                proxy_password,
+            )
+            self.session.page = page
+            self.session.context = context
+            self.session.browser = browser
+            self.session.playwright = playwright
+
             if not storage_state:
                 self.session.linkedin_profile.linkedin_username = creds["email"]
                 self.session.linkedin_profile.linkedin_password = creds["password"]
                 authenticate(self.session, username=creds["email"], password=creds["password"])
-                await self._sync_cookies()
+                # Return fresh cookies so the async caller can sync them
+                return context.storage_state()
+            return None
 
-            await self.client.report_session_state(
-                linkedin_profile_id=self.linkedin_profile_id,
-                is_logged_in=True,
-            )
-            logger.info("Logged in to LinkedIn")
-
+        try:
+            fresh_state = await asyncio.to_thread(_launch_and_auth)
         except Exception as e:
             logger.error("Login failed: %s", e)
             if "verification" in str(e).lower() or "challenge" in str(e).lower():
@@ -377,9 +375,18 @@ class RemoteDaemon:
                     requires_verification=True,
                     verification_type="challenge",
                 )
-                # Desktop daemon can show challenge directly in local browser
                 self._show_verification_notification(is_desktop=True)
             raise
+
+        if fresh_state:
+            cookie_json = json.dumps(fresh_state)
+            await self.client.sync_cookies(self.linkedin_profile_id, cookie_json)
+
+        await self.client.report_session_state(
+            linkedin_profile_id=self.linkedin_profile_id,
+            is_logged_in=True,
+        )
+        logger.info("Logged in to LinkedIn")
 
     async def _heartbeat_loop(self):
         """Send periodic heartbeats to backend."""
@@ -568,13 +575,14 @@ class RemoteDaemon:
 
         Sends cookie data as JSON string (NOT encrypted).
         The backend API handles encryption before storing in LinkedInProfile.cookie_data_encrypted.
+        storage_state() is a sync Playwright call — run in a thread.
         """
         if not self.session or not self.session.context:
             return
         try:
-            state = self.session.context.storage_state()
+            context = self.session.context
+            state = await asyncio.to_thread(context.storage_state)
             cookie_json = json.dumps(state)
-            # Send plaintext - API will encrypt before storing
             await self.client.sync_cookies(self.linkedin_profile_id, cookie_json)
         except Exception as e:
             logger.warning("Cookie sync failed: %s", e)
