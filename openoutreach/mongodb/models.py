@@ -339,20 +339,28 @@ class Lead:
 
         If update_fields is given, only those fields are written (partial update).
         """
+        from pymongo.errors import DuplicateKeyError
+
         collection = get_mongodb_collection("leads")
         if collection is None:
             raise RuntimeError("MongoDB collection 'leads' not available")
 
         self.update_date = datetime.now(tz.utc)
 
-        if update_fields:
-            field_map = self.to_dict()
-            update_doc = {f: field_map[f] for f in update_fields if f in field_map}
-            update_doc["update_date"] = self.update_date
-            collection.update_one({"_id": self._id}, {"$set": update_doc}, upsert=True)
-        else:
-            doc = self.to_dict()
-            collection.update_one({"_id": self._id}, {"$set": doc}, upsert=True)
+        try:
+            if update_fields:
+                field_map = self.to_dict()
+                update_doc = {f: field_map[f] for f in update_fields if f in field_map}
+                update_doc["update_date"] = self.update_date
+                collection.update_one({"_id": self._id}, {"$set": update_doc}, upsert=True)
+            else:
+                doc = self.to_dict()
+                collection.update_one({"_id": self._id}, {"$set": doc}, upsert=True)
+        except DuplicateKeyError:
+            # Concurrent insert on public_identifier — load the winner's _id
+            existing = collection.find_one({"public_identifier": self.public_identifier})
+            if existing:
+                self._id = str(existing["_id"])
         return self._id
 
     @classmethod
@@ -1460,22 +1468,23 @@ class UserProfile:
     
     def save(self) -> str:
         """Save the user profile to MongoDB."""
+        from pymongo.errors import DuplicateKeyError
+
         collection = get_mongodb_collection("user_profiles")
         if collection is None:
             raise RuntimeError("MongoDB collection 'user_profiles' not available")
-        
-        # Update the updated_at timestamp
+
         self.updated_at = datetime.now(tz.utc)
         doc = self.to_dict()
-        
-        # Remove _id from the document when updating to avoid immutable field error
         doc.pop("_id", None)
-        
-        result = collection.update_one(
-            {"user_id": self.user_id}, 
-            {"$set": doc}, 
-            upsert=True
-        )
+
+        try:
+            result = collection.update_one({"user_id": self.user_id}, {"$set": doc}, upsert=True)
+        except DuplicateKeyError:
+            existing = collection.find_one({"user_id": self.user_id})
+            if existing:
+                self._id = str(existing["_id"])
+            return self._id
         return str(result.upserted_id or self._id)
     
     @classmethod
@@ -2151,12 +2160,20 @@ class LeadPersona:
 
     def save(self) -> str:
         """Save the lead persona to MongoDB."""
+        from pymongo.errors import DuplicateKeyError
+
         collection = get_mongodb_collection("lead_personas")
         if collection is None:
             raise RuntimeError("MongoDB collection 'lead_personas' not available")
 
         doc = self.to_dict()
-        result = collection.update_one({"_id": self._id}, {"$set": doc}, upsert=True)
+        try:
+            result = collection.update_one({"_id": self._id}, {"$set": doc}, upsert=True)
+        except DuplicateKeyError:
+            existing = collection.find_one({"lead_id": self.lead_id, "campaign_id": self.campaign_id})
+            if existing:
+                self._id = str(existing["_id"])
+            return self._id
         return str(result.upserted_id or self._id)
 
     @classmethod
@@ -4160,12 +4177,20 @@ class SiteConfig:
 
     def save(self) -> str:
         """Save the site config to MongoDB."""
+        from pymongo.errors import DuplicateKeyError
+
         collection = get_mongodb_collection("site_config")
         if collection is None:
             raise RuntimeError("MongoDB collection 'site_config' not available")
 
         doc = self.to_dict()
-        result = collection.update_one({"_id": self._id}, {"$set": doc}, upsert=True)
+        try:
+            result = collection.update_one({"_id": self._id}, {"$set": doc}, upsert=True)
+        except DuplicateKeyError:
+            existing = collection.find_one({"user_id": self.user_id})
+            if existing:
+                self._id = str(existing["_id"])
+            return self._id
         return str(result.upserted_id or self._id)
 
     @classmethod

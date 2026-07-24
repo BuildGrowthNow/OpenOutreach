@@ -274,17 +274,25 @@ class LinkedInProfile:
 
     def save(self, update_fields: Optional[list] = None) -> str:
         """Save the profile to MongoDB. If update_fields given, partial update only."""
+        from pymongo.errors import DuplicateKeyError
+
         collection = get_mongodb_collection("linkedin_profiles")
         if collection is None:
             raise RuntimeError("MongoDB collection 'linkedin_profiles' not available")
 
-        if update_fields:
-            field_map = self.to_dict()
-            update_doc = {f: field_map[f] for f in update_fields if f in field_map}
-            collection.update_one({"_id": self._id}, {"$set": update_doc}, upsert=True)
-        else:
-            doc = self.to_dict()
-            collection.update_one({"_id": self._id}, {"$set": doc}, upsert=True)
+        try:
+            if update_fields:
+                field_map = self.to_dict()
+                update_doc = {f: field_map[f] for f in update_fields if f in field_map}
+                collection.update_one({"_id": self._id}, {"$set": update_doc}, upsert=True)
+            else:
+                doc = self.to_dict()
+                collection.update_one({"_id": self._id}, {"$set": doc}, upsert=True)
+        except DuplicateKeyError:
+            if self.linkedin_username:
+                existing = collection.find_one({"linkedin_username": self.linkedin_username})
+                if existing:
+                    self._id = str(existing["_id"])
         return self._id
 
     @classmethod
@@ -431,12 +439,20 @@ class SearchKeyword:
 
     def save(self) -> str:
         """Save the keyword to MongoDB."""
+        from pymongo.errors import DuplicateKeyError
+
         collection = get_mongodb_collection("search_keywords")
         if collection is None:
             raise RuntimeError("MongoDB collection 'search_keywords' not available")
 
         doc = self.to_dict()
-        result = collection.update_one({"_id": self._id}, {"$set": doc}, upsert=True)
+        try:
+            result = collection.update_one({"_id": self._id}, {"$set": doc}, upsert=True)
+        except DuplicateKeyError:
+            existing = collection.find_one({"campaign_id": self.campaign_id, "keyword": self.keyword})
+            if existing:
+                self._id = str(existing["_id"])
+            return self._id
         return str(result.upserted_id or self._id)
 
     @classmethod

@@ -68,11 +68,19 @@ class ChatMessage:
         )
 
     def save(self) -> str:
+        from pymongo.errors import DuplicateKeyError
+
         collection = get_mongodb_collection("chat_messages")
         if collection is None:
             raise RuntimeError("MongoDB collection 'chat_messages' not available")
         doc = self.to_dict()
-        result = collection.update_one({"_id": self._id}, {"$set": doc}, upsert=True)
+        try:
+            result = collection.update_one({"_id": self._id}, {"$set": doc}, upsert=True)
+        except DuplicateKeyError:
+            existing = collection.find_one({"deal_id": self.deal_id, "linkedin_urn": self.linkedin_urn})
+            if existing:
+                self._id = str(existing["_id"])
+            return self._id
         return str(result.upserted_id or self._id)
 
     @classmethod
@@ -564,11 +572,19 @@ class SearchKeyword:
         )
 
     def save(self) -> str:
+        from pymongo.errors import DuplicateKeyError
+
         collection = get_mongodb_collection("search_keywords")
         if collection is None:
             raise RuntimeError("MongoDB collection 'search_keywords' not available")
         doc = self.to_dict()
-        result = collection.update_one({"_id": self._id}, {"$set": doc}, upsert=True)
+        try:
+            result = collection.update_one({"_id": self._id}, {"$set": doc}, upsert=True)
+        except DuplicateKeyError:
+            existing = collection.find_one({"campaign_id": self.campaign_id, "keyword": self.keyword})
+            if existing:
+                self._id = str(existing["_id"])
+            return self._id
         return str(result.upserted_id or self._id)
 
     @classmethod

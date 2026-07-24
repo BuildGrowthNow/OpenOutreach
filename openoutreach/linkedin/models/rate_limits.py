@@ -105,13 +105,20 @@ class SmartRateLimitContext:
 
     def save(self) -> str:
         """Save to MongoDB."""
+        from pymongo.errors import DuplicateKeyError
+
         collection = get_mongodb_collection("smart_rate_limit_contexts")
         if collection is None:
             raise RuntimeError("MongoDB collection not available")
 
         self.updated_at = datetime.now(tz.utc)
         doc = self.to_dict()
-        collection.update_one({"_id": self._id}, {"$set": doc}, upsert=True)
+        try:
+            collection.update_one({"_id": self._id}, {"$set": doc}, upsert=True)
+        except DuplicateKeyError:
+            existing = collection.find_one({"linkedin_profile_id": self.linkedin_profile_id})
+            if existing:
+                self._id = str(existing["_id"])
         return self._id
 
     @classmethod
