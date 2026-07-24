@@ -29,6 +29,8 @@ if version_file.exists():
 # Data files to include
 datas = [
     (str(ASSETS_DIR), "openoutreach/desktop/assets"),
+    (str(PROJECT_ROOT / "linkedin_cli"), "linkedin_cli"),
+    (str(PROJECT_ROOT / "openoutreach"), "openoutreach"),
 ]
 
 # Platform-specific hidden imports
@@ -37,15 +39,58 @@ hiddenimports = [
     "pystray._win32" if sys.platform == "win32" else "pystray._darwin",
     "PIL._tkinter_finder",
     "zoneinfo",
+    # Desktop app modules
     "openoutreach.desktop.__version__",
     "openoutreach.desktop.app",
     "openoutreach.desktop.auth",
     "openoutreach.desktop.config",
     "openoutreach.desktop.updater",
     "openoutreach.desktop.protocol_handler",
+    # Daemon core
     "openoutreach.core.daemon_remote",
     "openoutreach.core.remote_client",
     "openoutreach.core.browser_detect",
+    "openoutreach.core.scheduler",
+    "openoutreach.core.models",
+    "openoutreach.core.conf",
+    # LinkedIn automation (runs locally on user's browser)
+    "linkedin_cli",
+    "linkedin_cli.auth",
+    "linkedin_cli.conf",
+    "linkedin_cli.actions",
+    "linkedin_cli.actions.search",
+    "linkedin_cli.actions.connect",
+    "linkedin_cli.browser",
+    "linkedin_cli.exceptions",
+    "playwright",
+    "playwright.sync_api",
+    "playwright_stealth",
+    # MongoDB (task queue, rate limiting)
+    "pymongo",
+    "pymongo.errors",
+    "bson",
+    # OpenOutreach models
+    "openoutreach.mongodb",
+    "openoutreach.mongodb.connection",
+    "openoutreach.mongodb.models",
+    "openoutreach.mongodb.models_extended",
+    "openoutreach.linkedin.models",
+    "openoutreach.linkedin.tasks",
+    "openoutreach.linkedin.tasks.connect",
+    "openoutreach.linkedin.tasks.check_pending",
+    "openoutreach.linkedin.tasks.follow_up",
+    "openoutreach.linkedin.tasks.send_manual_message",
+    "openoutreach.linkedin.pipeline",
+    "openoutreach.linkedin.pipeline.search",
+    "openoutreach.linkedin.pipeline.search_keywords",
+    "openoutreach.linkedin.pipeline.qualify",
+    "openoutreach.linkedin.pipeline.pools",
+    "openoutreach.linkedin.db",
+    "openoutreach.linkedin.ml",
+    "openoutreach.crm",
+    "openoutreach.crm.models",
+    "openoutreach.crm.models.deal",
+    # HTTP / networking
     "httpx",
     "httpx._transports",
     "httpx._transports.default",
@@ -62,16 +107,16 @@ hiddenimports = [
     "webview.platforms.winforms" if sys.platform == "win32" else "webview.platforms.cocoa",
     "clr",
     "pythonnet",
+    # LLM (for keyword generation)
+    "pydantic_ai",
+    "jinja2",
 ]
 
-# Packages to completely exclude (heavy/unused)
+# Packages to completely exclude (heavy/unused in desktop context)
 excludes = [
-    "playwright",
     "matplotlib",
-    "numpy",
     "pandas",
     "scipy",
-    "sklearn",
     "tensorflow",
     "torch",
     "tkinter",
@@ -85,13 +130,11 @@ excludes = [
     "ruff",
     "mypy",
     "pyright",
-    "pymongo",
     "motor",
     "beanie",
     "uvicorn",
     "fastapi",
     "starlette",
-    "linkedin_cli",
 ]
 
 a = Analysis(

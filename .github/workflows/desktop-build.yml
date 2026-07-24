@@ -24,7 +24,10 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install -r desktop/requirements.txt
+        run: |
+          pip install -r requirements/base.txt
+          pip install -r desktop/requirements.txt
+          pip install playwright playwright-stealth
 
       - name: Generate icons
         run: |
@@ -70,7 +73,10 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install -r desktop/requirements.txt
+        run: |
+          pip install -r requirements/base.txt
+          pip install -r desktop/requirements.txt
+          pip install playwright playwright-stealth
 
       - name: Build Windows exe
         run: python desktop/build.py
