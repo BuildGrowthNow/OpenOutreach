@@ -1016,7 +1016,7 @@ async def get_campaign_activity(
                 "status": log.get("status", "completed"),
                 "error": log.get("error_message") or None,
                 "durationMs": log.get("duration_ms"),
-                "timestamp": log["created_at"].isoformat() if log.get("created_at") else "",
+                "timestamp": (log["created_at"].isoformat() + "Z") if log.get("created_at") else "",
                 "details": log.get("details"),
             })
     else:

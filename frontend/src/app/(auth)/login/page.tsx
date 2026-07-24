@@ -22,7 +22,15 @@ export default function LoginPage() {
       if (isDesktop && callback) {
         let url = `${callback}?token=${accessToken}`
         if (refreshToken) url += `&refresh_token=${encodeURIComponent(refreshToken)}`
-        window.location.href = url
+
+        // Call pywebview API directly if available (avoids OS protocol launch)
+        const pywebview = (window as unknown as Record<string, unknown>).pywebview as
+          { api?: { handle_lengrowth_url?: (u: string) => void } } | undefined
+        if (pywebview?.api?.handle_lengrowth_url) {
+          pywebview.api.handle_lengrowth_url(url)
+        } else {
+          window.location.href = url
+        }
         return
       }
     }
