@@ -182,61 +182,57 @@ class RemoteDaemon:
 
         logger.info("Starting browser session...")
 
-        # Initialize MongoDB connection (required for rate limiting)
-        from openoutreach.mongodb.connection import initialize_mongodb_connection
-        if not initialize_mongodb_connection():
-            logger.warning("MongoDB connection failed - rate limiting will be bypassed")
-
         creds = await self.client.get_credentials(self.linkedin_profile_id)
 
-        # Load the real LinkedInProfile from database for rate limiting
-        from openoutreach.linkedin.models import LinkedInProfile as RealLinkedInProfile
+        # Fetch proxy config from backend — no local MongoDB required
+        profile_details = await self.client.get_profile_details(self.linkedin_profile_id)
 
-        real_profile = RealLinkedInProfile.get(self.linkedin_profile_id)
-        if not real_profile:
-            raise RuntimeError(f"LinkedIn profile {self.linkedin_profile_id} not found in database")
+        # Daily limits come from the config already loaded from the API
+        connect_daily_limit = self.config.daily_connect_limit if self.config else 50
+        follow_up_daily_limit = self.config.daily_message_limit if self.config else 30
 
-        # Create mock wrapper that delegates to real profile for rate limiting
+        # Create self-contained mock profile — no local DB delegation
         class MockLinkedInProfile:
-            def __init__(self, profile_id: str, real_profile: RealLinkedInProfile):
+            def __init__(self, profile_id: str, _connect_limit: int, _follow_up_limit: int):
                 self._id = profile_id
                 self.linkedin_username = ""
                 self.linkedin_password = ""
                 self._cookie_data_json = None
                 self.user = None
-                self._real_profile = real_profile
+                self._connect_daily_limit = _connect_limit
+                self._follow_up_daily_limit = _follow_up_limit
+                self._exhausted: dict = {}
 
             def refresh_from_db(self, fields: Optional[list] = None):
-                """Refresh from database."""
-                self._real_profile.refresh_from_db(fields=fields)
+                pass
 
             def save(self, update_fields: Optional[list] = None):
-                """Save to database."""
-                self._real_profile.save(update_fields=update_fields)
+                pass
 
             def can_execute(self, action_type: str) -> bool:
-                """Delegate to real profile for rate limit checks."""
-                return self._real_profile.can_execute(action_type)
+                from datetime import date
+                exhausted_date = self._exhausted.get(action_type)
+                if exhausted_date is not None and exhausted_date == date.today():
+                    return False
+                return True
 
             def record_action(self, action_type: str, campaign, details: Optional[dict] = None):
-                """Delegate to real profile for action logging."""
-                self._real_profile.record_action(action_type, campaign, details)
+                pass
 
             def mark_exhausted(self, action_type: str):
-                """Delegate to real profile."""
-                self._real_profile.mark_exhausted(action_type)
+                from datetime import date
+                self._exhausted[action_type] = date.today()
 
             @property
             def connect_daily_limit(self):
-                return self._real_profile.connect_daily_limit
+                return self._connect_daily_limit
 
             @property
             def follow_up_daily_limit(self):
-                return self._real_profile.follow_up_daily_limit
+                return self._follow_up_daily_limit
 
             @property
             def cookie_data(self):
-                """Return parsed cookie dict from JSON string."""
                 if not self._cookie_data_json:
                     return None
                 try:
@@ -246,7 +242,6 @@ class RemoteDaemon:
 
             @cookie_data.setter
             def cookie_data(self, value):
-                """Store cookie dict as JSON string."""
                 if value is None:
                     self._cookie_data_json = None
                 else:
@@ -254,15 +249,14 @@ class RemoteDaemon:
 
         # Create mock session object for linkedin_cli compatibility
         class RemoteSession:
-            def __init__(self, profile_id: str, real_profile: RealLinkedInProfile):
-                self.linkedin_profile = MockLinkedInProfile(profile_id, real_profile)
+            def __init__(self, profile_id: str, _connect_limit: int, _follow_up_limit: int):
+                self.linkedin_profile = MockLinkedInProfile(profile_id, _connect_limit, _follow_up_limit)
                 self.page: Any = None
                 self.context: Any = None
                 self.browser: Any = None
                 self.playwright: Any = None
                 self.campaign: Optional[Any] = None  # Set before task execution
-                # Load user from the real profile (lazy loaded via property)
-                self.user: Optional[Any] = real_profile.user
+                self.user: Optional[Any] = None  # Set per-task in _execute_task
 
             def close(self):
                 if self.context and hasattr(self.context, "close"):
@@ -276,7 +270,7 @@ class RemoteDaemon:
                 """Compatibility method for task handlers."""
                 pass
 
-        self.session = RemoteSession(self.linkedin_profile_id, real_profile)
+        self.session = RemoteSession(self.linkedin_profile_id, connect_daily_limit, follow_up_daily_limit)
 
         # Load saved cookies if available
         # API returns cookie_data as JSON string (already decrypted)
@@ -293,10 +287,10 @@ class RemoteDaemon:
         if not self.browser:
             raise BrowserNotFoundError("Browser not detected")
 
-        # Extract proxy configuration from profile
-        proxy_server = real_profile.proxy_server
-        proxy_username = real_profile.proxy_username
-        proxy_password = real_profile.proxy_password
+        # Extract proxy configuration from backend profile details
+        proxy_server = profile_details.get("proxy_server")
+        proxy_username = profile_details.get("proxy_username")
+        proxy_password = profile_details.get("proxy_password")
 
         logger.info("Launching %s (channel: %s)", self.browser.name, self.browser.channel)
         (
