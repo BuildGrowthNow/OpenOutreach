@@ -953,13 +953,6 @@ export default function CampaignDetailsPage() {
                 </CardContent>
               </Card>
 
-              {/* Additional analytics content would go here */}
-              <div className="text-center py-12">
-                <p className="text-muted-foreground">
-                  Advanced analytics charts and visualizations will be
-                  implemented in Phase 6
-                </p>
-              </div>
             </div>
           ) : (
             <div className="text-center py-12">

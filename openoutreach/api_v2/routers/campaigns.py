@@ -598,6 +598,21 @@ async def pause_campaign(
             {"$set": {"status": "paused", "is_paused": True}}
         )
 
+        # Cancel all pending tasks for this campaign so the daemon doesn't
+        # claim them and fail with "campaign not found or inactive".
+        tasks_collection = get_mongodb_collection("tasks")
+        if tasks_collection is not None:
+            cancelled = tasks_collection.update_many(
+                {"payload.campaign_id": campaign_id, "status": "pending"},
+                {"$set": {"status": "cancelled"}},
+            )
+            if cancelled.modified_count:
+                logger.info(
+                    "Cancelled %d pending tasks for paused campaign %s",
+                    cancelled.modified_count,
+                    campaign_id,
+                )
+
         # Fetch updated campaign
         updated_campaign = models.Campaign.get(campaign_id)
         if updated_campaign is None:
@@ -815,14 +830,33 @@ async def get_campaign_leads(
     for deal in deals:
         lead_data = leads_data.get(str(deal["lead_id"]))
         if lead_data:
+            # Extract display fields from cached_profile (Voyager response shape)
+            cp = lead_data.get("cached_profile") or {}
+            profile_inner = cp.get("profile", cp)  # support both flat and nested shapes
+            first = profile_inner.get("firstName", "") or cp.get("first_name", "")
+            last = profile_inner.get("lastName", "") or cp.get("last_name", "")
+            full_name = (
+                lead_data.get("full_name")
+                or (f"{first} {last}".strip() or None)
+            )
+            headline = (
+                lead_data.get("headline")
+                or profile_inner.get("headline")
+                or cp.get("headline")
+            )
+            location = (
+                lead_data.get("location")
+                or profile_inner.get("locationName")
+                or cp.get("location")
+            )
             results.append({
                 "lead": LeadResponse(
                     id=str(lead_data["_id"]),
                     public_identifier=lead_data.get("public_identifier", ""),
-                    url=lead_data.get("url", ""),
-                    full_name=lead_data.get("full_name"),
-                    headline=lead_data.get("headline"),
-                    location=lead_data.get("location"),
+                    url=lead_data.get("linkedin_url", lead_data.get("url", "")),
+                    full_name=full_name,
+                    headline=headline,
+                    location=location,
                     disqualified=lead_data.get("disqualified", False),
                     created_at=lead_data.get("creation_date").isoformat() if lead_data.get("creation_date") else None,
                 ),

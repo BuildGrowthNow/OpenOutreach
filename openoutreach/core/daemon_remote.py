@@ -327,6 +327,10 @@ class RemoteDaemon:
                 self._exhausted[action_type] = date.today()
 
             @property
+            def pk(self):
+                return self._id
+
+            @property
             def connect_daily_limit(self):
                 return self._connect_daily_limit
 
@@ -594,7 +598,9 @@ class RemoteDaemon:
 
         campaign = Campaign.get(campaign_id)
         if not campaign or campaign.status != Campaign.Status.ACTIVE:
-            raise ValueError(f"Campaign {campaign_id} not found or inactive")
+            logger.info("Skipping task — campaign %s is not active (status=%s)",
+                        campaign_id, campaign.status if campaign else "not found")
+            return None
 
         # Verify session is initialized
         if not self.session:

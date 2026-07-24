@@ -1230,12 +1230,23 @@ class Deal:
 
     def save(self) -> str:
         """Save the deal to MongoDB."""
+        from pymongo.errors import DuplicateKeyError
+
         collection = get_mongodb_collection("deals")
         if collection is None:
             raise RuntimeError("MongoDB collection 'deals' not available")
 
         doc = self.to_dict()
-        result = collection.update_one({"_id": self._id}, {"$set": doc}, upsert=True)
+        try:
+            result = collection.update_one({"_id": self._id}, {"$set": doc}, upsert=True)
+        except DuplicateKeyError:
+            # (lead_id, campaign_id) already exists from a concurrent insert — load it
+            existing = collection.find_one(
+                {"lead_id": self.lead_id, "campaign_id": self.campaign_id}
+            )
+            if existing:
+                self._id = str(existing["_id"])
+            return self._id
         return str(result.upserted_id or self._id)
 
     @classmethod
