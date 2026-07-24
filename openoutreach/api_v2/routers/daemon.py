@@ -292,6 +292,8 @@ async def get_daemon_config(
     # Parse active days string to list
     active_days = [int(d.strip()) for d in config.active_days.split(",") if d.strip()]
 
+    from openoutreach.config import settings as app_settings
+
     return {
         "rate_limits": {
             "velocity": config.velocity,
@@ -308,6 +310,8 @@ async def get_daemon_config(
         },
         "poll_interval_seconds": 30,
         "heartbeat_interval_seconds": 30,
+        "mongodb_uri": app_settings.MONGODB_URI or None,
+        "mongodb_name": app_settings.MONGODB_NAME,
     }
 
 

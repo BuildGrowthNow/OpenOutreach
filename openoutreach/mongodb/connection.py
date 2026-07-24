@@ -5,7 +5,7 @@ This module provides a singleton MongoDB connection handler for FastAPI + MongoD
 """
 
 import logging
-from typing import Optional, Any, Dict, Type, TypeVar
+from typing import Optional, TypeVar
 from pymongo import MongoClient
 from pymongo.collection import Collection
 from pymongo.database import Database
@@ -275,3 +275,30 @@ def initialize_mongodb_connection() -> bool:
     except Exception as e:
         logger.error(f"Failed to initialize MongoDB connection: {e}")
     return False
+
+
+def initialize_mongodb_with_uri(uri: str, db_name: str = "openoutreach") -> bool:
+    """Connect using an explicit URI, bypassing environment/settings lookup.
+
+    Used by the desktop daemon which receives the Atlas URI from the backend
+    API instead of from a local .env file.
+    """
+    if mongodb_connection._client is not None:
+        return True
+    try:
+        from pymongo import MongoClient
+        client = MongoClient(
+            uri,
+            serverSelectionTimeoutMS=30000,
+            connectTimeoutMS=30000,
+            socketTimeoutMS=10000,
+        )
+        client.admin.command("ping")
+        mongodb_connection._client = client
+        mongodb_connection._database = client[db_name]
+        mongodb_connection._initialized = True
+        logger.info("MongoDB connected via provided URI (db: %s)", db_name)
+        return True
+    except Exception as e:
+        logger.error("MongoDB connection failed: %s", e)
+        return False

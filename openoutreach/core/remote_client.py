@@ -32,6 +32,8 @@ class DaemonConfig:
     active_days: list[int]
     poll_interval_seconds: int
     heartbeat_interval_seconds: int
+    mongodb_uri: Optional[str] = None
+    mongodb_name: str = "openoutreach"
 
 
 @dataclass
@@ -122,6 +124,8 @@ class RemoteClient:
             active_days=data["active_hours"]["days"],
             poll_interval_seconds=data["poll_interval_seconds"],
             heartbeat_interval_seconds=data["heartbeat_interval_seconds"],
+            mongodb_uri=data.get("mongodb_uri"),
+            mongodb_name=data.get("mongodb_name", "openoutreach"),
         )
 
     async def reconcile(self, linkedin_profile_id: str) -> dict:

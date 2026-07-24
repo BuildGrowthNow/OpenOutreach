@@ -137,9 +137,20 @@ class RemoteDaemon:
             )
         logger.info("Using browser: %s", self.browser.name)
 
-        # Fetch config
+        # Fetch config (includes Atlas URI for desktop MongoDB bootstrap)
         self.config = await self.client.get_config(self.linkedin_profile_id)
         logger.info("Config loaded: velocity=%d/hr", self.config.velocity)
+
+        # Connect to Atlas using the URI provided by the backend
+        if self.config.mongodb_uri:
+            from openoutreach.mongodb.connection import initialize_mongodb_with_uri
+            ok = initialize_mongodb_with_uri(self.config.mongodb_uri, self.config.mongodb_name)
+            if ok:
+                logger.info("MongoDB Atlas connected (db: %s)", self.config.mongodb_name)
+            else:
+                logger.warning("MongoDB Atlas connection failed — task execution may be degraded")
+        else:
+            logger.warning("No MongoDB URI in config — task execution will fail")
 
         # Schedule tasks for active campaigns
         try:
