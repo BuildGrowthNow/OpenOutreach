@@ -13,6 +13,7 @@ import { useDashboard } from '@/hooks/use-dashboard'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { getAnalyticsOverview, AnalyticsOverviewResponse, RecentActivityEntry } from '@/lib/api/dashboard'
+import { QuickStats } from '@/components/dashboard/quick-stats'
 
 function toActivityItems(entries: RecentActivityEntry[]) {
   return entries.map((e) => {
@@ -203,8 +204,8 @@ const Dashboard = () => {
         </div>
       )}
 
-      {/* Pipeline + Activity */}
-      <div className="grid gap-6 md:grid-cols-2">
+      {/* Pipeline + Activity + Quick Stats */}
+      <div className="grid gap-6 lg:grid-cols-3 md:grid-cols-1">
         {overviewLoading ? (
           <Card>
             <CardHeader><Skeleton className="h-5 w-32" /></CardHeader>
@@ -226,6 +227,47 @@ const Dashboard = () => {
 
         <RecentActivity
           items={recentActivityLoading ? [] : toActivityItems(recentActivity)}
+        />
+
+        <QuickStats
+          items={overviewLoading ? [] : [
+            {
+              label: 'Accept Rate',
+              value: acceptRate,
+              sub: `${connectionsAccepted} of ${connectionsSent} sent`,
+              highlight: connectionsAccepted > 0 ? 'green' : 'neutral',
+            },
+            {
+              label: 'Reply Rate',
+              value: replyRate,
+              sub: `${messagesReplied} of ${messagesSent} messages`,
+              highlight: messagesReplied > 0 ? 'green' : 'neutral',
+            },
+            {
+              label: 'Connection Rate',
+              value: connectionRate,
+              sub: `${connected} connected`,
+              highlight: connected > 0 ? 'green' : 'neutral',
+            },
+            {
+              label: 'Active Campaigns',
+              value: campaigns.length,
+              sub: 'running now',
+              highlight: campaigns.length > 0 ? 'green' : 'neutral',
+            },
+            {
+              label: 'Total Leads',
+              value: totalLeads,
+              sub: 'all campaigns, 30 days',
+              highlight: totalLeads > 0 ? 'neutral' : 'neutral',
+            },
+            {
+              label: 'Connections Sent',
+              value: connectionsSent,
+              sub: '30-day window',
+              highlight: 'neutral',
+            },
+          ]}
         />
       </div>
 

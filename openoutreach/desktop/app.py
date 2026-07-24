@@ -378,7 +378,7 @@ class TrayApp:
             _register_autostart()
         else:
             _unregister_autostart()
-        self._start_update_checker()
+        self._start_periodic_update_checker()
 
     # ------------------------------------------------------------------
     # Daemon
@@ -497,40 +497,42 @@ class TrayApp:
     # Update checker
     # ------------------------------------------------------------------
 
-    def _start_update_checker(self):
-        if self._update_check_thread and self._update_check_thread.is_alive():
-            return
+    def _run_startup_update_check(self) -> None:
+        """Check for updates synchronously before the window opens.
 
-        async def startup_check():
-            """Run once on launch: auto-apply on Windows, notify on other platforms."""
+        On Windows frozen exe: download + replace + restart (app never opens).
+        On other platforms or if download fails: store for tray notification.
+        """
+        async def _check():
             try:
                 info = await check_for_updates()
                 if not info:
                     return
                 if can_auto_update():
-                    logger.info("Update v%s available — downloading automatically", info["version"])
+                    logger.info("Update v%s available — downloading before launch", info["version"])
                     path = await download_update(info["download_url"], version=info["version"])
                     if path:
-                        # apply_update_windows calls os._exit — this point is never reached
+                        # apply_update_windows calls os._exit — app never opens
                         apply_update_windows(path)
                     else:
-                        # Download failed — fall back to tray notification
                         self._pending_update = info
-                        self._update_menu()
-                        if self.icon:
-                            self.icon.notify(f"Update Available: v{info['version']}", "Click the tray icon to download")
                 else:
                     self._pending_update = info
-                    self._update_menu()
-                    if self.icon:
-                        self.icon.notify(f"Update Available: v{info['version']}", "Click the tray icon to download")
             except Exception as e:
                 logger.warning("Startup update check failed: %s", e)
 
+        lp = asyncio.new_event_loop()
+        try:
+            lp.run_until_complete(_check())
+        finally:
+            lp.close()
+
+    def _start_periodic_update_checker(self):
+        """Start the background 6-hour update poll (called from tray setup)."""
+        if self._update_check_thread and self._update_check_thread.is_alive():
+            return
+
         async def periodic_loop():
-            # First iteration: startup check (runs immediately)
-            await startup_check()
-            # Subsequent checks every 6 hours — notify only (user is already running)
             while not self._stopping:
                 await asyncio.sleep(3600 * 6)
                 if self._stopping:
@@ -565,6 +567,17 @@ class TrayApp:
         if pending_protocol_url:
             if handle_protocol_url(pending_protocol_url, self.auth):
                 self._pending_login_notification = True
+
+        # Check for updates before anything else — on Windows this shows a
+        # progress dialog and replaces the exe (os._exit), so the app never opens.
+        self._run_startup_update_check()
+
+        # If we reach here, no update was applied — notify via tray if one was found
+        if self._pending_update and self.icon:
+            self.icon.notify(
+                f"Update Available: v{self._pending_update['version']}",
+                "Click the tray icon to download",
+            )
 
         # Start tray icon in background thread (pystray owns its own loop)
         tray_icon = pystray.Icon(

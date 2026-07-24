@@ -63,10 +63,21 @@ async def check_for_updates() -> Optional[dict]:
             release = response.json()
             tag_name = release["tag_name"]
 
-            # Tags are like "desktop-v1.3.1" — extract semver after the last 'v'
-            latest_version = tag_name.lstrip("v").split("-")[-1].lstrip("v")
+            # Only process desktop release tags (desktop-v1.2.3)
+            if not tag_name.startswith("desktop-v"):
+                logger.debug("Skipping non-desktop release tag: %s", tag_name)
+                return None
 
-            if version.parse(latest_version) > version.parse(__version__):
+            # Extract semver after "desktop-v"
+            latest_version = tag_name[len("desktop-v"):]
+
+            try:
+                is_newer = version.parse(latest_version) > version.parse(__version__)
+            except Exception:
+                logger.debug("Could not parse version from tag %s", tag_name)
+                return None
+
+            if is_newer:
                 assets = release.get("assets", [])
                 expected_name = _get_platform_asset_name()
                 platform_url = None
