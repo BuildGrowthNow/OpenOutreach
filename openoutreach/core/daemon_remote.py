@@ -56,6 +56,7 @@ class RemoteDaemon:
         data_dir: Optional[Path] = None,
         refresh_token: Optional[str] = None,
         on_token_refresh: Optional[Callable[[str], None]] = None,
+        on_started: Optional[Callable[[], None]] = None,
     ):
         self.api_url = api_url
         self.token = token
@@ -63,6 +64,7 @@ class RemoteDaemon:
         self.data_dir = data_dir or self._default_data_dir()
         self.daemon_id = self._get_or_create_daemon_id()
         self.on_token_refresh = on_token_refresh
+        self.on_started = on_started
 
         self.client = RemoteClient(
             api_url, token, self.daemon_id, refresh_token, on_token_refresh=on_token_refresh
@@ -168,6 +170,14 @@ class RemoteDaemon:
 
         if not self._check_subscription_status(sub_status):
             return
+
+        # Notify the tray now that we've passed auth — running=True was set at the
+        # top of start(), but the tray menu was built before that so it showed Stopped.
+        if self.on_started:
+            try:
+                self.on_started()
+            except Exception:
+                pass
 
         # Detect browser
         self.browser = get_preferred_browser()

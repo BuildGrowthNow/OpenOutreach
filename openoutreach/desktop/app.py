@@ -429,15 +429,19 @@ class TrayApp:
         def run_daemon():
             self._loop = asyncio.new_event_loop()
             asyncio.set_event_loop(self._loop)
+
+            def on_started():
+                # Fires from inside the async start() after subscription check passes
+                self._update_menu()
+
             self.daemon = RemoteDaemon(
                 api_url=self.config.api_url,
                 token=token,
                 linkedin_profile_id=profile_id,
                 refresh_token=refresh_token,
                 on_token_refresh=on_token_refresh,
+                on_started=on_started,
             )
-            # Daemon object is now set — update menu so tray shows "Running"
-            self._update_menu()
             try:
                 self._loop.run_until_complete(self.daemon.start())
             except KeyboardInterrupt:

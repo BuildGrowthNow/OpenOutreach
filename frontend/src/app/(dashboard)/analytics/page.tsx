@@ -22,6 +22,18 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ProgressCard } from "@/components/ui/progress-card";
 import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  Cell,
+  PieChart,
+  Pie,
+  Legend,
+} from "recharts";
+import {
   getAnalyticsOverview,
   getCampaigns,
   type AnalyticsOverviewResponse,
@@ -180,6 +192,41 @@ export default function AnalyticsOverviewPage() {
   const pipeline = overview.pipeline;
   const visibleCampaigns = overview.campaigns;
 
+  const pipelineChartData = [
+    { name: "Qualified", value: pipeline.qualified, fill: "#3b82f6" },
+    { name: "Ready", value: pipeline.ready_to_connect, fill: "#f59e0b" },
+    { name: "Pending", value: pipeline.pending, fill: "#f97316" },
+    { name: "Connected", value: pipeline.connected, fill: "#10b981" },
+    { name: "Completed", value: pipeline.completed, fill: "#8b5cf6" },
+    { name: "Failed", value: pipeline.failed, fill: "#ef4444" },
+    { name: "No Email", value: pipeline.no_email, fill: "#6b7280" },
+  ].filter((d) => d.value > 0);
+
+  const ratesChartData = [
+    {
+      name: "Accept Rate",
+      value: roundTo1Decimal(stats.connectionAcceptRate),
+      fill: "#10b981",
+    },
+    {
+      name: "Response Rate",
+      value: roundTo1Decimal(stats.responseRate),
+      fill: "#3b82f6",
+    },
+    {
+      name: "Conversion Rate",
+      value: roundTo1Decimal(stats.conversionRate),
+      fill: "#8b5cf6",
+    },
+  ];
+
+  const campaignBarData = visibleCampaigns.map((c) => ({
+    name: c.name.length > 14 ? c.name.slice(0, 14) + "…" : c.name,
+    leads: c.stats?.totalLeads || 0,
+    connected: c.stats?.connected || 0,
+    completed: c.stats?.completed || 0,
+  }));
+
   return (
     <div className="space-y-6">
       <Breadcrumb
@@ -303,147 +350,115 @@ export default function AnalyticsOverviewPage() {
 
         <TabsContent value="overview" className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Campaign Performance</CardTitle>
-                <CardDescription>
-                  Live metrics for the selected scope
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {visibleCampaigns.length > 0 ? (
-                  <div className="space-y-3">
-                    {visibleCampaigns.map((campaign) => (
-                      <div
-                        key={campaign.id}
-                        className="flex items-center justify-between p-4 border border-border rounded-lg hover:border-primary/50 hover:bg-accent/30 hover:shadow-sm transition-all duration-200 cursor-pointer group"
-                      >
-                        <div className="flex-1">
-                          <h4 className="font-semibold group-hover:text-primary transition-colors">{campaign.name}</h4>
-                          <p className="text-sm text-muted-foreground line-clamp-1">
-                            {campaign.description || "No description"}
-                          </p>
-                        </div>
-                        <div className="text-right ml-4 flex-shrink-0">
-                          <div className="text-lg font-bold text-primary">
-                            {campaign.stats?.totalLeads || 0}
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            {campaign.stats?.connectionAcceptRate || 0}% accept rate
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <Icons.InboxIcon className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                    <p>No campaigns match the current filter.</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
+            {/* Pipeline donut chart */}
             <Card>
               <CardHeader>
                 <CardTitle>Lead Pipeline</CardTitle>
-                <CardDescription>
-                  Current lead distribution across stages
-                </CardDescription>
+                <CardDescription>Distribution across funnel stages</CardDescription>
               </CardHeader>
               <CardContent>
-                {totals.leads > 0 ||
-                pipeline.completed > 0 ||
-                pipeline.failed > 0 ||
-                pipeline.no_email > 0 ? (
-                  <div className="space-y-3">
-                    {[
-                      {
-                        stage: "Qualified",
-                        count: pipeline.qualified,
-                        color: "bg-blue-500",
-                        icon: Icons.CheckCircle,
-                      },
-                      {
-                        stage: "Ready to Connect",
-                        count: pipeline.ready_to_connect,
-                        color: "bg-amber-500",
-                        icon: Icons.Zap,
-                      },
-                      {
-                        stage: "Pending",
-                        count: pipeline.pending,
-                        color: "bg-orange-500",
-                        icon: Icons.Clock,
-                      },
-                      {
-                        stage: "Connected",
-                        count: pipeline.connected,
-                        color: "bg-emerald-500",
-                        icon: Icons.Link,
-                      },
-                      {
-                        stage: "Completed",
-                        count: pipeline.completed,
-                        color: "bg-purple-500",
-                        icon: Icons.Check,
-                      },
-                      {
-                        stage: "Failed",
-                        count: pipeline.failed,
-                        color: "bg-rose-500",
-                        icon: Icons.AlertCircle,
-                      },
-                      {
-                        stage: "No Email",
-                        count: pipeline.no_email,
-                        color: "bg-slate-500",
-                        icon: Icons.Mail,
-                      },
-                    ]
-                      .filter((item) => item.count > 0)
-                      .map((item) => {
-                        const Icon = item.icon;
-                        return (
-                          <div
-                            key={item.stage}
-                            className="flex items-center space-x-3 p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
-                          >
-                            <Icon className={`h-4 w-4 flex-shrink-0 ${item.color.replace('bg-', 'text-')}`} />
-                            <div className="flex-1 min-w-0">
-                              <div className="flex justify-between items-center mb-1.5">
-                                <span className="text-sm font-medium">{item.stage}</span>
-                                <span className="text-sm font-bold">{item.count}</span>
-                              </div>
-                              <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-                                <div
-                                  className={`h-full ${item.color} transition-all duration-300`}
-                                  style={{
-                                    width: `${totals.leads > 0 ? (item.count / Math.max(totals.leads, item.count)) * 100 : 100}%`,
-                                  }}
-                                />
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                  </div>
+                {pipelineChartData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={260}>
+                    <PieChart>
+                      <Pie
+                        data={pipelineChartData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={95}
+                        paddingAngle={2}
+                        dataKey="value"
+                        label={({ name, value }) => `${name}: ${value}`}
+                        labelLine={false}
+                      >
+                        {pipelineChartData.map((entry, i) => (
+                          <Cell key={i} fill={entry.fill} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(v) => [v, "leads"]} />
+                      <Legend />
+                    </PieChart>
+                  </ResponsiveContainer>
                 ) : (
-                  <div className="text-center py-8">
-                    <p className="text-muted-foreground">
-                      No pipeline data available yet.
-                    </p>
+                  <div className="flex items-center justify-center h-[260px] text-muted-foreground text-sm">
+                    No pipeline data yet
                   </div>
                 )}
               </CardContent>
             </Card>
+
+            {/* Rates bar chart */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Conversion Rates</CardTitle>
+                <CardDescription>Accept · Response · Conversion (%)</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={260}>
+                  <BarChart data={ratesChartData} layout="vertical" margin={{ left: 16, right: 24 }}>
+                    <XAxis type="number" domain={[0, 100]} unit="%" tick={{ fontSize: 11 }} />
+                    <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 12 }} />
+                    <Tooltip formatter={(v) => [`${v}%`]} />
+                    <Bar dataKey="value" radius={[0, 4, 4, 0]} maxBarSize={28}>
+                      {ratesChartData.map((entry, i) => (
+                        <Cell key={i} fill={entry.fill} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
           </div>
+
+          {/* Per-campaign bars — only shown when viewing all campaigns */}
+          {campaignBarData.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Leads per Campaign</CardTitle>
+                <CardDescription>Total leads · Connected · Completed</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={campaignBarData} margin={{ top: 4, right: 16, bottom: 4, left: 0 }}>
+                    <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                    <Tooltip />
+                    <Legend />
+                    <Bar dataKey="leads" name="Leads" fill="#3b82f6" radius={[4, 4, 0, 0]} maxBarSize={36} />
+                    <Bar dataKey="connected" name="Connected" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={36} />
+                    <Bar dataKey="completed" name="Completed" fill="#8b5cf6" radius={[4, 4, 0, 0]} maxBarSize={36} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         <TabsContent value="campaigns" className="space-y-6">
+          {campaignBarData.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Campaign Comparison</CardTitle>
+                <CardDescription>Leads · Connected · Completed by campaign</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={campaignBarData} margin={{ top: 4, right: 16, bottom: 4, left: 0 }}>
+                    <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                    <Tooltip />
+                    <Legend />
+                    <Bar dataKey="leads" name="Leads" fill="#3b82f6" radius={[4, 4, 0, 0]} maxBarSize={36} />
+                    <Bar dataKey="connected" name="Connected" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={36} />
+                    <Bar dataKey="completed" name="Completed" fill="#8b5cf6" radius={[4, 4, 0, 0]} maxBarSize={36} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
           <Card>
             <CardHeader>
-              <CardTitle>Campaign Comparison</CardTitle>
+              <CardTitle>Detailed Metrics</CardTitle>
               <CardDescription>
                 Real metrics for the selected time range
               </CardDescription>
