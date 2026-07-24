@@ -521,9 +521,18 @@ class TrayApp:
 # ---------------------------------------------------------------------------
 
 def main():
+    from openoutreach.desktop.config import AppConfig
+    log_dir = AppConfig._config_path().parent
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_file = log_dir / "daemon.log"
+
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        handlers=[
+            logging.StreamHandler(),
+            logging.FileHandler(str(log_file), encoding="utf-8"),
+        ],
     )
     logging.getLogger("urllib3").setLevel(logging.WARNING)
     logging.getLogger("httpx").setLevel(logging.WARNING)

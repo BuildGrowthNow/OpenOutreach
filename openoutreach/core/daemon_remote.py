@@ -77,10 +77,10 @@ class RemoteDaemon:
     def _default_data_dir(self) -> Path:
         """Get platform-specific data directory."""
         if sys.platform == "darwin":
-            return Path.home() / "Library/Application Support/OpenOutreach"
+            return Path.home() / "Library/Application Support/Lengrowth"
         elif sys.platform == "win32":
-            return Path.home() / "AppData/Local/OpenOutreach"
-        return Path.home() / ".openoutreach"
+            return Path.home() / "AppData/Local/Lengrowth"
+        return Path.home() / ".lengrowth"
 
     def _get_or_create_daemon_id(self) -> str:
         """Get or create persistent daemon ID."""
