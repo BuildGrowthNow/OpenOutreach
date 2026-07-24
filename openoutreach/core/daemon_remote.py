@@ -325,6 +325,10 @@ class RemoteDaemon:
                 if self.playwright and hasattr(self.playwright, "stop"):
                     self.playwright.stop()
 
+            def ensure_browser(self):
+                """No-op: browser is always live in the remote daemon."""
+                pass
+
             def wait(self):
                 """Compatibility method for task handlers."""
                 pass
