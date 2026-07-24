@@ -27,11 +27,14 @@ if version_file.exists():
                 break
 
 # Data files to include
+from PyInstaller.utils.hooks import collect_data_files
 datas = [
     (str(ASSETS_DIR), "openoutreach/desktop/assets"),
     (str(PROJECT_ROOT / "linkedin_cli"), "linkedin_cli"),
     (str(PROJECT_ROOT / "openoutreach"), "openoutreach"),
 ]
+# Include playwright_stealth JS files (read at runtime via pathlib)
+datas += collect_data_files("playwright_stealth")
 
 # Platform-specific hidden imports
 hiddenimports = [
