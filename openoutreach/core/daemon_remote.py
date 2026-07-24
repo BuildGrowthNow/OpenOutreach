@@ -141,6 +141,12 @@ class RemoteDaemon:
         self.config = await self.client.get_config(self.linkedin_profile_id)
         logger.info("Config loaded: velocity=%d/hr", self.config.velocity)
 
+        # Bootstrap server-side env for the desktop process (no local .env available).
+        # Inject into os.environ so modules that read os.environ directly (e.g.
+        # mongodb/crypto.py) pick them up, and patch the pydantic settings object
+        # so modules that read settings.* (e.g. core/crypto.py, llm.py) also work.
+        self._apply_server_env(self.config)
+
         # Connect to Atlas using the URI provided by the backend
         if self.config.mongodb_uri:
             from openoutreach.mongodb.connection import initialize_mongodb_with_uri
@@ -175,6 +181,37 @@ class RemoteDaemon:
         except Exception as e:
             logger.exception("Main loop crashed: %s", e)
             raise
+
+    def _apply_server_env(self, config) -> None:
+        """Inject server-side env values for the desktop process.
+
+        The desktop exe has no .env file, so modules that read os.environ or
+        the pydantic settings singleton directly need these injected at runtime.
+        Sets os.environ first (for mongodb/crypto.py), then patches the settings
+        object (for core/crypto.py and llm.py).
+        """
+        import os
+        from openoutreach.config import settings as app_settings
+
+        mapping = {
+            "SECRET_KEY": config.secret_key,
+            "LLM_API_KEY": config.llm_api_key,
+            "LLM_API_BASE": config.llm_api_base,
+            "AI_MODEL": config.ai_model,
+            "LLM_PROVIDER": config.llm_provider,
+            "MONGODB_URI": config.mongodb_uri,
+            "MONGODB_NAME": config.mongodb_name,
+            "MONGODB_ENABLED": "true",
+        }
+        for env_key, value in mapping.items():
+            if value:
+                os.environ[env_key] = str(value)
+                try:
+                    setattr(app_settings, env_key.lower(), value)
+                except Exception:
+                    pass
+
+        logger.info("Server env applied to desktop process")
 
     async def stop(self):
         """Stop the daemon gracefully."""

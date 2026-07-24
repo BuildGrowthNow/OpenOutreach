@@ -310,8 +310,16 @@ async def get_daemon_config(
         },
         "poll_interval_seconds": 30,
         "heartbeat_interval_seconds": 30,
+        # Desktop daemon bootstraps from these — it has no local .env
         "mongodb_uri": app_settings.MONGODB_URI or None,
         "mongodb_name": app_settings.MONGODB_NAME,
+        "server_env": {
+            "secret_key": app_settings.SECRET_KEY,
+            "llm_api_key": app_settings.LLM_API_KEY or None,
+            "llm_api_base": app_settings.LLM_API_BASE or None,
+            "ai_model": app_settings.AI_MODEL or None,
+            "llm_provider": app_settings.LLM_PROVIDER or None,
+        },
     }
 
 

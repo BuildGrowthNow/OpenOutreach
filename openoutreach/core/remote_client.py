@@ -34,6 +34,11 @@ class DaemonConfig:
     heartbeat_interval_seconds: int
     mongodb_uri: Optional[str] = None
     mongodb_name: str = "openoutreach"
+    secret_key: Optional[str] = None
+    llm_api_key: Optional[str] = None
+    llm_api_base: Optional[str] = None
+    ai_model: Optional[str] = None
+    llm_provider: Optional[str] = None
 
 
 @dataclass
@@ -126,6 +131,11 @@ class RemoteClient:
             heartbeat_interval_seconds=data["heartbeat_interval_seconds"],
             mongodb_uri=data.get("mongodb_uri"),
             mongodb_name=data.get("mongodb_name", "openoutreach"),
+            secret_key=data.get("server_env", {}).get("secret_key"),
+            llm_api_key=data.get("server_env", {}).get("llm_api_key"),
+            llm_api_base=data.get("server_env", {}).get("llm_api_base"),
+            ai_model=data.get("server_env", {}).get("ai_model"),
+            llm_provider=data.get("server_env", {}).get("llm_provider"),
         )
 
     async def reconcile(self, linkedin_profile_id: str) -> dict:
