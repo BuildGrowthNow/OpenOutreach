@@ -197,7 +197,7 @@ export function CampaignActivity({ campaignId, compact = false }: CampaignActivi
 
   useEffect(() => {
     fetchActivity(1);
-    const interval = setInterval(() => fetchActivity(1), 30000);
+    const interval = setInterval(() => fetchActivity(1), 10000);
     return () => clearInterval(interval);
   }, [fetchActivity]);
 
