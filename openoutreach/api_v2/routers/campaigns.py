@@ -974,16 +974,18 @@ async def get_campaign_analytics(
         connections_sent = action_logs_collection.count_documents({
             "campaign_id": campaign_id,
             "action_type": "connect",
+            "status": {"$nin": ["failed", "error"]},
             "created_at": {"$gte": since},
         })
         messages_sent = action_logs_collection.count_documents({
             "campaign_id": campaign_id,
             "action_type": "follow_up",
+            "status": {"$nin": ["failed", "error"]},
             "created_at": {"$gte": since},
         })
         errors = action_logs_collection.count_documents({
             "campaign_id": campaign_id,
-            "status": "error",
+            "status": {"$in": ["failed", "error"]},
             "created_at": {"$gte": since},
         })
 

@@ -242,12 +242,14 @@ async def get_daily_usage(
     connect_count = collection.count_documents({
         "linkedin_profile_id": {"$in": profile_ids},
         "action_type": "connect",
+        "status": {"$nin": ["failed", "error"]},
         "created_at": {"$gte": day_start, "$lt": day_end}
     })
 
     follow_up_count = collection.count_documents({
         "linkedin_profile_id": {"$in": profile_ids},
         "action_type": "follow_up",
+        "status": {"$nin": ["failed", "error"]},
         "created_at": {"$gte": day_start, "$lt": day_end}
     })
 

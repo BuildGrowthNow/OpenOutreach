@@ -149,6 +149,7 @@ def _get_action_logs_count(campaign_id: str, action_type: str, since: datetime) 
         return action_logs_collection.count_documents({
             "campaign_id": campaign_id,
             "action_type": action_type,
+            "status": {"$nin": ["failed", "error"]},
             "created_at": {"$gte": since}
         })
     except Exception as e:
@@ -310,6 +311,7 @@ async def get_analytics_overview(
     total_connections_sent = action_logs_collection.count_documents({
         "campaign_id": {"$in": campaign_ids},
         "action_type": "connect",
+        "status": {"$nin": ["failed", "error"]},
         "created_at": {"$gte": since}
     })
     total_connections_accepted = deals_collection.count_documents({
@@ -320,6 +322,7 @@ async def get_analytics_overview(
     total_messages_sent = action_logs_collection.count_documents({
         "campaign_id": {"$in": campaign_ids},
         "action_type": "follow_up",
+        "status": {"$nin": ["failed", "error"]},
         "created_at": {"$gte": since}
     })
 
