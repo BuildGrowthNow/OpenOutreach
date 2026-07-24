@@ -10,7 +10,9 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import queue
 import sys
+import threading
 import uuid
 from collections.abc import Callable
 from datetime import datetime, timezone as tz
@@ -73,6 +75,12 @@ class RemoteDaemon:
         self.last_task_at: Optional[datetime] = None
         self._pending_cookie_state: Optional[dict] = None
 
+        # All Playwright sync API calls must run on the same OS thread.
+        # We keep one dedicated thread alive for the lifetime of the daemon and
+        # dispatch work to it via a queue.  Each item is (fn, result_future).
+        self._pw_queue: queue.Queue = queue.Queue()
+        self._pw_thread: Optional[threading.Thread] = None
+
         self.data_dir.mkdir(parents=True, exist_ok=True)
 
     def _default_data_dir(self) -> Path:
@@ -94,11 +102,42 @@ class RemoteDaemon:
         id_file.write_text(daemon_id)
         return daemon_id
 
+    def _start_pw_thread(self) -> None:
+        """Start the dedicated Playwright thread that drains _pw_queue."""
+        def _worker():
+            while True:
+                item = self._pw_queue.get()
+                if item is None:  # sentinel — shut down
+                    break
+                fn, fut, loop = item
+                try:
+                    result = fn()
+                    loop.call_soon_threadsafe(fut.set_result, result)
+                except Exception as exc:
+                    loop.call_soon_threadsafe(fut.set_exception, exc)
+
+        self._pw_thread = threading.Thread(target=_worker, daemon=True, name="pw-worker")
+        self._pw_thread.start()
+
+    def _stop_pw_thread(self) -> None:
+        """Send the sentinel to stop the Playwright thread."""
+        self._pw_queue.put(None)
+        if self._pw_thread:
+            self._pw_thread.join(timeout=10)
+
+    async def _run_on_pw_thread(self, fn: Callable) -> Any:
+        """Schedule *fn* on the Playwright thread and await its result."""
+        loop = asyncio.get_event_loop()
+        fut: asyncio.Future = loop.create_future()
+        self._pw_queue.put((fn, fut, loop))
+        return await fut
+
     async def start(self):
         """Start the daemon and run main loops."""
         logger.info("Starting remote daemon v%s...", __version__)
         self.running = True
         self.start_time = datetime.now(tz.utc)
+        self._start_pw_thread()
 
         # Check subscription status before starting (with retry on 401)
         try:
@@ -222,8 +261,14 @@ class RemoteDaemon:
 
         if self.session:
             await self._sync_cookies()
-            self.session.close()
+            # Close the browser on the Playwright thread so greenlet is happy.
+            session = self.session
+            try:
+                await self._run_on_pw_thread(session.close)
+            except Exception as e:
+                logger.debug("Session close error: %s", e)
 
+        self._stop_pw_thread()
         await self.client.close()
 
     async def _start_session(self):
@@ -272,6 +317,7 @@ class RemoteDaemon:
                     linkedin_profile_id=self._id,
                     campaign_id=campaign._id if campaign else "",
                     action_type=action_type,
+                    status="completed",
                     details=details or {},
                 )
                 action_log.save()
@@ -385,16 +431,16 @@ class RemoteDaemon:
             return None
 
         try:
-            fresh_state = await asyncio.to_thread(_launch_and_auth, True)
+            fresh_state = await self._run_on_pw_thread(lambda: _launch_and_auth(True))
         except Exception as e:
             from linkedin_cli.exceptions import CheckpointChallengeError
             if isinstance(e, CheckpointChallengeError):
                 # Challenge detected in headless mode — close and relaunch headed
                 # so the user can interact with the verification in a visible window.
                 logger.warning("LinkedIn challenge detected — relaunching browser headed for user interaction")
-                session.close()
+                await self._run_on_pw_thread(session.close)
                 try:
-                    fresh_state = await asyncio.to_thread(_launch_and_auth, False)
+                    fresh_state = await self._run_on_pw_thread(lambda: _launch_and_auth(False))
                 except Exception as e2:
                     logger.error("Login failed after challenge relaunch: %s", e2)
                     await self.client.report_session_state(
@@ -459,7 +505,7 @@ class RemoteDaemon:
                 start = datetime.now(tz.utc)
 
                 try:
-                    result = await asyncio.to_thread(self._execute_task, task)
+                    result = await self._run_on_pw_thread(lambda t=task: self._execute_task(t))
 
                     duration_ms = int((datetime.now(tz.utc) - start).total_seconds() * 1000)
                     await self.client.report_result(
@@ -481,6 +527,8 @@ class RemoteDaemon:
                         duration_ms=duration_ms,
                     )
                     logger.error("Task failed: %s", e)
+                    # Write a failed ActionLog entry so the UI activity feed shows errors
+                    self._log_task_failure(task, str(e))
 
                     if "authentication" in str(e).lower() or "401" in str(e):
                         await self.client.report_session_state(
@@ -494,6 +542,23 @@ class RemoteDaemon:
             except Exception as e:
                 logger.error("Task loop error: %s", e)
                 await asyncio.sleep(30)
+
+    def _log_task_failure(self, task: dict, error: str) -> None:
+        """Write a failed ActionLog row so the UI activity feed shows the error."""
+        try:
+            from openoutreach.linkedin.models import ActionLog
+            campaign_id = task.get("payload", {}).get("campaign_id", "")
+            log = ActionLog(
+                linkedin_profile_id=self.linkedin_profile_id,
+                campaign_id=campaign_id,
+                action_type=task.get("task_type", ""),
+                status="failed",
+                error_message=error,
+                details={"task_id": task.get("task_id", "")},
+            )
+            log.save()
+        except Exception as e:
+            logger.debug("Failed to write ActionLog for task failure: %s", e)
 
     def _execute_task(self, task: dict) -> Optional[dict]:
         """Execute a task using the appropriate handler (runs in thread).
