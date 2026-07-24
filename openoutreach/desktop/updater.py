@@ -95,20 +95,114 @@ async def check_for_updates() -> Optional[dict]:
         return None
 
 
-async def download_update(url: str) -> Optional[str]:
-    """Download the update exe to a temp file. Returns the local path or None."""
+async def download_update(url: str, version: str = "") -> Optional[str]:
+    """Download the update exe to a temp file, showing a progress window.
+
+    Returns the local path on success, None on failure.
+    The progress window runs on a dedicated thread so it doesn't block the
+    asyncio event loop.
+    """
     dest = os.path.join(tempfile.gettempdir(), "Lengrowth_update.exe")
+    label_text = version or "latest"
+
+    # --- tkinter progress window (Windows only, safe to import here) ---
+    win = None
+    progress_var = None
+    status_var = None
+    try:
+        import tkinter as tk
+        from tkinter import ttk
+
+        win = tk.Tk()
+        win.title("Lengrowth Update")
+        win.resizable(False, False)
+        win.attributes("-topmost", True)
+
+        w, h = 360, 130
+        sw = win.winfo_screenwidth()
+        sh = win.winfo_screenheight()
+        win.geometry(f"{w}x{h}+{(sw - w) // 2}+{(sh - h) // 2}")
+        win.configure(bg="#09090b")
+
+        tk.Label(
+            win,
+            text=f"Updating to Lengrowth v{label_text}…",
+            bg="#09090b",
+            fg="#f4f4f5",
+            font=("Segoe UI", 11, "bold"),
+        ).pack(pady=(18, 4))
+
+        status_var = tk.StringVar(value="Downloading…")
+        tk.Label(
+            win,
+            textvariable=status_var,
+            bg="#09090b",
+            fg="#a1a1aa",
+            font=("Segoe UI", 9),
+        ).pack()
+
+        progress_var = tk.DoubleVar(value=0)
+        bar = ttk.Progressbar(win, variable=progress_var, maximum=100, length=300)
+        bar.pack(pady=(8, 0))
+
+        # Run the tkinter event loop on its own thread
+        import threading
+
+        def _run_tk():
+            win.mainloop()
+
+        tk.Thread = threading.Thread  # type: ignore[attr-defined]  # unused alias
+        _tk_thread = threading.Thread(target=_run_tk, daemon=True)
+        _tk_thread.start()
+    except Exception as e:
+        logger.debug("Progress window unavailable: %s", e)
+        win = None
+
+    def _set_progress(pct: float, msg: str = "") -> None:
+        if win is None:
+            return
+        try:
+            if progress_var is not None:
+                progress_var.set(pct)
+            if status_var is not None and msg:
+                status_var.set(msg)
+            win.update_idletasks()
+        except Exception:
+            pass
+
+    def _close_win() -> None:
+        if win is None:
+            return
+        try:
+            win.destroy()
+        except Exception:
+            pass
+
     try:
         async with httpx.AsyncClient(timeout=300.0, follow_redirects=True) as client:
             async with client.stream("GET", url) as response:
                 response.raise_for_status()
+                total = int(response.headers.get("content-length", 0))
+                downloaded = 0
                 with open(dest, "wb") as fh:
                     async for chunk in response.aiter_bytes(chunk_size=65536):
                         fh.write(chunk)
+                        downloaded += len(chunk)
+                        if total:
+                            pct = downloaded / total * 100
+                            mb = downloaded / 1_048_576
+                            total_mb = total / 1_048_576
+                            _set_progress(pct, f"{mb:.1f} / {total_mb:.1f} MB")
+                        else:
+                            _set_progress(50, f"{downloaded / 1_048_576:.1f} MB…")
+
+        _set_progress(100, "Installing…")
         logger.info("Update downloaded to %s", dest)
+        _close_win()
         return dest
     except Exception as e:
         logger.error("Update download failed: %s", e)
+        _close_win()
         return None
 
 

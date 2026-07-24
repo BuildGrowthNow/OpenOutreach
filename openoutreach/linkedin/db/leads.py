@@ -40,7 +40,7 @@ def create_enriched_lead(session, url: str, profile: Dict[str, Any]) -> Optional
     existing_lead = Lead.get_by_public_id(public_id)
     if existing_lead:
         # Lead exists - check if already linked to this campaign
-        if Deal.get_by_lead_and_campaign(public_id, session.campaign.pk) is not None:
+        if Deal.get_by_lead_and_campaign(existing_lead.pk, session.campaign.pk) is not None:
             return None  # Already discovered by this campaign
         # Lead exists but not in this campaign - create deal to link them
         deal = Deal(
@@ -114,7 +114,7 @@ def promote_lead_to_deal(session, public_id: str, reason: str = ""):
         raise ValueError(f"No Lead for {public_id}")
 
     # Check if deal already exists from discovery
-    deal = Deal.get_by_lead_and_campaign(public_id, session.campaign.pk)
+    deal = Deal.get_by_lead_and_campaign(lead.pk, session.campaign.pk)
     if deal:
         # Promote existing deal to QUALIFIED with qualification reason
         deal.state = DealState.QUALIFIED

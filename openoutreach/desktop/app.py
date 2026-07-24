@@ -505,9 +505,7 @@ class TrayApp:
                     return
                 if can_auto_update():
                     logger.info("Update v%s available — downloading automatically", info["version"])
-                    if self.icon:
-                        self.icon.notify("Updating Lengrowth…", f"Downloading v{info['version']}, please wait")
-                    path = await download_update(info["download_url"])
+                    path = await download_update(info["download_url"], version=info["version"])
                     if path:
                         # apply_update_windows calls os._exit — this point is never reached
                         apply_update_windows(path)
