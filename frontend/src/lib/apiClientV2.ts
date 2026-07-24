@@ -88,7 +88,9 @@ class ApiClient {
       const contentType = response.headers.get('content-type')
       let data: unknown = null
 
-      if (contentType?.includes('application/json')) {
+      if (response.status === 204) {
+        data = null
+      } else if (contentType?.includes('application/json')) {
         data = await response.json()
       } else {
         data = await response.text()
