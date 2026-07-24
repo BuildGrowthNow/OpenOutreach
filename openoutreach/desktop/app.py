@@ -430,6 +430,8 @@ class TrayApp:
                 refresh_token=refresh_token,
                 on_token_refresh=on_token_refresh,
             )
+            # Daemon object is now set — update menu so tray shows "Running"
+            self._update_menu()
             try:
                 self._loop.run_until_complete(self.daemon.start())
             except KeyboardInterrupt:
@@ -443,10 +445,11 @@ class TrayApp:
             finally:
                 self._loop.close()
                 self._loop = None
+                # Daemon has stopped — update menu so tray shows "Stopped"
+                self._update_menu()
 
         self.daemon_thread = threading.Thread(target=run_daemon, daemon=True)
         self.daemon_thread.start()
-        self._update_menu()
 
     def _resolve_profile_id(self, token: str) -> Optional[str]:
         import json
