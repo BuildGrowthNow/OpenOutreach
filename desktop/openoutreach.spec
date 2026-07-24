@@ -38,7 +38,8 @@ datas += collect_data_files("playwright_stealth")
 # genai_prices and pydantic_ai_slim read their version via importlib.metadata at
 # import time — include dist-info so they don't raise PackageNotFoundError in the frozen exe.
 datas += copy_metadata("genai_prices")
-datas += copy_metadata("pydantic-ai")
+datas += copy_metadata("pydantic-ai-slim")
+datas += copy_metadata("fastembed")
 
 # Platform-specific hidden imports
 hiddenimports = [
