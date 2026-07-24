@@ -9,11 +9,18 @@ Desktop app daemons use these to:
 5. Check subscription status (Phase 11)
 """
 
+import logging
+from datetime import datetime, timezone
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from typing import Optional
-from datetime import datetime, timezone
-import logging
+
+from openoutreach.api_v2.dependencies_v2 import get_current_user
+from openoutreach.core.models import Task, SiteConfig
+from openoutreach.linkedin.models import LinkedInProfile
+from openoutreach.mongodb.models_user import User
+
 
 def _utc_iso(dt: Optional[datetime]) -> Optional[str]:
     """Return a UTC-aware ISO-8601 string, normalising naive datetimes to UTC."""
@@ -22,11 +29,6 @@ def _utc_iso(dt: Optional[datetime]) -> Optional[str]:
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
     return dt.isoformat()
-
-from openoutreach.api_v2.dependencies_v2 import get_current_user
-from openoutreach.linkedin.models import LinkedInProfile
-from openoutreach.core.models import Task, SiteConfig
-from openoutreach.mongodb.models_user import User
 
 logger = logging.getLogger(__name__)
 

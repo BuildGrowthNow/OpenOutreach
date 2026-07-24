@@ -13,6 +13,10 @@ from openoutreach.linkedin.services.smart_rate_limits import (
     smart_record_action,
     smart_get_remaining,
 )
+from openoutreach.core.db.deals import set_profile_state
+from openoutreach.core.db.summaries import materialize_profile_summary_if_missing
+from linkedin_cli.actions.message import send_raw_message
+from openoutreach.core.agents.follow_up import run_follow_up_agent
 
 logger = logging.getLogger(__name__)
 
@@ -288,8 +292,3 @@ def handle_follow_up(task, session, qualifiers):
     # _try_execute_state_machine(deal, session)
 
 
-# Re-imports needed for type hints (local import avoids circular imports)
-from openoutreach.core.db.deals import set_profile_state
-from openoutreach.core.db.summaries import materialize_profile_summary_if_missing
-from linkedin_cli.actions.message import send_raw_message
-from openoutreach.core.agents.follow_up import run_follow_up_agent
