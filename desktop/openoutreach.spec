@@ -129,13 +129,21 @@ hiddenimports = [
     # LLM (for keyword generation)
     "pydantic_ai",
     "jinja2",
+    # ML pipeline (qualifier.py uses scipy + sklearn + numpy)
+    "numpy",
+    "scipy",
+    "scipy.stats",
+    "scipy.stats._continuous_distns",
+    "sklearn",
+    "sklearn.gaussian_process",
+    "sklearn.gaussian_process._gpr",
 ]
 
 # Packages to completely exclude (heavy/unused in desktop context)
+# NOTE: scipy and numpy are USED by the ML qualifier — do not exclude them.
 excludes = [
     "matplotlib",
     "pandas",
-    "scipy",
     "tensorflow",
     "torch",
     "tkinter",

@@ -21,6 +21,8 @@ const RELEASE_BASE =
   "https://github.com/Lengrowth/outbound/releases/latest/download"
 const RELEASES_PAGE =
   "https://github.com/Lengrowth/outbound/releases/latest"
+const GITHUB_API_LATEST =
+  "https://api.github.com/repos/Lengrowth/outbound/releases/latest"
 
 const DOWNLOADS = {
   windowsInstaller: `${RELEASE_BASE}/Lengrowth-Windows-Setup.exe`,
@@ -98,9 +100,19 @@ export default function DownloadPage() {
   const searchParams = useSearchParams()
   const isWelcome = searchParams.get("welcome") === "1"
   const [detectedOS, setDetectedOS] = useState<OS>("other")
+  const [latestVersion, setLatestVersion] = useState<string | null>(null)
 
   useEffect(() => {
     setDetectedOS(detectOS())
+    fetch(GITHUB_API_LATEST, { headers: { Accept: "application/vnd.github+json" } })
+      .then((r) => r.json())
+      .then((data) => {
+        // tag_name is like "v1.2.2-abc1234" — extract the semver part
+        const tag: string = data?.tag_name ?? ""
+        const match = tag.match(/v?(\d+\.\d+\.\d+)/)
+        if (match) setLatestVersion(match[1])
+      })
+      .catch(() => {})
   }, [])
 
   return (
@@ -183,7 +195,7 @@ export default function DownloadPage() {
                   className="flex items-center justify-center gap-2 w-full h-11 rounded-lg px-4 font-semibold text-sm text-white bg-emerald-600 hover:bg-emerald-500 shadow-lg shadow-emerald-600/20 transition-colors"
                 >
                   <Download className="h-4 w-4 shrink-0" />
-                  Download Installer (.exe)
+                  Download Installer (.exe){latestVersion && <span className="opacity-70 font-normal">v{latestVersion}</span>}
                 </a>
                 <p className="text-center text-xs text-zinc-600">
                   Recommended — start menu shortcut &amp; auto-start included
@@ -237,7 +249,7 @@ export default function DownloadPage() {
                   className="flex items-center justify-center gap-2 w-full h-11 rounded-lg px-4 font-semibold text-sm text-white bg-emerald-600 hover:bg-emerald-500 shadow-lg shadow-emerald-600/20 transition-colors"
                 >
                   <Download className="h-4 w-4 shrink-0" />
-                  Download for macOS (.dmg)
+                  Download for macOS (.dmg){latestVersion && <span className="opacity-70 font-normal">v{latestVersion}</span>}
                 </a>
                 <p className="text-center text-xs text-zinc-600">
                   Open the DMG and drag Lengrowth to Applications
