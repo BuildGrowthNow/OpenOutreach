@@ -35,11 +35,22 @@ datas = [
 ]
 # Include playwright_stealth JS files (read at runtime via pathlib)
 datas += collect_data_files("playwright_stealth")
-# genai_prices and pydantic_ai_slim read their version via importlib.metadata at
-# import time — include dist-info so they don't raise PackageNotFoundError in the frozen exe.
-datas += copy_metadata("genai_prices")
-datas += copy_metadata("pydantic-ai-slim")
-datas += copy_metadata("fastembed")
+# Several packages read their own version via importlib.metadata at import time.
+# Include their dist-info directories so they don't raise PackageNotFoundError in the frozen exe.
+for _pkg in [
+    "genai_prices",
+    "pydantic-ai-slim",
+    "fastembed",
+    "opentelemetry-api",
+    "onnxruntime",
+    "MarkupSafe",
+    "httpcore2",
+    "click",
+]:
+    try:
+        datas += copy_metadata(_pkg)
+    except Exception:
+        pass  # package not installed in this build environment — skip
 
 # Platform-specific hidden imports
 hiddenimports = [
