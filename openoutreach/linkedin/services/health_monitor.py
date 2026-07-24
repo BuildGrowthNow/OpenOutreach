@@ -8,13 +8,12 @@ from collections import Counter
 from datetime import datetime, timedelta, timezone as tz
 from typing import Optional
 
-from openoutreach.core.models import Campaign
+from openoutreach.mongodb.models import Campaign
 from openoutreach.linkedin.models import (
     ActionLog,
     LinkedInProfile,
-    SmartRateLimitContext,
 )
-from openoutreach.crm.models import Deal, DealState
+from openoutreach.crm.models import DealState
 from openoutreach.linkedin.models.health import (
     CampaignHealthMetric,
     HealthAlert,

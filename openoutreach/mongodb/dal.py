@@ -7,7 +7,7 @@ Replaces Django ORM queries and signals with explicit service-layer calls.
 
 import logging
 from datetime import datetime
-from typing import List, Optional, Dict, Any
+from typing import Optional, Dict, Any
 from pymongo import ASCENDING, DESCENDING
 
 from .connection import get_mongodb_collection

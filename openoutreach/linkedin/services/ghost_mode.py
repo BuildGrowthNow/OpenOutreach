@@ -6,7 +6,7 @@ from __future__ import annotations
 import logging
 import random
 from datetime import datetime, timezone as tz
-from typing import Dict, Optional, List, Any
+from typing import Dict, Optional
 
 from openoutreach.linkedin.models.ghost_mode import GhostCampaign, GhostSimulationLog
 
@@ -118,9 +118,6 @@ class GhostModeInterceptor:
 
     def _simulate_qualify(self, target_data: Dict, context: Optional[Dict]) -> Dict:
         """Simulate lead qualification."""
-        # Simulate qualification based on profile data
-        profile = target_data.get("profile", {})
-
         # Mock qualification logic
         score = random.uniform(0.4, 0.95)
         is_qualified = score > 0.6
@@ -145,8 +142,6 @@ class GhostModeInterceptor:
 
     def _simulate_message(self, target_data: Dict) -> Dict:
         """Simulate sending a message."""
-        message_text = target_data.get("message", "")
-
         # Simulate response probability
         response_probability = target_data.get("response_probability", 0.35)
         will_response = random.random() < response_probability

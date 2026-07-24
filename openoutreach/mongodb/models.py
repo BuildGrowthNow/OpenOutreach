@@ -560,8 +560,6 @@ class Lead:
 
     def get_embedding(self, session):
         """384-dim embedding. Lazy: scrapes + embeds on first access."""
-        import numpy as np
-
         if self.embedding is None:
             profile = self.get_profile(session)
             if profile:

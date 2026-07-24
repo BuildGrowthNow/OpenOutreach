@@ -20,7 +20,7 @@ from openoutreach.core.conf import (
 from openoutreach.core.logging import brand
 from openoutreach.core.models import SiteConfig
 from openoutreach.core.onboarding_wizard import _BACK, IntText, MultilineText, Password
-from openoutreach.crm.models import Deal, DealState, Lead
+from openoutreach.crm.models import DealState
 from openoutreach.emails.icemail import parse_mailboxes
 from openoutreach.emails.models import Mailbox
 from openoutreach.emails.smtp import verify_auth

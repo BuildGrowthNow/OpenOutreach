@@ -8,7 +8,7 @@ from datetime import date, datetime
 from typing import ClassVar, Optional
 from uuid import uuid4
 
-from openoutreach.core.models import Campaign
+from openoutreach.mongodb.models import Campaign
 from openoutreach.mongodb.connection import get_mongodb_collection
 
 # Health monitoring models
@@ -36,6 +36,13 @@ from .state_machine import (
     StateNode,
     StateTransition,
 )
+
+__all__ = [
+    "Campaign",
+    "CampaignHealthMetric", "HealthAlert", "RecoveryAction",
+    "EngagementLevel", "LinkedInDetectability", "RateLimitWarning", "SmartRateLimitContext",
+    "CampaignExecutionLog", "CampaignState", "CampaignStateGraph", "StateNode", "StateTransition",
+]
 
 logger = logging.getLogger(__name__)
 

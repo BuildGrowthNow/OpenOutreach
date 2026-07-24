@@ -9,7 +9,7 @@ maintains the import structure for any legacy references.
 from __future__ import annotations
 
 import logging
-from typing import Optional, Tuple
+from typing import Tuple
 
 logger = logging.getLogger(__name__)
 

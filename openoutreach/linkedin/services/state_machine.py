@@ -12,7 +12,6 @@ import logging
 from datetime import datetime, timedelta, timezone as tz
 from typing import Dict, List, Optional, Tuple
 
-from openoutreach.core.models import Campaign
 from openoutreach.crm.models import Deal
 from openoutreach.linkedin.models.state_machine import (
     CampaignStateGraph,
@@ -147,7 +146,6 @@ class StateMachineEngine:
 
         elif node.node_type == StateNode.TYPE_MESSAGE:
             # Get message template
-            template_id = node.config.get("message_template_id")
             template_text = node.config.get("message_template_text", "")
 
             # Get the user to send the message from
@@ -224,7 +222,6 @@ class StateMachineEngine:
             # Webhook nodes trigger external events
             webhook_url = node.config.get("webhook_url", "")
             webhook_method = node.config.get("webhook_method", "POST")
-            webhook_payload = node.config.get("webhook_payload", {})
 
             # Placeholder for webhook execution
             return {
@@ -386,7 +383,7 @@ class StateMachineEngine:
                 chars = string.ascii_lowercase + string.digits
                 short_code = url_hash[:4] + "".join(random.sample(chars, 4))
 
-                tracked_link, created = TrackedLink.objects.get_or_create(
+                tracked_link, _created = TrackedLink.objects.get_or_create(
                     short_code=short_code,
                     defaults={
                         "original_url": link_url,
@@ -418,7 +415,6 @@ class StateMachineEngine:
             # Save message to chat
             try:
                 from openoutreach.chat.models import ChatMessage
-                from openoutreach.linkedin.models import LinkedInProfile
 
                 outgoing_message = ChatMessage.objects.create(
                     deal=deal,
@@ -579,7 +575,7 @@ def simulate_state_machine(
     campaign_id: int, deal_id: int, node_id: Optional[int] = None
 ) -> Dict:
     """Simulate a state machine execution for a deal."""
-    from openoutreach.core.models import Campaign
+    from openoutreach.mongodb.models import Campaign
     from openoutreach.crm.models import Deal
 
     try:

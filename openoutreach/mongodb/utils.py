@@ -10,14 +10,11 @@ This module provides utility functions for MongoDB operations including:
 
 import logging
 from datetime import datetime, timedelta
-from typing import Dict, List, Any, Optional, TypeVar, cast
-from pymongo.collection import Collection
-from pymongo.results import InsertOneResult, UpdateResult, DeleteResult
+from typing import Dict, List, Any, Optional
 
-from .connection import get_mongodb_collection, mongodb_connection
+from .connection import get_mongodb_collection
 
 logger = logging.getLogger(__name__)
-T = TypeVar("T")
 
 
 # ==================== Aggregation Pipelines ====================
@@ -378,10 +375,6 @@ class BackupManager:
 class CleanupManager:
     """Manager for MongoDB data cleanup operations."""
 
-    def __init__(self):
-        """Initialize the cleanup manager."""
-        pass
-
     def cleanup_old_logs(self, days: int = 30) -> int:
         """
         Cleanup old log entries.
@@ -578,14 +571,16 @@ def validate_document(
                 logger.error(f"Missing required field: {field}")
                 return False
 
-        # Validate field types
+        _TYPE_MAP: Dict[str, Any] = {
+            "string": str, "integer": int, "number": (int, float),
+            "boolean": bool, "array": list, "object": dict, "null": type(None),
+        }
         properties = schema.get("properties", {})
         for field, value in document.items():
             if field in properties:
                 expected_type = properties[field].get("type")
-                if expected_type and not isinstance(
-                    value, eval(expected_type).__class__
-                ):
+                py_type = _TYPE_MAP.get(expected_type) if expected_type else None
+                if py_type and not isinstance(value, py_type):
                     logger.error(
                         f"Invalid type for field '{field}': expected {expected_type}"
                     )

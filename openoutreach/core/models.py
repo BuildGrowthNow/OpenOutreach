@@ -2,12 +2,8 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import TYPE_CHECKING, Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List
 from uuid import uuid4
-
-if TYPE_CHECKING:
-    from openoutreach.crm.models import Deal
-    from openoutreach.linkedin.models import CampaignStateGraph, SearchKeyword
 
 
 class SiteConfig:
@@ -349,10 +345,6 @@ class CampaignTemplateManager:
             return CampaignTemplate.from_dict(data)
         return None
 
-
-# Campaign and CampaignManager are now in mongodb.models
-# Import them for backward compatibility
-from openoutreach.mongodb.models import Campaign, CampaignManager
 
 
 # NOTE: TrackedLink is now in openoutreach.mongodb.models

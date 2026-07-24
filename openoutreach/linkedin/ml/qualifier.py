@@ -11,7 +11,7 @@ import numpy as np
 from pydantic import BaseModel, Field
 from scipy.stats import norm
 
-from openoutreach.core.conf import CAMPAIGN_CONFIG, PROMPTS_DIR
+from openoutreach.core.conf import PROMPTS_DIR
 
 logger = logging.getLogger(__name__)
 

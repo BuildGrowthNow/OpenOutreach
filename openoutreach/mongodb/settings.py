@@ -6,7 +6,6 @@ Supports both dual-write (SQLite + MongoDB) and MongoDB-only configurations.
 """
 
 import os
-import sys
 from pathlib import Path
 from typing import Optional
 
