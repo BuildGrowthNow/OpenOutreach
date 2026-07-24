@@ -5,8 +5,8 @@ Pydantic models for SiteConfig validation, serialization, and API responses.
 Corresponds to the MongoDB SiteConfig model in openoutreach.mongodb.models.
 """
 
-from typing import Optional
-from pydantic import BaseModel, Field
+from typing import Any, Optional
+from pydantic import BaseModel, Field, model_validator
 
 
 class SiteConfigResponse(BaseModel):
@@ -95,6 +95,72 @@ class SiteConfigUpdate(BaseModel):
     bettercontact_api_key: Optional[str] = Field(None, description="Update BetterContact API key")
     contacts_api_token: Optional[str] = Field(None, description="Update Contacts API token")
     contacts_api_url: Optional[str] = Field(None, description="Update Contacts API URL")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _flatten_nested(cls, data: Any) -> Any:
+        """Accept the nested camelCase body the frontend sends and flatten it.
+
+        Frontend sends: { llm: { provider, model, apiKey, apiBase, ... },
+                          rateLimits: { ... }, activeHours: { ... } }
+        Schema expects: flat snake_case fields.
+        """
+        if not isinstance(data, dict):
+            return data
+
+        # llm sub-object
+        llm = data.pop("llm", None) or {}
+        if llm.get("provider") is not None:
+            data.setdefault("llm_provider", llm["provider"])
+        if llm.get("apiKey") is not None:
+            data.setdefault("llm_api_key", llm["apiKey"])
+        if llm.get("model") is not None:
+            data.setdefault("ai_model", llm["model"])
+        if llm.get("apiBase") is not None:
+            data.setdefault("llm_api_base", llm["apiBase"])
+        if llm.get("writingStyle") is not None:
+            data.setdefault("ai_writing_style", llm["writingStyle"])
+        if llm.get("sayRules") is not None:
+            data.setdefault("ai_say_rules", llm["sayRules"])
+        if llm.get("avoidRules") is not None:
+            data.setdefault("ai_avoid_rules", llm["avoidRules"])
+
+        # rateLimits sub-object
+        rl = data.pop("rateLimits", None) or {}
+        if rl.get("enableSmartRateLimiting") is not None:
+            data.setdefault("enable_smart_rate_limiting", rl["enableSmartRateLimiting"])
+        if rl.get("aggressivenessPreset") is not None:
+            data.setdefault("aggressiveness_preset", rl["aggressivenessPreset"])
+        if rl.get("dailyConnectionLimit") is not None:
+            data.setdefault("daily_connection_limit", rl["dailyConnectionLimit"])
+        if rl.get("dailyFollowUpLimit") is not None:
+            data.setdefault("daily_follow_up_limit", rl["dailyFollowUpLimit"])
+        if rl.get("velocity") is not None:
+            data.setdefault("velocity", rl["velocity"])
+        if rl.get("cooldownMinutes") is not None:
+            data.setdefault("cooldown_minutes", rl["cooldownMinutes"])
+
+        # activeHours sub-object
+        ah = data.pop("activeHours", None) or {}
+        if ah.get("enableActiveHours") is not None:
+            data.setdefault("enable_active_hours", ah["enableActiveHours"])
+        if ah.get("activeStartHour") is not None:
+            data.setdefault("active_start_hour", ah["activeStartHour"])
+        if ah.get("activeEndHour") is not None:
+            data.setdefault("active_end_hour", ah["activeEndHour"])
+        if ah.get("activeTimezone") is not None:
+            data.setdefault("active_timezone", ah["activeTimezone"])
+        if ah.get("activeDays") is not None:
+            data.setdefault("active_days", ah["activeDays"])
+
+        # linkedinProfile sub-object
+        lp = data.pop("linkedinProfile", None) or {}
+        if lp.get("username") is not None:
+            data.setdefault("linkedin_username", lp["username"])
+        if lp.get("campaign") is not None:
+            data.setdefault("linkedin_campaign", lp["campaign"])
+
+        return data
 
     class Config:
         json_schema_extra = {

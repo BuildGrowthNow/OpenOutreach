@@ -668,6 +668,7 @@ export async function getLinkClicks(linkId: string): Promise<
 export interface Settings {
   llm: {
     provider: string;
+    apiKey: string;
     model: string;
     apiBase: string;
     writingStyle: string;

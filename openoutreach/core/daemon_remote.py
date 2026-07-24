@@ -207,7 +207,8 @@ class RemoteDaemon:
             if value:
                 os.environ[env_key] = str(value)
                 try:
-                    setattr(app_settings, env_key.lower(), value)
+                    # Pydantic fields are uppercase (LLM_API_KEY, not llm_api_key)
+                    object.__setattr__(app_settings, env_key, value)
                 except Exception:
                     pass
 
