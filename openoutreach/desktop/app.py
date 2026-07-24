@@ -430,7 +430,7 @@ class TrayApp:
         import json
         import urllib.request
         req = urllib.request.Request(
-            f"{self.config.api_url.rstrip('/')}/api/linkedin-profiles/",
+            f"{self.config.api_url.rstrip('/')}/api/linkedin-profiles",
             headers={"Authorization": f"Bearer {token}"},
         )
         try:
