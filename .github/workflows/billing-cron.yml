@@ -15,16 +15,29 @@ jobs:
     if: github.event.schedule == '0 */6 * * *' || github.event_name == 'workflow_dispatch'
 
     steps:
+      - name: Set up SSH
+        env:
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$EC2_SSH_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+
       - name: Execute trial expiry on server
-        uses: appleboy/ssh-action@v1.0.0
-        with:
-          host: ${{ secrets.AWS_HOST }}
-          username: ubuntu
-          key: ${{ secrets.AWS_SSH_KEY }}
-          script: |
-            cd /home/ubuntu/openoutreach
-            docker-compose exec -T app python -m openoutreach.cli expire-trials
-            echo "Trial expiry check completed"
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+        run: |
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o IdentitiesOnly=yes "${EC2_USER}@${EC2_HOST}" "
+            set -e
+            cd ~/OpenOutreach
+            docker compose exec -T openoutreach python -m openoutreach.cli expire-trials
+          "
+
+      - name: Cleanup SSH
+        if: always()
+        run: rm -f ~/.ssh/id_rsa ~/.ssh/known_hosts
 
   cleanup-deletions:
     name: Cleanup Expired Deletions
@@ -32,16 +45,29 @@ jobs:
     if: github.event.schedule == '0 3 * * *' || github.event_name == 'workflow_dispatch'
 
     steps:
+      - name: Set up SSH
+        env:
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$EC2_SSH_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+
       - name: Execute deletion cleanup on server
-        uses: appleboy/ssh-action@v1.0.0
-        with:
-          host: ${{ secrets.AWS_HOST }}
-          username: ubuntu
-          key: ${{ secrets.AWS_SSH_KEY }}
-          script: |
-            cd /home/ubuntu/openoutreach
-            docker-compose exec -T app python -m openoutreach.cli cleanup-deletions
-            echo "Deletion cleanup completed"
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+        run: |
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o IdentitiesOnly=yes "${EC2_USER}@${EC2_HOST}" "
+            set -e
+            cd ~/OpenOutreach
+            docker compose exec -T openoutreach python -m openoutreach.cli cleanup-deleted-accounts
+          "
+
+      - name: Cleanup SSH
+        if: always()
+        run: rm -f ~/.ssh/id_rsa ~/.ssh/known_hosts
 
   trial-warnings:
     name: Send Trial Warnings
@@ -49,13 +75,26 @@ jobs:
     if: github.event.schedule == '0 */6 * * *' || github.event_name == 'workflow_dispatch'
 
     steps:
+      - name: Set up SSH
+        env:
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$EC2_SSH_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+
       - name: Execute trial warning emails on server
-        uses: appleboy/ssh-action@v1.0.0
-        with:
-          host: ${{ secrets.AWS_HOST }}
-          username: ubuntu
-          key: ${{ secrets.AWS_SSH_KEY }}
-          script: |
-            cd /home/ubuntu/openoutreach
-            docker-compose exec -T app python -m openoutreach.cli send-trial-warnings
-            echo "Trial warning emails sent"
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+        run: |
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o IdentitiesOnly=yes "${EC2_USER}@${EC2_HOST}" "
+            set -e
+            cd ~/OpenOutreach
+            docker compose exec -T openoutreach python -m openoutreach.cli send-trial-warnings
+          "
+
+      - name: Cleanup SSH
+        if: always()
+        run: rm -f ~/.ssh/id_rsa ~/.ssh/known_hosts
