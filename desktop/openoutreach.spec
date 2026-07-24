@@ -27,7 +27,7 @@ if version_file.exists():
                 break
 
 # Data files to include
-from PyInstaller.utils.hooks import collect_data_files
+from PyInstaller.utils.hooks import collect_data_files, copy_metadata
 datas = [
     (str(ASSETS_DIR), "openoutreach/desktop/assets"),
     (str(PROJECT_ROOT / "linkedin_cli"), "linkedin_cli"),
@@ -35,6 +35,9 @@ datas = [
 ]
 # Include playwright_stealth JS files (read at runtime via pathlib)
 datas += collect_data_files("playwright_stealth")
+# genai_prices reads its own version via importlib.metadata at import time;
+# include dist-info so it doesn't raise PackageNotFoundError in the frozen exe.
+datas += copy_metadata("genai_prices")
 
 # Platform-specific hidden imports
 hiddenimports = [

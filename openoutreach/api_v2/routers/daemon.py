@@ -15,6 +15,14 @@ from typing import Optional
 from datetime import datetime, timezone
 import logging
 
+def _utc_iso(dt: Optional[datetime]) -> Optional[str]:
+    """Return a UTC-aware ISO-8601 string, normalising naive datetimes to UTC."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.isoformat()
+
 from openoutreach.api_v2.dependencies_v2 import get_current_user
 from openoutreach.linkedin.models import LinkedInProfile
 from openoutreach.core.models import Task, SiteConfig
@@ -462,16 +470,8 @@ async def get_subscription_status(
         "plan": user.plan or "starter",
         "subscription_status": user.subscription_status or "none",
         "user_status": user.status or "active",
-        "trial_ends_at": (
-            user.trial_ends_at.isoformat()
-            if user.trial_ends_at
-            else None
-        ),
-        "current_period_end": (
-            user.current_period_end.isoformat()
-            if user.current_period_end
-            else None
-        ),
+        "trial_ends_at": _utc_iso(user.trial_ends_at),
+        "current_period_end": _utc_iso(user.current_period_end),
         "block_reason": block_reason,
     }
 
