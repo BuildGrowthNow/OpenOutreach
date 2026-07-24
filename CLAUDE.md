@@ -82,6 +82,34 @@ For detailed module docs, see `ARCHITECTURE.md`.
 - **Docker**: Playwright base image. When `ENABLE_VNC=true`, starts x11vnc on port 5900 and noVNC websockify web viewer on port 6080. The frontend Settings → LinkedIn Connection tab embeds a live noVNC iframe viewer (`/components/settings/vnc-viewer.tsx`) so operators can interact with LinkedIn challenges, CAPTCHAs, or security verifications directly from the platform without needing an external VNC client or SSH tunnel. `BUILD_ENV` arg selects requirements.
 - **CI/CD**: `.github/workflows/tests.yml` (pytest), `deploy.yml` (build + push to ghcr.io).
 
+## Execution Modes: Desktop vs. Cloud
+
+There are two mutually exclusive ways to run the LinkedIn automation daemon. **Always check which mode is relevant before touching daemon, session, or env code.**
+
+### Desktop execution (default for all base plans)
+- The `Lengrowth.exe` desktop app runs `openoutreach/core/daemon_remote.py` on the user's own Windows/macOS machine.
+- The browser runs locally on the user's residential IP — no proxy needed, no cloud cost.
+- The exe has **no `.env` file**. `openoutreach/config.py` (pydantic `Settings`) and `openoutreach/mongodb/settings.py` (os.environ) both start with empty/default values.
+- On startup, the daemon calls `GET /api/daemon/config` (auth-protected, HTTPS) which returns `mongodb_uri`, `mongodb_name`, and a `server_env` block (`SECRET_KEY`, `LLM_API_KEY`, `LLM_API_BASE`, `AI_MODEL`, `LLM_PROVIDER`).
+- `RemoteDaemon._apply_server_env()` immediately injects these into `os.environ` and patches the pydantic `settings` object so all downstream code works identically to the server.
+- MongoDB is **Atlas** (same cluster as the server). The daemon reads/writes `Campaign`, `Task`, `Lead`, `Deal`, `ChatMessage`, `ActionLog`, `SiteConfig`, `User` etc. directly — same as the cloud daemon.
+- Cookie encryption/decryption (`mongodb/crypto.py`, `core/crypto.py`) requires `SECRET_KEY` — bootstrapped via `_apply_server_env`.
+- LLM calls (`core/llm.py`) fall back to `settings.LLM_API_KEY` when the user hasn't configured LLM in the UI — bootstrapped via `_apply_server_env`.
+- **Never add code that reads `settings.*` or `os.environ` at module import time in daemon-path modules** — those values are empty until `_apply_server_env` runs after `get_config`.
+- **Never do a local MongoDB lookup** (`LinkedInProfile.get()`, `User.get()`, etc.) in daemon startup code to obtain data that the backend API already exposes — the `/api/daemon/config`, `/api/daemon/credentials`, and `/api/daemon/profile/{id}` endpoints exist for exactly this purpose.
+- Profile ID is resolved fresh from `/api/linkedin-profiles` on every startup (`app.py:_resolve_profile_id`) — never rely on a cached keychain value being current after a credential delete/recreate.
+
+### Cloud execution (paid add-on, `cloud_addon` plan, $299/month per seat)
+- `openoutreach/core/daemon.py` runs server-side in Docker on the EC2 instance.
+- Browser runs via proxy ($25–75/profile/month). **Never use datacenter/Elastic IPs** — LinkedIn blocks them.
+- The server has a full `.env` file; pydantic `settings` loads everything at import time. No bootstrap needed.
+- Trial users cannot use cloud execution — they must use the desktop app during trial.
+
+### What's shared between both modes
+- Both use the same MongoDB Atlas cluster, same `Task`/`Lead`/`Deal`/`Campaign` models, same task handlers (`openoutreach/linkedin/tasks/`), same `SiteConfig` for per-user settings.
+- Both use the same `authenticate()` flow from `linkedin_cli`.
+- Resend (email), Stripe (billing), and Supabase (auth) are **server-only** — the desktop daemon never calls these directly.
+
 ## Desktop App — GitHub Release Workflow
 
 The exe is **never committed to git**. Distribution is via GitHub Releases on the `desktop-v*` tag pattern (handled by `.github/workflows/desktop-build.yml`).
