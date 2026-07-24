@@ -1,7 +1,7 @@
 """Auto-updater using GitHub releases.
 
 Startup behaviour (Windows frozen exe only):
-  check → download → replace-via-bat → restart, all silently.
+  check → download (with progress dialog) → replace-via-PowerShell → restart, all silently.
 
 Periodic behaviour (every 6 h, all platforms):
   check → tray notification + menu item → user clicks to download.
@@ -34,7 +34,7 @@ def is_frozen() -> bool:
 
 def can_auto_update() -> bool:
     """True only for the distributed Windows exe — the one case where we can safely
-    replace the running binary by writing a detached .bat."""
+    replace the running binary."""
     return sys.platform == "win32" and is_frozen()
 
 
@@ -43,7 +43,6 @@ def _get_platform_asset_name() -> str:
     if system == "darwin":
         return "Lengrowth-macOS.dmg"
     elif system == "windows":
-        # Standalone exe — simpler to replace than the installer
         return "Lengrowth.exe"
     return ""
 
@@ -64,8 +63,8 @@ async def check_for_updates() -> Optional[dict]:
             release = response.json()
             tag_name = release["tag_name"]
 
-            # Tags are like "v1.2.13-a3f2b1c" — extract semver prefix
-            latest_version = tag_name.lstrip("v").split("-")[0]
+            # Tags are like "desktop-v1.3.1" — extract semver after the last 'v'
+            latest_version = tag_name.lstrip("v").split("-")[-1].lstrip("v")
 
             if version.parse(latest_version) > version.parse(__version__):
                 assets = release.get("assets", [])
@@ -95,88 +94,198 @@ async def check_for_updates() -> Optional[dict]:
         return None
 
 
+# ---------------------------------------------------------------------------
+# Win32 progress dialog (no tkinter dependency)
+# ---------------------------------------------------------------------------
+
+class _ProgressWindow:
+    """Minimal update-progress dialog using win32 APIs via ctypes.
+
+    Creates a real Win32 window so it works inside a frozen exe without any
+    Python UI framework.  Runs its own message loop on a background thread.
+    """
+
+    def __init__(self, label_text: str):
+        self._label = label_text
+        self._hwnd = None
+        self._hwnd_label = None
+        self._hwnd_bar = None
+        self._hwnd_status = None
+        self._thread = None
+        self._pct = 0.0
+        self._status = "Downloading…"
+        self._alive = False
+
+    def show(self) -> None:
+        if sys.platform != "win32":
+            return
+        import threading
+        self._alive = True
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
+
+    def _run(self) -> None:
+        try:
+            import ctypes
+            import ctypes.wintypes as wt
+
+            HINST = ctypes.windll.kernel32.GetModuleHandleW(None)
+            WS_OVERLAPPED = 0x00000000
+            WS_CAPTION = 0x00C00000
+            WS_SYSMENU = 0x00080000
+            WS_VISIBLE = 0x10000000
+            WS_CHILD = 0x40000000
+            WS_BORDER = 0x00800000
+            PBS_SMOOTH = 0x01
+            WM_CLOSE = 0x0010
+            WM_DESTROY = 0x0002
+            SS_CENTER = 0x01
+
+            SW_SHOWNORMAL = 1
+
+            # Forward declarations so the WndProc closure works
+            hwnd_ref = [None]
+
+            WNDPROCTYPE = ctypes.WINFUNCTYPE(ctypes.c_long, wt.HWND, wt.UINT, wt.WPARAM, wt.LPARAM)
+
+            def wnd_proc(hwnd, msg, wp, lp):
+                if msg in (WM_CLOSE, WM_DESTROY):
+                    return 0
+                return ctypes.windll.user32.DefWindowProcW(hwnd, msg, wp, lp)
+
+            wnd_proc_cb = WNDPROCTYPE(wnd_proc)
+
+            class WNDCLASSW(ctypes.Structure):
+                _fields_ = [
+                    ("style", wt.UINT), ("lpfnWndProc", WNDPROCTYPE),
+                    ("cbClsExtra", ctypes.c_int), ("cbWndExtra", ctypes.c_int),
+                    ("hInstance", wt.HINSTANCE), ("hIcon", wt.HICON),
+                    ("hCursor", wt.HCURSOR), ("hbrBackground", wt.HBRUSH),
+                    ("lpszMenuName", wt.LPCWSTR), ("lpszClassName", wt.LPCWSTR),
+                ]
+
+            wc = WNDCLASSW()
+            wc.lpfnWndProc = wnd_proc_cb
+            wc.hInstance = HINST
+            wc.hbrBackground = ctypes.windll.gdi32.CreateSolidBrush(0x001B1B1B)  # dark bg
+            wc.lpszClassName = "LengrowthUpdateDlg"
+            ctypes.windll.user32.RegisterClassW(ctypes.byref(wc))
+
+            W, H = 380, 140
+            SM_CXSCREEN, SM_CYSCREEN = 0, 1
+            sw = ctypes.windll.user32.GetSystemMetrics(SM_CXSCREEN)
+            sh = ctypes.windll.user32.GetSystemMetrics(SM_CYSCREEN)
+            x = (sw - W) // 2
+            y = (sh - H) // 2
+
+            WS_EX_TOPMOST = 0x00000008
+            hwnd = ctypes.windll.user32.CreateWindowExW(
+                WS_EX_TOPMOST,
+                "LengrowthUpdateDlg",
+                "Lengrowth Update",
+                WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_VISIBLE,
+                x, y, W, H,
+                None, None, HINST, None,
+            )
+            hwnd_ref[0] = hwnd
+            self._hwnd = hwnd
+
+            # Title label
+            self._hwnd_label = ctypes.windll.user32.CreateWindowExW(
+                0, "STATIC", self._label,
+                WS_CHILD | WS_VISIBLE | SS_CENTER,
+                10, 14, W - 20, 24,
+                hwnd, None, HINST, None,
+            )
+
+            # Status label
+            self._hwnd_status = ctypes.windll.user32.CreateWindowExW(
+                0, "STATIC", self._status,
+                WS_CHILD | WS_VISIBLE | SS_CENTER,
+                10, 42, W - 20, 20,
+                hwnd, None, HINST, None,
+            )
+
+            # Progress bar  (requires comctl32 init)
+            ctypes.windll.comctl32.InitCommonControls()
+            PROGRESS_CLASS = "msctls_progress32"
+            self._hwnd_bar = ctypes.windll.user32.CreateWindowExW(
+                0, PROGRESS_CLASS, None,
+                WS_CHILD | WS_VISIBLE | WS_BORDER | PBS_SMOOTH,
+                20, 72, W - 40, 22,
+                hwnd, None, HINST, None,
+            )
+            PBM_SETRANGE = 0x0401
+            PBM_SETPOS = 0x0402
+            ctypes.windll.user32.SendMessageW(self._hwnd_bar, PBM_SETRANGE, 0, (100 << 16) | 0)
+            ctypes.windll.user32.SendMessageW(self._hwnd_bar, PBM_SETPOS, 0, 0)
+
+            ctypes.windll.user32.ShowWindow(hwnd, SW_SHOWNORMAL)
+            ctypes.windll.user32.UpdateWindow(hwnd)
+
+            # Message loop
+            class MSG(ctypes.Structure):
+                _fields_ = [
+                    ("hwnd", wt.HWND), ("message", wt.UINT),
+                    ("wParam", wt.WPARAM), ("lParam", wt.LPARAM),
+                    ("time", wt.DWORD), ("pt", wt.POINT),
+                ]
+
+            msg = MSG()
+            PM_REMOVE = 0x0001
+            WM_QUIT = 0x0012
+            while self._alive:
+                if ctypes.windll.user32.PeekMessageW(ctypes.byref(msg), None, 0, 0, PM_REMOVE):
+                    if msg.message == WM_QUIT:
+                        break
+                    ctypes.windll.user32.TranslateMessage(ctypes.byref(msg))
+                    ctypes.windll.user32.DispatchMessageW(ctypes.byref(msg))
+                else:
+                    import time
+                    time.sleep(0.02)
+
+        except Exception as e:
+            logger.debug("Progress window error: %s", e)
+
+    def update(self, pct: float, status: str = "") -> None:
+        self._pct = pct
+        if status:
+            self._status = status
+        if sys.platform != "win32" or not self._hwnd:
+            return
+        try:
+            import ctypes
+            PBM_SETPOS = 0x0402
+            ctypes.windll.user32.SendMessageW(self._hwnd_bar, PBM_SETPOS, int(pct), 0)
+            if status and self._hwnd_status:
+                ctypes.windll.user32.SetWindowTextW(self._hwnd_status, status)
+            ctypes.windll.user32.UpdateWindow(self._hwnd)
+        except Exception:
+            pass
+
+    def close(self) -> None:
+        self._alive = False
+        if sys.platform != "win32" or not self._hwnd:
+            return
+        try:
+            import ctypes
+            WM_CLOSE = 0x0010
+            ctypes.windll.user32.PostMessageW(self._hwnd, WM_CLOSE, 0, 0)
+        except Exception:
+            pass
+        self._hwnd = None
+
+
 async def download_update(url: str, version: str = "") -> Optional[str]:
-    """Download the update exe to a temp file, showing a progress window.
+    """Download the update exe to a temp file, showing a progress dialog.
 
     Returns the local path on success, None on failure.
-    The progress window runs on a dedicated thread so it doesn't block the
-    asyncio event loop.
     """
     dest = os.path.join(tempfile.gettempdir(), "Lengrowth_update.exe")
-    label_text = version or "latest"
+    label_text = f"Updating to Lengrowth v{version}…" if version else "Downloading Lengrowth update…"
 
-    # --- tkinter progress window (Windows only, safe to import here) ---
-    win = None
-    progress_var = None
-    status_var = None
-    try:
-        import tkinter as tk
-        from tkinter import ttk
-
-        win = tk.Tk()
-        win.title("Lengrowth Update")
-        win.resizable(False, False)
-        win.attributes("-topmost", True)
-
-        w, h = 360, 130
-        sw = win.winfo_screenwidth()
-        sh = win.winfo_screenheight()
-        win.geometry(f"{w}x{h}+{(sw - w) // 2}+{(sh - h) // 2}")
-        win.configure(bg="#09090b")
-
-        tk.Label(
-            win,
-            text=f"Updating to Lengrowth v{label_text}…",
-            bg="#09090b",
-            fg="#f4f4f5",
-            font=("Segoe UI", 11, "bold"),
-        ).pack(pady=(18, 4))
-
-        status_var = tk.StringVar(value="Downloading…")
-        tk.Label(
-            win,
-            textvariable=status_var,
-            bg="#09090b",
-            fg="#a1a1aa",
-            font=("Segoe UI", 9),
-        ).pack()
-
-        progress_var = tk.DoubleVar(value=0)
-        bar = ttk.Progressbar(win, variable=progress_var, maximum=100, length=300)
-        bar.pack(pady=(8, 0))
-
-        # Run the tkinter event loop on its own thread
-        import threading
-
-        def _run_tk():
-            win.mainloop()
-
-        tk.Thread = threading.Thread  # type: ignore[attr-defined]  # unused alias
-        _tk_thread = threading.Thread(target=_run_tk, daemon=True)
-        _tk_thread.start()
-    except Exception as e:
-        logger.debug("Progress window unavailable: %s", e)
-        win = None
-
-    def _set_progress(pct: float, msg: str = "") -> None:
-        if win is None:
-            return
-        try:
-            if progress_var is not None:
-                progress_var.set(pct)
-            if status_var is not None and msg:
-                status_var.set(msg)
-            win.update_idletasks()
-        except Exception:
-            pass
-
-    def _close_win() -> None:
-        if win is None:
-            return
-        try:
-            win.destroy()
-        except Exception:
-            pass
+    win = _ProgressWindow(label_text)
+    win.show()
 
     try:
         async with httpx.AsyncClient(timeout=300.0, follow_redirects=True) as client:
@@ -192,50 +301,77 @@ async def download_update(url: str, version: str = "") -> Optional[str]:
                             pct = downloaded / total * 100
                             mb = downloaded / 1_048_576
                             total_mb = total / 1_048_576
-                            _set_progress(pct, f"{mb:.1f} / {total_mb:.1f} MB")
+                            win.update(pct, f"{mb:.1f} / {total_mb:.1f} MB")
                         else:
-                            _set_progress(50, f"{downloaded / 1_048_576:.1f} MB…")
+                            win.update(50, f"{downloaded / 1_048_576:.1f} MB…")
 
-        _set_progress(100, "Installing…")
+        win.update(100, "Installing…")
         logger.info("Update downloaded to %s", dest)
-        _close_win()
+        win.close()
         return dest
     except Exception as e:
         logger.error("Update download failed: %s", e)
-        _close_win()
+        win.close()
         return None
 
 
 def apply_update_windows(new_exe_path: str) -> None:
     """Replace the current exe with new_exe_path and restart.
 
-    Writes a detached .bat that waits for this process to exit, copies the new
-    exe over the old one, then relaunches it.  Terminates this process via
-    os._exit so all threads are killed immediately (sys.exit only raises in the
-    calling thread).
+    Uses a hidden PowerShell script that waits for the current process to exit
+    by PID, copies the new exe over, then relaunches it — no visible CMD window.
     """
     current_exe = sys.executable
-    bat_path = os.path.join(tempfile.gettempdir(), "lengrowth_update.bat")
-    bat = (
-        "@echo off\n"
-        "timeout /t 3 /nobreak > nul\n"
-        f'copy /Y "{new_exe_path}" "{current_exe}"\n'
-        f'start "" "{current_exe}"\n'
-        f'del "{new_exe_path}"\n'
-        'del "%~f0"\n'
-    )
+    current_pid = os.getpid()
+    ps_path = os.path.join(tempfile.gettempdir(), "lengrowth_update.ps1")
+
+    # Wait for THIS process to exit (by PID), then replace and relaunch.
+    # The -WindowStyle Hidden on the outer call keeps the PowerShell console invisible.
+    ps_script = f"""
+$pid_to_wait = {current_pid}
+$target = '{current_exe.replace("'", "''")}'
+$source = '{new_exe_path.replace("'", "''")}'
+
+# Wait up to 15 s for the old process to exit
+$deadline = (Get-Date).AddSeconds(15)
+while ((Get-Process -Id $pid_to_wait -ErrorAction SilentlyContinue) -and (Get-Date) -lt $deadline) {{
+    Start-Sleep -Milliseconds 200
+}}
+
+# Copy new exe over old one
+Copy-Item -Path $source -Destination $target -Force
+
+# Clean up temp file
+Remove-Item -Path $source -Force -ErrorAction SilentlyContinue
+
+# Relaunch
+Start-Process -FilePath $target
+
+# Remove this script
+Remove-Item -Path '{ps_path.replace("'", "''")}' -Force -ErrorAction SilentlyContinue
+"""
+
     try:
-        with open(bat_path, "w") as fh:
-            fh.write(bat)
+        with open(ps_path, "w", encoding="utf-8") as fh:
+            fh.write(ps_script)
+
         subprocess.Popen(
-            ["cmd", "/c", bat_path],
+            [
+                "powershell.exe",
+                "-NonInteractive",
+                "-NoProfile",
+                "-WindowStyle", "Hidden",
+                "-ExecutionPolicy", "Bypass",
+                "-File", ps_path,
+            ],
             creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NO_WINDOW,
             close_fds=True,
         )
-        logger.info("Update bat launched — exiting for replacement")
+        logger.info("Update PowerShell script launched — exiting for replacement")
     except Exception as e:
-        logger.error("Failed to launch update bat: %s", e)
+        logger.error("Failed to launch update script: %s", e)
         return
+
     os._exit(0)
 
 
