@@ -389,8 +389,14 @@ async def get_credentials(
 ):
     """Get LinkedIn credentials for daemon login.
 
+    Reads email/password from LinkedInCredentials (the canonical store).
+    profile.linkedin_username / linkedin_password are only populated after the
+    first successful login and must not be used as the source of truth here.
     Returns decrypted cookie_data as JSON string for remote daemon consumption.
     """
+    from openoutreach.mongodb.models import LinkedInCredentials
+    import json
+
     profile = LinkedInProfile.objects.get(
         _id=linkedin_profile_id,
         user_id=user_id,
@@ -398,17 +404,26 @@ async def get_credentials(
     if not profile:
         raise HTTPException(404, "LinkedIn profile not found")
 
-    # Return credentials with DECRYPTED cookie_data
-    # profile.cookie_data property handles decryption automatically
-    import json
+    # Fetch the active credential for this profile
+    cred = None
+    for c in LinkedInCredentials.objects().filter(
+        linkedin_profile_id=linkedin_profile_id,
+        user_id=user_id,
+    ):
+        cred = c
+        break  # take the first (there should only be one per profile)
+
+    if not cred:
+        raise HTTPException(404, "No credentials found for this LinkedIn profile")
+
     cookie_data_json = None
     if profile.cookie_data:
         cookie_data_json = json.dumps(profile.cookie_data)
 
     return {
-        "email": profile.linkedin_username,
-        "password": profile.linkedin_password,
-        "cookie_data": cookie_data_json,  # JSON string, not encrypted
+        "email": cred.get_email(),
+        "password": cred.get_password(),
+        "cookie_data": cookie_data_json,
     }
 
 
