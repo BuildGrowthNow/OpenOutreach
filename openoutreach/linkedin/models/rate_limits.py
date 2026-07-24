@@ -151,8 +151,8 @@ class SmartRateLimitContext:
             effective = int(effective * m)
 
         # Reduce if campaign-specific limits are lower
-        if campaign and str(campaign.id) in self.campaign_context:
-            campaign_limit = self.campaign_context[str(campaign.id)].get("limit", float("inf"))
+        if campaign and str(campaign._id) in self.campaign_context:
+            campaign_limit = self.campaign_context[str(campaign._id)].get("limit", float("inf"))
             effective = min(effective, int(campaign_limit))
 
         return max(1, effective)  # At least 1 action allowed
