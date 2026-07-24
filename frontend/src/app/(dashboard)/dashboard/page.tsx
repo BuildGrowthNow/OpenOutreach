@@ -70,9 +70,8 @@ const Dashboard = () => {
       processedActivity.push({
         id: `campaign-${campaign.id || index}`,
         type: 'campaign_updated',
-        description: `Campaign "${campaign.name || 'Unnamed'}" was updated`,
+        description: `Campaign "${campaign.name || 'Unnamed'}" is ${campaign.status}`,
         timestamp: new Date(NOW - index * 3600000).toISOString(),
-        entity: campaign.id,
         status: 'success',
       })
     })
@@ -81,9 +80,9 @@ const Dashboard = () => {
       processedActivity.push({
         id: `lead-${lead.id || index}`,
         type: 'new_lead',
-        description: `New lead "${lead.name || 'Unnamed'}" added`,
+        description: `New lead discovered${lead.name ? `: ${lead.name}` : ''}`,
         timestamp: new Date(NOW - (index + 2) * 3600000).toISOString(),
-        entity: lead.id,
+        entity: lead.state ? lead.state.toLowerCase().replace(/_/g, ' ') : undefined,
         status: 'success',
       })
     })

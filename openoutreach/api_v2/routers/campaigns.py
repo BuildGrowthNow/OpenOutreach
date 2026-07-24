@@ -65,6 +65,14 @@ class CampaignUpdate(BaseModel):
     follow_up_strategy: Optional[str] = None
 
 
+class CampaignStats(BaseModel):
+    totalLeads: int = 0
+    connected: int = 0
+    completed: int = 0
+    messagesSent: int = 0
+    messagesReplied: int = 0
+
+
 class CampaignResponse(BaseModel):
     """Response schema for campaign."""
     id: str
@@ -81,6 +89,7 @@ class CampaignResponse(BaseModel):
     icp_titles: List[str]
     follow_up_strategy: Optional[str]
     created_at: str
+    stats: CampaignStats = CampaignStats()
 
 
 class PaginationInfo(BaseModel):
@@ -168,11 +177,35 @@ async def list_campaigns(
             ]
         }
         cursor = collection.find(query).skip(skip).limit(limit)
+        docs = list(cursor)
+
+        # Batch-fetch deal stats for all campaigns in one aggregation
+        deals_collection = get_mongodb_collection("deals")
+        campaign_stats: Dict[str, Dict] = {}
+        if deals_collection is not None and docs:
+            campaign_ids = [str(doc["_id"]) for doc in docs]
+            pipeline = [
+                {"$match": {"campaign_id": {"$in": campaign_ids}}},
+                {"$group": {
+                    "_id": "$campaign_id",
+                    "totalLeads": {"$sum": 1},
+                    "connected": {"$sum": {"$cond": [{"$eq": ["$state", "Connected"]}, 1, 0]}},
+                    "completed": {"$sum": {"$cond": [{"$eq": ["$state", "Completed"]}, 1, 0]}},
+                }},
+            ]
+            for row in deals_collection.aggregate(pipeline):
+                campaign_stats[str(row["_id"])] = {
+                    "totalLeads": row.get("totalLeads", 0),
+                    "connected": row.get("connected", 0),
+                    "completed": row.get("completed", 0),
+                }
 
         campaigns = []
-        for doc in cursor:
+        for doc in docs:
+            cid = str(doc.get("_id"))
+            s = campaign_stats.get(cid, {})
             campaigns.append(CampaignResponse(
-                id=str(doc.get("_id")),
+                id=cid,
                 name=doc.get("name", ""),
                 product_pitch=doc.get("product_pitch", ""),
                 campaign_objective=doc.get("campaign_objective", ""),
@@ -186,6 +219,11 @@ async def list_campaigns(
                 icp_titles=doc.get("icp_titles", []),
                 follow_up_strategy=doc.get("follow_up_strategy"),
                 created_at=doc.get("created_at").isoformat() if doc.get("created_at") else "",
+                stats=CampaignStats(
+                    totalLeads=s.get("totalLeads", 0),
+                    connected=s.get("connected", 0),
+                    completed=s.get("completed", 0),
+                ),
             ))
 
         count = collection.count_documents(query)

@@ -99,23 +99,52 @@ async def list_leads(
         raise HTTPException(status_code=503, detail="Database unavailable")
     leads_data = {str(doc["_id"]): doc for doc in leads_collection.find({"_id": {"$in": lead_ids}})}
 
+    # Fetch campaign names for lookup
+    campaign_ids = list(set(str(d["campaign_id"]) for d in deals))
+    campaigns_collection = get_mongodb_collection("campaigns")
+    campaign_names: dict = {}
+    if campaigns_collection is not None:
+        for cdoc in campaigns_collection.find({"_id": {"$in": campaign_ids}}, {"_id": 1, "name": 1}):
+            campaign_names[str(cdoc["_id"])] = cdoc.get("name", "")
+
     # Build response — flat Lead shape matching frontend Lead interface
     data = []
     for deal in deals:
         lead_data = leads_data.get(str(deal["lead_id"]))
         if lead_data:
             created = lead_data.get("creation_date")
-            updated = lead_data.get("updated_at") or created
+            updated = lead_data.get("update_date") or created
+            # Extract display fields from cached_profile (Voyager response shape)
+            cp = lead_data.get("cached_profile") or {}
+            profile_inner = cp.get("profile", cp)
+            first = profile_inner.get("firstName", "") or cp.get("first_name", "")
+            last = profile_inner.get("lastName", "") or cp.get("last_name", "")
+            full_name = (
+                lead_data.get("full_name")
+                or (f"{first} {last}".strip() or None)
+            )
+            headline = (
+                lead_data.get("headline")
+                or profile_inner.get("headline")
+                or cp.get("headline")
+            )
+            # Extract company from "Title at Company" headline pattern
+            company = None
+            if headline:
+                at_idx = headline.lower().find(" at ")
+                if at_idx > -1:
+                    company = headline[at_idx + 4:].strip()
             data.append({
                 "id": str(lead_data["_id"]),
                 "publicIdentifier": lead_data.get("public_identifier", ""),
-                "linkedinUrl": lead_data.get("url", ""),
-                "name": lead_data.get("full_name"),
-                "title": lead_data.get("headline"),
-                "company": None,
+                "linkedinUrl": lead_data.get("linkedin_url", lead_data.get("url", "")),
+                "name": full_name,
+                "title": headline,
+                "company": company,
                 "state": deal.get("state", "DISCOVERED"),
                 "outcome": deal.get("outcome"),
                 "campaignId": str(deal["campaign_id"]),
+                "campaignName": campaign_names.get(str(deal["campaign_id"])),
                 "creationDate": created.isoformat() if hasattr(created, "isoformat") else (created or ""),
                 "updateDate": updated.isoformat() if hasattr(updated, "isoformat") else (updated or ""),
                 "disqualified": lead_data.get("disqualified", False),

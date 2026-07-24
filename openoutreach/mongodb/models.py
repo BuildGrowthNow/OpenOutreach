@@ -974,13 +974,20 @@ class Campaign:
         user_ids.extend(self.team_member_ids)
         return user_ids
 
-    def save(self) -> str:
-        """Save the campaign to MongoDB."""
+    def save(self, update_fields: Optional[List[str]] = None) -> str:
+        """Save the campaign to MongoDB.
+
+        If update_fields is given, only those fields are written (partial update).
+        """
         collection = get_mongodb_collection("campaigns")
         if collection is None:
             raise RuntimeError("MongoDB collection 'campaigns' not available")
 
-        doc = self.to_dict()
+        if update_fields:
+            full = self.to_dict()
+            doc = {f: full[f] for f in update_fields if f in full}
+        else:
+            doc = self.to_dict()
         result = collection.update_one({"_id": self._id}, {"$set": doc}, upsert=True)
         return str(result.upserted_id or self._id)
 

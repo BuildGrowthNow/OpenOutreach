@@ -96,6 +96,10 @@ SILENCED_LOGGERS = (
     "filelock",
     "asyncio",
     "requests",
+    "huggingface_hub",
+    "huggingface_hub.utils._http",
+    "huggingface_hub.file_download",
+    "hf_xet",
     # MongoDB driver - heartbeats and topology discovery
     "pymongo",
     "pymongo.command",
