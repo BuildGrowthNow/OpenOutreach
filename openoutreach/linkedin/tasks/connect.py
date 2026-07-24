@@ -154,20 +154,16 @@ def handle_connect(task, session, qualifiers):
                 session.linkedin_profile, ActionLog.ActionType.CONNECT, campaign
             )
             # Also record in ActionLog with details
-            lead_obj = Lead.find_by_public_identifier(public_id)
             lead_name = ""
-            if lead_obj:
-                try:
-                    prof = lead_obj.get_profile(session)
-                    if prof and "profile" in prof:
-                        first = prof["profile"].get("firstName", "")
-                        last = prof["profile"].get("lastName", "")
-                        lead_name = f"{first} {last}".strip()
-                except Exception:
-                    pass
+            if lead and lead.cached_profile and isinstance(lead.cached_profile, dict):
+                first = lead.cached_profile.get("first_name", "")
+                last = lead.cached_profile.get("last_name", "")
+                lead_name = f"{first} {last}".strip()
             if not lead_name:
-                lead_name = profile.get("profile", {}).get("firstName", "") + " " + profile.get("profile", {}).get("lastName", "")
-                lead_name = lead_name.strip() or public_id
+                nested = profile.get("profile", {})
+                first = nested.get("firstName", "") or nested.get("first_name", "")
+                last = nested.get("lastName", "") or nested.get("last_name", "")
+                lead_name = f"{first} {last}".strip() or public_id
 
             session.linkedin_profile.record_action(
                 ActionLog.ActionType.CONNECT,

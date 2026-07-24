@@ -241,14 +241,10 @@ def handle_follow_up(task, session, qualifiers):
         )
         # Also record in ActionLog with details
         lead_name = ""
-        try:
-            prof = lead.get_profile(session)
-            if prof and "profile" in prof:
-                first = prof["profile"].get("firstName", "")
-                last = prof["profile"].get("lastName", "")
-                lead_name = f"{first} {last}".strip()
-        except Exception:
-            pass
+        if lead.cached_profile and isinstance(lead.cached_profile, dict):
+            first = lead.cached_profile.get("first_name", "")
+            last = lead.cached_profile.get("last_name", "")
+            lead_name = f"{first} {last}".strip()
         if not lead_name:
             lead_name = lead.public_identifier
 
