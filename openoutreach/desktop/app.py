@@ -271,6 +271,7 @@ class TrayApp:
 
         items.extend([
             pystray.Menu.SEPARATOR,
+            Item("Check for Updates", self._on_check_for_updates),
             Item("Quit", self._on_quit),
         ])
 
@@ -360,6 +361,10 @@ class TrayApp:
         else:
             self._start_daemon()
         self._update_menu()
+
+    def _on_check_for_updates(self):
+        """Tray: manually trigger an update check and download."""
+        self._start_background_update_check()
 
     def _on_download_update(self):
         if self._pending_update:
