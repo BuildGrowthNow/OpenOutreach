@@ -250,6 +250,26 @@ export default function CampaignDetailsPage() {
     return () => clearInterval(interval);
   }, [campaignId, fetchCampaignStatus]);
 
+  // Poll leads every 30 seconds so new discoveries appear without a page reload
+  const fetchLeadsSilent = useCallback(async () => {
+    try {
+      const leadsResponse = await getCampaignLeads(campaignId);
+      if (leadsResponse.data) {
+        setLeads(leadsResponse.data.data || []);
+      }
+    } catch {
+      // silent — don't surface polling errors to the user
+    }
+  }, [campaignId]);
+
+  useEffect(() => {
+    if (!campaignId) return;
+    const interval = setInterval(() => {
+      void fetchLeadsSilent();
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [campaignId, fetchLeadsSilent]);
+
 
   const handleDeleteCampaign = async () => {
     if (!campaign) return;
