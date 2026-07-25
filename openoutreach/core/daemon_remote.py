@@ -730,7 +730,7 @@ class RemoteDaemon:
         zone = ZoneInfo(self.config.active_timezone)
         now = datetime.now(zone)
 
-        if now.weekday() not in self.config.active_days:
+        if (now.weekday() + 1) not in self.config.active_days:
             return False
 
         return self.config.active_start_hour <= now.hour < self.config.active_end_hour

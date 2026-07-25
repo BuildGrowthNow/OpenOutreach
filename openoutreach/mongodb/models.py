@@ -4111,7 +4111,7 @@ class SiteConfig:
         self.active_start_hour = active_start_hour
         self.active_end_hour = active_end_hour
         self.active_timezone = active_timezone
-        self.active_days = active_days if active_days is not None else [0, 1, 2, 3, 4]
+        self.active_days = active_days if active_days is not None else [1, 2, 3, 4, 5]
         self.enable_smart_rate_limiting = enable_smart_rate_limiting
         self.aggressiveness_preset = aggressiveness_preset
         self.ai_writing_style = ai_writing_style

@@ -103,7 +103,7 @@ async def get_settings(
             "activeStartHour": getattr(config, "active_start_hour", 9),
             "activeEndHour": getattr(config, "active_end_hour", 18),
             "activeTimezone": getattr(config, "active_timezone", "UTC") or "UTC",
-            "activeDays": active_days_str or "0,1,2,3,4",
+            "activeDays": active_days_str or "1,2,3,4,5",
         },
         "linkedinProfile": {
             "username": li_username,
@@ -188,7 +188,7 @@ async def update_settings(
             active_start_hour=getattr(config, "active_start_hour", 9),
             active_end_hour=getattr(config, "active_end_hour", 18),
             active_timezone=getattr(config, "active_timezone", "UTC") or "UTC",
-            active_days=active_days_str or "0,1,2,3,4",
+            active_days=active_days_str or "1,2,3,4,5",
             bettercontact_api_key=config.bettercontact_api_key or "",
             contacts_api_token=config.contacts_api_token or "",
             contacts_api_url=config.contacts_api_url or "",

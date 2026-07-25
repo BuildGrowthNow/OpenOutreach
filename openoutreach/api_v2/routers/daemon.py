@@ -300,7 +300,7 @@ async def get_daemon_config(
     config = SiteConfig.load(user_id=user_id)
 
     # active_days is stored as List[int] in the model
-    active_days = config.active_days if isinstance(config.active_days, list) else [0, 1, 2, 3, 4, 5, 6]
+    active_days = config.active_days if isinstance(config.active_days, list) else [1, 2, 3, 4, 5, 6, 7]
 
     from openoutreach.config import settings as app_settings
 

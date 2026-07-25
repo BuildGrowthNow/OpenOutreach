@@ -37,7 +37,7 @@ class SiteConfigResponse(BaseModel):
     active_start_hour: int = Field(default=9, ge=0, le=23, description="Active hours start (0-23)")
     active_end_hour: int = Field(default=18, ge=0, le=23, description="Active hours end (0-23)")
     active_timezone: str = Field(default="UTC", description="Timezone for active hours")
-    active_days: str = Field(default="0,1,2,3,4", description="Comma-separated day numbers (0=Monday, 6=Sunday)")
+    active_days: str = Field(default="1,2,3,4,5", description="Comma-separated day numbers (1=Monday, 7=Sunday)")
     bettercontact_api_key: str = Field(default="", description="BetterContact API key")
     contacts_api_token: str = Field(default="", description="Contacts API token")
     contacts_api_url: str = Field(default="", description="Contacts API URL")
