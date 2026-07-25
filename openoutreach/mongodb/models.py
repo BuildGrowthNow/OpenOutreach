@@ -1282,12 +1282,19 @@ class Deal:
 
     @classmethod
     def get_by_lead_and_campaign(cls, lead_id: str, campaign_id: str) -> Optional["Deal"]:
-        """Get deal by lead and campaign."""
+        """Get deal by lead_id (UUID) or public_identifier and campaign."""
         collection = get_mongodb_collection("deals")
         if collection is None:
             return None
         data = collection.find_one({"lead_id": lead_id, "campaign_id": campaign_id})
-        return cls.from_dict(data) if data else None
+        if data:
+            return cls.from_dict(data)
+        # Fallback: treat lead_id as a public_identifier and resolve to _id first
+        lead = Lead.find_by_public_identifier(lead_id)
+        if lead and lead._id != lead_id:
+            data = collection.find_one({"lead_id": lead._id, "campaign_id": campaign_id})
+            return cls.from_dict(data) if data else None
+        return None
 
     @classmethod
     def find_by_state_and_campaign(cls, state: str, campaign_id: str) -> List["Deal"]:
