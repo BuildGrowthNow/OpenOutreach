@@ -376,6 +376,7 @@ class LinkedInProfile:
         return collection.count_documents({
             "linkedin_profile_id": self._id,
             "action_type": action_type,
+            "status": "completed",
             "created_at": {"$gte": today_start},
         })
 
