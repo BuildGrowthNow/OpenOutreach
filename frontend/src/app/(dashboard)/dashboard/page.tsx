@@ -185,7 +185,7 @@ const Dashboard = () => {
             title="Total Leads"
             value={totalLeads}
             icon="Users"
-            description="All campaigns, 30 days"
+            description="All campaigns"
           />
           <StatsCard
             title="Connected"
@@ -237,7 +237,7 @@ const Dashboard = () => {
             {
               label: 'Total Leads',
               value: totalLeads,
-              sub: 'all campaigns, 30 days',
+              sub: 'all campaigns',
               highlight: 'neutral',
             },
             {

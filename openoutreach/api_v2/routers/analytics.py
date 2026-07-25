@@ -262,6 +262,7 @@ async def get_analytics_overview(
     # Get deals collection
     deals_collection = get_mongodb_collection("deals")
     action_logs_collection = get_mongodb_collection("action_logs")
+    leads_collection = get_mongodb_collection("leads")
 
     if deals_collection is None or action_logs_collection is None:
         return AnalyticsOverviewResponse(
@@ -462,8 +463,14 @@ async def get_analytics_overview(
         conversion_rate=conversion_rate,
     )
 
+    total_leads = (
+        leads_collection.count_documents({"user_id": user_id})
+        if leads_collection is not None
+        else 0
+    )
+
     totals = OverviewTotals(
-        leads=total_qualified + total_ready_to_connect + total_pending + total_connected,
+        leads=total_leads,
         qualified=total_qualified,
         ready_to_connect=total_ready_to_connect,
         connected=total_connected,
