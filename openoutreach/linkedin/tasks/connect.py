@@ -90,7 +90,13 @@ def handle_connect(task, session, qualifiers):
         )
         return
 
-    candidate = strategy.find_candidate(session)
+    try:
+        candidate = strategy.find_candidate(session)
+    except Exception as e:
+        if "Failed to fetch" in str(e) or "Page.evaluate" in str(e):
+            logger.warning("[%s] connect: Voyager API unavailable — slot skipped (%s)", campaign, e)
+            return
+        raise
     if candidate is None:
         logger.info("[%s] connect: no candidate available — slot skipped", campaign)
         return

@@ -458,11 +458,22 @@ def plan_connect_window(session, campaign) -> int:
 
 def plan_follow_up_window(session, campaign) -> int:
     """Plan the next 24h of follow-up slots for *campaign*. No-op when a
-    PENDING follow-up task already exists for the campaign."""
+    PENDING follow-up task already exists or there are no CONNECTED deals."""
     profile = session.linkedin_profile
 
     if _has_pending(Task.TaskType.FOLLOW_UP, campaign.pk, linkedin_profile_id=profile.pk):
         return 0
+
+    from openoutreach.mongodb.connection import get_mongodb_collection
+    from openoutreach.crm.models import DealState
+    deals_col = get_mongodb_collection("deals")
+    if deals_col is not None:
+        connected_count = deals_col.count_documents({
+            "campaign_id": campaign.pk,
+            "state": DealState.CONNECTED,
+        })
+        if connected_count == 0:
+            return 0
 
     from openoutreach.mongodb.models import SiteConfig
     from openoutreach.core.rate_limit_presets import get_preset
