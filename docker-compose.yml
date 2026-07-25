@@ -25,7 +25,7 @@ services:
 
       # MongoDB
       - MONGODB_ENABLED=true
-      - MONGODB_URI=${MONGODB_URI:-mongodb://mongodb:27017/}
+      - MONGODB_URI=${MONGODB_URI}
       - MONGODB_NAME=${MONGODB_NAME:-openoutreach}
 
       # LLM Configuration
@@ -79,22 +79,4 @@ services:
       - "6080:6080"  # noVNC web viewer
       - "5900:5900"  # VNC direct connection
 
-    depends_on:
-      - mongodb
-
     command: ["/start"]
-
-  mongodb:
-    image: mongo:7.0
-    restart: unless-stopped
-    environment:
-      - MONGO_INITDB_DATABASE=openoutreach
-    volumes:
-      - mongodb_data:/data/db
-      - mongodb_config:/data/configdb
-    ports:
-      - "27017:27017"
-
-volumes:
-  mongodb_data:
-  mongodb_config:

@@ -59,8 +59,8 @@ jobs:
           ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o IdentitiesOnly=yes "${EC2_USER}@${EC2_HOST}" "
             set -e
             cd ~/OpenOutreach
-            docker compose down
-            docker compose up -d --build
+            docker compose down --remove-orphans
+            docker compose up -d --build --force-recreate
           "
 
       - name: Ensure MongoDB Indexes
