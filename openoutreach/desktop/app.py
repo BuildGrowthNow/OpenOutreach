@@ -406,7 +406,10 @@ class TrayApp:
 
         # Always resolve fresh profile_id so a credential delete+recreate doesn't
         # leave a stale ID in the keychain causing 404s on every daemon start.
+        # _resolve_profile_id may refresh the token internally on 401 — re-read
+        # token afterwards so the daemon gets the latest one.
         resolved = self._resolve_profile_id(token)
+        token = self.auth.get_token() or token  # pick up refreshed token if any
         if resolved:
             cached = self.auth.get_profile_id()
             if resolved != cached:
@@ -461,20 +464,63 @@ class TrayApp:
         self.daemon_thread = threading.Thread(target=run_daemon, daemon=True)
         self.daemon_thread.start()
 
-    def _resolve_profile_id(self, token: str) -> Optional[str]:
+    def _try_refresh_token(self, refresh_token: str) -> Optional[str]:
+        """Exchange a refresh token for a new access token. Returns new token or None."""
         import json
         import urllib.request
-        req = urllib.request.Request(
-            f"{self.config.api_url.rstrip('/')}/api/linkedin-profiles",
-            headers={"Authorization": f"Bearer {token}"},
-        )
         try:
+            body = json.dumps({"refresh_token": refresh_token}).encode()
+            req = urllib.request.Request(
+                f"{self.config.api_url.rstrip('/')}/api/auth/refresh/",
+                data=body,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                data = json.loads(resp.read())
+                new_token = data.get("access_token")
+                if new_token:
+                    logger.info("Access token refreshed at startup")
+                    self.auth.update_token(new_token)
+                    return new_token
+        except Exception as e:
+            logger.warning("Startup token refresh failed: %s", e)
+        return None
+
+    def _resolve_profile_id(self, token: str) -> Optional[str]:
+        import json
+        import urllib.error
+        import urllib.request
+
+        def _fetch(t: str) -> Optional[str]:
+            req = urllib.request.Request(
+                f"{self.config.api_url.rstrip('/')}/api/linkedin-profiles",
+                headers={"Authorization": f"Bearer {t}"},
+            )
             with urllib.request.urlopen(req, timeout=10) as resp:
                 data = json.loads(resp.read())
                 profiles = data if isinstance(data, list) else data.get("profiles", [])
                 if profiles:
                     pid = profiles[0].get("id") or profiles[0].get("_id")
                     return str(pid) if pid else None
+            return None
+
+        try:
+            return _fetch(token)
+        except urllib.error.HTTPError as e:
+            if e.code == 401:
+                # Token expired — try refreshing before giving up
+                refresh_token = self.auth.get_refresh_token()
+                if refresh_token:
+                    new_token = self._try_refresh_token(refresh_token)
+                    if new_token:
+                        try:
+                            return _fetch(new_token)
+                        except Exception as e2:
+                            logger.error("Failed to resolve profile_id after refresh: %s", e2)
+                logger.error("Failed to resolve profile_id: token expired and refresh unavailable")
+            else:
+                logger.error("Failed to resolve profile_id: %s", e)
         except Exception as e:
             logger.error("Failed to resolve profile_id: %s", e)
         return None

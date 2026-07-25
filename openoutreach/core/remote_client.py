@@ -270,7 +270,7 @@ class RemoteClient:
 
         try:
             response = await self._client.post(
-                "/api/auth/refresh",
+                "/api/auth/refresh/",
                 json={"refresh_token": self._refresh_token},
             )
             response.raise_for_status()
