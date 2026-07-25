@@ -602,13 +602,24 @@ def on_deal_state_entered(deal) -> None:
 STALE_RUNNING_THRESHOLD_MINUTES = 30
 
 
-def _recover_stale_running_tasks() -> int:
+def _recover_stale_running_tasks(linkedin_profile_id: str | None = None) -> int:
     """Reset RUNNING tasks older than 30 minutes to PENDING.
 
     Only tasks that have been RUNNING longer than the threshold are considered
-    stale (daemon crash). Fresh RUNNING tasks are left alone.
+    stale (daemon crash or laptop lid close). Fresh RUNNING tasks are left alone.
+
+    When ``linkedin_profile_id`` is provided only that profile's tasks are
+    considered — used by the desktop daemon's API reconcile path so each user's
+    reconnect cleans up their own stale tasks without touching others.
     """
-    running_tasks = list(Task.objects.filter(status=Task.Status.RUNNING))
+    if linkedin_profile_id:
+        running_tasks = list(Task.objects.filter(
+            status=Task.Status.RUNNING,
+            linkedin_profile_id=linkedin_profile_id,
+        ))
+    else:
+        running_tasks = list(Task.objects.filter(status=Task.Status.RUNNING))
+
     if not running_tasks:
         return 0
 

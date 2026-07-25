@@ -346,9 +346,10 @@ async def reconcile_tasks(
     """
     from openoutreach.mongodb.connection import get_mongodb_collection
     from openoutreach.core.scheduler import (
+        _recover_stale_running_tasks,
+        plan_check_pending_window,
         plan_connect_window,
         plan_follow_up_window,
-        plan_check_pending_window,
     )
 
     profile = LinkedInProfile.objects.get(
@@ -357,6 +358,14 @@ async def reconcile_tasks(
     )
     if not profile:
         raise HTTPException(404, "LinkedIn profile not found")
+
+    # Reset any RUNNING tasks for this profile that are older than the stale
+    # threshold (30 min). This handles laptop-close / mid-task daemon restarts:
+    # the task that was executing when the session died gets re-queued so the
+    # next reconcile can pick it up instead of blocking the planner forever.
+    recovered = _recover_stale_running_tasks(linkedin_profile_id=linkedin_profile_id)
+    if recovered:
+        logger.info("Reconcile: recovered %d stale tasks for profile %s", recovered, linkedin_profile_id)
 
     campaigns_collection = get_mongodb_collection("campaigns")
     if campaigns_collection is None:
