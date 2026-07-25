@@ -102,12 +102,11 @@ class SmartRateLimiter:
         if collection is None:
             return 0
 
-        # Count actions, excluding empty details
         count = collection.count_documents({
             "linkedin_profile_id": self.linkedin_profile._id,
             "action_type": action_type,
+            "status": "completed",
             "created_at": {"$gte": since},
-            "details": {"$ne": {}, "$exists": True}  # Exclude empty details
         })
 
         return count
