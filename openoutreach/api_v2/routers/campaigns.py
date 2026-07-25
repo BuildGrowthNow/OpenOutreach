@@ -6,7 +6,7 @@ and team access control.
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
@@ -1107,7 +1107,10 @@ async def get_campaign_activity(
             scheduled_at = upcoming.get("scheduled_at")
             eta = 0
             if scheduled_at:
-                delta = (scheduled_at - datetime.utcnow()).total_seconds()
+                now_utc = datetime.now(timezone.utc)
+                if scheduled_at.tzinfo is None:
+                    scheduled_at = scheduled_at.replace(tzinfo=timezone.utc)
+                delta = (scheduled_at - now_utc).total_seconds()
                 eta = max(0, int(delta))
             next_task = {
                 "id": str(upcoming.get("_id", "")),

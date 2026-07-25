@@ -328,12 +328,25 @@ def _seconds_to_timestamp(seconds: float, intervals: list[tuple]):
 # ── Per-type planners ─────────────────────────────────────────────────
 
 
-def _has_pending(task_type: str, campaign_id: str) -> bool:
-    pending = Task.objects.filter(
-        task_type=task_type,
-        status=Task.Status.PENDING,
-    )
-    return any(t.payload.get("campaign_id") == campaign_id for t in pending)
+def _has_pending(task_type: str, campaign_id: str, linkedin_profile_id: str | None = None) -> bool:
+    """Return True if a PENDING task of this type already exists for the campaign.
+
+    Uses dot-notation to query payload.campaign_id directly in MongoDB (no
+    Python-side filter) and scopes to a specific profile so one profile's
+    pending tasks never block another profile's planner.
+    """
+    from openoutreach.mongodb.connection import get_mongodb_collection
+    col = get_mongodb_collection("tasks")
+    if col is None:
+        return False
+    query: dict = {
+        "task_type": task_type,
+        "status": Task.Status.PENDING,
+        "payload.campaign_id": campaign_id,
+    }
+    if linkedin_profile_id:
+        query["linkedin_profile_id"] = linkedin_profile_id
+    return col.count_documents(query, limit=1) > 0
 
 
 def _create_lazy_slots(
@@ -392,13 +405,13 @@ def plan_connect_window(session, campaign) -> int:
     Only the daily limit is consulted — LinkedIn's own weekly ceiling
     surfaces at the handler boundary via ``ReachedConnectionLimit``.
     """
-    if _has_pending(Task.TaskType.CONNECT, campaign.pk):
+    profile = session.linkedin_profile
+
+    if _has_pending(Task.TaskType.CONNECT, campaign.pk, linkedin_profile_id=profile.pk):
         return 0
 
     from openoutreach.mongodb.models import SiteConfig
     from openoutreach.core.rate_limit_presets import get_preset
-
-    profile = session.linkedin_profile
     config = SiteConfig.load(user_id=profile.user_id)
     n = max(0, profile.connect_daily_limit - profile._daily_count("connect"))
 
@@ -446,13 +459,14 @@ def plan_connect_window(session, campaign) -> int:
 def plan_follow_up_window(session, campaign) -> int:
     """Plan the next 24h of follow-up slots for *campaign*. No-op when a
     PENDING follow-up task already exists for the campaign."""
-    if _has_pending(Task.TaskType.FOLLOW_UP, campaign.pk):
+    profile = session.linkedin_profile
+
+    if _has_pending(Task.TaskType.FOLLOW_UP, campaign.pk, linkedin_profile_id=profile.pk):
         return 0
 
     from openoutreach.mongodb.models import SiteConfig
     from openoutreach.core.rate_limit_presets import get_preset
 
-    profile = session.linkedin_profile
     config = SiteConfig.load(user_id=profile.user_id)
     n = max(0, profile.follow_up_daily_limit - profile._daily_count("follow_up"))
 
@@ -504,10 +518,10 @@ def plan_check_pending_window(session, campaign) -> int:
     from openoutreach.mongodb.models import SiteConfig
     from openoutreach.core.rate_limit_presets import get_preset
 
-    if _has_pending(Task.TaskType.CHECK_PENDING, campaign.pk):
-        return 0
-
     profile = session.linkedin_profile
+
+    if _has_pending(Task.TaskType.CHECK_PENDING, campaign.pk, linkedin_profile_id=profile.pk):
+        return 0
     config = SiteConfig.load(user_id=profile.user_id)
     now = Datetime.now(tz.utc)
 

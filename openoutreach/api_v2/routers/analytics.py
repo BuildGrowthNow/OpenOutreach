@@ -511,8 +511,20 @@ async def get_recent_activity(
     if action_logs_collection is None:
         return {"data": []}
 
+    # Scope by user's campaign_ids — action_logs don't store user_id directly
+    campaigns_collection = get_mongodb_collection("campaigns")
+    user_campaign_ids: list[str] = []
+    if campaigns_collection is not None:
+        user_campaign_ids = [
+            str(doc["_id"])
+            for doc in campaigns_collection.find({"user_id": user_id}, {"_id": 1})
+        ]
+
+    if not user_campaign_ids:
+        return {"data": []}
+
     logs = list(
-        action_logs_collection.find({"user_id": user_id})
+        action_logs_collection.find({"campaign_id": {"$in": user_campaign_ids}})
         .sort("created_at", -1)
         .limit(limit)
     )
@@ -520,11 +532,9 @@ async def get_recent_activity(
     # Build a campaign name lookup for the returned logs
     campaign_ids = list({log.get("campaign_id") for log in logs if log.get("campaign_id")})
     campaign_names: dict[str, str] = {}
-    if campaign_ids:
-        campaigns_collection = get_mongodb_collection("campaigns")
-        if campaigns_collection is not None:
-            for doc in campaigns_collection.find({"_id": {"$in": campaign_ids}}, {"_id": 1, "name": 1}):
-                campaign_names[str(doc["_id"])] = doc.get("name", "")
+    if campaign_ids and campaigns_collection is not None:
+        for doc in campaigns_collection.find({"_id": {"$in": campaign_ids}}, {"_id": 1, "name": 1}):
+            campaign_names[str(doc["_id"])] = doc.get("name", "")
 
     entries = []
     for log in logs:

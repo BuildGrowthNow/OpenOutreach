@@ -357,6 +357,7 @@ class LinkedInProfile:
             linkedin_profile_id=self._id,
             campaign_id=campaign.pk if campaign else "",
             action_type=action_type,
+            status="completed",
             details=details or {},
         )
         action_log.save()
