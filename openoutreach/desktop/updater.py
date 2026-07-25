@@ -376,36 +376,65 @@ async def download_update(url: str, version: str = "", silent: bool = False) -> 
         return None
 
 
-def apply_update_windows(new_exe_path: str) -> None:
+def apply_update_windows(new_exe_path: str, download_url: str = "") -> None:
     """Replace the current exe with new_exe_path and restart.
 
     Uses a hidden PowerShell script that waits for the current process to exit
     by PID, copies the new exe over, then relaunches it — no visible CMD window.
+    On copy failure opens the download page in the browser as a fallback.
     """
     current_exe = sys.executable
     current_pid = os.getpid()
     ps_path = os.path.join(tempfile.gettempdir(), "lengrowth_update.ps1")
+    log_path = os.path.join(tempfile.gettempdir(), "lengrowth_update.log")
 
-    # Wait for THIS process to exit (by PID), then replace and relaunch.
-    # The -WindowStyle Hidden on the outer call keeps the PowerShell console invisible.
+    fallback_url = download_url or "https://github.com/Lengrowth/outbound/releases/latest"
+
     ps_script = f"""
 $pid_to_wait = {current_pid}
 $target = '{current_exe.replace("'", "''")}'
 $source = '{new_exe_path.replace("'", "''")}'
+$log = '{log_path.replace("'", "''")}'
+$fallback_url = '{fallback_url.replace("'", "''")}'
 
-# Wait up to 15 s for the old process to exit
-$deadline = (Get-Date).AddSeconds(15)
-while ((Get-Process -Id $pid_to_wait -ErrorAction SilentlyContinue) -and (Get-Date) -lt $deadline) {{
-    Start-Sleep -Milliseconds 200
+function Write-Log($msg) {{
+    $ts = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss')
+    Add-Content -Path $log -Value "$ts $msg" -Encoding UTF8
 }}
 
-# Copy new exe over old one
-Copy-Item -Path $source -Destination $target -Force
+Write-Log "Update script started. source=$source target=$target pid=$pid_to_wait"
+
+# Wait up to 30 s for the old process to exit
+$deadline = (Get-Date).AddSeconds(30)
+while ((Get-Process -Id $pid_to_wait -ErrorAction SilentlyContinue) -and (Get-Date) -lt $deadline) {{
+    Start-Sleep -Milliseconds 500
+}}
+
+if (Get-Process -Id $pid_to_wait -ErrorAction SilentlyContinue) {{
+    Write-Log "ERROR: old process still running after 30s — aborting"
+    Start-Process $fallback_url
+    exit 1
+}}
+
+Write-Log "Old process exited. Attempting copy..."
+
+# Extra pause so Windows releases file handle
+Start-Sleep -Milliseconds 1000
+
+try {{
+    Copy-Item -Path $source -Destination $target -Force -ErrorAction Stop
+    Write-Log "Copy succeeded."
+}} catch {{
+    Write-Log "ERROR: Copy-Item failed: $_"
+    # Open download page so user can update manually
+    Start-Process $fallback_url
+    exit 1
+}}
 
 # Clean up temp file
 Remove-Item -Path $source -Force -ErrorAction SilentlyContinue
 
-# Relaunch
+Write-Log "Relaunching $target"
 Start-Process -FilePath $target
 
 # Remove this script
@@ -415,6 +444,12 @@ Remove-Item -Path '{ps_path.replace("'", "''")}' -Force -ErrorAction SilentlyCon
     try:
         with open(ps_path, "w", encoding="utf-8") as fh:
             fh.write(ps_script)
+        # Clear any stale log from a previous attempt
+        try:
+            if os.path.exists(log_path):
+                os.remove(log_path)
+        except Exception:
+            pass
 
         subprocess.Popen(
             [

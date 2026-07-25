@@ -379,7 +379,8 @@ class TrayApp:
         pending = load_pending_update()
         if pending:
             exe_path = pending.get("exe_path", "")
-            if exe_path:
+            download_url = pending.get("download_url", "")
+            if exe_path and Path(exe_path).exists():
                 self._stopping = True
                 self._stop_daemon()
                 if self._window:
@@ -387,7 +388,8 @@ class TrayApp:
                         self._window.destroy()
                     except Exception:
                         pass
-                apply_update_windows(exe_path)
+                # apply_update_windows calls os._exit — never returns
+                apply_update_windows(exe_path, download_url=download_url)
                 return
         # exe gone — fall back to browser download
         if self._pending_update:
@@ -605,8 +607,10 @@ class TrayApp:
                     clear_pending_update()
                 else:
                     logger.info("Applying previously downloaded update v%s from %s", ver, exe_path)
-                    clear_pending_update()
-                    apply_update_windows(exe_path)
+                    # Do NOT clear pending here — if copy fails, the PS script opens browser
+                    # and the next startup should not retry (stale json will be stale by ver check)
+                    download_url = pending.get("download_url", "")
+                    apply_update_windows(exe_path, download_url=download_url)
                     # apply_update_windows calls os._exit — never reaches here
 
         # Phase 2: non-blocking background download (app opens immediately)
