@@ -114,6 +114,8 @@ There are two mutually exclusive ways to run the LinkedIn automation daemon. **A
 
 The exe is **never committed to git**. Distribution is via GitHub Releases on the `desktop-v*` tag pattern (handled by `.github/workflows/desktop-build.yml`).
 
+**Desktop releases repo**: `Lengrowth/outbound` (separate from the main `BuildGrowthNow/OpenOutreach` repo). The auto-updater in `openoutreach/desktop/updater.py` checks `https://api.github.com/repos/Lengrowth/outbound/releases/latest` — do not change this URL. Release tags are published as `v{version}-{short_sha}` (e.g. `v1.3.4-abc1234`) by the workflow; the updater strips the leading `v` and the `-{sha}` suffix to extract the semver for comparison.
+
 ### Releasing a new desktop version
 
 1. **Bump the version** in `openoutreach/desktop/__version__.py` (e.g. `"1.0.7"`).

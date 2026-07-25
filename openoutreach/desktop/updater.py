@@ -63,13 +63,13 @@ async def check_for_updates() -> Optional[dict]:
             release = response.json()
             tag_name = release["tag_name"]
 
-            # Only process desktop release tags (desktop-v1.2.3)
-            if not tag_name.startswith("desktop-v"):
-                logger.debug("Skipping non-desktop release tag: %s", tag_name)
+            # Release tags are "v{version}-{short_sha}" e.g. "v1.3.4-abc1234"
+            # Strip leading "v" then take everything before the first "-"
+            if not tag_name.startswith("v"):
+                logger.debug("Skipping unrecognised release tag: %s", tag_name)
                 return None
 
-            # Extract semver after "desktop-v"
-            latest_version = tag_name[len("desktop-v"):]
+            latest_version = tag_name.lstrip("v").split("-")[0]
 
             try:
                 is_newer = version.parse(latest_version) > version.parse(__version__)
