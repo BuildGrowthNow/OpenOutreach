@@ -34,7 +34,6 @@ from openoutreach.desktop.updater import (
     load_pending_update,
     prompt_update,
     save_pending_update,
-    show_os_toast,
 )
 
 logger = logging.getLogger(__name__)
@@ -595,10 +594,15 @@ class TrayApp:
             if pending:
                 exe_path = pending.get("exe_path", "")
                 ver = pending.get("version", "?")
-                logger.info("Applying previously downloaded update v%s from %s", ver, exe_path)
-                clear_pending_update()
-                apply_update_windows(exe_path)
-                # apply_update_windows calls os._exit — never reaches here
+                if ver == __version__:
+                    # Already running this version — stale entry, discard it
+                    logger.info("Discarding stale pending_update.json for already-running v%s", ver)
+                    clear_pending_update()
+                else:
+                    logger.info("Applying previously downloaded update v%s from %s", ver, exe_path)
+                    clear_pending_update()
+                    apply_update_windows(exe_path)
+                    # apply_update_windows calls os._exit — never reaches here
 
         # Phase 2: non-blocking background download (app opens immediately)
         self._start_background_update_check()
@@ -622,10 +626,6 @@ class TrayApp:
                         save_pending_update(info, path)
                         self._pending_update = info
                         self._update_menu()
-                        show_os_toast(
-                            f"Lengrowth v{ver} downloaded",
-                            "Restart the app to install the update.",
-                        )
                         if self.icon:
                             self.icon.notify(
                                 f"Lengrowth v{ver} ready to install",
@@ -672,10 +672,6 @@ class TrayApp:
                                 save_pending_update(info, path)
                                 self._pending_update = info
                                 self._update_menu()
-                                show_os_toast(
-                                    f"Lengrowth v{ver} downloaded",
-                                    "Restart the app to install the update.",
-                                )
                                 if self.icon:
                                     self.icon.notify(
                                         f"Lengrowth v{ver} ready to install",
