@@ -422,6 +422,9 @@ class RemoteDaemon:
         session = self.session
         browser_info = self.browser  # already asserted non-None above
 
+        profile_dir = self._get_profile_data_dir()
+        is_new_profile = not any(profile_dir.iterdir())
+
         def _launch_and_auth(headless: bool = True):
             page, context, browser, playwright = self._launch_browser_with_channel(
                 storage_state,
@@ -436,11 +439,15 @@ class RemoteDaemon:
             session.browser = browser
             session.playwright = playwright
 
-            if not storage_state:
+            # Only authenticate when there is no existing persistent profile.
+            # On subsequent restarts the profile dir already holds the session,
+            # so we skip authenticate() to avoid a fresh login (and a new-device email).
+            needs_auth = is_new_profile and not storage_state
+            if needs_auth:
                 session.linkedin_profile.linkedin_username = creds["email"]
                 session.linkedin_profile.linkedin_password = creds["password"]
                 authenticate(session, username=creds["email"], password=creds["password"])
-                # Return fresh cookies so the async caller can sync them
+                # Return fresh cookies so the async caller can sync them to the backend
                 return context.storage_state()
             return None
 
@@ -914,6 +921,17 @@ class RemoteDaemon:
 
         self._show_system_notification(message_title, message_body)
 
+    def _get_profile_data_dir(self) -> Path:
+        """Return a stable per-LinkedIn-profile browser data directory.
+
+        A persistent user data dir means Chrome reuses the same device fingerprint,
+        localStorage, and cookies across daemon restarts — LinkedIn sees the same
+        device every time, preventing "Remember me on new device" emails.
+        """
+        profile_dir = Path.home() / ".lengrowth" / "browser_profiles" / str(self.linkedin_profile_id)
+        profile_dir.mkdir(parents=True, exist_ok=True)
+        return profile_dir
+
     def _launch_browser_with_channel(
         self,
         storage_state,
@@ -923,10 +941,11 @@ class RemoteDaemon:
         proxy_password: Optional[str] = None,
         headless: bool = False,
     ):
-        """Launch browser using Playwright with specified channel (chrome/msedge/webkit).
+        """Launch browser using a persistent context (stable user data dir per profile).
 
-        This uses the user's installed browser instead of Playwright's bundled Chromium.
-        Accepts optional per-profile proxy configuration.
+        Uses the user's installed browser (chrome/msedge/webkit) via channel.
+        The persistent profile dir gives Chrome a stable device identity so
+        LinkedIn stops sending "Remember me on a new device" emails on every restart.
         """
         from playwright.sync_api import sync_playwright
         from linkedin_cli.conf import (
@@ -938,31 +957,29 @@ class RemoteDaemon:
         )
         from playwright_stealth import Stealth
 
-        logger.debug("Launching Playwright with channel=%s", channel)
+        profile_dir = self._get_profile_data_dir()
+        user_data_dir = str(profile_dir)
+        # Profile is considered "new" when the dir is empty (first ever launch)
+        is_new_profile = not any(profile_dir.iterdir())
+
+        logger.debug("Launching Playwright with channel=%s, persistent profile=%s (new=%s)",
+                     channel, user_data_dir, is_new_profile)
         playwright = sync_playwright().start()
 
-        # Launch with channel to use installed browser
-        if channel == "webkit":
-            browser = playwright.webkit.launch(headless=headless, slow_mo=BROWSER_SLOW_MO)
-        elif channel == "msedge":
-            browser = playwright.chromium.launch(
-                headless=headless,
-                slow_mo=BROWSER_SLOW_MO,
-                channel="msedge",
-            )
-        else:  # chrome
-            browser = playwright.chromium.launch(
-                headless=headless,
-                slow_mo=BROWSER_SLOW_MO,
-                channel="chrome",
-            )
+        # Build launch options
+        context_options: dict = {
+            "headless": headless,
+            "slow_mo": BROWSER_SLOW_MO,
+        }
 
-        # Build context options
-        context_options = {"storage_state": storage_state}
+        # Seed storage_state only on the very first launch so we don't overwrite
+        # a fresher Chrome-native session that already lives in the profile dir.
+        if storage_state and is_new_profile:
+            context_options["storage_state"] = storage_state
 
         # Priority: per-profile proxy > environment proxy > no proxy
         if proxy_server:
-            proxy_config = {"server": proxy_server}
+            proxy_config: dict = {"server": proxy_server}
             if proxy_username and proxy_password:
                 proxy_config["username"] = proxy_username
                 proxy_config["password"] = proxy_password
@@ -976,7 +993,19 @@ class RemoteDaemon:
             context_options["proxy"] = proxy_config
             logger.info("Using environment proxy: %s", BROWSER_PROXY_SERVER)
 
-        context = browser.new_context(**context_options)
+        # launch_persistent_context keeps the same Chrome user data dir across
+        # restarts — same fingerprint, same localStorage, same device identity.
+        if channel == "webkit":
+            context = playwright.webkit.launch_persistent_context(user_data_dir, **context_options)
+        elif channel == "msedge":
+            context = playwright.chromium.launch_persistent_context(
+                user_data_dir, channel="msedge", **context_options
+            )
+        else:  # chrome
+            context = playwright.chromium.launch_persistent_context(
+                user_data_dir, channel="chrome", **context_options
+            )
+
         context.set_default_timeout(BROWSER_DEFAULT_TIMEOUT_MS)
         context.set_default_navigation_timeout(BROWSER_DEFAULT_TIMEOUT_MS)
 
@@ -988,8 +1017,10 @@ class RemoteDaemon:
         ))
 
         Stealth().apply_stealth_sync(context)
-        page = context.new_page()
-        return page, context, browser, playwright
+        # Persistent context may already have pages open; reuse the first one
+        page = context.pages[0] if context.pages else context.new_page()
+        # No separate browser object with persistent context — close via context
+        return page, context, None, playwright
 
 
 async def run_daemon(
