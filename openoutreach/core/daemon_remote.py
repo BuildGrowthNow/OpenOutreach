@@ -452,6 +452,13 @@ class RemoteDaemon:
                 authenticate(session, username=creds["email"], password=creds["password"])
                 # Return fresh cookies so the async caller can sync them to the backend
                 return context.storage_state()
+            # No fresh auth — ensure the page is on linkedin.com so that
+            # page.evaluate(fetch(...)) runs from a linkedin.com origin.
+            # Persistent Chrome may reopen on chrome://newtab or any other URL
+            # which causes "TypeError: Failed to fetch" for all Voyager API calls.
+            current_url = page.url
+            if "linkedin.com" not in current_url:
+                page.goto("https://www.linkedin.com/feed/", wait_until="domcontentloaded")
             return None
 
         try:

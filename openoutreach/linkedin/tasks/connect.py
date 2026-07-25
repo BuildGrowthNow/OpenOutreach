@@ -94,7 +94,7 @@ def handle_connect(task, session, qualifiers):
         candidate = strategy.find_candidate(session)
     except Exception as e:
         if "Failed to fetch" in str(e) or "Page.evaluate" in str(e):
-            logger.warning("[%s] connect: Voyager API unavailable — slot skipped (%s)", campaign, e)
+            logger.warning("[%s] connect: Voyager API unavailable during candidate search — slot skipped (%s)", campaign, e)
             return
         raise
     if candidate is None:
@@ -195,3 +195,8 @@ def handle_connect(task, session, qualifiers):
     except SkipProfile as e:
         logger.warning("Skipping %s: %s", public_id, e)
         set_profile_state(session, public_id, DealState.FAILED.value)
+    except Exception as e:
+        if "Failed to fetch" in str(e) or "Page.evaluate" in str(e):
+            logger.warning("[%s] connect: Voyager API unavailable during connect attempt — slot skipped (%s)", campaign, e)
+            return
+        raise

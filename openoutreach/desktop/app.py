@@ -601,14 +601,17 @@ class TrayApp:
             if pending:
                 exe_path = pending.get("exe_path", "")
                 ver = pending.get("version", "?")
-                if ver == __version__:
-                    # Already running this version — stale entry, discard it
-                    logger.info("Discarding stale pending_update.json for already-running v%s", ver)
+                try:
+                    from packaging import version as _v
+                    is_upgrade = _v.parse(ver) > _v.parse(__version__)
+                except Exception:
+                    is_upgrade = False
+                if not is_upgrade:
+                    # Pending is same or older than running version — discard
+                    logger.info("Discarding stale pending_update.json (pending v%s <= running v%s)", ver, __version__)
                     clear_pending_update()
                 else:
                     logger.info("Applying previously downloaded update v%s from %s", ver, exe_path)
-                    # Do NOT clear pending here — if copy fails, the PS script opens browser
-                    # and the next startup should not retry (stale json will be stale by ver check)
                     download_url = pending.get("download_url", "")
                     apply_update_windows(exe_path, download_url=download_url)
                     # apply_update_windows calls os._exit — never reaches here
