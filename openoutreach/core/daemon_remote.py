@@ -442,7 +442,10 @@ class RemoteDaemon:
             # Only authenticate when there is no existing persistent profile.
             # On subsequent restarts the profile dir already holds the session,
             # so we skip authenticate() to avoid a fresh login (and a new-device email).
-            needs_auth = is_new_profile and not storage_state
+            # webkit has no persistent profile, so always fall back to storage_state check.
+            needs_auth = (browser_info.channel == "webkit" and not storage_state) or (
+                browser_info.channel != "webkit" and is_new_profile and not storage_state
+            )
             if needs_auth:
                 session.linkedin_profile.linkedin_username = creds["email"]
                 session.linkedin_profile.linkedin_password = creds["password"]
@@ -993,11 +996,29 @@ class RemoteDaemon:
             context_options["proxy"] = proxy_config
             logger.info("Using environment proxy: %s", BROWSER_PROXY_SERVER)
 
-        # launch_persistent_context keeps the same Chrome user data dir across
-        # restarts — same fingerprint, same localStorage, same device identity.
+        # webkit (Safari on macOS) doesn't support launch_persistent_context —
+        # fall back to an ephemeral context seeded with storage_state instead.
         if channel == "webkit":
-            context = playwright.webkit.launch_persistent_context(user_data_dir, **context_options)
-        elif channel == "msedge":
+            browser = playwright.webkit.launch(headless=headless, slow_mo=BROWSER_SLOW_MO)
+            ctx_opts = {k: v for k, v in context_options.items()
+                        if k not in ("headless", "slow_mo")}
+            if storage_state:
+                ctx_opts["storage_state"] = storage_state
+            context = browser.new_context(**ctx_opts)
+            context.set_default_timeout(BROWSER_DEFAULT_TIMEOUT_MS)
+            context.set_default_navigation_timeout(BROWSER_DEFAULT_TIMEOUT_MS)
+            context.route("**/*", lambda route: (
+                route.abort() if route.request.resource_type in ["image", "media", "font", "stylesheet"]
+                and not any(domain in route.request.url for domain in ["linkedin.com", "licdn.com"])
+                else route.continue_()
+            ))
+            Stealth().apply_stealth_sync(context)
+            page = context.new_page()
+            return page, context, browser, playwright
+
+        # Chrome and Edge support launch_persistent_context — same user data dir
+        # across restarts gives a stable device fingerprint, stopping new-device emails.
+        if channel == "msedge":
             context = playwright.chromium.launch_persistent_context(
                 user_data_dir, channel="msedge", **context_options
             )
