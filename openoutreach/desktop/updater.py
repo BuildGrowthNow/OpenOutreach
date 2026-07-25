@@ -7,6 +7,7 @@ Periodic behaviour (every 6 h, all platforms):
   check → tray notification + menu item → user clicks to download.
 """
 
+import json
 import logging
 import os
 import platform
@@ -14,6 +15,7 @@ import subprocess
 import sys
 import tempfile
 import webbrowser
+from pathlib import Path
 from typing import Optional
 
 import httpx
@@ -26,6 +28,126 @@ logger = logging.getLogger(__name__)
 GITHUB_RELEASES_URL = (
     "https://api.github.com/repos/Lengrowth/outbound/releases/latest"
 )
+
+
+_PENDING_UPDATE_FILE = Path.home() / ".lengrowth" / "pending_update.json"
+
+
+def save_pending_update(info: dict, exe_path: str) -> None:
+    """Persist downloaded update info to disk so the next startup can force-apply it."""
+    try:
+        _PENDING_UPDATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        payload = {**info, "exe_path": exe_path}
+        _PENDING_UPDATE_FILE.write_text(json.dumps(payload), encoding="utf-8")
+        logger.info("Pending update v%s saved to %s", info.get("version"), _PENDING_UPDATE_FILE)
+    except Exception as e:
+        logger.warning("Failed to save pending update: %s", e)
+
+
+def load_pending_update() -> Optional[dict]:
+    """Load persisted pending update. Returns None if not present or exe is missing."""
+    try:
+        if not _PENDING_UPDATE_FILE.exists():
+            return None
+        data = json.loads(_PENDING_UPDATE_FILE.read_text(encoding="utf-8"))
+        exe_path = data.get("exe_path", "")
+        if not exe_path or not Path(exe_path).exists():
+            # Stale entry — the temp file was cleaned up
+            clear_pending_update()
+            return None
+        return data
+    except Exception as e:
+        logger.warning("Failed to load pending update: %s", e)
+        return None
+
+
+def clear_pending_update() -> None:
+    """Remove the persisted pending update record."""
+    try:
+        _PENDING_UPDATE_FILE.unlink(missing_ok=True)
+    except Exception as e:
+        logger.warning("Failed to clear pending update: %s", e)
+
+
+def show_os_toast(title: str, message: str) -> None:
+    """Show a native OS toast notification (best-effort, no crash if unavailable)."""
+    try:
+        if sys.platform == "win32":
+            _toast_windows(title, message)
+        elif sys.platform == "darwin":
+            _toast_macos(title, message)
+    except Exception as e:
+        logger.debug("OS toast failed: %s", e)
+
+
+def _toast_windows(title: str, message: str) -> None:
+    import ctypes
+    import ctypes.wintypes as wt
+
+    # Use Shell_NotifyIconW (NIIF_INFO balloon) via ctypes — no external library needed.
+    # This is a fire-and-forget: create a hidden tray icon, show the balloon, destroy it.
+    NIIF_INFO = 0x00000001
+    NIM_ADD = 0x00000000
+    NIM_MODIFY = 0x00000001
+    NIM_DELETE = 0x00000002
+    NIF_MESSAGE = 0x00000001
+    NIF_ICON = 0x00000002
+    NIF_TIP = 0x00000004
+    NIF_INFO = 0x00000010
+    WM_APP = 0x8000
+
+    class NOTIFYICONDATAW(ctypes.Structure):
+        _fields_ = [
+            ("cbSize", wt.DWORD),
+            ("hWnd", wt.HWND),
+            ("uID", wt.UINT),
+            ("uFlags", wt.UINT),
+            ("uCallbackMessage", wt.UINT),
+            ("hIcon", wt.HICON),
+            ("szTip", ctypes.c_wchar * 128),
+            ("dwState", wt.DWORD),
+            ("dwStateMask", wt.DWORD),
+            ("szInfo", ctypes.c_wchar * 256),
+            ("uTimeoutOrVersion", wt.UINT),
+            ("szInfoTitle", ctypes.c_wchar * 64),
+            ("dwInfoFlags", wt.DWORD),
+            ("guidItem", ctypes.c_byte * 16),
+            ("hBalloonIcon", wt.HICON),
+        ]
+
+    hwnd = ctypes.windll.user32.GetDesktopWindow()
+    nid = NOTIFYICONDATAW()
+    nid.cbSize = ctypes.sizeof(NOTIFYICONDATAW)
+    nid.hWnd = hwnd
+    nid.uID = 0x4C454E47  # 'LENG'
+    nid.uFlags = NIF_ICON | NIF_TIP | NIF_INFO | NIF_MESSAGE
+    nid.uCallbackMessage = WM_APP + 1
+    nid.szTip = "Lengrowth"
+    nid.szInfoTitle = title[:63]
+    nid.szInfo = message[:255]
+    nid.dwInfoFlags = NIIF_INFO
+    nid.uTimeoutOrVersion = 5000
+
+    shell32 = ctypes.windll.shell32
+    shell32.Shell_NotifyIconW(NIM_ADD, ctypes.byref(nid))
+    import time
+    time.sleep(0.1)
+    shell32.Shell_NotifyIconW(NIM_MODIFY, ctypes.byref(nid))
+    time.sleep(5)
+    shell32.Shell_NotifyIconW(NIM_DELETE, ctypes.byref(nid))
+
+
+def _toast_macos(title: str, message: str) -> None:
+    script = (
+        f'display notification "{message}" '
+        f'with title "{title}" '
+        f'sound name "Glass"'
+    )
+    subprocess.Popen(
+        ["osascript", "-e", script],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
 
 
 def is_frozen() -> bool:
@@ -171,7 +293,7 @@ class _ProgressWindow:
                     ("style", wt.UINT), ("lpfnWndProc", WNDPROCTYPE),
                     ("cbClsExtra", ctypes.c_int), ("cbWndExtra", ctypes.c_int),
                     ("hInstance", wt.HINSTANCE), ("hIcon", wt.HICON),
-                    ("hCursor", wt.HCURSOR), ("hbrBackground", wt.HBRUSH),
+                    ("hCursor", wt.HANDLE), ("hbrBackground", wt.HBRUSH),
                     ("lpszMenuName", wt.LPCWSTR), ("lpszClassName", wt.LPCWSTR),
                 ]
 
@@ -287,16 +409,20 @@ class _ProgressWindow:
         self._hwnd = None
 
 
-async def download_update(url: str, version: str = "") -> Optional[str]:
-    """Download the update exe to a temp file, showing a progress dialog.
+async def download_update(url: str, version: str = "", silent: bool = False) -> Optional[str]:
+    """Download the update exe to a temp file.
+
+    When ``silent=False`` (default for blocking startup path) shows a progress dialog.
+    When ``silent=True`` (background download) runs quietly with no UI.
 
     Returns the local path on success, None on failure.
     """
     dest = os.path.join(tempfile.gettempdir(), "Lengrowth_update.exe")
     label_text = f"Updating to Lengrowth v{version}…" if version else "Downloading Lengrowth update…"
 
-    win = _ProgressWindow(label_text)
-    win.show()
+    win = _ProgressWindow(label_text) if not silent else None
+    if win:
+        win.show()
 
     try:
         async with httpx.AsyncClient(timeout=300.0, follow_redirects=True) as client:
@@ -308,21 +434,25 @@ async def download_update(url: str, version: str = "") -> Optional[str]:
                     async for chunk in response.aiter_bytes(chunk_size=65536):
                         fh.write(chunk)
                         downloaded += len(chunk)
-                        if total:
-                            pct = downloaded / total * 100
-                            mb = downloaded / 1_048_576
-                            total_mb = total / 1_048_576
-                            win.update(pct, f"{mb:.1f} / {total_mb:.1f} MB")
-                        else:
-                            win.update(50, f"{downloaded / 1_048_576:.1f} MB…")
+                        if win:
+                            if total:
+                                pct = downloaded / total * 100
+                                mb = downloaded / 1_048_576
+                                total_mb = total / 1_048_576
+                                win.update(pct, f"{mb:.1f} / {total_mb:.1f} MB")
+                            else:
+                                win.update(50, f"{downloaded / 1_048_576:.1f} MB…")
 
-        win.update(100, "Installing…")
+        if win:
+            win.update(100, "Installing…")
         logger.info("Update downloaded to %s", dest)
-        win.close()
+        if win:
+            win.close()
         return dest
     except Exception as e:
         logger.error("Update download failed: %s", e)
-        win.close()
+        if win:
+            win.close()
         return None
 
 

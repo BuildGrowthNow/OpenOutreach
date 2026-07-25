@@ -194,9 +194,8 @@ jobs:
             3. If SmartScreen appears, click **"More info" → "Run anyway"**
 
             ### Why run locally?
-            - Use your own residential IP — no proxy costs ($25–75/mo saved)
+            - Use your own residential IP
             - Your LinkedIn credentials never leave your machine
-            - Runs silently in the system tray, auto-starts on login
           files: |
             ./release/macos/Lengrowth-macOS.dmg
             ./release/windows/Lengrowth.exe

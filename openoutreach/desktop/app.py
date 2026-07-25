@@ -29,8 +29,12 @@ from openoutreach.desktop.updater import (
     apply_update_windows,
     can_auto_update,
     check_for_updates,
+    clear_pending_update,
     download_update,
+    load_pending_update,
     prompt_update,
+    save_pending_update,
+    show_os_toast,
 )
 
 logger = logging.getLogger(__name__)
@@ -252,9 +256,18 @@ class TrayApp:
         ]
 
         if self._pending_update:
+            ver = self._pending_update["version"]
+            # If we have a downloaded exe on disk, offer restart; otherwise offer download
+            pending = load_pending_update()
+            if pending and pending.get("version") == ver:
+                label = f"↑ Restart to update v{ver}"
+                action = self._on_apply_update
+            else:
+                label = f"Update Available: v{ver}"
+                action = self._on_download_update
             items.extend([
                 pystray.Menu.SEPARATOR,
-                Item(f"Update Available: v{self._pending_update['version']}", self._on_download_update),
+                Item(label, action),
             ])
 
         items.extend([
@@ -283,7 +296,7 @@ class TrayApp:
 
         api = DesktopAPI(self)
 
-        self._window = webview.create_window(
+        win = webview.create_window(
             title=_WINDOW_TITLE,
             url=url,
             width=_WINDOW_W,
@@ -294,8 +307,10 @@ class TrayApp:
             background_color="#09090b",  # zinc-950 matches the dark theme
             js_api=api,
         )
-        self._window.events.closed += self._on_window_closed
-        self._window.events.loaded += self._on_loaded
+        self._window = win
+        assert win is not None
+        win.events.closed += self._on_window_closed
+        win.events.loaded += self._on_loaded
 
         # pywebview.start() is blocking — run in current thread
         webview.start(debug=False)
@@ -348,6 +363,29 @@ class TrayApp:
         self._update_menu()
 
     def _on_download_update(self):
+        if self._pending_update:
+            prompt_update(self._pending_update)
+
+    def _on_apply_update(self):
+        """Tray: apply a previously downloaded update — replace exe and restart."""
+        if not can_auto_update():
+            if self._pending_update:
+                prompt_update(self._pending_update)
+            return
+        pending = load_pending_update()
+        if pending:
+            exe_path = pending.get("exe_path", "")
+            if exe_path:
+                self._stopping = True
+                self._stop_daemon()
+                if self._window:
+                    try:
+                        self._window.destroy()
+                    except Exception:
+                        pass
+                apply_update_windows(exe_path)
+                return
+        # exe gone — fall back to browser download
         if self._pending_update:
             prompt_update(self._pending_update)
 
@@ -544,34 +582,74 @@ class TrayApp:
     # ------------------------------------------------------------------
 
     def _run_startup_update_check(self) -> None:
-        """Check for updates synchronously before the window opens.
+        """Force-apply a pending update if one was downloaded during a previous session.
 
-        On Windows frozen exe: download + replace + restart (app never opens).
-        On other platforms or if download fails: store for tray notification.
+        On Windows frozen exe: if a pending update exe is on disk, apply it immediately
+        (PowerShell replace + restart) before the window opens.
+        If no pending update exists, start the background checker — the app opens normally
+        and the download happens silently in the background.
         """
-        async def _check():
+        # Phase 1: apply any previously downloaded update
+        if can_auto_update():
+            pending = load_pending_update()
+            if pending:
+                exe_path = pending.get("exe_path", "")
+                ver = pending.get("version", "?")
+                logger.info("Applying previously downloaded update v%s from %s", ver, exe_path)
+                clear_pending_update()
+                apply_update_windows(exe_path)
+                # apply_update_windows calls os._exit — never reaches here
+
+        # Phase 2: non-blocking background download (app opens immediately)
+        self._start_background_update_check()
+
+    def _start_background_update_check(self) -> None:
+        """Start a one-shot background thread that checks for and silently downloads an update.
+
+        On Windows frozen exe: downloads silently, saves to disk, shows OS toast.
+        On other platforms: just checks and stores info for the tray notification.
+        """
+        async def _background():
             try:
                 info = await check_for_updates()
                 if not info:
                     return
+                ver = info["version"]
                 if can_auto_update():
-                    logger.info("Update v%s available — downloading before launch", info["version"])
-                    path = await download_update(info["download_url"], version=info["version"])
+                    logger.info("Update v%s available — downloading in background", ver)
+                    path = await download_update(info["download_url"], version=ver, silent=True)
                     if path:
-                        # apply_update_windows calls os._exit — app never opens
-                        apply_update_windows(path)
+                        save_pending_update(info, path)
+                        self._pending_update = info
+                        self._update_menu()
+                        show_os_toast(
+                            f"Lengrowth v{ver} downloaded",
+                            "Restart the app to install the update.",
+                        )
+                        if self.icon:
+                            self.icon.notify(
+                                f"Lengrowth v{ver} ready to install",
+                                "Click 'Restart to update' in the tray menu.",
+                            )
                     else:
                         self._pending_update = info
+                        self._update_menu()
                 else:
                     self._pending_update = info
+                    self._update_menu()
             except Exception as e:
-                logger.warning("Startup update check failed: %s", e)
+                logger.warning("Background update check failed: %s", e)
 
-        lp = asyncio.new_event_loop()
-        try:
-            lp.run_until_complete(_check())
-        finally:
-            lp.close()
+        def run():
+            lp = asyncio.new_event_loop()
+            asyncio.set_event_loop(lp)
+            try:
+                lp.run_until_complete(_background())
+            finally:
+                lp.close()
+
+        t = threading.Thread(target=run, daemon=True)
+        t.start()
 
     def _start_periodic_update_checker(self):
         """Start the background 6-hour update poll (called from tray setup)."""
@@ -586,10 +664,33 @@ class TrayApp:
                 try:
                     info = await check_for_updates()
                     if info and not self._pending_update:
-                        self._pending_update = info
-                        self._update_menu()
-                        if self.icon:
-                            self.icon.notify(f"Update Available: v{info['version']}", "Click the tray icon to download")
+                        ver = info["version"]
+                        if can_auto_update():
+                            logger.info("Periodic check: update v%s available — downloading in background", ver)
+                            path = await download_update(info["download_url"], version=ver, silent=True)
+                            if path:
+                                save_pending_update(info, path)
+                                self._pending_update = info
+                                self._update_menu()
+                                show_os_toast(
+                                    f"Lengrowth v{ver} downloaded",
+                                    "Restart the app to install the update.",
+                                )
+                                if self.icon:
+                                    self.icon.notify(
+                                        f"Lengrowth v{ver} ready to install",
+                                        "Click 'Restart to update' in the tray menu.",
+                                    )
+                            else:
+                                self._pending_update = info
+                                self._update_menu()
+                                if self.icon:
+                                    self.icon.notify(f"Update Available: v{ver}", "Click the tray icon to download")
+                        else:
+                            self._pending_update = info
+                            self._update_menu()
+                            if self.icon:
+                                self.icon.notify(f"Update Available: v{ver}", "Click the tray icon to download")
                 except Exception as e:
                     logger.warning("Periodic update check failed: %s", e)
 
@@ -614,16 +715,9 @@ class TrayApp:
             if handle_protocol_url(pending_protocol_url, self.auth):
                 self._pending_login_notification = True
 
-        # Check for updates before anything else — on Windows this shows a
-        # progress dialog and replaces the exe (os._exit), so the app never opens.
+        # Check for a previously-downloaded pending update (force-apply it) or
+        # kick off a background download check.  On Windows this may call os._exit.
         self._run_startup_update_check()
-
-        # If we reach here, no update was applied — notify via tray if one was found
-        if self._pending_update and self.icon:
-            self.icon.notify(
-                f"Update Available: v{self._pending_update['version']}",
-                "Click the tray icon to download",
-            )
 
         # Start tray icon in background thread (pystray owns its own loop)
         tray_icon = pystray.Icon(
