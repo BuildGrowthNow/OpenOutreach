@@ -1213,6 +1213,21 @@ class Deal:
     def lead(self, value: Optional["Lead"]) -> None:
         self._lead = value
 
+    def refresh_from_db(self, fields=None):
+        collection = get_mongodb_collection("deals")
+        if collection is None:
+            return
+        data = collection.find_one({"_id": self._id})
+        if data:
+            if fields:
+                for field in fields:
+                    if field in data:
+                        setattr(self, field, data[field])
+            else:
+                for key, value in data.items():
+                    if hasattr(self, key):
+                        setattr(self, key, value)
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert model instance to dictionary for MongoDB storage."""
         data = {
