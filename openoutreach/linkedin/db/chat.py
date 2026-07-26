@@ -67,7 +67,11 @@ def _sync_from_api(session, public_identifier: str, deal) -> list:
     session.ensure_browser()
     api = PlaywrightLinkedinAPI(session=session)
 
-    lead = deal.lead
+    from openoutreach.mongodb.models import Lead
+    lead = deal.lead or Lead.get(deal.lead_id)
+    if not lead:
+        logger.warning("sync_deal_messages: lead not found for deal %s", deal._id)
+        return []
     target_urn = lead.get_urn(session)
     mailbox_urn = session.self_profile["urn"]
 
@@ -175,7 +179,7 @@ def _read_from_db(deal) -> list[dict]:
     """Read all ChatMessages for a deal, sorted chronologically."""
     from openoutreach.mongodb.models_extended import ChatMessage
 
-    lead_name = deal.lead.public_identifier or "them"
+    lead_name = (deal.lead.public_identifier if deal.lead else None) or "them"
 
     messages = ChatMessage.find_by_deal(deal.pk)
 

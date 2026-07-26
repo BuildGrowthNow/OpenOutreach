@@ -1200,8 +1200,18 @@ class Deal:
         self.profile_summary = profile_summary or {}
         self.chat_summary = chat_summary or {}
         self.creation_date = creation_date or datetime.now(tz.utc)
-        self.lead: Optional["Lead"] = None
+        self._lead: Optional["Lead"] = None
         self.campaign: Optional["Campaign"] = None
+
+    @property
+    def lead(self) -> Optional["Lead"]:
+        if self._lead is None and self.lead_id:
+            self._lead = Lead.get(self.lead_id)
+        return self._lead
+
+    @lead.setter
+    def lead(self, value: Optional["Lead"]) -> None:
+        self._lead = value
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert model instance to dictionary for MongoDB storage."""
