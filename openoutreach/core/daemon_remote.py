@@ -376,6 +376,14 @@ class RemoteDaemon:
                 self.user: Optional[Any] = None  # Set per-task in _execute_task
                 self.user_id: Optional[str] = None  # Set per-task in _execute_task
                 self.linkedin_profile_id: str = profile_id
+                self._self_profile: Optional[dict] = None
+
+            @property
+            def self_profile(self) -> dict:
+                if self._self_profile is None:
+                    from linkedin_cli.setup.self_profile import discover_self_profile
+                    self._self_profile = discover_self_profile(self)
+                return self._self_profile
 
             def close(self):
                 if self.context and hasattr(self.context, "close"):
