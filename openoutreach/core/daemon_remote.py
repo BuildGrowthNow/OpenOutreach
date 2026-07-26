@@ -397,7 +397,7 @@ class RemoteDaemon:
                 """No-op: browser is always live in the remote daemon."""
                 pass
 
-            def wait(self):
+            def wait(self, min_seconds=None, max_seconds=None):
                 """Compatibility method for task handlers."""
                 pass
 
