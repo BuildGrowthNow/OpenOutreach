@@ -657,6 +657,8 @@ def _recover_stale_running_tasks(linkedin_profile_id: str | None = None) -> int:
     count = 0
     for task in running_tasks:
         started = task.started_at or task.scheduled_at or task.created_at
+        if started and started.tzinfo is None:
+            started = started.replace(tzinfo=tz.utc)
         if started and started > threshold:
             continue  # Still fresh — do not reset
 
