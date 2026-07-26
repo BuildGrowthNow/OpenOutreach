@@ -39,15 +39,25 @@ class SmartRateLimiter:
         context.save()
         return context
 
+    def _profile_daily_limit(self, action_type: str) -> int:
+        """Return the profile's configured daily limit for action_type."""
+        if action_type == "connect":
+            return self.linkedin_profile.connect_daily_limit or 20
+        if action_type in ("follow_up", "message"):
+            return self.linkedin_profile.follow_up_daily_limit or 20
+        return 20
+
     def can_execute(self, action_type: str, campaign=None) -> bool:
-        """Check if action can be executed given current context."""
-        effective_limit = self.context.get_effective_limit(action_type, campaign)
+        """Check if action can be executed given current context.
 
-        # Count recent actions (last 24 hours)
-        since = datetime.now(tz.utc) - timedelta(hours=24)
-        recent_count = self._count_recent_actions(action_type, since)
-
-        return recent_count < effective_limit
+        Uses the profile's configured daily limit (not the context's base limit)
+        and a today-aligned window (midnight UTC to now) so the count resets
+        daily rather than rolling 24h.
+        """
+        daily_limit = self._profile_daily_limit(action_type)
+        today_start = datetime.now(tz.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+        today_count = self._count_recent_actions(action_type, today_start)
+        return today_count < daily_limit
 
     def record_action(self, action_type: str, campaign=None):
         """Record an action and update rate limit context.
@@ -59,11 +69,10 @@ class SmartRateLimiter:
 
     def get_remaining_quota(self, action_type: str, campaign=None) -> int:
         """Get remaining quota for action type."""
-        effective_limit = self.context.get_effective_limit(action_type, campaign)
-        since = datetime.now(tz.utc) - timedelta(hours=24)
-        recent_count = self._count_recent_actions(action_type, since)
-
-        return max(0, effective_limit - recent_count)
+        daily_limit = self._profile_daily_limit(action_type)
+        today_start = datetime.now(tz.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+        today_count = self._count_recent_actions(action_type, today_start)
+        return max(0, daily_limit - today_count)
 
     def get_quota_breakdown(self, action_type: str, campaign=None) -> dict:
         """Get detailed breakdown of rate limiting."""

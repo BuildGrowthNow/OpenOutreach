@@ -1243,13 +1243,22 @@ class Deal:
             creation_date=data.get("creation_date"),
         )
 
-    def save(self) -> str:
-        """Save the deal to MongoDB."""
+    def save(self, update_fields: Optional[List[str]] = None) -> str:
+        """Save the deal to MongoDB.
+
+        If update_fields is given, only those fields are written (partial update).
+        """
         from pymongo.errors import DuplicateKeyError
 
         collection = get_mongodb_collection("deals")
         if collection is None:
             raise RuntimeError("MongoDB collection 'deals' not available")
+
+        if update_fields:
+            doc = self.to_dict()
+            partial = {k: doc[k] for k in update_fields if k in doc}
+            collection.update_one({"_id": self._id}, {"$set": partial})
+            return self._id
 
         doc = self.to_dict()
         try:
