@@ -142,7 +142,15 @@ def materialize_profile_summary_if_missing(deal, session) -> None:
     if deal.profile_summary:
         return
 
-    lead = deal.lead
+    from openoutreach.mongodb.models import Lead
+    lead = Lead.get(deal.lead_id)
+    if not lead:
+        logger.warning(
+            "materialize_profile_summary: lead not found for deal=%s lead_id=%s",
+            deal.pk,
+            deal.lead_id,
+        )
+        return
     profile = lead.get_profile(session)
     if not profile:
         logger.warning(

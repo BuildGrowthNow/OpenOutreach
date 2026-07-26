@@ -146,6 +146,10 @@ class SmartRateLimitContext:
         """Calculate effective rate limit based on all context factors."""
         base_limit = self._get_base_limit(action_type)
 
+        # Compute time/day multipliers fresh from current time (stored values are stale)
+        now = datetime.now(tz.utc)
+        self._update_time_context(now)
+
         # Apply multipliers
         multipliers = [
             self.time_of_day_limit_multiplier,
