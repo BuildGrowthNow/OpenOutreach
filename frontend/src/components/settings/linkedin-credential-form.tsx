@@ -258,7 +258,7 @@ export default function LinkedInCredentialForm({
         <Alert className="border-emerald-800/80 bg-emerald-950/70 text-emerald-100">
           <Icons.CheckCircle className="h-4 w-4 text-emerald-400" />
           <AlertDescription>
-            Credentials verified successfully. The daemon will use this account.
+            Account verified successfully. Lengrowth will use this account.
           </AlertDescription>
         </Alert>
       ) : null}
@@ -384,7 +384,7 @@ export default function LinkedInCredentialForm({
                         <Cloud className="h-4 w-4 shrink-0" />
                         <div className="text-left">
                           <div className="font-medium">Cloud</div>
-                          <div className="text-xs opacity-70">Our servers · $299/mo</div>
+                          <div className="text-xs opacity-70">Managed by Lengrowth · $299/mo</div>
                         </div>
                       </button>
                     </div>
@@ -441,7 +441,7 @@ export default function LinkedInCredentialForm({
                     </div>
                     <div className="flex items-start">
                       <Icons.CheckCircle className="mr-2 mt-0.5 h-3 w-3 text-green-500/80" />
-                      <span>Session cookies are maintained server-side only.</span>
+                      <span>Your login session is kept securely on Lengrowth — never stored in your browser.</span>
                     </div>
                   </div>
                 </CardContent>
@@ -457,7 +457,7 @@ export default function LinkedInCredentialForm({
                     <li className="flex items-start">
                       <Icons.CheckCircle className="mr-2 mt-0.5 h-3 w-3 text-blue-400/80" />
                       <span>
-                        We log into LinkedIn on the server using your credentials.
+                        Lengrowth logs into LinkedIn on your behalf using the details you provide.
                       </span>
                     </li>
                     <li className="flex items-start">
@@ -470,8 +470,7 @@ export default function LinkedInCredentialForm({
                     <li className="flex items-start">
                       <Icons.CheckCircle className="mr-2 mt-0.5 h-3 w-3 text-blue-400/80" />
                       <span>
-                        Once verified, the server maintains its own session —
-                        your personal browser stays unaffected.
+                        Once verified, Lengrowth handles everything automatically — your personal browser is never touched.
                       </span>
                     </li>
                   </ul>

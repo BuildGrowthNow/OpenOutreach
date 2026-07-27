@@ -41,7 +41,7 @@ export function VncViewer({ vncUrl, embedded, profileId }: VncViewerProps) {
           }
         })
         .catch(() => {
-          setError("VNC session unavailable. The daemon may not be running.");
+          setError("Browser view unavailable. Make sure the desktop app is running.");
           setLoading(false);
         });
     }
@@ -64,7 +64,7 @@ export function VncViewer({ vncUrl, embedded, profileId }: VncViewerProps) {
         <div className="w-full h-full flex items-center justify-center bg-zinc-900 text-zinc-400">
           <div className="flex flex-col items-center gap-2">
             <Icons.Loader className="h-6 w-6 animate-spin" />
-            <p className="text-sm">Loading VNC session...</p>
+            <p className="text-sm">Loading browser view...</p>
           </div>
         </div>
       );
@@ -83,7 +83,7 @@ export function VncViewer({ vncUrl, embedded, profileId }: VncViewerProps) {
       <iframe
         src={`${effectiveUrl}/vnc.html?autoconnect=true&resize=remote&reconnect=true`}
         className="w-full h-full border-0"
-        title="VNC Browser Session"
+        title="Live Browser View"
         allow="clipboard-read; clipboard-write"
       />
     );
@@ -101,7 +101,7 @@ export function VncViewer({ vncUrl, embedded, profileId }: VncViewerProps) {
 
   const handleIframeError = () => {
     setError(
-      "Failed to load VNC viewer. Make sure the container is running with ENABLE_VNC=true and port 6080 is accessible.",
+      "Unable to load the browser view. Make sure Lengrowth Cloud is running with the browser viewer enabled.",
     );
   };
 
@@ -111,25 +111,22 @@ export function VncViewer({ vncUrl, embedded, profileId }: VncViewerProps) {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Monitor className="h-5 w-5" />
-            Browser Session Viewer
+            Live Browser View
           </CardTitle>
           <CardDescription>
-            Access the live browser session when LinkedIn requires manual
-            verification or CAPTCHA solving
+            See the live browser when LinkedIn asks for verification or a CAPTCHA
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <Alert>
             <Icons.Info className="h-4 w-4" />
             <AlertDescription>
-              The browser session runs inside the Docker container. Use this
-              viewer to interact with LinkedIn challenges, CAPTCHAs, or security
-              verifications without SSH/VNC client.
+              Use this viewer to complete LinkedIn security challenges directly — no extra tools needed.
             </AlertDescription>
           </Alert>
           <Button onClick={handleOpenViewer} className="w-full">
             <Monitor className="h-4 w-4 mr-2" />
-            Open Browser Viewer
+            Open Browser View
           </Button>
         </CardContent>
       </Card>
@@ -144,7 +141,7 @@ export function VncViewer({ vncUrl, embedded, profileId }: VncViewerProps) {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Monitor className="h-5 w-5" />
-            <CardTitle>Live Browser Session</CardTitle>
+            <CardTitle>Live Browser View</CardTitle>
           </div>
           <div className="flex items-center gap-2">
             <Button
@@ -177,7 +174,7 @@ export function VncViewer({ vncUrl, embedded, profileId }: VncViewerProps) {
           <iframe
             src={`${effectiveUrl}/vnc.html?autoconnect=true&resize=remote&reconnect=true`}
             className="w-full h-full border-0"
-            title="VNC Browser Session"
+            title="Live Browser View"
             onError={handleIframeError}
             allow="clipboard-read; clipboard-write"
           />

@@ -206,8 +206,8 @@ export function ProxyConfigForm({ profileId, onConfigUpdate }: ProxyConfigFormPr
           <CardTitle>Proxy Configuration</CardTitle>
         </div>
         <CardDescription>
-          Configure a proxy server for this LinkedIn profile when running the cloud daemon.
-          Desktop daemon users run on their own residential IP and do not need a proxy.
+          Configure a proxy for this LinkedIn account when using Lengrowth Cloud.
+          Users running the desktop app connect from their own computer and do not need a proxy.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -222,16 +222,16 @@ export function ProxyConfigForm({ profileId, onConfigUpdate }: ProxyConfigFormPr
         </Alert>
 
         <div className="space-y-2">
-          <Label htmlFor="proxy-server">Proxy Server URL</Label>
+          <Label htmlFor="proxy-server">Proxy URL</Label>
           <Input
             id="proxy-server"
             type="text"
-            placeholder="http://proxy.example.com:8080 or socks5://proxy.example.com:1080"
+            placeholder="http://proxy.example.com:8080"
             value={proxyServer}
             onChange={(e) => setProxyServer(e.target.value)}
           />
           <p className="text-xs text-muted-foreground">
-            Format: http://host:port or socks5://host:port
+            Enter the full proxy URL provided by your proxy service
           </p>
         </div>
 
@@ -243,12 +243,12 @@ export function ProxyConfigForm({ profileId, onConfigUpdate }: ProxyConfigFormPr
                   showAdvanced ? "rotate-180" : ""
                 }`}
               />
-              Advanced: Proxy Authentication
+              Proxy login details (optional)
             </Button>
           </CollapsibleTrigger>
           <CollapsibleContent className="space-y-4 pt-4">
             <div className="space-y-2">
-              <Label htmlFor="proxy-username">Proxy Username (Optional)</Label>
+              <Label htmlFor="proxy-username">Username (Optional)</Label>
               <Input
                 id="proxy-username"
                 type="text"
@@ -259,7 +259,7 @@ export function ProxyConfigForm({ profileId, onConfigUpdate }: ProxyConfigFormPr
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="proxy-password">Proxy Password (Optional)</Label>
+              <Label htmlFor="proxy-password">Password (Optional)</Label>
               <Input
                 id="proxy-password"
                 type="password"
@@ -334,20 +334,16 @@ export function ProxyConfigForm({ profileId, onConfigUpdate }: ProxyConfigFormPr
           <AlertDescription>
             <ul className="mt-2 list-disc space-y-1 pl-4 text-xs">
               <li>
-                <strong>Desktop daemon:</strong> No proxy needed - uses your
-                residential IP
+                <strong>Desktop app users:</strong> No proxy needed — your own internet connection is used
               </li>
               <li>
-                <strong>Cloud daemon:</strong> Mobile proxies recommended
-                ($50-150/month unlimited bandwidth)
+                <strong>Lengrowth Cloud users:</strong> A mobile proxy is recommended ($50-150/month for unlimited usage)
               </li>
               <li>
-                <strong>Never use:</strong> Datacenter/Elastic IPs - LinkedIn
-                actively blocks cloud provider IPs
+                <strong>Avoid:</strong> Datacenter or hosting IPs — LinkedIn blocks these
               </li>
               <li>
-                <strong>Budget:</strong> 1 IP per 2-3 profiles = $25-75 per
-                profile/month
+                <strong>Cost estimate:</strong> One IP can cover 2-3 accounts ($25-75 per account/month)
               </li>
             </ul>
           </AlertDescription>

@@ -214,7 +214,7 @@ export default function RateLimitForm({
                   Smart Rate Limiting
                 </FormLabel>
                 <FormDescription>
-                  Automatically adjust pacing based on time-of-day, detectability score, and engagement patterns
+                  Automatically adjust pacing based on time-of-day and engagement patterns to stay within safe limits
                 </FormDescription>
               </div>
               <FormControl>
@@ -410,12 +410,12 @@ export default function RateLimitForm({
                     </FormControl>
                     <div className="text-xs text-muted-foreground">
                       {velocity >= 30
-                        ? `Burst mode: tasks fire immediately with 5-10s gaps (~${Math.round(3600 / velocity)}s between actions)`
-                        : `Spread mode: tasks distributed across 24h (~${Math.round(60 / velocity)} min between actions)`}
+                        ? `High-frequency: actions run back-to-back with short gaps (~${Math.round(3600 / velocity)}s between each)`
+                        : `Spread evenly: actions are spaced ~${Math.round(60 / velocity)} min apart throughout the day`}
                     </div>
                   </div>
                   <FormDescription>
-                    Controls task spacing: ≥30 actions/hr = burst mode, &lt;30 = spread mode
+                    ≥30 actions/hr runs them back-to-back; below 30 spaces them throughout the day
                   </FormDescription>
                   <FormMessage />
                 </FormItem>

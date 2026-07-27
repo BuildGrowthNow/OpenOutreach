@@ -182,7 +182,7 @@ export default function LlmSettingsForm({ initialData, onSuccess }: LlmSettingsF
         {success && (
           <Alert>
             <Icons.CheckCircle className="h-4 w-4" />
-            <AlertDescription>LLM and AI messaging settings updated successfully.</AlertDescription>
+            <AlertDescription>AI settings updated successfully.</AlertDescription>
           </Alert>
         )}
 
@@ -194,16 +194,16 @@ export default function LlmSettingsForm({ initialData, onSuccess }: LlmSettingsF
               <div>
                 {useCustomLlm ? (
                   <>
-                    <p className="font-medium text-zinc-100">Using your own LLM</p>
+                    <p className="font-medium text-zinc-100">Using your own AI provider</p>
                     <p className="mt-0.5 text-sm text-zinc-400">
-                      Your API key and model are active. Clear them below to switch back to the Lengrowth AI.
+                      Your custom AI is active. Clear it below to switch back to the Lengrowth AI.
                     </p>
                   </>
                 ) : (
                   <>
                     <p className="font-medium text-zinc-100">Running on Lengrowth AI</p>
                     <p className="mt-0.5 text-sm text-zinc-400">
-                      No setup needed — we handle the LLM. You can still customise tone and messaging rules below.
+                      No setup needed — we handle the AI. You can still customise tone and messaging rules below.
                     </p>
                   </>
                 )}
@@ -216,7 +216,7 @@ export default function LlmSettingsForm({ initialData, onSuccess }: LlmSettingsF
               className="shrink-0"
               onClick={() => form.setValue('useCustomLlm', !useCustomLlm)}
             >
-              {useCustomLlm ? 'Use Lengrowth AI' : 'Use my own LLM →'}
+              {useCustomLlm ? 'Use Lengrowth AI' : 'Use my own AI →'}
             </Button>
           </div>
         </div>
@@ -245,8 +245,8 @@ export default function LlmSettingsForm({ initialData, onSuccess }: LlmSettingsF
                   <p className="truncate text-lg font-semibold">{model || 'Not configured'}</p>
                   <p className="text-sm text-muted-foreground">
                     {provider === 'openai_compatible'
-                      ? 'Uses your custom OpenAI-style endpoint.'
-                      : 'Uses the provider default endpoint.'}
+                      ? 'Uses your custom AI provider URL.'
+                      : 'Uses the default URL for this provider.'}
                   </p>
                 </CardContent>
               </Card>
@@ -274,7 +274,7 @@ export default function LlmSettingsForm({ initialData, onSuccess }: LlmSettingsF
                 name="provider"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>LLM provider</FormLabel>
+                    <FormLabel>AI provider</FormLabel>
                     <Select
                       value={field.value}
                       onValueChange={(value: string | null) => {
@@ -321,7 +321,7 @@ export default function LlmSettingsForm({ initialData, onSuccess }: LlmSettingsF
               name="apiKey"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>API key</FormLabel>
+                  <FormLabel>API key <span className="text-zinc-500 font-normal text-xs">(from your AI provider)</span></FormLabel>
                   <FormControl>
                     <Input
                       type="password"
@@ -341,7 +341,7 @@ export default function LlmSettingsForm({ initialData, onSuccess }: LlmSettingsF
               name="apiBase"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>API base URL <span className="text-zinc-500 font-normal">(optional)</span></FormLabel>
+                  <FormLabel>Custom API URL <span className="text-zinc-500 font-normal">(optional)</span></FormLabel>
                   <FormControl>
                     <Input
                       placeholder="https://api.example.com/v1"
@@ -350,8 +350,8 @@ export default function LlmSettingsForm({ initialData, onSuccess }: LlmSettingsF
                   </FormControl>
                   <FormDescription>
                     {provider === 'openai_compatible'
-                      ? 'Required for custom OpenAI-compatible providers.'
-                      : 'Only needed for custom or proxy endpoints.'}
+                      ? 'Required when using a self-hosted or custom AI provider.'
+                      : 'Only needed if your provider uses a non-standard URL.'}
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -363,7 +363,7 @@ export default function LlmSettingsForm({ initialData, onSuccess }: LlmSettingsF
         {/* Prompt guardrails — always visible */}
         <div className="space-y-2">
           <p className="text-sm font-medium text-zinc-200">Messaging rules</p>
-          <p className="text-xs text-zinc-500">These apply regardless of which LLM you use.</p>
+          <p className="text-xs text-zinc-500">These apply regardless of which AI you use.</p>
         </div>
 
         <div className="grid gap-6 lg:grid-cols-3">

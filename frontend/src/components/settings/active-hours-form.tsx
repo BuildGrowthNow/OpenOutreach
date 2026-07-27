@@ -136,7 +136,7 @@ export default function ActiveHoursForm({ settings, onUpdate }: ActiveHoursFormP
         <CardHeader>
           <CardTitle>Active Hours Configuration</CardTitle>
           <CardDescription>
-            Control when the daemon executes tasks. Outside active hours, the daemon will idle until the next active window.
+            Control when Lengrowth is allowed to run outreach. Outside active hours, all activity pauses until the next window.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -148,8 +148,8 @@ export default function ActiveHoursForm({ settings, onUpdate }: ActiveHoursFormP
               </Label>
               <p className="text-sm text-zinc-400">
                 {enabled
-                  ? "Daemon will only run during configured hours"
-                  : "Daemon will run 24/7 regardless of time"}
+                  ? "Lengrowth will only run during the hours you set"
+                  : "Lengrowth runs around the clock"}
               </p>
             </div>
             <Switch
@@ -183,7 +183,7 @@ export default function ActiveHoursForm({ settings, onUpdate }: ActiveHoursFormP
                     ))}
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-zinc-500">Tasks start executing at this hour</p>
+                <p className="text-xs text-zinc-500">Outreach starts at this hour</p>
               </div>
 
               <div className="space-y-2">
@@ -207,7 +207,7 @@ export default function ActiveHoursForm({ settings, onUpdate }: ActiveHoursFormP
                     ))}
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-zinc-500">Tasks stop executing at this hour (exclusive)</p>
+                <p className="text-xs text-zinc-500">Outreach stops at this hour</p>
               </div>
             </div>
 
@@ -287,7 +287,7 @@ export default function ActiveHoursForm({ settings, onUpdate }: ActiveHoursFormP
                     : activeDays.map((d) => WEEKDAYS.find((wd) => wd.value === d)?.label).join(", ")}
                 </p>
                 <p className="pt-2 text-xs text-zinc-500">
-                  The daemon will idle outside these windows and resume when conditions are met.
+                  Lengrowth pauses outside these windows and resumes automatically at the next active time.
                 </p>
               </div>
             </div>

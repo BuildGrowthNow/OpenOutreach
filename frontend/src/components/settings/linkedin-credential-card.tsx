@@ -330,7 +330,7 @@ export default function LinkedInCredentialCard({
                 {credential.daemonIp ? (
                   <div className="flex items-center gap-1.5 text-xs text-zinc-500">
                     <Icons.Globe className="h-3 w-3" />
-                    <span>IP: {credential.daemonIp}</span>
+                    <span>Connected from: {credential.daemonIp}</span>
                   </div>
                 ) : null}
               </div>
@@ -397,7 +397,7 @@ export default function LinkedInCredentialCard({
                 <div className="min-w-0 space-y-2">
                   <div className="flex flex-wrap items-center gap-2">
                     <div className="text-sm font-semibold text-zinc-100">
-                      Credential needs attention
+                      Account needs attention
                     </div>
                     <span className="rounded-full border border-red-500/30 bg-red-500/10 px-2 py-0.5 text-xs text-red-300">
                       {statusLabel}
@@ -498,9 +498,9 @@ export default function LinkedInCredentialCard({
         <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
           <DialogContent className="max-w-3xl border border-zinc-800 bg-zinc-950 text-zinc-100 shadow-2xl">
             <DialogHeader>
-              <DialogTitle>Edit LinkedIn Credential</DialogTitle>
+              <DialogTitle>Edit LinkedIn Account</DialogTitle>
               <DialogDescription>
-                Update your LinkedIn account credentials.
+                Update your LinkedIn login details.
               </DialogDescription>
             </DialogHeader>
             <LinkedInCredentialForm
@@ -510,7 +510,7 @@ export default function LinkedInCredentialCard({
                 onRefresh();
                 toast({
                   title: "Success",
-                  description: "Credential updated successfully",
+                  description: "Account updated successfully",
                 });
               }}
               onCancel={() => setShowEditDialog(false)}
@@ -521,9 +521,9 @@ export default function LinkedInCredentialCard({
         <Dialog open={showLogsDialog} onOpenChange={setShowLogsDialog}>
           <DialogContent className="max-h-[80vh] max-w-3xl overflow-y-auto border border-zinc-800 bg-zinc-950 text-zinc-100 shadow-2xl">
             <DialogHeader>
-              <DialogTitle>Credential Audit Logs</DialogTitle>
+              <DialogTitle>Account Activity Log</DialogTitle>
               <DialogDescription>
-                History of actions performed on this credential.
+                History of login and verification activity for this account.
               </DialogDescription>
             </DialogHeader>
             <div className="max-h-[60vh] space-y-4 overflow-y-auto pr-2">
@@ -542,15 +542,18 @@ export default function LinkedInCredentialCard({
                       </span>
                     </div>
                     {log.details && Object.keys(log.details).length > 0 ? (
-                      <div className="rounded-lg border border-zinc-800 bg-zinc-900/80 p-3 text-xs font-mono text-zinc-100">
-                        <pre className="whitespace-pre-wrap break-words text-zinc-100">
-                          {JSON.stringify(log.details, null, 2)}
-                        </pre>
+                      <div className="rounded-lg border border-zinc-800 bg-zinc-900/80 p-3 text-xs text-zinc-300 space-y-1">
+                        {Object.entries(log.details).map(([k, v]) => (
+                          <div key={k} className="flex gap-2">
+                            <span className="text-zinc-500 capitalize shrink-0">{k.replaceAll("_", " ")}:</span>
+                            <span className="break-all">{String(v)}</span>
+                          </div>
+                        ))}
                       </div>
                     ) : null}
                     {log.ipAddress ? (
                       <div className="text-xs text-zinc-400">
-                        IP: {log.ipAddress}
+                        Connected from: {log.ipAddress}
                       </div>
                     ) : null}
                   </div>

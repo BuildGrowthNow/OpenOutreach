@@ -452,7 +452,7 @@ export function CampaignForm({
                           />
                         </FormControl>
                         <FormDescription>
-                          Comma-separated LinkedIn search terms used to discover leads. These are the actual queries the daemon uses to search LinkedIn.
+                          Comma-separated LinkedIn search terms. Lengrowth uses these to find and discover matching leads on LinkedIn.
                           {field.value && (
                             <span className="ml-1 text-zinc-300">
                               ({parseSearchKeywords(field.value).length} keywords)

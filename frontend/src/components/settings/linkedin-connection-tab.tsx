@@ -301,7 +301,7 @@ export function LinkedInConnectionTab({
       if (response.data) {
         toast({
           title: "Success",
-          description: "Credential deactivated successfully",
+          description: "Account removed successfully",
         });
         handleLinkedInCredentialsUpdate();
       } else {
@@ -495,14 +495,14 @@ export function LinkedInConnectionTab({
                   className={`h-5 w-5 ${credExists ? "text-green-400" : "text-red-400"}`}
                 />
                 <span className="font-medium text-zinc-100">
-                  LinkedIn Credentials
+                  LinkedIn Accounts
                 </span>
               </div>
               <div className="text-sm text-muted-foreground">
                 {credExists ? "Configured" : "Not Configured"}
               </div>
               <div className="text-xs mt-1 text-zinc-400">
-                {credCount} credential(s) found
+                {credCount} account{credCount === 1 ? "" : "s"} connected
               </div>
             </div>
             <div
@@ -529,18 +529,17 @@ export function LinkedInConnectionTab({
 
       <Card>
         <CardHeader>
-          <CardTitle>LinkedIn Credentials</CardTitle>
+          <CardTitle>LinkedIn Accounts</CardTitle>
           <CardDescription>
-            Add and manage your LinkedIn account credentials for outreach
-            campaigns
+            Add and manage the LinkedIn accounts used for your outreach campaigns
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">
-              Your LinkedIn credentials are encrypted at rest using AES-256.
-              Each credential includes usage tracking, health monitoring, and
-              automatic rotation alerts.
+              Your LinkedIn login details are securely encrypted.
+              Each account includes usage tracking, health monitoring, and
+              automatic alerts.
             </p>
             <div className="flex items-center gap-2">
               <PlanLimitButton
@@ -549,16 +548,14 @@ export function LinkedInConnectionTab({
                 onClick={() => setIsAddDialogOpen(true)}
               >
                 <Plus className="h-4 w-4 mr-2" />
-                Add Credential
+                Add Account
               </PlanLimitButton>
               <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
                 <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto border border-zinc-800 bg-zinc-950 text-zinc-100 shadow-2xl">
                   <DialogHeader className="border-b border-zinc-800/80 pb-4">
-                    <DialogTitle>Add LinkedIn Credential</DialogTitle>
+                    <DialogTitle>Add LinkedIn Account</DialogTitle>
                     <DialogDescription>
-                      Add your LinkedIn email, password, and an optional session
-                      cookie. Your LinkedIn profile is detected automatically
-                      after login.
+                      Add your LinkedIn email and password to get started. Your profile is detected automatically after login.
                     </DialogDescription>
                   </DialogHeader>
                   <LinkedInCredentialForm
@@ -584,11 +581,11 @@ export function LinkedInConnectionTab({
             <div className="text-center py-12 bg-muted rounded-lg border-2 border-dashed border-muted-foreground/20">
               <Lock className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
               <h3 className="text-lg font-medium mb-2">
-                No LinkedIn Credentials
+                No LinkedIn Accounts
               </h3>
               <p className="text-sm text-muted-foreground mb-6 max-w-md mx-auto">
-                Add your first LinkedIn account to start managing campaigns.
-                Your credentials are securely encrypted and never shared.
+                Add your first LinkedIn account to start running campaigns.
+                Your login details are securely encrypted and never shared.
               </p>
               <PlanLimitButton
                 resource="linkedin_accounts"
@@ -596,12 +593,12 @@ export function LinkedInConnectionTab({
                 onClick={() => setIsAddDialogOpen(true)}
               >
                 <Plus className="h-4 w-4 mr-2" />
-                Add Your First Credential
+                Add Your First Account
               </PlanLimitButton>
               <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
                 <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto border border-zinc-800 bg-zinc-950 text-zinc-100 shadow-2xl">
                   <DialogHeader className="border-b border-zinc-800/80 pb-4">
-                    <DialogTitle>Add LinkedIn Credential</DialogTitle>
+                    <DialogTitle>Add LinkedIn Account</DialogTitle>
                     <DialogDescription>
                       Add your LinkedIn email, password, and an optional session
                       cookie. Your LinkedIn profile is detected automatically
@@ -621,10 +618,10 @@ export function LinkedInConnectionTab({
           ) : (
             <div className="space-y-4">
               <h4 className="font-medium">
-                {linkedinCredentials.length} Stored{" "}
+                {linkedinCredentials.length} Connected{" "}
                 {linkedinCredentials.length === 1
-                  ? "Credential"
-                  : "Credentials"}
+                  ? "Account"
+                  : "Accounts"}
               </h4>
               {linkedinCredentials.map((cred) => (
                 <LinkedInCredentialCard
@@ -656,9 +653,9 @@ export function LinkedInConnectionTab({
       >
         <DialogContent className="max-h-[80vh] max-w-2xl overflow-y-auto border border-zinc-800 bg-zinc-950 text-zinc-100 shadow-2xl">
           <DialogHeader>
-            <DialogTitle>How to Get LinkedIn Session Cookies</DialogTitle>
+            <DialogTitle>How to Connect Your LinkedIn Account</DialogTitle>
             <DialogDescription>
-              Follow these steps to extract your LinkedIn session cookies
+              Follow these steps to link your LinkedIn account to Lengrowth
             </DialogDescription>
           </DialogHeader>
 
@@ -748,7 +745,7 @@ export function LinkedInConnectionTab({
                 handleStartSetup();
               }}
             >
-              Go to Credentials Setup
+              Connect an Account
             </Button>
           </div>
         </DialogContent>

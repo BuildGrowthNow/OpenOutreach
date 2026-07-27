@@ -23,10 +23,10 @@ export function DaemonStatusCard() {
       if (response.data) {
         setStatus(response.data);
       } else {
-        setError(response.error || "Failed to load daemon status");
+        setError(response.error || "Unable to check connection status");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load daemon status");
+      setError(err instanceof Error ? err.message : "Unable to check connection status");
     } finally {
       setLoading(false);
     }
@@ -100,10 +100,10 @@ export function DaemonStatusCard() {
         <CardHeader>
           <div className="flex items-center gap-2">
             <Monitor className="h-5 w-5 text-zinc-400" />
-            <CardTitle>Desktop Daemon Status</CardTitle>
+            <CardTitle>Lengrowth Desktop Status</CardTitle>
           </div>
           <CardDescription>
-            Checking daemon connection...
+            Checking connection...
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -121,7 +121,7 @@ export function DaemonStatusCard() {
         <CardHeader>
           <div className="flex items-center gap-2">
             <Monitor className="h-5 w-5 text-zinc-400" />
-            <CardTitle>Desktop Daemon Status</CardTitle>
+            <CardTitle>Lengrowth Desktop Status</CardTitle>
           </div>
         </CardHeader>
         <CardContent>
@@ -142,17 +142,17 @@ export function DaemonStatusCard() {
         <CardHeader>
           <div className="flex items-center gap-2">
             <Monitor className="h-5 w-5 text-zinc-400" />
-            <CardTitle>Desktop Daemon</CardTitle>
+            <CardTitle>Lengrowth Desktop App</CardTitle>
           </div>
           <CardDescription>
-            Run automation from your computer using your residential IP
+            Run outreach directly from your computer
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <Alert className="border-zinc-700 bg-zinc-900/50">
             <Download className="h-4 w-4 text-blue-400" />
             <AlertDescription className="text-zinc-300">
-              No desktop daemon detected. Download the desktop app to run automation from your own computer and avoid proxy costs.
+              Lengrowth desktop app not detected. Download it to run outreach from your own computer — no extra costs required.
             </AlertDescription>
           </Alert>
           <Button variant="outline" asChild>
@@ -172,7 +172,7 @@ export function DaemonStatusCard() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Monitor className="h-5 w-5 text-zinc-400" />
-            <CardTitle>Desktop Daemon Status</CardTitle>
+            <CardTitle>Lengrowth Desktop App</CardTitle>
           </div>
           <Button
             variant="ghost"
@@ -184,7 +184,7 @@ export function DaemonStatusCard() {
           </Button>
         </div>
         <CardDescription>
-          Desktop automation running on your local machine
+          Outreach is running on your computer
         </CardDescription>
       </CardHeader>
       <CardContent>
