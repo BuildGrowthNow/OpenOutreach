@@ -185,11 +185,9 @@ export default function PricingPage() {
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-50">
-      <Navbar />
-
-      {/* Lifetime banner — top of page */}
-      <div className="bg-emerald-600/10 border-b border-emerald-500/20">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-3 flex flex-col sm:flex-row items-center justify-center gap-2 text-center">
+      {/* Lifetime banner — fixed above navbar */}
+      <div className="fixed top-0 left-0 right-0 z-[60] bg-zinc-950 border-b border-emerald-500/20">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-2.5 flex flex-col sm:flex-row items-center justify-center gap-2 text-center">
           <span className="flex items-center gap-1.5 text-sm font-medium text-emerald-300">
             <Zap className="h-4 w-4 shrink-0" />
             Limited lifetime deal — Pro features forever for $149 one-time.
@@ -199,6 +197,14 @@ export default function PricingPage() {
           </Link>
         </div>
       </div>
+
+      {/* Push the fixed Navbar down below the banner */}
+      <div className="[&_header]:top-[40px]">
+        <Navbar />
+      </div>
+
+      {/* Spacer so content clears the fixed banner + navbar (40px banner + 64px nav) */}
+      <div className="h-[104px]" />
 
       {/* Hero */}
       <section className="pt-16 pb-4 sm:pt-24 sm:pb-8">
