@@ -541,7 +541,7 @@ RequestExecutionLevel admin
 
 ; Welcome page
 !define MUI_WELCOMEPAGE_TITLE "Welcome to Lengrowth Outreach {version}"
-!define MUI_WELCOMEPAGE_TEXT "Your LinkedIn co-pilot for B2B lead gen.$\\r$\\n$\\r$\\nThis wizard will guide you through the installation of Lengrowth Outreach on your computer.$\\r$\\n$\\r$\\nLengrowth Outreach runs on your own machine using your residential IP — no proxy costs, no cloud middleman.$\\r$\\n$\\r$\\nClick Next to continue."
+!define MUI_WELCOMEPAGE_TEXT "Fill your calendar with qualified meetings.$\\r$\\n$\\r$\\nDefine your ideal customer once. Lengrowth finds them on LinkedIn, writes a unique message for each, and follows up until they're ready to talk — completely hands-off.$\\r$\\n$\\r$\\nThis wizard will guide you through the installation. Click Next to continue."
 
 ; Finish page
 !define MUI_FINISHPAGE_RUN "$INSTDIR\\Lengrowth.exe"
