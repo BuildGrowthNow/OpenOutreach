@@ -62,10 +62,12 @@ def create_enriched_lead(session, url: str, profile: Dict[str, Any]) -> Optional
         return None
 
     # Create new lead with cached profile data
+    degree = profile.get("connection_degree")
     lead = Lead(
         linkedin_url=clean_url,
         public_identifier=public_id,
         cached_profile=profile,
+        connection_degree=degree,
     )
     lead.save()
     _cache_urn_from_profile(lead, profile)

@@ -26,6 +26,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
@@ -72,6 +73,7 @@ const formSchema = z.object({
   searchKeywords: z.string().optional(),
   icpTitles: z.string().optional(),
   followUpStrategy: z.string().optional(),
+  targetDegrees: z.array(z.number()).min(1, "Select at least one connection degree"),
   isFreemium: z.boolean(),
   velocity: z.number().min(1).max(100),
   cooldownMinutes: z.number().min(1).max(1440),
@@ -138,6 +140,7 @@ export function CampaignForm({
       searchKeywords: undefined,
       icpTitles: undefined,
       followUpStrategy: undefined,
+      targetDegrees: [2, 3],
       isFreemium: false,
       velocity: 10,
       cooldownMinutes: 60,
@@ -177,6 +180,7 @@ export function CampaignForm({
         searchKeywords: formatSearchKeywords(campaign.searchKeywords),
         icpTitles: formatIcpTitles(campaign.icpTitles),
         followUpStrategy: campaign.followUpStrategy || undefined,
+        targetDegrees: campaign.targetDegrees || [2, 3],
         isFreemium: campaign.isFreemium,
         velocity: campaign.velocity,
         cooldownMinutes: campaign.cooldownMinutes,
@@ -192,6 +196,7 @@ export function CampaignForm({
         searchKeywords: undefined,
         icpTitles: undefined,
         followUpStrategy: undefined,
+        targetDegrees: [2, 3],
         isFreemium: false,
         velocity: 10,
         cooldownMinutes: 60,
@@ -203,11 +208,12 @@ export function CampaignForm({
   const handleSubmit = async (values: FormValues) => {
     setLoading(true);
     try {
-      const { searchKeywords, icpTitles, ...rest } = values;
+      const { searchKeywords, icpTitles, targetDegrees, ...rest } = values;
       const payload: Partial<Campaign> = {
         ...rest,
         searchKeywords: parseSearchKeywords(searchKeywords),
         icpTitles: parseIcpTitles(icpTitles),
+        targetDegrees,
       };
 
       await onSubmit(payload);
@@ -480,6 +486,48 @@ export function CampaignForm({
                             </span>
                           )}
                         </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="targetDegrees"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Target Connection Degrees</FormLabel>
+                        <FormDescription className="mb-2">
+                          Which connection degrees should this campaign target?
+                        </FormDescription>
+                        <div className="flex flex-col gap-3">
+                          {[
+                            { value: 1, label: "1st degree", desc: "Already connected — message directly" },
+                            { value: 2, label: "2nd degree", desc: "Connect first, then message" },
+                            { value: 3, label: "3rd degree", desc: "Connect first, then message" },
+                          ].map((item) => (
+                            <label
+                              key={item.value}
+                              className="flex items-center gap-3 rounded-lg border border-zinc-800/80 bg-zinc-900/50 px-4 py-3 cursor-pointer hover:bg-zinc-800/50 transition-colors"
+                            >
+                              <Checkbox
+                                checked={field.value?.includes(item.value)}
+                                onCheckedChange={(checked) => {
+                                  const current = field.value || [];
+                                  if (checked) {
+                                    field.onChange([...current, item.value].sort());
+                                  } else {
+                                    field.onChange(current.filter((d) => d !== item.value));
+                                  }
+                                }}
+                              />
+                              <div className="flex flex-col">
+                                <span className="text-sm font-medium text-zinc-100">{item.label}</span>
+                                <span className="text-xs text-zinc-400">{item.desc}</span>
+                              </div>
+                            </label>
+                          ))}
+                        </div>
                         <FormMessage />
                       </FormItem>
                     )}

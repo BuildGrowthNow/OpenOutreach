@@ -285,6 +285,7 @@ export interface Campaign {
   searchKeywords?: string[];
   icpTitles?: string[];
   followUpStrategy?: string;
+  targetDegrees?: number[];
   isFreemium: boolean;
   ghostModeEnabled: boolean;
   velocity: number;

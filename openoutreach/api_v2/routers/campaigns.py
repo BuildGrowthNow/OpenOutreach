@@ -33,6 +33,7 @@ class CampaignCreate(BaseModel):
     team_member_ids: Optional[List[str]] = None  # Optional: share with team
     icp_titles: Optional[List[str]] = None  # ICP job titles
     follow_up_strategy: Optional[str] = None  # Follow-up strategy text
+    target_degrees: Optional[List[int]] = None  # Target connection degrees (1, 2, 3)
 
     class Config:
         json_schema_extra = {
@@ -45,7 +46,8 @@ class CampaignCreate(BaseModel):
                 "velocity": 20,
                 "team_member_ids": ["user_456"],
                 "icp_titles": ["CEO", "CTO", "VP of Engineering"],
-                "follow_up_strategy": "Send personalized follow-up after 3 days"
+                "follow_up_strategy": "Send personalized follow-up after 3 days",
+                "target_degrees": [2, 3]
             }
         }
 
@@ -63,6 +65,7 @@ class CampaignUpdate(BaseModel):
     team_member_ids: Optional[List[str]] = None
     icp_titles: Optional[List[str]] = None
     follow_up_strategy: Optional[str] = None
+    target_degrees: Optional[List[int]] = None
 
 
 class CampaignStats(BaseModel):
@@ -88,6 +91,7 @@ class CampaignResponse(BaseModel):
     team_member_ids: List[str]
     icp_titles: List[str]
     follow_up_strategy: Optional[str]
+    target_degrees: List[int] = [2, 3]
     created_at: str
     stats: CampaignStats = CampaignStats()
 
@@ -218,6 +222,7 @@ async def list_campaigns(
                 team_member_ids=doc.get("team_member_ids", []),
                 icp_titles=doc.get("icp_titles", []),
                 follow_up_strategy=doc.get("follow_up_strategy"),
+                target_degrees=doc.get("target_degrees", [2, 3]),
                 created_at=doc.get("created_at").isoformat() if doc.get("created_at") else "",
                 stats=CampaignStats(
                     totalLeads=s.get("totalLeads", 0),
@@ -322,6 +327,7 @@ async def create_campaign(
             team_member_ids=team_ids,
             icp_titles=data.icp_titles or [],
             follow_up_strategy=data.follow_up_strategy,
+            target_degrees=data.target_degrees if data.target_degrees is not None else [2, 3],
             status="draft",  # New campaigns start as draft
             is_paused=True,  # Keep is_paused in sync with draft status
         )
@@ -343,6 +349,7 @@ async def create_campaign(
             team_member_ids=campaign.team_member_ids,
             icp_titles=campaign.icp_titles,
             follow_up_strategy=campaign.follow_up_strategy,
+            target_degrees=campaign.target_degrees,
             created_at=campaign.created_at.isoformat() if campaign.created_at else "",
         )
 
@@ -379,6 +386,7 @@ async def get_campaign(
         team_member_ids=campaign.team_member_ids,
         icp_titles=campaign.icp_titles,
         follow_up_strategy=campaign.follow_up_strategy,
+        target_degrees=campaign.target_degrees,
         created_at=campaign.created_at.isoformat() if campaign.created_at else "",
     )
 
@@ -448,6 +456,8 @@ async def update_campaign(
             updates["icp_titles"] = data.icp_titles
         if data.follow_up_strategy is not None:
             updates["follow_up_strategy"] = data.follow_up_strategy
+        if data.target_degrees is not None:
+            updates["target_degrees"] = data.target_degrees
 
         # Handle status/is_paused synchronization
         # Priority: if status is provided, use it; otherwise use is_paused
@@ -519,6 +529,7 @@ async def update_campaign(
             team_member_ids=updated_campaign.team_member_ids,
             icp_titles=updated_campaign.icp_titles,
             follow_up_strategy=updated_campaign.follow_up_strategy,
+            target_degrees=updated_campaign.target_degrees,
             created_at=updated_campaign.created_at.isoformat() if updated_campaign.created_at else "",
         )
 
@@ -675,6 +686,7 @@ async def pause_campaign(
             team_member_ids=updated_campaign.team_member_ids,
             icp_titles=updated_campaign.icp_titles,
             follow_up_strategy=updated_campaign.follow_up_strategy,
+            target_degrees=updated_campaign.target_degrees,
             created_at=updated_campaign.created_at.isoformat() if updated_campaign.created_at else "",
         )
 
@@ -774,6 +786,7 @@ async def resume_campaign(
             team_member_ids=updated_campaign.team_member_ids,
             icp_titles=updated_campaign.icp_titles,
             follow_up_strategy=updated_campaign.follow_up_strategy,
+            target_degrees=updated_campaign.target_degrees,
             created_at=updated_campaign.created_at.isoformat() if updated_campaign.created_at else "",
         )
 

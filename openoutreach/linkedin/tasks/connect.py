@@ -114,6 +114,16 @@ def handle_connect(task, session, qualifiers):
     if lead:
         deal = Deal.get_by_lead_and_campaign(lead._id, session.campaign._id if hasattr(session.campaign, '_id') else str(session.campaign))
 
+    # Check target_degrees filter — skip leads whose degree doesn't match
+    target_degrees = getattr(campaign, "target_degrees", None) or [2, 3]
+    if lead and lead.connection_degree is not None:
+        if lead.connection_degree not in target_degrees:
+            logger.info(
+                "[%s] connect: %s degree %d not in target_degrees %s — skipped",
+                campaign, public_id, lead.connection_degree, target_degrees,
+            )
+            return
+
     reason = deal.reason if deal else ""
     stats = strategy.qualifier.explain(candidate, session) if strategy.qualifier else ""
     logger.info("[%s] connect", campaign)
@@ -124,9 +134,28 @@ def handle_connect(task, session, qualifiers):
         # our funnel enum at the boundary.
         status = DealState(get_connection_status(session, profile).value)
 
-        if status in (DealState.CONNECTED, DealState.PENDING):
-            # set_profile_state fires on_deal_state_entered, which stamps
-            # next_check_pending_at on PENDING and no-ops on CONNECTED.
+        # Update lead's connection_degree from the fresh API check
+        degree = profile.get("connection_degree")
+        if degree is not None and lead:
+            lead.connection_degree = degree
+            lead.save(update_fields=["connection_degree"])
+
+        # Re-check degree filter after fresh API call
+        if degree is not None and degree not in target_degrees:
+            logger.info(
+                "[%s] connect: %s fresh degree %d not in target_degrees %s — skipped",
+                campaign, public_id, degree, target_degrees,
+            )
+            return
+
+        # 1st-degree leads: skip connect, transition directly to CONNECTED
+        if degree == 1 or status == DealState.CONNECTED:
+            set_profile_state(session, public_id, DealState.CONNECTED.value)
+            if degree == 1:
+                logger.info("[%s] %s already 1st-degree — auto-CONNECTED", campaign, public_id)
+            return
+
+        if status == DealState.PENDING:
             set_profile_state(session, public_id, status.value)
             return
 

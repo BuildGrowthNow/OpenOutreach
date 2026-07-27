@@ -17,6 +17,7 @@ class CampaignCreate(BaseModel):
     icp_titles: Optional[List[str]] = Field(None, description="Ideal customer profile job titles")
     follow_up_strategy: Optional[str] = Field(None, description="Follow-up strategy")
     linkedin_profile_id: Optional[str] = Field(None, description="LinkedIn profile to use")
+    target_degrees: Optional[List[int]] = Field(None, description="Target connection degrees (1, 2, 3)")
 
 
 class CampaignUpdate(BaseModel):
@@ -30,6 +31,7 @@ class CampaignUpdate(BaseModel):
     cooldown_minutes: Optional[int] = Field(None, ge=0)
     icp_titles: Optional[List[str]] = None
     follow_up_strategy: Optional[str] = None
+    target_degrees: Optional[List[int]] = None
 
 
 class CampaignResponse(BaseModel):
@@ -47,6 +49,7 @@ class CampaignResponse(BaseModel):
     linkedin_profile_id: Optional[str] = None
     icp_titles: Optional[List[str]] = None
     follow_up_strategy: Optional[str] = None
+    target_degrees: List[int] = Field(default_factory=lambda: [2, 3])
     created_at: datetime
     updated_at: datetime
 

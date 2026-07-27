@@ -271,6 +271,7 @@ class Lead:
         api_email: Optional[str] = None,
         notes: Optional[str] = None,
         disqualified: bool = False,
+        connection_degree: Optional[int] = None,
         user_id: Optional[str] = None,
         creation_date: Optional[datetime] = None,
         update_date: Optional[datetime] = None,
@@ -285,6 +286,7 @@ class Lead:
         self.api_email = api_email
         self.notes = notes
         self.disqualified = disqualified
+        self.connection_degree = connection_degree
         self.user_id = user_id
         self.creation_date = creation_date or datetime.now(tz.utc)
         self.update_date = update_date or datetime.now(tz.utc)
@@ -311,6 +313,8 @@ class Lead:
             data["api_email"] = self.api_email
         if self.notes is not None:
             data["notes"] = self.notes
+        if self.connection_degree is not None:
+            data["connection_degree"] = self.connection_degree
         if self.user_id is not None:
             data["user_id"] = self.user_id
         return data
@@ -329,6 +333,7 @@ class Lead:
             api_email=data.get("api_email"),
             notes=data.get("notes"),
             disqualified=data.get("disqualified", False),
+            connection_degree=data.get("connection_degree"),
             user_id=data.get("user_id"),
             creation_date=data.get("creation_date"),
             update_date=data.get("update_date"),
@@ -890,6 +895,7 @@ class Campaign:
         team_member_ids: Optional[List[str]] = None,
         icp_titles: Optional[List[str]] = None,
         follow_up_strategy: Optional[str] = None,
+        target_degrees: Optional[List[int]] = None,
         created_at: Optional[datetime] = None,
     ):
         self._id = _id or str(uuid4())
@@ -910,6 +916,7 @@ class Campaign:
         self.team_member_ids = team_member_ids or []
         self.icp_titles = icp_titles or []
         self.follow_up_strategy = follow_up_strategy
+        self.target_degrees = target_degrees if target_degrees is not None else [2, 3]
         self.created_at = created_at or datetime.now(tz.utc)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -931,6 +938,7 @@ class Campaign:
             "linkedin_profile_id": self.linkedin_profile_id,
             "team_member_ids": self.team_member_ids,
             "icp_titles": self.icp_titles,
+            "target_degrees": self.target_degrees,
             "created_at": self.created_at,
         }
         if self.model_blob:
@@ -961,6 +969,7 @@ class Campaign:
             team_member_ids=data.get("team_member_ids", []),
             icp_titles=data.get("icp_titles", []),
             follow_up_strategy=data.get("follow_up_strategy"),
+            target_degrees=data.get("target_degrees"),
             created_at=data.get("created_at"),
         )
 
