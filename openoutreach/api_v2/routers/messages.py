@@ -15,13 +15,15 @@ router = APIRouter()
 
 class MessageResponse(BaseModel):
     id: str
-    deal_id: str
-    campaign_id: str
-    sender_name: Optional[str] = None
+    dealId: str
+    campaignId: str
+    senderName: Optional[str] = None
     content: str
-    is_outgoing: bool
-    creation_date: Optional[datetime] = None
-    event_urn: Optional[str] = None
+    isOutgoing: bool
+    creationDate: Optional[datetime] = None
+    recipientName: Optional[str] = None
+    recipientUrl: Optional[str] = None
+    sender: str = "me"
 
 
 class MessageCreate(BaseModel):
@@ -112,22 +114,28 @@ async def list_messages(
     results = []
     for msg in messages:
         deal_data = deals_data.get(str(msg["deal_id"]))
+        is_outgoing = msg.get("is_outgoing", False)
         results.append(MessageResponse(
             id=str(msg["_id"]),
-            deal_id=str(msg["deal_id"]),
-            campaign_id=str(deal_data["campaign_id"]) if deal_data else "",
-            sender_name=msg.get("sender_name"),
+            dealId=str(msg["deal_id"]),
+            campaignId=str(deal_data["campaign_id"]) if deal_data else "",
+            senderName=msg.get("sender_name"),
             content=msg.get("content", ""),
-            is_outgoing=msg.get("is_outgoing", False),
-            creation_date=msg.get("creation_date"),
-            event_urn=msg.get("event_urn"),
+            isOutgoing=is_outgoing,
+            creationDate=msg.get("creation_date"),
+            sender="me" if is_outgoing else "them",
+            recipientName=msg.get("sender_name") or "",
+            recipientUrl="",
         ))
 
     return {
-        "total": total,
-        "limit": limit,
-        "offset": offset,
-        "results": results,
+        "data": results,
+        "pagination": {
+            "page": (offset // limit) + 1,
+            "limit": limit,
+            "total": total,
+            "total_pages": max(1, (total + limit - 1) // limit),
+        },
     }
 
 
@@ -154,15 +162,18 @@ async def get_message(
     if not campaign or not campaign.has_access(user_id):
         raise HTTPException(status_code=403, detail="Access denied")
 
+    is_outgoing = msg.get("is_outgoing", False)
     return MessageResponse(
         id=str(msg["_id"]),
-        deal_id=str(msg["deal_id"]),
-        campaign_id=deal.campaign_id,
-        sender_name=msg.get("sender_name"),
+        dealId=str(msg["deal_id"]),
+        campaignId=deal.campaign_id,
+        senderName=msg.get("sender_name"),
         content=msg.get("content", ""),
-        is_outgoing=msg.get("is_outgoing", False),
-        creation_date=msg.get("creation_date"),
-        event_urn=msg.get("event_urn"),
+        isOutgoing=is_outgoing,
+        creationDate=msg.get("creation_date"),
+        sender="me" if is_outgoing else "them",
+        recipientName=msg.get("sender_name") or "",
+        recipientUrl="",
     )
 
 
