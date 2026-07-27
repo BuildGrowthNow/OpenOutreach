@@ -1,0 +1,43 @@
+LENGROWTH OUTREACH — END USER LICENSE AGREEMENT
+================================================
+
+PLEASE READ THIS AGREEMENT CAREFULLY BEFORE INSTALLING OR USING LENGROWTH OUTREACH.
+
+By installing or using Lengrowth Outreach ("Software"), you agree to be bound by
+the terms of this End User License Agreement ("Agreement"). If you do not agree,
+do not install or use the Software.
+
+1. LICENSE GRANT
+   Lengrowth grants you a limited, non-exclusive, non-transferable license to
+   install and use the Software on your own devices solely for your personal or
+   internal business use.
+
+2. RESTRICTIONS
+   You may not: (a) sublicense, sell, or redistribute the Software; (b) reverse
+   engineer, decompile, or disassemble the Software; (c) use the Software to
+   violate any applicable law or LinkedIn's Terms of Service.
+
+3. ACCOUNT & DATA
+   The Software connects to Lengrowth Outreach servers using your account
+   credentials. You are solely responsible for all activity conducted through
+   your account.
+
+4. DISCLAIMER OF WARRANTIES
+   THE SOFTWARE IS PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND. LENGROWTH
+   EXPRESSLY DISCLAIMS ALL WARRANTIES, EXPRESS OR IMPLIED.
+
+5. LIMITATION OF LIABILITY
+   IN NO EVENT SHALL LENGROWTH BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL,
+   OR CONSEQUENTIAL DAMAGES ARISING FROM YOUR USE OF THE SOFTWARE.
+
+6. TERMINATION
+   This license is effective until terminated. It terminates automatically if
+   you breach any term. Upon termination you must uninstall the Software.
+
+7. GOVERNING LAW
+   This Agreement is governed by applicable law. Any disputes shall be resolved
+   in the appropriate jurisdiction.
+
+For questions contact: support@lengrowth.com
+
+Copyright (c) 2025-2026 Lengrowth. All rights reserved.
