@@ -332,7 +332,7 @@ export default function RateLimitForm({
                       </div>
                     </div>
                     <FormDescription>
-                      Maximum new connection requests per day (per LinkedIn profile)
+                      Maximum new connection requests per day (per LinkedIn profile). With multiple active campaigns, this budget is split equally between them.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -373,7 +373,7 @@ export default function RateLimitForm({
                       </div>
                     </div>
                     <FormDescription>
-                      Maximum follow-up messages per day (per LinkedIn profile)
+                      Maximum follow-up messages per day (per LinkedIn profile). With multiple active campaigns, this budget is split equally between them.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>

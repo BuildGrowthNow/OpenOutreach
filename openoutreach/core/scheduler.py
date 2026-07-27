@@ -401,12 +401,16 @@ def _plan_slots(
     )
 
 
-def plan_connect_window(session, campaign) -> int:
+def plan_connect_window(session, campaign, *, connect_cap: int | None = None) -> int:
     """Plan the next 24h of connect slots for *campaign*. No-op when a
     PENDING connect task already exists for the campaign.
 
     Only the daily limit is consulted — LinkedIn's own weekly ceiling
     surfaces at the handler boundary via ``ReachedConnectionLimit``.
+
+    ``connect_cap``: when multiple campaigns are active, reconcile() passes
+    ``floor(remaining_budget / n_campaigns)`` so the daily budget is shared
+    evenly instead of every campaign racing for the same pool.
     """
     profile = session.linkedin_profile
 
@@ -417,6 +421,8 @@ def plan_connect_window(session, campaign) -> int:
     from openoutreach.core.rate_limit_presets import get_preset
     config = SiteConfig.load(user_id=profile.user_id)
     n = max(0, profile.connect_daily_limit - profile._daily_count("connect"))
+    if connect_cap is not None:
+        n = min(n, connect_cap)
 
     profile_id = profile.pk
     user_id = profile.user_id
@@ -459,9 +465,14 @@ def plan_connect_window(session, campaign) -> int:
     return created
 
 
-def plan_follow_up_window(session, campaign) -> int:
+def plan_follow_up_window(session, campaign, *, follow_up_cap: int | None = None) -> int:
     """Plan the next 24h of follow-up slots for *campaign*. No-op when a
-    PENDING follow-up task already exists or there are no CONNECTED deals."""
+    PENDING follow-up task already exists or there are no CONNECTED deals.
+
+    ``follow_up_cap``: when multiple campaigns are active, reconcile() passes
+    ``floor(remaining_budget / n_campaigns)`` so the daily budget is shared
+    evenly instead of every campaign racing for the same pool.
+    """
     profile = session.linkedin_profile
 
     if _has_pending(Task.TaskType.FOLLOW_UP, campaign.pk, linkedin_profile_id=profile.pk):
@@ -483,6 +494,8 @@ def plan_follow_up_window(session, campaign) -> int:
 
     config = SiteConfig.load(user_id=profile.user_id)
     n = max(0, profile.follow_up_daily_limit - profile._daily_count("follow_up"))
+    if follow_up_cap is not None:
+        n = min(n, follow_up_cap)
 
     profile_id = profile.pk
     user_id = profile.user_id
@@ -678,21 +691,38 @@ def _recover_stale_running_tasks(linkedin_profile_id: str | None = None) -> int:
     return count
 
 
-_PLANNERS = (
-    plan_connect_window,
-    plan_follow_up_window,
-    plan_check_pending_window,
-)
-
-
 def reconcile(session) -> None:
     """Recover stale RUNNING tasks, then ensure every (campaign, task_type)
     whose pending queue is empty gets a fresh 24h plan. Runs on daemon
-    startup and whenever the queue has no ready task."""
+    startup and whenever the queue has no ready task.
+
+    When multiple campaigns are active the remaining daily budget for each
+    action type is divided evenly so no single campaign can starve the rest.
+    """
     _recover_stale_running_tasks()
-    for campaign in session.campaigns:
-        for planner in _PLANNERS:
-            planner(session, campaign)
+
+    campaigns = session.campaigns
+    n_campaigns = max(1, len(campaigns))
+    profile = session.linkedin_profile
+
+    # Remaining budget across ALL campaigns today
+    connect_remaining = max(0, profile.connect_daily_limit - profile._daily_count("connect"))
+    follow_up_remaining = max(0, profile.follow_up_daily_limit - profile._daily_count("follow_up"))
+
+    # Each campaign's fair share — floor division so we never exceed the budget
+    connect_cap = connect_remaining // n_campaigns
+    follow_up_cap = follow_up_remaining // n_campaigns
+
+    if n_campaigns > 1:
+        logger.info(
+            "Budget split across %d campaigns: connect %d/ea (total %d), follow_up %d/ea (total %d)",
+            n_campaigns, connect_cap, connect_remaining, follow_up_cap, follow_up_remaining,
+        )
+
+    for campaign in campaigns:
+        plan_connect_window(session, campaign, connect_cap=connect_cap)
+        plan_follow_up_window(session, campaign, follow_up_cap=follow_up_cap)
+        plan_check_pending_window(session, campaign)
 
     pending_count = Task.objects.pending().count()
     logger.info("Task queue reconciled: %d pending tasks", pending_count)
