@@ -222,16 +222,41 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   /**
-   * Refresh access token using refresh token cookie
+   * Refresh access token using refresh token cookie (or keychain on desktop restart)
    */
   refreshToken: async () => {
     try {
+      // On desktop, try to get the refresh token from the system keychain if the
+      // HTTP-only cookie is gone (i.e. after the webview is restarted).
+      // Poll briefly for pywebview.api — it's injected by pywebview's bridge but
+      // may not be fully registered when the first useEffect fires.
+      let body: string | undefined
+      if (typeof window !== 'undefined' && typeof (window as any).pywebview !== 'undefined') {
+        const keychainToken = await new Promise<string | null>((resolve) => {
+          const poll = (tries: number) => {
+            const api = (window as any).pywebview?.api
+            if (api?.get_keychain_refresh_token) {
+              Promise.resolve(api.get_keychain_refresh_token()).then(resolve).catch(() => resolve(null))
+            } else if (tries > 0) {
+              setTimeout(() => poll(tries - 1), 50)
+            } else {
+              resolve(null)
+            }
+          }
+          poll(20) // up to 1s
+        })
+        if (keychainToken) {
+          body = JSON.stringify({ refresh_token: keychainToken })
+        }
+      }
+
       const response = await fetch(`${API_BASE}/auth/refresh/`, {
         method: 'POST',
-        credentials: 'include', // Send refresh token cookie
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
         },
+        ...(body ? { body } : {}),
       })
 
       if (!response.ok) {

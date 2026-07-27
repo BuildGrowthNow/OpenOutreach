@@ -185,6 +185,10 @@ class DesktopAPI:
             if self._app.auth.is_logged_in():
                 self._app._start_daemon()
 
+    def get_keychain_refresh_token(self) -> Optional[str]:
+        """Return the stored refresh token so the frontend can re-authenticate after restart."""
+        return self._app.auth.get_refresh_token()
+
 
 class TrayApp:
     def __init__(self):
