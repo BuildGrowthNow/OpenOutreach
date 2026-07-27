@@ -114,7 +114,7 @@ export function PricingPreview() {
                       : 'bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-700/50'
                   }`}
                 >
-                  Try free for 3 days
+                  Try free for 7 days
                 </Button>
               </Link>
             </motion.div>

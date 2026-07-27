@@ -339,7 +339,7 @@ export default function PrivacyPage() {
           {/* Bottom CTA */}
           <div className="mt-12 p-8 bg-zinc-900/50 border border-zinc-800 rounded-xl text-center">
             <h3 className="text-xl font-bold text-white mb-2">Ready to get started?</h3>
-            <p className="text-zinc-400 mb-4">Start your free 3-day Pro trial today. No credit card required to cancel.</p>
+            <p className="text-zinc-400 mb-4">Start your free 7-day Pro trial today. No credit card required to cancel.</p>
             <Link href="/signup">
               <Button className="bg-emerald-600 hover:bg-emerald-700 text-white">
                 Start Free Trial

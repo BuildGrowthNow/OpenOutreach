@@ -140,7 +140,7 @@ const faqs = [
   {
     question: "What's included in the free trial?",
     answer:
-      "Full Pro plan access for 3 days. A credit card is required, but if you cancel before the trial ends you won't be charged a thing.",
+      "Full Pro plan access for 7 days. A credit card is required, but if you cancel before the trial ends you won't be charged a thing.",
   },
   {
     question: "Can my LinkedIn account get restricted?",
@@ -304,7 +304,7 @@ export default function PricingPage() {
           </div>
 
           {/* Cloud card */}
-          <div className="rounded-2xl border border-sky-500/30 bg-gradient-to-r from-sky-900/20 via-zinc-900/60 to-zinc-900/60 p-8 relative overflow-hidden">
+          <div className="rounded-2xl border border-sky-500/30 bg-gradient-to-r from-sky-900/20 via-zinc-900/60 to-zinc-900/60 p-8 relative mt-4">
             <div className="absolute -top-3.5 left-8 bg-sky-600 text-white text-[11px] font-bold px-3 py-1 rounded-full tracking-wide">
               FULLY MANAGED
             </div>

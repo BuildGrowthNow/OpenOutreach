@@ -71,7 +71,7 @@ export function CtaSection() {
               </div>
 
               <p className="mt-6 text-sm text-zinc-600">
-                3-day free trial &middot; No setup fees &middot; Cancel anytime
+                7-day free trial &middot; No setup fees &middot; Cancel anytime
               </p>
             </div>
           </div>

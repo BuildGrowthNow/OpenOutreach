@@ -32,7 +32,7 @@ const faqs = [
   },
   {
     question: "Is there a free trial?",
-    answer: "Yes — 3 days, full access, no credit card required to start exploring. You'll need to add payment to actually send outreach, but you can set up campaigns and see the interface immediately.",
+    answer: "Yes — 7 days, full access, no credit card required to start exploring. You'll need to add payment to actually send outreach, but you can set up campaigns and see the interface immediately.",
   },
 ];
 

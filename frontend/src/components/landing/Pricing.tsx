@@ -24,7 +24,7 @@ const pricingTiers: PricingTier[] = [
       'AI messages',
       'Automated follow-ups',
       'Unified inbox',
-      '3-day free trial',
+      '7-day free trial',
     ],
   },
   {
@@ -38,7 +38,7 @@ const pricingTiers: PricingTier[] = [
       'AI follow-ups',
       'Sales Navigator access',
       'API access',
-      '3-day free trial',
+      '7-day free trial',
     ],
     highlighted: true,
   },
@@ -78,7 +78,7 @@ export function Pricing() {
             Simple, <span className="bg-gradient-to-r from-emerald-400 to-teal-300 bg-clip-text text-transparent">transparent pricing.</span>
           </h2>
           <p className="text-lg text-zinc-400 max-w-xl mx-auto">
-            Choose the plan that fits your growth ambitions. All plans include a 3-day free trial.
+            Choose the plan that fits your growth ambitions. All plans include a 7-day free trial.
           </p>
         </motion.div>
 
