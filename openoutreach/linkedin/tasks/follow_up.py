@@ -122,6 +122,8 @@ def _too_soon_to_nudge(deal) -> bool:
     # Count nudges (outgoing messages after last reply)
     if last_reply:
         last_reply_date = last_reply.get("creation_date")
+        if last_reply_date is not None and last_reply_date.tzinfo is None:
+            last_reply_date = last_reply_date.replace(tzinfo=timezone.utc)
         nudges = [m for m in messages if m.get("is_outgoing", False) and m.get("creation_date", datetime.min.replace(tzinfo=timezone.utc)) > last_reply_date]
     else:
         nudges = [m for m in messages if m.get("is_outgoing", False)]
@@ -129,6 +131,8 @@ def _too_soon_to_nudge(deal) -> bool:
     required = timedelta(days=len(nudges) * MIN_DAYS_PER_UNANSWERED)
     now = datetime.now(timezone.utc)
     last_creation_date = last.get("creation_date", now)
+    if last_creation_date.tzinfo is None:
+        last_creation_date = last_creation_date.replace(tzinfo=timezone.utc)
     return now - last_creation_date < required
 
 
