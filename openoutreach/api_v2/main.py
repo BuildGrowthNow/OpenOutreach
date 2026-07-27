@@ -57,7 +57,7 @@ async def startup():
     # that had it stored as True from the old incorrect default.
     try:
         from openoutreach.mongodb.connection import get_mongodb_collection
-        site_configs = get_mongodb_collection("site_configs")
+        site_configs = get_mongodb_collection("site_config")
         if site_configs is not None:
             result = site_configs.update_many(
                 {"enable_active_hours": True},
