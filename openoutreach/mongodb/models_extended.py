@@ -6,7 +6,7 @@ These models follow the same pattern as the existing models in models.py.
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
@@ -39,7 +39,7 @@ class ChatMessage:
         self.owner_id = owner_id
         self.linkedin_urn = linkedin_urn
         self.is_outgoing = is_outgoing
-        self.creation_date = creation_date or datetime.utcnow()
+        self.creation_date = creation_date or datetime.now(timezone.utc)
         self.user_id = user_id
 
     def to_dict(self) -> Dict[str, Any]:
@@ -235,7 +235,7 @@ class ActionLog:
         self.linkedin_profile_id = linkedin_profile_id
         self.campaign_id = campaign_id
         self.action_type = action_type
-        self.created_at = created_at or datetime.utcnow()
+        self.created_at = created_at or datetime.now(timezone.utc)
         self.details = details or {}
         self.status = status
         self.error_message = error_message
@@ -396,7 +396,7 @@ class Notification:
         self.is_read = is_read
         self.read_at = read_at
         self.data = data or {}
-        self.created_at = created_at or datetime.utcnow()
+        self.created_at = created_at or datetime.now(timezone.utc)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -439,7 +439,7 @@ class Notification:
 
     def mark_as_read(self):
         self.is_read = True
-        self.read_at = datetime.utcnow()
+        self.read_at = datetime.now(timezone.utc)
         self.save()
 
     @classmethod
@@ -730,7 +730,7 @@ class Mailbox:
         collection = get_mongodb_collection("deals")
         if collection is None:
             return 0
-        midnight = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        midnight = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
         try:
             return collection.count_documents({
                 "mailbox_id": self._id,
@@ -855,8 +855,8 @@ class CampaignTemplate:
         self.ghost_mode_enabled = ghost_mode_enabled
         self.is_public = is_public
         self.created_by_id = created_by_id
-        self.created_at = created_at or datetime.utcnow()
-        self.updated_at = updated_at or datetime.utcnow()
+        self.created_at = created_at or datetime.now(timezone.utc)
+        self.updated_at = updated_at or datetime.now(timezone.utc)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -897,7 +897,7 @@ class CampaignTemplate:
         collection = get_mongodb_collection("campaign_templates")
         if collection is None:
             raise RuntimeError("MongoDB collection 'campaign_templates' not available")
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
         doc = self.to_dict()
         result = collection.update_one({"_id": self._id}, {"$set": doc}, upsert=True)
         return str(result.upserted_id or self._id)

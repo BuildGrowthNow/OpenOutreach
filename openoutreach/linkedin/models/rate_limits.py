@@ -261,7 +261,8 @@ class SmartRateLimitContext:
 
         # Days since first connection
         if deal.creation_date:
-            days_since = (datetime.now(tz.utc) - deal.creation_date).days
+            cd = deal.creation_date if deal.creation_date.tzinfo else deal.creation_date.replace(tzinfo=tz.utc)
+            days_since = (datetime.now(tz.utc) - cd).days
             if days_since < 3:
                 return EngagementLevel.HOT
 
@@ -272,7 +273,8 @@ class SmartRateLimitContext:
         # Connection accepted, no response yet
         if deal.state == "CONNECTED":
             if deal.creation_date:
-                hours_since = (datetime.now(tz.utc) - deal.creation_date).total_seconds() / 3600
+                cd = deal.creation_date if deal.creation_date.tzinfo else deal.creation_date.replace(tzinfo=tz.utc)
+                hours_since = (datetime.now(tz.utc) - cd).total_seconds() / 3600
                 if hours_since < 24:
                     return EngagementLevel.ACTIVELY_ENGAGED
 

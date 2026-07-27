@@ -8,7 +8,7 @@ The handler in tasks/follow_up.py executes the decision.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Literal
 
 import jinja2
@@ -67,9 +67,15 @@ class FollowUpDecision(BaseModel):
 RECENT_MESSAGES_WINDOW = 6
 
 
+def _as_utc(dt: datetime) -> datetime:
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
 def _humanize_age(when: datetime, now: datetime) -> str:
     """Render `when` as a coarse age relative to `now` (e.g. ``3d ago``)."""
-    delta = now - when
+    delta = now - _as_utc(when)
     if delta < timedelta(hours=1):
         return f"{max(int(delta.total_seconds() // 60), 1)}m ago"
     if delta < timedelta(days=1):
@@ -103,7 +109,7 @@ def _days_since_last_outgoing(messages: list, now: datetime) -> int | None:
     ]
     if not timestamps:
         return None
-    return max((now - max(timestamps)).days, 0)
+    return max((now - _as_utc(max(timestamps))).days, 0)
 
 
 def _count_unanswered_outgoing(messages: list) -> int:

@@ -6,7 +6,7 @@ Replaces Django ORM queries and signals with explicit service-layer calls.
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Dict, Any
 from pymongo import ASCENDING, DESCENDING
 
@@ -53,7 +53,7 @@ class TaskDAL:
         if collection is None:
             return None
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         query = {'status': Task.STATUS_PENDING, 'scheduled_at': {'$lte': now}}
 
         if linkedin_profile_id:
@@ -89,7 +89,7 @@ class TaskDAL:
                 {"_id": task_id},
                 {"$set": {
                     "status": Task.STATUS_COMPLETED,
-                    "completed_at": datetime.utcnow()
+                    "completed_at": datetime.now(timezone.utc)
                 }}
             )
             return result.modified_count > 0
@@ -112,7 +112,7 @@ class TaskDAL:
                 {"$set": {
                     "status": Task.STATUS_FAILED,
                     "error_message": error_message,
-                    "completed_at": datetime.utcnow()
+                    "completed_at": datetime.now(timezone.utc)
                 }}
             )
             return result.modified_count > 0
@@ -197,7 +197,7 @@ class TaskDAL:
             return 0
 
         from datetime import timedelta
-        cutoff = datetime.utcnow() - timedelta(minutes=timeout_minutes)
+        cutoff = datetime.now(timezone.utc) - timedelta(minutes=timeout_minutes)
 
         try:
             result = collection.update_many(
@@ -558,7 +558,7 @@ class NotificationDAL:
                 },
                 {"$set": {
                     "is_read": True,
-                    "read_at": datetime.utcnow()
+                    "read_at": datetime.now(timezone.utc)
                 }}
             )
             return result.modified_count
@@ -604,7 +604,7 @@ class ActionLogDAL:
         if collection is None:
             return 0
 
-        midnight = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        midnight = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
 
         try:
             return collection.count_documents({

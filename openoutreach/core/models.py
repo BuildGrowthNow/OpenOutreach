@@ -1,9 +1,16 @@
 # openoutreach/core/models.py
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List
 from uuid import uuid4
+
+
+def _as_utc(dt: datetime) -> datetime:
+    """Return *dt* as an aware UTC datetime; treats naive as UTC."""
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
 
 
 class SiteConfig:
@@ -225,8 +232,8 @@ class CampaignTemplate:
         self.ghost_mode_enabled = ghost_mode_enabled
         self.is_public = is_public
         self.created_by_id = created_by_id
-        self.created_at = created_at or datetime.utcnow()
-        self.updated_at = updated_at or datetime.utcnow()
+        self.created_at = created_at or datetime.now(timezone.utc)
+        self.updated_at = updated_at or datetime.now(timezone.utc)
 
     @property
     def id(self):
@@ -288,7 +295,7 @@ class CampaignTemplate:
         if collection is None:
             raise RuntimeError("MongoDB collection 'campaign_templates' not available")
 
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
         doc = self.to_dict()
         result = collection.update_one({"_id": self._id}, {"$set": doc}, upsert=True)
         return str(result.upserted_id or self._id)
@@ -379,9 +386,9 @@ class Task:
         self._id = _id or str(uuid4())
         self.task_type = task_type
         self.status = status
-        self.scheduled_at = scheduled_at or datetime.utcnow()
+        self.scheduled_at = scheduled_at or datetime.now(timezone.utc)
         self.payload = payload or {}
-        self.created_at = created_at or datetime.utcnow()
+        self.created_at = created_at or datetime.now(timezone.utc)
         self.started_at = started_at
         self.completed_at = completed_at
 
@@ -453,13 +460,13 @@ class Task:
     def mark_running(self):
         """Mark task as running."""
         self.status = self.Status.RUNNING
-        self.started_at = datetime.utcnow()
+        self.started_at = datetime.now(timezone.utc)
         self.save(update_fields=["status", "started_at"])
 
     def mark_completed(self):
         """Mark task as completed."""
         self.status = self.Status.COMPLETED
-        self.completed_at = datetime.utcnow()
+        self.completed_at = datetime.now(timezone.utc)
         self.save(update_fields=["status", "completed_at"])
 
     def mark_failed(self, error_message: str | None = None):
@@ -535,7 +542,7 @@ class TaskManager:
         if collection is None:
             return None
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         data = collection.find_one(
             {"status": Task.Status.PENDING, "scheduled_at": {"$lte": now}},
             sort=[("scheduled_at", 1)]
@@ -559,8 +566,8 @@ class TaskManager:
             return None
 
         next_task = Task.from_dict(data)
-        now = datetime.utcnow()
-        return max((next_task.scheduled_at - now).total_seconds(), 0)
+        now = datetime.now(timezone.utc)
+        return max((_as_utc(next_task.scheduled_at) - now).total_seconds(), 0)
 
     def get(self, **kwargs) -> Optional[Task]:
         """Get a single task."""

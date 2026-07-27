@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import ClassVar, Optional
 from uuid import uuid4
 
@@ -368,7 +368,7 @@ class LinkedInProfile:
         logger.warning("Rate limit: %s externally exhausted for today", action_type)
 
     def _daily_count(self, action_type: str) -> int:
-        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
         collection = get_mongodb_collection("action_logs")
         if collection is None:
             return 0
@@ -519,7 +519,7 @@ class ActionLog:
         self.linkedin_profile_id = linkedin_profile_id
         self.campaign_id = campaign_id
         self.action_type = action_type
-        self.created_at = created_at or datetime.utcnow()
+        self.created_at = created_at or datetime.now(timezone.utc)
         self.details = details or {}
         self.status = status
         self.error_message = error_message

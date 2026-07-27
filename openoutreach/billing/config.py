@@ -60,6 +60,8 @@ def is_lifetime_deal_active() -> bool:
     else:
         ends_at = config.lifetime_deal_ends_at
 
+    if ends_at.tzinfo is None:
+        ends_at = ends_at.replace(tzinfo=tz.utc)
     return datetime.now(tz.utc) < ends_at
 
 

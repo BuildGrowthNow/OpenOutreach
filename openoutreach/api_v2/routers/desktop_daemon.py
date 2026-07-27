@@ -120,7 +120,8 @@ async def get_daemon_status(
             # Check if last heartbeat was recent
             is_connected = False
             if profile.last_heartbeat:
-                time_since_heartbeat = now - profile.last_heartbeat
+                hb = profile.last_heartbeat if profile.last_heartbeat.tzinfo else profile.last_heartbeat.replace(tzinfo=tz.utc)
+                time_since_heartbeat = now - hb
                 is_connected = time_since_heartbeat < connection_timeout
 
             # Update daemon_status based on heartbeat
