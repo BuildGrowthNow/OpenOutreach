@@ -87,15 +87,19 @@ def create_enriched_lead(session, url: str, profile: Dict[str, Any]) -> Optional
 
     # Log discovery to activity feed
     from openoutreach.mongodb.models_extended import ActionLog
+    _first = profile.get("first_name", "") or profile.get("profile", {}).get("firstName", "")
+    _last = profile.get("last_name", "") or profile.get("profile", {}).get("lastName", "")
+    _headline = profile.get("headline", "") or profile.get("profile", {}).get("headline", "")
     action_log = ActionLog(
         linkedin_profile_id=session.linkedin_profile.pk,
         campaign_id=session.campaign.pk,
         action_type="lead_discovered",
+        status="completed",
         details={
-            "lead_name": profile.get("profile", {}).get("firstName", "") + " " + profile.get("profile", {}).get("lastName", ""),
+            "lead_name": f"{_first} {_last}".strip() or public_id,
             "lead_url": clean_url,
             "public_identifier": public_id,
-            "headline": profile.get("profile", {}).get("headline", ""),
+            "headline": _headline,
         },
     )
     action_log.save()

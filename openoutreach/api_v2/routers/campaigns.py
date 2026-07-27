@@ -1082,6 +1082,7 @@ async def get_campaign_activity(
         )
 
     action_logs_collection = get_mongodb_collection("action_logs")
+    leads_collection = get_mongodb_collection("leads")
     tasks_collection = get_mongodb_collection("tasks")
 
     entries: List[Dict[str, Any]] = []
@@ -1095,7 +1096,34 @@ async def get_campaign_activity(
             .skip(skip)
             .limit(limit)
         )
+
+        # Collect public_identifiers that need lead-name enrichment (missing or blank lead_name)
+        pids_to_enrich: set[str] = set()
         for log in logs:
+            details = log.get("details") or {}
+            if not details.get("lead_name") and details.get("public_identifier"):
+                pids_to_enrich.add(details["public_identifier"])
+
+        # Batch-fetch names for those leads
+        pid_to_name: Dict[str, str] = {}
+        if pids_to_enrich and leads_collection is not None:
+            for lead_doc in leads_collection.find(
+                {"public_identifier": {"$in": list(pids_to_enrich)}},
+                {"public_identifier": 1, "cached_profile": 1},
+            ):
+                pid = lead_doc.get("public_identifier", "")
+                cp = lead_doc.get("cached_profile") or {}
+                profile_inner = cp.get("profile", cp)
+                first = profile_inner.get("firstName", "") or cp.get("first_name", "")
+                last = profile_inner.get("lastName", "") or cp.get("last_name", "")
+                name = f"{first} {last}".strip() or pid
+                pid_to_name[pid] = name
+
+        for log in logs:
+            details = log.get("details") or {}
+            if not details.get("lead_name") and details.get("public_identifier"):
+                pid = details["public_identifier"]
+                details = {**details, "lead_name": pid_to_name.get(pid, pid)}
             entries.append({
                 "id": str(log.get("_id", "")),
                 "source": "action",
@@ -1104,7 +1132,7 @@ async def get_campaign_activity(
                 "error": log.get("error_message") or None,
                 "durationMs": log.get("duration_ms"),
                 "timestamp": (log["created_at"].isoformat() + "Z") if log.get("created_at") else "",
-                "details": log.get("details"),
+                "details": details if details else None,
             })
     else:
         total = 0
