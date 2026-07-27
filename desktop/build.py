@@ -562,6 +562,17 @@ RequestExecutionLevel admin
 !insertmacro MUI_LANGUAGE "English"
 
 Section "Install"
+    ; Kill any running instance before replacing the exe
+    nsExec::ExecToStack 'taskkill /F /IM Lengrowth.exe'
+    Pop $0
+    Sleep 1000
+
+    ; Remove any previous installation registered under old uninstall key
+    ReadRegStr $0 HKLM "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\LengrowthOutreach" "UninstallString"
+    StrCmp $0 "" +3
+        ExecWait '"$0" /S'
+        Sleep 1000
+
     SetOutPath "$INSTDIR"
     File "{exe_path}"
 

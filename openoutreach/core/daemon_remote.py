@@ -304,6 +304,7 @@ class RemoteDaemon:
                 self.linkedin_password = ""
                 self._cookie_data_json = None
                 self.user = None
+                self.user_id: Optional[str] = None
                 self._connect_daily_limit = _connect_limit
                 self._follow_up_daily_limit = _follow_up_limit
                 self._exhausted: dict = {}
@@ -651,6 +652,7 @@ class RemoteDaemon:
         if campaign.user_id:
             self.session.user_id = campaign.user_id
             self.session.user = User.get(campaign.user_id)
+            self.session.linkedin_profile.user_id = campaign.user_id
 
         # Build minimal task object for handler
         task_obj = type(
