@@ -119,12 +119,19 @@ def _too_soon_to_nudge(deal) -> bool:
             last_reply = msg
             break
 
+    def _aware(dt):
+        if dt is None:
+            return datetime.min.replace(tzinfo=timezone.utc)
+        return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
+
     # Count nudges (outgoing messages after last reply)
     if last_reply:
-        last_reply_date = last_reply.get("creation_date")
-        if last_reply_date is not None and last_reply_date.tzinfo is None:
-            last_reply_date = last_reply_date.replace(tzinfo=timezone.utc)
-        nudges = [m for m in messages if m.get("is_outgoing", False) and m.get("creation_date", datetime.min.replace(tzinfo=timezone.utc)) > last_reply_date]
+        last_reply_date = _aware(last_reply.get("creation_date"))
+        nudges = [
+            m for m in messages
+            if m.get("is_outgoing", False)
+            and _aware(m.get("creation_date")) > last_reply_date
+        ]
     else:
         nudges = [m for m in messages if m.get("is_outgoing", False)]
 
