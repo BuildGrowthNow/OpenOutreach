@@ -53,6 +53,21 @@ async def startup():
     init_stripe()
     load_from_env()
 
+    # One-time migration: reset enable_active_hours to False for all site configs
+    # that had it stored as True from the old incorrect default.
+    try:
+        from openoutreach.mongodb.connection import get_mongodb_collection
+        site_configs = get_mongodb_collection("site_configs")
+        if site_configs is not None:
+            result = site_configs.update_many(
+                {"enable_active_hours": True},
+                {"$set": {"enable_active_hours": False}},
+            )
+            if result.modified_count:
+                logger.info("Migration: reset enable_active_hours=True → False for %d site config(s)", result.modified_count)
+    except Exception as e:
+        logger.warning("Migration enable_active_hours failed: %s", e)
+
     logger.info("✅ FastAPI app ready!")
 
 
