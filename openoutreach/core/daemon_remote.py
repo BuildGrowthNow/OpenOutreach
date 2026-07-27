@@ -531,12 +531,14 @@ class RemoteDaemon:
         while self.running:
             try:
                 if not self._is_active_time():
+                    logger.info("Outside active hours — sleeping 60s")
                     await asyncio.sleep(60)
                     continue
 
                 task = await self.client.claim_task(self.linkedin_profile_id)
 
                 if not task:
+                    logger.debug("No tasks ready — polling again in %ds", self.config.poll_interval_seconds)
                     await asyncio.sleep(self.config.poll_interval_seconds)
                     continue
 
@@ -746,9 +748,14 @@ class RemoteDaemon:
         now = datetime.now(zone)
 
         if (now.weekday() + 1) not in self.config.active_days:
+            logger.info("Outside active days (today=%d, active=%s)", now.weekday() + 1, self.config.active_days)
             return False
 
-        return self.config.active_start_hour <= now.hour < self.config.active_end_hour
+        in_hours = self.config.active_start_hour <= now.hour < self.config.active_end_hour
+        if not in_hours:
+            logger.info("Outside active hours (%02d:xx, window=%d-%d %s)",
+                        now.hour, self.config.active_start_hour, self.config.active_end_hour, self.config.active_timezone)
+        return in_hours
 
     def _check_subscription_status(self, status: SubscriptionStatus) -> bool:
         """Check subscription status and log if daemon cannot run.
