@@ -1,8 +1,11 @@
 # linkedin/actions/status.py
 import logging
-from typing import Dict, Any, Optional
+from typing import TYPE_CHECKING, Dict, Any, Optional
 
 from linkedin_cli.actions.connect import SELECTORS as CONNECT_SELECTORS
+
+if TYPE_CHECKING:
+    from linkedin_cli.session import LinkedInSession
 from linkedin_cli.actions.search import visit_profile
 from linkedin_cli.enums import ProfileState
 from linkedin_cli.browser.nav import find_top_card, dump_page_html
@@ -38,7 +41,7 @@ def _fetch_degree(session, public_identifier: str, profile: Dict[str, Any]) -> O
     from linkedin_cli.api.client import PlaywrightLinkedinAPI
 
     api = PlaywrightLinkedinAPI(session=session)
-    fresh, _raw = api.get_profile(public_identifier=public_identifier)
+    fresh, _ = api.get_profile(public_identifier=public_identifier)
     if fresh:
         profile.update(fresh)
     degree = profile.get("connection_degree")
@@ -116,7 +119,7 @@ def get_connection_status(
       2. For degree 2/3 or None — UI inspection decides between
          PENDING, QUALIFIED, and CONNECTED.
     """
-    public_identifier = profile.get("public_identifier")
+    public_identifier: str = profile.get("public_identifier") or ""
     session.ensure_browser()
     logger.debug("Checking connection status → %s", public_identifier)
 

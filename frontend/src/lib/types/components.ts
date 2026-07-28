@@ -245,6 +245,8 @@ export interface Lead {
   updateDate: string;
   contactInfo?: {
     email?: string;
+    apiEmail?: string;
+    overlayEmail?: string;
     phoneNumbers?: string[];
   };
   messagesCount?: number;

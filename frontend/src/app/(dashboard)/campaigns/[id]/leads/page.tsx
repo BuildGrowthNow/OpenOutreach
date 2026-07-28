@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Icons } from '@/lib/types/components'
-import { getCampaignLeads, getCampaign } from '@/lib/api/dashboard'
+import { getCampaignLeads, getCampaign, exportLeads } from '@/lib/api/dashboard'
 import { cn } from '@/lib/utils'
 import { CampaignList } from '@/components/campaigns/campaign-list'
 import { Lead } from '@/lib/types/components'
@@ -26,6 +26,7 @@ export default function CampaignLeadsPage() {
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage] = useState(20)
+  const [exporting, setExporting] = useState(false)
 
   const fetchCampaignData = useCallback(async () => {
     try {
@@ -61,6 +62,17 @@ export default function CampaignLeadsPage() {
 
   const refreshData = async () => {
     await fetchCampaignData()
+  }
+
+  const handleExport = async (filtered: boolean) => {
+    setExporting(true)
+    try {
+      await exportLeads(campaignId, filtered && statusFilter !== 'all' ? statusFilter : undefined)
+    } catch (err) {
+      console.error('Export error:', err)
+    } finally {
+      setExporting(false)
+    }
   }
 
   const filteredLeads = useMemo(() => {
@@ -364,12 +376,12 @@ export default function CampaignLeadsPage() {
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap gap-3">
-            <Button variant="outline">
-              <Icons.Download className="mr-2 h-4 w-4" />
+            <Button variant="outline" onClick={() => handleExport(false)} disabled={exporting}>
+              {exporting ? <Icons.RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Icons.Download className="mr-2 h-4 w-4" />}
               Export All Leads
             </Button>
-            <Button variant="outline">
-              <Icons.FileText className="mr-2 h-4 w-4" />
+            <Button variant="outline" onClick={() => handleExport(true)} disabled={exporting}>
+              {exporting ? <Icons.RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Icons.FileText className="mr-2 h-4 w-4" />}
               Export Filtered Leads
             </Button>
             <Button variant="outline">

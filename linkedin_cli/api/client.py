@@ -1,7 +1,7 @@
 # linkedin/api/client.py
 import json
 import logging
-from typing import Optional, Any
+from typing import TYPE_CHECKING, Optional, Any
 from urllib.parse import urlencode
 
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
@@ -13,6 +13,9 @@ from linkedin_cli.exceptions import (
     AuthenticationError,
     ProfileInaccessibleError,
 )
+
+if TYPE_CHECKING:
+    from linkedin_cli.session import LinkedInSession
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +54,7 @@ class PlaywrightLinkedinAPI:
 
         # Extract cookies from the browser context to get JSESSIONID for csrf-token
         cookies = self.context.cookies()
-        cookies_dict = {c['name']: c['value'] for c in cookies}
+        cookies_dict = {c.get('name', ''): c.get('value', '') for c in cookies}
         jsessionid = cookies_dict.get('JSESSIONID', '').strip('"')
 
         # Only API-level headers; fetch() inside the page inherits

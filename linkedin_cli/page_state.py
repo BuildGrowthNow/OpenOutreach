@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import functools
 from enum import Enum
+from typing import Any, Callable
 from urllib.parse import urlsplit
 
 from playwright.sync_api import Page
@@ -73,7 +74,7 @@ def transition(*, when: PageState, then: PageState | set[PageState]):
     """
     targets = frozenset({then} if isinstance(then, PageState) else then)
 
-    def decorator(fn):
+    def decorator(fn: Callable[..., object]) -> Callable[..., PageState]:
         @functools.wraps(fn)
         def wrapper(session, *args, **kwargs) -> PageState:
             before = classify_page(session.page)
@@ -92,8 +93,8 @@ def transition(*, when: PageState, then: PageState | set[PageState]):
                 )
             return after
 
-        wrapper.when = when
-        wrapper.then = targets
+        setattr(wrapper, "when", when)
+        setattr(wrapper, "then", targets)
         return wrapper
 
     return decorator
@@ -112,7 +113,7 @@ class PageFlow:
     def __init__(self, name: str, *, goal: PageState):
         self.name = name
         self.goal = goal
-        self._actions: dict[PageState, object] = {}
+        self._actions: dict[PageState, Callable[..., Any]] = {}
 
     def transition(self, *, when: PageState, then: PageState | set[PageState]):
         """Decorator: enforce the action's contract (via :func:`transition`) and

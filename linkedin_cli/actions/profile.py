@@ -15,8 +15,10 @@ def scrape_profile(session, profile: dict):
     api = PlaywrightLinkedinAPI(session=session)
 
     logger.info("Enriching profile → %s", url)
-    profile, data = api.get_profile(profile_url=url)
+    enriched, data = api.get_profile(profile_url=url)
 
-    logger.info("Profile enriched – %s", profile.get("public_identifier")) if profile else None
+    if enriched:
+        logger.info("Profile enriched – %s", enriched.get("public_identifier"))
+        profile = enriched
 
     return profile, data

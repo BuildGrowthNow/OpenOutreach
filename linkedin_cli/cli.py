@@ -186,7 +186,7 @@ def _scrape(session, handle: str) -> dict:
     """Scrape the target so urn-dependent verbs (message/thread) have its ``urn``."""
     from linkedin_cli.actions.profile import scrape_profile
 
-    profile, _data = scrape_profile(session, _handle_to_profile(handle))
+    profile, _ = scrape_profile(session, _handle_to_profile(handle))
     if not profile:
         raise ProfileInaccessibleError(handle)
     return profile
@@ -201,7 +201,7 @@ def _verb_login(session, args) -> dict:
     return {"account": args.name, "self": _self_block(session.self_profile)}
 
 
-def _verb_whoami(session, args) -> dict:
+def _verb_whoami(session, args) -> dict:  # noqa: ARG001
     return {"self": _self_block(session.self_profile)}
 
 
@@ -259,7 +259,8 @@ def _verb_thread(session, args) -> dict:
     from linkedin_cli.actions.conversations import get_conversation
 
     profile = _scrape(session, args.handle)
-    messages = get_conversation(session, profile.get("urn"), session.self_profile["urn"])
+    urn: str = profile.get("urn") or ""
+    messages = get_conversation(session, urn, session.self_profile["urn"])
     return {"public_identifier": profile.get("public_identifier"), "messages": messages}
 
 

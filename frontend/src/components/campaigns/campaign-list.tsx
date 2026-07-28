@@ -22,6 +22,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { Icons } from '@/lib/types/components'
 import { Lead, DealState } from '@/lib/types/components'
 import { stateColorMapping } from '@/components/dashboard/campaign-card'
@@ -86,6 +92,13 @@ export function CampaignList({ leads, campaignId, className }: CampaignListProps
 
   const handleLeadClick = (leadId: string) => {
     router.push(`/leads/${leadId}`)
+  }
+
+  const handleCopyEmail = (email: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    navigator.clipboard.writeText(email).then(() => {
+      toast({ title: 'Email copied', description: email })
+    })
   }
 
   const handleSort = (field: 'name' | 'company' | 'state' | 'date') => {
@@ -261,7 +274,28 @@ export function CampaignList({ leads, campaignId, className }: CampaignListProps
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <div>
-                          <div className="font-medium">{lead.name || <span className="text-muted-foreground italic">Unknown</span>}</div>
+                          <div className="flex items-center gap-1.5 font-medium">
+                            {lead.name || <span className="text-muted-foreground italic">Unknown</span>}
+                            {lead.contactInfo?.email && (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <button
+                                      className="text-muted-foreground hover:text-foreground transition-colors"
+                                      onClick={(e) => handleCopyEmail(lead.contactInfo!.email!, e)}
+                                      aria-label={`Copy email: ${lead.contactInfo.email}`}
+                                    >
+                                      <Icons.Mail className="h-3.5 w-3.5" />
+                                    </button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>{lead.contactInfo.email}</p>
+                                    <p className="text-xs text-muted-foreground">Click to copy</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            )}
+                          </div>
                           <div className="text-sm text-muted-foreground" title={lead.title || undefined}>{lead.title ? (lead.title.length > 25 ? lead.title.slice(0, 25) + '…' : lead.title) : <span className="text-muted-foreground">—</span>}</div>
                         </div>
                         {lead.state === 'QUALIFIED' && (

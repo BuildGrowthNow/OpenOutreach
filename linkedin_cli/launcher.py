@@ -42,7 +42,10 @@ def open_bound_session(name: str, *, profile_dir: str,
         context.set_default_navigation_timeout(BROWSER_DEFAULT_TIMEOUT_MS)
         Stealth().apply_stealth_sync(context)
 
-        endpoint = context.browser.bind(name, host=host, port=port)["endpoint"]
+        browser = context.browser
+        if browser is None:
+            raise RuntimeError("Playwright browser not available on this context")
+        endpoint = browser.bind(name, host=host, port=port)["endpoint"]
         page = context.pages[0] if context.pages else context.new_page()
         page.goto(LINKEDIN_FEED_URL)
 
@@ -51,7 +54,11 @@ def open_bound_session(name: str, *, profile_dir: str,
         print(endpoint, flush=True)
 
         try:
-            signal.pause()  # block until a termination signal
+            if hasattr(signal, "pause"):
+                signal.pause()  # type: ignore[attr-defined]  # POSIX only
+            else:
+                import threading
+                threading.Event().wait()
         except (KeyboardInterrupt, SystemExit):
             pass
         finally:

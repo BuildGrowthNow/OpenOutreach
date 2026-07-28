@@ -662,18 +662,36 @@ const LeadDetailsPage = () => {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {lead.contactInfo?.email && (
+                  {lead.contactInfo?.apiEmail && (
                     <div className="space-y-1">
-                      <div className="text-sm text-muted-foreground">Primary Email</div>
+                      <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                        <Icons.Mail className="h-3.5 w-3.5" />
+                        BetterContact (enrichment)
+                      </div>
                       <a
-                        href={`mailto:${lead.contactInfo.email}`}
+                        href={`mailto:${lead.contactInfo.apiEmail}`}
                         className="text-blue-600 hover:text-blue-800 hover:underline font-medium"
                       >
-                        {lead.contactInfo.email}
+                        {lead.contactInfo.apiEmail}
                       </a>
                     </div>
                   )}
-                  
+
+                  {lead.contactInfo?.overlayEmail && (
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                        <Icons.Mail className="h-3.5 w-3.5" />
+                        LinkedIn (contact overlay)
+                      </div>
+                      <a
+                        href={`mailto:${lead.contactInfo.overlayEmail}`}
+                        className="text-blue-600 hover:text-blue-800 hover:underline font-medium"
+                      >
+                        {lead.contactInfo.overlayEmail}
+                      </a>
+                    </div>
+                  )}
+
                   {lead.contactInfo?.phoneNumbers && lead.contactInfo.phoneNumbers.length > 0 && (
                     <div className="space-y-2">
                       <div className="text-sm text-muted-foreground">Phone Numbers</div>
@@ -687,7 +705,7 @@ const LeadDetailsPage = () => {
                     </div>
                   )}
 
-                  {(!lead.contactInfo?.email && !lead.contactInfo?.phoneNumbers) && (
+                  {!lead.contactInfo?.apiEmail && !lead.contactInfo?.overlayEmail && !lead.contactInfo?.phoneNumbers?.length && (
                     <div className="text-center py-6 text-muted-foreground">
                       <Icons.AlertTriangle className="mx-auto h-8 w-8 mb-2" />
                       <div>No contact information available</div>

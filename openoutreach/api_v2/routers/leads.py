@@ -1,7 +1,10 @@
 """
 Leads Router - Multi-tenant lead management endpoints
 """
+import csv
+import io
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
@@ -134,6 +137,15 @@ async def list_leads(
                 at_idx = headline.lower().find(" at ")
                 if at_idx > -1:
                     company = headline[at_idx + 4:].strip()
+            # Resolve best available email: api_email (BetterContact) > contact_info overlay
+            api_email = lead_data.get("api_email")
+            contact_info_raw = lead_data.get("contact_info") or {}
+            overlay_email = contact_info_raw.get("email") if isinstance(contact_info_raw, dict) else None
+            best_email = api_email or overlay_email
+            phone_numbers = (
+                contact_info_raw.get("phone_numbers") or []
+                if isinstance(contact_info_raw, dict) else []
+            )
             data.append({
                 "id": str(lead_data["_id"]),
                 "publicIdentifier": lead_data.get("public_identifier", ""),
@@ -148,6 +160,12 @@ async def list_leads(
                 "creationDate": created.isoformat() if hasattr(created, "isoformat") else (created or ""),
                 "updateDate": updated.isoformat() if hasattr(updated, "isoformat") else (updated or ""),
                 "disqualified": lead_data.get("disqualified", False),
+                "contactInfo": {
+                    "email": best_email,
+                    "apiEmail": api_email,
+                    "overlayEmail": overlay_email,
+                    "phoneNumbers": phone_numbers,
+                } if (best_email or phone_numbers) else None,
             })
 
     page = (offset // limit) + 1 if limit else 1
@@ -156,6 +174,129 @@ async def list_leads(
         "data": data,
         "pagination": {"total": total, "page": page, "limit": limit, "pages": pages},
     }
+
+
+@router.get("/export", response_class=StreamingResponse)
+async def export_leads(
+    user_id: str = Depends(get_current_user),
+    campaign_id: Optional[str] = None,
+    state: Optional[str] = None,
+):
+    """Export leads as CSV.
+
+    Returns a CSV file with one row per deal (lead × campaign), including all
+    available contact information.  Scoped to campaigns the requesting user can
+    access.
+    """
+    collection = get_mongodb_collection("deals")
+    if collection is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+
+    query: dict = {}
+
+    if campaign_id:
+        campaign = models.Campaign.get(campaign_id)
+        if not campaign or not campaign.has_access(user_id):
+            raise HTTPException(status_code=403, detail="Campaign access denied")
+        query["campaign_id"] = campaign_id
+    else:
+        campaigns_collection = get_mongodb_collection("campaigns")
+        if campaigns_collection is None:
+            raise HTTPException(status_code=503, detail="Database unavailable")
+        accessible = list(campaigns_collection.find(
+            {"$or": [{"user_id": user_id}, {"team_member_ids": user_id}]},
+            {"_id": 1},
+        ))
+        query["campaign_id"] = {"$in": [str(c["_id"]) for c in accessible]}
+
+    if state:
+        query["state"] = state
+
+    deals = list(collection.find(query).sort("creation_date", -1))
+
+    lead_ids = list({str(d["lead_id"]) for d in deals})
+    leads_collection = get_mongodb_collection("leads")
+    if leads_collection is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    leads_map = {
+        str(doc["_id"]): doc
+        for doc in leads_collection.find({"_id": {"$in": lead_ids}})
+    }
+
+    campaign_ids = list({str(d["campaign_id"]) for d in deals})
+    campaigns_collection = get_mongodb_collection("campaigns")
+    campaign_names: dict = {}
+    if campaigns_collection is not None:
+        for cdoc in campaigns_collection.find(
+            {"_id": {"$in": campaign_ids}}, {"_id": 1, "name": 1}
+        ):
+            campaign_names[str(cdoc["_id"])] = cdoc.get("name", "")
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "Name", "Email", "Phone Numbers", "LinkedIn URL",
+        "Company", "Title", "State", "Outcome",
+        "Campaign", "Created Date", "Disqualified",
+    ])
+
+    for deal in deals:
+        lead = leads_map.get(str(deal["lead_id"]))
+        if not lead:
+            continue
+
+        cp = lead.get("cached_profile") or {}
+        profile_inner = cp.get("profile", cp)
+        first = profile_inner.get("firstName", "") or cp.get("first_name", "")
+        last = profile_inner.get("lastName", "") or cp.get("last_name", "")
+        full_name = lead.get("full_name") or f"{first} {last}".strip() or ""
+        headline = (
+            lead.get("headline")
+            or profile_inner.get("headline")
+            or cp.get("headline", "")
+        )
+        company = ""
+        if headline:
+            at_idx = headline.lower().find(" at ")
+            if at_idx > -1:
+                company = headline[at_idx + 4:].strip()
+
+        api_email = lead.get("api_email", "")
+        contact_info_raw = lead.get("contact_info") or {}
+        overlay_email = (
+            contact_info_raw.get("email", "")
+            if isinstance(contact_info_raw, dict) else ""
+        )
+        best_email = api_email or overlay_email
+        phones = (
+            "; ".join(contact_info_raw.get("phone_numbers") or [])
+            if isinstance(contact_info_raw, dict) else ""
+        )
+
+        created = deal.get("creation_date")
+        created_str = created.isoformat() if hasattr(created, "isoformat") else str(created or "")
+
+        writer.writerow([
+            full_name,
+            best_email,
+            phones,
+            lead.get("linkedin_url") or lead.get("url", ""),
+            company,
+            headline,
+            deal.get("state", ""),
+            deal.get("outcome", ""),
+            campaign_names.get(str(deal["campaign_id"]), ""),
+            created_str,
+            "Yes" if lead.get("disqualified") else "No",
+        ])
+
+    output.seek(0)
+    filename = f"leads-export-{campaign_id or 'all'}.csv"
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/{lead_id}", response_model=LeadDetailResponse)

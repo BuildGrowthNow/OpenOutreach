@@ -1,8 +1,11 @@
 # linkedin/actions/connect.py
 import logging
-from typing import Dict, Any
+from typing import TYPE_CHECKING, Dict, Any
 
 from linkedin_cli.enums import ProfileState
+
+if TYPE_CHECKING:
+    from linkedin_cli.session import LinkedInSession
 from linkedin_cli.exceptions import SkipProfile, ReachedConnectionLimit
 from linkedin_cli.browser.nav import find_top_card, dump_page_html
 

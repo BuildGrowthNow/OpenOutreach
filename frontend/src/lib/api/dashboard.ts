@@ -448,15 +448,31 @@ export async function getLeads(
 }
 
 export async function getLead(id: string): Promise<ApiResponse<Lead>> {
-  const response = await get<Lead>(`/api/leads/${id}`);
-  
-  // Normalize state and outcome values
+  type RawLeadDetail = Lead & {
+    contact_info?: { email?: string; phone_numbers?: string[] };
+    api_email?: string;
+  };
+  const response = await get<RawLeadDetail>(`/api/leads/${id}`);
+
   if (response.data) {
-    response.data.state = normalizeState(response.data.state as string) as Lead["state"];
-    response.data.outcome = normalizeOutcome(response.data.outcome as string) as Lead["outcome"];
+    const raw = response.data;
+    raw.state = normalizeState(raw.state as string) as Lead["state"];
+    raw.outcome = normalizeOutcome(raw.outcome as string) as Lead["outcome"];
+    // Map snake_case detail fields to camelCase Lead shape
+    if (!raw.contactInfo && (raw.contact_info || raw.api_email)) {
+      const ci = raw.contact_info || {};
+      const apiEmail = raw.api_email || undefined;
+      const overlayEmail = ci.email || undefined;
+      raw.contactInfo = {
+        email: apiEmail || overlayEmail,
+        apiEmail,
+        overlayEmail,
+        phoneNumbers: ci.phone_numbers || [],
+      };
+    }
   }
-  
-  return response;
+
+  return response as unknown as ApiResponse<Lead>;
 }
 
 export async function createLead(
@@ -470,6 +486,25 @@ export async function updateLead(
   data: Partial<Lead>,
 ): Promise<ApiResponse<Lead>> {
   return patch(`/api/leads/${id}`, data);
+}
+
+export async function exportLeads(campaignId?: string, state?: string): Promise<void> {
+  const params: Record<string, string> = {};
+  if (campaignId) params.campaign_id = campaignId;
+  if (state) params.state = state;
+  const qs = Object.keys(params).length ? `?${new URLSearchParams(params)}` : '';
+  const { useAuthStore } = await import('../authStoreV2');
+  const token = useAuthStore.getState().accessToken;
+  const headers: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {};
+  const res = await fetch(`/api/leads/export${qs}`, { headers, credentials: 'include' });
+  if (!res.ok) throw new Error(`Export failed: ${res.status}`);
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `leads-export-${campaignId || 'all'}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 export async function addLeadToCampaign(
