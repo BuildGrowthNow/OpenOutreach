@@ -989,6 +989,18 @@ class RemoteDaemon:
         # Profile is considered "new" when the dir is empty (first ever launch)
         is_new_profile = not any(profile_dir.iterdir())
 
+        # Remove stale Chrome singleton lock files left behind by a prior crash.
+        # When these exist Chrome detects "another instance is running" and exits
+        # immediately with code 0, causing Playwright's TargetClosedError.
+        for lock_name in ("SingletonLock", "SingletonCookie", "SingletonSocket"):
+            lock_path = profile_dir / lock_name
+            try:
+                if lock_path.exists() or lock_path.is_symlink():
+                    lock_path.unlink()
+                    logger.info("Removed stale Chrome lock: %s", lock_path)
+            except OSError:
+                pass
+
         logger.debug("Launching Playwright with channel=%s, persistent profile=%s (new=%s)",
                      channel, user_data_dir, is_new_profile)
         playwright = sync_playwright().start()
