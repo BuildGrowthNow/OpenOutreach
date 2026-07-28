@@ -24,6 +24,11 @@ logger = logging.getLogger(__name__)
 # 1 unanswered → 3d, 2 → 6d, 3 → 9d. Skips the LLM call while open.
 MIN_DAYS_PER_UNANSWERED = 3
 
+# If the most recent message (in either direction) is older than this and
+# no outgoing message has ever been sent, the conversation is treated as
+# stale — skip it rather than cold-replying to an ancient inbound message.
+STALE_CONVERSATION_DAYS = 180
+
 
 def _build_send_profile(deal) -> dict:
     """Minimal profile dict for ``send_raw_message`` and its fallbacks."""
@@ -94,7 +99,18 @@ def _replace_placeholders(message: str, deal) -> str:
 
 
 def _too_soon_to_nudge(deal) -> bool:
-    """Wait ``unanswered_count * MIN_DAYS_PER_UNANSWERED`` days between nudges."""
+    """Return True if we should skip this deal now.
+
+    Guards three cases:
+    1. Nudge cooldown: wait ``unanswered_count * MIN_DAYS_PER_UNANSWERED`` days
+       after the most recent outgoing message before sending another.
+    2. Stale inbound: if the last message is incoming and older than
+       STALE_CONVERSATION_DAYS with no outgoing on record, the conversation
+       predates the campaign — skip it (avoids replying to ancient messages).
+    3. Post-send lock: if the most recent outgoing message is less than 60
+       seconds old, another task may have just fired — skip to avoid duplicates
+       while LinkedIn's API propagates the just-sent message.
+    """
     message_collection = get_mongodb_collection("chat_messages")
     if message_collection is None:
         return False
@@ -108,7 +124,38 @@ def _too_soon_to_nudge(deal) -> bool:
     if not messages:
         return False
 
+    def _aware(dt):
+        if dt is None:
+            return datetime.min.replace(tzinfo=timezone.utc)
+        return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
+
+    now = datetime.now(timezone.utc)
     last = messages[0]
+    last_date = _aware(last.get("creation_date"))
+
+    # Case 3: post-send lock — another task already sent a message <60s ago
+    if last.get("is_outgoing", False):
+        seconds_since_last_outgoing = (now - last_date).total_seconds()
+        if seconds_since_last_outgoing < 60:
+            logger.debug(
+                "deal %s: post-send lock (last outgoing %ds ago) — skip",
+                deal._id, int(seconds_since_last_outgoing),
+            )
+            return True
+
+    # Case 2: stale inbound — last message is an incoming message older than
+    # STALE_CONVERSATION_DAYS with no outgoing ever sent.
+    has_any_outgoing = any(m.get("is_outgoing", False) for m in messages)
+    if not has_any_outgoing and not last.get("is_outgoing", False):
+        age_days = (now - last_date).days
+        if age_days >= STALE_CONVERSATION_DAYS:
+            logger.info(
+                "deal %s: stale inbound conversation (%dd old, no outgoing) — skip",
+                deal._id, age_days,
+            )
+            return True
+
+    # Case 1: nudge cooldown after last outgoing message
     if not last.get("is_outgoing", False):
         return False
 
@@ -118,11 +165,6 @@ def _too_soon_to_nudge(deal) -> bool:
         if not msg.get("is_outgoing", False):
             last_reply = msg
             break
-
-    def _aware(dt):
-        if dt is None:
-            return datetime.min.replace(tzinfo=timezone.utc)
-        return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
 
     # Count nudges (outgoing messages after last reply)
     if last_reply:
@@ -136,11 +178,7 @@ def _too_soon_to_nudge(deal) -> bool:
         nudges = [m for m in messages if m.get("is_outgoing", False)]
 
     required = timedelta(days=len(nudges) * MIN_DAYS_PER_UNANSWERED)
-    now = datetime.now(timezone.utc)
-    last_creation_date = last.get("creation_date", now)
-    if last_creation_date.tzinfo is None:
-        last_creation_date = last_creation_date.replace(tzinfo=timezone.utc)
-    return now - last_creation_date < required
+    return now - last_date < required
 
 
 def _connected_deals(campaign):
