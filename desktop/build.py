@@ -506,6 +506,9 @@ def create_nsis_installer() -> bool:
     nsis_paths = [
         Path(r"C:\Program Files (x86)\NSIS\makensis.exe"),
         Path(r"C:\Program Files\NSIS\makensis.exe"),
+        # Chocolatey installs here on GitHub Actions runners
+        Path(r"C:\ProgramData\chocolatey\bin\makensis.exe"),
+        Path(r"C:\tools\nsis\makensis.exe"),
     ]
 
     makensis = None
@@ -513,6 +516,12 @@ def create_nsis_installer() -> bool:
         if path.exists():
             makensis = path
             break
+
+    # Fall back to PATH lookup (covers choco shims and manual installs)
+    if not makensis:
+        makensis_on_path = shutil.which("makensis")
+        if makensis_on_path:
+            makensis = Path(makensis_on_path)
 
     if not makensis:
         print("Warning: NSIS not found. Skipping installer creation.")
