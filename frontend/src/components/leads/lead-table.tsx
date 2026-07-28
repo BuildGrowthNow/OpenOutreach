@@ -26,7 +26,6 @@ interface LeadTableProps {
   onView: (lead: Lead) => void
   onEdit: (lead: Lead) => void
   onDisqualify: (lead: Lead) => void
-  onReScrape: (lead: Lead) => void
   onMessage?: (lead: Lead) => void
   onAddToCampaign?: (lead: Lead, campaignId: string) => void
   onSearch: (search: string) => void
@@ -42,7 +41,6 @@ export function LeadTable({
   onView,
   onEdit,
   onDisqualify,
-  onReScrape,
   onMessage,
   onAddToCampaign,
   onSearch,
@@ -284,14 +282,6 @@ export function LeadTable({
                            <Icons.Users className="h-4 w-4" />
                          </Button>
                        )}
-                       <Button
-                         size="sm"
-                         variant="ghost"
-                         onClick={() => onReScrape(lead)}
-                         title="Re-scrape profile"
-                       >
-                         <Icons.RefreshCw className="h-4 w-4" />
-                       </Button>
                        <Button
                          size="sm"
                          variant="ghost"

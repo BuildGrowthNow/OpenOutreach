@@ -475,12 +475,6 @@ export async function getLead(id: string): Promise<ApiResponse<Lead>> {
   return response as unknown as ApiResponse<Lead>;
 }
 
-export async function createLead(
-  data: Partial<Lead>,
-): Promise<ApiResponse<Lead>> {
-  return post("/api/leads", data);
-}
-
 export async function updateLead(
   id: string,
   data: Partial<Lead>,
@@ -516,30 +510,6 @@ export async function addLeadToCampaign(
   return post(`/api/leads/${id}/add-to-campaign/`, { campaign_id: campaignId });
 }
 
-export interface LeadProfile {
-  first_name?: string;
-  last_name?: string;
-  headline?: string;
-  summary?: string;
-  location?: string;
-  experience?: Array<{
-    company?: string;
-    title?: string;
-    duration?: string;
-  }>;
-  education?: Array<{
-    school?: string;
-    degree?: string;
-    year?: string;
-  }>;
-}
-
-export async function reScrapeLeadProfile(
-  id: string,
-): Promise<ApiResponse<{ success: boolean; profile: LeadProfile; error?: string }>> {
-  return post(`/api/leads/${id}/profile`);
-}
-
 // Messages API
 export async function getMessages(
   campaign_id?: string,
@@ -548,34 +518,26 @@ export async function getMessages(
   page?: number,
   limit?: number,
 ): Promise<ApiResponse<{ data: Message[]; pagination: Pagination }>> {
-  // Use lead_id endpoint if available (most specific)
-  if (lead_id) {
-    const params: Record<string, string> = {};
-    if (page) params.page = page.toString();
-    if (limit) params.limit = limit.toString();
-    return get(`/api/leads/${lead_id}/messages`, params);
-  }
-
-  // Use deal_id endpoint if available
-  if (deal_id) {
-    const params: Record<string, string> = {};
-    if (page) params.page = page.toString();
-    if (limit) params.limit = limit.toString();
-    return get(`/api/deals/${deal_id}/messages`, params);
-  }
-
-  // Use campaign_id endpoint if available
-  if (campaign_id) {
-    const params: Record<string, string> = {};
-    if (page) params.page = page.toString();
-    if (limit) params.limit = limit.toString();
-    return get(`/api/campaigns/${campaign_id}/messages`, params);
-  }
-
-  // Fallback to /api/messages if none specified (backend should handle this)
   const params: Record<string, string> = {};
   if (page) params.page = page.toString();
   if (limit) params.limit = limit.toString();
+
+  // Lead-scoped thread (GET /api/leads/{id}/messages)
+  if (lead_id) {
+    return get(`/api/leads/${lead_id}/messages`, params);
+  }
+
+  // Deal-scoped thread (GET /api/messages/deals/{id}/messages)
+  if (deal_id) {
+    return get(`/api/messages/deals/${deal_id}/messages`, params);
+  }
+
+  // Campaign-scoped list (GET /api/messages?campaign_id=...)
+  if (campaign_id) {
+    return get("/api/messages", { ...params, campaign_id });
+  }
+
+  // All accessible messages
   return get("/api/messages", params);
 }
 
@@ -585,43 +547,6 @@ export async function sendMessageToLead(
   content: string,
 ): Promise<ApiResponse<{ success: boolean; message: Message }>> {
   return post(`/api/leads/${lead_id}/messages`, { content, is_outgoing: true });
-}
-
-// Lead Notes API
-export interface Note {
-  id: string;
-  content: string;
-  created_by: string;
-  created_at: string;
-  updated_at?: string;
-}
-
-export async function getLeadNotes(
-  lead_id: string,
-): Promise<ApiResponse<{ data: Note[]; pagination: Pagination }>> {
-  return get(`/api/leads/${lead_id}/notes`);
-}
-
-export async function createLeadNote(
-  lead_id: string,
-  content: string,
-): Promise<ApiResponse<Note>> {
-  return post(`/api/leads/${lead_id}/notes`, { content });
-}
-
-export async function updateLeadNote(
-  lead_id: string,
-  note_id: string,
-  content: string,
-): Promise<ApiResponse<Note>> {
-  return patch(`/api/leads/${lead_id}/notes/${note_id}`, { content });
-}
-
-export async function deleteLeadNote(
-  lead_id: string,
-  note_id: string,
-): Promise<ApiResponse<{ success: boolean }>> {
-  return del(`/api/leads/${lead_id}/notes/${note_id}`);
 }
 
 // Tracked Link API
@@ -1259,16 +1184,6 @@ export async function getDaemonStatus(): Promise<
   ApiResponse<DaemonStatusResponse>
 > {
   return get("/api/linkedin-profiles/daemon/status");
-}
-
-// Upload campaign leads (CSV)
-export async function uploadCampaignLeads(
-  campaignId: string,
-  file: File,
-): Promise<ApiResponse<{ imported: number; skipped: number }>> {
-  const formData = new FormData();
-  formData.append("file", file);
-  return post(`/api/campaigns/${campaignId}/leads/upload/`, formData);
 }
 
 // LinkedIn Setup API (OAuth/Cookie Guide)

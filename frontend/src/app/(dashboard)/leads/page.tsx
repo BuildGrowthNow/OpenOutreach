@@ -9,7 +9,8 @@ import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Icons } from '@/lib/types/components'
-import { getLeads, updateLead, reScrapeLeadProfile, createLead, sendMessageToLead, getMessages, addLeadToCampaign } from '@/lib/api/dashboard'
+import { useToast } from '@/components/ui/use-toast'
+import { getLeads, updateLead, sendMessageToLead, getMessages, addLeadToCampaign } from '@/lib/api/dashboard'
 import { Lead, Pagination, Message } from '@/lib/types/components'
 import { exportFilteredLeads } from '@/lib/export'
 import { LeadForm } from '@/components/leads/lead-form'
@@ -29,6 +30,7 @@ const LeadsPage = () => {
   const [showLeadForm, setShowLeadForm] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [editingLead, setEditingLead] = useState<Lead | null>(null)
+  const { toast } = useToast()
   const [stats, setStats] = useState({
     total: 0,
     connected: 0,
@@ -100,29 +102,12 @@ const LeadsPage = () => {
   }
 
   const handleDisqualifyLead = async (lead: Lead) => {
-    if (!confirm(`Are you sure you want to disqualify ${lead.name || 'this lead'}?`)) {
-      return
-    }
-
     try {
       await updateLead(lead.id, { disqualified: true })
-      await fetchLeads() // Refresh the list
+      toast({ title: 'Lead Disqualified', description: `${lead.name || 'Lead'} has been disqualified.` })
+      await fetchLeads()
     } catch (err) {
-      alert(`Failed to disqualify lead: ${err instanceof Error ? err.message : 'Unknown error'}`)
-    }
-  }
-
-  const handleReScrapeLead = async (lead: Lead) => {
-    try {
-      const response = await reScrapeLeadProfile(lead.id)
-      if (response.data?.success) {
-        alert('Profile re-scraped successfully!')
-        await fetchLeads() // Refresh the list
-      } else {
-        alert(`Failed to re-scrape profile: ${response.error || 'Unknown error'}`)
-      }
-    } catch (err) {
-      alert(`Failed to re-scrape profile: ${err instanceof Error ? err.message : 'Unknown error'}`)
+      toast({ title: 'Disqualification Failed', description: err instanceof Error ? err.message : 'Unknown error', variant: 'destructive' })
     }
   }
 
@@ -148,42 +133,20 @@ const LeadsPage = () => {
     })
   }
 
-  const handleAddLead = () => {
-    setShowLeadForm(true)
-  }
-
   const handleSubmitLead = async (leadData: Partial<Lead>) => {
+    if (!editingLead?.id) return
     try {
       setIsSubmitting(true)
-      
-      // If editing an existing lead, use patch/put instead of create
-      if (editingLead && editingLead.id) {
-        const response = await updateLead(editingLead.id, leadData)
-        if (response.data) {
-          setShowLeadForm(false)
-          setEditingLead(null)
-          await fetchLeads() // Refresh the list
-        } else {
-          throw new Error(response.error || 'Failed to update lead')
-        }
+      const response = await updateLead(editingLead.id, leadData)
+      if (response.data) {
+        setShowLeadForm(false)
+        setEditingLead(null)
+        await fetchLeads()
       } else {
-        // Create the lead directly using the API
-        const leadResponse = await createLead({
-          linkedinUrl: leadData.linkedinUrl,
-          publicIdentifier: leadData.publicIdentifier,
-          name: leadData.name,
-        })
-        
-        if (leadResponse.data) {
-          setShowLeadForm(false)
-          await fetchLeads() // Refresh the list
-        } else {
-          throw new Error(leadResponse.error || 'Failed to create lead')
-        }
+        toast({ title: 'Update Failed', description: response.error || 'Failed to update lead', variant: 'destructive' })
       }
     } catch (err) {
-      alert(`Failed to add/update lead: ${err instanceof Error ? err.message : 'Unknown error'}`)
-      throw err
+      toast({ title: 'Update Failed', description: err instanceof Error ? err.message : 'Unknown error', variant: 'destructive' })
     } finally {
       setIsSubmitting(false)
     }
@@ -202,22 +165,18 @@ const LeadsPage = () => {
 
   const handleSendMessageToLead = async (content: string) => {
     if (!messageLead) return
-    
+
     try {
       setSendingMessage(true)
       const response = await sendMessageToLead(messageLead.id, content)
-      
-      if (response.data?.success && response.data?.message) {
-        // Add the sent message to the list
-        setMessages(prev => response.data ? [...prev, response.data.message] : prev)
-      } else if (response.error) {
-        alert(`Failed to send message: ${response.error}`)
+
+      if (response.data?.success) {
+        toast({ title: 'Message Queued', description: 'Your message has been queued for sending.' })
       } else {
-        alert('Failed to send message: Unknown error')
+        toast({ title: 'Send Failed', description: response.error || 'Unknown error', variant: 'destructive' })
       }
     } catch (error) {
-      console.error('Failed to send message:', error)
-      alert('Failed to send message. Please try again.')
+      toast({ title: 'Send Failed', description: 'Failed to send message. Please try again.', variant: 'destructive' })
     } finally {
       setSendingMessage(false)
     }
@@ -232,16 +191,10 @@ const LeadsPage = () => {
             Manage and track all your leads in one place
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <Badge variant="outline" className="px-3 py-1">
-            <Icons.Users className="mr-2 h-3.5 w-3.5" />
-            {stats.total} Total Leads
-          </Badge>
-          <Button onClick={handleAddLead}>
-            <Icons.UserPlus className="mr-2 h-4 w-4" />
-            Add Lead
-          </Button>
-        </div>
+        <Badge variant="outline" className="px-3 py-1">
+          <Icons.Users className="mr-2 h-3.5 w-3.5" />
+          {stats.total} Total Leads
+        </Badge>
       </div>
 
       {error && (
@@ -410,20 +363,19 @@ const LeadsPage = () => {
          onView={handleViewLead}
          onEdit={handleEditLead}
          onDisqualify={handleDisqualifyLead}
-         onReScrape={handleReScrapeLead}
          onMessage={handleSendMessage}
          onAddToCampaign={async (lead, campaignId) => {
-           if (campaignId) {
-             try {
-               const response = await addLeadToCampaign(lead.id, campaignId)
-               if (response.data?.success) {
-                 await fetchLeads() // Refresh the list
-               } else {
-                 alert(response.error || 'Failed to add lead to campaign')
-               }
-             } catch (err) {
-               alert(`Failed to add lead to campaign: ${err instanceof Error ? err.message : 'Unknown error'}`)
+           if (!campaignId) return
+           try {
+             const response = await addLeadToCampaign(lead.id, campaignId)
+             if (response.data?.success) {
+               toast({ title: 'Added to Campaign', description: `${lead.name || 'Lead'} added successfully.` })
+               await fetchLeads()
+             } else {
+               toast({ title: 'Failed', description: response.error || 'Failed to add lead to campaign', variant: 'destructive' })
              }
+           } catch (err) {
+             toast({ title: 'Failed', description: err instanceof Error ? err.message : 'Unknown error', variant: 'destructive' })
            }
          }}
          onSearch={handleSearch}

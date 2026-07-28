@@ -43,7 +43,6 @@ import {
   updateCampaign,
   deleteCampaign,
   getDailyUsage,
-  uploadCampaignLeads,
   getCampaignStatus,
 } from "@/lib/api/dashboard";
 import {
@@ -119,14 +118,6 @@ export default function CampaignDetailsPage() {
     warningLevel: "low",
   });
 
-  // Lead upload and play/pause states
-  const [showUploadModal, setShowUploadModal] = useState(false);
-  const [uploadFile, setUploadFile] = useState<File | null>(null);
-  const [uploadLoading, setUploadLoading] = useState(false);
-  const [uploadStatus, setUploadStatus] = useState<{
-    success: boolean;
-    message: string;
-  } | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
 
   // Targeted polling state - only fetch status every 10 seconds
@@ -364,43 +355,6 @@ export default function CampaignDetailsPage() {
       setError("An error occurred while resuming the campaign");
     } finally {
       setActionLoading(false);
-    }
-  };
-
-  const handleUploadCSV = async () => {
-    if (!uploadFile) return;
-    try {
-      setUploadLoading(true);
-      setUploadStatus(null);
-      const response = await uploadCampaignLeads(campaignId, uploadFile);
-      if (response.data) {
-        setUploadStatus({
-          success: true,
-          message: `Successfully imported ${response.data.imported} leads! (Skipped/Existing: ${response.data.skipped})`,
-        });
-        setUploadFile(null);
-        // Reset file input element if possible
-        const fileInput = document.getElementById(
-          "csv-file",
-        ) as HTMLInputElement;
-        if (fileInput) fileInput.value = "";
-        fetchCampaignData(true); // Refresh leads list in background
-      } else {
-        setUploadStatus({
-          success: false,
-          message: response.error || "Failed to import connections",
-        });
-      }
-    } catch (err) {
-      setUploadStatus({
-        success: false,
-        message:
-          err instanceof Error
-            ? err.message
-            : "An error occurred during import",
-      });
-    } finally {
-      setUploadLoading(false);
     }
   };
 
@@ -837,88 +791,6 @@ export default function CampaignDetailsPage() {
                   All leads associated with this campaign
                 </CardDescription>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                className="border-zinc-800 bg-zinc-900 text-zinc-100 hover:bg-zinc-800"
-                onClick={() => setShowUploadModal(true)}
-              >
-                <Icons.Download className="mr-2 h-4 w-4 rotate-180" />
-                Import Connections (CSV)
-              </Button>
-              <Dialog open={showUploadModal} onOpenChange={(open) => {
-                setShowUploadModal(open);
-                if (!open) { setUploadStatus(null); setUploadFile(null); }
-              }}>
-                <DialogContent
-                  className={`${zincDialogContentClassName} sm:max-w-[680px]`}
-                >
-                  <DialogHeader className={zincDialogHeaderClassName}>
-                    <DialogTitle>Import Connections (CSV)</DialogTitle>
-                    <DialogDescription>
-                      Upload a CSV file containing LinkedIn profiles or
-                      connection URLs to add as campaign leads. The CSV should
-                      have one profile URL or public identifier per line (or a
-                      header row starting with firstName/lastName).
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="flex flex-col gap-2">
-                    <label htmlFor="csv-file" className="text-sm font-medium">
-                      Select CSV File
-                    </label>
-                    <Input
-                      className={zincInputClassName}
-                      id="csv-file"
-                      type="file"
-                      accept=".csv"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0] || null;
-                        if (file && !file.name.toLowerCase().endsWith(".csv")) {
-                          setUploadStatus({
-                            success: false,
-                            message: "Please select a valid CSV file (.csv)",
-                          });
-                          setUploadFile(null);
-                        } else {
-                          setUploadFile(file);
-                          setUploadStatus(null);
-                        }
-                      }}
-                    />
-                  </div>
-                  {uploadStatus && (
-                    <Alert
-                      variant={uploadStatus.success ? "default" : "destructive"}
-                    >
-                      <AlertTitle>
-                        {uploadStatus.success ? "Success" : "Error"}
-                      </AlertTitle>
-                      <AlertDescription>
-                        {uploadStatus.message}
-                      </AlertDescription>
-                    </Alert>
-                  )}
-                  <DialogFooter className={zincDialogFooterClassName}>
-                    <Button
-                      variant="outline"
-                      className="border-zinc-800 bg-zinc-900 text-zinc-100 hover:bg-zinc-800"
-                      onClick={() => {
-                        setShowUploadModal(false);
-                        setUploadStatus(null);
-                        setUploadFile(null);
-                      }}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      onClick={handleUploadCSV}
-                      disabled={!uploadFile || uploadLoading}
-                    >
-                      {uploadLoading ? "Importing..." : "Import"}
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
             </CardHeader>
             <CardContent>
               {leads.length > 0 ? (

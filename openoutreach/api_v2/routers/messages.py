@@ -16,6 +16,7 @@ router = APIRouter()
 class MessageResponse(BaseModel):
     id: str
     dealId: str
+    leadId: Optional[str] = None
     campaignId: str
     senderName: Optional[str] = None
     content: str
@@ -118,6 +119,7 @@ async def list_messages(
         results.append(MessageResponse(
             id=str(msg["_id"]),
             dealId=str(msg["deal_id"]),
+            leadId=str(deal_data["lead_id"]) if deal_data and deal_data.get("lead_id") else None,
             campaignId=str(deal_data["campaign_id"]) if deal_data else "",
             senderName=msg.get("sender_name"),
             content=msg.get("content", ""),
@@ -166,6 +168,7 @@ async def get_message(
     return MessageResponse(
         id=str(msg["_id"]),
         dealId=str(msg["deal_id"]),
+        leadId=deal.lead_id if deal else None,
         campaignId=deal.campaign_id,
         senderName=msg.get("sender_name"),
         content=msg.get("content", ""),

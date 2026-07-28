@@ -17,15 +17,9 @@ import { useToast } from '@/components/ui/use-toast'
 import {
   getLead,
   updateLead,
-  reScrapeLeadProfile,
   getMessages,
   sendMessageToLead,
-  getLeadNotes,
-  createLeadNote,
-  updateLeadNote,
-  deleteLeadNote,
   getCampaigns,
-  type Note as ApiNote,
   type Campaign
 } from '@/lib/api/dashboard'
 import { Lead, DealState, DealOutcome, Message } from '@/lib/types/components'
@@ -58,25 +52,16 @@ const LeadDetailsPage = () => {
   const [lead, setLead] = useState<Lead | null>(null)
   const [profile, setProfile] = useState<LeadProfile | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
-  const [notes, setNotes] = useState<Array<{
-    id: string
-    content: string
-    createdBy: string
-    createdAt: string
-    updatedAt?: string
-  }>>([])
+  const [notes, setNotes] = useState<string>('')
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
-  const [notesLoading, setNotesLoading] = useState(false)
+  const [savingNote, setSavingNote] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState('overview')
   const [messageLoading, setMessageLoading] = useState(false)
   const [sendingMessage, setSendingMessage] = useState(false)
-  const [savingNote, setSavingNote] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [showAddToCampaign, setShowAddToCampaign] = useState(false)
-  const [scraping, setScraping] = useState(false)
-  const [scrapeCountdown, setScrapeCountdown] = useState(60)
 
 
   const fetchLeadDetails = useCallback(async () => {
@@ -88,6 +73,7 @@ const LeadDetailsPage = () => {
 
       if (response.data) {
         setLead(response.data)
+        setNotes(response.data.notes || '')
 
         // Use cached profile from lead detail response (no live scrape)
         if (response.data.profile) {
@@ -122,71 +108,9 @@ const LeadDetailsPage = () => {
     })()
   }, [leadId, fetchLeadDetails, fetchCampaigns])
 
-  const handleReScrape = async () => {
-    if (!lead || scraping) return
-
-    setScraping(true)
-    setScrapeCountdown(60)
-
-    // Show initial toast
-    toast({
-      title: 'Scraping Profile',
-      description: 'Fetching latest profile data from LinkedIn...',
-      variant: 'default',
-    })
-
-    try {
-      const response = await reScrapeLeadProfile(lead.id)
-      if (response.data?.success) {
-        if (response.data.profile) {
-          setProfile(response.data.profile)
-        }
-        toast({
-          title: 'Profile Saved',
-          description: 'Profile data has been updated successfully.',
-          variant: 'default',
-        })
-      } else {
-        toast({
-          title: 'Scrape Failed',
-          description: response.data?.error || response.error || 'Could not fetch profile data.',
-          variant: 'destructive',
-        })
-      }
-    } catch (err) {
-      toast({
-        title: 'Scrape Failed',
-        description: err instanceof Error ? err.message : 'An unexpected error occurred.',
-        variant: 'destructive',
-      })
-    } finally {
-      setScraping(false)
-      setScrapeCountdown(60)
-    }
-  }
-
-  // Countdown timer effect for scraping button
-  useEffect(() => {
-    if (!scraping) return
-
-    const interval = setInterval(() => {
-      setScrapeCountdown((prev) => {
-        if (prev <= 1) {
-          return 60
-        }
-        return prev - 1
-      })
-    }, 1000)
-
-    return () => clearInterval(interval)
-  }, [scraping])
 
   const handleDisqualify = async () => {
     if (!lead) return
-
-    if (!confirm(`Are you sure you want to disqualify ${lead.name || 'this lead'}?`)) {
-      return
-    }
 
     try {
       await updateLead(lead.id, { disqualified: true })
@@ -314,34 +238,6 @@ const LeadDetailsPage = () => {
     return () => clearInterval(interval)
   }, [activeTab, leadId, fetchMessages])
 
-  // Fetch notes on component mount
-  useEffect(() => {
-    const fetchNotes = async () => {
-      try {
-        setNotesLoading(true)
-        const response = await getLeadNotes(leadId)
-        if (response.data?.data) {
-          // Transform API notes to component format
-          const transformedNotes = response.data.data.map((apiNote: ApiNote) => ({
-            id: apiNote.id,
-            content: apiNote.content,
-            createdBy: apiNote.created_by,
-            createdAt: apiNote.created_at,
-            updatedAt: apiNote.updated_at
-          }))
-          setNotes(transformedNotes)
-        }
-      } catch (error) {
-        console.error('Failed to fetch notes:', error)
-      } finally {
-        setNotesLoading(false)
-      }
-    }
-
-    if (leadId) {
-      fetchNotes()
-    }
-  }, [leadId])
 
   const handleSendMessage = async (content: string) => {
     if (!lead) return
@@ -377,114 +273,18 @@ const LeadDetailsPage = () => {
     }
   }
 
-  // Note handlers
-  const handleAddNote = async (content: string) => {
+  const handleSaveNotes = async (content: string) => {
     try {
       setSavingNote(true)
-      const response = await createLeadNote(leadId, content)
-
+      const response = await updateLead(leadId, { notes: content })
       if (response.data) {
-        // Transform and add the new note to the list
-        const newNote = {
-          id: response.data.id,
-          content: response.data.content,
-          createdBy: response.data.created_by,
-          createdAt: response.data.created_at,
-          updatedAt: response.data.updated_at
-        }
-
-        setNotes(prev => [...prev, newNote])
-        toast({
-          title: 'Note Added',
-          description: 'Your note has been saved successfully.',
-          variant: 'default',
-        })
+        setNotes(content)
+        toast({ title: 'Notes Saved', description: 'Notes have been saved.', variant: 'default' })
       } else {
-        toast({
-          title: 'Failed to Add Note',
-          description: response.error || 'Unknown error',
-          variant: 'destructive',
-        })
+        toast({ title: 'Save Failed', description: response.error || 'Unknown error', variant: 'destructive' })
       }
     } catch (error) {
-      console.error('Failed to add note:', error)
-      toast({
-        title: 'Failed to Add Note',
-        description: 'Failed to add note. Please try again.',
-        variant: 'destructive',
-      })
-    } finally {
-      setSavingNote(false)
-    }
-  }
-
-  const handleEditNote = async (noteId: string, content: string) => {
-    try {
-      setSavingNote(true)
-      const response = await updateLeadNote(leadId, noteId, content)
-
-      if (response.data) {
-        // Update the note in the list
-        setNotes(prev => prev.map(note =>
-          note.id === noteId
-            ? {
-                ...note,
-                content: response.data!.content,
-                updatedAt: response.data!.updated_at || response.data!.created_at
-              }
-            : note
-        ))
-        toast({
-          title: 'Note Updated',
-          description: 'Your note has been updated successfully.',
-          variant: 'default',
-        })
-      } else {
-        toast({
-          title: 'Failed to Update Note',
-          description: response.error || 'Unknown error',
-          variant: 'destructive',
-        })
-      }
-    } catch (error) {
-      console.error('Failed to update note:', error)
-      toast({
-        title: 'Failed to Update Note',
-        description: 'Failed to update note. Please try again.',
-        variant: 'destructive',
-      })
-    } finally {
-      setSavingNote(false)
-    }
-  }
-
-  const handleDeleteNote = async (noteId: string) => {
-    try {
-      setSavingNote(true)
-      const response = await deleteLeadNote(leadId, noteId)
-
-      if (response.data?.success) {
-        // Remove the note from the list
-        setNotes(prev => prev.filter(note => note.id !== noteId))
-        toast({
-          title: 'Note Deleted',
-          description: 'Your note has been deleted successfully.',
-          variant: 'default',
-        })
-      } else {
-        toast({
-          title: 'Failed to Delete Note',
-          description: response.error || 'Unknown error',
-          variant: 'destructive',
-        })
-      }
-    } catch (error) {
-      console.error('Failed to delete note:', error)
-      toast({
-        title: 'Failed to Delete Note',
-        description: 'Failed to delete note. Please try again.',
-        variant: 'destructive',
-      })
+      toast({ title: 'Save Failed', description: 'Failed to save notes. Please try again.', variant: 'destructive' })
     } finally {
       setSavingNote(false)
     }
@@ -554,10 +354,6 @@ const LeadDetailsPage = () => {
             <Icons.Globe className="mr-2 h-3.5 w-3.5" />
             {lead.publicIdentifier}
           </Badge>
-          <Button variant="outline" onClick={handleReScrape} disabled={scraping}>
-            <Icons.RefreshCw className={`mr-2 h-4 w-4 ${scraping ? 'animate-spin' : ''}`} />
-            {scraping ? `Scraping ${scrapeCountdown}s...` : 'Re-scrape Profile'}
-          </Button>
           <Button variant="destructive" onClick={handleDisqualify}>
             <Icons.Trash2 className="mr-2 h-4 w-4" />
             Disqualify
@@ -787,10 +583,7 @@ const LeadDetailsPage = () => {
                     <div className="text-center py-8">
                       <Icons.AlertCircle className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
                       <div className="text-muted-foreground">Profile information not available</div>
-                      <Button onClick={() => handleReScrape()} className="mt-4" disabled={scraping}>
-                        <Icons.RefreshCw className={`mr-2 h-4 w-4 ${scraping ? 'animate-spin' : ''}`} />
-                        {scraping ? `Scraping ${scrapeCountdown}s...` : 'Re-scrape Profile'}
-                      </Button>
+                      <p className="text-sm text-muted-foreground mt-2">Profile data is fetched automatically by the discovery pipeline.</p>
                     </div>
                   )}
                 </CardContent>
@@ -860,15 +653,11 @@ const LeadDetailsPage = () => {
               <CardTitle className="text-base">Quick Actions</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <Button variant="outline" className="w-full justify-start" onClick={handleReScrape} disabled={scraping}>
-                <Icons.RefreshCw className={`mr-2 h-4 w-4 ${scraping ? 'animate-spin' : ''}`} />
-                {scraping ? `Scraping ${scrapeCountdown}s...` : 'Re-scrape Profile'}
-              </Button>
               <Button variant="outline" className="w-full justify-start" onClick={() => setShowEditModal(true)}>
                 <Icons.Edit className="mr-2 h-4 w-4" />
                 Edit Lead Info
               </Button>
-              <Button variant="outline" className="w-full justify-start">
+              <Button variant="outline" className="w-full justify-start" onClick={() => setActiveTab('messages')}>
                 <Icons.MessageSquare className="mr-2 h-4 w-4" />
                 Send Message
               </Button>
@@ -918,10 +707,7 @@ const LeadDetailsPage = () => {
           {/* Notes Card */}
           <LeadNotes
             notes={notes}
-            onAddNote={handleAddNote}
-            onEditNote={handleEditNote}
-            onDeleteNote={handleDeleteNote}
-            isLoading={notesLoading}
+            onSave={handleSaveNotes}
             isSaving={savingNote}
             leadName={lead.name || 'Lead'}
           />

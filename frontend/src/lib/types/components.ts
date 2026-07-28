@@ -302,6 +302,7 @@ export interface Campaign {
 export interface Message {
   id: string;
   dealId: string;
+  leadId?: string;
   dealUrn: string;
   content: string;
   isOutgoing: boolean;

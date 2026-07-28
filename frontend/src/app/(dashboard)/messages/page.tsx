@@ -150,11 +150,11 @@ const MessagesPage = () => {
     }
   }, [campaignFilter, currentPage, search]);
 
-  // Fetch messages with specific lead_id
-  const fetchMessageThread = useCallback(async (leadId: string) => {
+  // Fetch messages for a deal thread (uses deal_id)
+  const fetchMessageThread = useCallback(async (dealId: string) => {
     try {
       setModalLoading(true);
-      const response = await getMessages(undefined, undefined, leadId);
+      const response = await getMessages(undefined, dealId);
       if (response.data) {
         setModalMessages(response.data.data || []);
       }
@@ -181,20 +181,17 @@ const MessagesPage = () => {
   }, [messages]);
 
   const handleSendMessageToLead = async (content: string) => {
-    if (!selectedMessage) return;
+    if (!selectedMessage?.leadId) return;
 
     try {
       setSendingMessage(true);
-      const response = await sendMessageToLead(selectedMessage.dealId, content);
+      const response = await sendMessageToLead(selectedMessage.leadId, content);
 
       const data = response.data;
-      if (
-        data &&
-        typeof data.success === "boolean" &&
-        data.message !== undefined
-      ) {
-        // Use conditional check then cast as Message type
-        setModalMessages((prev) => [...prev, data.message]);
+      if (data && data.success) {
+        await fetchMessageThread(selectedMessage.dealId);
+      } else if (response.error) {
+        console.error("Failed to send message:", response.error);
       }
     } catch (error) {
       console.error("Failed to send message:", error);
@@ -890,7 +887,7 @@ const MessagesPage = () => {
                             input.value = "";
                           }
                         }}
-                        disabled={sendingMessage}
+                        disabled={sendingMessage || !selectedMessage?.leadId}
                       >
                         {sendingMessage ? (
                           <Icons.RefreshCw className="h-4 w-4 animate-spin" />
