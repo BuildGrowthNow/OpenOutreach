@@ -689,7 +689,7 @@ export default function CampaignDetailsPage() {
                         onClick={() => setShowCompletionModal(true)}
                       >
                         <Icons.Check className="mr-2 h-4 w-4" />
-                        Mark as Completed
+                        Archive Campaign
                       </Button>
                       <Dialog
                         open={showCompletionModal}
@@ -699,10 +699,9 @@ export default function CampaignDetailsPage() {
                           className={`${zincDialogContentClassName} sm:max-w-[720px]`}
                         >
                           <DialogHeader className={zincDialogHeaderClassName}>
-                            <DialogTitle>Complete Campaign</DialogTitle>
+                            <DialogTitle>Archive Campaign</DialogTitle>
                             <DialogDescription>
-                              Are you sure you want to mark this campaign as
-                              completed? This action cannot be undone.
+                              This stops all automation and marks the campaign as completed. The campaign and its leads remain visible — nothing is deleted.
                             </DialogDescription>
                           </DialogHeader>
                           <div className="space-y-4 py-4">
@@ -768,7 +767,7 @@ export default function CampaignDetailsPage() {
                               variant="destructive"
                               onClick={handleMarkCompleted}
                             >
-                              Yes, Complete Campaign
+                              Archive Campaign
                             </Button>
                           </DialogFooter>
                         </DialogContent>

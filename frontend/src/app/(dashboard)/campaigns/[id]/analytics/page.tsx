@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import {
   Card,
   CardContent,
@@ -9,151 +9,145 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Icons } from "@/lib/types/components";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  Cell,
+  PieChart,
+  Pie,
+  Legend,
+} from "recharts";
 import { getCampaignAnalytics } from "@/lib/api/dashboard";
-import { cn } from "@/lib/utils";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-interface CampaignAnalyticsResponse {
-  period: string;
-  campaign_id: string;
-  stats: {
-    connections_sent: number;
-    connections_accepted: number;
-    connection_accept_rate: number;
-    messages_sent: number;
-    messages_replied: number;
-    response_rate: number;
-    responses: number;
-    daily_connections?: number;
-    daily_messages?: number;
-    last_7_days?: {
-      connections_sent?: number;
-      connections_accepted?: number;
-    };
-    last_30_days?: {
-      connections_accepted?: number;
-      conversions?: number;
-    };
-    conversions: number;
-    conversion_rate: number;
-    connection_success_rate?: number;
-    errors: number;
-    rate_limit_warnings: number;
-    avg_time_to_accept?: string;
-    total_connection_attempts?: number;
-    failed_connections?: number;
-    avg_response_time?: string;
-    message_open_rate?: number;
-    total_messages_sent?: number;
-    positive_responses?: number;
-    avg_conversion_time?: string;
-    qualified_leads?: number;
-    hot_leads?: number;
-    deals_closed?: number;
-    profile_views?: number;
-    link_clicks?: number;
-    document_downloads?: number;
-    meeting_bookings?: number;
-    responses_under_1h?: number;
-    responses_1_24h?: number;
-    responses_1_7d?: number;
-    responses_over_7d?: number;
-    peak_day?: string;
-    peak_hour?: string;
-    timezone_optimization?: string;
-    high_quality_conversions?: number;
-    medium_quality_conversions?: number;
-    low_quality_conversions?: number;
-    best_performing_source?: string;
-    best_roi_source?: string;
-    avg_cost_per_conversion?: number;
-    best_performing_time?: string;
-    best_performing_day?: string;
-  };
-  daily_breakdown: Array<{
-    date: string;
-    connections_sent: number;
-    connections_accepted: number;
-    messages_sent: number;
-    messages_replied: number;
-  }>;
-  pipeline: {
-    qualified: number;
-    ready_to_connect: number;
-    pending: number;
-    connected: number;
-    completed: number;
-    failed: number;
-    no_email: number;
-  };
+const PIPELINE_COLORS: Record<string, string> = {
+  qualified: "#3b82f6",
+  ready_to_connect: "#6366f1",
+  pending: "#a855f7",
+  connected: "#06b6d4",
+  completed: "#10b981",
+  failed: "#ef4444",
+  no_email: "#9ca3af",
+};
+
+const PIPELINE_LABELS: Record<string, string> = {
+  qualified: "Qualified",
+  ready_to_connect: "Ready to Connect",
+  pending: "Pending",
+  connected: "Connected",
+  completed: "Completed",
+  failed: "Failed",
+  no_email: "No Email",
+};
+
+interface Stats {
+  connections_sent: number;
+  connections_accepted: number;
+  connection_accept_rate: number;
+  messages_sent: number;
+  messages_replied: number;
+  response_rate: number;
+  conversions: number;
+  conversion_rate: number;
+  errors: number;
+}
+
+interface AnalyticsData {
+  stats: Stats;
+  pipeline?: Record<string, number>;
+}
+
+function KpiCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
+  return (
+    <Card>
+      <CardContent className="pt-6 text-center">
+        <div className="text-3xl font-bold">{value}</div>
+        <div className="text-sm text-muted-foreground mt-1">{label}</div>
+        {sub && <div className="text-xs text-muted-foreground mt-0.5">{sub}</div>}
+      </CardContent>
+    </Card>
+  );
+}
+
+function RateBadge({ value, label }: { value: number; label: string }) {
+  const color =
+    value >= 30
+      ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
+      : value >= 15
+      ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20"
+      : "bg-zinc-500/10 text-zinc-400 border-zinc-500/20";
+  return (
+    <div className="flex items-center justify-between py-2">
+      <span className="text-sm">{label}</span>
+      <Badge variant="outline" className={color}>
+        {value.toFixed(1)}%
+      </Badge>
+    </div>
+  );
 }
 
 export default function CampaignAnalyticsPage() {
   const params = useParams();
+  const router = useRouter();
   const campaignId = params.id as string;
 
-  const [analytics, setAnalytics] = useState<CampaignAnalyticsResponse | null>(
-    null,
-  );
+  const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState("overview");
+  const [period, setPeriod] = useState("30d");
 
-  const fetchAnalytics = useCallback(async () => {
+  const fetchAnalytics = useCallback(async (p: string) => {
     try {
       setLoading(true);
       setError(null);
-
-      const response = await getCampaignAnalytics(campaignId);
+      const response = await getCampaignAnalytics(campaignId, p);
       if (response.data) {
         setAnalytics(response.data);
       } else {
-        setError(
-          response.error ||
-            response.message ||
-            "Failed to fetch campaign analytics",
-        );
+        setError(response.error || response.message || "Failed to load analytics");
       }
-    } catch (err) {
-      setError("An error occurred while fetching campaign analytics");
-      console.error("Error fetching campaign analytics:", err);
+    } catch {
+      setError("Failed to load analytics");
     } finally {
       setLoading(false);
     }
   }, [campaignId]);
 
   useEffect(() => {
-    void (async () => {
-      await fetchAnalytics();
-    })();
-  }, [fetchAnalytics]);
-
-  const refreshAnalytics = async () => {
-    await fetchAnalytics();
-  };
+    void fetchAnalytics(period);
+  }, [fetchAnalytics, period]);
 
   if (loading) {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <div className="space-y-2">
-            <Skeleton className="h-8 w-64" />
-            <Skeleton className="h-4 w-48" />
+          <Skeleton className="h-8 w-56" />
+          <div className="flex gap-2">
+            <Skeleton className="h-9 w-32" />
+            <Skeleton className="h-9 w-28" />
           </div>
-          <Skeleton className="h-10 w-32" />
         </div>
-
-        <div className="space-y-6">
-          <Skeleton className="h-48 w-full" />
-          <Skeleton className="h-64 w-full" />
-          <div className="grid grid-cols-2 gap-6">
-            <Skeleton className="h-64 w-full" />
-            <Skeleton className="h-64 w-full" />
-          </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-28" />)}
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Skeleton className="h-72" />
+          <Skeleton className="h-72" />
         </div>
       </div>
     );
@@ -161,779 +155,213 @@ export default function CampaignAnalyticsPage() {
 
   if (!analytics) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-4">
         <Alert variant="destructive">
-          <AlertTitle>Analytics Not Available</AlertTitle>
-          <AlertDescription>
-            {error || "No analytics data is available for this campaign yet."}
-          </AlertDescription>
+          <Icons.AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error || "No analytics data available."}</AlertDescription>
         </Alert>
-        <Button variant="outline" onClick={() => window.history.back()}>
+        <Button variant="outline" onClick={() => router.push(`/campaigns/${campaignId}`)}>
           Back to Campaign
         </Button>
       </div>
     );
   }
 
-  const stats = analytics.stats || {};
+  const s = analytics.stats;
 
-  const percentage = (numerator?: number, denominator?: number) => {
-    if (!denominator || denominator <= 0) {
-      return 0;
-    }
+  const funnelData = [
+    { name: "Sent", value: s.connections_sent, fill: "#6366f1" },
+    { name: "Accepted", value: s.connections_accepted, fill: "#06b6d4" },
+    { name: "Messaged", value: s.messages_sent, fill: "#3b82f6" },
+    { name: "Replied", value: s.messages_replied, fill: "#a855f7" },
+    { name: "Converted", value: s.conversions, fill: "#10b981" },
+  ];
 
-    return Math.round(((numerator || 0) / denominator) * 100);
-  };
+  const pipelineData = analytics.pipeline
+    ? Object.entries(analytics.pipeline)
+        .filter(([, v]) => v > 0)
+        .map(([k, v]) => ({
+          name: PIPELINE_LABELS[k] || k,
+          value: v,
+          fill: PIPELINE_COLORS[k] || "#71717a",
+        }))
+    : [];
 
-  const connectionRate = percentage(
-    stats.connections_accepted,
-    stats.connections_sent,
-  );
-  const messageResponseRate = percentage(stats.responses, stats.messages_sent);
-  const acceptedConversionRate = percentage(
-    stats.conversions,
-    stats.connections_accepted,
-  );
-  const responseFromAcceptedRate = percentage(
-    stats.responses,
-    stats.connections_accepted,
-  );
-  const conversionFromResponsesRate = percentage(
-    stats.conversions,
-    stats.responses,
-  );
-  const overallConversionRate = percentage(
-    stats.conversions,
-    stats.connections_sent,
-  );
-
-  const formatOptionalCount = (value?: number) =>
-    value === undefined || value === null ? "N/A" : value;
-  const formatOptionalRate = (value?: number) =>
-    value === undefined || value === null ? "N/A" : `${value}%`;
-  const formatOptionalCurrency = (value?: number) =>
-    value === undefined || value === null ? "N/A" : `$${value}`;
+  const totalPipeline = pipelineData.reduce((sum, d) => sum + d.value, 0);
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="space-y-1">
-          <h1 className="text-3xl font-bold tracking-tight">
-            Campaign Analytics
-          </h1>
-          <p className="text-muted-foreground">
-            Performance metrics and insights for your campaign
-          </p>
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Campaign Analytics</h1>
+          <p className="text-muted-foreground">Performance metrics for this campaign</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          <Select value={period} onValueChange={(v) => { if (v) setPeriod(v); }}>
+            <SelectTrigger className="w-32">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="7d">Last 7 days</SelectItem>
+              <SelectItem value="30d">Last 30 days</SelectItem>
+              <SelectItem value="90d">Last 90 days</SelectItem>
+              <SelectItem value="all">All time</SelectItem>
+            </SelectContent>
+          </Select>
           <Button
             variant="outline"
             size="sm"
-            onClick={refreshAnalytics}
+            onClick={() => void fetchAnalytics(period)}
             disabled={loading}
           >
-            {loading ? (
-              <>
-                <Icons.RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                Refreshing...
-              </>
-            ) : (
-              <>
-                <Icons.RefreshCw className="mr-2 h-4 w-4" />
-                Refresh
-              </>
-            )}
+            <Icons.RefreshCw className="h-4 w-4" />
           </Button>
           <Button
             variant="outline"
             size="sm"
-            onClick={() => window.history.back()}
+            onClick={() => router.push(`/campaigns/${campaignId}`)}
           >
-            Back to Campaign
+            <Icons.ChevronLeft className="mr-1 h-4 w-4" />
+            Back
           </Button>
         </div>
       </div>
 
       {error && (
         <Alert variant="destructive">
-          <AlertTitle>Error</AlertTitle>
+          <Icons.AlertCircle className="h-4 w-4" />
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
 
-      {/* Quick Stats Overview */}
+      {/* KPI row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <KpiCard label="Connections Sent" value={s.connections_sent} />
+        <KpiCard
+          label="Connections Accepted"
+          value={s.connections_accepted}
+          sub={`${s.connection_accept_rate.toFixed(1)}% accept rate`}
+        />
+        <KpiCard
+          label="Messages Sent"
+          value={s.messages_sent}
+          sub={`${s.messages_replied} replied · ${s.response_rate.toFixed(1)}% rate`}
+        />
+        <KpiCard
+          label="Conversions"
+          value={s.conversions}
+          sub={`${s.conversion_rate.toFixed(1)}% of connections`}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Outreach funnel */}
         <Card>
-          <CardContent className="pt-6">
-            <div className="text-3xl font-bold text-center">
-              {stats.connections_sent || 0}
-            </div>
-            <div className="text-sm text-muted-foreground text-center mt-2">
-              Connections Sent
-            </div>
+          <CardHeader>
+            <CardTitle>Outreach Funnel</CardTitle>
+            <CardDescription>Leads at each stage of the flow</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={funnelData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+                <XAxis dataKey="name" tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} />
+                <Tooltip
+                  contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }}
+                  labelStyle={{ color: "hsl(var(--foreground))" }}
+                  itemStyle={{ color: "hsl(var(--foreground))" }}
+                  cursor={{ fill: "rgba(255,255,255,0.05)" }}
+                />
+                <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                  {funnelData.map((entry, i) => (
+                    <Cell key={i} fill={entry.fill} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
           </CardContent>
         </Card>
 
+        {/* Rates summary */}
         <Card>
-          <CardContent className="pt-6">
-            <div className="text-3xl font-bold text-center">
-              {stats.connections_accepted || 0}
-            </div>
-            <div className="text-sm text-muted-foreground text-center mt-2">
-              Connections Accepted
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-3xl font-bold text-center">
-              {stats.messages_sent || 0}
-            </div>
-            <div className="text-sm text-muted-foreground text-center mt-2">
-              Messages Sent
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-3xl font-bold text-center">
-              {stats.conversions || 0}
-            </div>
-            <div className="text-sm text-muted-foreground text-center mt-2">
-              Conversions
-            </div>
+          <CardHeader>
+            <CardTitle>Conversion Rates</CardTitle>
+            <CardDescription>Key performance percentages</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-1 pt-2">
+            <RateBadge value={s.connection_accept_rate} label="Connection Accept Rate" />
+            <div className="h-px bg-border" />
+            <RateBadge value={s.response_rate} label="Message Response Rate" />
+            <div className="h-px bg-border" />
+            <RateBadge value={s.conversion_rate} label="Overall Conversion Rate" />
+            {s.errors > 0 && (
+              <>
+                <div className="h-px bg-border" />
+                <div className="flex items-center justify-between py-2">
+                  <span className="text-sm">Task Errors</span>
+                  <Badge variant="destructive">{s.errors}</Badge>
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>
 
-      {/* Tabs for Detailed Analytics */}
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid grid-cols-4 w-full md:w-auto">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="performance">Performance</TabsTrigger>
-          <TabsTrigger value="engagement">Engagement</TabsTrigger>
-          <TabsTrigger value="funnel">Conversion Funnel</TabsTrigger>
-        </TabsList>
-
-        {/* Overview Tab */}
-        <TabsContent value="overview" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Campaign Performance Overview</CardTitle>
-              <CardDescription>
-                Key metrics and performance trends
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-4">
-                  <div>
-                    <h4 className="font-medium mb-2">Connection Rate</h4>
-                    <div className="flex items-center">
-                      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-4 mr-4">
-                        <div
-                          className="bg-emerald-500 h-4 rounded-full"
-                          style={{ width: `${Math.min(100, connectionRate)}%` }}
-                        />
-                      </div>
-                      <span className="font-medium">{connectionRate}%</span>
+      {/* Pipeline breakdown */}
+      {pipelineData.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Lead Pipeline</CardTitle>
+            <CardDescription>
+              {totalPipeline} total leads by deal state
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col lg:flex-row items-center gap-8">
+              <ResponsiveContainer width="100%" height={260}>
+                <PieChart>
+                  <Pie
+                    data={pipelineData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={65}
+                    outerRadius={105}
+                    paddingAngle={2}
+                    dataKey="value"
+                  >
+                    {pipelineData.map((entry, i) => (
+                      <Cell key={i} fill={entry.fill} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    formatter={(v) => [v, "leads"]}
+                    contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }}
+                    itemStyle={{ color: "hsl(var(--foreground))" }}
+                  />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="w-full lg:w-auto min-w-[200px] space-y-2">
+                {pipelineData.map(({ name, value, fill }) => (
+                  <div key={name} className="flex items-center justify-between gap-6">
+                    <div className="flex items-center gap-2">
+                      <span className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: fill }} />
+                      <span className="text-sm">{name}</span>
                     </div>
-                    <p className="text-sm text-muted-foreground mt-2">
-                      {stats.connections_accepted || 0} accepted out of{" "}
-                      {stats.connections_sent || 0} sent
-                    </p>
-                  </div>
-
-                  <div>
-                    <h4 className="font-medium mb-2">Response Rate</h4>
-                    <div className="flex items-center">
-                      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-4 mr-4">
-                        <div
-                          className="bg-blue-500 h-4 rounded-full"
-                          style={{
-                            width: `${Math.min(100, messageResponseRate)}%`,
-                          }}
-                        />
-                      </div>
-                      <span className="font-medium">
-                        {messageResponseRate}%
-                      </span>
-                    </div>
-                    <p className="text-sm text-muted-foreground mt-2">
-                      {stats.responses || 0} responses to{" "}
-                      {stats.messages_sent || 0} messages
-                    </p>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <div>
-                    <h4 className="font-medium mb-2">Conversion Rate</h4>
-                    <div className="flex items-center">
-                      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-4 mr-4">
-                        <div
-                          className="bg-purple-500 h-4 rounded-full"
-                          style={{
-                            width: `${Math.min(100, acceptedConversionRate)}%`,
-                          }}
-                        />
-                      </div>
-                      <span className="font-medium">
-                        {acceptedConversionRate}%
-                      </span>
-                    </div>
-                    <p className="text-sm text-muted-foreground mt-2">
-                      {stats.conversions || 0} conversions from{" "}
-                      {stats.connections_accepted || 0} accepted connections
-                    </p>
-                  </div>
-
-                  <div>
-                    <h4 className="font-medium mb-2">Daily Activity</h4>
-                    <p className="text-sm text-muted-foreground">
-                      Average {stats.daily_connections || 0} connections per day
-                      <br />
-                      Average {stats.daily_messages || 0} messages per day
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Time Period Summary */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Time Period Summary</CardTitle>
-              <CardDescription>
-                Activity breakdown by time period
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="text-center">
-                  <div className="text-2xl font-bold">
-                    {stats.last_7_days?.connections_sent || 0}
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    Connections Last 7 Days
-                  </div>
-                </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold">
-                    {stats.last_30_days?.connections_accepted || 0}
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    Accepted Last 30 Days
-                  </div>
-                </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold">
-                    {stats.last_30_days?.conversions || 0}
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    Conversions Last 30 Days
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Performance Tab */}
-        <TabsContent value="performance" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Performance Metrics</CardTitle>
-              <CardDescription>Detailed performance analysis</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-6">
-                {/* Connection Performance */}
-                <div className="border rounded-lg p-4">
-                  <h4 className="font-medium mb-3">Connection Performance</h4>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="text-center">
-                      <div className="text-xl font-semibold">
-                        {stats.connection_success_rate || 0}%
-                      </div>
-                      <div className="text-sm text-muted-foreground">
-                        Success Rate
-                      </div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-xl font-semibold">
-                        {stats.avg_time_to_accept || "N/A"}
-                      </div>
-                      <div className="text-sm text-muted-foreground">
-                        Avg Accept Time
-                      </div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-xl font-semibold">
-                        {formatOptionalCount(stats.total_connection_attempts)}
-                      </div>
-                      <div className="text-sm text-muted-foreground">
-                        Total Attempts
-                      </div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-xl font-semibold">
-                        {formatOptionalCount(stats.failed_connections)}
-                      </div>
-                      <div className="text-sm text-muted-foreground">
-                        Failed
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Message Performance */}
-                <div className="border rounded-lg p-4">
-                  <h4 className="font-medium mb-3">Message Performance</h4>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="text-center">
-                      <div className="text-xl font-semibold">
-                        {stats.avg_response_time || "N/A"}
-                      </div>
-                      <div className="text-sm text-muted-foreground">
-                        Avg Response Time
-                      </div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-xl font-semibold">
-                        {formatOptionalRate(stats.message_open_rate)}
-                      </div>
-                      <div className="text-sm text-muted-foreground">
-                        Open Rate
-                      </div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-xl font-semibold">
-                        {stats.total_messages_sent || 0}
-                      </div>
-                      <div className="text-sm text-muted-foreground">
-                        Total Sent
-                      </div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-xl font-semibold">
-                        {formatOptionalCount(stats.positive_responses)}
-                      </div>
-                      <div className="text-sm text-muted-foreground">
-                        Positive Responses
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Conversion Performance */}
-                <div className="border rounded-lg p-4">
-                  <h4 className="font-medium mb-3">Conversion Performance</h4>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="text-center">
-                      <div className="text-xl font-semibold">
-                        {stats.avg_conversion_time || "N/A"}
-                      </div>
-                      <div className="text-sm text-muted-foreground">
-                        Avg Conversion Time
-                      </div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-xl font-semibold">
-                        {stats.qualified_leads || 0}
-                      </div>
-                      <div className="text-sm text-muted-foreground">
-                        Qualified Leads
-                      </div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-xl font-semibold">
-                        {formatOptionalCount(stats.hot_leads)}
-                      </div>
-                      <div className="text-sm text-muted-foreground">
-                        Hot Leads
-                      </div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-xl font-semibold">
-                        {stats.deals_closed || 0}
-                      </div>
-                      <div className="text-sm text-muted-foreground">
-                        Deals Closed
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Engagement Tab */}
-        <TabsContent value="engagement" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Engagement Metrics</CardTitle>
-              <CardDescription>
-                How leads are engaging with your campaign
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Engagement Types */}
-                  <div className="space-y-4">
-                    <h4 className="font-medium">Engagement Types</h4>
-                    <div className="space-y-3">
-                      <div className="flex justify-between">
-                        <span className="text-sm">Profile Views</span>
-                        <span className="font-medium">
-                          {formatOptionalCount(stats.profile_views)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-sm">Link Clicks</span>
-                        <span className="font-medium">
-                          {formatOptionalCount(stats.link_clicks)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-sm">Document Downloads</span>
-                        <span className="font-medium">
-                          {formatOptionalCount(stats.document_downloads)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-sm">Meeting Bookings</span>
-                        <span className="font-medium">
-                          {formatOptionalCount(stats.meeting_bookings)}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Response Heatmap */}
-                  <div className="space-y-4">
-                    <h4 className="font-medium">Response Times</h4>
-                    <div className="space-y-3">
-                      <div className="flex justify-between">
-                        <span className="text-sm">Under 1 Hour</span>
-                        <span className="font-medium">
-                          {formatOptionalCount(stats.responses_under_1h)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-sm">1-24 Hours</span>
-                        <span className="font-medium">
-                          {formatOptionalCount(stats.responses_1_24h)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-sm">1-7 Days</span>
-                        <span className="font-medium">
-                          {formatOptionalCount(stats.responses_1_7d)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-sm">Over 7 Days</span>
-                        <span className="font-medium">
-                          {formatOptionalCount(stats.responses_over_7d)}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Peak Activity Times */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Peak Activity Times</CardTitle>
-              <CardDescription>
-                When your audience is most active
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-3 gap-4">
-                <div className="text-center">
-                  <div className="text-xl font-semibold">
-                    {stats.peak_day || "N/A"}
-                  </div>
-                  <div className="text-sm text-muted-foreground">Best Day</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-xl font-semibold">
-                    {stats.peak_hour || "N/A"}
-                  </div>
-                  <div className="text-sm text-muted-foreground">Best Time</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-xl font-semibold">
-                    {stats.timezone_optimization || "N/A"}
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    Timezone Opt
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Conversion Funnel Tab */}
-        <TabsContent value="funnel" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Conversion Funnel</CardTitle>
-              <CardDescription>
-                Lead progression through your campaign
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-8">
-                {/* Funnel Visualization */}
-                <div className="relative">
-                  {/* Connection Stage */}
-                  <div className="mb-8 text-center">
-                    <div className="text-lg font-semibold mb-2">
-                      Connection Sent
-                    </div>
-                    <div className="text-3xl font-bold mb-1">
-                      {stats.connections_sent || 0}
-                    </div>
-                    <div className="w-full h-4 bg-blue-200 dark:bg-blue-900 rounded-lg mx-auto max-w-md"></div>
-                  </div>
-
-                  {/* Connection Accepted Stage */}
-                  <div className="mb-8 text-center">
-                    <div className="text-lg font-semibold mb-2">
-                      Connection Accepted
-                    </div>
-                    <div className="text-3xl font-bold mb-1">
-                      {stats.connections_accepted || 0}
-                    </div>
-                    <div
-                      className="w-full h-4 bg-green-200 dark:bg-green-900 rounded-lg mx-auto max-w-md"
-                      style={{ width: `${Math.min(100, connectionRate)}%` }}
-                    ></div>
-                    <div className="text-sm text-muted-foreground mt-1">
-                      {connectionRate}% acceptance rate
-                    </div>
-                  </div>
-
-                  {/* Response Stage */}
-                  <div className="mb-8 text-center">
-                    <div className="text-lg font-semibold mb-2">
-                      Messages / Responses
-                    </div>
-                    <div className="text-3xl font-bold mb-1">
-                      {stats.responses || 0}
-                    </div>
-                    <div
-                      className="w-full h-4 bg-purple-200 dark:bg-purple-900 rounded-lg mx-auto max-w-md"
-                      style={{
-                        width: `${Math.min(100, responseFromAcceptedRate)}%`,
-                      }}
-                    ></div>
-                    <div className="text-sm text-muted-foreground mt-1">
-                      {responseFromAcceptedRate}% response rate
-                    </div>
-                  </div>
-
-                  {/* Conversion Stage */}
-                  <div className="mb-8 text-center">
-                    <div className="text-lg font-semibold mb-2">
-                      Conversions
-                    </div>
-                    <div className="text-3xl font-bold mb-1">
-                      {stats.conversions || 0}
-                    </div>
-                    <div
-                      className="w-full h-4 bg-orange-200 dark:bg-orange-900 rounded-lg mx-auto max-w-md"
-                      style={{
-                        width: `${Math.min(100, conversionFromResponsesRate)}%`,
-                      }}
-                    ></div>
-                    <div className="text-sm text-muted-foreground mt-1">
-                      {conversionFromResponsesRate}% conversion rate
-                    </div>
-                  </div>
-
-                  {/* Overall Conversion Rate */}
-                  <div className="text-center p-4 bg-muted rounded-lg">
-                    <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
-                      Overall Conversion Rate: {overallConversionRate}%
-                    </div>
-                    <p className="text-sm text-muted-foreground mt-2">
-                      {stats.conversions || 0} conversions from{" "}
-                      {stats.connections_sent || 0} initial connections
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Lead Quality Analysis */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Lead Quality Analysis</CardTitle>
-              <CardDescription>
-                Conversion quality by lead source and type
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <h4 className="font-medium mb-3">Conversion Quality</h4>
-                  <div className="space-y-3">
-                    <div className="flex justify-between">
-                      <span className="text-sm">High Quality Conversions</span>
-                      <span className="font-medium">
-                        {formatOptionalCount(stats.high_quality_conversions)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm">
-                        Medium Quality Conversions
-                      </span>
-                      <span className="font-medium">
-                        {formatOptionalCount(stats.medium_quality_conversions)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm">Low Quality Conversions</span>
-                      <span className="font-medium">
-                        {formatOptionalCount(stats.low_quality_conversions)}
+                    <div className="text-right">
+                      <span className="text-sm font-medium tabular-nums">{value}</span>
+                      <span className="text-xs text-muted-foreground ml-1.5">
+                        {totalPipeline > 0 ? `${Math.round((value / totalPipeline) * 100)}%` : ""}
                       </span>
                     </div>
                   </div>
-                </div>
-
-                <div>
-                  <h4 className="font-medium mb-3">
-                    Lead Source Effectiveness
-                  </h4>
-                  <div className="space-y-3">
-                    <div className="flex justify-between">
-                      <span className="text-sm">Best Performing Source</span>
-                      <span className="font-medium">
-                        {stats.best_performing_source || "N/A"}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm">Source with Best ROI</span>
-                      <span className="font-medium">
-                        {stats.best_roi_source || "N/A"}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm">Avg Cost per Conversion</span>
-                      <span className="font-medium">
-                        {formatOptionalCurrency(stats.avg_cost_per_conversion)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
+                ))}
               </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
-
-      {/* Recommendations */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Recommendations</CardTitle>
-          <CardDescription>
-            Actionable insights to improve campaign performance
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {(stats.connection_success_rate || 0) < 20 && (
-              <div
-                className={cn(
-                  "p-3 rounded-lg border",
-                  "border-blue-500/20 bg-blue-500/5",
-                )}
-              >
-                <h4 className="font-medium flex items-center gap-2">
-                  <Icons.AlertCircle className="h-4 w-4 text-blue-500" />
-                  Improve Connection Success Rate
-                </h4>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Your connection success rate is lower than average. Consider
-                  reviewing your connection message templates and targeting
-                  criteria.
-                </p>
-              </div>
-            )}
-
-            {(stats.response_rate || 0) < 10 && (
-              <div
-                className={cn(
-                  "p-3 rounded-lg border",
-                  "border-amber-500/20 bg-amber-500/5",
-                )}
-              >
-                <h4 className="font-medium flex items-center gap-2">
-                  <Icons.AlertCircle className="h-4 w-4 text-amber-500" />
-                  Increase Response Rate
-                </h4>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Response rate could be improved. Try personalizing messages
-                  more, following up at optimal times, or segmenting your
-                  audience better.
-                </p>
-              </div>
-            )}
-
-            {(stats.conversions || 0) <
-              (stats.connections_accepted || 0) * 0.1 && (
-              <div
-                className={cn(
-                  "p-3 rounded-lg border",
-                  "border-emerald-500/20 bg-emerald-500/5",
-                )}
-              >
-                <h4 className="font-medium flex items-center gap-2">
-                  <Icons.AlertCircle className="h-4 w-4 text-emerald-500" />
-                  Optimize Conversion Funnel
-                </h4>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Consider creating a more defined conversion path with clear
-                  calls-to-action, better qualification criteria, and more
-                  targeted follow-ups.
-                </p>
-              </div>
-            )}
-
-            {(!stats.best_performing_time || !stats.best_performing_day) && (
-              <div
-                className={cn(
-                  "p-3 rounded-lg border",
-                  "border-purple-500/20 bg-purple-500/5",
-                )}
-              >
-                <h4 className="font-medium flex items-center gap-2">
-                  <Icons.AlertCircle className="h-4 w-4 text-purple-500" />
-                  Analyze Timing Patterns
-                </h4>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Enable timing analytics to discover when your audience is most
-                  responsive and optimize your send times.
-                </p>
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
