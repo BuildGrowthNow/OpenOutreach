@@ -18,6 +18,7 @@ class MessageResponse(BaseModel):
     dealId: str
     leadId: Optional[str] = None
     campaignId: str
+    campaignName: Optional[str] = None
     senderName: Optional[str] = None
     content: str
     isOutgoing: bool
@@ -25,6 +26,14 @@ class MessageResponse(BaseModel):
     recipientName: Optional[str] = None
     recipientUrl: Optional[str] = None
     sender: str = "me"
+
+
+def _extract_lead_name(lead_doc: dict) -> Optional[str]:
+    cp = lead_doc.get("cached_profile") or {}
+    profile_inner = cp.get("profile", cp)
+    first = profile_inner.get("firstName", "") or cp.get("first_name", "")
+    last = profile_inner.get("lastName", "") or cp.get("last_name", "")
+    return lead_doc.get("full_name") or (f"{first} {last}".strip() or None)
 
 
 class MessageCreate(BaseModel):
@@ -105,29 +114,50 @@ async def list_messages(
     total = collection.count_documents(query)
     messages = list(collection.find(query).skip(offset).limit(limit).sort("creation_date", -1))
 
-    # Get campaign IDs for enrichment
-    deal_ids = list(set(str(m["deal_id"]) for m in messages))
+    # Enrich messages with deal → lead name + campaign name
+    msg_deal_ids = list(set(str(m["deal_id"]) for m in messages))
     deals_collection = get_mongodb_collection("deals")
     if deals_collection is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
-    deals_data = {str(d["_id"]): d for d in deals_collection.find({"_id": {"$in": deal_ids}})}
+    deals_data = {str(d["_id"]): d for d in deals_collection.find({"_id": {"$in": msg_deal_ids}})}
+
+    lead_ids = list(set(str(d["lead_id"]) for d in deals_data.values() if d.get("lead_id")))
+    leads_collection = get_mongodb_collection("leads")
+    leads_map: dict = {}
+    if leads_collection is not None and lead_ids:
+        leads_map = {str(d["_id"]): d for d in leads_collection.find({"_id": {"$in": lead_ids}})}
+
+    enrich_campaign_ids = list(set(str(d["campaign_id"]) for d in deals_data.values() if d.get("campaign_id")))
+    campaigns_collection2 = get_mongodb_collection("campaigns")
+    campaigns_map: dict = {}
+    if campaigns_collection2 is not None and enrich_campaign_ids:
+        campaigns_map = {
+            str(c["_id"]): c.get("name", "")
+            for c in campaigns_collection2.find({"_id": {"$in": enrich_campaign_ids}}, {"_id": 1, "name": 1})
+        }
 
     results = []
     for msg in messages:
         deal_data = deals_data.get(str(msg["deal_id"]))
+        lead_id = str(deal_data["lead_id"]) if deal_data and deal_data.get("lead_id") else None
+        campaign_id_str = str(deal_data["campaign_id"]) if deal_data else ""
+        lead_doc = leads_map.get(lead_id) if lead_id else None
+        lead_name = _extract_lead_name(lead_doc) if lead_doc else None
+        campaign_name = campaigns_map.get(campaign_id_str) if campaign_id_str else None
         is_outgoing = msg.get("is_outgoing", False)
         results.append(MessageResponse(
             id=str(msg["_id"]),
             dealId=str(msg["deal_id"]),
-            leadId=str(deal_data["lead_id"]) if deal_data and deal_data.get("lead_id") else None,
-            campaignId=str(deal_data["campaign_id"]) if deal_data else "",
+            leadId=lead_id,
+            campaignId=campaign_id_str,
+            campaignName=campaign_name,
             senderName=msg.get("sender_name"),
             content=msg.get("content", ""),
             isOutgoing=is_outgoing,
             creationDate=msg.get("creation_date"),
             sender="me" if is_outgoing else "them",
-            recipientName=msg.get("sender_name") or "",
-            recipientUrl="",
+            recipientName=lead_name or msg.get("sender_name") or "",
+            recipientUrl=lead_doc.get("linkedin_url", "") if lead_doc else "",
         ))
 
     return {
@@ -164,19 +194,23 @@ async def get_message(
     if not campaign or not campaign.has_access(user_id):
         raise HTTPException(status_code=403, detail="Access denied")
 
+    leads_col = get_mongodb_collection("leads")
+    lead_doc = leads_col.find_one({"_id": deal.lead_id}) if leads_col is not None and deal.lead_id else None
+    lead_name = _extract_lead_name(lead_doc) if lead_doc else None
     is_outgoing = msg.get("is_outgoing", False)
     return MessageResponse(
         id=str(msg["_id"]),
         dealId=str(msg["deal_id"]),
         leadId=deal.lead_id if deal else None,
         campaignId=deal.campaign_id,
+        campaignName=campaign.name if campaign else None,
         senderName=msg.get("sender_name"),
         content=msg.get("content", ""),
         isOutgoing=is_outgoing,
         creationDate=msg.get("creation_date"),
         sender="me" if is_outgoing else "them",
-        recipientName=msg.get("sender_name") or "",
-        recipientUrl="",
+        recipientName=lead_name or msg.get("sender_name") or "",
+        recipientUrl=lead_doc.get("linkedin_url", "") if lead_doc else "",
     )
 
 

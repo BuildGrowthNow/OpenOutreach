@@ -303,13 +303,16 @@ export interface Message {
   id: string;
   dealId: string;
   leadId?: string;
+  campaignId?: string;
+  campaignName?: string;
   dealUrn: string;
   content: string;
   isOutgoing: boolean;
   sender: "me" | "them";
+  senderName?: string;
   creationDate: string;
   recipientName: string;
-  recipientUrl: string;
+  recipientUrl?: string;
 }
 
 export interface HealthStatus {
