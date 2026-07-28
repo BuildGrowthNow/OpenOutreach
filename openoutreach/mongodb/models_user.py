@@ -64,6 +64,8 @@ class User:
         email_verification_expires: Optional[datetime] = None,
         password_reset_token: Optional[str] = None,
         password_reset_expires: Optional[datetime] = None,
+        last_login_ip: Optional[str] = None,
+        signup_ip: Optional[str] = None,
     ):
         self._id = _id or str(uuid4())
         self.email = email.lower().strip()
@@ -102,6 +104,8 @@ class User:
         self.email_verification_expires = email_verification_expires
         self.password_reset_token = password_reset_token
         self.password_reset_expires = password_reset_expires
+        self.last_login_ip = last_login_ip
+        self.signup_ip = signup_ip
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to MongoDB document."""
@@ -142,6 +146,8 @@ class User:
             "email_verification_expires": self.email_verification_expires,
             "password_reset_token": self.password_reset_token,
             "password_reset_expires": self.password_reset_expires,
+            "last_login_ip": self.last_login_ip,
+            "signup_ip": self.signup_ip,
         }
         if self.supabase_user_id is not None:
             doc["supabase_user_id"] = self.supabase_user_id
@@ -188,6 +194,8 @@ class User:
             email_verification_expires=data.get("email_verification_expires"),
             password_reset_token=data.get("password_reset_token"),
             password_reset_expires=data.get("password_reset_expires"),
+            last_login_ip=data.get("last_login_ip"),
+            signup_ip=data.get("signup_ip"),
         )
 
     def save(self) -> str:
@@ -250,15 +258,16 @@ class User:
         """Set password (hashes automatically)."""
         self.hashed_password = self.hash_password(password)
 
-    def update_last_login(self):
-        """Update last login timestamp."""
+    def update_last_login(self, ip: Optional[str] = None):
+        """Update last login timestamp and optionally the login IP."""
         collection = get_mongodb_collection("users")
         if collection is not None:
             self.last_login = datetime.now(tz.utc)
-            collection.update_one(
-                {"_id": self._id},
-                {"$set": {"last_login": self.last_login}}
-            )
+            fields: Dict[str, Any] = {"last_login": self.last_login}
+            if ip:
+                self.last_login_ip = ip
+                fields["last_login_ip"] = ip
+            collection.update_one({"_id": self._id}, {"$set": fields})
 
     def schedule_deletion(self) -> datetime:
         """Schedule account for deletion (30-day soft delete window)."""

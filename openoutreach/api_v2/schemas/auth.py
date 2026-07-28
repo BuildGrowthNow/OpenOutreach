@@ -50,6 +50,8 @@ class UserResponse(BaseModel):
     created_at: datetime = Field(..., description="User creation timestamp")
     status: str = Field(default="active", description="User status (active/blocked/inactive)")
     admin_notes: Optional[str] = Field(None, description="Admin notes for the user")
+    is_admin: bool = Field(default=False, description="Whether user has admin access")
+    admin_role: Optional[str] = Field(None, description="Admin role (support/finance/superadmin)")
 
     class Config:
         populate_by_name = True

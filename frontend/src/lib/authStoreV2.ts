@@ -15,16 +15,22 @@ export interface User {
   created_at: string
   status: string
   admin_notes: string | null
+  is_admin: boolean
+  admin_role: string | null
 }
 
 interface AuthState {
   // State
   isLoading: boolean
+  isInitialized: boolean
   isAuthenticated: boolean
   error: string | null
   user: User | null
   accessToken: string | null
   refreshTokenValue: string | null
+
+  // Derived
+  isAdmin: () => boolean
 
   // Actions
   initialize: () => Promise<void>
@@ -45,11 +51,14 @@ const API_BASE = '/api'
 export const useAuthStore = create<AuthState>((set, get) => ({
   // Initial state
   isLoading: true,
+  isInitialized: false,
   isAuthenticated: false,
   error: null,
   user: null,
   accessToken: null,
   refreshTokenValue: null,
+
+  isAdmin: () => get().user?.is_admin === true,
 
   /**
    * Initialize auth state - fetch current user if token exists
@@ -61,7 +70,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // Step 1: try to get a fresh access token via the refresh cookie
       const refreshed = await get().refreshToken()
       if (!refreshed) {
-        set({ isAuthenticated: false, user: null, accessToken: null, isLoading: false, error: null })
+        set({ isAuthenticated: false, user: null, accessToken: null, isLoading: false, isInitialized: true, error: null })
         return
       }
 
@@ -77,13 +86,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       if (response.ok) {
         const user = await response.json()
-        set({ isAuthenticated: true, user, isLoading: false, error: null })
+        set({ isAuthenticated: true, user, isLoading: false, isInitialized: true, error: null })
       } else {
-        set({ isAuthenticated: false, user: null, accessToken: null, isLoading: false, error: null })
+        set({ isAuthenticated: false, user: null, accessToken: null, isLoading: false, isInitialized: true, error: null })
       }
     } catch (error) {
       console.error('Initialize error:', error)
-      set({ isLoading: false, isAuthenticated: false, user: null, accessToken: null, error: null })
+      set({ isLoading: false, isInitialized: true, isAuthenticated: false, user: null, accessToken: null, error: null })
     }
   },
 

@@ -11,6 +11,7 @@ Implements JWT authentication with proper security:
 
 import logging
 from datetime import datetime, timedelta, timezone as tz
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status, Response, Request
 from jose import jwt, JWTError
@@ -38,6 +39,38 @@ from openoutreach.billing.emails import send_email_verification, send_password_r
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+def _extract_client_ip(request: Request) -> Optional[str]:
+    """Extract the real client IP, respecting X-Forwarded-For from proxies."""
+    forwarded = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+    if forwarded:
+        return forwarded
+    return request.client.host if request.client else None
+
+
+async def _send_password_reset_email(user: User) -> bool:
+    """Generate a password reset token and send the reset email. Returns True on success."""
+    from datetime import timedelta
+    reset_token = jwt.encode(
+        {
+            "sub": user.email,
+            "exp": datetime.now(tz.utc) + timedelta(hours=24),
+            "type": "password_reset",
+        },
+        settings.jwt_secret,
+        algorithm=settings.JWT_ALGORITHM,
+    )
+    user.password_reset_token = reset_token
+    user.password_reset_expires = datetime.now(tz.utc) + timedelta(hours=24)
+    user.save()
+
+    app_url = settings.APP_URL or "http://localhost:3000"
+    reset_url = f"{app_url}/reset-password?token={reset_token}"
+    email_sent = send_password_reset(user, reset_url)
+    if not email_sent:
+        logger.error(f"Failed to send password reset email to {user.email}")
+    return email_sent
 
 
 def create_access_token(user_id: str, email: str) -> str:
@@ -85,7 +118,7 @@ async def register(data: RegisterRequest, request: Request):
     # Check IP rate limit
     from openoutreach.billing.rate_limiter import SignupRateLimiter
 
-    client_ip = request.client.host if request.client else "unknown"
+    client_ip = _extract_client_ip(request) or "unknown"
     allowed, error_msg = SignupRateLimiter.check_ip_limit(client_ip)
     if not allowed:
         raise HTTPException(
@@ -113,6 +146,7 @@ async def register(data: RegisterRequest, request: Request):
         algorithm=settings.JWT_ALGORITHM,
     )
 
+    signup_ip = _extract_client_ip(request)
     user = User(
         email=data.email,
         full_name=data.full_name,
@@ -121,6 +155,7 @@ async def register(data: RegisterRequest, request: Request):
         email_verified=False,
         email_verification_token=verification_token,
         email_verification_expires=datetime.now(tz.utc) + timedelta(hours=24),
+        signup_ip=signup_ip,
     )
     user.set_password(data.password)
     user.save()
@@ -154,6 +189,8 @@ async def register(data: RegisterRequest, request: Request):
         created_at=user.created_at or datetime.now(tz.utc),
         status=user.status,
         admin_notes=user.admin_notes,
+        is_admin=user.is_admin,
+        admin_role=user.admin_role,
     )
 
 
@@ -161,7 +198,7 @@ async def register(data: RegisterRequest, request: Request):
 
 
 @router.post("/login/", response_model=TokenResponse)
-async def login(credentials: LoginRequest, response: Response):
+async def login(credentials: LoginRequest, response: Response, request: Request):
     """
     Authenticate user with email and password.
 
@@ -212,8 +249,8 @@ async def login(credentials: LoginRequest, response: Response):
             detail="Account has been deleted"
         )
 
-    # Update last login
-    user.update_last_login()
+    # Update last login and capture IP
+    user.update_last_login(ip=_extract_client_ip(request))
 
     # Create tokens
     access_token = create_access_token(user._id, user.email)
@@ -362,6 +399,8 @@ async def get_current_user_info(user_id: str = Depends(get_current_user)):
         created_at=user.created_at or datetime.now(tz.utc),
         status=user.status,
         admin_notes=user.admin_notes,
+        is_admin=user.is_admin,
+        admin_role=user.admin_role,
     )
 
 
@@ -518,27 +557,7 @@ async def password_reset_request(request: PasswordResetRequest):
         user = User.get_by_email(request.email)
 
         if user and user.hashed_password:
-            reset_token = jwt.encode(
-                {
-                    "sub": user.email,
-                    "exp": datetime.now(tz.utc) + timedelta(hours=24),
-                    "type": "password_reset",
-                },
-                settings.jwt_secret,
-                algorithm=settings.JWT_ALGORITHM,
-            )
-
-            user.password_reset_token = reset_token
-            user.password_reset_expires = datetime.now(tz.utc) + timedelta(hours=24)
-            user.save()
-
-            app_url = settings.APP_URL or "http://localhost:3000"
-            reset_url = f"{app_url}/reset-password?token={reset_token}"
-            email_sent = send_password_reset(user, reset_url)
-
-            if not email_sent:
-                logger.error(f"Failed to send password reset email to {user.email}")
-
+            await _send_password_reset_email(user)
             logger.info(f"Password reset requested for: {request.email}")
 
         return {"status": "success", "message": "If an account exists, a reset link has been sent"}
