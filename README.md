@@ -65,7 +65,7 @@ cd frontend && npm install && npm run dev   # Next.js at localhost:3000
 
 ## Desktop App
 
-OpenOutreach ships a native desktop daemon for **macOS and Windows** (v1.0.3). Instead of running the browser automation on a cloud server (which requires expensive mobile proxies), the desktop daemon runs Playwright on your own machine using your residential IP — the same IP LinkedIn already knows.
+OpenOutreach ships a native desktop daemon for **macOS and Windows** (v1.5.8). Instead of running the browser automation on a cloud server (which requires expensive mobile proxies), the desktop daemon runs Playwright on your own machine using your residential IP — the same IP LinkedIn already knows.
 
 **Why this matters:** LinkedIn blocks cloud provider IP ranges (AWS, GCP, Azure). Running on your own machine with your own IP eliminates proxy costs ($25–75/profile/month) and reduces detection risk.
 
@@ -113,14 +113,14 @@ Download the latest release from [GitHub Releases](https://github.com/Lengrowth/
 
 | Plan | Monthly | Annual | LinkedIn Accounts | Campaigns |
 |------|---------|--------|-------------------|-----------|
-| Starter | $19/mo | $16/mo | 1 | 3 |
-| Pro | $49/mo | $41/mo | 1 | Unlimited |
-| Business | $99/mo | $82/mo | 3 | Unlimited |
-| Agency | $249/mo | $207/mo | 10 | Unlimited |
+| Starter | $19/mo | $192/yr | 1 | 3 |
+| Pro | $49/mo | $492/yr | 1 | Unlimited |
+| Business | $99/mo | $996/yr | 3 | Unlimited |
+| Agency | $249/mo | $2,496/yr | 10 | Unlimited |
 
 3-day free trial (full Pro access, credit card required). Lifetime deal available at launch ($149 one-time, Pro-equivalent).
 
-Cloud daemon add-on: +$39/profile/month (for users who prefer not to run the desktop app).
+Cloud execution add-on: +$299/profile/month (server-side browser via proxy, for users who prefer not to run the desktop app). Trial users cannot use cloud execution — desktop app required during trial.
 
 ---
 
@@ -227,18 +227,19 @@ Environment variables: `MONGODB_URI`, `MONGODB_NAME`, `JWT_SECRET_KEY`, `STRIPE_
 
 ## linkedin-agent-cli
 
-The LinkedIn automation layer is also published as a standalone package — [`linkedin-agent-cli`](https://github.com/eracle/linkedin-cli) — so you can drive LinkedIn from your own LLM agent without installing OpenOutreach:
+The LinkedIn automation layer lives in `linkedin_cli/` (vendored at the project root). It was previously published as `linkedin-agent-cli` on PyPI but is now yanked and maintained in-repo. You can drive LinkedIn from your own code by importing it directly or via the installed `linkedin-cli` console command:
 
 ```bash
-pip install linkedin-agent-cli
-python -m playwright install chromium
-
+# After `make setup`, the CLI is on your PATH:
 linkedin-cli session open --session work
 linkedin-cli login --session work
 linkedin-cli search "head of growth" --network first --json
 linkedin-cli profile alice-smith --json
 linkedin-cli message alice-smith --session work --text "Hi Alice"
+linkedin-cli thread alice-smith --session work
 ```
+
+The library uses a bind+connect transport: a session owner `browser.bind()`s the browser, clients `chromium.connect()`. Each verb returns a result dict — brief human summary by default, full dict with `--json`.
 
 ---
 
@@ -259,7 +260,7 @@ pytest tests/api/test_voyager.py
 pytest -k test_name
 
 # Desktop build
-python openoutreach/desktop/build.py
+python desktop/build.py
 
 # Billing
 openoutreach sync-stripe   # sync plans to Stripe
