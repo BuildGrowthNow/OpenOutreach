@@ -77,7 +77,7 @@ interface DashboardLayoutProps {
 
 const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
-  const [isDesktop, setIsDesktop] = useState(false)
+  const [isDesktop, setIsDesktop] = useState<boolean | null>(null)
 
   useEffect(() => {
     setIsDesktop(!!(window as unknown as Record<string, unknown>)['__LENGROWTH_DESKTOP__'])
@@ -85,7 +85,9 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
 
   const navItems = [
     ...dashboardItems,
-    ...(!isDesktop ? [{
+    // Only show "Get Desktop App" once we've confirmed we're NOT in the desktop app.
+    // null = not yet detected (suppress to avoid flash); false = web browser (show it).
+    ...(isDesktop === false ? [{
       title: 'Get Desktop App',
       href: '/download',
       icon: 'Download' as SidebarIcon,
