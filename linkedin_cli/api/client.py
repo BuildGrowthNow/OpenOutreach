@@ -149,7 +149,14 @@ class PlaywrightLinkedinAPI:
         self._check_profile_response(res, public_identifier)
 
         data = res.json()
-        extracted_info = parse_linkedin_voyager_response(data, public_identifier=public_identifier)
+        try:
+            extracted_info = parse_linkedin_voyager_response(data, public_identifier=public_identifier)
+        except ValueError as e:
+            logger.warning(
+                "Voyager profile parse failed for %s — decoration ID may be stale: %s",
+                public_identifier, e,
+            )
+            return None, data
         return extracted_info, data
 
     TOPCARD_DECORATION = (

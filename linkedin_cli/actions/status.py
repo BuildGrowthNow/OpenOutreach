@@ -14,6 +14,13 @@ SELECTORS = {
     "invite_to_connect": CONNECT_SELECTORS["invite_to_connect"],
     "more_button": CONNECT_SELECTORS["more_button"],
     "connect_option": CONNECT_SELECTORS["connect_option"],
+    # Message button is only rendered for 1st-degree (CONNECTED) members.
+    # Catching it prevents mis-classifying connected leads as QUALIFIED.
+    "message_button": (
+        'button[aria-label*="Message"]:visible, '
+        'a[aria-label*="Message"]:visible, '
+        'button:has(span:text-is("Message")):visible'
+    ),
 }
 
 
@@ -48,8 +55,12 @@ def _fetch_degree(session, public_identifier: str, profile: Dict[str, Any]) -> O
 def _inspect_ui(session, profile: Dict[str, Any]) -> ProfileState:
     """Determine connection status from profile page buttons.
 
-    Returns PENDING, QUALIFIED (connect available), or CONNECTED
-    (no connect/pending buttons found).
+    Returns PENDING, QUALIFIED (connect available), or CONNECTED.
+    Detection order:
+      1. Pending button → PENDING
+      2. Connect button (direct or in More menu) → QUALIFIED
+      3. Message button present, no Connect/Pending → CONNECTED (1st-degree)
+      4. No indicator found → WARNING + page dump, returns QUALIFIED as fallback
     """
     visit_profile(session, profile)
     session.wait()
@@ -67,7 +78,14 @@ def _inspect_ui(session, profile: Dict[str, Any]) -> ProfileState:
         logger.debug("UI → 'Connect' in More menu")
         return ProfileState.QUALIFIED
 
-    logger.debug("UI → no connect/pending indicators — dumping page")
+    if top_card.locator(SELECTORS["message_button"]).count() > 0:
+        logger.debug("UI → 'Message' button detected, no Connect/Pending — already CONNECTED")
+        return ProfileState.CONNECTED
+
+    logger.warning(
+        "UI → no connect/pending/message indicators for %s — page dumped, returning QUALIFIED as fallback",
+        profile.get("public_identifier"),
+    )
     dump_page_html(session, profile, category="status")
     return ProfileState.QUALIFIED
 

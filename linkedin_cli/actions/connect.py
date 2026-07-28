@@ -48,7 +48,7 @@ def send_connection_request(
 
     # Send invitation WITHOUT note (current active flow)
     if not _connect_direct(session) and not _connect_via_more(session):
-        logger.debug("Connect button not found for %s — staying at current stage", public_identifier)
+        logger.warning("Connect button not found for %s — page dumped for inspection", public_identifier)
         dump_page_html(session, profile)
         return ProfileState.QUALIFIED
 

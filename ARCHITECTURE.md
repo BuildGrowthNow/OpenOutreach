@@ -277,9 +277,9 @@ GPR (`sklearn.gaussian_process.GaussianProcessRegressor`, `ConstantKernel * RBF`
 - Identity binding: `seller_name` injected into extraction and reconcile prompts to prevent seller-name greetings from being misattributed to the lead.
 - mem0's `DEFAULT_UPDATE_MEMORY_PROMPT` vendored at `core/vendor/mem0/configs/prompts.py`. No `mem0ai` runtime dependency.
 
-## `linkedin_cli` — Standalone LinkedIn Library
+## `linkedin_cli` — Vendored LinkedIn Library
 
-External package ([`eracle/linkedin-cli`](https://github.com/eracle/linkedin-cli), installed via `requirements/base.txt` as `linkedin-agent-cli`, import name `linkedin_cli`). Django-free. Holds LinkedIn *platform mechanics*: browser nav/login, Voyager API, profile/conversation scrape, connect/message/status/thread verbs.
+Vendored at project root as `linkedin_cli/` — previously published as `linkedin-agent-cli` on PyPI (now yanked), maintained in-repo. Django-free. Holds LinkedIn *platform mechanics*: browser nav/login, Voyager API, profile/conversation scrape, connect/message/status/thread verbs. Full reference in `docs/LINKEDIN_CLI.md`.
 
 - **`session.py`** — `LinkedInSession` protocol. `PlaywrightCliSession` connects to a bound browser.
 - **`page_state.py`** — Page-state machine. `classify_page(page)` judges by URL path only. `@transition(when=,then=)` enforces pre/post state contracts raising `IllegalPageTransition`. `PageFlow` is the generic observe→act engine.
