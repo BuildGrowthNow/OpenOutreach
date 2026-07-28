@@ -984,9 +984,9 @@ Audit log entries where `target_user_id = {id}` (from `/api/admin/audit-logs?tar
 
 ---
 
-## Phase 5 — Finance, audit log, and platform pages
+## Phase 5 — Finance, audit log, and platform pages ✅
 
-### 5.1 Finance page
+### 5.1 Finance page ✅
 
 **New file**: `frontend/src/app/(admin)/admin/finance/page.tsx`
 
@@ -1058,7 +1058,7 @@ if user_id_filter:
         params["customer"] = user_doc["stripe_customer_id"]
 ```
 
-### 5.2 Audit log page
+### 5.2 Audit log page ✅
 
 **New file**: `frontend/src/app/(admin)/admin/audit/page.tsx`
 
@@ -1078,7 +1078,7 @@ Table:
 
 Pagination: skip/limit. Sort: newest first.
 
-### 5.3 Platform health page
+### 5.3 Platform health page ✅
 
 **New file**: `frontend/src/app/(admin)/admin/platform/page.tsx`
 
@@ -1212,9 +1212,9 @@ Every item in this list must be true before shipping Phase 5.
 | `frontend/src/app/(admin)/admin/page.tsx` | Dashboard page |
 | `frontend/src/app/(admin)/admin/users/page.tsx` | Users list ✅ |
 | `frontend/src/app/(admin)/admin/users/[id]/page.tsx` | User detail (tabbed) ✅ |
-| `frontend/src/app/(admin)/admin/finance/page.tsx` | Finance + funnel |
-| `frontend/src/app/(admin)/admin/audit/page.tsx` | Audit log |
-| `frontend/src/app/(admin)/admin/platform/page.tsx` | Platform health |
+| `frontend/src/app/(admin)/admin/finance/page.tsx` | Finance + funnel ✅ |
+| `frontend/src/app/(admin)/admin/audit/page.tsx` | Audit log ✅ |
+| `frontend/src/app/(admin)/admin/platform/page.tsx` | Platform health ✅ |
 
 ### Frontend — files to modify
 

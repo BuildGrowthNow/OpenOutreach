@@ -79,6 +79,23 @@ class AdminNotesResponse(BaseModel):
     notes: Optional[str]
 
 
+class RevenuePlanItem(BaseModel):
+    """MRR contribution per plan."""
+    plan: str
+    display_name: str
+    count: int
+    mrr: float
+
+
+class FunnelMetrics(BaseModel):
+    """User acquisition funnel."""
+    total_signups: int
+    email_verified: int
+    trial_started: int
+    converted: int
+    churned: int
+
+
 class FinanceMetricsResponse(BaseModel):
     """Response model for finance metrics."""
     total_users: int
@@ -88,6 +105,23 @@ class FinanceMetricsResponse(BaseModel):
     arr: float
     trial_conversion_rate: float
     churn_rate: float
+    revenue_by_plan: list[RevenuePlanItem]
+    funnel: FunnelMetrics
+
+
+class DaemonListItem(BaseModel):
+    """Single daemon row for the platform daemons table."""
+    profile_id: str
+    username: Optional[str]
+    execution_mode: str
+    daemon_status: str
+    daemon_ip: Optional[str]
+    daemon_platform: Optional[str]
+    daemon_browser: Optional[str]
+    daemon_version: Optional[str]
+    last_heartbeat: Optional[str]
+    user_id: Optional[str]
+    user_email: Optional[str]
 
 
 class InvoiceDetailResponse(BaseModel):
@@ -448,17 +482,51 @@ async def get_finance_metrics() -> FinanceMetricsResponse:
     )
 
     mrr = 0.0
-    users_data = list(users_collection.find({"subscription_status": "active"}))
-    for user_doc in users_data:
-        user = User.from_dict(user_doc)
-        plan = _get_plan_limits(user.plan)
-        if plan:
-            if user.billing_period == "monthly":
-                mrr += plan["monthly_price"] / 100.0
-            elif user.billing_period == "annual":
-                mrr += (plan["annual_price"] / 12) / 100.0
+    revenue_by_plan: list[RevenuePlanItem] = []
+    try:
+        from openoutreach.billing.plans import PLANS
+        for plan_def in PLANS:
+            plan_name = plan_def["name"]
+            plan_users = list(users_collection.find(
+                {"subscription_status": "active", "plan": plan_name}
+            ))
+            count = len(plan_users)
+            plan_mrr = 0.0
+            for user_doc in plan_users:
+                u = User.from_dict(user_doc)
+                if u.billing_period == "monthly":
+                    plan_mrr += plan_def["monthly_price"] / 100.0
+                elif u.billing_period == "annual":
+                    plan_mrr += (plan_def["annual_price"] / 12) / 100.0
+            revenue_by_plan.append(RevenuePlanItem(
+                plan=plan_name,
+                display_name=plan_def.get("display_name", plan_name.title()),
+                count=count,
+                mrr=plan_mrr,
+            ))
+        mrr = sum(r.mrr for r in revenue_by_plan)
+    except ImportError:
+        users_data = list(users_collection.find({"subscription_status": "active"}))
+        for user_doc in users_data:
+            u = User.from_dict(user_doc)
+            plan = _get_plan_limits(u.plan)
+            if plan:
+                if u.billing_period == "monthly":
+                    mrr += plan["monthly_price"] / 100.0
+                elif u.billing_period == "annual":
+                    mrr += (plan["annual_price"] / 12) / 100.0
 
     arr = mrr * 12
+
+    funnel = FunnelMetrics(
+        total_signups=total_users,
+        email_verified=users_collection.count_documents({"email_verified": True}),
+        trial_started=users_collection.count_documents(
+            {"subscription_status": {"$in": ["trialing", "active", "canceled"]}}
+        ),
+        converted=active_subscriptions,
+        churned=users_collection.count_documents({"subscription_status": "canceled"}),
+    )
 
     return FinanceMetricsResponse(
         total_users=total_users,
@@ -468,6 +536,8 @@ async def get_finance_metrics() -> FinanceMetricsResponse:
         arr=arr,
         trial_conversion_rate=trial_conversion_rate,
         churn_rate=churn_rate,
+        revenue_by_plan=revenue_by_plan,
+        funnel=funnel,
     )
 
 
@@ -1058,3 +1128,51 @@ async def get_platform_metrics() -> dict:
             "follow_ups": follow_ups_24h,
         },
     }
+
+
+@router.get("/platform/daemons", dependencies=[Depends(get_admin_user)])
+async def list_all_daemons(
+    status: Optional[str] = Query(None),
+    execution_mode: Optional[str] = Query(None),
+) -> dict:
+    """List all LinkedIn profiles with their live daemon status."""
+    profiles_col = get_mongodb_collection("linkedin_profiles")
+    users_col = get_mongodb_collection("users")
+    if profiles_col is None:
+        return {"daemons": [], "total": 0}
+
+    five_min_ago = datetime.now(tz.utc) - timedelta(minutes=5)
+    query: dict = {}
+    if execution_mode:
+        query["execution_mode"] = execution_mode
+
+    profiles = list(profiles_col.find(query))
+    result = []
+    for p in profiles:
+        heartbeat = p.get("last_heartbeat")
+        is_online = heartbeat is not None and isinstance(heartbeat, datetime) and heartbeat >= five_min_ago
+        daemon_status = "online" if is_online else "offline"
+        if status == "online" and not is_online:
+            continue
+        if status == "offline" and is_online:
+            continue
+
+        user_doc = None
+        if users_col is not None:
+            user_doc = users_col.find_one({"_id": p.get("user_id")}, {"email": 1, "full_name": 1})
+
+        result.append(DaemonListItem(
+            profile_id=str(p.get("_id")),
+            username=p.get("username") or p.get("linkedin_username"),
+            execution_mode=p.get("execution_mode", "desktop"),
+            daemon_status=daemon_status,
+            daemon_ip=p.get("daemon_ip"),
+            daemon_platform=p.get("daemon_platform"),
+            daemon_browser=p.get("daemon_browser"),
+            daemon_version=p.get("daemon_version"),
+            last_heartbeat=heartbeat.isoformat() if isinstance(heartbeat, datetime) else None,
+            user_id=p.get("user_id"),
+            user_email=user_doc.get("email") if user_doc else None,
+        ))
+
+    return {"daemons": result, "total": len(result)}

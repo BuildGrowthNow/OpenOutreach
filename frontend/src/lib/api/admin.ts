@@ -143,6 +143,21 @@ export interface AdminAuditLogsResponse {
   logs: AdminAuditLog[]
 }
 
+export interface RevenuePlanItem {
+  plan: string
+  display_name: string
+  count: number
+  mrr: number
+}
+
+export interface FunnelMetrics {
+  total_signups: number
+  email_verified: number
+  trial_started: number
+  converted: number
+  churned: number
+}
+
 export interface AdminFinanceMetrics {
   total_users: number
   active_subscriptions: number
@@ -151,6 +166,27 @@ export interface AdminFinanceMetrics {
   arr: number
   trial_conversion_rate: number
   churn_rate: number
+  revenue_by_plan: RevenuePlanItem[]
+  funnel: FunnelMetrics
+}
+
+export interface DaemonListItem {
+  profile_id: string
+  username: string | null
+  execution_mode: string
+  daemon_status: string
+  daemon_ip: string | null
+  daemon_platform: string | null
+  daemon_browser: string | null
+  daemon_version: string | null
+  last_heartbeat: string | null
+  user_id: string | null
+  user_email: string | null
+}
+
+export interface DaemonsListResponse {
+  daemons: DaemonListItem[]
+  total: number
 }
 
 export interface AdminInvoice {
@@ -329,4 +365,7 @@ export const adminApi = {
 
   getPlatformMetrics: () =>
     get<AdminPlatformMetrics>('/api/admin/platform'),
+
+  getDaemons: (params?: { status?: string; execution_mode?: string }) =>
+    get<DaemonsListResponse>('/api/admin/platform/daemons', params),
 }
