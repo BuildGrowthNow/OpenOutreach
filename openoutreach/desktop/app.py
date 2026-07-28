@@ -759,14 +759,23 @@ def main():
     log_dir.mkdir(parents=True, exist_ok=True)
     log_file = log_dir / "daemon.log"
 
+    import sys
     from logging.handlers import RotatingFileHandler
+
+    handlers: list = [
+        RotatingFileHandler(str(log_file), maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8"),
+    ]
+    # stdout is unavailable when running as a PyInstaller windowed (no-console) exe
+    try:
+        stream = open(1, "w", encoding="utf-8", closefd=False)
+        handlers.append(logging.StreamHandler(stream=stream))
+    except OSError:
+        pass
+
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        handlers=[
-            logging.StreamHandler(stream=open(1, "w", encoding="utf-8", closefd=False)),
-            RotatingFileHandler(str(log_file), maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8"),
-        ],
+        handlers=handlers,
     )
     logging.getLogger("urllib3").setLevel(logging.WARNING)
     logging.getLogger("httpx").setLevel(logging.WARNING)
