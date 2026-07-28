@@ -833,9 +833,9 @@ project. Show shadcn `Skeleton` components while loading.
 
 ---
 
-## Phase 4 — Frontend: users list and user detail
+## Phase 4 — Frontend: users list and user detail ✅
 
-### 4.1 Users list page
+### 4.1 Users list page ✅
 
 **New file**: `frontend/src/app/(admin)/admin/users/page.tsx`
 
@@ -872,7 +872,7 @@ Show `skip`/`limit` controls. Page size selector: 20 / 50 / 100.
 - Keep all filter state in `useSearchParams` so URLs are bookmarkable.
 - Use shadcn `Table`, `Badge`, `Button`, `Select`, `Input`, `AlertDialog`, `DropdownMenu`.
 
-### 4.2 User detail page
+### 4.2 User detail page ✅
 
 **New file**: `frontend/src/app/(admin)/admin/users/[id]/page.tsx`
 
@@ -1210,8 +1210,8 @@ Every item in this list must be true before shipping Phase 5.
 | `frontend/src/app/(admin)/layout.tsx` | Admin route guard + layout |
 | `frontend/src/components/admin/admin-sidebar.tsx` | Admin nav sidebar |
 | `frontend/src/app/(admin)/admin/page.tsx` | Dashboard page |
-| `frontend/src/app/(admin)/admin/users/page.tsx` | Users list |
-| `frontend/src/app/(admin)/admin/users/[id]/page.tsx` | User detail (tabbed) |
+| `frontend/src/app/(admin)/admin/users/page.tsx` | Users list ✅ |
+| `frontend/src/app/(admin)/admin/users/[id]/page.tsx` | User detail (tabbed) ✅ |
 | `frontend/src/app/(admin)/admin/finance/page.tsx` | Finance + funnel |
 | `frontend/src/app/(admin)/admin/audit/page.tsx` | Audit log |
 | `frontend/src/app/(admin)/admin/platform/page.tsx` | Platform health |

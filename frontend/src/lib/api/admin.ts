@@ -225,6 +225,8 @@ export interface UserUpdateRequest {
   plan?: string
   admin_role?: string
   notes?: string
+  is_admin?: boolean
+  full_name?: string
 }
 
 // ──────────────────────────────────────────────────────────────────────────────

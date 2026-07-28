@@ -70,6 +70,8 @@ class UserUpdateRequest(BaseModel):
     plan: Optional[str] = None
     admin_role: Optional[str] = None
     notes: Optional[str] = None
+    is_admin: Optional[bool] = None
+    full_name: Optional[str] = None
 
 
 class AdminNotesResponse(BaseModel):
@@ -304,6 +306,14 @@ async def update_user(user_id: str, request: UserUpdateRequest) -> UserDetailRes
     if request.notes is not None:
         user.admin_notes = request.notes
         logger.info(f"Admin updated notes for user {user_id}")
+
+    if request.is_admin is not None:
+        user.is_admin = request.is_admin
+        logger.info(f"Admin set is_admin={request.is_admin} for user {user_id}")
+
+    if request.full_name is not None:
+        user.full_name = request.full_name
+        logger.info(f"Admin updated full_name for user {user_id}")
 
     user.save()
 
