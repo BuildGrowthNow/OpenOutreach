@@ -165,7 +165,16 @@ def _sync_from_api(session, public_identifier: str, deal) -> list:
                 )
 
     # Sort new messages chronologically so the LLM sees them in order.
-    new_messages.sort(key=lambda m: m.creation_date or m.pk)
+    # Normalise creation_date to UTC-aware before sorting to avoid naive/aware mix.
+    from datetime import timezone as _tz
+    def _sort_key(m):
+        dt = m.creation_date
+        if dt is None:
+            return m.pk
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=_tz.utc)
+        return dt
+    new_messages.sort(key=_sort_key)
     logger.debug(
         "sync: processed %d messages for %s (%d new)",
         len(elements),

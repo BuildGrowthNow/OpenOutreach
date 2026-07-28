@@ -764,7 +764,7 @@ def main():
         level=logging.INFO,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         handlers=[
-            logging.StreamHandler(),
+            logging.StreamHandler(stream=open(1, "w", encoding="utf-8", closefd=False)),
             RotatingFileHandler(str(log_file), maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8"),
         ],
     )
