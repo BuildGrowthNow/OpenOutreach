@@ -9,6 +9,7 @@ import { DashboardContainer } from '@/components/dashboard/dashboard-container'
 import { LinkedInSetupModal } from '@/components/layout/linkedin-setup-modal'
 import { DashboardBillingWrapper } from '@/components/billing/dashboard-billing-wrapper'
 import { FirstCampaignBanner } from '@/components/layout/first-campaign-banner'
+import { useAuthStore } from '@/lib/authStoreV2'
 
 type SidebarIcon = keyof typeof Icons
 
@@ -78,6 +79,7 @@ interface DashboardLayoutProps {
 const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [isDesktop, setIsDesktop] = useState<boolean | null>(null)
+  const { isAdmin } = useAuthStore()
 
   useEffect(() => {
     setIsDesktop(!!(window as unknown as Record<string, unknown>)['__LENGROWTH_DESKTOP__'])
@@ -91,6 +93,11 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
       title: 'Get Desktop App',
       href: '/download',
       icon: 'Download' as SidebarIcon,
+    }] : []),
+    ...(isAdmin() ? [{
+      title: 'Admin',
+      href: '/admin',
+      icon: 'Shield' as SidebarIcon,
     }] : []),
   ]
 

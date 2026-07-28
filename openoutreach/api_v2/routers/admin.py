@@ -188,6 +188,7 @@ async def list_users(
     status_filter: Optional[str] = Query(None, alias="status"),
     plan: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
+    subscription_status: Optional[str] = Query(None),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=500),
 ) -> dict:
@@ -205,6 +206,8 @@ async def list_users(
         query["status"] = status_filter
     if plan:
         query["plan"] = plan
+    if subscription_status:
+        query["subscription_status"] = subscription_status
     if search:
         query["$or"] = [
             {"email": {"$regex": search, "$options": "i"}},

@@ -622,9 +622,9 @@ app.include_router(admin.router)
 
 ---
 
-## Phase 3 — Frontend: guard, layout, and dashboard page
+## Phase 3 — Frontend: guard, layout, and dashboard page ✅
 
-### 3.1 Admin route guard
+### 3.1 Admin route guard ✅
 
 **New file**: `frontend/src/app/(admin)/layout.tsx`
 
@@ -658,7 +658,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 }
 ```
 
-### 3.2 Admin sidebar
+### 3.2 Admin sidebar ✅
 
 **New file**: `frontend/src/components/admin/admin-sidebar.tsx`
 
@@ -717,7 +717,7 @@ export default function AdminSidebar() {
 }
 ```
 
-### 3.3 Admin API client
+### 3.3 Admin API client ✅
 
 **New file**: `frontend/src/lib/api/admin.ts`
 
@@ -798,7 +798,7 @@ export const adminApi = {
 
 Also define corresponding TypeScript interfaces mirroring the Pydantic response models above.
 
-### 3.4 Admin dashboard page
+### 3.4 Admin dashboard page ✅
 
 **New file**: `frontend/src/app/(admin)/admin/page.tsx`
 
@@ -1148,9 +1148,9 @@ Table columns: User email (link to user detail), LinkedIn username, Mode (Deskto
 
 ---
 
-## Navigation integration
+## Navigation integration ✅
 
-**File**: `frontend/src/components/navigation/nav-items.tsx` (or wherever the main nav is defined)
+**File**: `frontend/src/app/(dashboard)/layout.tsx` — added conditional `Admin` nav item via `isAdmin()` selector from `useAuthStore`. Uses the existing `Shield` icon from the Icons map.
 
 Add an "Admin" item that only renders when `user.is_admin === true`:
 
