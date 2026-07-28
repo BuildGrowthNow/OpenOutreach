@@ -269,16 +269,15 @@ openoutreach sync-stripe   # sync plans to Stripe
 
 ## Documentation
 
-- [Architecture](./docs/architecture.md)
+- [Architecture](./ARCHITECTURE.md)
 - [Configuration](./docs/configuration.md)
 - [Docker setup](./docs/docker.md)
 - [Proxy guide](./docs/PROXY_GUIDE.md)
 - [Desktop app](./docs/DESKTOP_APP.md)
 - [Billing implementation](./docs/BILLING_IMPLEMENTATION.md)
-- [Smart rate limiting](./docs/07_SMART_RATE_LIMITING.md)
 - [Follow-up agent](./docs/follow_up_agent.md)
 - [Profile lifecycle](./docs/profile_lifecycle.md)
-- [Testing](./docs/testing.md)
+- [Testing](./TESTING_GUIDE.md)
 
 ---
 

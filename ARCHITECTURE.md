@@ -2,86 +2,85 @@
 
 Detailed module documentation for OpenOutreach. See `CLAUDE.md` for rules and quick reference.
 
+## High-Level Overview
+
+OpenOutreach automates LinkedIn outreach through a persistent task queue executed by one of two daemon modes:
+
+1. **Desktop daemon** (default): runs `openoutreach/core/daemon_remote.py` on the user's own machine using their residential IP.
+2. **Cloud daemon** (paid add-on): runs `openoutreach/core/daemon.py` server-side in Docker on EC2, using proxies.
+
+Both modes share the same MongoDB Atlas cluster, task handlers, and `SiteConfig` for per-user settings.
+
+```
+┌────────────────────────────────────────┐
+│              AWS EC2                    │
+│  ┌─────────────┐  ┌─────────────┐      │
+│  │  Next.js    │  │  FastAPI    │      │
+│  │  Frontend   │  │  API v2     │      │
+│  └─────────────┘  └──────┬──────┘      │
+│                          │              │
+│                    ┌─────┘              │
+│                    ▼                    │
+│              ┌──────────┐              │
+│              │  MongoDB │              │
+│              │  Atlas   │              │
+│              └──────────┘              │
+└───────────────────▲────────────────────┘
+                    │ HTTPS
+        ┌───────────┴──────────────┐
+        │     User's Desktop App   │
+        │  pystray + Playwright    │
+        │  (residential IP)        │
+        └──────────────────────────┘
+```
+
+## Project Layout
+
+```
+openoutreach/
+├── api_v2/          # FastAPI routers, schemas, dependencies
+├── billing/         # Stripe integration, plan enforcement, trial/expiry
+├── core/            # Daemon, task queue, scheduler, LLM factory, follow-up agent, remote client
+├── crm/             # Lead and Deal models (MongoDB)
+├── chat/            # ChatMessage model (MongoDB)
+├── linkedin/        # Browser, discovery pipeline, ML qualifier, task handlers
+├── emails/          # Email enrichment (BetterContact finder)
+├── desktop/         # System tray app, auto-updater, protocol handler, keychain auth
+└── mongodb/         # Models base class, connection, DAL helpers
+
+frontend/
+├── src/app/         # Next.js App Router pages
+├── src/components/  # UI components (shadcn/ui)
+└── src/lib/         # API client, auth store, hooks
+
+docs/                # Proxy guide, desktop app, billing, platform remediation
+```
+
 ## Multi-Tenant Architecture (FastAPI + MongoDB)
 
-**Status:** Phase 1 (Auth) ✅ Complete | Phase 2 (Multi-Profile) ✅ Complete
+Every MongoDB document carries a `user_id` field:
+- `User` — base user account (Supabase SSO or email/password)
+- `LinkedInProfile` — each user can have multiple; `linkedin_profile_id` scopes tasks and sessions
+- `Campaign` — owned by user, executed by a specific profile, shareable with team members
+- `Deal`, `Lead`, `Task`, `ActionLog`, `Notification`, etc. — all scoped to user
 
-OpenOutreach supports **production-grade multi-tenancy** with user authentication, multiple LinkedIn profiles per user, and campaign team access. See detailed implementation:
-- `PHASE_1_COMPLETE.md` - User authentication (JWT + Supabase compatibility)
-- `PHASE_2_COMPLETE.md` - Multi-profile support + team access
-- `MULTI_TENANT_FASTAPI_MONGODB.md` - Overall architecture plan
+**Campaign team access**: `Campaign.user_id` (owner), `Campaign.linkedin_profile_id` (executor), `Campaign.team_member_ids` (additional users). `Campaign.has_access(user_id)` returns true for owner or team member.
 
-### Key Concepts
-
-**User Ownership:** Every MongoDB document has a `user_id` field:
-- `User` - Base user account (email/password or Supabase SSO)
-- `LinkedInProfile` - Each user can have multiple LinkedIn profiles
-- `Campaign` - Owned by user, executed by a specific profile, shareable with team members
-- `Deal`, `Lead`, `Task`, `Notification`, etc. - All scoped to user
-
-**Campaign Team Access:** Campaigns support owner + team member access:
-- `Campaign.user_id` - Campaign owner (creator)
-- `Campaign.linkedin_profile_id` - Which profile executes tasks
-- `Campaign.team_member_ids` - Additional users with access (array)
-- `Campaign.has_access(user_id)` - Returns true if user is owner OR team member
-
-**Per-Profile Rate Limiting:** Each LinkedIn profile has independent rate limits:
-- `LinkedInProfile.connect_daily_limit` - Max connections per day
-- `LinkedInProfile.follow_up_daily_limit` - Max follow-ups per day
-- `SmartRateLimitContext` - One per profile, tracks detectability score + multipliers
-- `ActionLog` - Tracks actions per profile for daily counting
-
-**Multi-Tenant Notifications:** Team notification routing (owner + all team members):
-- `NotificationService.notify_campaign_users()` - Routes to all users with campaign access
-- Campaign lifecycle, messages, errors, rate limits → entire team
-
-### API Endpoints (FastAPI v2)
-
-**Authentication** (`/api/auth/`):
-- `POST /register/` - Create new user
-- `POST /login/` - Login with email/password
-- `POST /logout/` - Logout (clear refresh cookie)
-- `GET /me/` - Get current user info
-- `POST /refresh/` - Refresh access token
-
-**LinkedIn Profiles** (`/api/linkedin-profiles`):
-- `GET /` - List user's profiles
-- `POST /` - Create new profile (auto-creates SmartRateLimitContext)
-- `GET /{id}` - Get single profile
-- `PUT /{id}` - Update profile
-- `DELETE /{id}` - Delete profile (blocked if active campaigns use it)
-- `POST /{id}/cookies` - Upload session cookies (encrypted storage)
-- `GET /linkedin-profile-health` - Health status for all profiles
-
-**Campaigns** (`/api/campaigns`):
-- `GET /` - List campaigns (owner + team access)
-- `POST /` - Create campaign (requires profile ownership)
-- `GET /{id}` - Get campaign (access check)
-- `PUT /{id}` - Update campaign (access check; only owner can update team)
-- `DELETE /{id}` - Delete campaign (owner only, blocked if deals exist)
-
-**Daemon Communication** (`/api/daemon`):
-- `POST /heartbeat` - Desktop daemon health check (30s interval)
-- `POST /tasks/claim` - Atomically claim next pending task for profile
-- `POST /tasks/result` - Report task completion or failure
-- `POST /cookies/sync` - Sync browser cookies to backend
-- `POST /session/state` - Report login/verification status
-- `GET /config` - Get daemon config (rate limits, active hours)
-- `GET /credentials` - Get LinkedIn credentials for daemon login
+**Per-profile rate limiting**: each `LinkedInProfile` has independent rate limits. `SmartRateLimitContext` tracks detectability score + multipliers per profile. `ActionLog` tracks actions per profile for daily counting.
 
 ### Multi-Tenant Security
 
-**Profile Ownership:** All profile operations verify `user_id`:
+Profile ownership check:
 ```python
 collection.find_one({"_id": profile_id, "user_id": user_id})
 ```
 
-**Campaign Access Control:**
+Campaign access:
 ```python
 # List: owner OR team member
 {"$or": [{"user_id": user_id}, {"team_member_ids": user_id}]}
 
-# Detail: access check
+# Detail/mutate: access check
 if not campaign.has_access(user_id):
     raise HTTPException(403, "Access denied")
 
@@ -90,281 +89,241 @@ if user_id != campaign.user_id:
     raise HTTPException(403, "Only owner can delete")
 ```
 
-**Data Isolation:** MongoDB indexes optimize multi-tenant queries:
-```python
-# Campaigns
-{'user_id': 1, 'is_paused': 1}
-{'team_member_ids': 1}
-{'linkedin_profile_id': 1, 'is_paused': 1}
+## API (FastAPI v2)
 
-# Profiles
-{'user_id': 1}
+Routers live in `openoutreach/api_v2/routers/`. All routes are registered in `api_v2/main.py`.
 
-# Notifications
-{'recipient_id': 1, 'is_read': 1, 'created_at': -1}
+**Auth** (`/api/auth/`): register, login, logout, /me, refresh token, Supabase SSO callback.
+
+**LinkedIn Profiles** (`/api/linkedin-profiles`): CRUD, cookies upload, health status.
+
+**Campaigns** (`/api/campaigns`): CRUD with access control.
+
+**Daemon** (`/api/daemon`): heartbeat, task claim/result, cookie sync, session state, config, credentials.
+
+**Settings** (`/api/settings`): `SiteConfig` read/write (LLM, rate limits, active hours, guardrails).
+
+**Billing** (`/api/billing`): Stripe portal, plan status, webhook handler.
+
+**Admin** (`/api/admin`): user management, audit log, platform health — authenticated admin-only endpoints.
+
+**Analytics** (`/api/analytics`): overview totals and per-campaign metrics with period filtering.
+
+## Data Models
+
+### MongoDB Models (openoutreach/mongodb/)
+
+All models extend the base `MongoModel` class from `openoutreach/mongodb/models/base.py`. Document IDs are stored as `_id` (ObjectId) and serialized to strings.
+
+**SiteConfig** (`core/models/site_config.py`) — singleton per user (`pk=user_id`). Fields: `llm_provider` (openai/anthropic/google/groq/mistral/cohere/openai_compatible), `llm_api_key`, `ai_model`, `llm_api_base`, `finder_api_key` (BetterContact — blank disables enrichment), `ai_writing_style`, `ai_say_rules`, `ai_avoid_rules` (follow-up guardrails), `enable_active_hours`, `active_start_hour`, `active_end_hour`, `active_timezone`, `active_days`, `enable_smart_rate_limiting`, `aggressiveness_preset`, `velocity`. Loaded via `SiteConfig.load(user_id=...)`.
+
+**Campaign** (`core/models/campaign.py`) — `name`, `user_id`, `linkedin_profile_id`, `team_member_ids`, `product_pitch`, `campaign_objective`, `booking_link`, `icp_titles`, `follow_up_strategy`, `target_degrees` (default `[2, 3]`), `is_freemium`, `action_fraction`, `seed_public_ids`, `model_blob` (per-campaign GP model, joblib-compressed bytes), `is_paused`.
+
+**LinkedInProfile** (`linkedin/models/profile.py`) — `user_id`, `linkedin_username`, `linkedin_password` (synced from credential), `cookie_data_encrypted`, `connect_daily_limit`, `follow_up_daily_limit`, `self_lead_id`, `execution_mode` (desktop/cloud), `last_heartbeat`, `daemon_status`.
+
+**Lead** (`crm/models/lead.py`) — one per LinkedIn URL. `linkedin_url` (unique), `public_identifier`, `urn` (cached after first scrape), `embedding` (384-dim float32 bytes), `connection_degree` (1/2/3), `disqualified` (permanent exclusion), `contact_info` (nullable JSON — LinkedIn overlay), `api_email` (nullable — BetterContact result), `cached_profile` (nullable JSON — Voyager-parsed profile), `user_id`.
+
+**Deal** (`crm/models/deal.py`) — per campaign (FK to Campaign + FK to Lead). `state` (`DealState` — see funnel below), `outcome` (converted/not_interested/wrong_fit/no_budget/has_solution/bad_timing/unresponsive/unknown), `reason`, `connect_attempts`, `backoff_hours`, `next_check_pending_at`, `profile_summary` (JSON fact list), `chat_summary` (JSON fact list).
+
+**Task** (`core/models/task.py`) — `task_type` (connect/check_pending/follow_up), `status` (pending/running/completed/failed), `scheduled_at`, `payload` (JSON `{"campaign_id": ...}`), `linkedin_profile_id`, `user_id`, `started_at`, `completed_at`.
+
+**ChatMessage** (`chat/models/message.py`) — FK to Deal. `content`, `is_outgoing`, `owner`, `linkedin_urn` (Voyager entityUrn, dedup key per deal), `answer_to` (self FK), `topic` (self FK).
+
+**ActionLog** (`linkedin/models/action_log.py`) — FK to LinkedInProfile + Campaign. `action_type` (connect/follow_up), `created_at`. Composite index on `(linkedin_profile_id, action_type, created_at)`.
+
+### Deal State Funnel
+
+`DealState` (in `crm/models/deal.py`):
+
+```
+DISCOVERED → QUALIFIED → READY_TO_CONNECT → PENDING → CONNECTED → COMPLETED / FAILED
+                                                                         ↑
+                                                                   NO_EMAIL (off-funnel)
 ```
 
-## Project Layout
+- **DISCOVERED**: initial state for all newly added leads. Operators can manually promote to QUALIFIED.
+- **QUALIFIED**: AI-approved. Enrichment (email finder) runs here.
+- **NO_EMAIL**: enrichment ran but found no address — held out of the connect pool.
+- **READY_TO_CONNECT**: GP confidence gate passed (`P(f>0.5) >= 0.9`).
+- **PENDING**: connection request sent, waiting for acceptance.
+- **CONNECTED**: accepted. Contact info captured (`Lead.capture_contact_info`).
+- **COMPLETED**: follow-up conversation finished.
+- **FAILED**: LLM rejection (`wrong_fit`) or task error — campaign-scoped, same lead can be FAILED in one campaign and QUALIFIED in another.
 
-All source lives in the single `openoutreach/` package; Django apps are nested inside it
-(dotted `AppConfig.name`, short labels). One engine, N outreach channels:
-
-```
-manage.py
-tests/
-openoutreach/
-  settings.py        # Django settings (was linkedin/django_settings.py)
-  urls.py
-  core/              # engine app (label: core) — daemon, task queue + scheduler,
-                     #   Campaign/SiteConfig/Task models, llm.py, conf.py, onboarding,
-                     #   follow-up agent, db/ helpers, management commands, vendored mem0
-  linkedin/          # channel app (label: linkedin) — browser/, pipeline/, ml/,
-                     #   LinkedInProfile/SearchKeyword/ActionLog models, task handlers, setup/
-  emails/            # channel app (label: emails) — email outreach (finder, sender; Layer 1 WIP)
-  crm/               # app (label: crm) — Lead, Deal
-  chat/              # app (label: chat) — ChatMessage
-```
-
-Layering: `core` owns orchestration and channel-agnostic models; channel apps own their
-platform mechanics, channel-bound models, and task handlers. `core` imports channel code
-only at wiring points (the daemon's handler map, onboarding's profile setup).
+The funnel is OpenOutreach-owned. `linkedin_cli` only observes three states (QUALIFIED/PENDING/CONNECTED) from the LinkedIn UI and returns them as plain strings; task handlers lift them via `DealState(value)`.
 
 ## Entry Flow
 
-`manage.py` — stock Django management entrypoint. Bare `python manage.py` (no args) defaults to `rundaemon`.
+`openoutreach/cli.py` — Click-based CLI. Key commands:
+- `rundaemon` — starts the multi-profile cloud daemon (`core/daemon.py`): scans active `LinkedInProfile` records, manages one browser session per profile, claims tasks by `linkedin_profile_id`, round-robins across users. Profiles re-scanned every 5 min.
+- `runserver` — starts FastAPI on port 8001.
+- `desktop` — launches the system tray desktop app.
+- `sync-stripe` — syncs billing plans to Stripe.
 
-### `rundaemon` management command (`management/commands/rundaemon.py`)
-
-Startup sequence:
-1. **Configure logging** — defaults to INFO via the OPENOUTREACH_LOG_LEVEL environment variable, suppresses noisy third-party loggers (urllib3, httpx, pydantic_ai, openai, playwright, pymongo, etc.).
-2. **Ensure DB** — `migrate --no-input` + `setup_crm` (idempotent).
-3. **Onboard** — checks `missing_keys()`; if incomplete: uses `--onboard <config.json>` (non-interactive), falls back to interactive wizard (TTY), or exits with clear error (no TTY).
-4. **Validate** — `LLM_API_KEY`, active `LinkedInProfile`, at least one campaign.
-5. **Session** — `get_or_create_session(profile)`, sets default campaign (first non-freemium).
-6. **Newsletter** — GDPR override + `ensure_newsletter_subscription()` (marker-guarded, runs once).
-7. **Run** — `run_daemon(session)`.
-
-Docker `start` script handles Xvfb/VNC + Next.js startup and now fails fast on migration errors. In `SKIP_DAEMON=true` mode it runs `python manage.py migrate --no-input` before `python manage.py runserver`; otherwise it `exec`s `python manage.py rundaemon "$@"`.
-
-LinkedIn settings endpoints (`/api/linkedin-profile-health`, `/api/linkedin-credentials`, `/api/linkedin-profiles`) intentionally query `LinkedInProfile` with a minimal column set so unrelated schema additions do not break the settings UI, and they return JSON `503` responses with a migration hint when the DB schema is out of sync. The Settings page is now a tabbed workspace: `LinkedIn Connection`, `Profile`, `Rate Limits`, and `LLM / AI Settings`. The LinkedIn settings credential modal now collects only LinkedIn email and password by default, with the optional cookie hidden inside a collapsed dropdown section that contains step-by-step DevTools guidance, an explicit note that `li_at` is `HttpOnly` and therefore not reliably available through browser-console JavaScript, and a warning that extensions are optional but higher-trust. Backend create/update/verify auto-attach or create the user's `LinkedInProfile`, keep its daemon login fields (`linkedin_username`, `linkedin_password`) synced from the saved credential, and browser session persistence reads/writes only `cookie_data_encrypted`, so manual profile selection/display-username entry is no longer part of the settings flow.
-
-### Other management commands
-
-- `onboard` — standalone onboarding (interactive or `--non-interactive` with `--config-file` / individual flags).
-- `setup_crm` — idempotent CRM bootstrap (default Site).
-- `add_seeds` — add seed LinkedIn profile URLs to a campaign.
-
-## Onboarding (`onboarding.py`)
-
-`OnboardConfig` — pure dataclass with all onboarding fields. Two constructors:
-- `OnboardConfig.from_json(path)` — from JSON file (cloud / non-interactive).
-- `collect_from_wizard()` — interactive questionary wizard (needs TTY), only asks for `missing_keys()`. Backed by the vendored `onboarding_wizard.py` (step engine) + `onboarding_prompts.py` (`SELF_HOSTED_QUESTIONS`) — no external `openoutreach` dependency.
-
-Single write path: `apply(config)` — idempotent, creates missing Campaign, LinkedInProfile, env vars, and legal acceptance. Four components:
-
-1. **Campaign** — name, product docs, objective, booking link, seed URLs. Creates `Campaign` with M2M user membership.
-2. **LinkedInProfile** — email, password, newsletter, rate limits. Django username from email slug.
-3. **LLM config** — `LLM_PROVIDER`, `LLM_API_KEY`, `AI_MODEL`, `LLM_API_BASE` → writes to `SiteConfig` singleton in DB.
-4. **Legal notice** — per-account acceptance stored as `LinkedInProfile.legal_accepted`.
-
-## Profile State Machine
-
-`crm/models/deal.py:DealState` (OpenOutreach-owned `TextChoices`) holds the CRM funnel: QUALIFIED, READY_TO_CONNECT, PENDING, CONNECTED, COMPLETED, FAILED, plus the off-funnel NO_EMAIL (enrichment found no address — held out of the connect pool). The funnel lives here, **not** in `linkedin_cli`: the library's connect/status verbs only *observe* QUALIFIED/PENDING/CONNECTED off the LinkedIn UI and return them as plain strings, which the task handlers lift via `DealState(value)` at the boundary. Pre-Deal states: url_only (Lead row exists but `embedding` is null), enriched (has `embedding`). `Lead.disqualified=True` = permanent account-level exclusion. LLM rejections = FAILED Deals with wrong_fit outcome (campaign-scoped).
-
-`crm/models/deal.py:Outcome` (TextChoices): converted, not_interested, wrong_fit, no_budget, has_solution, bad_timing, unresponsive, unknown. Used by `Deal.outcome`.
+Docker `start` script handles Xvfb/VNC, starts Next.js, and the FastAPI server.
 
 ## Task Queue
 
-Persistent queue backed by `Task` model. Worker loop in `daemon.py`: `seconds_until_active()` guard pauses outside the daily active-hours window (single contiguous window, no weekend skip) → pop oldest due task → set campaign on session → RUNNING → dispatch via `_HANDLERS` dict → COMPLETED/FAILED. Failures captured by `failure_diagnostics()` context manager.
+`Task` is a persistent MongoDB collection. `Task.objects.claim_next(linkedin_profile_id=...)` atomically claims the next due task for a specific profile.
 
-Task rows are **lazy**: `payload = {"campaign_id": <id>}` only — no `public_id`, no deal reference. The handler resolves a concrete target at execution time via a single eligibility query. Slot creation is centralized in `openoutreach/core/scheduler.py`; no other module inserts Task rows. The module is organized in three layers:
+Task rows are **lazy**: `payload = {"campaign_id": <id>}` only. Handlers resolve the concrete target at execution time via an eligibility query.
 
-1. **Per-type planners** — `plan_connect_window`, `plan_follow_up_window`, `plan_check_pending_window`. Each, when no PENDING task of its type exists for a campaign, computes the right slot count `n` for the next 24h and spaces tasks according to **Smart** or **Manual** mode. **Smart mode** (`SiteConfig.enable_smart_rate_limiting=True`): reads `aggressiveness_preset` (very_slow/slow/average/aggressive/very_aggressive) from `rate_limit_presets.py`, applies time-of-day weighting via `smart_velocity_slot_times()` (clusters tasks 9am-6pm, reduces at night/weekends), and adjusts for `SmartRateLimitContext.detectability_score` (adds jitter when score > 60). **Manual mode** (`enable_smart_rate_limiting=False`): uses fixed `SiteConfig.velocity` (actions/hr) — velocity >= 30 = burst mode (immediate with 5-10s gaps), < 30 = spread mode (Poisson across 24h). The scheduler reads active-hours config from `SiteConfig` DB fields (`enable_active_hours`, `active_start_hour`, `active_end_hour`, `active_timezone`, `active_days`) — deprecated `conf.py` constants are no longer consulted. **Rate limiting is account-level only** — `Campaign.velocity` and `Campaign.cooldown_minutes` have been removed; all pacing is controlled from `SiteConfig` (Settings page).
-2. **State-transition hook** — `on_deal_state_entered(deal)`. For PENDING transitions, stamps `deal.next_check_pending_at = now + backoff_hours`. All other transitions are no-ops. Separately, `set_profile_state` itself fires a best-effort `Lead.capture_contact_info(session)` on the first CONNECTED transition (contact-info overlay scrape — the hook can't, it has no `session`); errors are logged and never fail the transition, `AuthenticationError` propagates.
-3. **`reconcile(session)`** — Recovers stale RUNNING tasks, then iterates campaigns × planners. Daemon calls it on startup and whenever the queue has no ready task.
+Slot creation is centralized in `openoutreach/core/scheduler.py` — no other module inserts Task rows.
 
-Per-type recompute trigger: when a type's PENDING queue is empty for a campaign, the next idle reconcile re-plans only that type's next 24h window. No global rollover, no leftover-slot reconciliation. `AuthenticationError` (401) triggers `session.reauthenticate()` then marks the task FAILED; the planner picks the type back up on the next idle cycle.
+### Scheduler (core/scheduler.py)
 
-Three task types (handlers in `openoutreach/linkedin/tasks/`, signature: `handle_*(task, session, qualifiers)`):
+Three per-type planners: `plan_connect_window`, `plan_follow_up_window`, `plan_check_pending_window`.
 
-1. **`handle_connect`** — Unified via `ConnectStrategy` dataclass. Regular: `find_candidate()` from `pools.py`; freemium: `find_freemium_candidate()`. Unreachable detection after `MAX_CONNECT_ATTEMPTS` (3). No self-rescheduling — the planner owns timing.
-2. **`handle_check_pending`** — Eligibility query: oldest PENDING deal in the campaign with `next_check_pending_at <= now`. If none, mark task DONE. On still-PENDING outcome, double `backoff_hours` and re-stamp `next_check_pending_at`.
-3. **`handle_follow_up`** — Eligibility query: oldest CONNECTED deal in the campaign with no recent outgoing message. If none, mark task DONE. Otherwise call `run_follow_up_agent()` (returns `FollowUpDecision`: `send_message`/`mark_completed`/`wait`) and execute deterministically.
+**Smart mode** (`SiteConfig.enable_smart_rate_limiting=True`): reads `aggressiveness_preset` (very_slow/slow/average/aggressive/very_aggressive) from `rate_limit_presets.py`, applies time-of-day weighting, adjusts for `SmartRateLimitContext.detectability_score`.
 
-## Qualification ML Pipeline
+**Manual mode**: uses fixed `SiteConfig.velocity` (actions/hr). velocity ≥ 30 = burst mode (immediate, 5–10s gaps); < 30 = spread mode (Poisson across 24h).
 
-GPR (sklearn, ConstantKernel * RBF) inside Pipeline(StandardScaler, GPR) with BALD active learning:
+Active-hours config read from `SiteConfig` DB fields (`enable_active_hours`, `active_start_hour`, `active_end_hour`, `active_timezone`, `active_days`).
 
-1. **Balance-driven selection** — n_negatives > n_positives → exploit (highest P); otherwise → explore (highest BALD).
-2. **LLM decision** — All decisions via LLM (`qualify_lead.j2`). GP only for candidate selection and confidence gate.
-3. **READY_TO_CONNECT gate** — P(f > 0.5) above `min_ready_to_connect_prob` (0.9) promotes QUALIFIED → READY_TO_CONNECT.
+`reconcile(session)` recovers stale RUNNING tasks and dispatches per-type planners. Daemon calls it on idle.
 
-384-dim FastEmbed embeddings stored directly on Lead model, per-campaign GP models at ``Campaign.model_blob` (BinaryField, joblib-dumped with `compress=3`)`. Cold start returns None until >=2 labels of both classes.
+### Task Handlers (openoutreach/linkedin/tasks/)
 
-## Django Apps
+Signature: `handle_*(task, session, qualifiers)`
 
-Five apps in `INSTALLED_APPS`, all nested under the `openoutreach/` package (see Project Layout):
+**`handle_connect`** (`connect.py`): unified via `ConnectStrategy` dataclass. Regular: `find_candidate()` from `pools.py`; freemium: `find_freemium_candidate()`. Unreachable detection after `MAX_CONNECT_ATTEMPTS` (3).
 
-- **`core`** — Engine: SiteConfig, Campaign (with users M2M), Task models; daemon, scheduler, LLM factory, onboarding, follow-up agent.
-- **`linkedin`** — LinkedIn channel: LinkedInProfile, SearchKeyword, ActionLog models; browser, discovery pipeline, ML qualification, task handlers.
-- **`emails`** — Email channel (Layer 1 of the email-first pivot). `finder.py` resolves a work email for a qualified lead on demand (`resolve_email`); `bettercontact.py` is the one provider (submit→poll over the BetterContact API). Sender + tasks land in later slices.
-- **`crm`** — Lead (with embedding) and Deal models (in `crm/models/lead.py` and `crm/models/deal.py`). Also defines `Outcome` enum.
-- **`chat`** — `ChatMessage` model (FK to the owning Deal, content, owner, answer_to threading, topic).
+**`handle_check_pending`** (`check_pending.py`): eligibility = oldest PENDING deal with `next_check_pending_at <= now`. On still-PENDING: doubles `backoff_hours`, re-stamps `next_check_pending_at`.
 
-History note: core's models lived in the linkedin app until mid-2026; the move was state-only
-plus table renames (`linkedin_campaign` → `core_campaign` etc., `core.0002_rename_engine_tables`).
+**`handle_follow_up`** (`follow_up.py`): eligibility = oldest CONNECTED deal with no recent outgoing message. Calls `run_follow_up_agent()` returning `FollowUpDecision` (send_message/mark_completed/wait), executed deterministically.
 
-## CRM Data Model
+## Execution Modes
 
-- **SiteConfig** (`core/models.py`) — Singleton (pk=1). `llm_provider` (TextChoices: openai/anthropic/google/groq/mistral/cohere/openai_compatible), `llm_api_key`, `ai_model`, `llm_api_base`, `finder_api_key` (BetterContact email-finder key; blank disables enrichment — see `emails/finder.py`), plus account-level follow-up guardrails `ai_writing_style`, `ai_say_rules`, and `ai_avoid_rules`. Accessed via `SiteConfig.load()`; `core/llm.py:get_llm_model()` is the single factory that turns it into a `pydantic_ai.models.Model`.
-- **Campaign** (`core/models.py`) — `name` (unique), `users` (M2M to User), `product_pitch` (TextField — product description for agents), `campaign_objective`, `booking_link`, `icp_titles` (JSONField list of target job titles/roles), `follow_up_strategy` (TextField — agent follow-up instructions), `target_degrees` (List[int], default `[2, 3]` — which connection degrees the campaign targets; `1` = message directly, `2`/`3` = connect first), `is_freemium`, `action_fraction`, `seed_public_ids` (JSONField).
-- **CampaignTemplate** (`core/models.py`) — Reusable campaign blueprint. Carries `product_pitch`, `campaign_objective`, `booking_link`, `icp_titles`, `follow_up_strategy`, `ghost_mode_enabled`, `velocity`, `cooldown_minutes`, `is_public`. Creating a Campaign from a template copies all content fields.
-- **LinkedInProfile** (`linkedin/models.py`) — 1:1 with User. `self_lead` FK to Lead (nullable, set on first self-profile discovery). Credentials, rate limits (`connect_daily_limit`, `follow_up_daily_limit` — daily-only; LinkedIn's own weekly ceiling surfaces at the handler boundary via `ReachedConnectionLimit`). Methods: `can_execute`/`record_action`/`mark_exhausted`. In-memory `_exhausted` dict for daily rate limit caching.
-- **SearchKeyword** (`linkedin/models.py`) — FK to Campaign. `keyword`, `used`, `used_at`. Unique on `(campaign, keyword)`.
-- **ActionLog** (`linkedin/models.py`) — FK to LinkedInProfile + Campaign. `action_type` (connect/follow_up), `created_at`. Composite index on `(linkedin_profile, action_type, created_at)`.
-- **Lead** (`crm/models/lead.py`) — Per LinkedIn URL (`linkedin_url` = unique). `public_identifier` (derived from URL, unique). `urn` = unique CharField (LinkedIn entity URN, cached on first scrape). `embedding` = 384-dim float32 BinaryField (nullable). `connection_degree` = Optional[int] (1/2/3, populated at discovery from Voyager response, refreshed at connect-time). `disqualified` = permanent exclusion. **Email storage = one field per source:** `contact_info` (nullable JSON — raw LinkedIn contact-info overlay `{email, emails, phone_numbers}`, captured once at CONNECTED; null = never scraped, the idempotency flag) and `api_email` (nullable EmailField — enrichment-API result; null = not found). `resolve_api_email()` populates it via the finder at qualification (tri-state: True hit / False genuine-miss / None finder-unavailable; cached on a hit, a miss is free to retry). A genuine miss parks the Deal in the OpenOutreach-owned `DealState.NO_EMAIL` state (held out of the connect pool) via the qualify hook. `cached_profile` (nullable JSON) — the full Voyager-parsed profile dict, stored at discovery time (`create_enriched_lead`) and refreshed on any successful `get_profile(session)` call. The Lead detail API serves this cached data directly (no live scrape on page load); the "Re-scrape" button triggers a live scrape in a background thread and updates the cache. `embedding_array` property for numpy access. `embed_from_profile(profile)` computes + persists the embedding from an in-hand dict (skips the scrape). `get_labeled_arrays(campaign)` classmethod returns (X, y) for GP warm start. Labels: non-FAILED state → 1, FAILED+wrong_fit → 0, other FAILED → skipped.
-- **Deal** (`crm/models/deal.py`) — Per campaign (campaign-scoped via FK). `state` = CharField (`DealState` choices — the OpenOutreach-owned funnel, incl. NO_EMAIL). `outcome` = CharField (Outcome choices: converted/not_interested/wrong_fit/no_budget/has_solution/bad_timing/unresponsive/unknown). `reason` = qualification reason (free text). `connect_attempts` = retry count. `backoff_hours` = check_pending backoff. `next_check_pending_at` = DateTimeField (indexed) stamped by `on_deal_state_entered(PENDING)`; the `check_pending` eligibility query and `plan_check_pending_window` both read it. `profile_summary` / `chat_summary` = JSONField fact lists (lazy, mem0-style, campaign-scoped). `creation_date`, `update_date`.
-- **Task** (`core/models.py`) — `task_type` (connect/check_pending/follow_up), `status` (pending/running/completed/failed), `scheduled_at`, `payload` (JSONField), `started_at`, `completed_at`. Composite index on `(status, scheduled_at)`.
-- **ChatMessage** (`chat/models.py`) — FK to the owning **Deal** (the per-(lead, campaign) conversation; `related_name="messages"`). `content`, `is_outgoing`, `owner`, `linkedin_urn` (Voyager entityUrn, used for dedup), `answer_to` (self FK), `topic` (self FK), `recipients`, `to` (M2M to User). Dedup is per-deal: `unique(deal, linkedin_urn)` — a shared LinkedIn DM thread is materialized once per live deal. (Replaced the original GenericForeignKey-to-Lead in `chat/0003`.)
+See `CLAUDE.md` "Execution Modes" section for the authoritative description and critical code constraints.
+
+- **Desktop**: `core/daemon_remote.py` on user's machine; bootstrapped via `GET /api/daemon/config` which returns MongoDB URI + server env. `RemoteDaemon._apply_server_env()` injects into `os.environ` before any DB code runs.
+- **Cloud**: `core/daemon.py` in Docker on EC2; full `.env` file, no bootstrap needed.
+- Both share MongoDB Atlas, task handlers, `SiteConfig`, and `authenticate()` from `linkedin_cli`.
 
 ## Key Modules
 
-Paths below are relative to `openoutreach/`.
+Paths relative to `openoutreach/`.
 
-- **`core/daemon.py`** — Worker loop with active-hours guard (`ENABLE_ACTIVE_HOURS` flag, `seconds_until_active()`), `_build_qualifiers()`, freemium import, `_CloudPromoRotator`. Calls `scheduler.reconcile()` when the queue has no ready task.
-- **`linkedin/diagnostics.py`** — `failure_diagnostics()` context manager, `capture_failure()` saves page HTML/screenshot/traceback to `/tmp/openoutreach-diagnostics/`.
-- **`core/scheduler.py`** — Single owner of Task row creation. Per-type planners (`plan_connect_window` / `plan_follow_up_window` / `plan_check_pending_window`) emit lazy slots with `1 immediate + (n-1) Poisson-spaced`; `poisson_slot_times(now, n, horizon_hours)` + `working_seconds_in_window(start, end)` are the spacing primitives. State-transition hook `on_deal_state_entered` only stamps `Deal.next_check_pending_at` for PENDING. `reconcile()` recovers stale RUNNING + dispatches the per-type planners.
-- **`linkedin/tasks/connect.py`** — `handle_connect`, `ConnectStrategy`.
-- **`linkedin/tasks/check_pending.py`** — `handle_check_pending`, exponential backoff.
-- **`linkedin/tasks/follow_up.py`** — `handle_follow_up`, rate limiting.
+### Core
+
+- **`core/daemon.py`** — Cloud daemon worker loop. Active-hours guard, `_build_qualifiers()`, freemium support.
+- **`core/daemon_remote.py`** — Desktop daemon. Connects to backend API, executes tasks locally, sends heartbeats.
+- **`core/remote_client.py`** — Async HTTP client for desktop daemon ↔ backend communication (task claim/result, cookie sync, config fetch).
+- **`core/browser_detect.py`** — Detects Chrome/Edge/Safari on Windows/macOS for the desktop daemon.
+- **`core/scheduler.py`** — Single owner of Task row creation. See Task Queue section above.
+- **`core/llm.py`** — `get_llm_model()` factory + `run_agent_sync(coro)` sync boundary. Never use `Agent.run_sync` — it poisons subsequent sync Playwright calls.
+- **`core/conf.py`** — `CAMPAIGN_CONFIG` (timing/ML defaults), planner caps, scheduler constants.
+- **`core/onboarding.py`** — Interactive setup wizard.
+- **`core/agents/follow_up.py`** — Follow-up agent. Single LLM call with structured output (`FollowUpDecision`). Injects `profile_summary + chat_summary + last 6 messages` plus `SiteConfig` guardrails.
+- **`core/db/deals.py`** — Deal/state ops, `set_profile_state()` (fires `_capture_contact_info()` on CONNECTED), `increment_connect_attempts()`.
+- **`core/db/summaries.py`** — mem0-style LLM boundary. `materialize_profile_summary_if_missing(deal, session)` fires on first follow-up; `update_chat_summary(deal, new_messages, *, seller_name)` folds new messages via `reconcile_facts`. Filters outgoing messages — `chat_summary` stores facts about the lead only. `seller_name_from(session)` is the single derivation point (first_name from `session.self_profile`).
+- **`core/crypto.py`** — Cookie encryption/decryption (requires `SECRET_KEY` — bootstrapped by desktop daemon before use).
+
+### LinkedIn Channel
+
+- **`linkedin/browser/session.py`** — `AccountSession`: central session object. `campaigns` cached_property (list). `self_profile` cached_property (Voyager scrape on first access). `ensure_browser()`, `reauthenticate()`.
+- **`linkedin/browser/launch.py`** — `start_browser_session()` + `_save_cookies()`: launch/persistence orchestration. `_save_cookies()` called after every successful task completion.
+- **`linkedin/browser/registry.py`** — `get_or_create_session()`, `get_first_active_profile()`.
+- **`linkedin/tasks/`** — Task handlers (see Task Handlers section).
 - **`linkedin/pipeline/qualify.py`** — `run_qualification()`, `fetch_qualification_candidates()`.
 - **`linkedin/pipeline/search.py`** — `run_search()`, keyword management.
 - **`linkedin/pipeline/search_keywords.py`** — `generate_search_keywords()` via LLM.
 - **`linkedin/pipeline/ready_pool.py`** — GP confidence gate, `promote_to_ready()`.
 - **`linkedin/pipeline/pools.py`** — Composable generators: `search_source` → `qualify_source` → `ready_source`.
 - **`linkedin/pipeline/freemium_pool.py`** — Seed priority + undiscovered pool, ranked by qualifier.
-- **`linkedin/ml/qualifier.py`** — `Qualifier` protocol, `BayesianQualifier`, `KitQualifier`, `qualify_with_llm()`.
-- **`linkedin/ml/embeddings.py`** — FastEmbed utilities, `embed_text()`, `embed_texts()`.
-- **`linkedin/ml/profile_text.py`** — `build_profile_text()`.
-- **`linkedin/ml/hub.py`** — HuggingFace kit loader (`fetch_kit()`).
-- **`linkedin/browser/session.py`** — `AccountSession` (a `linkedin_cli.session.LinkedInSession`): linkedin_profile, page, context, browser, playwright. `campaigns` cached_property (list, via Campaign.users M2M). `ensure_browser()` launches/recovers browser via `linkedin.browser.launch.start_browser_session`. `self_profile` cached_property — scrapes via the `linkedin_cli` self-discovery primitive on first access (no DB cache; one extra scrape per daemon restart) and persists the disqualified self-lead via `db.leads.register_self_lead`. Cookie expiry check via `_maybe_refresh_cookies()`. `reauthenticate()` forces fresh login.
-- **`linkedin/browser/registry.py`** — `get_or_create_session()`, `get_first_active_profile()`, `resolve_profile()`, `cli_parser()`/`cli_session()` (Django bootstrap for `follow_up.py`'s `__main__`).
-- **`linkedin/browser/launch.py`** — `start_browser_session()` + `_save_cookies()`: the daemon's launch/persistence orchestration — launch the stealthed browser (via `linkedin_cli.browser.login.launch_browser`), restore/persist cookies to the Django DB, run the login flow (`linkedin_cli.auth.authenticate`), validate a saved session. The reusable browser/login *mechanics* live in `linkedin_cli`; this is the Django/DB glue. **Proactive cookie refresh**: `_save_cookies()` is now called after every successful task completion (in `core/daemon.py`) to persist the current Playwright storage state (including `li_at` auth cookie) back to the DB, keeping the session warm and reducing the frequency of full re-authentications triggered by 401 errors.
-- **`linkedin/db/leads.py`** — Lead CRUD, `get_leads_for_qualification()`, `disqualify_lead()`, `_cache_urn_from_profile()`, `register_self_lead()` (persists the logged-in member as a disqualified self-lead on top of the `linkedin_cli` self-discovery primitive).
-- **`core/db/deals.py`** — Deal/state ops, `set_profile_state()` (also fires `_capture_contact_info()` on the CONNECTED transition), `increment_connect_attempts()`, `create_freemium_deal()`.
-- **`linkedin/db/chat.py`** — `sync_conversation()`, `_sync_from_api()`, folds newly-synced messages into `Deal.chat_summary` via `update_chat_summary`.
-- **`core/db/summaries.py`** — Single mem0-style LLM boundary. `materialize_profile_summary_if_missing(deal, session)` fires on first follow-up touch (one Voyager re-scrape per `(lead, campaign)` lifetime); `update_chat_summary(deal, new_messages, *, seller_name)` folds newly-synced ChatMessages incrementally via `reconcile_facts`, which routes new facts through mem0's UPDATE prompt to apply ADD/UPDATE/DELETE/NONE events (mirrors `mem0/memory/main.py::Memory._add_to_vector_store` lines 594-700, with vector-store ops replaced by an in-memory dict because `Deal.chat_summary` is a flat list). `_format_messages_for_extraction` filters to incoming messages only, so `chat_summary` holds facts about the lead and a one-sided outgoing burst is a noop. `extract_facts(text, *, seller_name, context)` runs `pydantic_ai.Agent(get_llm_model(), output_type=FactList)` against the vendored `_FACT_EXTRACTION_PROMPT` plus an unconditional identity-binding block (`_build_identity_binding`) telling the LLM that `[Me]` is `seller_name`, so seller-name greetings in `[Lead]` messages don't get misattributed to the lead. `reconcile_facts(existing, new, *, seller_name)` prepends the same binding to mem0's UPDATE prompt with an explicit "DELETE contamination" instruction — previously-stored facts that describe the seller as the lead *should* clean up on the next sync that produces a conflicting fact, though this is best-effort (the upstream mem0 prompt is example-heavy and the cleanup hint is one prepended sentence; dormant deals stay contaminated). `seller_name_from(session)` is the single derivation point — `first_name` from `session.self_profile` with username fallback. mem0's `DEFAULT_UPDATE_MEMORY_PROMPT` and `get_update_memory_messages` live under `openoutreach/core/vendor/mem0/configs/prompts.py` (mirrors upstream path so future syncs are a clean diff; pinned commit recorded in the file header).
-- **`core/conf.py`** — Config constants, `CAMPAIGN_CONFIG`. LLM construction lives in `llm.py`. (Browser/Voyager/fixture constants moved to `linkedin_cli/conf.py`.)
-- **LinkedIn credentials UI/API contract** — The frontend API client camel-cases JSON responses, so settings components must consume credential fields as `publicEmail`/`healthStatus`/`createdAt` rather than snake_case. Credential deletion is now a true delete in `api/views/linkedin_credentials.py`: removing a credential also clears the linked profile's synced login fields and saved cookie blob so failed test credentials disappear cleanly instead of lingering as invalid rows. The credential card falls back to `Profile not available` when LinkedIn has not exposed a profile name yet, ignores invalid timestamps instead of rendering `Invalid Date`, toggles health details open/closed, and renders audit-log JSON on zinc backgrounds with light text for readability. The LinkedIn Connection tab applies the same camel-cased contract to setup status (`linkedinProfile`, `linkedinCredentials`, `setupComplete`, `setupProgress`) and reloads setup guide/status/instructions/credentials together on refresh, while `api/views/linkedin_setup.py` now reports a real `active_count` and progress based on actual profile/credential presence.
-- **`core/llm.py`** — `get_llm_model()` factory + `run_agent_sync(coro)` sync boundary. `get_llm_model()` reads `SiteConfig` and dispatches via per-provider builders (OpenAI / Anthropic / Google / Groq / Mistral / Cohere / openai_compatible) to the right `pydantic_ai.models.Model`. Call sites build `Agent(get_llm_model(), ...)` and invoke `run_agent_sync(agent.run(prompt))` — never `Agent.run_sync`, whose anyio portal leaves the caller's thread running-loop slot populated and poisons subsequent sync Playwright calls (`"using Playwright Sync API inside the asyncio loop"`). `run_agent_sync` drives the coroutine to completion on a short-lived worker thread with its own event loop; per-thread asyncio slots are independent, so the caller's thread stays clean regardless of what anyio / pytest-anyio / Jupyter / etc. did to it.
-- **`core/onboarding.py`** — Interactive setup.
-- **`core/agents/follow_up.py`** — Follow-up agent. Single LLM call with structured output (`FollowUpDecision`). Conversation is read in Python and injected into the prompt. The renderer also injects account-level `SiteConfig` guardrails (`ai_writing_style`, `ai_say_rules`, `ai_avoid_rules`) into `follow_up_agent.j2` so operators can steer wording from Settings. No tool-calling loop.
-- **`linkedin/api/newsletter.py`** — `subscribe_to_newsletter()` via Brevo form, `ensure_newsletter_subscription()`. No config parsing — subscribe_newsletter is a BooleanField. (The LinkedIn-platform `api/` — `client`, `voyager`, `messaging/` — moved to `linkedin_cli`.)
-- **`linkedin/setup/freemium.py`** — `import_freemium_campaign()`, `seed_profiles()`.
-- **`linkedin/setup/gdpr.py`** — `apply_gdpr_newsletter_override()`.
-- **`linkedin/setup/seeds.py`** — User-provided seed profiles: parse URLs, create Leads + QUALIFIED Deals.
-- **`core/management/setup_crm.py`** — Idempotent CRM bootstrap (Site creation).
-- **`admin.py`** (per app) — Django Admin: `core/admin.py` (SiteConfig, Campaign, Task), `linkedin/admin.py` (LinkedInProfile, SearchKeyword, ActionLog), `chat/admin.py` (ChatMessage).
-- **Analytics surfaces** — `api/serializers/campaigns.py` computes campaign-card/list stats from live `ActionLog`, `ChatMessage`, and current `DealState` counts and exposes real sent/accepted/replied counters plus zero-safe rates (no UI placeholder percentages). `api/views/campaigns.py:AnalyticsOverviewView` serves `/api/analytics/overview` with real `campaign_id` + `period` filtering, live overview totals, and per-campaign metrics for the selected time window; `frontend/src/app/(dashboard)/analytics/page.tsx` consumes that endpoint directly and no longer shows placeholder trend/export tabs. `api/views/campaigns.py:CampaignAnalyticsView` serves the per-campaign analytics page, uses `ChatMessage.creation_date` for reply-period filters, returns real 7/30-day aggregates, and falls back to `N/A` in the UI (`frontend/src/app/(dashboard)/campaigns/[id]/analytics/page.tsx`) for metrics the backend does not yet track instead of inventing zeros.
-- **`settings.py`** — Django settings (SQLite at `data/db.sqlite3`). Apps: crm, chat, core, linkedin, emails.
+- **`linkedin/ml/qualifier.py`** — `BayesianQualifier` (GPR + BALD), `KitQualifier` (freemium pre-trained model).
+- **`linkedin/ml/embeddings.py`** — FastEmbed utilities (`embed_text`, `embed_texts`). Default model: BAAI/bge-small-en-v1.5 (384 dim).
+- **`linkedin/db/leads.py`** — Lead CRUD, `create_enriched_lead()`, `disqualify_lead()`, `register_self_lead()`.
+- **`linkedin/db/chat.py`** — `sync_conversation()`, folds new messages into `Deal.chat_summary`.
+- **`linkedin/diagnostics.py`** — `failure_diagnostics()` context manager, saves page HTML/screenshot/traceback.
 
+### Desktop App
 
-## `linkedin_cli` — Standalone LinkedIn Library (Django-free)
+- **`desktop/app.py`** — System tray (pystray): start/stop daemon, status, open dashboard, login/logout, auto-start.
+- **`desktop/auth.py`** — OS keychain integration via `keyring` (macOS Keychain / Windows Credential Manager).
+- **`desktop/config.py`** — Persistent config (`~/Library/Application Support/OpenOutreach/` on macOS, `%LOCALAPPDATA%\OpenOutreach\` on Windows).
+- **`desktop/protocol_handler.py`** — `lengrowth://auth?token=...` URL callback handler for web login flow.
+- **`desktop/updater.py`** — Checks `https://api.github.com/repos/Lengrowth/outbound/releases/latest` every 6 hours.
 
-External package ([`eracle/linkedin-cli`](https://github.com/eracle/linkedin-cli),
-installed via the `requirements/base.txt` git dependency) holding the LinkedIn
-*platform mechanics* (browser nav, login form, Voyager API, profile/conversation
-scrape, the connect/message/status/thread verbs), so the daemon and external
-agents share one surface. Imports with **no Django** configured and holds no DB.
-The module docs below describe the installed package's surface.
+### API v2
 
-**Transport — bind + connect.** A session *owner* launches a browser and
-`browser.bind()`s it (Playwright ≥1.59); clients attach via `chromium.connect()`
-with a real `Page`, and `playwright-cli attach <name>` can share the same browser
-(e.g. for a human to clear a checkpoint). The daemon owns its browser in-process;
-the standalone CLI's `session open` launcher owns it for non-daemon use.
+- **`api_v2/main.py`** — FastAPI app, router registration, CORS, middleware.
+- **`api_v2/routers/`** — One file per domain: `auth.py`, `campaigns.py`, `linkedin_profiles.py`, `linkedin_credentials.py`, `settings.py`, `billing.py`, `analytics.py`, `admin.py`, `daemon.py`, etc.
+- **`api_v2/schemas/`** — Pydantic request/response models.
+- **`api_v2/dependencies.py`** — `get_current_user()`, plan enforcement, admin check.
 
-- **`session.py`** — `LinkedInSession` Protocol (the contract verbs run against:
-  `page`, `context`, `self_profile`, `ensure_browser()`, `wait()`, `close()`).
-  `PlaywrightCliSession` connects to a bound browser (`chromium.connect(endpoint)`).
-  Session registry (`write_session`/`read_session`/`clear_session`,
-  `linkedin_cli_home()`) maps a session name → bound-browser websocket endpoint.
-- **`launcher.py`** — `open_bound_session()`: launch a persistent browser,
-  `bind()` it, register the endpoint, block. The standalone session owner.
-- **`cli.py`** — verb CLI over bind+connect (`python -m linkedin_cli.cli`):
-  `session open/close`, `login`, `whoami`, `search`, `profile`, `status`, `connect`,
-  `message`, `thread`. **Output contract** (documented in the module docstring so
-  it travels with the package): every verb produces a result dict; the default is
-  a brief human-readable summary on stdout, and `--json` (on every verb) emits the
-  full dict — redirect with `>` to save it (no `--out`; clig.dev composability).
-  stdout carries only the result; logs and errors go to stderr as
-  `error: <type>: <message>` + non-zero exit (`type` mirrors `exceptions.py`).
-  Owns interaction-pacing policy (injected into the session).
-- **`page_state.py`** — the page-state machine. `classify_page(page)` judges the
-  live page by **URL path only** (a `/login?session_redirect=…/feed/` redirect must
-  not read as the feed). `@transition(when=, then=)` is a contract decorator over an
-  action: it enforces the precondition state *and*, re-reading the page after the
-  action, that the result is in the allowed `then` set — raising `IllegalPageTransition`
-  otherwise (the postcondition is what a held-state FSM can't express). `PageFlow` is
-  the generic engine: `.transition` registers an action under its `when`; `.run()` is
-  the single observe→act loop that drives a session to the flow's goal.
-- **`auth.py`** — the auth flow, declared as `@auth_flow.transition` actions
-  (unknown/authwall/login/checkpoint → feed); no hand-written loop. `authenticate(session,
-  *, username=, password=)` stamps credentials and runs the flow to the feed. Shared by
-  the CLI `login` verb and the daemon (`openoutreach/linkedin/browser/launch.py`), so both drive one
-  enforced login path. Rejected credentials = landing back on `/login`, which the
-  `_from_login` contract forbids → surfaces as `AuthenticationError` (and enforces
-  never-resubmit).
-- **`linkedin/browser/login.py`** — login form mechanics: locators,
-  `submit_login_form(session, username, password)` (fills + submits, asserts nothing —
-  the auth flow re-reads the page), `dismiss_comply_gate()`, `await_checkpoint_clear()`,
-  `launch_browser()`.
-- **`linkedin/browser/nav.py`** — `goto_page()`, `human_type()`, `find_top_card()`, `dump_page_html()`.
-- **`actions/`** — `connect.py` (`send_connection_request`), `status.py`
-  (`get_connection_status`), `message.py` (`send_raw_message`), `profile.py`
-  (`scrape_profile`), `search.py` (`search_people` — returns a
-  `{query, page, network, profiles:[{public_identifier, url}]}` envelope, optional
-  `network` degree filter; backs the `search` verb and is used in-process by the
-  daemon — plus `visit_profile`), `conversations.py` (`get_conversation`).
-- **`api/client.py`** — `PlaywrightLinkedinAPI`: in-page `fetch()` for authentic
-  headers; `get_profile()` with tenacity retry; `VOYAGER_REQUEST_TIMEOUT_MS`.
-- **`api/voyager.py`** — `LinkedInProfile` parse (`parse_linkedin_voyager_response()`,
-  `parse_connection_degree()`).
-- **`api/messaging/`** — `send.py` (`send_message`), `conversations.py`
-  (`fetch_conversations`/`fetch_messages`), `utils.py` (`encode_urn`/`check_response`).
-- **`linkedin/setup/self_profile.py`** — `discover_self_profile(session)`: Voyager `me`
-  scrape → dict, no persistence (the disqualified-lead write is OpenOutreach's
-  `db.leads.register_self_lead`).
-- **`core/conf.py`** — browser/timeout/fixture constants (`BROWSER_*`, `HUMAN_TYPE_*`,
-  `BROWSER_HEADLESS`, `CHECKPOINT_RESOLVE_TIMEOUT_S`, fixture dirs).
-  **`exceptions.py`** (`AuthenticationError`, `SkipProfile`,
-  `ProfileInaccessibleError`, `ReachedConnectionLimit`, `CheckpointChallengeError`),
-  **`enums.py`** (`ProfileState` — the library's internal enum for the 3 UI-observed
-  states its connect/status verbs detect; the CRM funnel is OpenOutreach's `DealState`,
-  see Profile State Machine), **`url_utils.py`** (`url_to_public_id`/`public_id_to_url`).
+### Billing
 
+- **`billing/plans.py`** — Plan definitions (starter/pro/business/agency/lifetime + cloud_addon). Desktop execution included in all base plans; cloud execution requires `cloud_addon` only.
+- **`billing/enforcement.py`** — `PlanEnforcer`: checks campaign limits, cloud access, trial restrictions. Called on every mutating endpoint.
+- **`billing/stripe_client.py`** — Stripe API wrapper (subscriptions, customer portal, webhook verification).
+
+## ML Qualification Pipeline
+
+GPR (`sklearn.gaussian_process.GaussianProcessRegressor`, `ConstantKernel * RBF`) inside `Pipeline(StandardScaler, GPR)` with BALD active learning.
+
+1. **Balance-driven selection**: negatives > positives → exploit (highest P); otherwise → explore (highest BALD).
+2. **LLM decision**: all qualification decisions via LLM (`qualify_lead.j2`). GP only for candidate ranking and confidence gate.
+3. **READY_TO_CONNECT gate**: `P(f > 0.5) >= min_ready_to_connect_prob` (0.9) promotes QUALIFIED → READY_TO_CONNECT.
+
+384-dim FastEmbed embeddings stored on Lead model. Per-campaign GP models in `Campaign.model_blob` (joblib-compressed bytes). Cold start (< 2 labels of both classes) returns `None` — pure LLM ordering until both classes are present.
+
+## Deal Summaries (mem0-style)
+
+`Deal.profile_summary` and `Deal.chat_summary` are lazy JSON fact lists. Single boundary in `core/db/summaries.py`:
+
+- `materialize_profile_summary_if_missing(deal, session)` — fires on first follow-up; one Voyager re-scrape per (lead, campaign) lifetime.
+- `update_chat_summary(deal, new_messages, *, seller_name)` — folds newly-synced ChatMessages via `reconcile_facts`, which routes facts through mem0's UPDATE prompt (ADD/UPDATE/DELETE/NONE events). Outgoing messages filtered — only lead messages contribute to `chat_summary`.
+- Identity binding: `seller_name` injected into extraction and reconcile prompts to prevent seller-name greetings from being misattributed to the lead.
+- mem0's `DEFAULT_UPDATE_MEMORY_PROMPT` vendored at `core/vendor/mem0/configs/prompts.py`. No `mem0ai` runtime dependency.
+
+## `linkedin_cli` — Standalone LinkedIn Library
+
+External package ([`eracle/linkedin-cli`](https://github.com/eracle/linkedin-cli), installed via `requirements/base.txt` as `linkedin-agent-cli`, import name `linkedin_cli`). Django-free. Holds LinkedIn *platform mechanics*: browser nav/login, Voyager API, profile/conversation scrape, connect/message/status/thread verbs.
+
+- **`session.py`** — `LinkedInSession` protocol. `PlaywrightCliSession` connects to a bound browser.
+- **`page_state.py`** — Page-state machine. `classify_page(page)` judges by URL path only. `@transition(when=,then=)` enforces pre/post state contracts raising `IllegalPageTransition`. `PageFlow` is the generic observe→act engine.
+- **`auth.py`** — Login flow as `@auth_flow.transition` actions. `authenticate(session, *, username, password)` drives the flow to feed. Shared by CLI verb and daemon — no duplicated login path.
+- **`api/client.py`** — `PlaywrightLinkedinAPI`: in-page `fetch()` for authentic Voyager headers. `VOYAGER_REQUEST_TIMEOUT_MS` is the constructor default.
+- **`api/voyager.py`** — `parse_linkedin_voyager_response()`, `parse_connection_degree()`.
+- **`api/messaging/`** — `send.py` (`send_message`), `conversations.py` (`fetch_conversations`/`fetch_messages`), `utils.py`.
+- **`actions/`** — `connect.py`, `status.py`, `message.py`, `profile.py`, `search.py`, `conversations.py`.
+- **`conf.py`** — `BROWSER_*`, `HUMAN_TYPE_*`, `BROWSER_HEADLESS`, `DUMP_PAGES` (save HTML snapshots for fixture collection), `BROWSER_PROXY_SERVER/USERNAME/PASSWORD` (optional proxy config).
+- **`exceptions.py`** — `AuthenticationError`, `SkipProfile`, `ProfileInaccessibleError`, `ReachedConnectionLimit`, `CheckpointChallengeError`.
 
 ## Configuration
 
-- **`SiteConfig`** (DB singleton) — `llm_provider` (required, defaults to `openai`; choices: `openai`/`anthropic`/`google`/`groq`/`mistral`/`cohere`/`openai_compatible`), `llm_api_key` (required), `ai_model` (required), `llm_api_base` (required only for `openai_compatible`), `finder_api_key` (optional — BetterContact email-finder key; blank disables enrichment), plus `ai_writing_style` / `ai_say_rules` / `ai_avoid_rules` for account-level follow-up messaging guardrails. Editable via Django Admin and the frontend Settings page.
-- **`conf.py` schedule** — `ENABLE_ACTIVE_HOURS` (`False`), `ACTIVE_START_HOUR` (9), `ACTIVE_END_HOUR` (19), `ACTIVE_TIMEZONE` (system-local IANA name, falls back to "UTC"). Daemon sleeps outside this window. No weekend/rest-day handling — humans use LinkedIn 7 days a week.
-- **`conf.py` planner cap** — `CHECK_PENDING_DAILY_CAP` (100). Maximum `check_pending` slots planned per 24h window per campaign; overflow rolls into the next planning cycle.
-- **`conf.py:CAMPAIGN_CONFIG`** — `min_ready_to_connect_prob` (0.9), `min_positive_pool_prob` (0.20), `check_pending_recheck_after_hours` (24), `qualification_n_mc_samples` (100), `enrich_min_delay_seconds` (6), `enrich_max_delay_seconds` (10), `enrich_max_per_page` (10), `burst_min_seconds` (2700), `burst_max_seconds` (3900), `break_min_seconds` (600), `break_max_seconds` (1200), `min_action_interval` (120), `embedding_model` ("BAAI/bge-small-en-v1.5").
-- **Prompt templates** (at `openoutreach/core/templates/prompts/`) — `qualify_lead.j2` (temp 0.7), `search_keywords.j2` (temp 0.9), `follow_up_agent.j2` (includes account-level `SiteConfig` messaging guardrails when configured).
-- **`requirements/`** — `base.txt`, `local.txt`, `production.txt`, `crm.txt` (empty — DjangoCRM installed via `--no-deps`).
+All settings editable from Settings page in the web UI or via FastAPI endpoints:
+
+| Setting | Location |
+|---------|----------|
+| LLM provider, API key, model | Settings → LLM / AI Settings → `SiteConfig` |
+| LinkedIn credentials | Settings → LinkedIn Connection → `LinkedInCredential` model |
+| Rate limits + active hours | Settings → Rate Limits → `SiteConfig` |
+| Follow-up writing style/say/avoid rules | Settings → Profile → `SiteConfig` |
+| Stripe keys, email finder key, JWT secret | `.env` / `openoutreach/config.py` |
+| MongoDB URI + name | `.env` or `/api/daemon/config` response (desktop) |
+
+Environment variables (`openoutreach/config.py`, pydantic `Settings`): `MONGODB_URI`, `MONGODB_NAME`, `JWT_SECRET_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET`.
+
+`conf.py:CAMPAIGN_CONFIG` — `min_ready_to_connect_prob` (0.9), `min_positive_pool_prob` (0.20), `check_pending_recheck_after_hours` (24), `embedding_model` ("BAAI/bge-small-en-v1.5"), timing/burst constants.
 
 ## Docker
 
-Base image: `mcr.microsoft.com/playwright/python:v1.55.0-noble`. When `ENABLE_VNC=true`, the `compose/linkedin/start` script launches x11vnc on port 5900 and noVNC websockify on port 6080, exposing a web-based VNC viewer. The frontend embeds a live noVNC iframe (`frontend/src/components/settings/vnc-viewer.tsx`) in the Settings → LinkedIn Connection tab so operators can interact with the live browser session (LinkedIn challenges, CAPTCHAs, security verifications) directly from the platform without needing an external VNC client or SSH tunnel. `BUILD_ENV` arg selects requirements. Dockerfile at `compose/linkedin/Dockerfile`. Install: uv pip → DjangoCRM `--no-deps` → requirements → Playwright chromium.
+Base image: `mcr.microsoft.com/playwright/python:v1.55.0-noble`. Dockerfile at `compose/linkedin/Dockerfile`. `BUILD_ENV` arg selects requirements file.
+
+When `ENABLE_VNC=true`: x11vnc on port 5900, noVNC websockify on port 6080. Frontend embeds a live noVNC iframe (`frontend/src/components/settings/vnc-viewer.tsx`) in Settings → LinkedIn Connection so operators can handle LinkedIn challenges from the UI without an external VNC client.
 
 ## CI/CD
 
-- `tests.yml` — pytest in Docker on push to `master` and PRs.
-- `deploy.yml` — Tests → build + push to `ghcr.io/eracle/openoutreach`. Tags: `latest`, `sha-<commit>`, semver.
+- `tests.yml` — pytest in Docker on push to `main` and PRs.
+- `deploy.yml` — Tests → build + push to `ghcr.io`. Tags: `latest`, `sha-<commit>`.
+- `desktop-build.yml` — triggered on `desktop-v*` tags; builds Lengrowth.exe via PyInstaller, creates GitHub Release on `Lengrowth/outbound` repo.
 
-## Dependencies
+## Analytics Contract
 
-`requirements/` files. DjangoCRM's `mysqlclient` excluded via `--no-deps`. `uv pip install` for fast installs.
+`api_v2/routers/analytics.py`:
+- `AnalyticsOverviewView` — live overview totals + per-campaign metrics for selected `campaign_id` + `period` window.
+- `CampaignAnalyticsView` — per-campaign page: live `connectionsSent`, `connectionsAccepted`, `messagesSent`, `messagesReplied`; zero-safe rates; real 7/30-day aggregates; reply timestamps from `ChatMessage.creation_date`.
 
-Core: `playwright`, `playwright-stealth`, `Django`, `django-crm-admin`, `pandas`, `pydantic-ai-slim` (with `openai`/`anthropic`/`google`/`groq`/`mistral`/`cohere`/`bedrock` extras), `jinja2`, `pydantic`, `jsonpath-ng`, `tendo`, `termcolor`, `tenacity`
-ML: `scikit-learn`, `numpy`, `fastembed`, `joblib`
+No hard-coded placeholder percentages anywhere.
