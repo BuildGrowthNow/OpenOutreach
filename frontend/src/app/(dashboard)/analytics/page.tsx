@@ -375,7 +375,12 @@ export default function AnalyticsOverviewPage() {
                           <Cell key={i} fill={entry.fill} />
                         ))}
                       </Pie>
-                      <Tooltip formatter={(v) => [v, "leads"]} />
+                      <Tooltip
+                        formatter={(v) => [v, "leads"]}
+                        contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }}
+                        labelStyle={{ color: "hsl(var(--foreground))" }}
+                        itemStyle={{ color: "hsl(var(--foreground))" }}
+                      />
                       <Legend />
                     </PieChart>
                   </ResponsiveContainer>
@@ -396,9 +401,15 @@ export default function AnalyticsOverviewPage() {
               <CardContent>
                 <ResponsiveContainer width="100%" height={260}>
                   <BarChart data={ratesChartData} layout="vertical" margin={{ left: 16, right: 24 }}>
-                    <XAxis type="number" domain={[0, 100]} unit="%" tick={{ fontSize: 11 }} />
-                    <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 12 }} />
-                    <Tooltip formatter={(v) => [`${v}%`]} />
+                    <XAxis type="number" domain={[0, 100]} unit="%" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
+                    <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} />
+                    <Tooltip
+                      formatter={(v) => [`${v}%`]}
+                      contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }}
+                      labelStyle={{ color: "hsl(var(--foreground))" }}
+                      itemStyle={{ color: "hsl(var(--foreground))" }}
+                      cursor={{ fill: "rgba(255,255,255,0.05)" }}
+                    />
                     <Bar dataKey="value" radius={[0, 4, 4, 0]} maxBarSize={28}>
                       {ratesChartData.map((entry, i) => (
                         <Cell key={i} fill={entry.fill} />
@@ -420,9 +431,14 @@ export default function AnalyticsOverviewPage() {
               <CardContent>
                 <ResponsiveContainer width="100%" height={220}>
                   <BarChart data={campaignBarData} margin={{ top: 4, right: 16, bottom: 4, left: 0 }}>
-                    <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-                    <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
-                    <Tooltip />
+                    <XAxis dataKey="name" tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }}
+                      labelStyle={{ color: "hsl(var(--foreground))" }}
+                      itemStyle={{ color: "hsl(var(--foreground))" }}
+                      cursor={{ fill: "rgba(255,255,255,0.05)" }}
+                    />
                     <Legend />
                     <Bar dataKey="leads" name="Leads" fill="#3b82f6" radius={[4, 4, 0, 0]} maxBarSize={36} />
                     <Bar dataKey="connected" name="Connected" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={36} />
@@ -444,9 +460,14 @@ export default function AnalyticsOverviewPage() {
               <CardContent>
                 <ResponsiveContainer width="100%" height={220}>
                   <BarChart data={campaignBarData} margin={{ top: 4, right: 16, bottom: 4, left: 0 }}>
-                    <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-                    <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
-                    <Tooltip />
+                    <XAxis dataKey="name" tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }}
+                      labelStyle={{ color: "hsl(var(--foreground))" }}
+                      itemStyle={{ color: "hsl(var(--foreground))" }}
+                      cursor={{ fill: "rgba(255,255,255,0.05)" }}
+                    />
                     <Legend />
                     <Bar dataKey="leads" name="Leads" fill="#3b82f6" radius={[4, 4, 0, 0]} maxBarSize={36} />
                     <Bar dataKey="connected" name="Connected" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={36} />

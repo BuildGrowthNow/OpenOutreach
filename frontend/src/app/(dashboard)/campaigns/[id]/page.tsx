@@ -1062,12 +1062,13 @@ function CampaignAnalyticsCharts({ analytics }: { analytics: CampaignAnalyticsRe
           <CardContent>
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={funnelData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
-                <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-                <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
+                <XAxis dataKey="name" tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} />
                 <Tooltip
                   contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }}
                   labelStyle={{ color: "hsl(var(--foreground))" }}
                   itemStyle={{ color: "hsl(var(--foreground))" }}
+                  cursor={{ fill: "rgba(255,255,255,0.05)" }}
                 />
                 <Bar dataKey="value" radius={[4, 4, 0, 0]}>
                   {funnelData.map((_, i) => (
@@ -1088,13 +1089,14 @@ function CampaignAnalyticsCharts({ analytics }: { analytics: CampaignAnalyticsRe
           <CardContent>
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={ratesData} layout="vertical" margin={{ top: 4, right: 24, left: 10, bottom: 0 }}>
-                <XAxis type="number" domain={[0, 100]} tickFormatter={(v) => `${v}%`} tick={{ fontSize: 12 }} />
-                <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 12 }} />
+                <XAxis type="number" domain={[0, 100]} tickFormatter={(v) => `${v}%`} tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} />
+                <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} />
                 <Tooltip
                   formatter={(v) => [`${v}%`, ""]}
                   contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }}
                   labelStyle={{ color: "hsl(var(--foreground))" }}
                   itemStyle={{ color: "hsl(var(--foreground))" }}
+                  cursor={{ fill: "rgba(255,255,255,0.05)" }}
                 />
                 <Bar dataKey="value" radius={[0, 4, 4, 0]}>
                   <Cell fill="#6366f1" />
