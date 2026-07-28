@@ -357,13 +357,13 @@ async def get_platform_metrics() -> dict:
 
 ---
 
-## Phase 2 — User management write endpoints
+## Phase 2 — User management write endpoints ✅
 
 > All mutating operations on users: soft-delete, trial extension, plan/billing override, force
 > subscription cancel, impersonation token, email verification override, password reset.
 > Every write goes through `AdminSecurityPolicy.log_admin_action`.
 
-### 2.1 `DELETE /api/admin/users/{user_id}` — soft delete
+### 2.1 `DELETE /api/admin/users/{user_id}` — soft delete ✅
 
 ```python
 @router.delete("/users/{user_id}", dependencies=[Depends(get_admin_user)])
@@ -398,7 +398,7 @@ async def delete_user(
     return {"ok": True, "deletion_scheduled_at": user.deletion_scheduled_at.isoformat()}
 ```
 
-### 2.2 `POST /api/admin/users/{user_id}/restore` — undo soft delete
+### 2.2 `POST /api/admin/users/{user_id}/restore` — undo soft delete ✅
 
 ```python
 @router.post("/users/{user_id}/restore", dependencies=[Depends(get_admin_user)])
@@ -415,7 +415,7 @@ async def restore_user(user_id: str, current_admin: str = Depends(get_admin_user
     return {"ok": True}
 ```
 
-### 2.3 `POST /api/admin/users/{user_id}/extend-trial`
+### 2.3 `POST /api/admin/users/{user_id}/extend-trial` ✅
 
 ```python
 class ExtendTrialRequest(BaseModel):
@@ -449,7 +449,7 @@ async def extend_trial(
     return {"ok": True, "trial_ends_at": user.trial_ends_at.isoformat()}
 ```
 
-### 2.4 `POST /api/admin/users/{user_id}/cancel-subscription`
+### 2.4 `POST /api/admin/users/{user_id}/cancel-subscription` ✅
 
 Cancels in Stripe (immediate) and updates local record.
 
@@ -481,7 +481,7 @@ async def force_cancel_subscription(
     return {"ok": True}
 ```
 
-### 2.5 `POST /api/admin/users/{user_id}/set-plan`
+### 2.5 `POST /api/admin/users/{user_id}/set-plan` ✅
 
 Richer plan change that also sets `billing_period` and optionally overrides limits.
 
@@ -530,7 +530,7 @@ async def set_user_plan(
 Create `_build_user_detail_response(user: User) -> UserDetailResponse` as a module-level helper to
 avoid duplicating the mapping code across endpoints.
 
-### 2.6 `POST /api/admin/users/{user_id}/verify-email`
+### 2.6 `POST /api/admin/users/{user_id}/verify-email` ✅
 
 Force-mark an email as verified (e.g., for support cases).
 
@@ -548,7 +548,7 @@ async def force_verify_email(user_id: str, current_admin: str = Depends(get_admi
     return {"ok": True}
 ```
 
-### 2.7 `POST /api/admin/users/{user_id}/send-password-reset`
+### 2.7 `POST /api/admin/users/{user_id}/send-password-reset` ✅
 
 Triggers the existing password-reset email flow on behalf of the user.
 
@@ -571,7 +571,7 @@ async def send_password_reset(user_id: str, current_admin: str = Depends(get_adm
 If `_send_password_reset_email` is inlined in the auth router rather than extracted, extract it to a
 shared helper first.
 
-### 2.8 `POST /api/admin/users/{user_id}/impersonate`
+### 2.8 `POST /api/admin/users/{user_id}/impersonate` ✅
 
 Returns a short-lived JWT for the target user so the admin can log in as them in a new tab.
 
@@ -610,7 +610,7 @@ The frontend opens the returned token in a new tab via the `lengrowth://` protoc
 directly in local storage. Show a visible "Impersonation active" banner in the UI (read
 `impersonated_by` claim from the JWT).
 
-### 2.9 Register all new endpoints in the API router
+### 2.9 Register all new endpoints in the API router ✅
 
 **File**: `openoutreach/api_v2/main.py`
 

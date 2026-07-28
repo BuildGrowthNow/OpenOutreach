@@ -723,6 +723,274 @@ async def get_user_action_logs(
     }
 
 
+# ==================== PHASE 2 — USER MANAGEMENT WRITE ENDPOINTS ====================
+
+
+@router.delete("/users/{user_id}", dependencies=[Depends(get_admin_user)])
+async def delete_user(
+    user_id: str,
+    current_admin: str = Depends(get_admin_user),
+) -> dict:
+    """Soft-delete a user (sets is_deleted=True, schedules data wipe in 30 days)."""
+    from openoutreach.billing.admin_security import AdminSecurityPolicy
+
+    admin_user = User.get(current_admin)
+    if not admin_user:
+        raise HTTPException(status_code=403, detail="Admin user not found")
+    allowed, err = AdminSecurityPolicy.require_write_permission(admin_user)
+    if not allowed:
+        raise HTTPException(status_code=403, detail=err or "Forbidden")
+
+    user = User.get(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user.is_deleted:
+        raise HTTPException(status_code=400, detail="User already deleted")
+
+    now = datetime.now(tz.utc)
+    user.is_deleted = True
+    user.deleted_at = now
+    user.deletion_scheduled_at = now + timedelta(days=30)
+    user.status = "inactive"
+    user.save()
+
+    AdminSecurityPolicy.log_admin_action(
+        current_admin, "delete_user", user_id,
+        {"scheduled_wipe": user.deletion_scheduled_at.isoformat()},
+    )
+    return {"ok": True, "deletion_scheduled_at": user.deletion_scheduled_at.isoformat()}
+
+
+@router.post("/users/{user_id}/restore", dependencies=[Depends(get_admin_user)])
+async def restore_user(
+    user_id: str,
+    current_admin: str = Depends(get_admin_user),
+) -> dict:
+    """Undo a soft-delete — reactivates the user."""
+    from openoutreach.billing.admin_security import AdminSecurityPolicy
+
+    user = User.get(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if not user.is_deleted:
+        raise HTTPException(status_code=400, detail="User is not deleted")
+
+    user.is_deleted = False
+    user.deleted_at = None
+    user.deletion_scheduled_at = None
+    user.status = "active"
+    user.save()
+
+    AdminSecurityPolicy.log_admin_action(current_admin, "restore_user", user_id, {})
+    return {"ok": True}
+
+
+class ExtendTrialRequest(BaseModel):
+    days: int
+
+
+@router.post("/users/{user_id}/extend-trial", dependencies=[Depends(get_admin_user)])
+async def extend_trial(
+    user_id: str,
+    body: ExtendTrialRequest,
+    current_admin: str = Depends(get_admin_user),
+) -> dict:
+    """Extend a user's trial period."""
+    from openoutreach.billing.admin_security import AdminSecurityPolicy
+
+    if body.days <= 0 or body.days > 365:
+        raise HTTPException(status_code=400, detail="days must be 1–365")
+
+    user = User.get(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    base = user.trial_ends_at or datetime.now(tz.utc)
+    user.trial_ends_at = base + timedelta(days=body.days)
+    if user.subscription_status not in ("active",):
+        user.subscription_status = "trialing"
+    user.save()
+
+    AdminSecurityPolicy.log_admin_action(
+        current_admin, "extend_trial", user_id,
+        {"days": body.days, "new_trial_ends_at": user.trial_ends_at.isoformat()},
+    )
+    return {"ok": True, "trial_ends_at": user.trial_ends_at.isoformat()}
+
+
+@router.post("/users/{user_id}/cancel-subscription", dependencies=[Depends(get_admin_user)])
+async def force_cancel_subscription(
+    user_id: str,
+    current_admin: str = Depends(get_admin_user),
+) -> dict:
+    """Cancel a user's Stripe subscription immediately."""
+    import stripe as _stripe
+    from openoutreach.billing.admin_security import AdminSecurityPolicy
+    from openoutreach.billing.stripe_service import init_stripe
+
+    user = User.get(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if not user.stripe_subscription_id:
+        raise HTTPException(status_code=400, detail="No active Stripe subscription")
+
+    init_stripe()
+    try:
+        _stripe.Subscription.cancel(user.stripe_subscription_id)  # type: ignore[arg-type]
+    except Exception as e:
+        logger.error(f"Stripe cancel failed for {user_id}: {e}")
+        raise HTTPException(status_code=500, detail="Stripe cancellation failed")
+
+    user.subscription_status = "canceled"
+    user.stripe_subscription_id = None
+    user.save()
+
+    AdminSecurityPolicy.log_admin_action(current_admin, "cancel_subscription", user_id, {})
+    return {"ok": True}
+
+
+class SetPlanRequest(BaseModel):
+    plan: str
+    billing_period: Optional[str] = None
+    linkedin_account_limit: Optional[int] = None
+    campaign_limit: Optional[int] = None
+    cloud_profiles: Optional[int] = None
+
+
+@router.post("/users/{user_id}/set-plan", dependencies=[Depends(get_admin_user)])
+async def set_user_plan(
+    user_id: str,
+    body: SetPlanRequest,
+    current_admin: str = Depends(get_admin_user),
+) -> UserDetailResponse:
+    """Change a user's plan with optional limit overrides."""
+    from openoutreach.billing.admin_security import AdminSecurityPolicy
+    from openoutreach.billing.api_security import BillingAPISecurity
+
+    valid, err = BillingAPISecurity.validate_plan_name(body.plan)
+    if not valid:
+        raise HTTPException(status_code=400, detail=err or "Invalid plan name")
+    if body.billing_period:
+        valid_period, err_period = BillingAPISecurity.validate_billing_period(body.billing_period)
+        if not valid_period:
+            raise HTTPException(status_code=400, detail=err_period or "Invalid billing period")
+
+    user = User.get(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    plan = _get_plan_limits(body.plan)
+    user.plan = body.plan
+    if body.billing_period:
+        user.billing_period = body.billing_period
+    user.linkedin_account_limit = (
+        body.linkedin_account_limit
+        if body.linkedin_account_limit is not None
+        else (plan["max_linkedin_accounts"] if plan else user.linkedin_account_limit)
+    )
+    user.campaign_limit = (
+        body.campaign_limit
+        if body.campaign_limit is not None
+        else (plan["max_campaigns"] if plan else user.campaign_limit)
+    )
+    if body.cloud_profiles is not None:
+        user.cloud_profiles = body.cloud_profiles
+    user.save()
+
+    AdminSecurityPolicy.log_admin_action(
+        current_admin, "set_plan", user_id,
+        {"plan": body.plan, "billing_period": body.billing_period},
+    )
+    return _build_user_detail_response(user)
+
+
+@router.post("/users/{user_id}/verify-email", dependencies=[Depends(get_admin_user)])
+async def force_verify_email(
+    user_id: str,
+    current_admin: str = Depends(get_admin_user),
+) -> dict:
+    """Force-mark a user's email as verified."""
+    from openoutreach.billing.admin_security import AdminSecurityPolicy
+
+    user = User.get(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user.email_verified = True
+    user.email_verification_token = None
+    user.email_verification_expires = None
+    user.save()
+
+    AdminSecurityPolicy.log_admin_action(current_admin, "force_verify_email", user_id, {})
+    return {"ok": True}
+
+
+@router.post("/users/{user_id}/send-password-reset", dependencies=[Depends(get_admin_user)])
+async def send_password_reset_for_user(
+    user_id: str,
+    current_admin: str = Depends(get_admin_user),
+) -> dict:
+    """Trigger a password-reset email on behalf of a user."""
+    from openoutreach.billing.admin_security import AdminSecurityPolicy
+    from openoutreach.api_v2.routers.auth import _send_password_reset_email
+
+    user = User.get(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if not user.hashed_password:
+        raise HTTPException(status_code=400, detail="User does not have a password (SSO account)")
+
+    await _send_password_reset_email(user)
+
+    AdminSecurityPolicy.log_admin_action(current_admin, "send_password_reset", user_id, {})
+    return {"ok": True}
+
+
+class ImpersonateResponse(BaseModel):
+    access_token: str
+    expires_in: int
+
+
+@router.post("/users/{user_id}/impersonate", dependencies=[Depends(get_admin_user)])
+async def impersonate_user(
+    user_id: str,
+    current_admin: str = Depends(get_admin_user),
+) -> ImpersonateResponse:
+    """Issue a short-lived (15 min) JWT for the target user so the admin can act as them."""
+    from openoutreach.billing.admin_security import AdminSecurityPolicy
+    from openoutreach.config import settings
+    from jose import jwt as _jwt
+
+    target_user = User.get(user_id)
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if target_user.status == "blocked":
+        raise HTTPException(status_code=400, detail="Cannot impersonate a blocked user")
+
+    now = datetime.now(tz.utc)
+    expire = now + timedelta(minutes=15)
+    token = _jwt.encode(
+        {
+            "sub": user_id,
+            "email": target_user.email,
+            "exp": expire,
+            "iat": now,
+            "type": "access",
+            "impersonated_by": current_admin,
+        },
+        settings.jwt_secret,
+        algorithm=settings.JWT_ALGORITHM,
+    )
+
+    AdminSecurityPolicy.log_admin_action(
+        current_admin, "impersonate_user", user_id, {"expires_in": 900},
+    )
+    return ImpersonateResponse(access_token=token, expires_in=900)
+
+
+# ==================== PLATFORM METRICS ====================
+
+
 @router.get("/platform", dependencies=[Depends(get_admin_user)])
 async def get_platform_metrics() -> dict:
     """Platform-wide metrics: tasks, active daemons, connection rates."""
