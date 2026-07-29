@@ -76,7 +76,7 @@ export default function TermsPage() {
                 <strong>Subscription Plans:</strong> All subscription plans renew automatically on a monthly or annual basis, depending on your selection. You authorize us to charge the payment method on file each billing cycle.
               </p>
               <p className="mt-4">
-                <strong>Free Trial:</strong> New users receive a 7-day free trial of the Pro plan. The trial requires a valid payment method but will not be charged during the trial period. Your subscription will automatically begin at the end of the trial unless canceled.
+                <strong>Free Trial:</strong> New users receive a 7-day free trial of the Pro plan. No credit card is required to start your trial. At the end of the trial period, you may choose a paid plan to continue using the Service. Campaigns will be paused if no plan is selected.
               </p>
               <p className="mt-4">
                 <strong>Cancellation:</strong> You may cancel your subscription at any time through your account settings. Cancellation takes effect at the end of your current billing period. No refunds are provided for partial months or unused portions of your subscription.

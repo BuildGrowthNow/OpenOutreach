@@ -180,7 +180,6 @@ def _get_email_provider(settings: Settings) -> Optional[EmailProvider]:
 
 
 def _format_date(dt: Optional[datetime]) -> str:
-    """Format datetime for email display."""
     if not dt:
         return "N/A"
     return dt.strftime("%B %d, %Y at %I:%M %p UTC")
@@ -205,12 +204,108 @@ def _send_billing_email(user: User, subject: str, html: str, text: str) -> bool:
 def _settings_ctx() -> tuple[str, str, str, str]:
     """Return (brand_name, app_url, support_email, docs_url) from settings."""
     s = Settings()
-    brand = s.EMAIL_FROM_NAME or "Lengrowth"
+    brand = s.EMAIL_FROM_NAME or "Lengrowth Outreach"
     app_url = s.APP_URL or "http://localhost:3000"
-    support = s.SUPPORT_EMAIL or f"support@{brand.lower().replace(' ', '')}.com"
+    support = s.SUPPORT_EMAIL or "support@lengrowth.com"
     docs_url = f"https://docs.{brand.lower().replace(' ', '')}.com"
     return brand, app_url, support, docs_url
 
+
+# ---------------------------------------------------------------------------
+# Shared HTML layout helpers
+# ---------------------------------------------------------------------------
+
+def _html_wrap(brand: str, support: str, body_content: str) -> str:
+    """Wrap email body in the dark/emerald branded shell."""
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{brand}</title>
+</head>
+<body style="margin:0;padding:0;background-color:#09090b;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#09090b;padding:40px 0;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
+
+          <!-- Header -->
+          <tr>
+            <td style="padding:0 0 32px 0;">
+              <span style="font-size:20px;font-weight:700;color:#10b981;letter-spacing:-0.5px;">{brand}</span>
+            </td>
+          </tr>
+
+          <!-- Card -->
+          <tr>
+            <td style="background-color:#18181b;border:1px solid #27272a;border-radius:12px;padding:40px;">
+              {body_content}
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding:32px 0 0 0;text-align:center;">
+              <p style="margin:0;font-size:12px;color:#52525b;">
+                &copy; {datetime.now().year} {brand}. All rights reserved.
+              </p>
+              <p style="margin:8px 0 0 0;font-size:12px;color:#52525b;">
+                Questions? <a href="mailto:{support}" style="color:#10b981;text-decoration:none;">{support}</a>
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>"""
+
+
+def _btn(url: str, label: str) -> str:
+    return (
+        f'<a href="{url}" style="display:inline-block;background-color:#10b981;color:#ffffff;'
+        f'font-weight:600;font-size:14px;padding:12px 24px;text-decoration:none;border-radius:8px;'
+        f'margin-top:8px;">{label}</a>'
+    )
+
+
+def _h1(text: str) -> str:
+    return f'<h1 style="margin:0 0 24px 0;font-size:24px;font-weight:700;color:#f4f4f5;">{text}</h1>'
+
+
+def _p(text: str, extra_style: str = "") -> str:
+    return f'<p style="margin:0 0 16px 0;font-size:15px;line-height:1.6;color:#a1a1aa;{extra_style}">{text}</p>'
+
+
+def _ul(items: list[str]) -> str:
+    lis = "".join(
+        f'<li style="margin:0 0 8px 0;font-size:15px;color:#a1a1aa;">{item}</li>'
+        for item in items
+    )
+    return f'<ul style="margin:0 0 24px 0;padding-left:20px;">{lis}</ul>'
+
+
+def _section_heading(text: str) -> str:
+    return f'<p style="margin:24px 0 12px 0;font-size:13px;font-weight:600;color:#71717a;text-transform:uppercase;letter-spacing:0.08em;">{text}</p>'
+
+
+def _divider() -> str:
+    return '<hr style="border:none;border-top:1px solid #27272a;margin:32px 0;">'
+
+
+def _note(text: str) -> str:
+    return (
+        f'<p style="margin:16px 0;font-size:13px;line-height:1.6;color:#71717a;'
+        f'background-color:#09090b;border:1px solid #27272a;border-radius:8px;padding:12px 16px;">{text}</p>'
+    )
+
+
+# ---------------------------------------------------------------------------
+# Email senders
+# ---------------------------------------------------------------------------
 
 def send_welcome_email(user: User) -> bool:
     """Send welcome email on signup with trial info."""
@@ -218,45 +313,32 @@ def send_welcome_email(user: User) -> bool:
     trial_days = s.TRIAL_DURATION_DAYS
     brand, app_url, support, _ = _settings_ctx()
 
-    html = f"""
-<html>
-  <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333;">
-    <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-      <h1 style="color: #0066cc; margin-bottom: 20px;">Welcome to {brand}!</h1>
+    body = (
+        _h1(f"Welcome to {brand}!")
+        + _p(f"Hi {user.full_name or 'there'},")
+        + _p(f"Your free {trial_days}-day trial has started. You have full access to {brand} Pro — no credit card required.")
+        + _section_heading("Your trial includes")
+        + _ul([
+            "Up to 1 LinkedIn account",
+            "Unlimited campaigns",
+            "AI-powered messaging",
+            "Voice notes",
+            "Sales Navigator access",
+            "Full API access",
+        ])
+        + _p("When your trial ends, choose a plan to keep your campaigns running.")
+        + _btn(f"{app_url}/settings/billing", "View Your Trial")
+        + _divider()
+        + _p(f'Questions? Reply to this email or reach us at <a href="mailto:{support}" style="color:#10b981;text-decoration:none;">{support}</a>', "font-size:13px;color:#71717a;")
+    )
 
-      <p>Hi {user.full_name or 'there'},</p>
-
-      <p>Your free trial has started! You now have <strong>{trial_days} days</strong> of full access to {brand} Pro.</p>
-
-      <h3>Your trial includes:</h3>
-      <ul>
-        <li>Up to 1 LinkedIn account</li>
-        <li>Unlimited campaigns</li>
-        <li>AI-powered messaging</li>
-        <li>Voice notes</li>
-        <li>Sales Navigator access</li>
-        <li>Full API access</li>
-      </ul>
-
-      <p><strong>No credit card will be charged during your trial.</strong> When your trial ends, you'll need to choose a plan to continue using {brand}.</p>
-
-      <p><a href="{app_url}/settings/billing" style="display: inline-block; background-color: #0066cc; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 10px;">View Your Trial</a></p>
-
-      <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
-
-      <p style="color: #666; font-size: 12px;">
-        If you have any questions, reply to this email or contact us at {support}
-      </p>
-    </div>
-  </body>
-</html>
-"""
+    html = _html_wrap(brand, support, body)
 
     text = f"""Welcome to {brand}!
 
 Hi {user.full_name or 'there'},
 
-Your free trial has started! You now have {trial_days} days of full access to {brand} Pro.
+Your free {trial_days}-day trial has started. You have full access to {brand} Pro — no credit card required.
 
 Your trial includes:
 - Up to 1 LinkedIn account
@@ -266,11 +348,11 @@ Your trial includes:
 - Sales Navigator access
 - Full API access
 
-No credit card will be charged during your trial. When your trial ends, you'll need to choose a plan to continue using {brand}.
+When your trial ends, choose a plan to keep your campaigns running.
 
 View your trial: {app_url}/settings/billing
 
-If you have any questions, reply to this email or contact us at {support}
+Questions? Reply to this email or contact us at {support}
 """
 
     return _send_billing_email(user, f"Welcome to {brand}! Your trial has started.", html, text)
@@ -280,52 +362,35 @@ def send_trial_expiry_warning(user: User, days_remaining: int) -> bool:
     """Send trial expiry warning email (1 day before expiry)."""
     brand, app_url, support, _ = _settings_ctx()
 
-    html = f"""
-<html>
-  <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333;">
-    <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-      <h1 style="color: #ff6600; margin-bottom: 20px;">Your Trial Ends Tomorrow</h1>
+    body = (
+        _h1("Your trial ends tomorrow")
+        + _p(f"Hi {user.full_name or 'there'},")
+        + _p(f"Your {brand} trial expires <strong style=\"color:#f4f4f5;\">tomorrow</strong>. After that, your campaigns will pause.")
+        + _section_heading("Available plans")
+        + _ul([
+            "<strong style=\"color:#f4f4f5;\">Starter — $19/month:</strong> 1 LinkedIn account, 3 campaigns",
+            "<strong style=\"color:#f4f4f5;\">Pro — $49/month:</strong> 1 LinkedIn account, unlimited campaigns, voice notes, API access",
+            "<strong style=\"color:#f4f4f5;\">Business — $99/month:</strong> 3 LinkedIn accounts, team members, priority support",
+            "<strong style=\"color:#f4f4f5;\">Agency — $249/month:</strong> 10 LinkedIn accounts, white-label branding, unlimited team members",
+        ])
+        + _btn(f"{app_url}/settings/plan", "Choose a Plan")
+        + _divider()
+        + _p(f'Questions? Reply to this email or contact <a href="mailto:{support}" style="color:#10b981;text-decoration:none;">{support}</a>', "font-size:13px;color:#71717a;")
+    )
 
-      <p>Hi {user.full_name or 'there'},</p>
+    html = _html_wrap(brand, support, body)
 
-      <p>Your {brand} trial ends <strong>tomorrow</strong>. After that, your campaigns will pause and you won't be able to run new automations.</p>
-
-      <h3>Choose a plan to keep going:</h3>
-      <ul>
-        <li><strong>Starter - $19/month</strong>: 1 LinkedIn account, 3 campaigns</li>
-        <li><strong>Pro - $49/month</strong>: 1 LinkedIn account, unlimited campaigns, voice notes, API access</li>
-        <li><strong>Business - $99/month</strong>: 3 LinkedIn accounts, team members, priority support</li>
-        <li><strong>Agency - $249/month</strong>: 10 LinkedIn accounts, white-label branding, unlimited team members</li>
-        <li><strong>Cloud - $299/month</strong>: Fully managed cloud execution + AI on Sonnet, priority support included</li>
-      </ul>
-
-      <p><a href="{app_url}/settings/plan" style="display: inline-block; background-color: #ff6600; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 10px;">Choose a Plan</a></p>
-
-      <p style="color: #666; margin-top: 20px; font-size: 14px;">
-        Questions? Our team is here to help. Reply to this email or contact {support}
-      </p>
-
-      <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
-
-      <p style="color: #999; font-size: 12px;">
-        This is an automated message. Please don't reply with sensitive information.
-      </p>
-    </div>
-  </body>
-</html>
-"""
-
-    text = f"""Your Trial Ends Tomorrow
+    text = f"""Your trial ends tomorrow
 
 Hi {user.full_name or 'there'},
 
-Your {brand} trial ends tomorrow. After that, your campaigns will pause and you won't be able to run new automations.
+Your {brand} trial expires tomorrow. After that, your campaigns will pause.
 
-Choose a plan to keep going:
-- Starter - $19/month: 1 LinkedIn account, 3 campaigns
-- Pro - $49/month: 1 LinkedIn account, unlimited campaigns, voice notes, API access
-- Business - $99/month: 3 LinkedIn accounts, team members, priority support
-- Agency - $249/month: 10 LinkedIn accounts, white-label branding, unlimited team members
+Available plans:
+- Starter — $19/month: 1 LinkedIn account, 3 campaigns
+- Pro — $49/month: 1 LinkedIn account, unlimited campaigns, voice notes, API access
+- Business — $99/month: 3 LinkedIn accounts, team members, priority support
+- Agency — $249/month: 10 LinkedIn accounts, white-label branding, unlimited team members
 
 Choose a plan: {app_url}/settings/plan
 
@@ -339,49 +404,30 @@ def send_trial_expired(user: User) -> bool:
     """Send trial expired notification."""
     brand, app_url, support, _ = _settings_ctx()
 
-    html = f"""
-<html>
-  <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333;">
-    <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-      <h1 style="color: #cc0000; margin-bottom: 20px;">Your Trial Has Ended</h1>
+    body = (
+        _h1("Your trial has ended")
+        + _p(f"Hi {user.full_name or 'there'},")
+        + _p(f"Your {brand} trial has ended. Your campaigns are now paused.")
+        + _p("Subscribe to a plan to reactivate your campaigns and get back to work.")
+        + _btn(f"{app_url}/settings/plan", "Subscribe Now")
+        + _divider()
+        + _p(f'Still deciding? Our team can help — <a href="mailto:{support}" style="color:#10b981;text-decoration:none;">get in touch</a>.', "font-size:13px;color:#71717a;")
+        + _note("Your data will be preserved for 30 days. After that, it will be permanently deleted.")
+    )
 
-      <p>Hi {user.full_name or 'there'},</p>
+    html = _html_wrap(brand, support, body)
 
-      <p>Your {brand} trial has ended. Your campaigns are now paused and automations have been stopped.</p>
-
-      <h3>Ready to continue?</h3>
-      <p>Choose a plan to reactivate your campaigns and get back to work.</p>
-
-      <p><a href="{app_url}/settings/plan" style="display: inline-block; background-color: #0066cc; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 10px;">Subscribe Now</a></p>
-
-      <h3>Still deciding?</h3>
-      <p>Our team is here to answer questions about plans and help you choose the right option. <a href="mailto:{support}">Get in touch</a>.</p>
-
-      <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
-
-      <p style="color: #999; font-size: 12px;">
-        Your data will be preserved for 30 days. After that, it will be permanently deleted.
-      </p>
-    </div>
-  </body>
-</html>
-"""
-
-    text = f"""Your Trial Has Ended
+    text = f"""Your trial has ended
 
 Hi {user.full_name or 'there'},
 
-Your {brand} trial has ended. Your campaigns are now paused and automations have been stopped.
+Your {brand} trial has ended. Your campaigns are now paused.
 
-Ready to continue?
-
-Choose a plan to reactivate your campaigns and get back to work.
+Subscribe to a plan to reactivate your campaigns and get back to work.
 
 Subscribe now: {app_url}/settings/plan
 
-Still deciding?
-
-Our team is here to answer questions about plans. Get in touch: {support}
+Still deciding? Our team can help: {support}
 
 Your data will be preserved for 30 days. After that, it will be permanently deleted.
 """
@@ -399,37 +445,24 @@ def send_plan_upgraded(user: User, old_plan: str, new_plan: str) -> bool:
         "agency": "Agency",
     }
 
-    html = f"""
-<html>
-  <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333;">
-    <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-      <h1 style="color: #0066cc; margin-bottom: 20px;">Welcome to the {plan_names.get(new_plan, new_plan)} Plan!</h1>
+    body = (
+        _h1(f"You're on the {plan_names.get(new_plan, new_plan)} plan")
+        + _p(f"Hi {user.full_name or 'there'},")
+        + _p(f"Your upgrade from <strong style=\"color:#f4f4f5;\">{plan_names.get(old_plan, old_plan)}</strong> to <strong style=\"color:#f4f4f5;\">{plan_names.get(new_plan, new_plan)}</strong> is now active.")
+        + _section_heading("Your new limits")
+        + _ul([
+            f"LinkedIn accounts: {user.linkedin_account_limit}",
+            f"Campaigns: {user.campaign_limit if user.campaign_limit else 'Unlimited'}",
+        ])
+        + _p(f'The prorated charge has been applied. <a href="{app_url}/settings/billing" style="color:#10b981;text-decoration:none;">View your invoice</a>.')
+        + _btn(app_url, "Go to Dashboard")
+        + _divider()
+        + _p(f'Questions? <a href="mailto:{support}" style="color:#10b981;text-decoration:none;">{support}</a>', "font-size:13px;color:#71717a;")
+    )
 
-      <p>Hi {user.full_name or 'there'},</p>
+    html = _html_wrap(brand, support, body)
 
-      <p>Your upgrade from <strong>{plan_names.get(old_plan, old_plan)}</strong> to <strong>{plan_names.get(new_plan, new_plan)}</strong> is now active.</p>
-
-      <h3>Your new limits:</h3>
-      <ul>
-        <li>LinkedIn accounts: {user.linkedin_account_limit}</li>
-        <li>Campaigns: {user.campaign_limit if user.campaign_limit else "Unlimited"}</li>
-      </ul>
-
-      <p>The prorated charge for this upgrade has been applied to your account. Any questions about your billing? <a href="{app_url}/settings/billing">View your invoice</a>.</p>
-
-      <p><a href="{app_url}" style="display: inline-block; background-color: #0066cc; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 10px;">Back to Dashboard</a></p>
-
-      <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
-
-      <p style="color: #666; font-size: 12px;">
-        If you have any questions, reply to this email or contact us at {support}
-      </p>
-    </div>
-  </body>
-</html>
-"""
-
-    text = f"""Welcome to the {plan_names.get(new_plan, new_plan)} Plan!
+    text = f"""You're on the {plan_names.get(new_plan, new_plan)} plan
 
 Hi {user.full_name or 'there'},
 
@@ -439,11 +472,11 @@ Your new limits:
 - LinkedIn accounts: {user.linkedin_account_limit}
 - Campaigns: {user.campaign_limit if user.campaign_limit else "Unlimited"}
 
-The prorated charge for this upgrade has been applied to your account. View your invoice: {app_url}/settings/billing
+The prorated charge has been applied. View your invoice: {app_url}/settings/billing
 
-Back to dashboard: {app_url}
+Go to dashboard: {app_url}
 
-If you have any questions, reply to this email or contact us at {support}
+Questions? {support}
 """
 
     return _send_billing_email(user, f"You've upgraded to {plan_names.get(new_plan, new_plan)}!", html, text)
@@ -461,56 +494,37 @@ def send_plan_downgraded(user: User, old_plan: str, new_plan: str, effective_dat
 
     date_str = effective_date.strftime("%B %d, %Y")
 
-    html = f"""
-<html>
-  <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333;">
-    <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-      <h1 style="color: #666; margin-bottom: 20px;">Your Plan Change</h1>
+    body = (
+        _h1("Your plan change")
+        + _p(f"Hi {user.full_name or 'there'},")
+        + _p(f"Your request to downgrade from <strong style=\"color:#f4f4f5;\">{plan_names.get(old_plan, old_plan)}</strong> to <strong style=\"color:#f4f4f5;\">{plan_names.get(new_plan, new_plan)}</strong> has been received.")
+        + _p(f"Your new plan activates on <strong style=\"color:#f4f4f5;\">{date_str}</strong> at the end of your current billing period.")
+        + _section_heading(f"New limits starting {date_str}")
+        + _ul([
+            f"LinkedIn accounts: {user.linkedin_account_limit}",
+            f"Campaigns: {user.campaign_limit if user.campaign_limit else 'Unlimited'}",
+        ])
+        + _note(f"If you currently exceed your new plan's limits, excess profiles will be deactivated on {date_str}. You'll receive a separate email listing which profiles were affected.")
+        + _btn(f"{app_url}/settings/billing", "View Your Subscription")
+        + _divider()
+        + _p("Changed your mind? You can upgrade anytime from your billing settings.", "font-size:13px;color:#71717a;")
+    )
 
-      <p>Hi {user.full_name or 'there'},</p>
+    html = _html_wrap(brand, support, body)
 
-      <p>We've received your request to downgrade from <strong>{plan_names.get(old_plan, old_plan)}</strong> to <strong>{plan_names.get(new_plan, new_plan)}</strong>.</p>
-
-      <h3>When does it take effect?</h3>
-      <p>Your new plan will activate on <strong>{date_str}</strong> at the end of your current billing period.</p>
-
-      <h3>Your new limits (starting {date_str}):</h3>
-      <ul>
-        <li>LinkedIn accounts: {user.linkedin_account_limit}</li>
-        <li>Campaigns: {user.campaign_limit if user.campaign_limit else "Unlimited"}</li>
-      </ul>
-
-      <p style="background-color: #fff3cd; padding: 10px; border-radius: 5px; margin-top: 20px;">
-        <strong>Note:</strong> If you currently have more LinkedIn accounts or campaigns than your new plan allows, we'll deactivate the excess profiles starting on {date_str}. You'll receive another email letting you know which profiles were deactivated.
-      </p>
-
-      <p style="margin-top: 20px;"><a href="{app_url}/settings/billing" style="display: inline-block; background-color: #0066cc; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">View Your Subscription</a></p>
-
-      <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
-
-      <p style="color: #666; font-size: 12px;">
-        Changed your mind? You can upgrade anytime from your billing settings.
-      </p>
-    </div>
-  </body>
-</html>
-"""
-
-    text = f"""Your Plan Change
+    text = f"""Your plan change
 
 Hi {user.full_name or 'there'},
 
-We've received your request to downgrade from {plan_names.get(old_plan, old_plan)} to {plan_names.get(new_plan, new_plan)}.
+Your request to downgrade from {plan_names.get(old_plan, old_plan)} to {plan_names.get(new_plan, new_plan)} has been received.
 
-When does it take effect?
+Your new plan activates on {date_str} at the end of your current billing period.
 
-Your new plan will activate on {date_str} at the end of your current billing period.
-
-Your new limits (starting {date_str}):
+New limits starting {date_str}:
 - LinkedIn accounts: {user.linkedin_account_limit}
 - Campaigns: {user.campaign_limit if user.campaign_limit else "Unlimited"}
 
-Note: If you currently have more LinkedIn accounts or campaigns than your new plan allows, we'll deactivate the excess profiles starting on {date_str}. You'll receive another email letting you know which profiles were deactivated.
+Note: If you currently exceed your new plan's limits, excess profiles will be deactivated on {date_str}.
 
 View your subscription: {app_url}/settings/billing
 
@@ -524,67 +538,43 @@ def send_payment_failed(user: User, retry_count: int = 1) -> bool:
     """Send payment failed notification with retry information."""
     brand, app_url, support, _ = _settings_ctx()
 
-    html = f"""
-<html>
-  <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333;">
-    <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-      <h1 style="color: #cc0000; margin-bottom: 20px;">Payment Failed</h1>
+    body = (
+        _h1("Payment failed")
+        + _p(f"Hi {user.full_name or 'there'},")
+        + _p("We attempted to charge your payment method for your subscription, but it was declined.")
+        + _p("We'll retry up to 3 times over the next few days. If all attempts fail, your account will be downgraded and campaigns paused.")
+        + _p("Update your payment method now to avoid any interruption.")
+        + _btn(f"{app_url}/settings/billing", "Update Payment Method")
+        + _section_heading("Common reasons")
+        + _ul([
+            "Card has expired",
+            "Insufficient funds",
+            "Card issuer declined the transaction",
+            "Billing address mismatch",
+        ])
+        + _divider()
+        + _p(f'Need help? <a href="mailto:{support}" style="color:#10b981;text-decoration:none;">{support}</a>', "font-size:13px;color:#71717a;")
+    )
 
-      <p>Hi {user.full_name or 'there'},</p>
+    html = _html_wrap(brand, support, body)
 
-      <p>We attempted to charge your payment method for your subscription, but it was declined.</p>
-
-      <h3>What happens next?</h3>
-      <p>We'll retry charging your card up to 3 times over the next few days. If all attempts fail, your account will be downgraded to the free tier and your campaigns will be paused.</p>
-
-      <h3>Fix it now</h3>
-      <p>Update your payment method to avoid service interruption.</p>
-
-      <p><a href="{app_url}/settings/billing" style="display: inline-block; background-color: #0066cc; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 10px;">Update Payment Method</a></p>
-
-      <p style="margin-top: 20px; color: #666; font-size: 14px;">
-        <strong>Common reasons for payment failures:</strong>
-      </p>
-      <ul style="color: #666; font-size: 14px;">
-        <li>Card has expired</li>
-        <li>Insufficient funds</li>
-        <li>Card issuer declined the transaction</li>
-        <li>Billing address mismatch</li>
-      </ul>
-
-      <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
-
-      <p style="color: #666; font-size: 12px;">
-        Need help? Reply to this email or contact us at {support}
-      </p>
-    </div>
-  </body>
-</html>
-"""
-
-    text = f"""Payment Failed
+    text = f"""Payment failed
 
 Hi {user.full_name or 'there'},
 
 We attempted to charge your payment method for your subscription, but it was declined.
 
-What happens next?
+We'll retry up to 3 times over the next few days. If all attempts fail, your account will be downgraded and campaigns paused.
 
-We'll retry charging your card up to 3 times over the next few days. If all attempts fail, your account will be downgraded to the free tier and your campaigns will be paused.
+Update your payment method: {app_url}/settings/billing
 
-Fix it now
-
-Update your payment method to avoid service interruption.
-
-Update payment method: {app_url}/settings/billing
-
-Common reasons for payment failures:
+Common reasons:
 - Card has expired
 - Insufficient funds
 - Card issuer declined the transaction
 - Billing address mismatch
 
-Need help? Reply to this email or contact us at {support}
+Need help? {support}
 """
 
     return _send_billing_email(user, f"Payment failed for your {brand} subscription", html, text)
@@ -594,34 +584,19 @@ def send_account_blocked(user: User, reason: str = "violation of our terms of se
     """Send account blocked notification."""
     brand, _, support, _ = _settings_ctx()
 
-    html = f"""
-<html>
-  <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333;">
-    <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-      <h1 style="color: #cc0000; margin-bottom: 20px;">Your Account Has Been Suspended</h1>
+    body = (
+        _h1("Your account has been suspended")
+        + _p(f"Hi {user.full_name or 'there'},")
+        + _p(f"Your {brand} account has been suspended due to: <strong style=\"color:#f4f4f5;\">{reason}</strong>")
+        + _p("You will no longer be able to log in or run automations.")
+        + _p(f'If you believe this is a mistake, reply to this email or contact <a href="mailto:{support}" style="color:#10b981;text-decoration:none;">{support}</a> with your account email and a brief explanation. Our team will review within 24 hours.')
+        + _divider()
+        + _p("This is an automated message. Please do not reply with sensitive information.", "font-size:13px;color:#71717a;")
+    )
 
-      <p>Hi {user.full_name or 'there'},</p>
+    html = _html_wrap(brand, support, body)
 
-      <p>Your {brand} account has been suspended due to: <strong>{reason}</strong></p>
-
-      <p>You will no longer be able to log in or run automations.</p>
-
-      <h3>What now?</h3>
-      <p>If you believe this is a mistake or have questions about this decision, please reply to this email or contact our support team at {support} with your account email and a brief explanation.</p>
-
-      <p>Our team will review your account within 24 hours.</p>
-
-      <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
-
-      <p style="color: #999; font-size: 12px;">
-        This is an automated message. Please don't reply with sensitive information.
-      </p>
-    </div>
-  </body>
-</html>
-"""
-
-    text = f"""Your Account Has Been Suspended
+    text = f"""Your account has been suspended
 
 Hi {user.full_name or 'there'},
 
@@ -629,11 +604,7 @@ Your {brand} account has been suspended due to: {reason}
 
 You will no longer be able to log in or run automations.
 
-What now?
-
-If you believe this is a mistake or have questions about this decision, please reply to this email or contact our support team at {support} with your account email and a brief explanation.
-
-Our team will review your account within 24 hours.
+If you believe this is a mistake, contact {support} with your account email and a brief explanation. Our team will review within 24 hours.
 """
 
     return _send_billing_email(user, f"Your {brand} account has been suspended", html, text)
@@ -643,54 +614,35 @@ def send_lifetime_deal_purchase(user: User) -> bool:
     """Send lifetime deal purchase confirmation email."""
     brand, app_url, support, docs_url = _settings_ctx()
 
-    html = f"""
-<html>
-  <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333;">
-    <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-      <h1 style="color: #0066cc; margin-bottom: 20px;">Lifetime Deal Activated!</h1>
+    body = (
+        _h1("Lifetime Deal activated!")
+        + _p(f"Hi {user.full_name or 'there'},")
+        + _p(f"Thank you for your purchase! You've activated the {brand} Lifetime Deal — Pro-equivalent access <strong style=\"color:#f4f4f5;\">forever</strong>.")
+        + _section_heading("What's included")
+        + _ul([
+            "1 LinkedIn account",
+            "Unlimited campaigns",
+            "AI-powered messaging (requires your own LLM API key)",
+            "Voice notes",
+            "Sales Navigator access",
+            "Full API access",
+            "Desktop daemon execution (runs on your machine)",
+            "<strong style=\"color:#f4f4f5;\">No recurring charges — ever</strong>",
+        ])
+        + _note("The lifetime deal uses the desktop daemon for campaign execution — automation runs on your computer using your own residential IP. The Cloud tier ($299/month) is not included. Download the desktop app from the dashboard to get started.")
+        + _btn(app_url, "Go to Dashboard")
+        + _divider()
+        + _p(f'Need help? Check our <a href="{docs_url}" style="color:#10b981;text-decoration:none;">documentation</a> or reach out to <a href="mailto:{support}" style="color:#10b981;text-decoration:none;">{support}</a>.', "font-size:13px;color:#71717a;")
+        + _p("Your receipt has been sent to your email. If you didn't receive it, reply to this email.", "font-size:13px;color:#71717a;")
+    )
 
-      <p>Hi {user.full_name or 'there'},</p>
+    html = _html_wrap(brand, support, body)
 
-      <p>Thank you for your purchase! You've activated the {brand} Lifetime Deal with Pro-equivalent access <strong>forever</strong>.</p>
-
-      <h3>What's included:</h3>
-      <ul>
-        <li>1 LinkedIn account</li>
-        <li>Unlimited campaigns</li>
-        <li>AI-powered messaging (requires your own LLM API key)</li>
-        <li>Voice notes</li>
-        <li>Sales Navigator access</li>
-        <li>Full API access</li>
-        <li>Desktop daemon execution (runs on your machine)</li>
-        <li><strong>No recurring charges — ever</strong></li>
-      </ul>
-
-      <p style="color: #666; font-size: 14px;">
-        <strong>Note:</strong> The lifetime deal uses the desktop daemon for campaign execution — automation runs on your computer using your own residential IP. The Cloud tier ($299/month) is not included. To set up your desktop daemon, download the app from the dashboard.
-      </p>
-
-      <p>You're all set. Your campaigns are ready to launch!</p>
-
-      <p><a href="{app_url}" style="display: inline-block; background-color: #0066cc; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 10px;">Go to Dashboard</a></p>
-
-      <h3>Need help getting started?</h3>
-      <p>Check out our <a href="{docs_url}">documentation</a> or reach out to {support} if you have any questions.</p>
-
-      <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
-
-      <p style="color: #666; font-size: 12px;">
-        Your receipt has been sent to your email. If you didn't receive it, reply to this email.
-      </p>
-    </div>
-  </body>
-</html>
-"""
-
-    text = f"""Lifetime Deal Activated!
+    text = f"""Lifetime Deal activated!
 
 Hi {user.full_name or 'there'},
 
-Thank you for your purchase! You've activated the {brand} Lifetime Deal with Pro-equivalent access forever.
+Thank you for your purchase! You've activated the {brand} Lifetime Deal — Pro-equivalent access forever.
 
 What's included:
 - 1 LinkedIn account
@@ -704,15 +656,9 @@ What's included:
 
 Note: The lifetime deal uses the desktop daemon for execution. The Cloud tier ($299/month) is not included.
 
-You're all set. Your campaigns are ready to launch!
-
 Go to dashboard: {app_url}
 
-Need help getting started?
-
-Check out our documentation: {docs_url}
-
-Or reach out to {support} if you have any questions.
+Need help? {docs_url} or {support}
 
 Your receipt has been sent to your email. If you didn't receive it, reply to this email.
 """
@@ -722,48 +668,30 @@ Your receipt has been sent to your email. If you didn't receive it, reply to thi
 
 def send_email_verification(user: User, verification_url: str) -> bool:
     """Send email verification link to new user."""
-    brand, _, _, _ = _settings_ctx()
+    brand, _, support, _ = _settings_ctx()
 
-    html = f"""
-<html>
-  <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333;">
-    <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-      <h1 style="color: #0066cc; margin-bottom: 20px;">Verify Your Email</h1>
+    body = (
+        _h1("Verify your email")
+        + _p(f"Hi {user.full_name or 'there'},")
+        + _p(f"Thanks for signing up for {brand}! Verify your email address to start your trial.")
+        + _btn(verification_url, "Verify Email Address")
+        + _divider()
+        + _p(f'Or copy this link into your browser:<br><a href="{verification_url}" style="color:#10b981;text-decoration:none;word-break:break-all;font-size:13px;">{verification_url}</a>', "font-size:13px;color:#71717a;")
+        + _p("This link expires in 24 hours.", "font-size:13px;color:#71717a;")
+        + _p("If you didn't create an account, you can safely ignore this email.", "font-size:13px;color:#71717a;")
+    )
 
-      <p>Hi {user.full_name or 'there'},</p>
+    html = _html_wrap(brand, support, body)
 
-      <p>Thanks for signing up for {brand}! Please verify your email address to start your trial.</p>
-
-      <p><a href="{verification_url}" style="display: inline-block; background-color: #0066cc; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 10px;">Verify Email Address</a></p>
-
-      <p style="margin-top: 20px; color: #666; font-size: 14px;">
-        Or copy and paste this link into your browser:<br>
-        <a href="{verification_url}" style="color: #0066cc; word-break: break-all;">{verification_url}</a>
-      </p>
-
-      <p style="margin-top: 20px; color: #666; font-size: 14px;">
-        This link will expire in 24 hours.
-      </p>
-
-      <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
-
-      <p style="color: #666; font-size: 12px;">
-        If you didn't create an account, you can safely ignore this email.
-      </p>
-    </div>
-  </body>
-</html>
-"""
-
-    text = f"""Verify Your Email
+    text = f"""Verify your email
 
 Hi {user.full_name or 'there'},
 
-Thanks for signing up for {brand}! Please verify your email address to start your trial.
+Thanks for signing up for {brand}! Verify your email address to start your trial.
 
 Verify your email: {verification_url}
 
-This link will expire in 24 hours.
+This link expires in 24 hours.
 
 If you didn't create an account, you can safely ignore this email.
 """
@@ -773,48 +701,30 @@ If you didn't create an account, you can safely ignore this email.
 
 def send_password_reset(user: User, reset_url: str) -> bool:
     """Send password reset link to user."""
-    brand, _, _, _ = _settings_ctx()
+    brand, _, support, _ = _settings_ctx()
 
-    html = f"""
-<html>
-  <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333;">
-    <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-      <h1 style="color: #0066cc; margin-bottom: 20px;">Reset Your Password</h1>
+    body = (
+        _h1("Reset your password")
+        + _p(f"Hi {user.full_name or 'there'},")
+        + _p(f"We received a request to reset your {brand} password.")
+        + _btn(reset_url, "Reset Password")
+        + _divider()
+        + _p(f'Or copy this link into your browser:<br><a href="{reset_url}" style="color:#10b981;text-decoration:none;word-break:break-all;font-size:13px;">{reset_url}</a>', "font-size:13px;color:#71717a;")
+        + _p("This link expires in 24 hours.", "font-size:13px;color:#71717a;")
+        + _p("If you didn't request a password reset, you can safely ignore this email. Your password will remain unchanged.", "font-size:13px;color:#71717a;")
+    )
 
-      <p>Hi {user.full_name or 'there'},</p>
+    html = _html_wrap(brand, support, body)
 
-      <p>We received a request to reset your {brand} password. Click the button below to create a new password:</p>
-
-      <p><a href="{reset_url}" style="display: inline-block; background-color: #0066cc; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 10px;">Reset Password</a></p>
-
-      <p style="margin-top: 20px; color: #666; font-size: 14px;">
-        Or copy and paste this link into your browser:<br>
-        <a href="{reset_url}" style="color: #0066cc; word-break: break-all;">{reset_url}</a>
-      </p>
-
-      <p style="margin-top: 20px; color: #666; font-size: 14px;">
-        This link will expire in 24 hours.
-      </p>
-
-      <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
-
-      <p style="color: #666; font-size: 12px;">
-        If you didn't request a password reset, you can safely ignore this email. Your password will remain unchanged.
-      </p>
-    </div>
-  </body>
-</html>
-"""
-
-    text = f"""Reset Your Password
+    text = f"""Reset your password
 
 Hi {user.full_name or 'there'},
 
-We received a request to reset your {brand} password. Click the link below to create a new password:
+We received a request to reset your {brand} password.
 
-{reset_url}
+Reset your password: {reset_url}
 
-This link will expire in 24 hours.
+This link expires in 24 hours.
 
 If you didn't request a password reset, you can safely ignore this email. Your password will remain unchanged.
 """
