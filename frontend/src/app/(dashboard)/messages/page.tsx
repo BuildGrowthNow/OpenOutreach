@@ -369,7 +369,7 @@ const MessagesPage = () => {
     try {
       setThreadLoading(true);
       const response = await getMessages(undefined, dealId);
-      if (response.data) setThreadMessages(response.data.data || []);
+      if (response.data) setThreadMessages((response.data.data || []).slice().reverse());
     } catch (err) {
       console.error("Error fetching thread:", err);
     } finally {

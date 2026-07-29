@@ -185,7 +185,7 @@ const LeadDetailsPage = () => {
       if (!silent) setMessageLoading(true)
       const response = await getMessages(undefined, undefined, leadId)
       if (response.data?.data) {
-        setMessages(response.data.data)
+        setMessages(response.data.data.slice().reverse())
       }
     } catch (err) {
       console.error('Failed to fetch messages:', err)
