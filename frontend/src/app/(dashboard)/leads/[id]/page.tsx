@@ -22,7 +22,15 @@ import {
   getCampaigns,
   type Campaign
 } from '@/lib/api/dashboard'
-import { Lead, DealState, DealOutcome, Message } from '@/lib/types/components'
+import { Lead, Message } from '@/lib/types/components'
+
+interface LeadDeal {
+  dealId: string
+  campaignId: string
+  campaignName?: string
+  state: string
+  outcome?: string
+}
 import { formatDistanceToNow } from 'date-fns'
 
 interface LeadProfile {
@@ -51,6 +59,7 @@ const LeadDetailsPage = () => {
 
   const [lead, setLead] = useState<Lead | null>(null)
   const [profile, setProfile] = useState<LeadProfile | null>(null)
+  const [leadDeals, setLeadDeals] = useState<LeadDeal[]>([])
   const [messages, setMessages] = useState<Message[]>([])
   const [notes, setNotes] = useState<string>('')
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
@@ -74,11 +83,12 @@ const LeadDetailsPage = () => {
       if (response.data) {
         setLead(response.data)
         setNotes(response.data.notes || '')
-
-        // Use cached profile from lead detail response (no live scrape)
         if (response.data.profile) {
           setProfile(response.data.profile)
         }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const rawDeals = (response.data as any).deals as LeadDeal[] | undefined
+        if (rawDeals) setLeadDeals(rawDeals)
       } else {
         setError(response.error || 'Failed to fetch lead details')
       }
@@ -160,46 +170,6 @@ const LeadDetailsPage = () => {
       })
     } finally {
       setLoading(false)
-    }
-  }
-
-  const handleAddToCampaign = async (campaignId: string) => {
-    if (!lead) return
-
-    try {
-      const response = await fetch(`/api/leads/${lead.id}/add-to-campaign/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ campaign_id: parseInt(campaignId) }),
-      })
-
-      const data = await response.json()
-
-      if (response.ok && data.success) {
-        toast({
-          title: 'Added to Campaign',
-          description: 'Lead has been added to the campaign successfully.',
-          variant: 'default',
-        })
-        setShowAddToCampaign(false)
-        await fetchLeadDetails()
-        await fetchCampaigns()
-      } else {
-        toast({
-          title: 'Failed to Add',
-          description: data.error || 'Unknown error',
-          variant: 'destructive',
-        })
-      }
-    } catch (err) {
-      console.error('Failed to add to campaign:', err)
-      toast({
-        title: 'Failed to Add',
-        description: 'Failed to add to campaign. Please try again.',
-        variant: 'destructive',
-      })
     }
   }
 
@@ -608,23 +578,25 @@ const LeadDetailsPage = () => {
                   <CardTitle>Campaign Participation</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {campaigns.length > 0 ? (
+                  {leadDeals.length > 0 ? (
                     <div className="space-y-4">
-                      {campaigns.map(campaign => (
-                        <div key={campaign.id} className="p-4 border rounded-lg hover:bg-muted/50 transition-colors">
-                          <div className="flex items-start justify-between">
+                      {leadDeals.map(deal => (
+                        <div
+                          key={deal.dealId}
+                          className="p-4 border rounded-lg hover:bg-muted/50 transition-colors cursor-pointer"
+                          onClick={() => router.push(`/campaigns/${deal.campaignId}`)}
+                        >
+                          <div className="flex items-center justify-between">
                             <div>
-                              <h3 className="font-medium">{campaign.name}</h3>
-                              {campaign.description && (
-                                <p className="text-sm text-muted-foreground mt-1">{campaign.description}</p>
-                              )}
-                              <div className="flex items-center gap-2 mt-2">
-                                <Badge variant="outline" className="text-xs">
-                                  {campaign.status || 'Draft'}
-                                </Badge>
-
+                              <h3 className="font-medium">{deal.campaignName || deal.campaignId}</h3>
+                              <div className="flex items-center gap-2 mt-1">
+                                <Badge variant="outline" className="text-xs">{deal.state}</Badge>
+                                {deal.outcome && (
+                                  <Badge variant="outline" className="text-xs text-muted-foreground">{deal.outcome}</Badge>
+                                )}
                               </div>
                             </div>
+                            <Icons.ChevronRight className="h-4 w-4 text-muted-foreground" />
                           </div>
                         </div>
                       ))}
@@ -724,18 +696,16 @@ const LeadDetailsPage = () => {
       />
 
       {/* Add to Campaign Modal */}
-      {campaigns.length > 0 && (
-        <AddToCampaignModal
-          open={showAddToCampaign}
-          onOpenChange={setShowAddToCampaign}
-          leadId={lead.id}
-          leadName={lead.name}
-          onSuccess={() => {
-            setShowAddToCampaign(false)
-            void fetchLeadDetails()
-          }}
-        />
-      )}
+      <AddToCampaignModal
+        open={showAddToCampaign}
+        onOpenChange={setShowAddToCampaign}
+        leadId={lead.id}
+        leadName={lead.name}
+        onSuccess={() => {
+          setShowAddToCampaign(false)
+          void fetchLeadDetails()
+        }}
+      />
     </div>
   )
 }

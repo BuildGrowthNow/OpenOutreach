@@ -299,7 +299,7 @@ async def export_leads(
     )
 
 
-@router.get("/{lead_id}", response_model=LeadDetailResponse)
+@router.get("/{lead_id}", response_model=dict)
 async def get_lead(
     lead_id: str,
     user_id: str = Depends(get_current_user),
@@ -307,8 +307,8 @@ async def get_lead(
     """
     Get a single lead by ID.
     User must have access via at least one campaign.
+    Returns the same camelCase shape as the list endpoint, plus full profile and deal details.
     """
-    # Check if user has access to this lead via any campaign
     deals_collection = get_mongodb_collection("deals")
     if deals_collection is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
@@ -317,18 +317,17 @@ async def get_lead(
     if not deals:
         raise HTTPException(status_code=404, detail="Lead not found")
 
-    # Verify user has access to at least one campaign
-    has_access = False
+    # Verify user has access to at least one campaign; keep first accessible deal for state
+    accessible_deal = None
     for deal in deals:
         campaign = models.Campaign.get(str(deal["campaign_id"]))
         if campaign and campaign.has_access(user_id):
-            has_access = True
-            break
+            if accessible_deal is None:
+                accessible_deal = deal
 
-    if not has_access:
+    if accessible_deal is None:
         raise HTTPException(status_code=403, detail="Access denied")
 
-    # Get lead
     leads_collection = get_mongodb_collection("leads")
     if leads_collection is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
@@ -337,19 +336,132 @@ async def get_lead(
     if not lead_data:
         raise HTTPException(status_code=404, detail="Lead not found")
 
-    return LeadDetailResponse(
-        id=str(lead_data["_id"]),
-        public_identifier=lead_data.get("public_identifier", ""),
-        url=lead_data.get("url", ""),
-        full_name=lead_data.get("full_name"),
-        headline=lead_data.get("headline"),
-        location=lead_data.get("location"),
-        disqualified=lead_data.get("disqualified", False),
-        created_at=lead_data.get("creation_date"),
-        cached_profile=lead_data.get("cached_profile"),
-        contact_info=lead_data.get("contact_info"),
-        api_email=lead_data.get("api_email"),
+    # Build profile shape from cached_profile (Voyager response)
+    cp = lead_data.get("cached_profile") or {}
+    first = cp.get("first_name", "")
+    last = cp.get("last_name", "")
+    full_name = lead_data.get("full_name") or (f"{first} {last}".strip() or None)
+    headline = lead_data.get("headline") or cp.get("headline")
+    location = lead_data.get("location") or cp.get("location_name")
+
+    company = None
+    if headline:
+        at_idx = headline.lower().find(" at ")
+        if at_idx > -1:
+            company = headline[at_idx + 4:].strip()
+
+    # Build experience list from positions
+    positions = cp.get("positions") or []
+    experience = []
+    for pos in positions:
+        if not isinstance(pos, dict):
+            continue
+        dr = pos.get("date_range") or {}
+        start = dr.get("start") or {}
+        end = dr.get("end") or {}
+
+        def _year_month(d: dict) -> Optional[str]:
+            if not d:
+                return None
+            y, m = d.get("year"), d.get("month")
+            if y and m:
+                return f"{m}/{y}"
+            return str(y) if y else None
+
+        start_str = _year_month(start)
+        end_str = _year_month(end) or "Present"
+        duration = f"{start_str} - {end_str}" if start_str else None
+        experience.append({
+            "title": pos.get("title"),
+            "company": pos.get("company_name"),
+            "duration": duration,
+        })
+
+    # Build education list
+    educations = cp.get("educations") or []
+    education = []
+    for edu in educations:
+        if not isinstance(edu, dict):
+            continue
+        dr = edu.get("date_range") or {}
+        end = dr.get("end") or {}
+        year = str(end.get("year")) if end.get("year") else None
+        education.append({
+            "school": edu.get("school_name"),
+            "degree": edu.get("degree_name"),
+            "year": year,
+        })
+
+    profile_shape = {
+        "firstName": first,
+        "lastName": last,
+        "headline": headline,
+        "summary": cp.get("summary"),
+        "location": location,
+        "experience": experience,
+        "education": education,
+    } if cp else None
+
+    # Contact info
+    api_email = lead_data.get("api_email")
+    contact_info_raw = lead_data.get("contact_info") or {}
+    overlay_email = contact_info_raw.get("email") if isinstance(contact_info_raw, dict) else None
+    best_email = api_email or overlay_email
+    phone_numbers = (
+        contact_info_raw.get("phone_numbers") or []
+        if isinstance(contact_info_raw, dict) else []
     )
+
+    created = lead_data.get("creation_date")
+    updated = lead_data.get("update_date") or created
+
+    # Collect all deals the user can see for this lead
+    all_deals = []
+    campaigns_collection = get_mongodb_collection("campaigns")
+    campaign_names: dict = {}
+    if campaigns_collection is not None:
+        for cdoc in campaigns_collection.find(
+            {"_id": {"$in": [str(d["campaign_id"]) for d in deals]}},
+            {"_id": 1, "name": 1},
+        ):
+            campaign_names[str(cdoc["_id"])] = cdoc.get("name", "")
+
+    for deal in deals:
+        campaign_obj = models.Campaign.get(str(deal["campaign_id"]))
+        if campaign_obj and campaign_obj.has_access(user_id):
+            all_deals.append({
+                "dealId": str(deal["_id"]),
+                "campaignId": str(deal["campaign_id"]),
+                "campaignName": campaign_names.get(str(deal["campaign_id"])),
+                "state": deal.get("state", "DISCOVERED"),
+                "outcome": deal.get("outcome"),
+            })
+
+    return {
+        "id": str(lead_data["_id"]),
+        "publicIdentifier": lead_data.get("public_identifier", ""),
+        "linkedinUrl": lead_data.get("linkedin_url", lead_data.get("url", "")),
+        "name": full_name,
+        "title": headline,
+        "company": company,
+        "state": accessible_deal.get("state", "DISCOVERED"),
+        "outcome": accessible_deal.get("outcome"),
+        "campaignId": str(accessible_deal["campaign_id"]),
+        "campaignName": campaign_names.get(str(accessible_deal["campaign_id"])),
+        "creationDate": created.isoformat() if hasattr(created, "isoformat") else (str(created) if created else ""),
+        "updateDate": updated.isoformat() if hasattr(updated, "isoformat") else (str(updated) if updated else ""),
+        "disqualified": lead_data.get("disqualified", False),
+        "notes": lead_data.get("notes"),
+        "contactInfo": {
+            "email": best_email,
+            "apiEmail": api_email,
+            "overlayEmail": overlay_email,
+            "phoneNumbers": phone_numbers,
+        } if (best_email or phone_numbers) else None,
+        "profile": profile_shape,
+        "deals": all_deals,
+        "connectionDegree": lead_data.get("connection_degree"),
+    }
 
 
 @router.get("/campaigns/{campaign_id}/leads", response_model=dict)
@@ -619,7 +731,8 @@ async def update_lead(
 
     leads_collection.update_one({"_id": lead_id}, {"$set": update_doc})
 
-    return {"success": True, "lead_id": lead_id, "updated": list(update_doc.keys())}
+    # Return updated lead via the same shape as get_lead
+    return await get_lead(lead_id=lead_id, user_id=user_id)
 
 
 class AddToCampaignRequest(BaseModel):
