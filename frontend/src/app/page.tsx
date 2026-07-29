@@ -20,7 +20,7 @@ function Capabilities() {
     { value: '50/day', label: 'Connection requests' },
     { value: 'AI-written', label: 'Personalized messages' },
     { value: 'Smart', label: 'Automated follow-ups' },
-    { value: 'Your IP', label: 'Runs on your machine' },
+    { value: 'Desktop or Cloud', label: 'Your choice of execution' },
   ];
 
   return (

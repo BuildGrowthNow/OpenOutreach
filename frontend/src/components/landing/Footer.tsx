@@ -19,7 +19,7 @@ export function Footer() {
               <Logo variant="dark" iconSize={28} className="text-sm text-white" />
             </Link>
             <p className="text-zinc-500 text-sm leading-relaxed mb-6">
-              AI-powered LinkedIn outreach that runs on your desktop. Your IP, your browser, your conversations.
+              AI-powered LinkedIn outreach. Run it on your own machine or let us manage it fully in the cloud.
             </p>
             <a
               href="mailto:support@lengrowth.com"
@@ -98,11 +98,11 @@ export function Footer() {
             &copy; {currentYear} Lengrowth. All rights reserved.
           </div>
           <div className="flex items-center gap-6 text-xs text-zinc-600">
-            <span>Runs on your machine</span>
+            <span>Desktop or Cloud</span>
             <span className="w-1 h-1 rounded-full bg-zinc-800" />
-            <span>Your IP, your browser</span>
+            <span>AI-powered outreach</span>
             <span className="w-1 h-1 rounded-full bg-zinc-800" />
-            <span>No cloud required</span>
+            <span>No long-term contracts</span>
           </div>
         </div>
       </div>

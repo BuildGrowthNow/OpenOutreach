@@ -8,11 +8,11 @@ import { TextReveal } from './text-reveal';
 const faqs = [
   {
     question: "Will my LinkedIn account get banned?",
-    answer: "Lengrowth runs on your own machine, using your real IP and browser. It mimics human timing — random delays, daily limits, activity spread across hours. We've designed it to be indistinguishable from manual use. Most users run it for months without any issues.",
+    answer: "Lengrowth mimics human timing — random delays, daily limits, activity spread across hours. On desktop plans, it uses your own machine and IP, making activity indistinguishable from manual browsing. On the Cloud plan, we handle everything on managed infrastructure. Most users run it for months without any issues.",
   },
   {
     question: "How is this different from other LinkedIn tools?",
-    answer: "Most tools run in the cloud on shared IPs that LinkedIn already flags. Lengrowth runs locally on your desktop — your IP, your browser session, your cookies. No proxy costs, no shared infrastructure, no red flags. Plus the AI writes genuinely personalized messages, not template swaps.",
+    answer: "Most tools run in the cloud on shared IPs that LinkedIn already flags. With Lengrowth, desktop plans use your own machine and IP — no proxy costs, no shared infrastructure, no red flags. If you prefer fully managed, our Cloud plan handles it all for you. Plus the AI writes genuinely personalized messages, not template swaps.",
   },
   {
     question: "Do the AI messages actually sound good?",
@@ -23,16 +23,12 @@ const faqs = [
     answer: "The sequence stops immediately. The reply lands in your Lengrowth inbox and you take over the conversation manually. We're an outreach tool, not a chatbot — you handle the selling.",
   },
   {
-    question: "Can I use this with Sales Navigator?",
-    answer: "Yes. If you have a Sales Navigator subscription, Lengrowth can use its advanced search filters to find more targeted prospects. It works with or without it.",
-  },
-  {
     question: "What if I already have a CRM?",
-    answer: "Lengrowth has its own lightweight pipeline, but if you want to push leads elsewhere, the Pro plan includes API access. Export your connected leads and conversations to whatever system you use.",
+    answer: "Lengrowth has its own lightweight pipeline with leads, deals, and conversation history. You can manage everything directly in the platform.",
   },
   {
     question: "Is there a free trial?",
-    answer: "Yes — 7 days, full access, no credit card required to start exploring. You'll need to add payment to actually send outreach, but you can set up campaigns and see the interface immediately.",
+    answer: "Yes — 7 days full access on the Starter plan. A credit card is required, but you won't be charged if you cancel before the trial ends.",
   },
 ];
 
