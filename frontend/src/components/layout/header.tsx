@@ -1,6 +1,6 @@
 'use client'
 
-import { Menu, Bell, Search, Settings, LogOut, Monitor } from 'lucide-react'
+import { Menu, Bell, Search, Settings, LogOut, Monitor, CreditCard } from 'lucide-react'
 import { Icons } from '@/lib/types/components'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -421,6 +421,10 @@ const Header = ({ onMenuClick, className }: HeaderProps) => {
             <DropdownMenuItem className="gap-2 rounded-md px-2 py-1.5 transition-colors" onClick={() => router.push('/settings')}>
               <Settings className="h-4 w-4" />
               Settings
+            </DropdownMenuItem>
+            <DropdownMenuItem className="gap-2 rounded-md px-2 py-1.5 transition-colors" onClick={() => router.push('/settings/billing')}>
+              <CreditCard className="h-4 w-4" />
+              Billing
             </DropdownMenuItem>
               <DropdownMenuSeparator className="bg-zinc-200/20 my-2" />
              <DropdownMenuItem className="gap-2 rounded-md px-2 py-1.5 transition-colors cursor-pointer" onClick={async () => {

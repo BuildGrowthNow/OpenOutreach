@@ -75,6 +75,8 @@ class BillingStatusResponse(BaseModel):
     campaign_limit: Optional[int]
     cloud_profiles: int
     user_status: str
+    admin_notes: Optional[str] = None
+    stripe_subscription_id: Optional[str] = None
 
 
 class CheckoutSessionRequest(BaseModel):
@@ -204,6 +206,8 @@ async def billing_status(
         campaign_limit=user.campaign_limit,
         cloud_profiles=user.cloud_profiles,
         user_status=user.status,
+        admin_notes=user.admin_notes,
+        stripe_subscription_id=user.stripe_subscription_id,
     )
 
 
