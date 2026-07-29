@@ -28,7 +28,7 @@ const faqs = [
   },
   {
     question: "Is there a free trial?",
-    answer: "Yes — 7 days full access on the Starter plan. A credit card is required, but you won't be charged if you cancel before the trial ends.",
+    answer: "Yes — 7 days full access on the Starter plan. No credit card required to start.",
   },
 ];
 

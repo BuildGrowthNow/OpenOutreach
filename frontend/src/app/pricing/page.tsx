@@ -127,7 +127,7 @@ const faqs = [
   {
     question: "What's included in the free trial?",
     answer:
-      "Full Starter plan access for 7 days. A credit card is required, but if you cancel before the trial ends you won't be charged a thing.",
+      "Full Starter plan access for 7 days. No credit card required to start.",
   },
   {
     question: "Can my LinkedIn account get restricted?",

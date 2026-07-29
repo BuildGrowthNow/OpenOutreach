@@ -835,7 +835,7 @@ class RemoteDaemon:
 
     def _show_block_notification(self, reason: Optional[str] = None) -> None:
         """Show system notification for blocked account."""
-        message_title = "OpenOutreach - Account Blocked"
+        message_title = "Lengrowth - Account Blocked"
         message_body = (
             f"Your account has been blocked: {reason}\n"
             "Please log in to the web platform or contact support for more information."
@@ -850,27 +850,27 @@ class RemoteDaemon:
         else:
             time_text = "1 hour"
 
-        message_title = "OpenOutreach - Trial Ending Soon"
+        message_title = "Lengrowth - Trial Ending Soon"
         message_body = (
             f"Your trial ends in {time_text}. Please log in to the web platform "
-            "to choose a plan and continue using OpenOutreach."
+            "to choose a plan and continue using Lengrowth."
         )
 
         self._show_system_notification(message_title, message_body)
 
     def _show_trial_expired_notification(self) -> None:
         """Show system notification for expired trial."""
-        message_title = "OpenOutreach - Trial Expired"
+        message_title = "Lengrowth - Trial Expired"
         message_body = (
             "Your trial has ended. Please log in to the web platform to choose a plan "
-            "and continue using OpenOutreach."
+            "and continue using Lengrowth."
         )
 
         self._show_system_notification(message_title, message_body)
 
     def _show_subscription_canceled_notification(self) -> None:
         """Show system notification for canceled subscription."""
-        message_title = "OpenOutreach - Subscription Canceled"
+        message_title = "Lengrowth - Subscription Canceled"
         message_body = (
             "Your subscription has been canceled. Please log in to the web platform "
             "to reactivate or choose a new plan."
@@ -880,7 +880,7 @@ class RemoteDaemon:
 
     def _show_payment_failed_notification(self) -> None:
         """Show system notification for payment failure."""
-        message_title = "OpenOutreach - Payment Failed"
+        message_title = "Lengrowth - Payment Failed"
         message_body = (
             "Your payment has failed. Please log in to the web platform to update "
             "your payment method."
@@ -915,7 +915,7 @@ class RemoteDaemon:
                     "$x.LoadXml($t.GetXml())",
                     "$o = [Windows.UI.Notifications.ToastNotification]::new($x)",
                     "[Windows.UI.Notifications.ToastNotificationManager]"
-                    '::CreateToastNotifier("OpenOutreach").Show($o)',
+                    '::CreateToastNotifier("Lengrowth").Show($o)',
                 ]
                 ps_script = ";".join(ps_lines)
                 subprocess.run(
@@ -934,7 +934,7 @@ class RemoteDaemon:
             is_desktop: If True, desktop daemon shows challenge in local browser.
                        If False, redirect to web platform.
         """
-        message_title = "OpenOutreach - Action Required"
+        message_title = "Lengrowth - Action Required"
         if is_desktop:
             message_body = (
                 "LinkedIn requires verification. Complete the challenge in "

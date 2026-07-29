@@ -10,7 +10,7 @@ import { Footer } from '@/components/landing/Footer';
 const LAUNCH_DATE = new Date('2026-07-19T00:00:00Z');
 const END_DATE = new Date(LAUNCH_DATE.getTime() + 30 * 24 * 60 * 60 * 1000);
 const TOTAL_SPOTS = 100;
-const SPOTS_TAKEN = 23;
+const BASELINE_SPOTS = 23; // pre-launch buyers shown for social proof
 
 const features = [
   'Unlimited campaigns',
@@ -52,6 +52,7 @@ const faqs = [
 export default function LifetimeDealPage() {
   const [time, setTime] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
   const [expired, setExpired] = useState(false);
+  const [spotsTaken, setSpotsTaken] = useState(BASELINE_SPOTS);
 
   useEffect(() => {
     const tick = () => {
@@ -72,8 +73,19 @@ export default function LifetimeDealPage() {
     return () => clearInterval(id);
   }, []);
 
-  const spotsLeft = TOTAL_SPOTS - SPOTS_TAKEN;
-  const progressPct = (SPOTS_TAKEN / TOTAL_SPOTS) * 100;
+  useEffect(() => {
+    fetch('/api/billing/lifetime-deal-active')
+      .then((r) => r.json())
+      .then((data) => {
+        if (typeof data.buyer_count === 'number') {
+          setSpotsTaken(BASELINE_SPOTS + data.buyer_count);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const spotsLeft = TOTAL_SPOTS - spotsTaken;
+  const progressPct = (spotsTaken / TOTAL_SPOTS) * 100;
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-50">
@@ -89,7 +101,7 @@ export default function LifetimeDealPage() {
           <div className="container relative mx-auto px-4 sm:px-6 lg:px-8 max-w-3xl text-center">
             <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/25 bg-emerald-500/[0.08] px-4 py-1.5 text-sm font-semibold text-emerald-400 mb-8">
               <Zap className="h-3.5 w-3.5" />
-              Limited Time — {SPOTS_TAKEN} of {TOTAL_SPOTS} spots taken
+              Limited Time — {spotsTaken} of {TOTAL_SPOTS} spots taken
             </div>
 
             <h1
@@ -112,7 +124,7 @@ export default function LifetimeDealPage() {
             {/* Spots progress */}
             <div className="mb-10 max-w-sm mx-auto">
               <div className="flex justify-between text-xs font-medium mb-2">
-                <span className="text-zinc-400">{SPOTS_TAKEN} spots claimed</span>
+                <span className="text-zinc-400">{spotsTaken} spots claimed</span>
                 <span className="text-emerald-400 font-bold">{spotsLeft} left</span>
               </div>
               <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">

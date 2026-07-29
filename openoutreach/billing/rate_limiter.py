@@ -80,7 +80,7 @@ class LinkedInCredentialValidator:
 
         existing = collection.find_one(query)
         if existing:
-            return False, "This LinkedIn account is already connected to another OpenOutreach account"
+            return False, "This LinkedIn account is already connected to another Lengrowth account"
 
         return True, None
 

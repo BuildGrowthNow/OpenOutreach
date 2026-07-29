@@ -174,9 +174,14 @@ async def list_plans() -> list[PlanResponse]:
 
 
 @router.get("/lifetime-deal-active")
-async def lifetime_deal_active() -> dict[str, bool]:
-    """Check if lifetime deal is still active."""
-    return {"active": is_lifetime_deal_active()}
+async def lifetime_deal_active() -> dict:
+    """Check if lifetime deal is still active and return buyer count."""
+    config = get_site_config()
+    return {
+        "active": is_lifetime_deal_active(),
+        "buyer_count": config.lifetime_deal_buyer_count,
+        "max_buyers": config.lifetime_deal_max_buyers,
+    }
 
 
 @router.get("/status")

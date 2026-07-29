@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 logger = logging.getLogger(__name__)
 
 app = FastAPI(
-    title="OpenOutreach API",
+    title="Lengrowth API",
     description="LinkedIn Automation Platform - FastAPI + MongoDB",
     version="2.0.0",
     docs_url="/docs",
