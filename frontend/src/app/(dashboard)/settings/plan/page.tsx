@@ -11,10 +11,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Breadcrumb } from "@/components/layout/breadcrumb";
 import { Icons } from "@/lib/types/components";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Breadcrumb } from "@/components/layout/breadcrumb";
 import {
   getBillingStatus,
   getPlans,
@@ -124,9 +124,9 @@ export default function PlanPage() {
 
   const currentPlan = billingStatus?.plan || "starter";
 
-  const displayPlans = isAnnual
-    ? plans
-    : plans.filter((p) => p.name !== "lifetime" || lifetimeDealActive);
+  // Separate lifetime from regular plans; exclude cloud_addon from display
+  const regularPlans = plans.filter((p) => p.name !== "lifetime" && p.name !== "cloud_addon");
+  const lifetimePlan = plans.find((p) => p.name === "lifetime");
 
   return (
     <div className="space-y-6">
@@ -159,9 +159,7 @@ export default function PlanPage() {
           <div className="flex items-center justify-between">
             <div>
               <CardTitle>Billing Frequency</CardTitle>
-              <CardDescription>
-                Save 17% when billed annually
-              </CardDescription>
+              <CardDescription>Save 17% when billed annually</CardDescription>
             </div>
             <Tabs
               defaultValue="monthly"
@@ -178,7 +176,7 @@ export default function PlanPage() {
       </Card>
 
       <div className="grid gap-6 lg:grid-cols-4">
-        {displayPlans.map((plan) => (
+        {regularPlans.map((plan) => (
           <PlanCard
             key={plan.name}
             plan={plan}
@@ -191,14 +189,39 @@ export default function PlanPage() {
         ))}
       </div>
 
-      {!isAnnual && lifetimeDealActive && (
-        <Alert className="bg-amber-50 border-amber-200">
-          <Icons.Zap className="h-4 w-4 text-amber-600" />
-          <AlertDescription className="text-amber-900">
-            <span className="font-semibold">Limited time offer:</span> Get Pro plan
-            forever with a one-time payment of $149. Offer ends in 30 days!
-          </AlertDescription>
-        </Alert>
+      {/* Lifetime deal — standalone banner */}
+      {lifetimeDealActive && lifetimePlan && (
+        <Card className={`border-amber-500/50 bg-amber-500/5 ${currentPlan === "lifetime" ? "border-2 border-amber-500" : ""}`}>
+          <CardContent className="flex flex-col sm:flex-row items-start sm:items-center gap-6 pt-6">
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-1">
+                <Icons.Zap className="h-5 w-5 text-amber-500" />
+                <span className="font-bold text-lg">Lifetime Pro — $149 once</span>
+                {currentPlan === "lifetime" && (
+                  <span className="text-xs bg-amber-500 text-white px-2 py-0.5 rounded-full font-semibold">Current Plan</span>
+                )}
+              </div>
+              <p className="text-sm text-muted-foreground mb-3">
+                Pay once, use forever. All Pro features included — no monthly fees, ever. Limited spots remaining.
+              </p>
+              <ul className="flex flex-wrap gap-x-6 gap-y-1">
+                {lifetimePlan.features.map((f) => (
+                  <li key={f} className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                    <span className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0" />
+                    {f}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <Button
+              onClick={() => handleSelectPlan("lifetime", "lifetime")}
+              disabled={currentPlan === "lifetime" || isProcessing}
+              className="bg-amber-500 hover:bg-amber-400 text-white font-semibold shrink-0"
+            >
+              {currentPlan === "lifetime" ? "Current Plan" : isProcessing && selectedPlan === "lifetime" ? "Loading..." : "Claim Lifetime Deal"}
+            </Button>
+          </CardContent>
+        </Card>
       )}
 
       <Card>

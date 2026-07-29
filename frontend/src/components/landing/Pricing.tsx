@@ -34,10 +34,7 @@ const pricingTiers: PricingTier[] = [
     features: [
       '1 LinkedIn account',
       'Unlimited campaigns',
-      'Voice notes',
-      'AI follow-ups',
-      'Sales Navigator access',
-      'API access',
+      'AI follow-up sequences',
       '7-day free trial',
     ],
     highlighted: true,

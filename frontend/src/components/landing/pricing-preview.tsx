@@ -18,7 +18,7 @@ const plans = [
     name: 'Pro',
     price: '$49',
     tagline: 'For teams scaling outbound',
-    features: ['Unlimited campaigns', 'Sales Navigator', 'AI follow-ups', 'API access'],
+    features: ['Unlimited campaigns', 'AI follow-up sequences'],
     highlighted: true,
   },
   {

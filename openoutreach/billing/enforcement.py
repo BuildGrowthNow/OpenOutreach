@@ -92,9 +92,8 @@ class PlanEnforcer:
         if not PlanEnforcer._is_subscription_active(user):
             return False, "Subscription is not active"
 
-        # Plans with cloud_execution in their features have it included
-        plan = get_plan(user.plan)
-        if plan and "cloud_execution" in plan.get("features", []):
+        # Cloud plan always has cloud execution included
+        if user.plan in ("cloud",):
             return True, None
 
         # The cloud_addon purchase grants seats tracked in cloud_profiles
