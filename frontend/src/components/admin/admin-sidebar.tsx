@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { BarChart2, Users, DollarSign, FileText, Server, ShieldCheck, LogOut } from 'lucide-react'
+import { BarChart2, Users, DollarSign, FileText, Server, ShieldCheck, LogOut, ArrowLeft } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Logo } from '@/components/ui/logo'
@@ -21,50 +21,66 @@ export default function AdminSidebar() {
   const { logout } = useAuthStore()
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-50 flex w-56 flex-col border-r bg-background md:relative">
-      <div className="flex h-16 items-center border-b px-4">
-        <Logo variant="dark" iconSize={28} className="text-sm" />
+    <aside className="fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r bg-background md:relative">
+      {/* Logo */}
+      <div className="flex h-16 items-center border-b px-6">
+        <Logo variant="dark" iconSize={32} className="text-base" />
       </div>
 
-      <div className="flex flex-col px-2 py-3">
-        <div className="mb-3 flex items-center gap-1.5 px-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-          <ShieldCheck className="h-3.5 w-3.5" />
-          Admin
-        </div>
-        <nav className="space-y-0.5">
+      {/* Section label */}
+      <div className="flex items-center gap-1.5 px-6 pt-4 pb-2 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+        <ShieldCheck className="h-3.5 w-3.5" />
+        Admin Panel
+      </div>
+
+      {/* Nav */}
+      <nav className="flex-1 overflow-y-auto py-2">
+        <div className="space-y-0.5 px-3">
           {NAV.map(({ href, label, icon: Icon, exact }) => {
-            const isActive = exact ? pathname === href : pathname === href || pathname.startsWith(href + '/')
+            const isActive = exact
+              ? pathname === href
+              : pathname === href || pathname.startsWith(href + '/')
             return (
-              <Button
-                key={href}
-                asChild
-                variant="ghost"
-                className={cn(
-                  'w-full justify-start gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200',
-                  isActive && 'bg-accent text-accent-foreground'
-                )}
-              >
-                <Link href={href}>
+              <Link key={href} href={href}>
+                <Button
+                  variant={isActive ? 'secondary' : 'ghost'}
+                  className="w-full justify-start gap-3.5 rounded-lg px-3 py-2.5 transition-all duration-200"
+                >
                   <Icon className="h-4 w-4 shrink-0" />
-                  {label}
-                </Link>
-              </Button>
+                  <span className="text-sm font-medium">{label}</span>
+                  {isActive && (
+                    <span className="ml-auto h-2 w-2 rounded-full bg-current" />
+                  )}
+                </Button>
+              </Link>
             )
           })}
-        </nav>
-      </div>
+        </div>
+      </nav>
 
-      <div className="mt-auto border-t p-2">
+      {/* Footer */}
+      <div className="border-t p-3 space-y-0.5">
+        {/* Back to app — ghost with muted tint */}
+        <Link href="/dashboard">
+          <Button
+            variant="ghost"
+            className="w-full justify-start gap-3.5 rounded-lg px-3 py-2.5 transition-all duration-200 text-muted-foreground hover:text-foreground bg-muted/40 hover:bg-muted/70"
+          >
+            <ArrowLeft className="h-4 w-4 shrink-0" />
+            <span className="text-sm font-medium">Back to App</span>
+          </Button>
+        </Link>
+
         <Button
           variant="ghost"
-          className="w-full justify-start gap-3 rounded-lg px-3 py-2.5 text-sm font-medium"
+          className="w-full justify-start gap-3.5 rounded-lg px-3 py-2.5 transition-all duration-200"
           onClick={async () => {
             await logout()
             window.location.href = '/login'
           }}
         >
           <LogOut className="h-4 w-4 shrink-0" />
-          Logout
+          <span className="text-sm font-medium">Logout</span>
         </Button>
       </div>
     </aside>
