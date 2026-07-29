@@ -393,7 +393,7 @@ Implement at minimum:
 - [x] Call downgrade email from `downgrade_handler` when profiles deactivated (already implemented in webhook handler)
 - [x] Verify Stripe signature on **all** webhook entrypoints (implemented in `billing.py:stripe_webhook` line 756)
 - [x] Portal `return_url` / fallback from config (`APP_URL`), never localhost in prod (fixed in `billing.py:create_portal` to use `APP_URL` from settings)
-- [x] Single support email constant (`support@openoutreach.ai` or env) (added `SUPPORT_EMAIL` to `config.py`)
+- [x] Single support email constant (`support@lengrowth.com` or env) (added `SUPPORT_EMAIL` to `config.py`)
 
 ### 4.6 Feature-access correctness (B13)
 
