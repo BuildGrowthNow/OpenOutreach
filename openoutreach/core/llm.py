@@ -192,6 +192,17 @@ def _validated_site_config(user_id: str | None = None):
     cfg = SiteConfig.load(user_id=user_id)
 
     if not cfg.llm_api_key:
+        # Lifetime plan users must supply their own key — they are not entitled to the
+        # platform-managed LLM key.
+        if user_id:
+            from openoutreach.mongodb.models_user import User
+            user = User.get(user_id)
+            if user and user.plan == "lifetime":
+                raise ValueError(
+                    "Lifetime plan requires your own LLM API key. "
+                    "Add it in Settings → LLM / AI Settings."
+                )
+
         # No custom key — use the full platform LLM config (key, provider, model, base).
         # Always override provider here: core/models.py defaults it to "openai" even when
         # the DB has no value, so `not cfg.llm_provider` would never be true.

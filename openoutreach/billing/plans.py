@@ -56,8 +56,6 @@ PLANS: list[PlanDefinition] = [
         "features": [
             "Everything in Pro",
             "3 LinkedIn accounts",
-            "Team member seats",
-            "Workspace management",
             "Priority support",
         ],
     },
@@ -71,9 +69,7 @@ PLANS: list[PlanDefinition] = [
         "features": [
             "Everything in Business",
             "10 LinkedIn accounts",
-            "White-label branding",
-            "Custom domain",
-            "Unlimited team members",
+            "+$20/mo per additional account",
         ],
     },
     {

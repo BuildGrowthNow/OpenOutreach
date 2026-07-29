@@ -47,19 +47,9 @@ const CATEGORIES: FeatureCategory[] = [
     ],
   },
   {
-    name: "Team & Scale",
-    rows: [
-      { name: "Team member seats", plans: { starter: false, pro: false, business: true, agency: true, cloud: false, lifetime: false } },
-      { name: "Workspace management", plans: { starter: false, pro: false, business: true, agency: true, cloud: false, lifetime: false } },
-      { name: "White-label branding", plans: { starter: false, pro: false, business: false, agency: true, cloud: false, lifetime: false } },
-      { name: "Custom domain", plans: { starter: false, pro: false, business: false, agency: true, cloud: false, lifetime: false } },
-    ],
-  },
-  {
     name: "Cloud",
     rows: [
       { name: "Managed cloud execution", plans: { starter: false, pro: false, business: false, agency: false, cloud: true, lifetime: false } },
-      { name: "AI included (no key needed)", plans: { starter: false, pro: false, business: false, agency: false, cloud: true, lifetime: false } },
       { name: "Priority support", plans: { starter: false, pro: false, business: true, agency: true, cloud: true, lifetime: false } },
     ],
   },
