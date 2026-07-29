@@ -114,9 +114,9 @@ class Settings(BaseSettings):
     # =========================================================================
     EMAIL_PROVIDER: str = "resend"  # "resend", "ses", or "smtp"
     RESEND_API_KEY: Optional[str] = None
-    EMAIL_FROM_ADDRESS: str = "noreply@openoutreach.ai"
+    EMAIL_FROM_ADDRESS: str = "noreply@lengrowth.com"
     EMAIL_FROM_NAME: str = "OpenOutreach"
-    SUPPORT_EMAIL: str = "support@openoutreach.ai"  # Support email for user-facing messages
+    SUPPORT_EMAIL: str = "support@lengrowth.com"  # Support email for user-facing messages
     SMTP_HOST: Optional[str] = None
     SMTP_PORT: int = 587
     SMTP_USERNAME: Optional[str] = None
