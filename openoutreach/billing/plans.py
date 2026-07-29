@@ -69,7 +69,7 @@ PLANS: list[PlanDefinition] = [
         "features": [
             "Everything in Business",
             "10 LinkedIn accounts",
-            "+$20/mo per additional account",
+            "Priority support",
         ],
     },
     {
@@ -81,11 +81,11 @@ PLANS: list[PlanDefinition] = [
         "max_campaigns": None,
         "features": [
             "Fully managed execution",
-            "AI included (no extra key)",
+            "AI included (no API key needed)",
             "No desktop app needed",
             "All Pro plan features",
+            "Campaign performance reviews & tips",
             "Priority support",
-            "Optional campaign management",
         ],
     },
     {

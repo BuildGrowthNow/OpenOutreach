@@ -35,7 +35,7 @@ const CATEGORIES: FeatureCategory[] = [
     rows: [
       { name: "AI-written messages", plans: { starter: true, pro: true, business: true, agency: true, cloud: true, lifetime: true } },
       { name: "Automated follow-ups", plans: { starter: true, pro: true, business: true, agency: true, cloud: true, lifetime: true } },
-      { name: "AI follow-up sequences", plans: { starter: false, pro: true, business: true, agency: true, cloud: true, lifetime: true } },
+      { name: "AI follow-up sequences", plans: { starter: true, pro: true, business: true, agency: true, cloud: true, lifetime: true } },
       { name: "Unified inbox", plans: { starter: true, pro: true, business: true, agency: true, cloud: true, lifetime: true } },
     ],
   },
@@ -47,10 +47,11 @@ const CATEGORIES: FeatureCategory[] = [
     ],
   },
   {
-    name: "Cloud",
+    name: "Support",
     rows: [
+      { name: "Priority support", plans: { starter: true, pro: true, business: true, agency: true, cloud: true, lifetime: false } },
       { name: "Managed cloud execution", plans: { starter: false, pro: false, business: false, agency: false, cloud: true, lifetime: false } },
-      { name: "Priority support", plans: { starter: false, pro: false, business: true, agency: true, cloud: true, lifetime: false } },
+      { name: "Campaign performance reviews & tips", plans: { starter: false, pro: false, business: false, agency: false, cloud: true, lifetime: false } },
     ],
   },
 ];

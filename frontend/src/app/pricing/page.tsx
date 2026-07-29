@@ -73,8 +73,6 @@ const plans: Plan[] = [
     features: [
       'Everything in Pro',
       '3 LinkedIn accounts',
-      'Team member seats',
-      'Workspace management',
       'Priority support',
     ],
   },
@@ -89,10 +87,7 @@ const plans: Plan[] = [
     features: [
       'Everything in Business',
       '10 LinkedIn accounts',
-      '+$20/ea additional accounts',
-      'White-label branding',
-      'Custom domain',
-      'Unlimited team members',
+      'Priority support',
     ],
   },
   {
@@ -105,11 +100,11 @@ const plans: Plan[] = [
     maxCampaigns: null,
     features: [
       'Fully managed execution',
-      'AI included (no extra key)',
+      'AI included (no API key needed)',
       'No desktop app needed',
       'All Pro plan features',
+      'Campaign performance reviews & tips',
       'Priority support',
-      'Optional campaign management',
     ],
     isCloudTier: true,
   },
@@ -122,14 +117,11 @@ const comparisonFeatures: ComparisonFeature[] = [
   { name: 'Automated Follow-ups', starter: true, pro: true, business: true, agency: true, cloud: true },
   { name: 'Unified Inbox', starter: true, pro: true, business: true, agency: true, cloud: true },
   { name: 'Analytics Dashboard', starter: true, pro: true, business: true, agency: true, cloud: true },
-  { name: 'AI Follow-up Sequences', starter: false, pro: true, business: true, agency: true, cloud: true },
-  { name: 'Team Members', starter: false, pro: false, business: true, agency: true, cloud: false },
-  { name: 'Workspace Management', starter: false, pro: false, business: true, agency: true, cloud: false },
-  { name: 'Priority Support', starter: false, pro: false, business: true, agency: true, cloud: true },
-  { name: 'White Label', starter: false, pro: false, business: false, agency: true, cloud: false },
-  { name: 'Custom Domain', starter: false, pro: false, business: false, agency: true, cloud: false },
+  { name: 'AI Follow-up Sequences', starter: true, pro: true, business: true, agency: true, cloud: true },
+  { name: 'Priority Support', starter: true, pro: true, business: true, agency: true, cloud: true },
   { name: 'Managed Cloud Execution', starter: false, pro: false, business: false, agency: false, cloud: true },
-  { name: 'AI Included (no key needed)', starter: false, pro: false, business: false, agency: false, cloud: true },
+  { name: 'AI Included (no API key needed)', starter: false, pro: false, business: false, agency: false, cloud: true },
+  { name: 'Campaign Performance Reviews', starter: false, pro: false, business: false, agency: false, cloud: true },
 ];
 
 const faqs = [
@@ -156,7 +148,7 @@ const faqs = [
   {
     question: "Can I change plans?",
     answer:
-      "Yes — upgrades take effect immediately with prorated charges. Downgrades take effect at the end of your billing cycle.",
+      "Yes — upgrades take effect immediately with prorated charges. Downgrades take effect at the end of your billing cycle. If you downgrade to a plan with fewer LinkedIn account slots, the oldest accounts are automatically deactivated to fit the new limit.",
   },
   {
     question: "Do you offer refunds?",
