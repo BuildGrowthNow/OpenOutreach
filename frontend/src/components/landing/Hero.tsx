@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { ArrowRight, Calendar, Play } from 'lucide-react';
+import { ArrowRight, Calendar } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { RotatingText } from './rotating-text';
 
@@ -118,19 +118,18 @@ export function Hero() {
                 lengrowth.app
               </span>
             </div>
-            {/* Video content area — put your video here */}
-            <div className="aspect-[16/9] relative flex items-center justify-center bg-zinc-950">
-              <div className="absolute inset-0 bg-[linear-gradient(to_right,#10b981_1px,transparent_1px),linear-gradient(to_bottom,#10b981_1px,transparent_1px)] bg-[size:48px_48px] opacity-[0.02]" />
-              <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-transparent to-zinc-950/50" />
-              <div className="relative z-10 flex flex-col items-center gap-5">
-                <button className="group w-20 h-20 rounded-full bg-emerald-600/90 border border-emerald-500/50 flex items-center justify-center hover:bg-emerald-500 hover:scale-105 transition-all duration-300 shadow-2xl shadow-emerald-600/30">
-                  <Play
-                    className="h-8 w-8 text-white ml-1 transition-transform group-hover:scale-110"
-                    fill="currentColor"
-                  />
-                </button>
-                <p className="text-zinc-500 text-sm font-medium">See it in action — 2 min demo</p>
-              </div>
+            {/* Video demo */}
+            <div className="aspect-[16/9] relative bg-zinc-950">
+              <video
+                className="w-full h-full object-cover"
+                autoPlay
+                muted
+                loop
+                playsInline
+                controls
+              >
+                <source src="/video-demo.mp4" type="video/mp4" />
+              </video>
             </div>
           </div>
         </motion.div>
