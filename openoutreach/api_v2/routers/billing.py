@@ -186,9 +186,17 @@ async def billing_status(
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
 
+    # Heal stale trial state: if trial_ends_at was cleared by admin set-plan but
+    # subscription_status wasn't updated (pre-fix DB records), correct it now.
+    subscription_status = user.subscription_status
+    if subscription_status == "trialing" and not user.trial_ends_at:
+        user.subscription_status = "active"
+        user.save()
+        subscription_status = "active"
+
     return BillingStatusResponse(
         plan=user.plan,
-        subscription_status=user.subscription_status,
+        subscription_status=subscription_status,
         billing_period=user.billing_period,
         trial_ends_at=user.trial_ends_at.isoformat() if user.trial_ends_at else None,
         current_period_end=user.current_period_end.isoformat() if user.current_period_end else None,

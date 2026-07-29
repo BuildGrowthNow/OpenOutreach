@@ -23,13 +23,13 @@ export function BillingStatusCard({
           )
         : 0;
       return (
-        <Badge variant="outline" className="bg-blue-50">
+        <Badge variant="outline" className="border-blue-500/40 text-blue-400">
           Trial ({daysRemaining} days left)
         </Badge>
       );
     } else if (subscriptionStatus === "active") {
       return (
-        <Badge variant="outline" className="bg-green-50">
+        <Badge variant="outline" className="border-emerald-500/40 text-emerald-400">
           Active
         </Badge>
       );
@@ -41,7 +41,7 @@ export function BillingStatusCard({
       );
     } else if (subscriptionStatus === "canceled") {
       return (
-        <Badge variant="outline" className="bg-gray-50">
+        <Badge variant="outline" className="border-zinc-500/40 text-zinc-400">
           Canceled
         </Badge>
       );
@@ -52,7 +52,7 @@ export function BillingStatusCard({
         </Badge>
       );
     }
-    return <Badge variant="outline">Unknown</Badge>;
+    return <Badge variant="outline" className="border-zinc-500/40 text-zinc-400">Unknown</Badge>;
   };
 
   const nextRenewalDate = status.current_period_end
