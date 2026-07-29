@@ -696,6 +696,16 @@ export default function CampaignDetailsPage() {
                     <Icons.BarChart3 className="mr-2 h-4 w-4" />
                     View Analytics
                   </Button>
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start"
+                    onClick={() =>
+                      router.push(`/messages?campaign=${campaignId}`)
+                    }
+                  >
+                    <Icons.MessageSquare className="mr-2 h-4 w-4" />
+                    View Campaign Messages
+                  </Button>
                   {/* State Machine temporarily hidden - incomplete feature */}
                   {process.env.NEXT_PUBLIC_ENABLE_STATE_MACHINE === 'true' && (
                     <Button

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -309,13 +309,16 @@ function ThreadModal({
 
 const MessagesPage = () => {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [pagination, setPagination] = useState<Pagination | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [campaignFilter, setCampaignFilter] = useState<string>("all");
+  const [campaignFilter, setCampaignFilter] = useState<string>(
+    searchParams.get("campaign") || "all"
+  );
   const [dateRange, setDateRange] = useState<string>("all");
   const [hasResponseFilter, setHasResponseFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
@@ -578,7 +581,13 @@ const MessagesPage = () => {
                 <div className="space-y-2">
                   <Label>Campaign</Label>
                   <Select value={campaignFilter} onValueChange={(v) => { if (v) { setCampaignFilter(v); setCurrentPage(1); } }}>
-                    <SelectTrigger><SelectValue placeholder="All Campaigns" /></SelectTrigger>
+                    <SelectTrigger>
+                      <span className="truncate">
+                        {campaignFilter === "all"
+                          ? "All Campaigns"
+                          : (campaigns.find((c) => c.id === campaignFilter)?.name ?? "All Campaigns")}
+                      </span>
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All Campaigns</SelectItem>
                       {campaigns.map((c) => (
