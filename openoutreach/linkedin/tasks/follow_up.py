@@ -24,6 +24,12 @@ logger = logging.getLogger(__name__)
 # 1 unanswered → 3d, 2 → 6d, 3 → 9d. Skips the LLM call while open.
 MIN_DAYS_PER_UNANSWERED = 3
 
+# In-memory post-send guard: maps deal_id → sent_at. Prevents a second queued
+# follow_up task from firing before LinkedIn's API propagates the just-sent
+# message (DB sync has a propagation delay of ~10-30s).
+_last_send_times: dict[str, datetime] = {}
+_IN_MEMORY_LOCK_SECONDS = 300  # 5 minutes
+
 # If the most recent message (in either direction) is older than this and
 # no outgoing message has ever been sent, the conversation is treated as
 # stale — skip it rather than cold-replying to an ancient inbound message.
@@ -101,16 +107,34 @@ def _replace_placeholders(message: str, deal) -> str:
 def _too_soon_to_nudge(deal) -> bool:
     """Return True if we should skip this deal now.
 
-    Guards three cases:
-    1. Nudge cooldown: wait ``unanswered_count * MIN_DAYS_PER_UNANSWERED`` days
+    Guards four cases:
+    1. In-memory post-send lock: if this process sent a message for this deal
+       within the last 5 minutes, skip immediately (guards LinkedIn API
+       propagation delay before DB sync catches up).
+    2. Nudge cooldown: wait ``unanswered_count * MIN_DAYS_PER_UNANSWERED`` days
        after the most recent outgoing message before sending another.
-    2. Stale inbound: if the last message is incoming and older than
+    3. Stale inbound: if the last message is incoming and older than
        STALE_CONVERSATION_DAYS with no outgoing on record, the conversation
        predates the campaign — skip it (avoids replying to ancient messages).
-    3. Post-send lock: if the most recent outgoing message is less than 60
+    4. Post-send lock: if the most recent outgoing message is less than 60
        seconds old, another task may have just fired — skip to avoid duplicates
        while LinkedIn's API propagates the just-sent message.
     """
+    # Case 1: in-memory guard — fastest check, no DB hit
+    deal_id = str(deal._id)
+    sent_at = _last_send_times.get(deal_id)
+    if sent_at is not None:
+        seconds_since = (datetime.now(timezone.utc) - sent_at).total_seconds()
+        if seconds_since < _IN_MEMORY_LOCK_SECONDS:
+            logger.debug(
+                "deal %s: in-memory post-send lock (%ds ago) — skip",
+                deal_id, int(seconds_since),
+            )
+            return True
+        else:
+            # Expired — clean up
+            del _last_send_times[deal_id]
+
     message_collection = get_mongodb_collection("chat_messages")
     if message_collection is None:
         return False
@@ -280,6 +304,8 @@ def handle_follow_up(task, session, qualifiers):
         message = decision.message or ""
         # Replace any placeholders the LLM may have generated
         message = _replace_placeholders(message, deal)
+        # Strip em-dashes — the LLM occasionally ignores the hard constraint
+        message = message.replace("—", "-").replace("–", "-")
         logger.info("[%s] follow_up message for %s: %s", campaign, public_id, message)
         sent = send_raw_message(session, profile, message)
         if not sent:
@@ -288,6 +314,9 @@ def handle_follow_up(task, session, qualifiers):
                 public_id,
             )
             return
+        # Stamp in-memory lock so back-to-back queued tasks skip this deal
+        # before LinkedIn's API propagates the just-sent message to the DB.
+        _last_send_times[str(deal._id)] = datetime.now(timezone.utc)
         # Record action with smart rate limiter
         smart_record_action(
             session.linkedin_profile, ActionLog.ActionType.FOLLOW_UP, campaign
