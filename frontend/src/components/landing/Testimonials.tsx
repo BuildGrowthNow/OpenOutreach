@@ -11,14 +11,14 @@ const testimonials = [
     name: 'James Whitfield',
     role: 'Head of Sales, Claritec',
     avatar: '/avatars/james.jpg',
-    content: "Went from 5 meetings a week to 18 without hiring anyone. The messages sound like something I'd actually write. That's why people reply.",
+    content: "5 meetings a week to 18. Didn't hire anyone. The messages just sound real.",
     metric: '3.6x more meetings',
   },
   {
     name: 'Priya Sharma',
     role: 'Co-founder, NovaBridge',
     avatar: '/avatars/priya.jpg',
-    content: "Honestly just set it up and forgot about it for a week. Came back to 12 warm conversations already going. For a two-person team that's kind of insane.",
+    content: "Set it up, forgot about it. Came back to 12 warm conversations. We're a team of two.",
     metric: '92% time saved',
   },
   {
@@ -39,14 +39,14 @@ const testimonials = [
     name: 'David Andersson',
     role: 'Founder, Scalebound',
     avatar: '/avatars/david.jpg',
-    content: "Six months in, zero account issues. The volume is there, the replies are there. I genuinely don't think about it anymore.",
+    content: "Six months. Zero issues. I don't think about it anymore.",
     metric: '6 months, 0 flags',
   },
   {
     name: 'Nina Kowalski',
     role: 'Growth Lead, Finova Partners',
     avatar: '/avatars/nina.jpg',
-    content: "I expected generic AI messages and was ready to turn it off after a week. People are actually responding like I wrote to them personally. Still kind of surprised.",
+    content: "Expected generic AI garbage. People are responding like I wrote to them personally. Still surprised honestly.",
     metric: '34% response rate',
   },
 ];
