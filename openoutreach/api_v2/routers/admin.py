@@ -331,6 +331,9 @@ async def update_user(user_id: str, request: UserUpdateRequest) -> UserDetailRes
         user.plan = request.plan
         user.linkedin_account_limit = plan["max_linkedin_accounts"]
         user.campaign_limit = plan["max_campaigns"]
+        # Admin-assigned plan always activates the user — clear trial state
+        user.subscription_status = "active"
+        user.trial_ends_at = None
         logger.info(f"Admin changed user {user_id} plan to {request.plan}")
 
     if request.admin_role is not None:
@@ -978,6 +981,9 @@ async def set_user_plan(
     )
     if body.cloud_profiles is not None:
         user.cloud_profiles = body.cloud_profiles
+    # Admin-assigned plans always put the user in active state — clear trial flags
+    user.subscription_status = "active"
+    user.trial_ends_at = None
     user.save()
 
     AdminSecurityPolicy.log_admin_action(

@@ -18,7 +18,9 @@ logger = logging.getLogger(__name__)
 
 def send_trial_expiry_warnings() -> int:
     """
-    Send trial expiry warnings to users whose trial ends in 1 day.
+    Send a single trial expiry warning to users whose trial ends in ≤1 day.
+    Guards with trial_warning_sent_at so each user gets at most one email per 12 hours,
+    and never after they've converted to an active subscription.
     Returns count of emails sent.
     """
     users_collection = get_mongodb_collection("users")
@@ -29,6 +31,7 @@ def send_trial_expiry_warnings() -> int:
     now = datetime.now(tz.utc)
     tomorrow = now + timedelta(days=1)
     two_days_from_now = now + timedelta(days=2)
+    dedup_cutoff = now - timedelta(hours=12)
 
     users = users_collection.find(
         {
@@ -37,6 +40,12 @@ def send_trial_expiry_warnings() -> int:
                 "$gte": tomorrow,
                 "$lt": two_days_from_now,
             },
+            # Only select users who haven't been warned in the last 12 hours
+            "$or": [
+                {"trial_warning_sent_at": {"$exists": False}},
+                {"trial_warning_sent_at": None},
+                {"trial_warning_sent_at": {"$lt": dedup_cutoff}},
+            ],
         }
     )
 
@@ -45,6 +54,10 @@ def send_trial_expiry_warnings() -> int:
         try:
             user = User.from_dict(user_doc)
             if send_trial_expiry_warning(user, 1):
+                users_collection.update_one(
+                    {"_id": user_doc["_id"]},
+                    {"$set": {"trial_warning_sent_at": now}},
+                )
                 sent_count += 1
         except Exception as e:
             logger.error(f"Failed to send trial warning to {user_doc.get('email')}: {e}")

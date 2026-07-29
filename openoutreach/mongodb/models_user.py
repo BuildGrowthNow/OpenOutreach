@@ -66,6 +66,7 @@ class User:
         password_reset_expires: Optional[datetime] = None,
         last_login_ip: Optional[str] = None,
         signup_ip: Optional[str] = None,
+        trial_warning_sent_at: Optional[datetime] = None,
     ):
         self._id = _id or str(uuid4())
         self.email = email.lower().strip()
@@ -106,6 +107,7 @@ class User:
         self.password_reset_expires = password_reset_expires
         self.last_login_ip = last_login_ip
         self.signup_ip = signup_ip
+        self.trial_warning_sent_at = trial_warning_sent_at
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to MongoDB document."""
@@ -148,6 +150,7 @@ class User:
             "password_reset_expires": self.password_reset_expires,
             "last_login_ip": self.last_login_ip,
             "signup_ip": self.signup_ip,
+            "trial_warning_sent_at": self.trial_warning_sent_at,
         }
         if self.supabase_user_id is not None:
             doc["supabase_user_id"] = self.supabase_user_id
@@ -196,6 +199,7 @@ class User:
             password_reset_expires=data.get("password_reset_expires"),
             last_login_ip=data.get("last_login_ip"),
             signup_ip=data.get("signup_ip"),
+            trial_warning_sent_at=data.get("trial_warning_sent_at"),
         )
 
     def save(self) -> str:
