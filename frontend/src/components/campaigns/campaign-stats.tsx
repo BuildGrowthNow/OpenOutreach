@@ -3,6 +3,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Icons } from '@/lib/types/components'
 import { cn } from '@/lib/utils'
 
@@ -19,10 +20,11 @@ interface CampaignStatsProps {
     errors: number
     rate_limit_warnings: number
   }
+  onClearErrors?: () => void
   className?: string
 }
 
-export function CampaignStats({ stats, className }: CampaignStatsProps) {
+export function CampaignStats({ stats, onClearErrors, className }: CampaignStatsProps) {
   const formatConnectionStats = () => {
     if (!stats.connections_sent || stats.connections_sent === 0) {
       return "No connections sent";
@@ -83,6 +85,8 @@ export function CampaignStats({ stats, className }: CampaignStatsProps) {
           subtitle={formatErrorStats()}
           icon={<Icons.AlertTriangle className="h-4 w-4 text-amber-500" />}
           color="amber"
+          onAction={(stats.errors ?? 0) > 0 ? onClearErrors : undefined}
+          actionLabel="clear"
         />
       </div>
 
@@ -121,10 +125,12 @@ interface StatCardProps {
   subtitle: string
   icon: React.ReactNode
   color?: 'emerald' | 'blue' | 'purple' | 'amber' | 'red'
+  onAction?: () => void
+  actionLabel?: string
   className?: string
 }
 
-function StatCard({ title, value, subtitle, icon, color = 'emerald', className }: StatCardProps) {
+function StatCard({ title, value, subtitle, icon, color = 'emerald', onAction, actionLabel = 'clear', className }: StatCardProps) {
   const colorClasses = {
     emerald: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
     blue: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
@@ -146,6 +152,18 @@ function StatCard({ title, value, subtitle, icon, color = 'emerald', className }
             {icon}
           </div>
         </div>
+        {onAction && (
+          <div className="flex justify-end mt-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onAction}
+              className="h-5 px-1.5 text-[10px] opacity-40 hover:opacity-70 text-muted-foreground"
+            >
+              {actionLabel}
+            </Button>
+          </div>
+        )}
       </CardContent>
     </Card>
   )

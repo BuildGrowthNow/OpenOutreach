@@ -42,6 +42,7 @@ import {
   getCampaignLeads,
   updateCampaign,
   deleteCampaign,
+  clearCampaignErrors,
   getDailyUsage,
   getCampaignStatus,
 } from "@/lib/api/dashboard";
@@ -96,6 +97,7 @@ export default function CampaignDetailsPage() {
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("overview");
   const [deleting, setDeleting] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showCompletionModal, setShowCompletionModal] = useState(false);
   const [settingsSaving, setSettingsSaving] = useState(false);
 
@@ -262,19 +264,23 @@ export default function CampaignDetailsPage() {
   }, [campaignId, fetchLeadsSilent]);
 
 
+  const handleClearErrors = async () => {
+    if (!campaign) return;
+    await clearCampaignErrors(campaign.id);
+    fetchCampaignData(true);
+  };
+
   const handleDeleteCampaign = async () => {
     if (!campaign) return;
-
-    try {
-      setDeleting(true);
-      await deleteCampaign(campaign.id);
-      // Deletion successful (204 No Content) - navigate away immediately
-      router.push("/campaigns");
-    } catch (error) {
-      console.error("Error deleting campaign:", error);
-      setError("An error occurred while deleting the campaign");
+    setShowDeleteModal(false);
+    setDeleting(true);
+    const result = await deleteCampaign(campaign.id);
+    if (result.error) {
+      setError(result.error);
       setDeleting(false);
+      return;
     }
+    router.push("/campaigns");
   };
 
   const getStatusColor = (status: string) => {
@@ -486,7 +492,7 @@ export default function CampaignDetailsPage() {
           ) : null}
           <Button
             variant="destructive"
-            onClick={handleDeleteCampaign}
+            onClick={() => setShowDeleteModal(true)}
             disabled={deleting}
           >
             {deleting ? (
@@ -501,6 +507,28 @@ export default function CampaignDetailsPage() {
               </>
             )}
           </Button>
+          <Dialog open={showDeleteModal} onOpenChange={setShowDeleteModal}>
+            <DialogContent className={`${zincDialogContentClassName} sm:max-w-[420px]`}>
+              <DialogHeader className={zincDialogHeaderClassName}>
+                <DialogTitle>Delete Campaign</DialogTitle>
+                <DialogDescription>
+                  This will permanently delete &quot;{campaign?.name}&quot; along with all its leads, deals, and conversation history. This cannot be undone.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter className={zincDialogFooterClassName}>
+                <Button
+                  variant="outline"
+                  className="border-zinc-800 bg-zinc-900 text-zinc-100 hover:bg-zinc-800"
+                  onClick={() => setShowDeleteModal(false)}
+                >
+                  Cancel
+                </Button>
+                <Button variant="destructive" onClick={handleDeleteCampaign}>
+                  Delete Campaign
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
 
@@ -535,7 +563,7 @@ export default function CampaignDetailsPage() {
                 </CardHeader>
                 <CardContent>
                   {analytics ? (
-                    <CampaignStatsComponent stats={analytics.stats} />
+                    <CampaignStatsComponent stats={analytics.stats} onClearErrors={handleClearErrors} />
                   ) : (
                     <div className="space-y-4">
                       <Skeleton className="h-32 w-full" />

@@ -15,7 +15,14 @@ import {
 import { Campaign } from "@/lib/types/components";
 import { CampaignCard } from "@/components/dashboard/campaign-card";
 import { CreateCampaignWizard } from "@/components/campaigns/create-campaign-wizard";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -32,6 +39,7 @@ export default function CampaignsPage() {
   const [selectedTab, setSelectedTab] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [campaignToDelete, setCampaignToDelete] = useState<Campaign | null>(null);
 
   const fetchCampaigns = useCallback(async () => {
     try {
@@ -76,16 +84,21 @@ export default function CampaignsPage() {
     return filtered;
   }, [campaigns, selectedTab, searchQuery]);
 
-  const handleDeleteCampaign = async (campaign: Campaign) => {
-    if (!window.confirm(`Delete "${campaign.name}"? This cannot be undone.`)) return;
-    try {
-      setError(null);
-      await deleteCampaign(campaign.id);
-      fetchCampaigns();
-    } catch (error) {
-      console.error("Error deleting campaign:", error);
-      setError("An error occurred while deleting the campaign");
+  const handleDeleteCampaign = (campaign: Campaign) => {
+    setCampaignToDelete(campaign);
+  };
+
+  const confirmDeleteCampaign = async () => {
+    if (!campaignToDelete) return;
+    const target = campaignToDelete;
+    setCampaignToDelete(null);
+    setError(null);
+    const result = await deleteCampaign(target.id);
+    if (result.error) {
+      setError(result.error);
+      return;
     }
+    fetchCampaigns();
   };
 
   const handleStartCampaign = async (campaign: Campaign) => {
@@ -239,6 +252,25 @@ export default function CampaignsPage() {
           ))}
         </div>
       )}
+
+      <Dialog open={!!campaignToDelete} onOpenChange={(open) => { if (!open) setCampaignToDelete(null); }}>
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle>Delete Campaign</DialogTitle>
+            <DialogDescription>
+              This will permanently delete &quot;{campaignToDelete?.name}&quot; along with all its leads, deals, and conversation history. This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCampaignToDelete(null)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={confirmDeleteCampaign}>
+              Delete Campaign
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={showCreateForm} onOpenChange={setShowCreateForm}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">

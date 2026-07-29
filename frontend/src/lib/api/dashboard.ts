@@ -209,6 +209,12 @@ export async function deleteCampaign(
   return del(`/api/campaigns/${id}`);
 }
 
+export async function clearCampaignErrors(
+  id: string,
+): Promise<ApiResponse<null>> {
+  return del(`/api/campaigns/${id}/errors`);
+}
+
 export interface AnalyticsOverviewResponse {
   period: string;
   stats: {

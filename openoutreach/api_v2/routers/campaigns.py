@@ -578,14 +578,18 @@ async def delete_campaign(
                 detail="Only campaign owner can delete campaigns"
             )
 
-        # Check for associated deals
+        # Cascade-delete all related data
+        tasks_collection = get_mongodb_collection("tasks")
+        chat_messages_collection = get_mongodb_collection("chat_messages")
+
         if deals_collection is not None:
-            deal_count = deals_collection.count_documents({"campaign_id": campaign_id})
-            if deal_count > 0:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Cannot delete campaign: {deal_count} deal(s) exist. Archive instead."
-                )
+            deal_ids = [d["_id"] for d in deals_collection.find({"campaign_id": campaign_id}, {"_id": 1})]
+            if deal_ids and chat_messages_collection is not None:
+                chat_messages_collection.delete_many({"deal_id": {"$in": deal_ids}})
+            deals_collection.delete_many({"campaign_id": campaign_id})
+
+        if tasks_collection is not None:
+            tasks_collection.delete_many({"payload.campaign_id": campaign_id})
 
         # Delete campaign
         result = campaigns_collection.delete_one({"_id": campaign_id})
@@ -595,7 +599,7 @@ async def delete_campaign(
                 detail="Campaign not found"
             )
 
-        logger.info(f"Deleted campaign {campaign_id} by user {user_id}")
+        logger.info("Deleted campaign %s by user %s", campaign_id, user_id)
         return None
 
     except HTTPException:
@@ -606,6 +610,27 @@ async def delete_campaign(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to delete campaign: {str(e)}"
         )
+
+
+@router.delete("/{campaign_id}/errors", status_code=204)
+async def clear_campaign_errors(
+    campaign_id: str,
+    user_id: str = Depends(get_current_user),
+):
+    """Delete all failed/error ActionLog entries for a campaign."""
+    campaign = models.Campaign.get(campaign_id)
+    if not campaign:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
+    if user_id != campaign.user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+    action_logs_collection = get_mongodb_collection("action_logs")
+    if action_logs_collection is not None:
+        action_logs_collection.delete_many({
+            "campaign_id": campaign_id,
+            "status": {"$in": ["failed", "error"]},
+        })
+    return None
 
 
 @router.post("/{campaign_id}/pause", response_model=CampaignResponse)
