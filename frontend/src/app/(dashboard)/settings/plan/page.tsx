@@ -250,7 +250,7 @@ export default function PlanPage() {
           <div>
             <h4 className="font-semibold mb-2">Downgrading</h4>
             <p className="text-sm text-muted-foreground">
-              Your plan will change at the end of your current billing period. If you have more LinkedIn accounts or campaigns than your new plan allows, you'll be asked to select which to keep.
+              Your plan will change at the end of your current billing period. If you have more LinkedIn accounts than your new plan allows, the oldest accounts are automatically deactivated to fit the new limit.
             </p>
           </div>
           <div>

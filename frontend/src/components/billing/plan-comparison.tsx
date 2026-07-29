@@ -49,7 +49,7 @@ const CATEGORIES: FeatureCategory[] = [
   {
     name: "Support",
     rows: [
-      { name: "Priority support", plans: { starter: true, pro: true, business: true, agency: true, cloud: true, lifetime: false } },
+      { name: "Priority support", plans: { starter: false, pro: false, business: true, agency: true, cloud: true, lifetime: false } },
       { name: "Managed cloud execution", plans: { starter: false, pro: false, business: false, agency: false, cloud: true, lifetime: false } },
       { name: "Campaign performance reviews & tips", plans: { starter: false, pro: false, business: false, agency: false, cloud: true, lifetime: false } },
     ],

@@ -28,7 +28,7 @@ PLANS: list[PlanDefinition] = [
             "1 LinkedIn account",
             "3 active campaigns",
             "AI-written messages",
-            "Automated follow-ups",
+            "AI follow-up sequences",
             "Unified inbox",
             "Analytics dashboard",
         ],
@@ -43,7 +43,6 @@ PLANS: list[PlanDefinition] = [
         "features": [
             "Everything in Starter",
             "Unlimited campaigns",
-            "AI follow-up sequences",
         ],
     },
     {

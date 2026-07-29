@@ -205,7 +205,7 @@ def handle_customer_subscription_updated(event: dict[str, Any]) -> None:
         if old_plan and plan_name:
             try:
                 # Determine if upgrade or downgrade based on plan hierarchy
-                plan_hierarchy = ["starter", "lifetime", "pro", "business", "agency", "cloud"]
+                plan_hierarchy = ["starter", "pro", "lifetime", "business", "agency", "cloud"]
                 old_idx = plan_hierarchy.index(old_plan) if old_plan in plan_hierarchy else -1
                 new_idx = plan_hierarchy.index(plan_name) if plan_name in plan_hierarchy else -1
 

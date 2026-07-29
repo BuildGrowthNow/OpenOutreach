@@ -42,7 +42,7 @@ const plans: Plan[] = [
       '1 LinkedIn account',
       '3 active campaigns',
       'AI-written messages',
-      'Automated follow-ups',
+      'AI follow-up sequences',
       'Unified inbox',
       'Analytics dashboard',
     ],
@@ -58,7 +58,6 @@ const plans: Plan[] = [
     features: [
       'Everything in Starter',
       'Unlimited campaigns',
-      'AI follow-up sequences',
     ],
     highlighted: true,
   },
@@ -118,7 +117,7 @@ const comparisonFeatures: ComparisonFeature[] = [
   { name: 'Unified Inbox', starter: true, pro: true, business: true, agency: true, cloud: true },
   { name: 'Analytics Dashboard', starter: true, pro: true, business: true, agency: true, cloud: true },
   { name: 'AI Follow-up Sequences', starter: true, pro: true, business: true, agency: true, cloud: true },
-  { name: 'Priority Support', starter: true, pro: true, business: true, agency: true, cloud: true },
+  { name: 'Priority Support', starter: false, pro: false, business: true, agency: true, cloud: true },
   { name: 'Managed Cloud Execution', starter: false, pro: false, business: false, agency: false, cloud: true },
   { name: 'AI Included (no API key needed)', starter: false, pro: false, business: false, agency: false, cloud: true },
   { name: 'Campaign Performance Reviews', starter: false, pro: false, business: false, agency: false, cloud: true },
@@ -128,7 +127,7 @@ const faqs = [
   {
     question: "What's included in the free trial?",
     answer:
-      "Full Pro plan access for 7 days. A credit card is required, but if you cancel before the trial ends you won't be charged a thing.",
+      "Full Starter plan access for 7 days. A credit card is required, but if you cancel before the trial ends you won't be charged a thing.",
   },
   {
     question: "Can my LinkedIn account get restricted?",

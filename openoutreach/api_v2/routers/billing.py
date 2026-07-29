@@ -40,7 +40,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/billing", tags=["billing"])
 
-PLAN_HIERARCHY = ["starter", "lifetime", "pro", "business", "agency", "cloud"]
+PLAN_HIERARCHY = ["starter", "pro", "lifetime", "business", "agency", "cloud"]
 
 
 def _is_plan_upgrade(current_plan: str, new_plan: str) -> bool:
