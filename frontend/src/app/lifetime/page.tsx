@@ -17,9 +17,7 @@ const features = [
   'AI-written messages per prospect',
   'Automated follow-up sequences',
   'Unified conversation inbox',
-  'Sales Navigator targeting',
   'Analytics & performance dashboard',
-  'API access',
   'All future Pro plan updates',
   'Forever — no recurring charges',
 ];
