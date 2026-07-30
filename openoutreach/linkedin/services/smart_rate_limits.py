@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone as tz
+from openoutreach.core.tz_detect import user_day_bounds
 from typing import Optional
 
 from openoutreach.linkedin.models import (
@@ -51,11 +52,11 @@ class SmartRateLimiter:
         """Check if action can be executed given current context.
 
         Uses the profile's configured daily limit (not the context's base limit)
-        and a today-aligned window (midnight UTC to now) so the count resets
-        daily rather than rolling 24h.
+        and a today-aligned window (user's local midnight to now) so the count
+        resets at the user's local midnight rather than UTC midnight.
         """
         daily_limit = self._profile_daily_limit(action_type)
-        today_start = datetime.now(tz.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+        today_start, _ = user_day_bounds(user_id=self.linkedin_profile.user_id)
         today_count = self._count_recent_actions(action_type, today_start)
         return today_count < daily_limit
 
@@ -70,7 +71,7 @@ class SmartRateLimiter:
     def get_remaining_quota(self, action_type: str, campaign=None) -> int:
         """Get remaining quota for action type."""
         daily_limit = self._profile_daily_limit(action_type)
-        today_start = datetime.now(tz.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+        today_start, _ = user_day_bounds(user_id=self.linkedin_profile.user_id)
         today_count = self._count_recent_actions(action_type, today_start)
         return max(0, daily_limit - today_count)
 

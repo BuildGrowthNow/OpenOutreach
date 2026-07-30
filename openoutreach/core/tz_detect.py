@@ -10,7 +10,7 @@ systems.
 from __future__ import annotations
 
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -96,7 +96,5 @@ def user_day_bounds(user_id: str | None = None) -> tuple[datetime, datetime]:
 
     now_local = datetime.now(user_tz)
     day_start = now_local.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
-    day_end = day_start.replace(tzinfo=None)
-    from datetime import timedelta
     day_end = day_start + timedelta(days=1)
     return day_start, day_end

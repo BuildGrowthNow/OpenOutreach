@@ -598,13 +598,18 @@ class ActionLogDAL:
         return log
 
     @staticmethod
-    def get_daily_count(linkedin_profile_id: str, action_type: str) -> int:
-        """Count actions of a specific type today for a profile."""
+    def get_daily_count(linkedin_profile_id: str, action_type: str, user_id: str | None = None) -> int:
+        """Count actions of a specific type today for a profile.
+
+        Uses the user's local midnight when user_id is provided so the daily
+        window matches their timezone rather than always resetting at UTC midnight.
+        """
         collection = get_mongodb_collection('action_logs')
         if collection is None:
             return 0
 
-        midnight = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+        from openoutreach.core.tz_detect import user_day_bounds
+        midnight, _ = user_day_bounds(user_id=user_id)
 
         try:
             return collection.count_documents({
