@@ -62,6 +62,14 @@ def handle_send_manual_message(task, session, qualifiers):
     if not sent:
         raise Exception(f"Playwright send_raw_message failed for {public_id}")
 
+    # Stamp last_outgoing_at immediately (before sync) so follow_up tasks
+    # respect the cooldown even while LinkedIn's API propagates the message.
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
+    deal.last_outgoing_at = now
+    deal.creation_date = now
+    deal.save(update_fields=["last_outgoing_at", "creation_date"])
+
     # Mark the deal state as CONNECTED just in case it wasn't
     if deal.state != DealState.CONNECTED:
         set_profile_state(session, public_id, DealState.CONNECTED)

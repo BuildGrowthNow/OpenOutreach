@@ -478,6 +478,7 @@ def plan_follow_up_window(session, campaign, *, follow_up_cap: int | None = None
     from openoutreach.mongodb.connection import get_mongodb_collection
     from openoutreach.crm.models import DealState
     deals_col = get_mongodb_collection("deals")
+    connected_count: int = 0
     if deals_col is not None:
         connected_count = deals_col.count_documents({
             "campaign_id": campaign.pk,
@@ -493,6 +494,10 @@ def plan_follow_up_window(session, campaign, *, follow_up_cap: int | None = None
     n = max(0, profile.follow_up_daily_limit - profile._daily_count("follow_up"))
     if follow_up_cap is not None:
         n = min(n, follow_up_cap)
+    # Never create more slots than CONNECTED deals — each slot resolves lazily
+    # but there's no point queuing 50 slots when only 5 leads need follow-up.
+    if connected_count > 0:
+        n = min(n, connected_count)
 
     profile_id = profile.pk
     user_id = profile.user_id
