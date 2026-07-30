@@ -404,6 +404,16 @@ function Write-Log($msg) {{
 
 Write-Log "Update script started. source=$source target=$target pid=$pid_to_wait"
 
+# Re-launch with admin rights if the target is in a protected directory
+$protected = ($target -like "*\\Program Files*") -or ($target -like "*\\Windows*")
+$isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+if ($protected -and -not $isAdmin) {{
+    Write-Log "Target is in a protected path and we are not admin — re-launching elevated"
+    $thisScript = '{ps_path.replace("'", "''")}'
+    Start-Process powershell.exe -Verb RunAs -ArgumentList "-NonInteractive -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$thisScript`""
+    exit 0
+}}
+
 # Wait up to 30 s for the old process to exit
 $deadline = (Get-Date).AddSeconds(30)
 while ((Get-Process -Id $pid_to_wait -ErrorAction SilentlyContinue) -and (Get-Date) -lt $deadline) {{

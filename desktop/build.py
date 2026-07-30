@@ -582,6 +582,10 @@ Section "Install"
         ExecWait '"$0" /S'
         Sleep 1000
 
+    ; Force-remove the install directory so no old exe lingers (handles both
+    ; installer upgrades and cases where the old uninstaller failed/was absent)
+    RMDir /r "$INSTDIR"
+
     SetOutPath "$INSTDIR"
     File "{exe_path}"
 
