@@ -54,6 +54,19 @@ logger = logging.getLogger(__name__)
 _MAILTO_RE = re.compile(r"mailto:([^\"\\<>\s]+)")
 _TEL_RE = re.compile(r"tel:([^\"\\<>\s]+)")
 
+# LinkedIn's newer RSC format (React Flight / Next.js) encodes contact data as
+# plain string props inside component trees — no mailto:/tel: URI wrappers.
+# These patterns catch bare email addresses and phone numbers in that format.
+# Email: standard RFC 5322 local@domain.tld, anchored by JSON string delimiters.
+_EMAIL_RE = re.compile(
+    r'"([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})"'
+)
+# Phone: starts with + or digit, 7-20 chars of digits/spaces/dashes/parens,
+# anchored by JSON string delimiters.
+_PHONE_RE = re.compile(
+    r'"(\+?[\d][\d\s\-().]{6,19})"'
+)
+
 # Minimum raw-payload size (bytes) before we emit a regression warning when both
 # parsers find nothing.  Keeps noise down for truly-empty API responses.
 _EMPTY_WARN_THRESHOLD = 200
@@ -158,8 +171,17 @@ def _parse_rsc_chunks(rsc_text: str) -> tuple[list[str], list[str]]:
 # ── Regex fallback ────────────────────────────────────────────────────────────
 
 def _parse_rsc_regex(rsc_text: str) -> tuple[list[str], list[str]]:
-    """Regex scan over the raw text — catches values missed by the JSON walker."""
-    return _MAILTO_RE.findall(rsc_text), _TEL_RE.findall(rsc_text)
+    """Regex scan over the raw text — catches values missed by the JSON walker.
+
+    Three passes in priority order:
+    1. ``mailto:`` URIs — classic RSC format.
+    2. ``tel:`` URIs — classic RSC format.
+    3. Bare email / phone strings — newer React Flight / Next.js RSC format
+       where contact data appears as plain JSON string props with no URI prefix.
+    """
+    emails = _MAILTO_RE.findall(rsc_text) + _EMAIL_RE.findall(rsc_text)
+    phones = _TEL_RE.findall(rsc_text) + _PHONE_RE.findall(rsc_text)
+    return emails, phones
 
 
 # ── Regression logging ────────────────────────────────────────────────────────
