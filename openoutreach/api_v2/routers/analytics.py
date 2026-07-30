@@ -157,6 +157,54 @@ def _get_action_logs_count(campaign_id: str, action_type: str, since: datetime) 
         return 0
 
 
+def _get_connections_accepted_count(campaign_id: str, since: datetime | None = None) -> int:
+    """Count CONNECTED deals that came from a real connection request.
+
+    Excludes 1st-degree leads that auto-transitioned to CONNECTED without a
+    connection request being sent (connection_degree == 1 on their Lead record).
+    """
+    deals_collection = get_mongodb_collection("deals")
+    if deals_collection is None:
+        return 0
+
+    try:
+        match: dict = {
+            "campaign_id": campaign_id,
+            "state": DealState.CONNECTED.value,
+        }
+        if since is not None:
+            match["creation_date"] = {"$gte": since}
+
+        pipeline = [
+            {"$match": match},
+            {
+                "$lookup": {
+                    "from": "leads",
+                    "localField": "lead_id",
+                    "foreignField": "_id",
+                    "as": "lead",
+                }
+            },
+            {"$unwind": {"path": "$lead", "preserveNullAndEmptyArrays": True}},
+            # Keep only leads that are NOT 1st-degree (or have no stored degree)
+            {
+                "$match": {
+                    "$or": [
+                        {"lead.connection_degree": {"$exists": False}},
+                        {"lead.connection_degree": None},
+                        {"lead.connection_degree": {"$ne": 1}},
+                    ]
+                }
+            },
+            {"$count": "total"},
+        ]
+        result = list(deals_collection.aggregate(pipeline))
+        return result[0]["total"] if result else 0
+    except Exception as e:
+        logger.error(f"Failed to count connections accepted: {e}")
+        return 0
+
+
 def _get_messages_replied_count(campaign_id: str, since: datetime) -> int:
     """Count distinct deals with inbound messages in time range."""
     messages_collection = get_mongodb_collection("chat_messages")
@@ -315,11 +363,9 @@ async def get_analytics_overview(
         "status": {"$nin": ["failed", "error"]},
         "created_at": {"$gte": since}
     })
-    total_connections_accepted = deals_collection.count_documents({
-        "campaign_id": {"$in": campaign_ids},
-        "state": DealState.CONNECTED.value,
-        "creation_date": {"$gte": since}
-    })
+    total_connections_accepted = sum(
+        _get_connections_accepted_count(cid, since) for cid in campaign_ids
+    )
     total_messages_sent = action_logs_collection.count_documents({
         "campaign_id": {"$in": campaign_ids},
         "action_type": "follow_up",
@@ -394,11 +440,7 @@ async def get_analytics_overview(
 
         # Action counts (time-filtered)
         connections_sent = _get_action_logs_count(campaign._id, "connect", since)
-        connections_accepted = deals_collection.count_documents({
-            "campaign_id": campaign._id,
-            "state": DealState.CONNECTED.value,
-            "creation_date": {"$gte": since}
-        })
+        connections_accepted = _get_connections_accepted_count(campaign._id, since)
         messages_sent = _get_action_logs_count(campaign._id, "follow_up", since)
         messages_replied = _get_messages_replied_count(campaign._id, since)
         conversions = deals_collection.count_documents({

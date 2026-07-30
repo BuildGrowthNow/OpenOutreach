@@ -1028,10 +1028,19 @@ async def get_campaign_analytics(
         })
 
     if deals_collection is not None:
-        connections_accepted = deals_collection.count_documents({
-            "campaign_id": campaign_id,
-            "state": DealState.CONNECTED.value,
-        })
+        _accepted_pipeline = [
+            {"$match": {"campaign_id": campaign_id, "state": DealState.CONNECTED.value}},
+            {"$lookup": {"from": "leads", "localField": "lead_id", "foreignField": "_id", "as": "lead"}},
+            {"$unwind": {"path": "$lead", "preserveNullAndEmptyArrays": True}},
+            {"$match": {"$or": [
+                {"lead.connection_degree": {"$exists": False}},
+                {"lead.connection_degree": None},
+                {"lead.connection_degree": {"$ne": 1}},
+            ]}},
+            {"$count": "total"},
+        ]
+        _accepted_result = list(deals_collection.aggregate(_accepted_pipeline))
+        connections_accepted = _accepted_result[0]["total"] if _accepted_result else 0
         conversions = deals_collection.count_documents({
             "campaign_id": campaign_id,
             "state": DealState.COMPLETED.value,
