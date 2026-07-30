@@ -47,7 +47,7 @@ class CampaignCreate(BaseModel):
                 "team_member_ids": ["user_456"],
                 "icp_titles": ["CEO", "CTO", "VP of Engineering"],
                 "follow_up_strategy": "Send personalized follow-up after 3 days",
-                "target_degrees": [2, 3]
+                "target_degrees": [1, 2, 3]
             }
         }
 
@@ -91,7 +91,7 @@ class CampaignResponse(BaseModel):
     team_member_ids: List[str]
     icp_titles: List[str]
     follow_up_strategy: Optional[str]
-    target_degrees: List[int] = [2, 3]
+    target_degrees: List[int] = [1, 2, 3]
     created_at: str
     stats: CampaignStats = CampaignStats()
 
@@ -222,7 +222,7 @@ async def list_campaigns(
                 team_member_ids=doc.get("team_member_ids", []),
                 icp_titles=doc.get("icp_titles", []),
                 follow_up_strategy=doc.get("follow_up_strategy"),
-                target_degrees=doc.get("target_degrees", [2, 3]),
+                target_degrees=doc.get("target_degrees", [1, 2, 3]),
                 created_at=doc.get("created_at").isoformat() if doc.get("created_at") else "",
                 stats=CampaignStats(
                     totalLeads=s.get("totalLeads", 0),
@@ -327,7 +327,7 @@ async def create_campaign(
             team_member_ids=team_ids,
             icp_titles=data.icp_titles or [],
             follow_up_strategy=data.follow_up_strategy,
-            target_degrees=data.target_degrees if data.target_degrees is not None else [2, 3],
+            target_degrees=data.target_degrees if data.target_degrees is not None else [1, 2, 3],
             status="draft",  # New campaigns start as draft
             is_paused=True,  # Keep is_paused in sync with draft status
         )

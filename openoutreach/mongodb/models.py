@@ -916,7 +916,7 @@ class Campaign:
         self.team_member_ids = team_member_ids or []
         self.icp_titles = icp_titles or []
         self.follow_up_strategy = follow_up_strategy
-        self.target_degrees = target_degrees if target_degrees is not None else [2, 3]
+        self.target_degrees = target_degrees if target_degrees is not None else [1, 2, 3]
         self.created_at = created_at or datetime.now(tz.utc)
 
     def to_dict(self) -> Dict[str, Any]:

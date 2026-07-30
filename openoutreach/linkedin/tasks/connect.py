@@ -115,7 +115,7 @@ def handle_connect(task, session, qualifiers):
         deal = Deal.get_by_lead_and_campaign(lead._id, session.campaign._id if hasattr(session.campaign, '_id') else str(session.campaign))
 
     # Check target_degrees filter — skip leads whose degree doesn't match
-    target_degrees = getattr(campaign, "target_degrees", None) or [2, 3]
+    target_degrees = getattr(campaign, "target_degrees", None) or [1, 2, 3]
     if lead and lead.connection_degree is not None:
         if lead.connection_degree not in target_degrees:
             logger.info(

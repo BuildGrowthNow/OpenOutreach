@@ -49,7 +49,7 @@ class CampaignResponse(BaseModel):
     linkedin_profile_id: Optional[str] = None
     icp_titles: Optional[List[str]] = None
     follow_up_strategy: Optional[str] = None
-    target_degrees: List[int] = Field(default_factory=lambda: [2, 3])
+    target_degrees: List[int] = Field(default_factory=lambda: [1, 2, 3])
     created_at: datetime
     updated_at: datetime
 
