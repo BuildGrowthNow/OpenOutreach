@@ -1,7 +1,7 @@
 """
 WebSocket Router - Real-time notifications and campaign status
 """
-from datetime import datetime
+from datetime import datetime, timezone as _tz
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 from typing import Dict, Optional, Set
 import logging
@@ -181,7 +181,7 @@ async def emit_notification_to_user(user_id: str, notification_data: dict):
     """Send notification to user via WebSocket (replaces Django Channels emit)."""
     await manager.send_to_user(user_id, {
         "type": "notification_message",
-        "data": {**notification_data, "timestamp": datetime.utcnow().isoformat()},
+        "data": {**notification_data, "timestamp": datetime.now(_tz.utc).isoformat()},
     })
 
 
@@ -192,7 +192,7 @@ async def emit_campaign_status_update(campaign_id: str, status: str, message: Op
         "data": {
             "campaign_id": campaign_id,
             "status": status,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(_tz.utc).isoformat(),
         }
     }
     if message:
@@ -207,7 +207,7 @@ async def emit_campaign_error(campaign_id: str, error_message: str, deal_id: Opt
         "data": {
             "campaign_id": campaign_id,
             "error_message": error_message,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(_tz.utc).isoformat(),
         }
     }
     if deal_id:

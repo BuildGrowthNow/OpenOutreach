@@ -5,7 +5,7 @@ Replaces Django notification views with FastAPI implementation.
 import json
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timezone as _tz
 from typing import Any, AsyncIterator, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -270,7 +270,7 @@ async def sse_notification_stream(
     async def event_generator() -> AsyncIterator[str]:
         """Generate SSE events for new notifications."""
         # Send initial connection confirmation
-        yield f"data: {json.dumps({'type': 'connected', 'user_id': user_id, 'timestamp': datetime.utcnow().isoformat()})}\n\n"
+        yield f"data: {json.dumps({'type': 'connected', 'user_id': user_id, 'timestamp': datetime.now(_tz.utc).isoformat()})}\n\n"
 
         collection = get_mongodb_collection("notifications")
         if collection is None:
@@ -278,7 +278,7 @@ async def sse_notification_stream(
             return
 
         # Track last check time
-        last_check = datetime.utcnow()
+        last_check = datetime.now(_tz.utc)
 
         try:
             while True:
@@ -301,9 +301,9 @@ async def sse_notification_stream(
                     for notif_data in new_notifs:
                         notif = Notification.from_dict(notif_data)
                         notification_dict = _notification_to_response(notif).model_dump(mode='json')
-                        yield f"data: {json.dumps({'type': 'notification', 'notification': notification_dict, 'timestamp': datetime.utcnow().isoformat()})}\n\n"
+                        yield f"data: {json.dumps({'type': 'notification', 'notification': notification_dict, 'timestamp': datetime.now(_tz.utc).isoformat()})}\n\n"
 
-                    last_check = datetime.utcnow()
+                    last_check = datetime.now(_tz.utc)
 
                     # Send keepalive comment
                     yield ": keepalive\n\n"

@@ -1,6 +1,7 @@
 """Rate Limiting API endpoints - MongoDB + FastAPI."""
 
 from datetime import datetime, timezone as tz, timedelta
+from openoutreach.core.tz_detect import user_day_bounds
 from typing import List, Optional
 import logging
 
@@ -217,18 +218,20 @@ async def get_daily_action_counts(
     if not profile or profile.user_id != user_id:
         raise HTTPException(status_code=404, detail="LinkedIn profile not found")
 
-    # Parse date
+    # Calculate day boundaries in the user's local timezone
     if date:
         try:
-            target_date = datetime.strptime(date, "%Y-%m-%d").replace(tzinfo=tz.utc)
+            from zoneinfo import ZoneInfo
+            from openoutreach.mongodb.models import SiteConfig as _SC
+            _cfg = _SC.load(user_id=user_id)
+            _tz = ZoneInfo(_cfg.active_timezone or "UTC")
+            target_date = datetime.strptime(date, "%Y-%m-%d").replace(tzinfo=_tz)
+            day_start = target_date.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(tz.utc)
+            day_end = day_start + timedelta(days=1)
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
     else:
-        target_date = datetime.now(tz.utc)
-
-    # Calculate day boundaries
-    day_start = target_date.replace(hour=0, minute=0, second=0, microsecond=0)
-    day_end = day_start + timedelta(days=1)
+        day_start, day_end = user_day_bounds(user_id=user_id)
 
     # Count actions
     collection = get_mongodb_collection("action_logs")

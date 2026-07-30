@@ -329,23 +329,20 @@ def _seconds_to_timestamp(seconds: float, intervals: list[tuple]):
 
 
 def _has_pending(task_type: str, campaign_id: str, linkedin_profile_id: str | None = None) -> bool:
-    """Return True if a PENDING task of this type already exists for the campaign
-    and is scheduled within the next 24 hours.
+    """Return True if any PENDING task of this type already exists for the campaign.
 
-    Past-due PENDING tasks (from a previous session that died before executing)
-    are ignored so the planner re-fills the window. They will still be claimed
-    and executed by the task loop — this check only gates new slot creation.
+    Counts both past-due and future-scheduled tasks so that reconcile cycles
+    running every 5 minutes do not stack up hundreds of duplicate slots when
+    the daemon hasn't consumed the existing ones yet.
     """
     from openoutreach.mongodb.connection import get_mongodb_collection
     col = get_mongodb_collection("tasks")
     if col is None:
         return False
-    now = Datetime.now(tz.utc)
     query: dict = {
         "task_type": task_type,
         "status": Task.Status.PENDING,
         "payload.campaign_id": campaign_id,
-        "scheduled_at": {"$gte": now},
     }
     if linkedin_profile_id:
         query["linkedin_profile_id"] = linkedin_profile_id

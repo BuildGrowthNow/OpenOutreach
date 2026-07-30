@@ -74,3 +74,29 @@ def system_timezone() -> str:
         if name and _is_valid_iana(name):
             return name
     return "UTC"
+
+
+def user_day_bounds(user_id: str | None = None) -> tuple[datetime, datetime]:
+    """Return (day_start, day_end) as UTC-aware datetimes for the user's local today.
+
+    Uses the timezone configured in the user's SiteConfig (active_timezone).
+    Falls back to UTC when no SiteConfig exists or the timezone is invalid.
+    """
+    from datetime import timezone
+    user_tz = timezone.utc
+    if user_id:
+        try:
+            from openoutreach.mongodb.models import SiteConfig
+            config = SiteConfig.load(user_id=user_id)
+            tz_name = config.active_timezone or "UTC"
+            if _is_valid_iana(tz_name):
+                user_tz = ZoneInfo(tz_name)
+        except Exception:
+            pass
+
+    now_local = datetime.now(user_tz)
+    day_start = now_local.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
+    day_end = day_start.replace(tzinfo=None)
+    from datetime import timedelta
+    day_end = day_start + timedelta(days=1)
+    return day_start, day_end

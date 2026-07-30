@@ -7,6 +7,7 @@ import logging
 from datetime import date, datetime, timezone
 from typing import ClassVar, Optional
 from uuid import uuid4
+from zoneinfo import ZoneInfo
 
 from openoutreach.mongodb.models import Campaign
 from openoutreach.mongodb.connection import get_mongodb_collection
@@ -368,7 +369,20 @@ class LinkedInProfile:
         logger.warning("Rate limit: %s externally exhausted for today", action_type)
 
     def _daily_count(self, action_type: str) -> int:
-        today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+        # Use the user's configured timezone so the day boundary matches their
+        # local midnight rather than always resetting at UTC midnight.
+        user_tz = timezone.utc
+        try:
+            from openoutreach.mongodb.models import SiteConfig
+            config = SiteConfig.load(user_id=self.user_id)
+            tz_name = config.active_timezone or "UTC"
+            user_tz = ZoneInfo(tz_name)
+        except Exception:
+            pass
+
+        now_local = datetime.now(user_tz)
+        today_start = now_local.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
+
         collection = get_mongodb_collection("action_logs")
         if collection is None:
             return 0

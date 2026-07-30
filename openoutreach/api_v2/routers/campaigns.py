@@ -999,7 +999,7 @@ async def get_campaign_analytics(
     messages_collection = get_mongodb_collection("chat_messages")
 
     period_days = {"7d": 7, "30d": 30, "90d": 90}.get(period, 0)
-    since = datetime.utcnow() - timedelta(days=period_days) if period_days else datetime(2000, 1, 1)
+    since = datetime.now(timezone.utc) - timedelta(days=period_days) if period_days else datetime(2000, 1, 1, tzinfo=timezone.utc)
 
     connections_sent = 0
     connections_accepted = 0

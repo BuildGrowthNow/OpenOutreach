@@ -1,5 +1,5 @@
 # openoutreach/linkedin/pipeline/ready_pool.py
-"""Ready-to-connect pool: GP confidence gate between NEW and READY_TO_CONNECT."""
+"""Ready-to-connect pool: GP confidence gate between QUALIFIED and READY_TO_CONNECT."""
 
 from __future__ import annotations
 
@@ -21,14 +21,29 @@ logger = logging.getLogger(__name__)
 def promote_to_ready(session, qualifier: BayesianQualifier, threshold: float) -> int:
     """Promote QUALIFIED profiles above GP confidence threshold to READY_TO_CONNECT.
 
-    Returns the number of profiles promoted. Returns 0 when the GP model
-    is not fitted (cold start) or when no QUALIFIED profiles exist.
+    When the GP model is not yet fitted (cold start — no labelled examples),
+    all QUALIFIED leads are promoted directly so the campaign can start sending
+    connections immediately rather than stalling forever waiting for training data.
+
+    Returns the number of profiles promoted.
     """
     from openoutreach.mongodb.models import Lead
 
     profiles = get_qualified_profiles(session)
     if not profiles:
         return 0
+
+    # Cold-start: model has no labels yet — promote everything so connections start
+    if not qualifier.is_fitted:
+        promoted = 0
+        for p in profiles:
+            pid = p.get("public_identifier", "?")
+            logger.info("%s READY_TO_CONNECT (cold-start bypass)", pid)
+            set_profile_state(
+                session, pid, DealState.READY_TO_CONNECT.value
+            )
+            promoted += 1
+        return promoted
 
     embeddings = []
     valid = []
@@ -45,7 +60,16 @@ def promote_to_ready(session, qualifier: BayesianQualifier, threshold: float) ->
     X = np.array(embeddings, dtype=np.float64)
     probs = qualifier.predict_probs(X)
     if probs is None:
-        return 0
+        # predict_probs can still return None if fit failed — fall back to promote all
+        promoted = 0
+        for p in profiles:
+            pid = p.get("public_identifier", "?")
+            logger.info("%s READY_TO_CONNECT (GP unavailable, promoting all)", pid)
+            set_profile_state(
+                session, pid, DealState.READY_TO_CONNECT.value
+            )
+            promoted += 1
+        return promoted
 
     promoted = 0
     for prob, p in zip(probs, valid):

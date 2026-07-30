@@ -222,6 +222,11 @@ class BayesianQualifier:
         return len(self._y) - n_pos, n_pos
 
     @property
+    def is_fitted(self) -> bool:
+        """True when the GP model has been successfully fitted with labelled data."""
+        return self._fitted or self._fit_if_needed()
+
+    @property
     def pipeline(self):
         """The fitted sklearn Pipeline — serializable via joblib."""
         self._fit_if_needed()

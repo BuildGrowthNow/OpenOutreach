@@ -8,6 +8,7 @@ verification, health monitoring, rotation, and audit logging.
 import json
 import logging
 from datetime import datetime, timezone as tz
+from openoutreach.core.tz_detect import user_day_bounds
 from typing import List, Optional
 from uuid import uuid4
 
@@ -1025,7 +1026,7 @@ async def get_credential_health(
     # Daily limit usage
     daily_limit_usage = {}
     if action_logs is not None:
-        today_start = datetime.now(tz.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+        today_start, _ = user_day_bounds(user_id=profile.user_id)
 
         connect_count = action_logs.count_documents({
             "linkedin_profile_id": profile._id,

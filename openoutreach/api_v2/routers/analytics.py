@@ -6,7 +6,7 @@ Replaces Django AnalyticsOverviewView.
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
@@ -257,7 +257,7 @@ async def get_analytics_overview(
 
     # Calculate time range
     period_days = _calculate_period_days(period)
-    since = datetime.utcnow() - timedelta(days=period_days)
+    since = datetime.now(timezone.utc) - timedelta(days=period_days)
 
     # Get deals collection
     deals_collection = get_mongodb_collection("deals")
