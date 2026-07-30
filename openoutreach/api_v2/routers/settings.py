@@ -222,6 +222,7 @@ async def get_daily_usage(
             raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
     else:
         day_start, day_end = user_day_bounds(user_id=user_id)
+        target_date = day_start
 
     # Get user's LinkedIn profiles
     profiles_collection = get_mongodb_collection("linkedin_profiles")

@@ -232,6 +232,7 @@ async def get_daily_action_counts(
             raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
     else:
         day_start, day_end = user_day_bounds(user_id=user_id)
+        target_date = day_start
 
     # Count actions
     collection = get_mongodb_collection("action_logs")

@@ -240,10 +240,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // Poll briefly for pywebview.api — it's injected by pywebview's bridge but
       // may not be fully registered when the first useEffect fires.
       let body: string | undefined
-      if (typeof window !== 'undefined' && typeof (window as any).pywebview !== 'undefined') {
+      if (typeof window !== 'undefined' && typeof (window as unknown as { pywebview?: unknown }).pywebview !== 'undefined') {
         const keychainToken = await new Promise<string | null>((resolve) => {
           const poll = (tries: number) => {
-            const api = (window as any).pywebview?.api
+            const api = (window as unknown as { pywebview?: { api?: { get_keychain_refresh_token?: () => string | null | Promise<string | null> } } }).pywebview?.api
             if (api?.get_keychain_refresh_token) {
               Promise.resolve(api.get_keychain_refresh_token()).then(resolve).catch(() => resolve(null))
             } else if (tries > 0) {
