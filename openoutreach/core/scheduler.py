@@ -432,7 +432,7 @@ def plan_connect_window(session, campaign, *, connect_cap: int | None = None) ->
         velocity = preset["velocity"]
         time_aware = preset["time_aware"]
 
-        smart_effective = limiter.context.get_effective_limit('connect', campaign)
+        smart_effective = limiter.context.get_effective_limit('connect', campaign, now=limiter._user_local_now())
         n = min(n, int(smart_effective * preset["detectability_multiplier"]))
 
         created = _plan_slots(
@@ -505,7 +505,7 @@ def plan_follow_up_window(session, campaign, *, follow_up_cap: int | None = None
         velocity = preset["velocity"]
         time_aware = preset["time_aware"]
 
-        smart_effective = limiter.context.get_effective_limit('follow_up', campaign)
+        smart_effective = limiter.context.get_effective_limit('follow_up', campaign, now=limiter._user_local_now())
         n = min(n, int(smart_effective * preset["detectability_multiplier"]))
 
         created = _plan_slots(

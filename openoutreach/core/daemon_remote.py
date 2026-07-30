@@ -316,9 +316,9 @@ class RemoteDaemon:
                 pass
 
             def can_execute(self, action_type: str) -> bool:
-                from datetime import date
+                from datetime import datetime, timezone
                 exhausted_date = self._exhausted.get(action_type)
-                if exhausted_date is not None and exhausted_date == date.today():
+                if exhausted_date is not None and exhausted_date == datetime.now(timezone.utc).date():
                     return False
                 return True
 
@@ -334,8 +334,8 @@ class RemoteDaemon:
                 action_log.save()
 
             def mark_exhausted(self, action_type: str):
-                from datetime import date
-                self._exhausted[action_type] = date.today()
+                from datetime import datetime, timezone
+                self._exhausted[action_type] = datetime.now(timezone.utc).date()
 
             @property
             def pk(self):

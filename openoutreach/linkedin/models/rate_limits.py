@@ -142,12 +142,13 @@ class SmartRateLimitContext:
         context.save()
         return context
 
-    def get_effective_limit(self, action_type: str, campaign=None) -> int:
+    def get_effective_limit(self, action_type: str, campaign=None, now: datetime | None = None) -> int:
         """Calculate effective rate limit based on all context factors."""
         base_limit = self._get_base_limit(action_type)
 
-        # Always compute time/day multipliers fresh — never trust stored values
-        self._update_time_context(datetime.now(tz.utc))
+        # Always compute time/day multipliers fresh — never trust stored values.
+        # Caller should pass user-local now so hour/weekday match the user's timezone.
+        self._update_time_context(now or datetime.now(tz.utc))
 
         # Apply multipliers
         multipliers = [
@@ -188,9 +189,12 @@ class SmartRateLimitContext:
         else:
             return 1.0  # Normal - full speed
 
-    def record_action(self, action_type: str):
-        """Record an action and update context."""
-        now = datetime.now(tz.utc)
+    def record_action(self, action_type: str, now: datetime | None = None):
+        """Record an action and update context.
+
+        Caller should pass user-local now so hour/weekday match the user's timezone.
+        """
+        now = now or datetime.now(tz.utc)
 
         # Update time-based multipliers
         self._update_time_context(now)

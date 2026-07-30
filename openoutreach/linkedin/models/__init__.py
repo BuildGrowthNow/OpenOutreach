@@ -336,9 +336,9 @@ class LinkedInProfile:
 
     def can_execute(self, action_type: str) -> bool:
         """Check if the action is allowed under the daily rate limit."""
-        # Reset exhaustion flag on a new day
+        # Reset exhaustion flag on a new UTC day (consistent with mark_exhausted)
         exhausted_date = self._exhausted.get(action_type)
-        if exhausted_date is not None and exhausted_date != date.today():
+        if exhausted_date is not None and exhausted_date != datetime.now(timezone.utc).date():
             del self._exhausted[action_type]
         if action_type in self._exhausted:
             return False
@@ -364,8 +364,8 @@ class LinkedInProfile:
         action_log.save()
 
     def mark_exhausted(self, action_type: str) -> None:
-        """Mark the action type as externally exhausted for today."""
-        self._exhausted[action_type] = date.today()
+        """Mark the action type as externally exhausted for today (UTC date)."""
+        self._exhausted[action_type] = datetime.now(timezone.utc).date()
         logger.warning("Rate limit: %s externally exhausted for today", action_type)
 
     def _daily_count(self, action_type: str) -> int:

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone as tz
+from zoneinfo import ZoneInfo
 from openoutreach.core.tz_detect import user_day_bounds
 from typing import Optional
 
@@ -40,6 +41,16 @@ class SmartRateLimiter:
         context.save()
         return context
 
+    def _user_local_now(self) -> datetime:
+        """Return the current time in the user's configured timezone."""
+        try:
+            from openoutreach.mongodb.models import SiteConfig
+            config = SiteConfig.load(user_id=self.linkedin_profile.user_id)
+            tz_name = config.active_timezone or "UTC"
+            return datetime.now(ZoneInfo(tz_name))
+        except Exception:
+            return datetime.now(tz.utc)
+
     def _profile_daily_limit(self, action_type: str) -> int:
         """Return the profile's configured daily limit for action_type."""
         if action_type == "connect":
@@ -66,7 +77,7 @@ class SmartRateLimiter:
         NOTE: ActionLog entries are created by task handlers, not here.
         This method only updates the SmartRateLimitContext for detectability tracking.
         """
-        self.context.record_action(action_type)
+        self.context.record_action(action_type, now=self._user_local_now())
 
     def get_remaining_quota(self, action_type: str, campaign=None) -> int:
         """Get remaining quota for action type."""
@@ -84,13 +95,13 @@ class SmartRateLimiter:
             "time_multiplier": self.context.time_of_day_limit_multiplier,
             "day_multiplier": self.context.day_of_week_limit_multiplier,
             "detectability_multiplier": self.context._detectability_multiplier(),
-            "effective_limit": self.context.get_effective_limit(action_type, campaign),
+            "effective_limit": self.context.get_effective_limit(action_type, campaign, now=self._user_local_now()),
             "recent_24h": self._count_recent_actions(action_type),
             "remaining": self.get_remaining_quota(action_type, campaign),
             "detectability_score": self.context.detectability_score,
             "context": {
-                "time_of_day": datetime.now(tz.utc).strftime("%H:%M"),
-                "day_of_week": datetime.now(tz.utc).strftime("%A"),
+                "time_of_day": self._user_local_now().strftime("%H:%M"),
+                "day_of_week": self._user_local_now().strftime("%A"),
             },
         }
 
