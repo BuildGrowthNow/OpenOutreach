@@ -2,9 +2,9 @@
 Messages Router - Multi-tenant chat message management
 """
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 from openoutreach.mongodb import models
 from openoutreach.mongodb.connection import get_mongodb_collection
@@ -26,6 +26,13 @@ class MessageResponse(BaseModel):
     recipientName: Optional[str] = None
     recipientUrl: Optional[str] = None
     sender: str = "me"
+
+    @field_validator("creationDate", mode="before")
+    @classmethod
+    def ensure_utc(cls, v):
+        if isinstance(v, datetime) and v.tzinfo is None:
+            return v.replace(tzinfo=timezone.utc)
+        return v
 
 
 def _extract_lead_name(lead_doc: dict) -> Optional[str]:

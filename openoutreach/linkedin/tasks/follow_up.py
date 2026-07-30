@@ -33,7 +33,7 @@ _IN_MEMORY_LOCK_SECONDS = 300  # 5 minutes
 # If the most recent message (in either direction) is older than this and
 # no outgoing message has ever been sent, the conversation is treated as
 # stale — skip it rather than cold-replying to an ancient inbound message.
-STALE_CONVERSATION_DAYS = 180
+STALE_CONVERSATION_DAYS = 30
 
 
 def _build_send_profile(deal) -> dict:
@@ -167,17 +167,16 @@ def _too_soon_to_nudge(deal) -> bool:
             )
             return True
 
-    # Case 2: stale inbound — last message is an incoming message older than
-    # STALE_CONVERSATION_DAYS with no outgoing ever sent.
-    has_any_outgoing = any(m.get("is_outgoing", False) for m in messages)
-    if not has_any_outgoing and not last.get("is_outgoing", False):
-        age_days = (now - last_date).days
-        if age_days >= STALE_CONVERSATION_DAYS:
-            logger.info(
-                "deal %s: stale inbound conversation (%dd old, no outgoing) — skip",
-                deal._id, age_days,
-            )
-            return True
+    # Stale conversation: last message (any direction) older than STALE_CONVERSATION_DAYS.
+    # Catches both pure-inbound conversations and deals where a connect was sent long
+    # ago but nothing has happened since.
+    age_days = (now - last_date).days
+    if age_days >= STALE_CONVERSATION_DAYS:
+        logger.info(
+            "deal %s: stale conversation (%dd since last message) — skip",
+            deal._id, age_days,
+        )
+        return True
 
     # Case 1: nudge cooldown after last outgoing message
     if not last.get("is_outgoing", False):
