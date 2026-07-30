@@ -33,9 +33,21 @@ def promote_to_ready(session, qualifier: BayesianQualifier, threshold: float) ->
     if not profiles:
         return 0
 
+    # Degree-1 leads are already connected — skip READY_TO_CONNECT entirely so
+    # they don't burn a connect slot and go straight to the follow-up queue.
+    first_degree = [p for p in profiles if p.get("connection_degree") == 1]
+    for p in first_degree:
+        pid = p.get("public_identifier", "?")
+        logger.info("%s already 1st-degree — CONNECTED (no connect slot needed)", pid)
+        set_profile_state(session, pid, DealState.CONNECTED.value)
+    profiles = [p for p in profiles if p.get("connection_degree") != 1]
+
+    if not profiles:
+        return len(first_degree)
+
     # Cold-start: model has no labels yet — promote everything so connections start
     if not qualifier.is_fitted:
-        promoted = 0
+        promoted = len(first_degree)
         for p in profiles:
             pid = p.get("public_identifier", "?")
             logger.info("%s READY_TO_CONNECT (cold-start bypass)", pid)
@@ -55,13 +67,13 @@ def promote_to_ready(session, qualifier: BayesianQualifier, threshold: float) ->
             valid.append(p)
 
     if not valid:
-        return 0
+        return len(first_degree)
 
     X = np.array(embeddings, dtype=np.float64)
     probs = qualifier.predict_probs(X)
     if probs is None:
         # predict_probs can still return None if fit failed — fall back to promote all
-        promoted = 0
+        promoted = len(first_degree)
         for p in profiles:
             pid = p.get("public_identifier", "?")
             logger.info("%s READY_TO_CONNECT (GP unavailable, promoting all)", pid)
@@ -71,7 +83,7 @@ def promote_to_ready(session, qualifier: BayesianQualifier, threshold: float) ->
             promoted += 1
         return promoted
 
-    promoted = 0
+    promoted = len(first_degree)
     for prob, p in zip(probs, valid):
         if prob > threshold:
             pid = p.get("public_identifier", "?")

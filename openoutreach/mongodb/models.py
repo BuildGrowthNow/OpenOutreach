@@ -595,6 +595,7 @@ class Lead:
             "lead_id": self._id,
             "public_identifier": self.public_identifier,
             "url": self.linkedin_url or "",
+            "connection_degree": self.connection_degree,
             "meta": {},
         }
 
