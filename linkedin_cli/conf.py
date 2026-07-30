@@ -5,6 +5,7 @@ scheduling config (that stays in OpenOutreach's ``linkedin/conf.py``).
 """
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 ROOT_DIR = Path(__file__).parent.parent
@@ -15,7 +16,7 @@ ROOT_DIR = Path(__file__).parent.parent
 FIXTURE_DIR = ROOT_DIR / "tests" / "fixtures"
 FIXTURE_PROFILES_DIR = FIXTURE_DIR / "profiles"
 FIXTURE_PAGES_DIR = FIXTURE_DIR / "pages"
-DUMP_PAGES = False
+DUMP_PAGES = os.environ.get("DUMP_PAGES", "false").lower() == "true"
 
 # ----------------------------------------------------------------------
 # Browser config
