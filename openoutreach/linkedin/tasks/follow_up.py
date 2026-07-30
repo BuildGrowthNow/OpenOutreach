@@ -107,69 +107,71 @@ def _replace_placeholders(message: str, deal) -> str:
 def _too_soon_to_nudge(deal) -> bool:
     """Return True if we should skip this deal now.
 
-    Guards four cases:
-    1. In-memory post-send lock: if this process sent a message for this deal
-       within the last 5 minutes, skip immediately (guards LinkedIn API
-       propagation delay before DB sync catches up).
-    2. Nudge cooldown: wait ``unanswered_count * MIN_DAYS_PER_UNANSWERED`` days
-       after the most recent outgoing message before sending another.
-    3. Stale inbound: if the last message is incoming and older than
-       STALE_CONVERSATION_DAYS with no outgoing on record, the conversation
-       predates the campaign — skip it (avoids replying to ancient messages).
-    4. Post-send lock: if the most recent outgoing message is less than 60
-       seconds old, another task may have just fired — skip to avoid duplicates
-       while LinkedIn's API propagates the just-sent message.
+    Guards:
+    1. Persistent post-send lock (deal.last_outgoing_at): after a successful
+       send this field is stamped immediately — before sync_conversation —
+       so it survives LinkedIn API propagation delay and daemon restarts.
+       Required minimum cooldown = unanswered_count * MIN_DAYS_PER_UNANSWERED,
+       with a hard floor of _IN_MEMORY_LOCK_SECONDS to prevent same-minute
+       double-sends when the nudge count is 0.
+    2. In-memory post-send lock: belt-and-suspenders for the first 5 minutes.
+    3. Stale conversation: last message (either direction) older than
+       STALE_CONVERSATION_DAYS with no known outgoing record.
+    4. DB nudge cooldown: count outgoing messages since last reply and enforce
+       MIN_DAYS_PER_UNANSWERED * nudge_count days of silence.
     """
-    # Case 1: in-memory guard — fastest check, no DB hit
-    deal_id = str(deal._id)
-    sent_at = _last_send_times.get(deal_id)
-    if sent_at is not None:
-        seconds_since = (datetime.now(timezone.utc) - sent_at).total_seconds()
-        if seconds_since < _IN_MEMORY_LOCK_SECONDS:
-            logger.debug(
-                "deal %s: in-memory post-send lock (%ds ago) — skip",
-                deal_id, int(seconds_since),
-            )
-            return True
-        else:
-            # Expired — clean up
-            del _last_send_times[deal_id]
-
-    message_collection = get_mongodb_collection("chat_messages")
-    if message_collection is None:
-        return False
-
-    # Get all messages for this deal, sorted by creation_date descending
-    messages = list(message_collection.find(
-        {"deal_id": deal._id},
-        sort=[("creation_date", -1)]
-    ))
-
-    if not messages:
-        return False
-
     def _aware(dt):
         if dt is None:
             return datetime.min.replace(tzinfo=timezone.utc)
         return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
 
     now = datetime.now(timezone.utc)
-    last = messages[0]
-    last_date = _aware(last.get("creation_date"))
+    deal_id = str(deal._id)
 
-    # Case 3: post-send lock — another task already sent a message <60s ago
-    if last.get("is_outgoing", False):
-        seconds_since_last_outgoing = (now - last_date).total_seconds()
-        if seconds_since_last_outgoing < 60:
+    # Guard 1: persistent field — survives restarts, set before sync_conversation
+    last_out = _aware(deal.last_outgoing_at) if deal.last_outgoing_at else None
+    if last_out is not None and last_out > datetime.min.replace(tzinfo=timezone.utc):
+        seconds_since = (now - last_out).total_seconds()
+        if seconds_since < _IN_MEMORY_LOCK_SECONDS:
             logger.debug(
-                "deal %s: post-send lock (last outgoing %ds ago) — skip",
-                deal._id, int(seconds_since_last_outgoing),
+                "deal %s: persistent post-send lock (%ds ago) — skip",
+                deal_id, int(seconds_since),
             )
             return True
 
-    # Stale conversation: last message (any direction) older than STALE_CONVERSATION_DAYS.
-    # Catches both pure-inbound conversations and deals where a connect was sent long
-    # ago but nothing has happened since.
+    # Guard 2: in-memory lock (belt-and-suspenders)
+    sent_at = _last_send_times.get(deal_id)
+    if sent_at is not None:
+        seconds_since = (now - sent_at).total_seconds()
+        if seconds_since < _IN_MEMORY_LOCK_SECONDS:
+            logger.debug(
+                "deal %s: in-memory post-send lock (%ds ago) — skip",
+                deal_id, int(seconds_since),
+            )
+            return True
+        del _last_send_times[deal_id]
+
+    message_collection = get_mongodb_collection("chat_messages")
+    if message_collection is None:
+        return False
+
+    # Load messages sorted newest-first
+    messages = list(message_collection.find(
+        {"deal_id": deal._id},
+        sort=[("creation_date", -1)]
+    ))
+
+    if not messages:
+        # No synced messages yet; fall back to persistent field for cooldown check
+        if last_out is not None:
+            required = timedelta(days=MIN_DAYS_PER_UNANSWERED)
+            return (now - last_out) < required
+        return False
+
+    last = messages[0]
+    last_date = _aware(last.get("creation_date"))
+
+    # Guard 3: stale conversation
     age_days = (now - last_date).days
     if age_days >= STALE_CONVERSATION_DAYS:
         logger.info(
@@ -178,18 +180,21 @@ def _too_soon_to_nudge(deal) -> bool:
         )
         return True
 
-    # Case 1: nudge cooldown after last outgoing message
+    # If the last message is incoming, no nudge cooldown applies
     if not last.get("is_outgoing", False):
         return False
 
-    # Find last reply (incoming message)
-    last_reply = None
-    for msg in messages:
-        if not msg.get("is_outgoing", False):
-            last_reply = msg
-            break
+    # Guard 4: post-send DB lock (<60s) — guards against racing tasks before API propagation
+    seconds_since_last_outgoing = (now - last_date).total_seconds()
+    if seconds_since_last_outgoing < 60:
+        logger.debug(
+            "deal %s: post-send lock (last outgoing %ds ago) — skip",
+            deal._id, int(seconds_since_last_outgoing),
+        )
+        return True
 
-    # Count nudges (outgoing messages after last reply)
+    # Count nudges (outgoing messages since last incoming reply)
+    last_reply = next((m for m in messages if not m.get("is_outgoing", False)), None)
     if last_reply:
         last_reply_date = _aware(last_reply.get("creation_date"))
         nudges = [
@@ -200,7 +205,7 @@ def _too_soon_to_nudge(deal) -> bool:
     else:
         nudges = [m for m in messages if m.get("is_outgoing", False)]
 
-    required = timedelta(days=len(nudges) * MIN_DAYS_PER_UNANSWERED)
+    required = timedelta(days=max(1, len(nudges)) * MIN_DAYS_PER_UNANSWERED)
     return now - last_date < required
 
 
@@ -313,9 +318,14 @@ def handle_follow_up(task, session, qualifiers):
                 public_id,
             )
             return
+        now = datetime.now(timezone.utc)
         # Stamp in-memory lock so back-to-back queued tasks skip this deal
         # before LinkedIn's API propagates the just-sent message to the DB.
-        _last_send_times[str(deal._id)] = datetime.now(timezone.utc)
+        _last_send_times[str(deal._id)] = now
+        # Persist the send time and rotate the deal to the back of the queue
+        # so the next follow_up slot picks a different lead.
+        deal.last_outgoing_at = now
+        deal.creation_date = now
         # Record action with smart rate limiter
         smart_record_action(
             session.linkedin_profile, ActionLog.ActionType.FOLLOW_UP, campaign
@@ -347,7 +357,7 @@ def handle_follow_up(task, session, qualifiers):
             sync_conversation(session, public_id)
         except Exception:
             logger.exception("post-send sync failed for %s (best-effort)", public_id)
-        deal.save()
+        deal.save(update_fields=["last_outgoing_at", "creation_date"])
 
     elif decision.action == "mark_completed":
         from openoutreach.crm.models import DealState
@@ -360,9 +370,9 @@ def handle_follow_up(task, session, qualifiers):
         )
 
     elif decision.action == "wait":
-        # Bump creation_date (used for sorting) so the eligibility query cycles to a different deal
-        # next time; this deal returns to the front only after others are touched.
-        deal.save()
+        # Bump creation_date so the eligibility query cycles to a different deal next time.
+        deal.creation_date = datetime.now(timezone.utc)
+        deal.save(update_fields=["creation_date"])
 
     # State Machine Integration - Execute state machine if campaign has one
     # Note: State machine is disabled feature, skipping for now
