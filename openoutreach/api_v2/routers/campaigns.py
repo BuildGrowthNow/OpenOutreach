@@ -185,6 +185,7 @@ async def list_campaigns(
 
         # Batch-fetch deal stats for all campaigns in one aggregation
         deals_collection = get_mongodb_collection("deals")
+        action_logs_collection = get_mongodb_collection("action_logs")
         campaign_stats: Dict[str, Dict] = {}
         if deals_collection is not None and docs:
             campaign_ids = [str(doc["_id"]) for doc in docs]
@@ -193,16 +194,35 @@ async def list_campaigns(
                 {"$group": {
                     "_id": "$campaign_id",
                     "totalLeads": {"$sum": 1},
-                    "connected": {"$sum": {"$cond": [{"$eq": ["$state", "Connected"]}, 1, 0]}},
                     "completed": {"$sum": {"$cond": [{"$eq": ["$state", "Completed"]}, 1, 0]}},
                 }},
             ]
             for row in deals_collection.aggregate(pipeline):
                 campaign_stats[str(row["_id"])] = {
                     "totalLeads": row.get("totalLeads", 0),
-                    "connected": row.get("connected", 0),
+                    "connected": 0,
                     "completed": row.get("completed", 0),
                 }
+
+        # connections_accepted = actual connect actions from ActionLog, not deal state.
+        # Deal state includes 1st-degree leads auto-transitioned to CONNECTED without
+        # ever sending a connection request, which inflates the count.
+        if action_logs_collection is not None and docs:
+            campaign_ids = [str(doc["_id"]) for doc in docs]
+            connect_pipeline = [
+                {"$match": {
+                    "campaign_id": {"$in": campaign_ids},
+                    "action_type": "connect",
+                    "status": {"$nin": ["failed", "error"]},
+                }},
+                {"$group": {"_id": "$campaign_id", "connected": {"$sum": 1}}},
+            ]
+            for row in action_logs_collection.aggregate(connect_pipeline):
+                cid = str(row["_id"])
+                if cid in campaign_stats:
+                    campaign_stats[cid]["connected"] = row.get("connected", 0)
+                else:
+                    campaign_stats[cid] = {"totalLeads": 0, "connected": row.get("connected", 0), "completed": 0}
 
         campaigns = []
         for doc in docs:
