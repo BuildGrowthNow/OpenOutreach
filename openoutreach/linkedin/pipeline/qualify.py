@@ -44,6 +44,25 @@ def fetch_qualification_candidates(session):
 def run_qualification(session, qualifier: BayesianQualifier) -> str | None:
     """Qualify one unlabelled profile via BALD/auto-decision/LLM. Returns public_id or None."""
     from openoutreach.linkedin.ml.qualifier import qualify_with_llm, format_prediction
+    from openoutreach.mongodb.connection import get_mongodb_collection
+    from openoutreach.crm.models import DealState
+
+    # Cap the QUALIFIED+READY_TO_CONNECT backlog at 3× the daily connect limit so
+    # we don't accumulate thousands of qualified leads that can't be connected in time.
+    deals_col = get_mongodb_collection("deals")
+    if deals_col is not None:
+        backlog = deals_col.count_documents({
+            "campaign_id": session.campaign.pk,
+            "state": {"$in": [DealState.QUALIFIED.value, DealState.READY_TO_CONNECT.value]},
+        })
+        daily_limit = getattr(session.linkedin_profile, "connect_daily_limit", 20)
+        cap = max(30, daily_limit * 3)
+        if backlog >= cap:
+            logger.info(
+                "[%s] qualify: backlog %d ≥ cap %d — pausing (drain connects first)",
+                session.campaign, backlog, cap,
+            )
+            return None
 
     candidates = fetch_qualification_candidates(session)
     if not candidates:

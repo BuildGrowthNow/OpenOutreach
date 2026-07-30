@@ -105,6 +105,30 @@ def _capture_contact_info(lead, session) -> None:
         )
 
 
+def _enqueue_immediate_follow_up(deal, session) -> None:
+    """Schedule a follow_up task for *now* so the first message fires on the
+    next task-loop iteration rather than waiting for the next planner cycle."""
+    from openoutreach.mongodb.models import Task
+    from datetime import datetime, timezone
+
+    campaign_id = str(deal.campaign_id)
+    profile_id = str(session.linkedin_profile.pk) if session.linkedin_profile else None
+    user_id = str(session.user_id) if hasattr(session, "user_id") and session.user_id else None
+
+    task = Task(
+        task_type=Task.TaskType.FOLLOW_UP,
+        scheduled_at=datetime.now(timezone.utc),
+        payload={"campaign_id": campaign_id},
+        linkedin_profile_id=profile_id,
+        user_id=user_id,
+    )
+    task.save()
+    logger.debug(
+        "Enqueued immediate follow_up for deal %s (campaign %s)",
+        deal._id, campaign_id,
+    )
+
+
 def set_profile_state(
     session, public_identifier: str, new_state: str, reason: str = "", outcome: str = ""
 ):
@@ -161,6 +185,7 @@ def set_profile_state(
     if state_changed and ps == DealState.CONNECTED:
         if deal.lead:
             _capture_contact_info(deal.lead, session)
+        _enqueue_immediate_follow_up(deal, session)
 
 
 # ── State queries ──
