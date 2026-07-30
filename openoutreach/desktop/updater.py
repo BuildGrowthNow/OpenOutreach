@@ -390,12 +390,15 @@ def apply_update_windows(new_exe_path: str, download_url: str = "") -> None:
 
     fallback_url = download_url or "https://github.com/Lengrowth/outbound/releases/latest"
 
+    pending_json = str(_PENDING_UPDATE_FILE).replace("'", "''")
+
     ps_script = f"""
 $pid_to_wait = {current_pid}
 $target = '{current_exe.replace("'", "''")}'
 $source = '{new_exe_path.replace("'", "''")}'
 $log = '{log_path.replace("'", "''")}'
 $fallback_url = '{fallback_url.replace("'", "''")}'
+$pending_json = '{pending_json}'
 
 function Write-Log($msg) {{
     $ts = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss')
@@ -403,16 +406,6 @@ function Write-Log($msg) {{
 }}
 
 Write-Log "Update script started. source=$source target=$target pid=$pid_to_wait"
-
-# Re-launch with admin rights if the target is in a protected directory
-$protected = ($target -like "*\\Program Files*") -or ($target -like "*\\Windows*")
-$isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-if ($protected -and -not $isAdmin) {{
-    Write-Log "Target is in a protected path and we are not admin — re-launching elevated"
-    $thisScript = '{ps_path.replace("'", "''")}'
-    Start-Process powershell.exe -Verb RunAs -ArgumentList "-NonInteractive -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$thisScript`""
-    exit 0
-}}
 
 # Wait up to 30 s for the old process to exit
 $deadline = (Get-Date).AddSeconds(30)
@@ -441,8 +434,9 @@ try {{
     exit 1
 }}
 
-# Clean up temp file
+# Clean up temp exe and pending marker — prevents reapply loop on next launch
 Remove-Item -Path $source -Force -ErrorAction SilentlyContinue
+Remove-Item -Path $pending_json -Force -ErrorAction SilentlyContinue
 
 Write-Log "Relaunching $target"
 Start-Process -FilePath $target

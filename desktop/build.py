@@ -540,9 +540,10 @@ def create_nsis_installer() -> bool:
 
 Name "Lengrowth Outreach"
 OutFile "{DIST_DIR}\\Lengrowth-{version}-Setup.exe"
-InstallDir "$PROGRAMFILES64\\Lengrowth Outreach"
-InstallDirRegKey HKLM "Software\\Lengrowth Outreach" "InstallDir"
-RequestExecutionLevel admin
+; Install to per-user AppData so no UAC is needed (same as VS Code / Slack)
+InstallDir "$LOCALAPPDATA\\Programs\\Lengrowth Outreach"
+InstallDirRegKey HKCU "Software\\Lengrowth Outreach" "InstallDir"
+RequestExecutionLevel user
 
 !define MUI_ICON "{ASSETS_DIR}\\icon.ico"
 !define MUI_UNICON "{ASSETS_DIR}\\icon.ico"
@@ -576,20 +577,13 @@ Section "Install"
     Pop $0
     Sleep 1000
 
-    ; Remove any previous installation registered under old uninstall key
-    ReadRegStr $0 HKLM "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\LengrowthOutreach" "UninstallString"
-    StrCmp $0 "" +3
-        ExecWait '"$0" /S'
-        Sleep 1000
-
-    ; Force-remove the install directory so no old exe lingers (handles both
-    ; installer upgrades and cases where the old uninstaller failed/was absent)
+    ; Force-remove the install directory so no old exe lingers
     RMDir /r "$INSTDIR"
 
     SetOutPath "$INSTDIR"
     File "{exe_path}"
 
-    ; Create start menu shortcuts
+    ; Create start menu shortcuts (per-user)
     CreateDirectory "$SMPROGRAMS\\Lengrowth Outreach"
     CreateShortCut "$SMPROGRAMS\\Lengrowth Outreach\\Lengrowth Outreach.lnk" "$INSTDIR\\Lengrowth.exe"
     CreateShortCut "$SMPROGRAMS\\Lengrowth Outreach\\Uninstall.lnk" "$INSTDIR\\Uninstall.exe"
@@ -597,20 +591,20 @@ Section "Install"
     ; Create desktop shortcut
     CreateShortCut "$DESKTOP\\Lengrowth Outreach.lnk" "$INSTDIR\\Lengrowth.exe"
 
-    ; Register lengrowth:// protocol handler
-    WriteRegStr HKCR "lengrowth" "" "URL:Lengrowth Protocol"
-    WriteRegStr HKCR "lengrowth" "URL Protocol" ""
-    WriteRegStr HKCR "lengrowth\\shell\\open\\command" "" '"$INSTDIR\\Lengrowth.exe" "%1"'
+    ; Register lengrowth:// protocol handler (per-user, no UAC)
+    WriteRegStr HKCU "Software\\Classes\\lengrowth" "" "URL:Lengrowth Protocol"
+    WriteRegStr HKCU "Software\\Classes\\lengrowth" "URL Protocol" ""
+    WriteRegStr HKCU "Software\\Classes\\lengrowth\\shell\\open\\command" "" '"$INSTDIR\\Lengrowth.exe" "%1"'
 
-    ; Write uninstall info
-    WriteRegStr HKLM "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\LengrowthOutreach" "DisplayName" "Lengrowth Outreach"
-    WriteRegStr HKLM "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\LengrowthOutreach" "UninstallString" '"$INSTDIR\\Uninstall.exe"'
-    WriteRegStr HKLM "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\LengrowthOutreach" "DisplayVersion" "{version}"
-    WriteRegStr HKLM "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\LengrowthOutreach" "Publisher" "Lengrowth Outreach"
-    WriteRegStr HKLM "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\LengrowthOutreach" "DisplayIcon" "$INSTDIR\\Lengrowth.exe"
-    WriteRegStr HKLM "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\LengrowthOutreach" "URLInfoAbout" "https://lengrowth.com"
-    WriteRegDWORD HKLM "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\LengrowthOutreach" "NoModify" 1
-    WriteRegDWORD HKLM "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\LengrowthOutreach" "NoRepair" 1
+    ; Write uninstall info to per-user registry (shows in Apps & Features)
+    WriteRegStr HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\LengrowthOutreach" "DisplayName" "Lengrowth Outreach"
+    WriteRegStr HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\LengrowthOutreach" "UninstallString" '"$INSTDIR\\Uninstall.exe"'
+    WriteRegStr HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\LengrowthOutreach" "DisplayVersion" "{version}"
+    WriteRegStr HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\LengrowthOutreach" "Publisher" "Lengrowth Outreach"
+    WriteRegStr HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\LengrowthOutreach" "DisplayIcon" "$INSTDIR\\Lengrowth.exe"
+    WriteRegStr HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\LengrowthOutreach" "URLInfoAbout" "https://lengrowth.com"
+    WriteRegDWORD HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\LengrowthOutreach" "NoModify" 1
+    WriteRegDWORD HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\LengrowthOutreach" "NoRepair" 1
 
     WriteUninstaller "$INSTDIR\\Uninstall.exe"
 SectionEnd
@@ -625,9 +619,9 @@ Section "Uninstall"
     RMDir "$SMPROGRAMS\\Lengrowth Outreach"
     Delete "$DESKTOP\\Lengrowth Outreach.lnk"
 
-    DeleteRegKey HKCR "lengrowth"
-    DeleteRegKey HKLM "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\LengrowthOutreach"
-    DeleteRegKey HKLM "Software\\Lengrowth Outreach"
+    DeleteRegKey HKCU "Software\\Classes\\lengrowth"
+    DeleteRegKey HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\LengrowthOutreach"
+    DeleteRegKey HKCU "Software\\Lengrowth Outreach"
 SectionEnd
 '''
     nsi_script.write_text(nsi_content)
