@@ -322,10 +322,11 @@ def handle_follow_up(task, session, qualifiers):
         # Stamp in-memory lock so back-to-back queued tasks skip this deal
         # before LinkedIn's API propagates the just-sent message to the DB.
         _last_send_times[str(deal._id)] = now
-        # Persist the send time and rotate the deal to the back of the queue
-        # so the next follow_up slot picks a different lead.
+        # Persist last_outgoing_at immediately — before any post-send logging
+        # or sync that could throw, so the guard survives exceptions and restarts.
         deal.last_outgoing_at = now
         deal.creation_date = now
+        deal.save(update_fields=["last_outgoing_at", "creation_date"])
         # Record action with smart rate limiter
         smart_record_action(
             session.linkedin_profile, ActionLog.ActionType.FOLLOW_UP, campaign
@@ -348,16 +349,12 @@ def handle_follow_up(task, session, qualifiers):
                 "message_preview": message[:100] if message else "",
             },
         )
-        # Persist the outgoing message locally and bump update_date so the
-        # next slot's eligibility query respects the cooldown and moves
-        # this deal to the back of the queue.
         from openoutreach.linkedin.db.chat import sync_conversation
 
         try:
             sync_conversation(session, public_id)
         except Exception:
             logger.exception("post-send sync failed for %s (best-effort)", public_id)
-        deal.save(update_fields=["last_outgoing_at", "creation_date"])
 
     elif decision.action == "mark_completed":
         from openoutreach.crm.models import DealState

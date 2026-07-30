@@ -329,11 +329,11 @@ def _seconds_to_timestamp(seconds: float, intervals: list[tuple]):
 
 
 def _has_pending(task_type: str, campaign_id: str, linkedin_profile_id: str | None = None) -> bool:
-    """Return True if any PENDING task of this type already exists for the campaign.
+    """Return True if any PENDING or RUNNING task of this type already exists for the campaign.
 
-    Counts both past-due and future-scheduled tasks so that reconcile cycles
-    running every 5 minutes do not stack up hundreds of duplicate slots when
-    the daemon hasn't consumed the existing ones yet.
+    Counts RUNNING tasks too: a task that is currently executing has status=RUNNING
+    in MongoDB, so a PENDING-only check would allow reconcile to create duplicate
+    slots while an execution is in flight.
     """
     from openoutreach.mongodb.connection import get_mongodb_collection
     col = get_mongodb_collection("tasks")
@@ -341,7 +341,7 @@ def _has_pending(task_type: str, campaign_id: str, linkedin_profile_id: str | No
         return False
     query: dict = {
         "task_type": task_type,
-        "status": Task.Status.PENDING,
+        "status": {"$in": [Task.Status.PENDING, Task.Status.RUNNING]},
         "payload.campaign_id": campaign_id,
     }
     if linkedin_profile_id:

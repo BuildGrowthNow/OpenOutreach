@@ -4734,10 +4734,12 @@ class TaskManager:
         query = {"status": Task.STATUS_PENDING, "scheduled_at": {"$lte": now}}
         if linkedin_profile_id:
             query["linkedin_profile_id"] = linkedin_profile_id
+        from pymongo import ReturnDocument
         doc = collection.find_one_and_update(
             query,
             {"$set": {"status": Task.STATUS_RUNNING, "started_at": now}},
             sort=[("scheduled_at", 1)],
+            return_document=ReturnDocument.AFTER,
         )
         if doc:
             return Task.from_dict(doc)
