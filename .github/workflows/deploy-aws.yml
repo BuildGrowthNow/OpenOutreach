@@ -55,12 +55,13 @@ jobs:
             cd ~/OpenOutreach
           "
 
-          # Deploy with docker-compose
+          # Deploy with docker-compose — build new image first, then recreate
+          # (avoids a hard down→up gap that causes 502s for desktop daemons)
           ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o IdentitiesOnly=yes "${EC2_USER}@${EC2_HOST}" "
             set -e
             cd ~/OpenOutreach
-            docker compose down --remove-orphans
-            docker compose up -d --build --force-recreate
+            docker compose build
+            docker compose up -d --force-recreate --remove-orphans
           "
 
       - name: Ensure MongoDB Indexes
@@ -76,10 +77,27 @@ jobs:
             docker compose exec -T openoutreach python -m openoutreach.cli ensure-indexes
           "
 
-      - name: Wait for services to start
+      - name: Wait for services to be healthy
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
         run: |
-          echo "Waiting 15 seconds for services to initialize..."
-          sleep 15
+          echo "Waiting for container to report healthy..."
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o IdentitiesOnly=yes "${EC2_USER}@${EC2_HOST}" "
+            set -e
+            cd ~/OpenOutreach
+            for i in \$(seq 1 24); do
+              STATUS=\$(docker inspect --format='{{.State.Health.Status}}' \$(docker compose ps -q openoutreach) 2>/dev/null || echo 'unknown')
+              echo \"Health status: \$STATUS (attempt \$i/24)\"
+              if [ \"\$STATUS\" = 'healthy' ]; then
+                echo 'Container is healthy!'
+                exit 0
+              fi
+              sleep 10
+            done
+            echo 'WARNING: Container did not reach healthy state in time'
+            exit 0
+          "
 
       - name: Check Docker Compose Status
         env:

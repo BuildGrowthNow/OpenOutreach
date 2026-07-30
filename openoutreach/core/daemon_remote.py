@@ -134,6 +134,46 @@ class RemoteDaemon:
         self._pw_queue.put((fn, fut, loop))
         return await fut
 
+    async def _startup_request(self, label: str, coro_fn, *, max_wait: int = 300):
+        """Retry *coro_fn* on transient server errors (502/503/connect failures).
+
+        Keeps retrying with exponential back-off (up to 30 s) for *max_wait*
+        seconds total so a server deploy mid-startup doesn't crash the daemon.
+        Raises immediately on auth errors (401/403) or once *max_wait* is
+        exceeded.
+        """
+        delay = 5
+        elapsed = 0
+        while True:
+            try:
+                return await coro_fn()
+            except httpx.HTTPStatusError as e:
+                code = e.response.status_code
+                if code in (502, 503, 504):
+                    if elapsed >= max_wait:
+                        raise
+                    logger.warning(
+                        "%s: server returned %d (deploy in progress?) — retrying in %ds",
+                        label, code, delay,
+                    )
+                elif code == 401 and self.client._refresh_token:
+                    logger.info("Got 401 on %s, attempting token refresh", label)
+                    new_token = await self.client.refresh_access_token()
+                    if not new_token:
+                        raise
+                    # retry once after refresh — fall through to next loop iteration
+                else:
+                    raise
+            except (httpx.ConnectError, httpx.RemoteProtocolError, httpx.ReadError) as e:
+                if elapsed >= max_wait:
+                    raise
+                logger.warning(
+                    "%s: connection error (%s) — retrying in %ds", label, e, delay,
+                )
+            await asyncio.sleep(delay)
+            elapsed += delay
+            delay = min(delay * 2, 30)
+
     async def start(self):
         """Start the daemon and run main loops."""
         logger.info("Starting remote daemon v%s...", __version__)
@@ -141,28 +181,11 @@ class RemoteDaemon:
         self.start_time = datetime.now(tz.utc)
         self._start_pw_thread()
 
-        # Check subscription status before starting (with retry on 401)
+        # Check subscription status — retry through deploys (502/503) for up to 5 min
         try:
-            sub_status = await self.client.check_subscription_status()
-        except httpx.HTTPStatusError as e:
-            if e.response.status_code == 401 and self.client._refresh_token:
-                logger.info("Got 401 on subscription check, attempting token refresh")
-                new_token = await self.client.refresh_access_token()
-                if new_token:
-                    try:
-                        sub_status = await self.client.check_subscription_status()
-                    except Exception as e2:
-                        logger.error("Subscription check failed after token refresh: %s", e2)
-                        self.running = False
-                        return
-                else:
-                    logger.error("Token refresh failed, cannot start daemon")
-                    self.running = False
-                    return
-            else:
-                logger.error("Subscription check failed: %s", e)
-                self.running = False
-                return
+            sub_status = await self._startup_request(
+                "subscription check", self.client.check_subscription_status
+            )
         except Exception as e:
             logger.error("Subscription check failed: %s", e)
             self.running = False
@@ -187,8 +210,17 @@ class RemoteDaemon:
             )
         logger.info("Using browser: %s", self.browser.name)
 
-        # Fetch config (includes Atlas URI for desktop MongoDB bootstrap)
-        self.config = await self.client.get_config(self.linkedin_profile_id)
+        # Fetch config — retry through deploys for up to 5 min
+        try:
+            self.config = await self._startup_request(
+                "get config",
+                lambda: self.client.get_config(self.linkedin_profile_id),
+            )
+        except Exception as e:
+            logger.error("Failed to fetch config: %s", e)
+            self.running = False
+            return
+        assert self.config is not None
         logger.info("Config loaded: velocity=%d/hr", self.config.velocity)
 
         # Bootstrap server-side env for the desktop process (no local .env available).

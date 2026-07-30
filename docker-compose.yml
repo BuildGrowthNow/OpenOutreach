@@ -74,6 +74,13 @@ services:
       - STRIPE_PUBLISHABLE_KEY=${STRIPE_PUBLISHABLE_KEY:-}
       - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-}
 
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 60s
+
     volumes:
       - ./data:/app/data
       - ./openoutreach/media:/app/openoutreach/media
