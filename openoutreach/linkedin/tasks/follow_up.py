@@ -224,7 +224,7 @@ def _connected_deals(campaign):
             "state": models.Deal.DealState.CONNECTED,
             "outcome": "",
         },
-        sort=[("creation_date", 1)]  # Oldest first (use creation_date since update_date doesn't exist yet)
+        sort=[("follow_up_cycled_at", 1), ("creation_date", 1)]
     ))
 
     # Filter out deals with disqualified leads
@@ -300,7 +300,20 @@ def handle_follow_up(task, session, qualifiers):
     )
 
     materialize_profile_summary_if_missing(deal, session)
+
+    # Safety guard: never let the agent close a deal it has never messaged.
+    # The LLM can see profile summary and wrongly decide "wrong_fit" before
+    # sending a single word. If that happens, skip this cycle — the deal stays
+    # CONNECTED and the operator can review it manually.
+    never_messaged = not deal.last_outgoing_at
     decision = run_follow_up_agent(session, deal)
+    if decision.action == "mark_completed" and never_messaged:
+        logger.warning(
+            "[%s] follow_up: agent tried to close %s before sending any message "
+            "(outcome=%s) — skipping, deal stays CONNECTED for manual review",
+            campaign, public_id, decision.outcome,
+        )
+        return
 
     profile = _build_send_profile(deal)
 
@@ -324,9 +337,10 @@ def handle_follow_up(task, session, qualifiers):
         _last_send_times[str(deal._id)] = now
         # Persist last_outgoing_at immediately — before any post-send logging
         # or sync that could throw, so the guard survives exceptions and restarts.
+        # follow_up_cycled_at is used for queue ordering; creation_date is never mutated.
         deal.last_outgoing_at = now
-        deal.creation_date = now
-        deal.save(update_fields=["last_outgoing_at", "creation_date"])
+        deal.follow_up_cycled_at = now
+        deal.save(update_fields=["last_outgoing_at", "follow_up_cycled_at"])
         # Record action with smart rate limiter
         smart_record_action(
             session.linkedin_profile, ActionLog.ActionType.FOLLOW_UP, campaign
@@ -367,9 +381,9 @@ def handle_follow_up(task, session, qualifiers):
         )
 
     elif decision.action == "wait":
-        # Bump creation_date so the eligibility query cycles to a different deal next time.
-        deal.creation_date = datetime.now(timezone.utc)
-        deal.save(update_fields=["creation_date"])
+        # Bump follow_up_cycled_at so the eligibility query cycles to a different deal next time.
+        deal.follow_up_cycled_at = datetime.now(timezone.utc)
+        deal.save(update_fields=["follow_up_cycled_at"])
 
     # State Machine Integration - Execute state machine if campaign has one
     # Note: State machine is disabled feature, skipping for now

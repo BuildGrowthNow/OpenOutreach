@@ -62,7 +62,7 @@ Choose exactly one:
 
 - **send_message**: Send a short LinkedIn message. You must also decide `follow_up_hours`.
 - **wait**: Check back later without sending. You must also decide `follow_up_hours`.
-- **mark_completed**: End the conversation. You must choose an `outcome`:
+- **mark_completed**: End the conversation. **ONLY allowed if at least one outgoing message has already been sent** (i.e. there are `Me` lines in the recent messages). Never use this on a fresh connection with no prior messages. You must choose an `outcome`:
   - `converted` - they explicitly booked a meeting, agreed to a trial, or committed to a concrete next step. A polite "thanks", an acknowledgment, or silence does NOT count as converted.
   - `not_interested` - they heard us out and explicitly declined
   - `wrong_fit` - their situation doesn't match what we solve

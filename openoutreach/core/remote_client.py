@@ -17,6 +17,10 @@ import httpx
 logger = logging.getLogger(__name__)
 
 
+class SessionExpiredError(Exception):
+    """Raised when the refresh token has expired and re-login is required."""
+
+
 @dataclass
 class DaemonConfig:
     """Configuration received from backend for daemon operation."""
@@ -287,6 +291,11 @@ class RemoteClient:
                     except Exception as e:
                         logger.warning("Token refresh callback failed: %s", e)
                 return new_token
+            return None
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 401:
+                raise SessionExpiredError("Refresh token expired — re-login required") from e
+            logger.error("Token refresh failed: %s", e)
             return None
         except Exception as e:
             logger.error("Token refresh failed: %s", e)

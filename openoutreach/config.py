@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     JWT_SECRET_KEY: Optional[str] = None
     JWT_ALGORITHM: str = "HS256"
     JWT_ACCESS_TOKEN_LIFETIME_MINUTES: int = 60 * 24  # 24 hours
-    JWT_REFRESH_TOKEN_LIFETIME_DAYS: int = 7
+    JWT_REFRESH_TOKEN_LIFETIME_DAYS: int = 30
 
     # =========================================================================
     # API Server

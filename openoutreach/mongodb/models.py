@@ -1197,6 +1197,7 @@ class Deal:
         chat_summary: Optional[Dict[str, Any]] = None,
         creation_date: Optional[datetime] = None,
         last_outgoing_at: Optional[datetime] = None,
+        follow_up_cycled_at: Optional[datetime] = None,
     ):
         self._id = _id or str(uuid4())
         self.lead_id = lead_id
@@ -1212,6 +1213,7 @@ class Deal:
         self.chat_summary = chat_summary or {}
         self.creation_date = creation_date or datetime.now(tz.utc)
         self.last_outgoing_at = last_outgoing_at
+        self.follow_up_cycled_at = follow_up_cycled_at
         self._lead: Optional["Lead"] = None
         self.campaign: Optional["Campaign"] = None
 
@@ -1261,6 +1263,8 @@ class Deal:
             data["next_check_pending_at"] = self.next_check_pending_at
         if self.last_outgoing_at:
             data["last_outgoing_at"] = self.last_outgoing_at
+        if self.follow_up_cycled_at:
+            data["follow_up_cycled_at"] = self.follow_up_cycled_at
         return data
 
     @classmethod
@@ -1281,6 +1285,7 @@ class Deal:
             chat_summary=data.get("chat_summary", {}),
             creation_date=data.get("creation_date"),
             last_outgoing_at=data.get("last_outgoing_at"),
+            follow_up_cycled_at=data.get("follow_up_cycled_at"),
         )
 
     def save(self, update_fields: Optional[List[str]] = None) -> str:

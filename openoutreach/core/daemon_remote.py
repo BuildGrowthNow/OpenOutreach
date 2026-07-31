@@ -25,6 +25,7 @@ from openoutreach.core.browser_detect import BrowserInfo, get_preferred_browser
 from openoutreach.core.remote_client import (
     DaemonConfig,
     RemoteClient,
+    SessionExpiredError,
     SubscriptionStatus,
 )
 from openoutreach.desktop.__version__ import __version__
@@ -551,6 +552,10 @@ class RemoteDaemon:
                     uptime_seconds=uptime,
                     browser=self.browser.name,
                 )
+            except SessionExpiredError:
+                logger.error("Session expired (refresh token invalid) — stopping daemon. Please re-login.")
+                await self.stop()
+                return
             except Exception as e:
                 logger.warning("Heartbeat failed: %s", e)
 
@@ -613,6 +618,10 @@ class RemoteDaemon:
                         if self.on_token_refresh and self.client._token != self.token:
                             self.on_token_refresh(self.client._token)
 
+            except SessionExpiredError:
+                logger.error("Session expired (refresh token invalid) — stopping daemon. Please re-login.")
+                await self.stop()
+                return
             except Exception as e:
                 logger.error("Task loop error: %s", e)
                 await asyncio.sleep(30)
