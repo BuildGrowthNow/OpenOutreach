@@ -30,7 +30,7 @@ class SiteConfigResponse(BaseModel):
     enable_smart_rate_limiting: bool = Field(default=False, description="Enable smart rate limiting")
     aggressiveness_preset: str = Field(default="average", description="Rate limiting aggressiveness preset (very_slow, slow, average, aggressive, very_aggressive)")
     daily_connection_limit: int = Field(default=20, ge=0, description="Daily connection request limit")
-    daily_follow_up_limit: int = Field(default=25, ge=0, description="Daily follow-up message limit")
+    daily_follow_up_limit: int = Field(default=40, ge=0, description="Daily follow-up message limit")
     velocity: int = Field(default=20, ge=0, description="Actions per hour (manual mode)")
     cooldown_minutes: int = Field(default=0, ge=0, description="Cooldown between actions in minutes")
     enable_active_hours: bool = Field(default=False, description="Enable active hours restriction")

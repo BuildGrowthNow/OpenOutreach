@@ -140,7 +140,7 @@ export default function RateLimitForm({
       enableSmartRateLimiting: initialData?.enableSmartRateLimiting ?? false,
       aggressivenessPreset: initialData?.aggressivenessPreset ?? "average",
       dailyConnectionLimit: initialData?.dailyConnectionLimit ?? 20,
-      dailyFollowUpLimit: initialData?.dailyFollowUpLimit ?? 25,
+      dailyFollowUpLimit: initialData?.dailyFollowUpLimit ?? 40,
       velocity: initialData?.velocity ?? 20,
     },
   });
@@ -367,13 +367,13 @@ export default function RateLimitForm({
                         </div>
                       </FormControl>
                       <div className="flex justify-between text-xs text-muted-foreground">
-                        <span>Safe: ≤25</span>
-                        <span>Moderate: ≤40</span>
-                        <span>Aggressive: &gt;40</span>
+                        <span>Safe: ≤40</span>
+                        <span>Moderate: ≤80</span>
+                        <span>Aggressive: &gt;80</span>
                       </div>
                     </div>
                     <FormDescription>
-                      Maximum follow-up messages per day (per LinkedIn profile). With multiple active campaigns, this budget is split equally between them.
+                      Maximum follow-up messages per day (per LinkedIn profile). Includes messages to 1st-degree connections, who skip the connection request and go straight to messaging.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -453,7 +453,7 @@ export default function RateLimitForm({
                 enableSmartRateLimiting: initialData?.enableSmartRateLimiting ?? false,
                 aggressivenessPreset: initialData?.aggressivenessPreset ?? "average",
                 dailyConnectionLimit: initialData?.dailyConnectionLimit || 20,
-                dailyFollowUpLimit: initialData?.dailyFollowUpLimit || 25,
+                dailyFollowUpLimit: initialData?.dailyFollowUpLimit || 40,
                 velocity: initialData?.velocity || 20,
               })
             }
