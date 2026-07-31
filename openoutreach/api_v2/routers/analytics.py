@@ -420,7 +420,7 @@ async def get_analytics_overview(
     # Calculate rates
     connection_accept_rate = _calculate_rate(total_connections_accepted, total_connections_sent)
     response_rate = _calculate_rate(total_messages_replied, total_messages_sent)
-    conversion_rate = _calculate_rate(total_conversions, total_qualified)
+    conversion_rate = _calculate_rate(total_conversions, total_connections_accepted)
 
     # ========== Build Per-Campaign Stats ==========
 
@@ -452,7 +452,7 @@ async def get_analytics_overview(
         # Calculate campaign rates
         campaign_connection_rate = _calculate_rate(connections_accepted, connections_sent)
         campaign_response_rate = _calculate_rate(messages_replied, messages_sent)
-        campaign_conversion_rate = _calculate_rate(conversions, qualified)
+        campaign_conversion_rate = _calculate_rate(conversions, connections_accepted)
 
         campaigns_data.append(
             CampaignOverview(

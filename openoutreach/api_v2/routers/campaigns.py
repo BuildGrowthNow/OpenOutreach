@@ -1083,7 +1083,7 @@ async def get_campaign_analytics(
 
     connection_accept_rate = round((connections_accepted / connections_sent * 100), 2) if connections_sent else 0.0
     response_rate = round((messages_replied / messages_sent * 100), 2) if messages_sent else 0.0
-    conversion_rate = round((conversions / connections_sent * 100), 2) if connections_sent else 0.0
+    conversion_rate = round((conversions / connections_accepted * 100), 2) if connections_accepted else 0.0
 
     # Pipeline counts
     pipeline_stats: Dict[str, int] = {}
