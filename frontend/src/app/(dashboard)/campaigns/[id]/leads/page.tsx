@@ -182,7 +182,7 @@ export default function CampaignLeadsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-10">
       {/* Campaign Stats Card */}
       <Card>
         <CardContent className="pt-6">
@@ -400,5 +400,6 @@ export default function CampaignLeadsPage() {
         </CardContent>
       </Card>
     </div>
+
   )
 }

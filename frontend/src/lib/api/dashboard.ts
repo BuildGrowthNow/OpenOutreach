@@ -432,16 +432,16 @@ export async function getLeads(
   page?: number,
   limit?: number,
 ): Promise<ApiResponse<{ data: Lead[]; pagination: Pagination }>> {
-  const params: Record<string, string | boolean> = {};
-  if (status) params.status = status;
+  const params: Record<string, string> = {};
+  if (status) params.state = status;
   if (search) params.search = search;
-  if (disqualified !== undefined) params.disqualified = disqualified;
-  if (page) params.page = page.toString();
-  if (limit) params.limit = limit.toString();
-  
-  const response = await get<{ data: Lead[]; pagination: Pagination }>("/api/leads", params as Record<string, string>);
-  
-  // Normalize state and outcome values from backend format to frontend format
+  if (disqualified !== undefined) params.disqualified = disqualified.toString();
+  const resolvedLimit = limit ?? 20;
+  params.limit = resolvedLimit.toString();
+  if (page && page > 1) params.offset = ((page - 1) * resolvedLimit).toString();
+
+  const response = await get<{ data: Lead[]; pagination: { total: number; page: number; limit: number; pages: number } }>("/api/leads", params);
+
   if (response.data?.data) {
     response.data.data = response.data.data.map((lead: Lead) => ({
       ...lead,
@@ -449,8 +449,13 @@ export async function getLeads(
       outcome: normalizeOutcome(lead.outcome as string) as Lead["outcome"],
     }));
   }
-  
-  return response;
+
+  // Remap backend `pages` → frontend `total_pages`
+  if (response.data?.pagination) {
+    (response.data.pagination as unknown as Pagination).total_pages = response.data.pagination.pages;
+  }
+
+  return response as ApiResponse<{ data: Lead[]; pagination: Pagination }>;
 }
 
 export async function getLead(id: string): Promise<ApiResponse<Lead>> {

@@ -49,6 +49,8 @@ async def list_leads(
     user_id: str = Depends(get_current_user),
     campaign_id: Optional[str] = None,
     state: Optional[str] = None,
+    search: Optional[str] = None,
+    disqualified: Optional[bool] = None,
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
 ):
@@ -89,9 +91,45 @@ async def list_leads(
     if state:
         query["state"] = state
 
-    # Get deals
-    total = collection.count_documents(query)
-    deals = list(collection.find(query).skip(offset).limit(limit).sort("creation_date", -1))
+    # Get deals (unfiltered by lead fields first; will narrow by lead after fetching)
+    all_deals = list(collection.find(query).sort("creation_date", -1))
+
+    # Apply lead-level filters (search, disqualified) that require joining the leads collection
+    if search or disqualified is not None:
+        all_lead_ids = list(set(str(d["lead_id"]) for d in all_deals))
+        leads_collection = get_mongodb_collection("leads")
+        if leads_collection is None:
+            raise HTTPException(status_code=503, detail="Database unavailable")
+
+        lead_filter: dict = {"_id": {"$in": all_lead_ids}}
+        if disqualified is not None:
+            lead_filter["disqualified"] = disqualified
+
+        matching_leads = {
+            str(doc["_id"]): doc
+            for doc in leads_collection.find(lead_filter)
+        }
+
+        if search:
+            term = search.lower()
+            matching_leads = {
+                k: v for k, v in matching_leads.items()
+                if (
+                    term in (v.get("full_name") or "").lower()
+                    or term in (v.get("headline") or "").lower()
+                    or term in (v.get("public_identifier") or "").lower()
+                    or term in (v.get("api_email") or "").lower()
+                    or (
+                        isinstance(v.get("contact_info"), dict)
+                        and term in (v["contact_info"].get("email") or "").lower()
+                    )
+                )
+            }
+
+        all_deals = [d for d in all_deals if str(d["lead_id"]) in matching_leads]
+
+    total = len(all_deals)
+    deals = all_deals[offset: offset + limit]
 
     # Get unique lead IDs
     lead_ids = list(set(str(d["lead_id"]) for d in deals))
