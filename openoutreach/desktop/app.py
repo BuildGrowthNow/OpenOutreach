@@ -283,6 +283,7 @@ class TrayApp:
         self._update_check_thread: Optional[threading.Thread] = None
         self._pending_login_notification = False
         self._window: Optional[webview.Window] = None
+        self._token_valid: Optional[bool] = None  # None = not yet checked
 
     # ------------------------------------------------------------------
     # Icon helpers
@@ -372,7 +373,7 @@ class TrayApp:
 
     def _start_window(self):
         """Create and show the pywebview window. Blocks until the window closes."""
-        if self.auth.is_logged_in():
+        if self.auth.is_logged_in() and self._token_valid is not False:
             url = self._app_url("dashboard")
         else:
             url = self._app_url("login") + "?desktop=true&callback=lengrowth%3A%2F%2Fauth"
@@ -499,7 +500,7 @@ class TrayApp:
             self._pending_login_notification = False
             icon.notify("Login successful", "Lengrowth is ready")
 
-        if self.auth.is_logged_in():
+        if self.auth.is_logged_in() and self._token_valid is not False:
             self._start_daemon()
 
         if self.config.autostart:
@@ -595,6 +596,7 @@ class TrayApp:
     def _try_refresh_token(self, refresh_token: str) -> Optional[str]:
         """Exchange a refresh token for a new access token. Returns new token or None."""
         import json
+        import urllib.error
         import urllib.request
         try:
             body = json.dumps({"refresh_token": refresh_token}).encode()
@@ -611,6 +613,14 @@ class TrayApp:
                     logger.info("Access token refreshed at startup")
                     self.auth.update_token(new_token)
                     return new_token
+        except urllib.error.HTTPError as e:
+            if e.code == 401:
+                logger.warning("Startup token refresh failed: refresh token expired")
+                # Clear the dead credentials so next startup goes straight to login
+                self.auth.logout()
+                self._token_valid = False
+            else:
+                logger.warning("Startup token refresh failed: HTTP Error %d: %s", e.code, e.reason)
         except Exception as e:
             logger.warning("Startup token refresh failed: %s", e)
         return None
@@ -647,6 +657,7 @@ class TrayApp:
                         except Exception as e2:
                             logger.error("Failed to resolve profile_id after refresh: %s", e2)
                 logger.error("Failed to resolve profile_id: token expired and refresh unavailable")
+                self._token_valid = False
             else:
                 logger.error("Failed to resolve profile_id: %s", e)
         except Exception as e:
@@ -805,6 +816,7 @@ class TrayApp:
         """Handle a protocol URL forwarded from a second instance."""
         logger.info("IPC: received protocol URL from second instance")
         if handle_protocol_url(url, self.auth):
+            self._token_valid = True
             self._update_menu()
             if self.icon:
                 self.icon.notify("Login successful", "Lengrowth is ready")
@@ -816,6 +828,19 @@ class TrayApp:
         if pending_protocol_url:
             if handle_protocol_url(pending_protocol_url, self.auth):
                 self._pending_login_notification = True
+                self._token_valid = True  # fresh login, token is definitely valid
+
+        # Eagerly validate the stored token before opening the window so
+        # _start_window knows whether to open /dashboard or /login.
+        # This must run synchronously here — _on_setup fires in a background
+        # thread (tray) and can race with _start_window otherwise.
+        if self.auth.is_logged_in() and self._token_valid is None:
+            refresh_token = self.auth.get_refresh_token()
+            if refresh_token:
+                new_token = self._try_refresh_token(refresh_token)
+                if new_token:
+                    self._token_valid = True
+                # 401 path: _try_refresh_token already set _token_valid=False and cleared auth
 
         # Listen for protocol URLs forwarded from a second instance (e.g. login callback)
         _ipc_listen(lambda url: self._on_ipc_url(url))
