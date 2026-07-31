@@ -56,7 +56,6 @@ import { CampaignActivity } from "@/components/campaigns/campaign-activity";
 import { DailyProgress } from "@/components/campaigns/daily-progress";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import {
   zincDialogContentClassName,
@@ -648,14 +647,6 @@ export default function CampaignDetailsPage() {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-sm text-muted-foreground">
-                        Daily Connection Limit
-                      </span>
-                      <span className="font-medium">
-                        {campaign.velocity} connections/day
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm text-muted-foreground">
                         Created
                       </span>
                       <span className="font-medium">
@@ -1088,7 +1079,6 @@ function CampaignSettingsForm({
   const [bookingLink, setBookingLink] = useState(getStr("bookingLink", "booking_link"));
   const [icpTitles, setIcpTitles] = useState<string[]>(getArr("icpTitles", "icp_titles"));
   const [icpInput, setIcpInput] = useState("");
-  const [velocity, setVelocity] = useState(String(campaign.velocity || 20));
   const [followUpStrategy, setFollowUpStrategy] = useState(getStr("followUpStrategy", "follow_up_strategy"));
 
   useEffect(() => {
@@ -1100,7 +1090,6 @@ function CampaignSettingsForm({
     setCampaignObjective(s("campaignObjective", "campaign_objective"));
     setBookingLink(s("bookingLink", "booking_link"));
     setIcpTitles(a("icpTitles", "icp_titles"));
-    setVelocity(String(campaign.velocity || 20));
     setFollowUpStrategy(s("followUpStrategy", "follow_up_strategy"));
   }, [campaign]);
 
@@ -1120,7 +1109,6 @@ function CampaignSettingsForm({
       campaign_objective: campaignObjective.trim(),
       booking_link: bookingLink.trim(),
       icp_titles: icpTitles,
-      velocity: parseInt(velocity, 10) || 20,
       follow_up_strategy: followUpStrategy.trim() || undefined,
     } as unknown as Partial<Campaign>);
   };
@@ -1247,31 +1235,6 @@ function CampaignSettingsForm({
             )}
             <p className="text-xs text-muted-foreground">
               The AI generates LinkedIn search queries based on these titles
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Pacing</CardTitle>
-          <CardDescription>Control how fast the campaign runs</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label>Daily Connection Limit</Label>
-            <Select value={velocity} onValueChange={(v) => v && setVelocity(v)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="10">Conservative — 10 connections/day</SelectItem>
-                <SelectItem value="20">Normal — 20 connections/day</SelectItem>
-                <SelectItem value="30">Aggressive — 30 connections/day</SelectItem>
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              Higher values increase reach but may trigger LinkedIn restrictions on newer accounts
             </p>
           </div>
         </CardContent>
