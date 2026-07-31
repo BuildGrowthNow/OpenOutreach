@@ -89,34 +89,30 @@ export default function CampaignLeadsPage() {
     }
 
     if (statusFilter !== 'all') {
-      const stateMap: Record<string, Lead['state']> = {
-        new: 'PENDING',
-        contacted: 'CONNECTED',
-        qualified: 'QUALIFIED',
-        converted: 'COMPLETED',
-        disqualified: 'FAILED',
-      }
-      const dealState = stateMap[statusFilter.toLowerCase()]
-      if (dealState) {
-        filtered = filtered.filter(lead => lead.state === dealState)
-      }
+      filtered = filtered.filter(lead => lead.state === statusFilter)
     }
 
     return filtered
   }, [leads, searchTerm, statusFilter])
 
   const getStatusBadge = (status: string) => {
-    switch (status?.toLowerCase()) {
-      case 'new':
+    switch (status?.toUpperCase()) {
+      case 'DISCOVERED':
+        return 'border-zinc-500/20 text-zinc-600 dark:text-zinc-400 bg-zinc-500/10'
+      case 'QUALIFIED':
         return 'border-blue-500/20 text-blue-600 dark:text-blue-400 bg-blue-500/10'
-      case 'contacted':
+      case 'READY_TO_CONNECT':
+        return 'border-indigo-500/20 text-indigo-600 dark:text-indigo-400 bg-indigo-500/10'
+      case 'PENDING':
         return 'border-purple-500/20 text-purple-600 dark:text-purple-400 bg-purple-500/10'
-      case 'qualified':
+      case 'CONNECTED':
         return 'border-emerald-500/20 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10'
-      case 'disqualified':
-        return 'border-red-500/20 text-red-600 dark:text-red-400 bg-red-500/10'
-      case 'converted':
+      case 'COMPLETED':
         return 'border-orange-500/20 text-orange-600 dark:text-orange-400 bg-orange-500/10'
+      case 'FAILED':
+        return 'border-red-500/20 text-red-600 dark:text-red-400 bg-red-500/10'
+      case 'NO_EMAIL':
+        return 'border-gray-500/20 text-gray-500 dark:text-gray-400 bg-gray-500/10'
       default:
         return 'border-gray-500/20 text-gray-600 dark:text-gray-400 bg-gray-500/10'
     }
@@ -231,11 +227,14 @@ export default function CampaignLeadsPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Statuses</SelectItem>
-                  <SelectItem value="new">New</SelectItem>
-                  <SelectItem value="contacted">Contacted</SelectItem>
-                  <SelectItem value="qualified">Qualified</SelectItem>
-                  <SelectItem value="converted">Converted</SelectItem>
-                  <SelectItem value="disqualified">Disqualified</SelectItem>
+                  <SelectItem value="DISCOVERED">Discovered</SelectItem>
+                  <SelectItem value="QUALIFIED">Qualified</SelectItem>
+                  <SelectItem value="READY_TO_CONNECT">Ready to Connect</SelectItem>
+                  <SelectItem value="PENDING">Pending</SelectItem>
+                  <SelectItem value="CONNECTED">Connected</SelectItem>
+                  <SelectItem value="COMPLETED">Converted</SelectItem>
+                  <SelectItem value="FAILED">Failed</SelectItem>
+                  <SelectItem value="NO_EMAIL">No Email</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -312,11 +311,13 @@ export default function CampaignLeadsPage() {
           <div className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {[
-                { status: 'PENDING', label: 'New', color: 'bg-blue-500' },
-                { status: 'CONNECTED', label: 'Contacted', color: 'bg-purple-500' },
-                { status: 'QUALIFIED', label: 'Qualified', color: 'bg-emerald-500' },
+                { status: 'DISCOVERED', label: 'Discovered', color: 'bg-zinc-500' },
+                { status: 'QUALIFIED', label: 'Qualified', color: 'bg-blue-500' },
+                { status: 'PENDING', label: 'Pending', color: 'bg-purple-500' },
+                { status: 'CONNECTED', label: 'Connected', color: 'bg-emerald-500' },
                 { status: 'COMPLETED', label: 'Converted', color: 'bg-orange-500' },
-                { status: 'FAILED', label: 'Disqualified', color: 'bg-red-500' },
+                { status: 'FAILED', label: 'Failed', color: 'bg-red-500' },
+                { status: 'NO_EMAIL', label: 'No Email', color: 'bg-gray-400' },
               ].map(({ status, label, color }) => {
                 const count = leads.filter(l => l.state === status).length
                 const percentage = leads.length > 0 ? Math.round((count / leads.length) * 100) : 0

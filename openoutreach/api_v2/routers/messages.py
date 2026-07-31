@@ -178,6 +178,78 @@ async def list_messages(
     }
 
 
+@router.get("/stats", response_model=dict)
+async def get_message_stats(
+    user_id: str = Depends(get_current_user),
+    campaign_id: Optional[str] = None,
+):
+    """
+    Return true message totals for the stat cards on the Messages page.
+    Counts across all accessible messages, not just the current page.
+    """
+    collection = get_mongodb_collection("chat_messages")
+    if collection is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+
+    # Resolve accessible deal_ids (same scoping logic as list_messages)
+    if campaign_id:
+        campaign = models.Campaign.get(campaign_id)
+        if not campaign or not campaign.has_access(user_id):
+            raise HTTPException(status_code=403, detail="Campaign access denied")
+        deals_collection = get_mongodb_collection("deals")
+        if deals_collection is None:
+            raise HTTPException(status_code=503, detail="Database unavailable")
+        deals = list(deals_collection.find({"campaign_id": campaign_id}, {"_id": 1}))
+        deal_ids = [str(d["_id"]) for d in deals]
+    else:
+        campaigns_collection = get_mongodb_collection("campaigns")
+        if campaigns_collection is None:
+            raise HTTPException(status_code=503, detail="Database unavailable")
+        accessible = list(campaigns_collection.find(
+            {"$or": [{"user_id": user_id}, {"team_member_ids": user_id}]},
+            {"_id": 1},
+        ))
+        accessible_campaign_ids = [str(c["_id"]) for c in accessible]
+        deals_collection = get_mongodb_collection("deals")
+        if deals_collection is None:
+            raise HTTPException(status_code=503, detail="Database unavailable")
+        deals = list(deals_collection.find(
+            {"campaign_id": {"$in": accessible_campaign_ids}}, {"_id": 1, "campaign_id": 1}
+        ))
+        deal_ids = [str(d["_id"]) for d in deals]
+        # Build campaign-id set for activeCampaigns count
+        deal_campaign_ids = {str(d["campaign_id"]) for d in deals if d.get("campaign_id")}
+
+    query: dict = {"deal_id": {"$in": deal_ids}}
+    total_sent = collection.count_documents({**query, "is_outgoing": True})
+    total_received = collection.count_documents({**query, "is_outgoing": False})
+    # distinct deals that have at least one reply
+    replied_deal_ids = collection.distinct("deal_id", {**query, "is_outgoing": False})
+    response_rate = round((len(replied_deal_ids) / max(total_sent, 1)) * 100) if total_sent else 0
+
+    if campaign_id:
+        active_campaigns = 1
+    else:
+        # campaigns that have at least one message
+        msg_deal_ids = collection.distinct("deal_id", query)
+        if deals_collection is not None and msg_deal_ids:
+            active_deal_campaigns = {
+                str(d["campaign_id"])
+                for d in deals_collection.find({"_id": {"$in": msg_deal_ids}}, {"campaign_id": 1})
+                if d.get("campaign_id")
+            }
+            active_campaigns = len(active_deal_campaigns)
+        else:
+            active_campaigns = 0
+
+    return {
+        "totalSent": total_sent,
+        "totalReceived": total_received,
+        "responseRate": response_rate,
+        "activeCampaigns": active_campaigns,
+    }
+
+
 @router.get("/{message_id}", response_model=MessageResponse)
 async def get_message(
     message_id: str,

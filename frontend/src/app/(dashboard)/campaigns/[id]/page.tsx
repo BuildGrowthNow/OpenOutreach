@@ -583,7 +583,7 @@ export default function CampaignDetailsPage() {
               <Card>
                 <CardHeader>
                   <CardTitle>Daily Progress</CardTitle>
-                  <CardDescription>Today's velocity tracking</CardDescription>
+                  <CardDescription>Today's account-wide velocity</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <DailyProgress

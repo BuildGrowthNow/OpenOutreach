@@ -34,6 +34,7 @@ import {
 } from "@/components/ui/select";
 import {
   getMessages,
+  getMessageStats,
   getCampaigns,
   sendMessageToLead,
 } from "@/lib/api/dashboard";
@@ -42,19 +43,6 @@ import { formatDistanceToNow } from "date-fns";
 import { generateExportFilename } from "@/lib/export";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
-
-function calcStats(msgs: Message[]) {
-  const sent = msgs.filter((m) => m.isOutgoing).length;
-  const received = msgs.filter((m) => !m.isOutgoing).length;
-  const total = sent + received;
-  const activeCampaigns = new Set(msgs.map((m) => m.campaignId).filter(Boolean)).size;
-  return {
-    totalSent: sent,
-    totalReceived: received,
-    responseRate: total > 0 ? Math.round((received / total) * 100) : 0,
-    activeCampaigns,
-  };
-}
 
 // ─── sub-components ──────────────────────────────────────────────────────────
 
@@ -327,6 +315,8 @@ const MessagesPage = () => {
 
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
 
+  const [stats, setStats] = useState({ totalSent: 0, totalReceived: 0, responseRate: 0, activeCampaigns: 0 });
+
   const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
   const [threadMessages, setThreadMessages] = useState<Message[]>([]);
   const [threadLoading, setThreadLoading] = useState(false);
@@ -340,6 +330,15 @@ const MessagesPage = () => {
       console.error("Error fetching campaigns:", err);
     }
   }, []);
+
+  const fetchStats = useCallback(async () => {
+    try {
+      const response = await getMessageStats(campaignFilter !== 'all' ? campaignFilter : undefined);
+      if (response.data) setStats(response.data);
+    } catch (err) {
+      console.error("Error fetching message stats:", err);
+    }
+  }, [campaignFilter]);
 
   const fetchMessages = useCallback(async () => {
     try {
@@ -406,11 +405,9 @@ const MessagesPage = () => {
   useEffect(() => {
     void (async () => {
       await fetchCampaigns();
-      await fetchMessages();
+      await Promise.all([fetchMessages(), fetchStats()]);
     })();
-  }, [fetchCampaigns, fetchMessages]);
-
-  const stats = useMemo(() => calcStats(messages), [messages]);
+  }, [fetchCampaigns, fetchMessages, fetchStats]);
 
   // ── client-side filters (date + response status) ──────────────────────────
   const filteredMessages = useMemo(() => {

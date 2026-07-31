@@ -522,6 +522,14 @@ export async function addLeadToCampaign(
 }
 
 // Messages API
+export async function getMessageStats(
+  campaignId?: string,
+): Promise<ApiResponse<{ totalSent: number; totalReceived: number; responseRate: number; activeCampaigns: number }>> {
+  const params: Record<string, string> = {};
+  if (campaignId && campaignId !== 'all') params.campaign_id = campaignId;
+  return get('/api/messages/stats', params);
+}
+
 export async function getMessages(
   campaign_id?: string,
   deal_id?: string,

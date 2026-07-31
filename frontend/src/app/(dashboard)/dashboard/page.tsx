@@ -185,13 +185,13 @@ const Dashboard = () => {
             title="Total Leads"
             value={totalLeads}
             icon="Users"
-            description="All campaigns"
+            description="Last 30 days"
           />
           <StatsCard
             title="Connected"
             value={connected}
             icon="Users"
-            description={`Connection rate ${connectionRate}`}
+            description={`${connectionRate} connection rate (30d)`}
           />
           <StatsCard
             title="Messages Sent"

@@ -327,10 +327,10 @@ export default function AnalyticsOverviewPage() {
         />
 
         <ProgressCard
-          title="Active Leads"
+          title="Total Leads"
           value={totals.leads}
-          subtitle={`${totals.qualified} qualified • ${totals.readyToConnect} ready`}
-          progress={totals.leads > 0 ? (totals.readyToConnect / totals.leads) * 100 : 0}
+          subtitle={`${totals.qualified} qualified • ${totals.connected} connected`}
+          progress={totals.leads > 0 ? ((totals.qualified + totals.connected) / totals.leads) * 100 : 0}
           progressColor="amber"
           icon={<Icons.Users className="h-4 w-4" />}
         />
