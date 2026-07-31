@@ -193,7 +193,7 @@ export default function CampaignLeadsPage() {
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold">{leads.filter(l => l.state === 'COMPLETED').length}</div>
-              <div className="text-sm text-muted-foreground">Converted</div>
+              <div className="text-sm text-muted-foreground">Done</div>
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold">{leads.filter(l => l.state === 'FAILED').length}</div>
@@ -232,7 +232,7 @@ export default function CampaignLeadsPage() {
                   <SelectItem value="READY_TO_CONNECT">Ready to Connect</SelectItem>
                   <SelectItem value="PENDING">Pending</SelectItem>
                   <SelectItem value="CONNECTED">Connected</SelectItem>
-                  <SelectItem value="COMPLETED">Converted</SelectItem>
+                  <SelectItem value="COMPLETED">Done</SelectItem>
                   <SelectItem value="FAILED">Failed</SelectItem>
                   <SelectItem value="NO_EMAIL">No Email</SelectItem>
                 </SelectContent>
@@ -315,7 +315,7 @@ export default function CampaignLeadsPage() {
                 { status: 'QUALIFIED', label: 'Qualified', color: 'bg-blue-500' },
                 { status: 'PENDING', label: 'Pending', color: 'bg-purple-500' },
                 { status: 'CONNECTED', label: 'Connected', color: 'bg-emerald-500' },
-                { status: 'COMPLETED', label: 'Converted', color: 'bg-orange-500' },
+                { status: 'COMPLETED', label: 'Done', color: 'bg-orange-500' },
                 { status: 'FAILED', label: 'Failed', color: 'bg-red-500' },
                 { status: 'NO_EMAIL', label: 'No Email', color: 'bg-gray-400' },
               ].map(({ status, label, color }) => {

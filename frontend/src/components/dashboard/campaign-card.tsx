@@ -145,7 +145,7 @@ const CampaignCard = ({
           </div>
           <div className="text-center border-l">
             <div className="text-lg font-bold">{stats.completed}</div>
-            <div className="text-xs text-muted-foreground">Converted</div>
+            <div className="text-xs text-muted-foreground">Done</div>
           </div>
         </div>
 

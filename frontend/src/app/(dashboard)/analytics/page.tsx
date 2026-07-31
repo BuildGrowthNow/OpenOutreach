@@ -197,7 +197,7 @@ export default function AnalyticsOverviewPage() {
     { name: "Ready", value: pipeline.ready_to_connect, fill: "#f59e0b" },
     { name: "Pending", value: pipeline.pending, fill: "#f97316" },
     { name: "Connected", value: pipeline.connected, fill: "#10b981" },
-    { name: "Completed", value: pipeline.completed, fill: "#8b5cf6" },
+    { name: "Done", value: pipeline.completed, fill: "#8b5cf6" },
     { name: "Failed", value: pipeline.failed, fill: "#ef4444" },
     { name: "No Email", value: pipeline.no_email, fill: "#6b7280" },
   ].filter((d) => d.value > 0);
@@ -442,7 +442,7 @@ export default function AnalyticsOverviewPage() {
                     <Legend />
                     <Bar dataKey="leads" name="Leads" fill="#3b82f6" radius={[4, 4, 0, 0]} maxBarSize={36} />
                     <Bar dataKey="connected" name="Connected" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={36} />
-                    <Bar dataKey="completed" name="Completed" fill="#8b5cf6" radius={[4, 4, 0, 0]} maxBarSize={36} />
+                    <Bar dataKey="completed" name="Done" fill="#8b5cf6" radius={[4, 4, 0, 0]} maxBarSize={36} />
                   </BarChart>
                 </ResponsiveContainer>
               </CardContent>
@@ -471,7 +471,7 @@ export default function AnalyticsOverviewPage() {
                     <Legend />
                     <Bar dataKey="leads" name="Leads" fill="#3b82f6" radius={[4, 4, 0, 0]} maxBarSize={36} />
                     <Bar dataKey="connected" name="Connected" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={36} />
-                    <Bar dataKey="completed" name="Completed" fill="#8b5cf6" radius={[4, 4, 0, 0]} maxBarSize={36} />
+                    <Bar dataKey="completed" name="Done" fill="#8b5cf6" radius={[4, 4, 0, 0]} maxBarSize={36} />
                   </BarChart>
                 </ResponsiveContainer>
               </CardContent>

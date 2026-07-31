@@ -910,7 +910,7 @@ const PIPELINE_LABELS: Record<string, string> = {
   ready_to_connect: "Ready",
   pending: "Pending",
   connected: "Connected",
-  completed: "Completed",
+  completed: "Done",
   failed: "Failed",
   no_email: "No Email",
 };
@@ -923,7 +923,7 @@ function CampaignAnalyticsCharts({ analytics }: { analytics: CampaignAnalyticsRe
     { name: "Accepted", value: s.connections_accepted },
     { name: "Messaged", value: s.messages_sent },
     { name: "Replied", value: s.messages_replied },
-    { name: "Converted", value: s.conversions },
+    { name: "Done", value: s.conversions },
   ];
 
   const ratesData = [

@@ -50,7 +50,7 @@ const PIPELINE_LABELS: Record<string, string> = {
   ready_to_connect: "Ready to Connect",
   pending: "Pending",
   connected: "Connected",
-  completed: "Completed",
+  completed: "Done",
   failed: "Failed",
   no_email: "No Email",
 };
@@ -174,7 +174,7 @@ export default function CampaignAnalyticsPage() {
     { name: "Accepted", value: s.connections_accepted, fill: "#06b6d4" },
     { name: "Messaged", value: s.messages_sent, fill: "#3b82f6" },
     { name: "Replied", value: s.messages_replied, fill: "#a855f7" },
-    { name: "Converted", value: s.conversions, fill: "#10b981" },
+    { name: "Done", value: s.conversions, fill: "#10b981" },
   ];
 
   const pipelineData = analytics.pipeline
