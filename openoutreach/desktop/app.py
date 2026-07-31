@@ -145,6 +145,9 @@ def _autostart_macos(enable: bool) -> None:
 # Single-instance lock
 # ---------------------------------------------------------------------------
 
+_IPC_PIPE_NAME = r"\\.\pipe\LengrowthOutreach" if sys.platform == "win32" else str(Path.home() / ".lengrowth" / "ipc.sock")
+
+
 def _acquire_single_instance_lock():
     if sys.platform == "win32":
         handle = ctypes.windll.kernel32.CreateMutexW(None, True, "LengrowthOutreachSingleInstance")
@@ -162,6 +165,83 @@ def _acquire_single_instance_lock():
         except OSError:
             fh.close()
             return None
+
+
+def _ipc_send(url: str) -> None:
+    """Forward a protocol URL to the already-running instance via IPC."""
+    try:
+        if sys.platform == "win32":
+            import win32file  # type: ignore[import]
+            handle = win32file.CreateFile(
+                _IPC_PIPE_NAME,
+                win32file.GENERIC_WRITE,
+                0, None,
+                win32file.OPEN_EXISTING,
+                0, None,
+            )
+            win32file.WriteFile(handle, url.encode())
+            win32file.CloseHandle(handle)
+        else:
+            import socket as _socket
+            sock = _socket.socket(_socket.AF_UNIX, _socket.SOCK_STREAM)
+            sock.connect(_IPC_PIPE_NAME)
+            sock.sendall(url.encode())
+            sock.close()
+    except Exception as e:
+        logger.warning("IPC send failed: %s", e)
+
+
+def _ipc_listen(callback) -> threading.Thread:
+    """Start a background thread that waits for protocol URLs from new instances."""
+
+    def _serve():
+        if sys.platform == "win32":
+            import pywintypes  # type: ignore[import]
+            import win32pipe  # type: ignore[import]
+            import win32file  # type: ignore[import]
+            while True:
+                try:
+                    pipe = win32pipe.CreateNamedPipe(
+                        _IPC_PIPE_NAME,
+                        win32pipe.PIPE_ACCESS_INBOUND,
+                        win32pipe.PIPE_TYPE_MESSAGE | win32pipe.PIPE_READMODE_MESSAGE | win32pipe.PIPE_WAIT,
+                        1, 65536, 65536, 0, None,
+                    )
+                    win32pipe.ConnectNamedPipe(pipe, None)
+                    _, data = win32file.ReadFile(pipe, 65536)
+                    win32file.CloseHandle(pipe)
+                    url = data.decode(errors="replace").strip()
+                    if url:
+                        callback(url)
+                except pywintypes.error:
+                    break
+                except Exception as e:
+                    logger.warning("IPC listen error: %s", e)
+        else:
+            import socket as _socket
+            sock_path = Path(_IPC_PIPE_NAME)
+            sock_path.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                sock_path.unlink()
+            except FileNotFoundError:
+                pass
+            server = _socket.socket(_socket.AF_UNIX, _socket.SOCK_STREAM)
+            server.bind(str(sock_path))
+            server.listen(1)
+            while True:
+                try:
+                    conn, _ = server.accept()
+                    data = conn.recv(65536)
+                    conn.close()
+                    url = data.decode(errors="replace").strip()
+                    if url:
+                        callback(url)
+                except Exception as e:
+                    logger.warning("IPC listen error: %s", e)
+
+    t = threading.Thread(target=_serve, daemon=True, name="ipc-listener")
+    t.start()
+    return t
 
 
 # ---------------------------------------------------------------------------
@@ -721,11 +801,24 @@ class TrayApp:
     # Run
     # ------------------------------------------------------------------
 
+    def _on_ipc_url(self, url: str) -> None:
+        """Handle a protocol URL forwarded from a second instance."""
+        logger.info("IPC: received protocol URL from second instance")
+        if handle_protocol_url(url, self.auth):
+            self._update_menu()
+            if self.icon:
+                self.icon.notify("Login successful", "Lengrowth is ready")
+            if not self._is_running():
+                self._start_daemon()
+
     def run(self, pending_protocol_url: Optional[str] = None):
         # Handle protocol callback that arrived before the window existed
         if pending_protocol_url:
             if handle_protocol_url(pending_protocol_url, self.auth):
                 self._pending_login_notification = True
+
+        # Listen for protocol URLs forwarded from a second instance (e.g. login callback)
+        _ipc_listen(lambda url: self._on_ipc_url(url))
 
         # Check for a previously-downloaded pending update (force-apply it) or
         # kick off a background download check.  On Windows this may call os._exit.
@@ -784,7 +877,12 @@ def main():
 
     _lock = _acquire_single_instance_lock()
     if _lock is None:
-        logger.info("Another instance is already running. Exiting.")
+        # Forward any protocol URL to the running instance before exiting
+        if len(sys.argv) > 1 and sys.argv[1].startswith("lengrowth://"):
+            logger.info("Forwarding protocol URL to running instance")
+            _ipc_send(sys.argv[1])
+        else:
+            logger.info("Another instance is already running. Exiting.")
         sys.exit(0)
 
     register_protocol_handler()
