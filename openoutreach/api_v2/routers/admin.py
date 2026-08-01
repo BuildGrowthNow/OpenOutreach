@@ -8,7 +8,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
-from openoutreach.api_v2.dependencies import get_admin_user
+from openoutreach.api_v2.dependencies_v2 import get_admin_user
 from openoutreach.mongodb.models_user import User
 from openoutreach.mongodb.connection import get_mongodb_collection
 
@@ -812,7 +812,7 @@ async def get_user_action_logs(
 # ==================== PHASE 2 — USER MANAGEMENT WRITE ENDPOINTS ====================
 
 
-@router.delete("/users/{user_id}", dependencies=[Depends(get_admin_user)])
+@router.delete("/users/{user_id}")
 async def delete_user(
     user_id: str,
     current_admin: str = Depends(get_admin_user),
@@ -847,7 +847,7 @@ async def delete_user(
     return {"ok": True, "deletion_scheduled_at": user.deletion_scheduled_at.isoformat()}
 
 
-@router.post("/users/{user_id}/restore", dependencies=[Depends(get_admin_user)])
+@router.post("/users/{user_id}/restore")
 async def restore_user(
     user_id: str,
     current_admin: str = Depends(get_admin_user),
@@ -875,7 +875,7 @@ class ExtendTrialRequest(BaseModel):
     days: int
 
 
-@router.post("/users/{user_id}/extend-trial", dependencies=[Depends(get_admin_user)])
+@router.post("/users/{user_id}/extend-trial")
 async def extend_trial(
     user_id: str,
     body: ExtendTrialRequest,
@@ -904,7 +904,7 @@ async def extend_trial(
     return {"ok": True, "trial_ends_at": user.trial_ends_at.isoformat()}
 
 
-@router.post("/users/{user_id}/cancel-subscription", dependencies=[Depends(get_admin_user)])
+@router.post("/users/{user_id}/cancel-subscription")
 async def force_cancel_subscription(
     user_id: str,
     current_admin: str = Depends(get_admin_user),
@@ -943,7 +943,7 @@ class SetPlanRequest(BaseModel):
     cloud_profiles: Optional[int] = None
 
 
-@router.post("/users/{user_id}/set-plan", dependencies=[Depends(get_admin_user)])
+@router.post("/users/{user_id}/set-plan")
 async def set_user_plan(
     user_id: str,
     body: SetPlanRequest,
@@ -993,7 +993,7 @@ async def set_user_plan(
     return _build_user_detail_response(user)
 
 
-@router.post("/users/{user_id}/verify-email", dependencies=[Depends(get_admin_user)])
+@router.post("/users/{user_id}/verify-email")
 async def force_verify_email(
     user_id: str,
     current_admin: str = Depends(get_admin_user),
@@ -1014,7 +1014,7 @@ async def force_verify_email(
     return {"ok": True}
 
 
-@router.post("/users/{user_id}/send-password-reset", dependencies=[Depends(get_admin_user)])
+@router.post("/users/{user_id}/send-password-reset")
 async def send_password_reset_for_user(
     user_id: str,
     current_admin: str = Depends(get_admin_user),
@@ -1040,7 +1040,7 @@ class ImpersonateResponse(BaseModel):
     expires_in: int
 
 
-@router.post("/users/{user_id}/impersonate", dependencies=[Depends(get_admin_user)])
+@router.post("/users/{user_id}/impersonate")
 async def impersonate_user(
     user_id: str,
     current_admin: str = Depends(get_admin_user),

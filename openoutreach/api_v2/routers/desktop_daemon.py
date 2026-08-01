@@ -9,7 +9,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 
-from openoutreach.api_v2.dependencies import get_current_user
+from openoutreach.api_v2.dependencies_v2 import get_current_user
 from openoutreach.linkedin.models import LinkedInProfile
 
 logger = logging.getLogger(__name__)

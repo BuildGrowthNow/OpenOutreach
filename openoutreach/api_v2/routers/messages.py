@@ -48,7 +48,7 @@ class MessageCreate(BaseModel):
     content: str
 
 
-@router.get("", response_model=dict)
+@router.get("")
 async def list_messages(
     user_id: str = Depends(get_current_user),
     campaign_id: Optional[str] = None,
@@ -178,7 +178,7 @@ async def list_messages(
     }
 
 
-@router.get("/stats", response_model=dict)
+@router.get("/stats")
 async def get_message_stats(
     user_id: str = Depends(get_current_user),
     campaign_id: Optional[str] = None,
@@ -294,7 +294,7 @@ async def get_message(
     )
 
 
-@router.get("/deals/{deal_id}/messages", response_model=dict)
+@router.get("/deals/{deal_id}/messages")
 async def list_deal_messages(
     deal_id: str,
     sync: bool = Query(True, description="Sync messages from LinkedIn before returning"),

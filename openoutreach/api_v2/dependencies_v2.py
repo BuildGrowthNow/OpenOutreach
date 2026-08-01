@@ -69,6 +69,14 @@ async def get_current_user_optional(
     return await get_current_user(credentials)
 
 
+async def get_admin_user(user_id: str = Depends(get_current_user)) -> str:
+    """Ensure user is an admin."""
+    user = User.get(user_id)
+    if not user or not user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return user_id
+
+
 async def get_campaign_with_access(campaign_id: str, user_id: str = Depends(get_current_user)):
     """
     Get campaign and verify user has access (owner OR team member).

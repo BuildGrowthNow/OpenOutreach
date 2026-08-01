@@ -190,7 +190,7 @@ class TestDatabaseConnection:
 
     def test_models_accessible_from_api(self):
         """Test that models can be imported in API context."""
-        from openoutreach.api_v2.dependencies import get_current_user
+        from openoutreach.api_v2.dependencies_v2 import get_current_user
         from openoutreach.mongodb.models import User, Campaign, Lead, Deal
         assert User is not None
         assert Campaign is not None

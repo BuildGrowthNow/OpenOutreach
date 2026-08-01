@@ -877,7 +877,7 @@ class DealResponse(BaseModel):
     creation_date: Optional[str] = None
 
 
-@router.get("/{campaign_id}/leads", response_model=dict)
+@router.get("/{campaign_id}/leads")
 async def get_campaign_leads(
     campaign_id: str,
     user_id: str = Depends(get_current_user),

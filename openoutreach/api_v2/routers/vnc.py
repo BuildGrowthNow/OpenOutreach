@@ -1,7 +1,7 @@
 """VNC session API endpoints."""
 from fastapi import APIRouter, Depends, HTTPException
 
-from openoutreach.api_v2.dependencies import get_current_user
+from openoutreach.api_v2.dependencies_v2 import get_current_user
 from openoutreach.mongodb.models_user import User
 
 router = APIRouter()

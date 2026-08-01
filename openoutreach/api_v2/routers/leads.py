@@ -44,7 +44,7 @@ class DealResponse(BaseModel):
     creation_date: Optional[datetime] = None
 
 
-@router.get("", response_model=dict)
+@router.get("")
 async def list_leads(
     user_id: str = Depends(get_current_user),
     campaign_id: Optional[str] = None,
@@ -337,7 +337,7 @@ async def export_leads(
     )
 
 
-@router.get("/{lead_id}", response_model=dict)
+@router.get("/{lead_id}")
 async def get_lead(
     lead_id: str,
     user_id: str = Depends(get_current_user),
@@ -519,7 +519,7 @@ async def get_lead(
     }
 
 
-@router.get("/campaigns/{campaign_id}/leads", response_model=dict)
+@router.get("/campaigns/{campaign_id}/leads")
 async def list_campaign_leads(
     campaign_id: str,
     user_id: str = Depends(get_current_user),
@@ -537,7 +537,7 @@ async def list_campaign_leads(
     return await list_leads(user_id=user_id, campaign_id=campaign_id, state=state, limit=limit, offset=offset)
 
 
-@router.get("/{lead_id}/messages", response_model=dict)
+@router.get("/{lead_id}/messages")
 async def get_lead_messages(
     lead_id: str,
     user_id: str = Depends(get_current_user),
@@ -601,7 +601,7 @@ class SendMessageRequest(BaseModel):
     campaign_id: Optional[str] = None
 
 
-@router.post("/{lead_id}/messages", response_model=dict)
+@router.post("/{lead_id}/messages")
 async def send_message_to_lead(
     lead_id: str,
     body: SendMessageRequest,
@@ -687,7 +687,7 @@ class StateUpdate(BaseModel):
     state: str
 
 
-@router.patch("/{lead_id}/campaigns/{campaign_id}/state", response_model=dict)
+@router.patch("/{lead_id}/campaigns/{campaign_id}/state")
 async def update_deal_state(
     lead_id: str,
     campaign_id: str,
@@ -743,7 +743,7 @@ class LeadUpdate(BaseModel):
     disqualified: Optional[bool] = None
 
 
-@router.patch("/{lead_id}", response_model=dict)
+@router.patch("/{lead_id}")
 async def update_lead(
     lead_id: str,
     body: LeadUpdate,
@@ -794,7 +794,7 @@ class AddToCampaignRequest(BaseModel):
     campaign_id: str
 
 
-@router.post("/{lead_id}/add-to-campaign", response_model=dict)
+@router.post("/{lead_id}/add-to-campaign")
 async def add_lead_to_campaign(
     lead_id: str,
     body: AddToCampaignRequest,
