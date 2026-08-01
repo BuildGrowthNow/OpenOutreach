@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   Card,
@@ -88,6 +88,7 @@ export default function CampaignDetailsPage() {
   const campaignId = params.id as string;
 
   const [campaign, setCampaign] = useState<Campaign | null>(null);
+  const campaignStatusRef = useRef<string | undefined>(undefined);
   const [analytics, setAnalytics] = useState<CampaignAnalyticsResponse | null>(
     null,
   );
@@ -211,6 +212,11 @@ export default function CampaignDetailsPage() {
     })();
   }, [fetchCampaignData]);
 
+  // Keep ref in sync so the polling callback stays stable
+  useEffect(() => {
+    campaignStatusRef.current = campaign?.status;
+  }, [campaign?.status]);
+
   // Targeted polling: fetch only status every 10 seconds
   // Full data is fetched only on initial load or manual refresh
   const fetchCampaignStatus = useCallback(async () => {
@@ -222,7 +228,7 @@ export default function CampaignDetailsPage() {
         "status" in response.data
       ) {
         const statusData = response.data as { status: string };
-        if (statusData.status !== campaign?.status) {
+        if (statusData.status !== campaignStatusRef.current) {
           setCampaign((prev) =>
             prev ? { ...prev, status: statusData.status } : null,
           );
@@ -231,7 +237,7 @@ export default function CampaignDetailsPage() {
     } catch (err) {
       console.error("Error fetching campaign status during polling:", err);
     }
-  }, [campaignId, campaign]);
+  }, [campaignId]);
 
   // Poll for status updates every 10 seconds (lightweight - single small API call)
   useEffect(() => {
@@ -822,7 +828,7 @@ export default function CampaignDetailsPage() {
             </CardHeader>
             <CardContent>
               {leads.length > 0 ? (
-                <CampaignListComponent leads={leads} campaignId={campaignId} />
+                <CampaignListComponent leads={leads} campaignId={campaignId} onLeadsUpdated={fetchLeadsSilent} />
               ) : (
                 <div className="text-center py-12">
                   <Icons.Users className="h-12 w-12 mx-auto text-muted-foreground mb-4" />

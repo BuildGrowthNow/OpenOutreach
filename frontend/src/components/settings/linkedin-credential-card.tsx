@@ -25,6 +25,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface LinkedInCredentialCardProps {
   credential: LinkedInCredentials;
@@ -123,6 +133,7 @@ export default function LinkedInCredentialCard({
   const [isLoadingLogs, setIsLoadingLogs] = useState(false);
   const [isLoadingHealth, setIsLoadingHealth] = useState(false);
   const [showChallengeModal, setShowChallengeModal] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const { toast } = useToast();
 
   const healthStatus: HealthStatusWithDetails =
@@ -178,14 +189,6 @@ export default function LinkedInCredentialCard({
   };
 
   const handleDelete = async () => {
-    if (
-      !confirm(
-        "Are you sure you want to delete this credential? This will remove the saved LinkedIn login from this profile.",
-      )
-    ) {
-      return;
-    }
-
     try {
       setIsDeleting(true);
       const response = await deleteLinkedInCredentials(credential.id);
@@ -486,7 +489,7 @@ export default function LinkedInCredentialCard({
             <Button
               variant="destructive"
               size="sm"
-              onClick={handleDelete}
+              onClick={() => setShowDeleteConfirm(true)}
               disabled={isDeleting}
             >
               <Icons.Trash2 className="mr-2 h-3 w-3" />
@@ -494,6 +497,26 @@ export default function LinkedInCredentialCard({
             </Button>
           </div>
         </div>
+
+        <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete credential?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will remove the saved LinkedIn login from this profile. This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={() => { void handleDelete() }}
+              >
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
           <DialogContent className="max-w-3xl border border-zinc-800 bg-zinc-950 text-zinc-100 shadow-2xl">

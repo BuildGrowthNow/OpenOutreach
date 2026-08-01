@@ -37,9 +37,10 @@ interface CampaignListProps {
   leads: Lead[]
   campaignId: string
   className?: string
+  onLeadsUpdated?: () => void
 }
 
-export function CampaignList({ leads, campaignId, className }: CampaignListProps) {
+export function CampaignList({ leads, campaignId, className, onLeadsUpdated }: CampaignListProps) {
   const router = useRouter()
   const { toast } = useToast()
   const [searchQuery, setSearchQuery] = useState('')
@@ -125,8 +126,7 @@ export function CampaignList({ leads, campaignId, className }: CampaignListProps
           title: 'Lead Qualified',
           description: 'Lead has been manually qualified and will be processed.',
         })
-        // Refresh the page to show updated state
-        window.location.reload()
+        onLeadsUpdated?.()
       } else {
         throw new Error(response.error || 'Failed to qualify lead')
       }
@@ -151,8 +151,7 @@ export function CampaignList({ leads, campaignId, className }: CampaignListProps
           title: 'Lead Disqualified',
           description: 'Lead has been marked as failed.',
         })
-        // Refresh the page to show updated state
-        window.location.reload()
+        onLeadsUpdated?.()
       } else {
         throw new Error(response.error || 'Failed to disqualify lead')
       }

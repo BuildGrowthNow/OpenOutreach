@@ -1,0 +1,16 @@
+{
+  "review_id": "entire_ui_20260801_000000",
+  "target": "frontend/src",
+  "focus_areas": ["visual", "code"],
+  "context": "data_display, data_entry, navigation",
+  "platform": "all_platforms",
+  "status": "complete",
+  "started_at": "2026-08-01T00:00:00Z",
+  "issues_found": 22,
+  "severity_counts": {
+    "critical": 1,
+    "major": 8,
+    "minor": 7,
+    "suggestion": 6
+  }
+}

@@ -11,8 +11,6 @@ import { RefreshCw, AlertCircle } from 'lucide-react'
 import { useDashboard } from '@/hooks/use-dashboard'
 import { formatDistanceToNow } from 'date-fns'
 
-const NOW = Date.now()
-const INITIAL_TIMESTAMP = new Date(NOW).toISOString()
 
 interface ServiceHealth {
   name: string
@@ -35,10 +33,11 @@ const Health = () => {
   }, [fetchHealth])
 
   const [refreshing, setRefreshing] = useState(false)
-  const lastCheck = healthStatus?.system?.timestamp || INITIAL_TIMESTAMP
+  const initialTimestamp = useMemo(() => new Date().toISOString(), [])
+  const lastCheck = healthStatus?.system?.timestamp || initialTimestamp
 
   const serviceHistory = useMemo<ServiceHealth[]>(() => {
-    const timestamp = new Date(NOW - 10000).toISOString()
+    const timestamp = healthStatus?.system?.timestamp || initialTimestamp
 
     if (healthStatus) {
       const services: ServiceHealth[] = []
@@ -47,7 +46,7 @@ const Health = () => {
         services.push({
           name: 'Database',
           status: healthStatus.services.database as 'connected' | 'degraded' | 'disconnected',
-          latency_ms: 12,
+          latency_ms: (healthStatus as { database?: { latency_ms?: number } }).database?.latency_ms ?? 0,
           lastCheck: timestamp,
         })
       }
@@ -55,7 +54,7 @@ const Health = () => {
       services.push({
         name: 'API',
         status: healthStatus.status === 'operational' ? 'connected' : 'degraded',
-        latency_ms: 15,
+        latency_ms: (healthStatus as { api?: { latency_ms?: number } }).api?.latency_ms ?? 0,
         lastCheck: timestamp,
       })
       return services
@@ -65,7 +64,7 @@ const Health = () => {
       { name: 'Database', status: 'disconnected', latency_ms: 0, lastCheck: timestamp },
       { name: 'API', status: 'disconnected', latency_ms: 0, lastCheck: timestamp },
     ]
-  }, [healthStatus])
+  }, [healthStatus, initialTimestamp])
 
   const handleRefresh = async () => {
     setRefreshing(true)

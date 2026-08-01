@@ -47,19 +47,6 @@ const Header = ({ onMenuClick, className }: HeaderProps) => {
   const [loadingNotifications, setLoadingNotifications] = useState(false)
   const [notificationMenuOpen, setNotificationMenuOpen] = useState(false)
 
-  const fetchLinkedInHealth = async () => {
-    try {
-      const response = await getLinkedInProfileHealth()
-      if (response.data) {
-        setLinkedinHealth(response.data)
-      }
-    } catch (error) {
-      console.error('Failed to fetch LinkedIn profile health:', error)
-    } finally {
-      setLoadingHealth(false)
-    }
-  }
-
   // Get the worst health status among all profiles
   const getOverallHealthStatus = () => {
     if (!linkedinHealth?.profiles || linkedinHealth.profiles.length === 0) {

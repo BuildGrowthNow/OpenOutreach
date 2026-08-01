@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Logo } from '@/components/ui/logo'
 import { Icons } from '@/lib/types/components'
-import { useAuthStore } from '@/lib/auth-store'
+import { useAuthStore } from '@/lib/authStoreV2'
 
 interface SidebarItem {
   title: string

@@ -43,7 +43,7 @@ function SettingsLoadingSkeleton() {
         <Skeleton className="h-28 w-full" />
         <Skeleton className="h-28 w-full" />
       </div>
-      <Skeleton className="h-105 w-full" />
+      <Skeleton className="h-96 w-full" />
     </div>
   );
 }
@@ -209,24 +209,24 @@ export default function SettingsPage() {
 
       <Tabs defaultValue="linkedin" className="space-y-6">
         <TabsList className="grid w-full grid-cols-2 gap-2 rounded-xl bg-muted p-1 sm:grid-cols-5">
-          <TabsTrigger value="linkedin" className="py-2">
-            <Icons.Link className="h-4 w-4" />
+          <TabsTrigger value="linkedin" className="flex items-center gap-2 py-2">
+            <Icons.Link className="h-4 w-4 shrink-0" />
             LinkedIn Connection
           </TabsTrigger>
-          <TabsTrigger value="rate-limits" className="py-2">
-            <Icons.Shield className="h-4 w-4" />
+          <TabsTrigger value="rate-limits" className="flex items-center gap-2 py-2">
+            <Icons.Shield className="h-4 w-4 shrink-0" />
             Rate Limits
           </TabsTrigger>
-          <TabsTrigger value="llm" className="py-2">
-            <Icons.Sparkles className="h-4 w-4" />
+          <TabsTrigger value="llm" className="flex items-center gap-2 py-2">
+            <Icons.Sparkles className="h-4 w-4 shrink-0" />
             LLM / AI Settings
           </TabsTrigger>
-          <TabsTrigger value="active-hours" className="py-2">
-            <Icons.Clock className="h-4 w-4" />
+          <TabsTrigger value="active-hours" className="flex items-center gap-2 py-2">
+            <Icons.Clock className="h-4 w-4 shrink-0" />
             Active Hours
           </TabsTrigger>
-          <TabsTrigger value="billing" className="py-2">
-            <Icons.CreditCard className="h-4 w-4" />
+          <TabsTrigger value="billing" className="flex items-center gap-2 py-2">
+            <Icons.CreditCard className="h-4 w-4 shrink-0" />
             Billing
           </TabsTrigger>
         </TabsList>

@@ -267,7 +267,7 @@ const LeadsPage = () => {
                   {stats.connected}
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  {stats.total > 0 ? `${Math.round((stats.connected / stats.total) * 100)}% connection rate` : 'No leads'}
+                  On this page
                 </div>
               </CardContent>
             </Card>
@@ -280,7 +280,7 @@ const LeadsPage = () => {
                   {stats.qualified}
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  Ready for outreach
+                  On this page
                 </div>
               </CardContent>
             </Card>
@@ -293,7 +293,7 @@ const LeadsPage = () => {
                   {stats.pending}
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  Awaiting response
+                  On this page
                 </div>
               </CardContent>
             </Card>
