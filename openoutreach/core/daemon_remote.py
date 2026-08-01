@@ -492,6 +492,7 @@ class RemoteDaemon:
                 proxy_username,
                 proxy_password,
                 headless=headless,
+                is_new_profile=is_new_profile,
             )
             session.page = page
             session.context = context
@@ -974,17 +975,23 @@ class RemoteDaemon:
                     f'display notification "{body}" with title "{title}"'
                 ], check=False, timeout=5)
             elif system == "Windows":
+                # Escape double quotes for PowerShell string literals
+                title_ps = title.replace('"', '`"')
+                body_ps = body.replace('"', '`"')
                 ps_lines = [
                     "[Windows.UI.Notifications.ToastNotificationManager, "
                     "Windows.UI.Notifications] | Out-Null",
                     "[Windows.Data.Xml.Dom.XmlDocument] | Out-Null",
                     "$t = [Windows.UI.Notifications.ToastNotificationManager]"
                     "::GetTemplateContent(0)",
-                    "$x = [xml]$t.GetXml()",
-                    f'$x.toast.visual.binding.text[0].InnerText = "{title}"',
-                    f'$x.toast.visual.binding.text[1].InnerText = "{body}"',
+                    # $xml is a .NET XmlDocument (editable); $x is the WinRT type
+                    # required by ToastNotification. Edit $xml first, then reload
+                    # into $x — do NOT reassign $xml before loading into $x.
+                    "$xml = [xml]$t.GetXml()",
+                    f'$xml.toast.visual.binding.text[0].InnerText = "{title_ps}"',
+                    f'$xml.toast.visual.binding.text[1].InnerText = "{body_ps}"',
                     "$x = [Windows.Data.Xml.Dom.XmlDocument]::new()",
-                    "$x.LoadXml($t.GetXml())",
+                    "$x.LoadXml($xml.OuterXml)",
                     "$o = [Windows.UI.Notifications.ToastNotification]::new($x)",
                     "[Windows.UI.Notifications.ToastNotificationManager]"
                     '::CreateToastNotifier("Lengrowth").Show($o)',
@@ -1039,6 +1046,7 @@ class RemoteDaemon:
         proxy_username: Optional[str] = None,
         proxy_password: Optional[str] = None,
         headless: bool = False,
+        is_new_profile: bool = False,
     ):
         """Launch browser using a persistent context (stable user data dir per profile).
 
@@ -1058,8 +1066,6 @@ class RemoteDaemon:
 
         profile_dir = self._get_profile_data_dir()
         user_data_dir = str(profile_dir)
-        # Profile is considered "new" when the dir is empty (first ever launch)
-        is_new_profile = not any(profile_dir.iterdir())
 
         # Remove stale Chrome singleton lock files left behind by a prior crash.
         # When these exist Chrome detects "another instance is running" and exits
