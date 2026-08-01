@@ -54,6 +54,7 @@ def qualify_with_llm(
     product_pitch: str,
     campaign_objective: str,
     icp_titles: list[str] | None = None,
+    target_company_size: str | None = None,
     user_id: str | None = None,
 ) -> tuple[int, str]:
     """Call LLM to qualify a profile. Returns (label, reason).
@@ -71,6 +72,7 @@ def qualify_with_llm(
         product_pitch=product_pitch,
         campaign_objective=campaign_objective,
         icp_titles=", ".join(icp_titles) if icp_titles else "",
+        target_company_size=target_company_size or "",
         profile_text=profile_text,
     )
 

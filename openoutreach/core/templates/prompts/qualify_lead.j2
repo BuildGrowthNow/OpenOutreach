@@ -12,21 +12,32 @@ The following roles are our ideal customer profile:
 {{ icp_titles }}
 {% endif %}
 
+{% if target_company_size %}
+## Target Company Size
+We sell to: {{ target_company_size }}
+
+This is a hard filter. If the profile clearly shows the person works at a company that is significantly outside this size range (e.g. a global enterprise, a publicly traded company with tens of thousands of employees), disqualify them. When company size is unclear or ambiguous, qualify them — give the benefit of the doubt.
+{% endif %}
+
 ## LinkedIn Profile
 {{ profile_text }}
 
 ## Instructions
-Decide if this person is worth reaching out to. Apply a GENEROUS standard — your default should be YES.
+Decide if this person is worth reaching out to.
 
-Only disqualify if there is a clear, obvious reason this person could never be a relevant prospect (e.g. student with no business role, retired, completely unrelated industry with no plausible connection to our product).
+{% if target_company_size %}
+COMPANY SIZE RULE: If it is clear from the profile that the person works at a company that is well outside our target company size ({{ target_company_size }}), disqualify. Examples of clear mismatches: working at Google, Meta, Amazon, Spotify, Shopify, a Fortune 500, or any company with thousands of employees when we target SMBs. When company size is uncertain, qualify.
+{% endif %}
 
-A soft or partial match is enough to qualify. Someone adjacent to the ICP, in a related industry, or at a company that could plausibly benefit counts as qualified. We would rather send an extra message to a borderline lead than miss someone good.
+For everything else, apply a reasonable standard — qualify when there is a plausible fit with our product and ICP. Only disqualify for other clear reasons: student with no business role, retired, completely unrelated industry.
 
 Do NOT disqualify based on:
 - Seniority being too low or too high
-- Company size being uncertain
 - Title not being an exact match to the ICP
 - Lack of explicit decision-making authority
+{% if not target_company_size %}
+- Company size being uncertain
+{% endif %}
 
 ## Hard Constraint - VIOLATION RESULTS IN TASK FAILURE
 
@@ -40,5 +51,5 @@ RULE 2: Output your answer in this EXACT JSON format:
 }
 
 Where:
-- "label" is 1 if the lead is worth reaching out to, 0 only if clearly irrelevant
+- "label" is 1 if the lead is worth reaching out to, 0 if clearly irrelevant or a hard company-size mismatch
 - "reason" is your explanation (1-3 sentences max)

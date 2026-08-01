@@ -895,6 +895,7 @@ class Campaign:
         linkedin_profile_id: Optional[str] = None,
         team_member_ids: Optional[List[str]] = None,
         icp_titles: Optional[List[str]] = None,
+        target_company_size: Optional[str] = None,
         follow_up_strategy: Optional[str] = None,
         target_degrees: Optional[List[int]] = None,
         created_at: Optional[datetime] = None,
@@ -916,6 +917,7 @@ class Campaign:
         self.linkedin_profile_id = linkedin_profile_id
         self.team_member_ids = team_member_ids or []
         self.icp_titles = icp_titles or []
+        self.target_company_size = target_company_size
         self.follow_up_strategy = follow_up_strategy
         self.target_degrees = target_degrees if target_degrees is not None else [1, 2, 3]
         self.created_at = created_at or datetime.now(tz.utc)
@@ -944,6 +946,8 @@ class Campaign:
         }
         if self.model_blob:
             data["model_blob"] = self.model_blob
+        if self.target_company_size is not None:
+            data["target_company_size"] = self.target_company_size
         if self.follow_up_strategy is not None:
             data["follow_up_strategy"] = self.follow_up_strategy
         return data
@@ -969,6 +973,7 @@ class Campaign:
             linkedin_profile_id=data.get("linkedin_profile_id"),
             team_member_ids=data.get("team_member_ids", []),
             icp_titles=data.get("icp_titles", []),
+            target_company_size=data.get("target_company_size"),
             follow_up_strategy=data.get("follow_up_strategy"),
             target_degrees=data.get("target_degrees"),
             created_at=data.get("created_at"),

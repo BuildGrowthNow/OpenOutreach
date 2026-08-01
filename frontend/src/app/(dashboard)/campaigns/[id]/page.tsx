@@ -1079,6 +1079,7 @@ function CampaignSettingsForm({
   const [bookingLink, setBookingLink] = useState(getStr("bookingLink", "booking_link"));
   const [icpTitles, setIcpTitles] = useState<string[]>(getArr("icpTitles", "icp_titles"));
   const [icpInput, setIcpInput] = useState("");
+  const [targetCompanySize, setTargetCompanySize] = useState(getStr("targetCompanySize", "target_company_size"));
   const [followUpStrategy, setFollowUpStrategy] = useState(getStr("followUpStrategy", "follow_up_strategy"));
 
   useEffect(() => {
@@ -1090,6 +1091,7 @@ function CampaignSettingsForm({
     setCampaignObjective(s("campaignObjective", "campaign_objective"));
     setBookingLink(s("bookingLink", "booking_link"));
     setIcpTitles(a("icpTitles", "icp_titles"));
+    setTargetCompanySize(s("targetCompanySize", "target_company_size"));
     setFollowUpStrategy(s("followUpStrategy", "follow_up_strategy"));
   }, [campaign]);
 
@@ -1109,6 +1111,7 @@ function CampaignSettingsForm({
       campaign_objective: campaignObjective.trim(),
       booking_link: bookingLink.trim(),
       icp_titles: icpTitles,
+      target_company_size: targetCompanySize.trim() || undefined,
       follow_up_strategy: followUpStrategy.trim() || undefined,
     } as unknown as Partial<Campaign>);
   };
@@ -1235,6 +1238,21 @@ function CampaignSettingsForm({
             )}
             <p className="text-xs text-muted-foreground">
               The AI generates LinkedIn search queries based on these titles
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="settings-company-size">
+              Target Company Size <span className="text-muted-foreground font-normal">(optional)</span>
+            </Label>
+            <Input
+              id="settings-company-size"
+              value={targetCompanySize}
+              onChange={(e) => setTargetCompanySize(e.target.value)}
+              placeholder="e.g., small to medium companies, 10-500 employees, no enterprise"
+            />
+            <p className="text-xs text-muted-foreground">
+              Leads who clearly work at companies outside this range (e.g. Google, Spotify) will be disqualified
             </p>
           </div>
         </CardContent>

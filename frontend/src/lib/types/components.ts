@@ -286,6 +286,7 @@ export interface Campaign {
   bookingLink?: string;
   searchKeywords?: string[];
   icpTitles?: string[];
+  targetCompanySize?: string;
   followUpStrategy?: string;
   targetDegrees?: number[];
   isFreemium: boolean;

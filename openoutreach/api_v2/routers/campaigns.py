@@ -32,6 +32,7 @@ class CampaignCreate(BaseModel):
     velocity: int = 20
     team_member_ids: Optional[List[str]] = None  # Optional: share with team
     icp_titles: Optional[List[str]] = None  # ICP job titles
+    target_company_size: Optional[str] = None  # Target company size description
     follow_up_strategy: Optional[str] = None  # Follow-up strategy text
     target_degrees: Optional[List[int]] = None  # Target connection degrees (1, 2, 3)
 
@@ -64,6 +65,7 @@ class CampaignUpdate(BaseModel):
     status: Optional[str] = None  # "active", "paused", or "draft"
     team_member_ids: Optional[List[str]] = None
     icp_titles: Optional[List[str]] = None
+    target_company_size: Optional[str] = None
     follow_up_strategy: Optional[str] = None
     target_degrees: Optional[List[int]] = None
 
@@ -90,6 +92,7 @@ class CampaignResponse(BaseModel):
     user_id: str
     team_member_ids: List[str]
     icp_titles: List[str]
+    target_company_size: Optional[str] = None
     follow_up_strategy: Optional[str]
     target_degrees: List[int] = [1, 2, 3]
     created_at: str
@@ -241,6 +244,7 @@ async def list_campaigns(
                 user_id=doc.get("user_id", ""),
                 team_member_ids=doc.get("team_member_ids", []),
                 icp_titles=doc.get("icp_titles", []),
+                target_company_size=doc.get("target_company_size"),
                 follow_up_strategy=doc.get("follow_up_strategy"),
                 target_degrees=doc.get("target_degrees", [1, 2, 3]),
                 created_at=doc.get("created_at").isoformat() if doc.get("created_at") else "",
@@ -346,6 +350,7 @@ async def create_campaign(
             user_id=user_id,
             team_member_ids=team_ids,
             icp_titles=data.icp_titles or [],
+            target_company_size=data.target_company_size,
             follow_up_strategy=data.follow_up_strategy,
             target_degrees=data.target_degrees if data.target_degrees is not None else [1, 2, 3],
             status="draft",  # New campaigns start as draft
@@ -368,6 +373,7 @@ async def create_campaign(
             user_id=campaign.user_id,
             team_member_ids=campaign.team_member_ids,
             icp_titles=campaign.icp_titles,
+            target_company_size=campaign.target_company_size,
             follow_up_strategy=campaign.follow_up_strategy,
             target_degrees=campaign.target_degrees,
             created_at=campaign.created_at.isoformat() if campaign.created_at else "",
@@ -474,6 +480,8 @@ async def update_campaign(
             updates["velocity"] = data.velocity
         if data.icp_titles is not None:
             updates["icp_titles"] = data.icp_titles
+        if data.target_company_size is not None:
+            updates["target_company_size"] = data.target_company_size
         if data.follow_up_strategy is not None:
             updates["follow_up_strategy"] = data.follow_up_strategy
         if data.target_degrees is not None:
@@ -548,6 +556,7 @@ async def update_campaign(
             user_id=updated_campaign.user_id,
             team_member_ids=updated_campaign.team_member_ids,
             icp_titles=updated_campaign.icp_titles,
+            target_company_size=updated_campaign.target_company_size,
             follow_up_strategy=updated_campaign.follow_up_strategy,
             target_degrees=updated_campaign.target_degrees,
             created_at=updated_campaign.created_at.isoformat() if updated_campaign.created_at else "",
@@ -730,6 +739,7 @@ async def pause_campaign(
             user_id=updated_campaign.user_id,
             team_member_ids=updated_campaign.team_member_ids,
             icp_titles=updated_campaign.icp_titles,
+            target_company_size=updated_campaign.target_company_size,
             follow_up_strategy=updated_campaign.follow_up_strategy,
             target_degrees=updated_campaign.target_degrees,
             created_at=updated_campaign.created_at.isoformat() if updated_campaign.created_at else "",
@@ -830,6 +840,7 @@ async def resume_campaign(
             user_id=updated_campaign.user_id,
             team_member_ids=updated_campaign.team_member_ids,
             icp_titles=updated_campaign.icp_titles,
+            target_company_size=updated_campaign.target_company_size,
             follow_up_strategy=updated_campaign.follow_up_strategy,
             target_degrees=updated_campaign.target_degrees,
             created_at=updated_campaign.created_at.isoformat() if updated_campaign.created_at else "",

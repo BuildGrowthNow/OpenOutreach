@@ -35,6 +35,7 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
   // Step 2 fields
   const [icpTitles, setIcpTitles] = useState<string[]>([]);
   const [icpInput, setIcpInput] = useState('');
+  const [targetCompanySize, setTargetCompanySize] = useState('');
   const [bookingLink, setBookingLink] = useState('');
 
   // UI state
@@ -121,6 +122,7 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
         booking_link: bookingLink.trim(),
         velocity: 20,
         icp_titles: icpTitles,
+        target_company_size: targetCompanySize.trim() || undefined,
       });
 
       if (res.error || !res.data) {
@@ -316,6 +318,22 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
                 ))}
               </div>
             )}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="targetCompanySize" className="text-base">
+              Target Company Size <span className="text-muted-foreground font-normal">(optional)</span>
+            </Label>
+            <Input
+              id="targetCompanySize"
+              value={targetCompanySize}
+              onChange={(e) => setTargetCompanySize(e.target.value)}
+              placeholder="e.g., small to medium companies, 10-500 employees, no enterprise"
+              className="text-base h-11"
+            />
+            <p className="text-xs text-muted-foreground">
+              The AI will disqualify leads who clearly work at companies outside this range (e.g. Google, Spotify, Fortune 500)
+            </p>
           </div>
 
           <div className="space-y-2">
