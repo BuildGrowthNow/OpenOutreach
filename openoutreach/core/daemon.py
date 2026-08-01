@@ -346,7 +346,8 @@ class ProfileSession:
 
 # ── Main daemon ────────────────────────────────────────────────────────
 
-PROFILE_REFRESH_INTERVAL = 300  # Re-scan for new/removed profiles every 5 min
+PROFILE_REFRESH_INTERVAL = 60   # Re-scan for new/removed profiles every 60s
+STALE_RECOVERY_INTERVAL = 300  # Run stale-task recovery independently every 5 min
 
 
 def _get_all_active_profiles() -> list:
@@ -394,6 +395,7 @@ def run_daemon():
     # Session pool: profile_id -> ProfileSession
     pool: dict[str, ProfileSession] = {}
     last_profile_refresh = 0.0
+    last_stale_recovery: float = 0.0
 
     def refresh_pool():
         nonlocal last_profile_refresh
@@ -444,6 +446,15 @@ def run_daemon():
 
     while True:
         refresh_pool()
+
+        # Recover stale RUNNING tasks on a fixed timer, not just on idle.
+        # A crashed task during a busy period would otherwise hold its slot
+        # until the queue drains and reconcile fires (can be 30+ min).
+        now_mono = time.monotonic()
+        if now_mono - last_stale_recovery >= STALE_RECOVERY_INTERVAL:
+            last_stale_recovery = now_mono
+            from openoutreach.core.scheduler import _recover_stale_running_tasks
+            _recover_stale_running_tasks()
 
         if not pool:
             logger.info("No active profiles with credentials — sleeping 60s")

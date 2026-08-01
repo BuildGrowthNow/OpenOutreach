@@ -971,6 +971,7 @@ class Deal:
         connect_attempts: int = 0,
         backoff_hours: int = 0,
         next_check_pending_at: Optional[datetime] = None,
+        pending_since: Optional[datetime] = None,
         profile_summary: Optional[Dict[str, Any]] = None,
         chat_summary: Optional[Dict[str, Any]] = None,
         creation_date: Optional[datetime] = None,
@@ -987,6 +988,7 @@ class Deal:
         self.connect_attempts = connect_attempts
         self.backoff_hours = backoff_hours
         self.next_check_pending_at = next_check_pending_at
+        self.pending_since: Optional[datetime] = pending_since
         self.profile_summary = profile_summary or {}
         self.chat_summary = chat_summary or {}
         self.creation_date = creation_date or datetime.now(tz.utc)
@@ -1039,6 +1041,8 @@ class Deal:
             data["user_id"] = self.user_id
         if self.next_check_pending_at:
             data["next_check_pending_at"] = self.next_check_pending_at
+        if self.pending_since:
+            data["pending_since"] = self.pending_since
         if self.last_outgoing_at:
             data["last_outgoing_at"] = self.last_outgoing_at
         if self.follow_up_cycled_at:
@@ -1059,6 +1063,7 @@ class Deal:
             connect_attempts=data.get("connect_attempts", 0),
             backoff_hours=data.get("backoff_hours", 0),
             next_check_pending_at=data.get("next_check_pending_at"),
+            pending_since=data.get("pending_since"),
             profile_summary=data.get("profile_summary", {}),
             chat_summary=data.get("chat_summary", {}),
             creation_date=data.get("creation_date"),

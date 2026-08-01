@@ -634,8 +634,12 @@ def on_deal_state_entered(deal) -> None:
         return
 
     backoff = deal.backoff_hours or CAMPAIGN_CONFIG["check_pending_recheck_after_hours"]
+    now = Datetime.now(tz.utc)
+    # Stamp pending_since once on first PENDING entry (never overwrite).
+    if not deal.pending_since:
+        deal.pending_since = now
     # Type: backoff should be a number (int or float)
-    deal.next_check_pending_at = Datetime.now(tz.utc) + timedelta(hours=float(backoff))  # type: ignore
+    deal.next_check_pending_at = now + timedelta(hours=float(backoff))  # type: ignore
     deal.save()
 
 
