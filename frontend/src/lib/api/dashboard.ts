@@ -372,7 +372,7 @@ export async function getCampaignLeads(
   // API returns { total, limit, offset, results: [{lead, deal}] }
   type RawLeadDeal = {
     lead: { id: string; public_identifier: string; url: string; full_name?: string; headline?: string; location?: string; disqualified?: boolean; created_at?: string };
-    deal: { id: string; lead_id: string; campaign_id: string; state: string; outcome?: string; reason?: string; creation_date?: string };
+    deal: { id: string; lead_id: string; campaign_id: string; state: string; outcome?: string; reason?: string; creation_date?: string; last_outgoing_at?: string; next_follow_up_at?: string; unanswered_count?: number };
   };
   type RawResponse = { total: number; limit: number; offset: number; results: RawLeadDeal[]; pipelineCounts?: Record<string, number> };
 
@@ -400,6 +400,9 @@ export async function getCampaignLeads(
       outcome: normalizeOutcome(deal.outcome) as Lead["outcome"] | undefined,
       creationDate: deal.creation_date || lead.created_at || new Date().toISOString(),
       updateDate: deal.creation_date || lead.created_at || new Date().toISOString(),
+      lastOutgoingAt: deal.last_outgoing_at || undefined,
+      nextFollowUpAt: deal.next_follow_up_at || undefined,
+      unansweredCount: deal.unanswered_count ?? 0,
     };
   });
 

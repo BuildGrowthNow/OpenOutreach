@@ -307,9 +307,45 @@ export function CampaignList({ leads, campaignId, className, onLeadsUpdated }: C
                     </TableCell>
                    <TableCell><span title={lead.company || undefined}>{lead.company ? (lead.company.length > 25 ? lead.company.slice(0, 25) + '…' : lead.company) : <span className="text-muted-foreground">—</span>}</span></TableCell>
                   <TableCell>
-                    <Badge variant="outline" className={cn(stateColorMapping[lead.state])}>
-                      {lead.state.replace(/_/g, ' ')}
-                    </Badge>
+                    <div className="flex flex-col gap-1">
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Badge variant="outline" className={cn(stateColorMapping[lead.state])}>
+                              {lead.state.replace(/_/g, ' ')}
+                            </Badge>
+                          </TooltipTrigger>
+                          {lead.state === 'NO_EMAIL' && (
+                            <TooltipContent>
+                              <p className="font-medium">No email found</p>
+                              <p className="text-xs text-muted-foreground max-w-[220px]">
+                                Email enrichment returned no result. The daemon retries automatically. Add an email manually on the lead page to unblock.
+                              </p>
+                            </TooltipContent>
+                          )}
+                        </Tooltip>
+                      </TooltipProvider>
+                      {lead.state === 'CONNECTED' && !!lead.unansweredCount && lead.unansweredCount > 0 && (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="text-xs text-amber-500 cursor-default">
+                                {lead.nextFollowUpAt && new Date(lead.nextFollowUpAt) > new Date()
+                                  ? `Next msg in ${Math.ceil((new Date(lead.nextFollowUpAt).getTime() - Date.now()) / 86400000)}d`
+                                  : `${lead.unansweredCount} unanswered`}
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p className="font-medium">{lead.unansweredCount} unanswered message{lead.unansweredCount !== 1 ? 's' : ''}</p>
+                              <p className="text-xs text-muted-foreground max-w-[220px]">
+                                Waiting {lead.unansweredCount} × 3 days between nudges.
+                                {lead.nextFollowUpAt ? ` Next message after ${new Date(lead.nextFollowUpAt).toLocaleDateString()}.` : ''}
+                              </p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell>
                     <div className="text-sm">

@@ -241,6 +241,9 @@ export interface Lead {
   state: DealState;
   outcome?: DealOutcome;
   nextCheckPendingAt?: string;
+  lastOutgoingAt?: string;
+  nextFollowUpAt?: string;
+  unansweredCount?: number;
   creationDate: string;
   updateDate: string;
   contactInfo?: {

@@ -15,6 +15,7 @@ import {
 
 const TYPE_LABELS: Record<string, string> = {
   connect: "Connection Request",
+  connect_skipped: "Connection Skipped",
   check_pending: "Check Pending",
   follow_up: "Follow Up",
   send_manual_message: "Manual Message",
@@ -36,11 +37,24 @@ function formatActivityDescription(entry: ActivityEntry): string {
       case "connect":
         return lead_name ? `Sent connection request to ${lead_name}` : baseLabel;
 
+      case "connect_skipped":
+        return lead_name && reason
+          ? `Skipped ${lead_name} — ${reason}`
+          : lead_name ? `Skipped ${lead_name}` : baseLabel;
+
       case "follow_up":
+        if (entry.details?.state === "wait") {
+          return lead_name
+            ? `Waiting before next message to ${lead_name} — AI holding off`
+            : "AI decided to wait before next message";
+        }
         if (lead_name && message_preview) {
           return `Sent message to ${lead_name}: "${message_preview.substring(0, 50)}..."`;
         }
         return lead_name ? `Sent follow-up to ${lead_name}` : baseLabel;
+
+      case "campaign_started":
+        return "Campaign started — daemon discovering and qualifying leads. First connections sent once prospects are qualified (usually within minutes).";
 
       case "lead_discovered":
         if (lead_name && headline) {

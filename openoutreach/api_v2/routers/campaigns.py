@@ -875,6 +875,9 @@ class DealResponse(BaseModel):
     outcome: Optional[str] = None
     reason: Optional[str] = None
     creation_date: Optional[str] = None
+    last_outgoing_at: Optional[str] = None
+    next_follow_up_at: Optional[str] = None
+    unanswered_count: int = 0
 
 
 @router.get("/{campaign_id}/leads")
@@ -953,6 +956,46 @@ async def get_campaign_leads(
     # Fetch leads
     leads_data = {str(lead_doc["_id"]): lead_doc for lead_doc in leads_collection.find({"_id": {"$in": lead_ids}})}
 
+    # Batch-compute nudge counts for CONNECTED deals so the UI can show cooldown info.
+    # For each deal: count outgoing messages since the last incoming reply.
+    messages_collection = get_mongodb_collection("chat_messages")
+    deal_nudge_info: Dict[str, Dict] = {}
+    if messages_collection is not None:
+        connected_deal_ids = [str(d["_id"]) for d in deals if d.get("state") == "Connected"]
+        if connected_deal_ids:
+            # Aggregate: per deal_id, count outgoing messages after the latest incoming one
+            pipeline = [
+                {"$match": {"deal_id": {"$in": connected_deal_ids}}},
+                {"$sort": {"creation_date": -1}},
+                {"$group": {
+                    "_id": "$deal_id",
+                    "messages": {"$push": {"is_outgoing": "$is_outgoing", "creation_date": "$creation_date"}},
+                }},
+            ]
+            for row in messages_collection.aggregate(pipeline):
+                msgs = row["messages"]
+                last_incoming_idx = next(
+                    (i for i, m in enumerate(msgs) if not m.get("is_outgoing", False)), None
+                )
+                if last_incoming_idx is None:
+                    nudge_count = sum(1 for m in msgs if m.get("is_outgoing", False))
+                else:
+                    nudge_count = last_incoming_idx  # outgoing msgs before first incoming (newest-first)
+                last_outgoing = next(
+                    (m["creation_date"] for m in msgs if m.get("is_outgoing", False)), None
+                )
+                next_follow_up_at = None
+                if nudge_count > 0 and last_outgoing:
+                    wait_days = max(1, nudge_count) * 3
+                    nfa = last_outgoing + timedelta(days=wait_days)
+                    if nfa.tzinfo is None:
+                        nfa = nfa.replace(tzinfo=timezone.utc)
+                    next_follow_up_at = nfa.isoformat() + "Z"
+                deal_nudge_info[str(row["_id"])] = {
+                    "unanswered_count": nudge_count,
+                    "next_follow_up_at": next_follow_up_at,
+                }
+
     # Build response
     results = []
     for deal in deals:
@@ -977,6 +1020,9 @@ async def get_campaign_leads(
                 or profile_inner.get("locationName")
                 or cp.get("location")
             )
+            deal_id_str = str(deal["_id"])
+            nudge = deal_nudge_info.get(deal_id_str, {})
+            last_outgoing_at = deal.get("last_outgoing_at")
             results.append({
                 "lead": LeadResponse(
                     id=str(lead_data["_id"]),
@@ -989,13 +1035,16 @@ async def get_campaign_leads(
                     created_at=lead_data.get("creation_date").isoformat() if lead_data.get("creation_date") else None,
                 ),
                 "deal": DealResponse(
-                    id=str(deal["_id"]),
+                    id=deal_id_str,
                     lead_id=str(deal["lead_id"]),
                     campaign_id=str(deal["campaign_id"]),
                     state=deal.get("state", "Discovered"),
                     outcome=deal.get("outcome"),
                     reason=deal.get("reason"),
                     creation_date=deal.get("creation_date").isoformat() if deal.get("creation_date") else None,
+                    last_outgoing_at=last_outgoing_at.isoformat() + "Z" if last_outgoing_at else None,
+                    next_follow_up_at=nudge.get("next_follow_up_at"),
+                    unanswered_count=nudge.get("unanswered_count", 0),
                 )
             })
 

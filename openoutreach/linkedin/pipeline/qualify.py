@@ -62,6 +62,29 @@ def run_qualification(session, qualifier: BayesianQualifier) -> str | None:
                 "[%s] qualify: backlog %d ≥ cap %d — pausing (drain connects first)",
                 session.campaign, backlog, cap,
             )
+            # Fire a UI notification once per cap event (dedup by unread key).
+            try:
+                from openoutreach.mongodb.models_extended import Notification
+                from openoutreach.mongodb.connection import get_mongodb_collection as _gcol
+                notif_col = _gcol("notifications")
+                dedup_key = f"qualify_cap_{session.campaign.pk}"
+                if notif_col is not None and not notif_col.find_one(
+                    {"data.dedup_key": dedup_key, "is_read": False}
+                ):
+                    user_id = getattr(session.linkedin_profile, "user_id", "") or ""
+                    Notification(
+                        recipient_id=user_id,
+                        notification_type="campaign_warning",
+                        title="Qualification paused — connect queue full",
+                        message=(
+                            f"Campaign \"{session.campaign}\" has {backlog} qualified leads waiting "
+                            f"(cap {cap}). Qualification resumes automatically as connections are sent."
+                        ),
+                        campaign_id=str(session.campaign.pk),
+                        data={"dedup_key": dedup_key, "backlog": backlog, "cap": cap},
+                    ).save()
+            except Exception:
+                pass
             return None
 
     candidates = fetch_qualification_candidates(session)

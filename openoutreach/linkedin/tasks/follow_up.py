@@ -210,7 +210,9 @@ def _connected_deals(campaign):
     if deal_collection is None or lead_collection is None:
         return []
 
-    # Find all CONNECTED deals for this campaign
+    # Find all CONNECTED deals for this campaign.
+    # Sort: never-messaged deals first (last_outgoing_at null sorts first in MongoDB asc),
+    # then oldest follow_up_cycled_at so mid-conversation deals cycle fairly.
     campaign_id = campaign._id if hasattr(campaign, '_id') else str(campaign)
     deal_docs = list(deal_collection.find(
         {
@@ -218,7 +220,7 @@ def _connected_deals(campaign):
             "state": models.Deal.DealState.CONNECTED,
             "outcome": "",
         },
-        sort=[("follow_up_cycled_at", 1), ("creation_date", 1)]
+        sort=[("last_outgoing_at", 1), ("follow_up_cycled_at", 1), ("creation_date", 1)]
     ))
 
     # Filter out deals with disqualified leads
@@ -428,6 +430,21 @@ def handle_follow_up(task, session, qualifiers):
         # Bump follow_up_cycled_at so the eligibility query cycles to a different deal next time.
         deal.follow_up_cycled_at = datetime.now(timezone.utc)
         deal.save(update_fields=["follow_up_cycled_at"])
+        lead_name = ""
+        if lead.cached_profile and isinstance(lead.cached_profile, dict):
+            first = lead.cached_profile.get("first_name", "")
+            last = lead.cached_profile.get("last_name", "")
+            lead_name = f"{first} {last}".strip()
+        session.linkedin_profile.record_action(
+            ActionLog.ActionType.FOLLOW_UP,
+            session.campaign,
+            details={
+                "lead_name": lead_name or public_id,
+                "public_identifier": public_id,
+                "state": "wait",
+                "reason": "AI decided to wait before next message",
+            },
+        )
 
     # State Machine Integration - Execute state machine if campaign has one
     # Note: State machine is disabled feature, skipping for now

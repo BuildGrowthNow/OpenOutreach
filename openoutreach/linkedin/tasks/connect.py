@@ -118,10 +118,22 @@ def handle_connect(task, session, qualifiers):
     target_degrees = getattr(campaign, "target_degrees", None) or [1, 2, 3]
     if lead and lead.connection_degree is not None:
         if lead.connection_degree not in target_degrees:
+            degree_val = lead.connection_degree
             logger.info(
                 "[%s] connect: %s degree %d not in target_degrees %s — skipped",
-                campaign, public_id, lead.connection_degree, target_degrees,
+                campaign, public_id, degree_val, target_degrees,
             )
+            from openoutreach.mongodb.models_extended import ActionLog as ActionLogExt
+            ActionLogExt(
+                linkedin_profile_id=session.linkedin_profile.pk,
+                campaign_id=campaign.pk if campaign else "",
+                action_type="connect_skipped",
+                status="skipped",
+                details={
+                    "public_identifier": public_id,
+                    "reason": f"{degree_val}° not in target degrees {target_degrees}",
+                },
+            ).save()
             return
 
     reason = deal.reason if deal else ""
@@ -146,6 +158,17 @@ def handle_connect(task, session, qualifiers):
                 "[%s] connect: %s fresh degree %d not in target_degrees %s — skipped",
                 campaign, public_id, degree, target_degrees,
             )
+            from openoutreach.mongodb.models_extended import ActionLog as ActionLogExt
+            ActionLogExt(
+                linkedin_profile_id=session.linkedin_profile.pk,
+                campaign_id=campaign.pk if campaign else "",
+                action_type="connect_skipped",
+                status="skipped",
+                details={
+                    "public_identifier": public_id,
+                    "reason": f"{degree}° not in target degrees {target_degrees}",
+                },
+            ).save()
             return
 
         # 1st-degree leads: skip connect, transition directly to CONNECTED
