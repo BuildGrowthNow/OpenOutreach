@@ -129,8 +129,17 @@ The exe is **never committed to git**. Distribution is via GitHub Releases on th
 5. GitHub Actions (`.github/workflows/desktop-build.yml`) will:
    - Build the Windows exe via PyInstaller.
    - Create a GitHub Release named `Desktop v1.0.7`.
-   - Attach `Lengrowth.exe` (Windows standalone) as a release asset.
-6. **Share the release URL** with users — they download and run the exe directly.
+   - Attach `Lengrowth.exe` (Windows standalone) and `Lengrowth-Windows-Setup.exe` (NSIS installer) as release assets.
+6. **Upload the NSIS installer to R2** so the Microsoft Store and download page always get a direct, non-redirecting URL:
+   ```bash
+   # Download from the new GitHub release, then upload:
+   wrangler r2 object put lengrowth-downloads/Lengrowth-Windows-Setup.exe --file ./Lengrowth-Windows-Setup.exe --remote
+   ```
+   - R2 bucket: `lengrowth-downloads` (Cloudflare, Eastern Europe)
+   - Public URL: `https://dl.lengrowth.com/Lengrowth-Windows-Setup.exe`
+   - Microsoft Store package URL uses this — never the GitHub URL (GitHub redirects, Store rejects redirects)
+   - Download page (`frontend/src/app/download/page.tsx`) `windowsInstaller` also points here
+7. **Share the release URL** with users — they download and run the exe directly.
 
 ### Why exe size grew from ~20 MB to ~75 MB
 

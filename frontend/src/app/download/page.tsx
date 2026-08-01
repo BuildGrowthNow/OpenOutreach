@@ -25,7 +25,7 @@ const GITHUB_API_LATEST =
   "https://api.github.com/repos/Lengrowth/outbound/releases/latest"
 
 const DOWNLOADS = {
-  windowsInstaller: `${RELEASE_BASE}/Lengrowth-Windows-Setup.exe`,
+  windowsInstaller: "https://dl.lengrowth.com/Lengrowth-Windows-Setup.exe",
   windowsStandalone: `${RELEASE_BASE}/Lengrowth.exe`,
   macos: `${RELEASE_BASE}/Lengrowth-macOS.dmg`,
 }
