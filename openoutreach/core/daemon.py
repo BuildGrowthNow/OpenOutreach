@@ -154,7 +154,7 @@ def seconds_until_active(user_id: Optional[str] = None) -> float:
         if isinstance(raw_days, str):
             active_days = set(int(d.strip()) for d in raw_days.split(",") if d.strip())
         elif isinstance(raw_days, list):
-            active_days = set(int(d) + 1 for d in raw_days)
+            active_days = set(int(d) for d in raw_days)
         else:
             active_days = {1, 2, 3, 4, 5}
     except (ValueError, AttributeError):
@@ -423,11 +423,16 @@ def run_daemon():
                 logger.info("Profile removed from pool: %s", pid)
 
     def build_qualifiers_for(ps: ProfileSession):
-        if ps.qualifiers:
-            return
         session = ps.ensure_session()
         campaigns = session.campaigns
-        ps.qualifiers = _build_qualifiers(campaigns, cfg)
+        campaign_ids = {c.pk for c in campaigns}
+        missing = campaign_ids - ps.qualifiers.keys()
+        if not missing:
+            return
+        new_qualifiers = _build_qualifiers(
+            [c for c in campaigns if c.pk in missing], cfg
+        )
+        ps.qualifiers.update(new_qualifiers)
 
     logger.info(colored("Daemon starting", "green", attrs=["bold"]) + " — multi-profile mode")
 
@@ -566,14 +571,19 @@ def run_daemon():
 
 
 def _reconcile_all(pool: dict[str, ProfileSession]) -> None:
-    """Run reconcile for every active profile's campaigns."""
+    """Run reconcile for every active profile's campaigns.
+
+    Creates the AccountSession if not yet present so new profiles that have
+    never executed a task still get their first task slots planned.
+    """
     from openoutreach.core.scheduler import reconcile
 
     for ps in pool.values():
-        if ps.is_paused() or not ps.session:
+        if ps.is_paused():
             continue
         try:
-            reconcile(ps.session)
+            session = ps.ensure_session()
+            reconcile(session)
         except Exception as e:
             logger.error("Reconcile error for %s: %s", ps.profile.linkedin_username, e)
 

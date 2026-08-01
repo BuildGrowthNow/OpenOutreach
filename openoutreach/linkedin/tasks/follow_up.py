@@ -256,7 +256,7 @@ def _close_stale_deals(campaign, session):
             sort=[("creation_date", -1)],
         )
         if last_msg is None:
-            age_days = STALE_CONVERSATION_DAYS
+            age_days = 0
         else:
             last_date = last_msg.get("creation_date")
             if last_date and last_date.tzinfo is None:
@@ -348,6 +348,21 @@ def handle_follow_up(task, session, qualifiers):
             "(outcome=%s) — skipping, deal stays CONNECTED for manual review",
             campaign, public_id, decision.outcome,
         )
+        try:
+            from openoutreach.mongodb.models_extended import Notification
+            Notification(
+                recipient_id=str(session.user_id) if hasattr(session, "user_id") else "",
+                notification_type="campaign_warning",
+                title="Lead Needs Manual Review",
+                message=(
+                    f"AI tried to close {public_id} before sending any message "
+                    f"(outcome: {decision.outcome}). Review this lead manually in "
+                    f"campaign \"{campaign}\"."
+                ),
+                data={"public_identifier": public_id, "campaign_id": str(campaign.pk)},
+            ).save()
+        except Exception as exc:
+            logger.debug("Could not create never-messaged notification: %s", exc)
         return
 
     profile = _build_send_profile(deal)

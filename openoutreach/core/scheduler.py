@@ -725,6 +725,53 @@ def reconcile(session) -> None:
         plan_connect_window(session, campaign, connect_cap=connect_cap)
         plan_follow_up_window(session, campaign, follow_up_cap=follow_up_cap)
         plan_check_pending_window(session, campaign)
+        _retry_no_email_deals(campaign)
 
     pending_count = Task.objects.pending().count()
     logger.info("Task queue reconciled: %d pending tasks", pending_count)
+
+
+def _retry_no_email_deals(campaign) -> None:
+    """Re-run the email finder on NO_EMAIL deals and promote to QUALIFIED on a hit.
+
+    BetterContact charges only on usable hits so retrying misses is free.
+    Runs once per reconcile cycle — the tri-state return means:
+      True  → hit; deal promoted back to QUALIFIED and enters connect pool
+      False → still no email; deal stays NO_EMAIL
+      None  → finder unavailable (no key / unreachable); skip silently
+    """
+    from openoutreach.crm.models import DealState
+    from openoutreach.mongodb.connection import get_mongodb_collection
+    from openoutreach.mongodb.models import Deal, Lead
+
+    deals_col = get_mongodb_collection("deals")
+    if deals_col is None:
+        return
+
+    no_email_docs = list(deals_col.find({
+        "campaign_id": campaign.pk,
+        "state": DealState.NO_EMAIL.value,
+    }))
+
+    if not no_email_docs:
+        return
+
+    logger.debug("[%s] checking %d NO_EMAIL deal(s) for email retry", campaign, len(no_email_docs))
+
+    for doc in no_email_docs:
+        try:
+            deal = Deal.from_dict(doc)
+            lead = Lead.get(deal.lead_id)
+            if not lead:
+                continue
+
+            result = lead.resolve_api_email()
+            if result is True:
+                deal.state = DealState.QUALIFIED
+                deal.save()
+                logger.info(
+                    "[%s] NO_EMAIL retry: email found for %s — promoted to QUALIFIED",
+                    campaign, lead.public_identifier,
+                )
+        except Exception as exc:
+            logger.warning("[%s] NO_EMAIL retry error for deal %s: %s", campaign, doc.get("_id"), exc)
