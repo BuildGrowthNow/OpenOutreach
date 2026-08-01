@@ -66,6 +66,7 @@ class LinkedInProfile:
         self_lead_id: Optional[str] = None,
         linkedin_username: Optional[str] = None,
         linkedin_password: Optional[str] = None,
+        linkedin_password_encrypted: Optional[str] = None,
         subscribe_newsletter: bool = True,
         active: bool = True,
         is_active: bool = True,
@@ -100,7 +101,15 @@ class LinkedInProfile:
         self.user_id = user_id
         self.self_lead_id = self_lead_id
         self.linkedin_username = linkedin_username
-        self.linkedin_password = linkedin_password
+        # Accept pre-encrypted value from DB or plaintext from caller.
+        # Plaintext path is used only when creating/updating via API.
+        if linkedin_password_encrypted:
+            self._linkedin_password_encrypted = linkedin_password_encrypted
+        elif linkedin_password:
+            from openoutreach.mongodb.crypto import safe_encrypt
+            self._linkedin_password_encrypted = safe_encrypt(linkedin_password)
+        else:
+            self._linkedin_password_encrypted = None
         self.subscribe_newsletter = subscribe_newsletter
         self.active = active
         self.is_active = is_active
@@ -170,6 +179,29 @@ class LinkedInProfile:
             self.cookie_data_encrypted = None
 
     @property
+    def linkedin_password(self) -> Optional[str]:
+        """Decrypt and return the LinkedIn password. Returns None if not set."""
+        if not self._linkedin_password_encrypted:
+            return None
+        try:
+            from openoutreach.mongodb.crypto import safe_decrypt
+            return safe_decrypt(self._linkedin_password_encrypted) or None
+        except Exception:
+            return None
+
+    @linkedin_password.setter
+    def linkedin_password(self, value: Optional[str]) -> None:
+        """Encrypt and store the LinkedIn password."""
+        if not value:
+            self._linkedin_password_encrypted = None
+            return
+        try:
+            from openoutreach.mongodb.crypto import safe_encrypt
+            self._linkedin_password_encrypted = safe_encrypt(value)
+        except Exception:
+            self._linkedin_password_encrypted = None
+
+    @property
     def user(self):
         """Get the User object for this profile (lazy load)."""
         if not self.user_id:
@@ -201,7 +233,8 @@ class LinkedInProfile:
             "user_id": self.user_id,
             "self_lead_id": self.self_lead_id,
             "linkedin_username": self.linkedin_username,
-            "linkedin_password": self.linkedin_password,
+            "linkedin_password_encrypted": self._linkedin_password_encrypted,
+            "linkedin_password": None,
             "subscribe_newsletter": self.subscribe_newsletter,
             "active": self.active,
             "is_active": self.is_active,
@@ -236,12 +269,16 @@ class LinkedInProfile:
     @classmethod
     def from_dict(cls, data: dict):
         """Create LinkedInProfile instance from MongoDB document."""
+        # Prefer the encrypted field; fall back to legacy plaintext field.
+        pw_encrypted = data.get("linkedin_password_encrypted") or None
+        pw_plaintext = data.get("linkedin_password") or None
         return cls(
             _id=str(data.get("_id")),
             user_id=data.get("user_id"),
             self_lead_id=data.get("self_lead_id"),
             linkedin_username=data.get("linkedin_username") or None,
-            linkedin_password=data.get("linkedin_password") or None,
+            linkedin_password=pw_plaintext if not pw_encrypted else None,
+            linkedin_password_encrypted=pw_encrypted,
             subscribe_newsletter=data.get("subscribe_newsletter", True),
             active=data.get("active", True),
             is_active=data.get("is_active", True),

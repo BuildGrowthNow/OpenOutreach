@@ -551,9 +551,21 @@ class RemoteDaemon:
             cookie_json = json.dumps(fresh_state)
             await self.client.sync_cookies(self.linkedin_profile_id, cookie_json)
 
+        # Discover the real LinkedIn public identifier post-login and report it.
+        discovered_username: Optional[str] = None
+        try:
+            from linkedin_cli.setup.self_profile import discover_self_profile
+            self_profile = await self._run_on_pw_thread(lambda: discover_self_profile(session))
+            discovered_username = self_profile.get("public_identifier")
+            if discovered_username:
+                logger.info("Discovered LinkedIn username: %s", discovered_username)
+        except Exception as e:
+            logger.warning("Could not discover LinkedIn username: %s", e)
+
         await self.client.report_session_state(
             linkedin_profile_id=self.linkedin_profile_id,
             is_logged_in=True,
+            linkedin_username=discovered_username,
         )
         logger.info("Logged in to LinkedIn")
 

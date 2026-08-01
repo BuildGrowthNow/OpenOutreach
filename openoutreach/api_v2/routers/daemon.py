@@ -69,6 +69,7 @@ class SessionStateRequest(BaseModel):
     is_logged_in: bool
     requires_verification: bool = False
     verification_type: Optional[str] = None
+    linkedin_username: Optional[str] = None
 
 
 @router.post("/heartbeat")
@@ -266,16 +267,18 @@ async def report_session_state(
     if collection is None:
         raise HTTPException(503, "Database unavailable")
 
+    update_fields: dict = {
+        "is_logged_in": request.is_logged_in,
+        "requires_verification": request.requires_verification,
+        "verification_type": request.verification_type,
+        "session_updated_at": datetime.now(timezone.utc),
+    }
+    if request.linkedin_username:
+        update_fields["linkedin_username"] = request.linkedin_username
+
     collection.update_one(
         {"_id": request.linkedin_profile_id},
-        {
-            "$set": {
-                "is_logged_in": request.is_logged_in,
-                "requires_verification": request.requires_verification,
-                "verification_type": request.verification_type,
-                "session_updated_at": datetime.now(timezone.utc),
-            }
-        }
+        {"$set": update_fields},
     )
 
     return {"status": "ok"}

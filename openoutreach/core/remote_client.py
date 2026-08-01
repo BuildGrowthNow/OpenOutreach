@@ -220,17 +220,21 @@ class RemoteClient:
         is_logged_in: bool,
         requires_verification: bool = False,
         verification_type: Optional[str] = None,
+        linkedin_username: Optional[str] = None,
     ) -> dict:
         """Report session state (login status, verification needed) to backend."""
+        payload: dict = {
+            "linkedin_profile_id": linkedin_profile_id,
+            "is_logged_in": is_logged_in,
+            "requires_verification": requires_verification,
+            "verification_type": verification_type,
+        }
+        if linkedin_username:
+            payload["linkedin_username"] = linkedin_username
         response = await self._request_with_retry(
             "POST",
             "/api/daemon/session/state",
-            json={
-                "linkedin_profile_id": linkedin_profile_id,
-                "is_logged_in": is_logged_in,
-                "requires_verification": requires_verification,
-                "verification_type": verification_type,
-            },
+            json=payload,
         )
         return response.json()
 

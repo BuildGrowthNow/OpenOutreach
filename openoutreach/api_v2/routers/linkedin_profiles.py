@@ -523,25 +523,25 @@ async def get_profile_health(
 
             profile_health_data.append({
                 "id": profile_id,
-                "linkedin_username": linkedin_username,
+                "linkedinUsername": linkedin_username,
                 "status": active,
-                "credentials_status": credentials_status,
-                "health_score": health_score,
-                "health_status": health_status,
-                "needs_attention": needs_attention,
-                "last_error": last_error,
-                "last_verification": last_verification,
+                "credentialsStatus": credentials_status,
+                "healthScore": health_score,
+                "healthStatus": health_status,
+                "needsAttention": needs_attention,
+                "lastError": last_error,
+                "lastVerification": last_verification,
             })
 
         needs_attention_count = sum(
-            1 for p in profile_health_data if p["needs_attention"]
+            1 for p in profile_health_data if p["needsAttention"]
         )
 
         return {
             "profiles": profile_health_data,
             "count": len(profile_health_data),
-            "total_profiles": total_profiles,
-            "needs_attention_count": needs_attention_count,
+            "totalProfiles": total_profiles,
+            "needsAttentionCount": needs_attention_count,
         }
 
     except Exception as e:
