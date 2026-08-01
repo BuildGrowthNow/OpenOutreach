@@ -266,6 +266,30 @@ def _close_stale_deals(campaign, session):
                 campaign, public_id, age_days,
             )
             set_profile_state(session, public_id, DealState.FAILED.value, reason="unresponsive")
+        elif age_days >= 2:
+            # Warn operator: lead connected but no message sent in 48h — likely a scheduling gap.
+            # Dedup by deal_id so we fire once per deal, not once per daemon loop.
+            try:
+                from openoutreach.mongodb.models_extended import Notification
+                from openoutreach.mongodb.connection import get_mongodb_collection as _gcol
+                notif_col = _gcol("notifications")
+                dedup_key = f"unmessaged_48h_{deal._id}"
+                if notif_col is None or notif_col.count_documents({"data.dedup_key": dedup_key}) == 0:
+                    lead = Lead.get(deal.lead_id)
+                    public_id = lead.public_identifier if lead else str(deal.lead_id)
+                    Notification(
+                        recipient_id=str(session.user_id) if hasattr(session, "user_id") else "",
+                        notification_type="campaign_warning",
+                        title="Connected lead not yet messaged",
+                        message=(
+                            f"{public_id} accepted your connection {age_days}d ago "
+                            f"but has not received a message yet in \"{campaign}\". "
+                            "Check follow-up queue or velocity settings."
+                        ),
+                        data={"public_identifier": public_id, "campaign_id": str(campaign.pk), "dedup_key": dedup_key},
+                    ).save()
+            except Exception as exc:
+                logger.debug("Could not create unmessaged-48h notification: %s", exc)
 
 
 def _next_followup_deal(campaign):

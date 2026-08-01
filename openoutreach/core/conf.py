@@ -62,7 +62,7 @@ CHECK_PENDING_DAILY_CAP = 100
 # Campaign config (timing + ML defaults — hardcoded, no YAML)
 # ----------------------------------------------------------------------
 CAMPAIGN_CONFIG = {
-    "check_pending_recheck_after_hours": 24,
+    "check_pending_recheck_after_hours": 2,
     "min_action_interval": 120,
     "qualification_n_mc_samples": 100,
     "min_ready_to_connect_prob": 0.9,

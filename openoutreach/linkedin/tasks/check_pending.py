@@ -20,11 +20,11 @@ from linkedin_cli.exceptions import SkipProfile
 
 logger = logging.getLogger(__name__)
 
-# Maximum backoff to prevent deals from being frozen for weeks
-MAX_BACKOFF_HOURS = 48
+# Maximum backoff: initial=2h → doubles once to 4h → stays at 4h
+MAX_BACKOFF_HOURS = 4
 
 # Auto-fail PENDING deals that never accepted after this many days.
-# At 48h backoff cap this means roughly 10 unanswered checks before giving up.
+# At 4h backoff cap this means roughly 126 checks (every 4h) before giving up.
 MAX_PENDING_DAYS = 21
 
 

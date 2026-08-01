@@ -76,6 +76,8 @@ class CampaignStats(BaseModel):
     completed: int = 0
     messagesSent: int = 0
     messagesReplied: int = 0
+    noEmailCount: int = 0
+    todayConnectBudget: Optional[int] = None
 
 
 class CampaignResponse(BaseModel):
@@ -198,6 +200,7 @@ async def list_campaigns(
                     "_id": "$campaign_id",
                     "totalLeads": {"$sum": 1},
                     "completed": {"$sum": {"$cond": [{"$eq": ["$state", "Completed"]}, 1, 0]}},
+                    "noEmailCount": {"$sum": {"$cond": [{"$eq": ["$state", "No Email"]}, 1, 0]}},
                 }},
             ]
             for row in deals_collection.aggregate(pipeline):
@@ -205,7 +208,39 @@ async def list_campaigns(
                     "totalLeads": row.get("totalLeads", 0),
                     "connected": 0,
                     "completed": row.get("completed", 0),
+                    "noEmailCount": row.get("noEmailCount", 0),
                 }
+
+        # Compute today's remaining connect budget per campaign.
+        # Budget = floor((profile.connect_daily_limit - today_connects) / active_campaigns_on_profile).
+        profile_budget: Dict[str, int] = {}
+        if docs:
+            from openoutreach.mongodb.connection import get_mongodb_collection as _get_col
+            from datetime import datetime, timezone as _tz
+            profiles_col = _get_col("linkedin_profiles")
+            action_logs_col = _get_col("action_logs")
+            if profiles_col is not None and action_logs_col is not None:
+                # Group active campaigns by profile
+                profile_campaign_count: Dict[str, int] = {}
+                profile_ids_needed: set = set()
+                for doc in docs:
+                    pid = str(doc.get("linkedin_profile_id", ""))
+                    if pid and doc.get("status") == "active":
+                        profile_campaign_count[pid] = profile_campaign_count.get(pid, 0) + 1
+                        profile_ids_needed.add(pid)
+                today_start = datetime.now(_tz.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+                for profile_doc in profiles_col.find({"_id": {"$in": list(profile_ids_needed)}}):
+                    pid = str(profile_doc["_id"])
+                    daily_limit = profile_doc.get("connect_daily_limit", 20)
+                    today_count = action_logs_col.count_documents({
+                        "linkedin_profile_id": pid,
+                        "action_type": "connect",
+                        "status": "completed",
+                        "created_at": {"$gte": today_start},
+                    })
+                    remaining = max(0, daily_limit - today_count)
+                    n = max(1, profile_campaign_count.get(pid, 1))
+                    profile_budget[pid] = max(0, remaining // n)
 
         # connections_accepted = actual connect actions from ActionLog, not deal state.
         # Deal state includes 1st-degree leads auto-transitioned to CONNECTED without
@@ -252,6 +287,8 @@ async def list_campaigns(
                     totalLeads=s.get("totalLeads", 0),
                     connected=s.get("connected", 0),
                     completed=s.get("completed", 0),
+                    noEmailCount=s.get("noEmailCount", 0),
+                    todayConnectBudget=profile_budget.get(str(doc.get("linkedin_profile_id", ""))) if doc.get("status") == "active" else None,
                 ),
             ))
 
@@ -1070,6 +1107,7 @@ async def get_campaign_leads(
             "pending": state_counts.get("Pending", 0),
             "discovered": state_counts.get("Discovered", 0),
             "readyToConnect": state_counts.get("ReadyToConnect", 0),
+            "noEmail": state_counts.get("No Email", 0),
         },
     }
 
@@ -1091,7 +1129,28 @@ async def get_campaign_status(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied"
         )
-    return {"status": campaign.status, "is_paused": campaign.is_paused}
+
+    # Find the next scheduled task for this campaign so the UI can show "Next action at X"
+    next_action_at = None
+    tasks_col = get_mongodb_collection("tasks")
+    if tasks_col is not None:
+        from datetime import datetime, timezone as _tz
+        next_task = tasks_col.find_one(
+            {
+                "status": "pending",
+                "payload.campaign_id": campaign_id,
+                "scheduled_at": {"$gte": datetime.now(_tz.utc)},
+            },
+            sort=[("scheduled_at", 1)],
+            projection={"scheduled_at": 1},
+        )
+        if next_task and next_task.get("scheduled_at"):
+            dt = next_task["scheduled_at"]
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=_tz.utc)
+            next_action_at = dt.isoformat() + "Z"
+
+    return {"status": campaign.status, "is_paused": campaign.is_paused, "nextActionAt": next_action_at}
 
 
 @router.get("/{campaign_id}/analytics")

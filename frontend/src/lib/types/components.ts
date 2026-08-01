@@ -229,6 +229,8 @@ export interface CampaignStats {
   connectionAcceptRate: number;
   responseRate: number;
   conversionRate: number;
+  noEmailCount?: number;
+  todayConnectBudget?: number | null;
 }
 
 export interface Lead {
@@ -301,6 +303,7 @@ export interface Campaign {
   createdAt: string;
   updatedAt: string;
   stats?: CampaignStats;
+  nextActionAt?: string | null;
 }
 
 export interface Message {

@@ -226,12 +226,15 @@ export default function CampaignDetailsPage() {
         typeof response.data === "object" &&
         "status" in response.data
       ) {
-        const statusData = response.data as { status: string };
-        if (statusData.status !== campaignStatusRef.current) {
-          setCampaign((prev) =>
-            prev ? { ...prev, status: statusData.status } : null,
-          );
-        }
+        const statusData = response.data;
+        setCampaign((prev) => {
+          if (!prev) return null;
+          const updated: typeof prev = { ...prev, nextActionAt: statusData.nextActionAt ?? null };
+          if (statusData.status !== campaignStatusRef.current) {
+            updated.status = statusData.status;
+          }
+          return updated;
+        });
       }
     } catch (err) {
       console.error("Error fetching campaign status during polling:", err);
@@ -471,6 +474,14 @@ export default function CampaignDetailsPage() {
               return pitch.length > 90 ? pitch.slice(0, 90) + '…' : pitch
             })()}
           </p>
+          {campaign.nextActionAt && (
+            <p className="text-xs text-muted-foreground">
+              Next action at{' '}
+              {new Date(campaign.nextActionAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              {' · '}
+              {new Date(campaign.nextActionAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+            </p>
+          )}
         </div>
         <div className="flex gap-2">
           {campaign.status === "active" ? (

@@ -461,6 +461,28 @@ Fixes shipped in commits `1f94043` + `7b0b7d6`.
 | #17 | PENDING deals stuck forever at 48h backoff | Added `Deal.pending_since: Optional[datetime]` (additive field, no migration). Stamped in `on_deal_state_entered` on first PENDING transition. `handle_check_pending` auto-fails with `reason="unresponsive"` any deal where `(now - pending_since) >= MAX_PENDING_DAYS (21)`. Falls back to `creation_date` for legacy deals without `pending_since` |
 
 **Constants:**
-- `MAX_PENDING_DAYS = 21` in `check_pending.py` — ~10 unanswered checks at 48h backoff cap
+- `MAX_PENDING_DAYS = 21` in `check_pending.py` — ~126 unanswered checks at 4h backoff cap
 - `STALE_RECOVERY_INTERVAL = 300` in `daemon.py`
 - `PROFILE_REFRESH_INTERVAL = 60` in `daemon.py`
+
+---
+
+## 17. Pipeline Bug Fixes — Batch 4 (UX issues C1/C2/H2/H3/M4)
+
+| # | Issue | Fix |
+|---|---|---|
+| C1 | 24h check_pending backoff kills first-day messaging | `check_pending_recheck_after_hours` in `conf.py` reduced from 24 to **2**. `MAX_BACKOFF_HOURS` in `check_pending.py` reduced from 48 to **4** (2h → 4h → stays at 4h). Accepted connections now trigger a follow-up message within 2–4h rather than 24h+ |
+| C2 | NO_EMAIL aggregate count missing at campaign level | `get_campaign_leads` now returns `pipelineCounts.noEmail` from the deals aggregation. Campaign card shows "Blocked — no email: N" when N > 0 |
+| H2 | Daily budget split not surfaced | `list_campaigns` now computes `todayConnectBudget` per campaign: `floor((profile.daily_limit - today_connects) / active_campaigns_on_profile)`. Campaign card shows "Today's connect budget: N left" for active campaigns |
+| H3 | No ETA for next scheduled action | `GET /campaigns/{id}/status` now returns `nextActionAt` (ISO datetime of the next PENDING task for the campaign). Campaign detail header shows "Next action at HH:MM · Mon DD", refreshed every 10s via the existing status poll |
+| M4 | 30-day auto-fail too slow to surface scheduling gaps | `_close_stale_deals` now fires a dedup'd `campaign_warning` notification after 48h for never-messaged CONNECTED leads, keyed by `unmessaged_48h_{deal_id}` to avoid spam |
+
+**Changed files:**
+- `openoutreach/core/conf.py` — `check_pending_recheck_after_hours: 2`
+- `openoutreach/linkedin/tasks/check_pending.py` — `MAX_BACKOFF_HOURS = 4`
+- `openoutreach/linkedin/tasks/follow_up.py` — 48h unmessaged warning notification in `_close_stale_deals`
+- `openoutreach/api_v2/routers/campaigns.py` — `noEmail` in `pipelineCounts`; `noEmailCount` + `todayConnectBudget` in list stats; `nextActionAt` in status endpoint
+- `frontend/src/lib/types/components.ts` — `CampaignStats.noEmailCount`, `CampaignStats.todayConnectBudget`, `Campaign.nextActionAt`
+- `frontend/src/components/dashboard/campaign-card.tsx` — budget + no-email count in card footer
+- `frontend/src/app/(dashboard)/campaigns/[id]/page.tsx` — `nextActionAt` in header, propagated in status poll
+- `frontend/src/lib/api/dashboard.ts` — `getCampaignStatus` return type includes `nextActionAt`

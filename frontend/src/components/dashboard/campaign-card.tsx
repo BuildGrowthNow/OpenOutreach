@@ -65,6 +65,8 @@ const CampaignCard = ({
     completed: 0,
     messagesSent: 0,
     messagesReplied: 0,
+    noEmailCount: 0,
+    todayConnectBudget: null,
   }
 
   const isActive = campaign.status === 'active'
@@ -175,7 +177,19 @@ const CampaignCard = ({
           </div>
         </div>
 
-        <div className="mt-4 pt-3 border-t">
+        <div className="mt-4 pt-3 border-t space-y-1">
+          {isActive && stats.todayConnectBudget != null && (
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>Today&apos;s connect budget</span>
+              <span className="font-medium text-foreground">{stats.todayConnectBudget} left</span>
+            </div>
+          )}
+          {(stats.noEmailCount ?? 0) > 0 && (
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>Blocked — no email</span>
+              <span className="font-medium text-amber-500">{stats.noEmailCount}</span>
+            </div>
+          )}
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Icons.Clock className="h-3 w-3" />
             Created {getCreatedDate(campaign)}

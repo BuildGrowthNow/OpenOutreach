@@ -186,7 +186,7 @@ export async function stopGhostMode(campaignId: string): Promise<
 // Targeted polling - only fetch campaign status for performance
 export async function getCampaignStatus(
   id: string,
-): Promise<ApiResponse<{ status: string }>> {
+): Promise<ApiResponse<{ status: string; is_paused: boolean; nextActionAt: string | null }>> {
   return get(`/api/campaigns/${id}/status`);
 }
 
