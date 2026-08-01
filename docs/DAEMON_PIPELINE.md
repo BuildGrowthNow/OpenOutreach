@@ -423,3 +423,27 @@ DISCOVERED (visible in UI immediately on discovery)
 | Deal state enum | `openoutreach/crm/models/__init__.py` |
 | Rate limit presets (smart mode) | `openoutreach/core/rate_limit_presets.py` |
 | Browser launch + cookie persistence | `openoutreach/linkedin/browser/launch.py` |
+
+---
+
+## 15. Pipeline Bug Fixes — Batch 2 (issues #6–13)
+
+Fixes shipped in commit `4a15d69`.
+
+| # | Issue | Fix |
+|---|---|---|
+| #6 | Budget starvation with multiple campaigns | `max(1, remaining // n_campaigns)` clamp in `scheduler.py:reconcile` so campaigns with budget < n_campaigns each still get 1 slot |
+| #7 | Degree mismatch silent fail | Both pre-API and post-API degree skip paths in `connect.py` now write a `connect_skipped` ActionLog row; activity feed shows readable "Skipped {name} — Xº not in target degrees" label |
+| #8 | Zero messages in hour 1 unexplained | `campaign_started` activity entry now renders a full explanation: "Campaign started — daemon discovering and qualifying leads. First connections sent once prospects are qualified (usually within minutes)." |
+| #9 | Connected leads not messaged equally | `_connected_deals` sort changed to `[last_outgoing_at ASC, follow_up_cycled_at ASC, creation_date ASC]` — MongoDB ascending sort puts null `last_outgoing_at` first, so never-messaged leads are always prioritised |
+| #10 | `action=wait` silently cycles deal | `wait` branch in `follow_up.py` records an ActionLog entry with `state="wait"` and reason; activity feed renders it as "Waiting before next message to {name} — AI holding off" |
+| #11 | Nudge cooldown not visible in UI | `DealResponse` extended with `unanswered_count` + `next_follow_up_at` (computed by MongoDB aggregation in `get_campaign_leads`); campaign leads table shows an amber sub-line "Next msg in Xd" with a tooltip explaining the cooldown formula |
+| #12 | Backlog cap silently pauses qualification | `qualify.py` fires a dedup'd `campaign_warning` Notification (keyed by `qualify_cap_{campaign_id}`) when the QUALIFIED+READY_TO_CONNECT backlog hits the cap; prevents repeated spam by checking for an existing unread notification with the same key |
+| #13 | NO_EMAIL hold looks like a bug | Status Badge for NO_EMAIL deals in the campaign leads table is wrapped in a Tooltip explaining what happened and how to unblock (add email manually or wait for daemon retry) |
+
+**Activity feed label additions** (`campaign-activity.tsx`):
+- `connect_skipped` → "Connection Skipped"
+- `wait` state on `follow_up` entries → "Waiting before next message to {name} — AI holding off"
+- `campaign_started` → expanded to explain the discovery-to-connect pipeline warm-up
+
+**Type chain** for #11/#13: `DealResponse` (Python) → `RawLeadDeal.deal` (dashboard.ts) → `Lead` interface (components.ts) → campaign-list.tsx UI.
