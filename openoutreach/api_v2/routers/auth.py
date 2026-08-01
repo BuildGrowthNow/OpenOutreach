@@ -282,7 +282,7 @@ async def login(credentials: LoginRequest, response: Response, request: Request)
     return TokenResponse(
         access_token=access_token,
         token_type="bearer",
-        refresh_token=None,
+        refresh_token=refresh_token,
         expires_in=settings.JWT_ACCESS_TOKEN_LIFETIME_MINUTES * 60
     )
 

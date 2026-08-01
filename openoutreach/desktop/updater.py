@@ -13,7 +13,6 @@ import os
 import platform
 import subprocess
 import sys
-import tempfile
 import webbrowser
 from pathlib import Path
 from typing import Optional
@@ -147,232 +146,46 @@ async def check_for_updates() -> Optional[dict]:
         return None
 
 
-# ---------------------------------------------------------------------------
-# Win32 progress dialog (no tkinter dependency)
-# ---------------------------------------------------------------------------
+async def download_update(url: str, version: str = "") -> Optional[str]:
+    """Download the update exe silently to a per-user location.
 
-class _ProgressWindow:
-    """Minimal update-progress dialog using win32 APIs via ctypes.
-
-    Creates a real Win32 window so it works inside a frozen exe without any
-    Python UI framework.  Runs its own message loop on a background thread.
-    """
-
-    def __init__(self, label_text: str):
-        self._label = label_text
-        self._hwnd = None
-        self._hwnd_label = None
-        self._hwnd_bar = None
-        self._hwnd_status = None
-        self._thread = None
-        self._pct = 0.0
-        self._status = "Downloading…"
-        self._alive = False
-
-    def show(self) -> None:
-        if sys.platform != "win32":
-            return
-        import threading
-        self._alive = True
-        self._thread = threading.Thread(target=self._run, daemon=True)
-        self._thread.start()
-
-    def _run(self) -> None:
-        try:
-            import ctypes
-            import ctypes.wintypes as wt
-
-            HINST = ctypes.windll.kernel32.GetModuleHandleW(None)
-            WS_OVERLAPPED = 0x00000000
-            WS_CAPTION = 0x00C00000
-            WS_SYSMENU = 0x00080000
-            WS_VISIBLE = 0x10000000
-            WS_CHILD = 0x40000000
-            WS_BORDER = 0x00800000
-            PBS_SMOOTH = 0x01
-            WM_CLOSE = 0x0010
-            WM_DESTROY = 0x0002
-            SS_CENTER = 0x01
-
-            SW_SHOWNORMAL = 1
-
-            # Forward declarations so the WndProc closure works
-            hwnd_ref = [None]
-
-            WNDPROCTYPE = ctypes.WINFUNCTYPE(ctypes.c_long, wt.HWND, wt.UINT, wt.WPARAM, wt.LPARAM)
-
-            def wnd_proc(hwnd, msg, wp, lp):
-                if msg in (WM_CLOSE, WM_DESTROY):
-                    return 0
-                return ctypes.windll.user32.DefWindowProcW(hwnd, msg, wp, lp)
-
-            wnd_proc_cb = WNDPROCTYPE(wnd_proc)
-
-            class WNDCLASSW(ctypes.Structure):
-                _fields_ = [
-                    ("style", wt.UINT), ("lpfnWndProc", WNDPROCTYPE),
-                    ("cbClsExtra", ctypes.c_int), ("cbWndExtra", ctypes.c_int),
-                    ("hInstance", wt.HINSTANCE), ("hIcon", wt.HICON),
-                    ("hCursor", wt.HANDLE), ("hbrBackground", wt.HBRUSH),
-                    ("lpszMenuName", wt.LPCWSTR), ("lpszClassName", wt.LPCWSTR),
-                ]
-
-            wc = WNDCLASSW()
-            wc.lpfnWndProc = wnd_proc_cb
-            wc.hInstance = HINST
-            wc.hbrBackground = ctypes.windll.gdi32.CreateSolidBrush(0x001B1B1B)  # dark bg
-            wc.lpszClassName = "LengrowthUpdateDlg"
-            ctypes.windll.user32.RegisterClassW(ctypes.byref(wc))
-
-            W, H = 380, 140
-            SM_CXSCREEN, SM_CYSCREEN = 0, 1
-            sw = ctypes.windll.user32.GetSystemMetrics(SM_CXSCREEN)
-            sh = ctypes.windll.user32.GetSystemMetrics(SM_CYSCREEN)
-            x = (sw - W) // 2
-            y = (sh - H) // 2
-
-            WS_EX_TOPMOST = 0x00000008
-            hwnd = ctypes.windll.user32.CreateWindowExW(
-                WS_EX_TOPMOST,
-                "LengrowthUpdateDlg",
-                "Lengrowth Update",
-                WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_VISIBLE,
-                x, y, W, H,
-                None, None, HINST, None,
-            )
-            hwnd_ref[0] = hwnd
-            self._hwnd = hwnd
-
-            # Title label
-            self._hwnd_label = ctypes.windll.user32.CreateWindowExW(
-                0, "STATIC", self._label,
-                WS_CHILD | WS_VISIBLE | SS_CENTER,
-                10, 14, W - 20, 24,
-                hwnd, None, HINST, None,
-            )
-
-            # Status label
-            self._hwnd_status = ctypes.windll.user32.CreateWindowExW(
-                0, "STATIC", self._status,
-                WS_CHILD | WS_VISIBLE | SS_CENTER,
-                10, 42, W - 20, 20,
-                hwnd, None, HINST, None,
-            )
-
-            # Progress bar  (requires comctl32 init)
-            ctypes.windll.comctl32.InitCommonControls()
-            PROGRESS_CLASS = "msctls_progress32"
-            self._hwnd_bar = ctypes.windll.user32.CreateWindowExW(
-                0, PROGRESS_CLASS, None,
-                WS_CHILD | WS_VISIBLE | WS_BORDER | PBS_SMOOTH,
-                20, 72, W - 40, 22,
-                hwnd, None, HINST, None,
-            )
-            PBM_SETRANGE = 0x0401
-            PBM_SETPOS = 0x0402
-            ctypes.windll.user32.SendMessageW(self._hwnd_bar, PBM_SETRANGE, 0, (100 << 16) | 0)
-            ctypes.windll.user32.SendMessageW(self._hwnd_bar, PBM_SETPOS, 0, 0)
-
-            ctypes.windll.user32.ShowWindow(hwnd, SW_SHOWNORMAL)
-            ctypes.windll.user32.UpdateWindow(hwnd)
-
-            # Message loop
-            class MSG(ctypes.Structure):
-                _fields_ = [
-                    ("hwnd", wt.HWND), ("message", wt.UINT),
-                    ("wParam", wt.WPARAM), ("lParam", wt.LPARAM),
-                    ("time", wt.DWORD), ("pt", wt.POINT),
-                ]
-
-            msg = MSG()
-            PM_REMOVE = 0x0001
-            WM_QUIT = 0x0012
-            while self._alive:
-                if ctypes.windll.user32.PeekMessageW(ctypes.byref(msg), None, 0, 0, PM_REMOVE):
-                    if msg.message == WM_QUIT:
-                        break
-                    ctypes.windll.user32.TranslateMessage(ctypes.byref(msg))
-                    ctypes.windll.user32.DispatchMessageW(ctypes.byref(msg))
-                else:
-                    import time
-                    time.sleep(0.02)
-
-        except Exception as e:
-            logger.debug("Progress window error: %s", e)
-
-    def update(self, pct: float, status: str = "") -> None:
-        self._pct = pct
-        if status:
-            self._status = status
-        if sys.platform != "win32" or not self._hwnd:
-            return
-        try:
-            import ctypes
-            PBM_SETPOS = 0x0402
-            ctypes.windll.user32.SendMessageW(self._hwnd_bar, PBM_SETPOS, int(pct), 0)
-            if status and self._hwnd_status:
-                ctypes.windll.user32.SetWindowTextW(self._hwnd_status, status)
-            ctypes.windll.user32.UpdateWindow(self._hwnd)
-        except Exception:
-            pass
-
-    def close(self) -> None:
-        self._alive = False
-        if sys.platform != "win32" or not self._hwnd:
-            return
-        try:
-            import ctypes
-            WM_CLOSE = 0x0010
-            ctypes.windll.user32.PostMessageW(self._hwnd, WM_CLOSE, 0, 0)
-        except Exception:
-            pass
-        self._hwnd = None
-
-
-async def download_update(url: str, version: str = "", silent: bool = False) -> Optional[str]:
-    """Download the update exe to a temp file.
-
-    When ``silent=False`` (default for blocking startup path) shows a progress dialog.
-    When ``silent=True`` (background download) runs quietly with no UI.
+    Stored under ~/.lengrowth/ (same dir as pending_update.json) so it
+    persists across sessions and is isolated per user on multi-user Windows.
+    Any existing partial/stale download is removed before starting.
 
     Returns the local path on success, None on failure.
     """
-    dest = os.path.join(tempfile.gettempdir(), "Lengrowth_update.exe")
-    label_text = f"Updating to Lengrowth v{version}…" if version else "Downloading Lengrowth update…"
+    dest_dir = _PENDING_UPDATE_FILE.parent
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest = str(dest_dir / "Lengrowth_update.exe")
 
-    win = _ProgressWindow(label_text) if not silent else None
-    if win:
-        win.show()
+    # Remove any stale partial download before starting
+    try:
+        if os.path.exists(dest):
+            os.remove(dest)
+    except Exception:
+        pass
 
     try:
         async with httpx.AsyncClient(timeout=300.0, follow_redirects=True) as client:
             async with client.stream("GET", url) as response:
                 response.raise_for_status()
-                total = int(response.headers.get("content-length", 0))
                 downloaded = 0
                 with open(dest, "wb") as fh:
                     async for chunk in response.aiter_bytes(chunk_size=65536):
                         fh.write(chunk)
                         downloaded += len(chunk)
-                        if win:
-                            if total:
-                                pct = downloaded / total * 100
-                                mb = downloaded / 1_048_576
-                                total_mb = total / 1_048_576
-                                win.update(pct, f"{mb:.1f} / {total_mb:.1f} MB")
-                            else:
-                                win.update(50, f"{downloaded / 1_048_576:.1f} MB…")
-
-        if win:
-            win.update(100, "Installing…")
-        logger.info("Update downloaded to %s", dest)
-        if win:
-            win.close()
+        ver_tag = f"v{version} " if version else ""
+        logger.info("Update %sdownloaded to %s (%d bytes)", ver_tag, dest, downloaded)
         return dest
     except Exception as e:
         logger.error("Update download failed: %s", e)
-        if win:
-            win.close()
+        # Remove incomplete file so load_pending_update won't find a corrupt exe
+        try:
+            if os.path.exists(dest):
+                os.remove(dest)
+        except Exception:
+            pass
         return None
 
 
@@ -385,8 +198,12 @@ def apply_update_windows(new_exe_path: str, download_url: str = "") -> None:
     """
     current_exe = sys.executable
     current_pid = os.getpid()
-    ps_path = os.path.join(tempfile.gettempdir(), "lengrowth_update.ps1")
-    log_path = os.path.join(tempfile.gettempdir(), "lengrowth_update.log")
+    # Use the per-user ~/.lengrowth dir so multiple Windows users don't clobber
+    # each other's update scripts.  tempfile.gettempdir() is shared on RDS/TS.
+    _update_dir = _PENDING_UPDATE_FILE.parent
+    _update_dir.mkdir(parents=True, exist_ok=True)
+    ps_path = str(_update_dir / "lengrowth_update.ps1")
+    log_path = str(_update_dir / "lengrowth_update.log")
 
     fallback_url = download_url or "https://github.com/Lengrowth/outbound/releases/latest"
 

@@ -67,18 +67,12 @@ class AuthManager:
         keyring.set_password(SERVICE_NAME, "token", token)
 
     def logout(self):
-        """Remove stored credentials."""
-        try:
-            keyring.delete_password(SERVICE_NAME, "token")
-        except keyring.errors.PasswordDeleteError:
-            pass
-
-        try:
-            keyring.delete_password(SERVICE_NAME, "refresh_token")
-        except keyring.errors.PasswordDeleteError:
-            pass
-
-        try:
-            keyring.delete_password(SERVICE_NAME, "profile_id")
-        except keyring.errors.PasswordDeleteError:
-            pass
+        """Remove stored credentials from all service name variants."""
+        for svc in (SERVICE_NAME, _LEGACY_SERVICE_NAME):
+            for key in ("token", "refresh_token", "profile_id"):
+                try:
+                    keyring.delete_password(svc, key)
+                except keyring.errors.PasswordDeleteError:
+                    pass
+                except Exception:
+                    pass

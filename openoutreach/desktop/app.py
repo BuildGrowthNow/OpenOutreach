@@ -283,6 +283,7 @@ class TrayApp:
         self._update_check_thread: Optional[threading.Thread] = None
         self._pending_login_notification = False
         self._window: Optional[webview.Window] = None
+        self._window_thread: Optional[threading.Thread] = None
         self._token_valid: Optional[bool] = None  # None = not yet checked
 
     # ------------------------------------------------------------------
@@ -397,8 +398,19 @@ class TrayApp:
         win.events.closed += self._on_window_closed
         win.events.loaded += self._on_loaded
 
+        # Persist WebView2/WKWebView profile across restarts so the HTTP-only
+        # refresh_token cookie survives.  Without a fixed path, Edge WebView2 on
+        # Windows uses a per-process temp dir that is wiped on exit.
+        if sys.platform == "win32":
+            _wv_data = Path.home() / "AppData" / "Local" / "Lengrowth" / "WebView2"
+        elif sys.platform == "darwin":
+            _wv_data = Path.home() / "Library" / "Application Support" / "Lengrowth" / "WebView2"
+        else:
+            _wv_data = Path.home() / ".lengrowth" / "webview2"
+        _wv_data.mkdir(parents=True, exist_ok=True)
+
         # pywebview.start() is blocking — run in current thread
-        webview.start(debug=False)
+        webview.start(debug=False, user_data_path=str(_wv_data))
 
     def _on_loaded(self):
         """Called after each page navigation — re-inject the desktop globals."""
@@ -422,8 +434,13 @@ class TrayApp:
             except Exception:
                 pass
 
-        # Window was closed — open a new one in a thread so the tray keeps running
-        threading.Thread(target=self._start_window, daemon=True).start()
+        # Window was closed — open a new one in a background thread so the tray
+        # keeps running.  Guard with _window_thread so we never call
+        # webview.start() twice concurrently (pywebview doesn't support that).
+        if self._window_thread is not None and self._window_thread.is_alive():
+            return
+        self._window_thread = threading.Thread(target=self._start_window, daemon=True, name="webview-window")
+        self._window_thread.start()
 
     # ------------------------------------------------------------------
     # Tray callbacks
@@ -587,7 +604,11 @@ class TrayApp:
             finally:
                 self._loop.close()
                 self._loop = None
-                # Daemon has stopped — update menu so tray shows "Stopped"
+                # Clear daemon reference so _is_running() returns False and any
+                # held browser/session resources are released for GC.
+                self.daemon = None
+                self.daemon_thread = None
+                # Update menu so tray shows "Stopped"
                 self._update_menu()
 
         self.daemon_thread = threading.Thread(target=run_daemon, daemon=True)
@@ -667,13 +688,18 @@ class TrayApp:
     def _stop_daemon(self):
         if not self._is_running():
             return
-        if self._loop and self.daemon:
+        loop = self._loop
+        daemon = self.daemon
+        thread = self.daemon_thread
+        if loop and daemon:
             try:
-                asyncio.run_coroutine_threadsafe(self.daemon.stop(), self._loop).result(timeout=10)
+                asyncio.run_coroutine_threadsafe(daemon.stop(), loop).result(timeout=10)
             except Exception as e:
                 logger.warning("Error stopping daemon: %s", e)
-        if self.daemon_thread and self.daemon_thread.is_alive():
-            self.daemon_thread.join(timeout=5)
+        # run_daemon's finally block clears self.daemon/self.daemon_thread after the
+        # loop exits.  Join the thread directly so we don't race on the attribute.
+        if thread and thread.is_alive():
+            thread.join(timeout=5)
         self.daemon = None
         self.daemon_thread = None
         self._update_menu()
@@ -728,7 +754,7 @@ class TrayApp:
                 ver = info["version"]
                 if can_auto_update():
                     logger.info("Update v%s available — downloading in background", ver)
-                    path = await download_update(info["download_url"], version=ver, silent=True)
+                    path = await download_update(info["download_url"], version=ver)
                     if path:
                         save_pending_update(info, path)
                         self._pending_update = info
@@ -774,7 +800,7 @@ class TrayApp:
                         ver = info["version"]
                         if can_auto_update():
                             logger.info("Periodic check: update v%s available — downloading in background", ver)
-                            path = await download_update(info["download_url"], version=ver, silent=True)
+                            path = await download_update(info["download_url"], version=ver)
                             if path:
                                 save_pending_update(info, path)
                                 self._pending_update = info
