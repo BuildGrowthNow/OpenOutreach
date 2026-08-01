@@ -21,12 +21,15 @@ export default function CampaignLeadsPage() {
 
   const [leads, setLeads] = useState<Lead[]>([])
   const [pipelineCounts, setPipelineCounts] = useState<Record<string, number>>({})
+  const [totalLeads, setTotalLeads] = useState(0)
+  const [totalPages, setTotalPages] = useState(1)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [currentPage, setCurrentPage] = useState(1)
-  const [itemsPerPage] = useState(20)
+  const itemsPerPage = 20
   const [exporting, setExporting] = useState(false)
 
   const fetchCampaignData = useCallback(async () => {
@@ -40,11 +43,19 @@ export default function CampaignLeadsPage() {
         setError(campaignResponse.error || campaignResponse.message || 'Failed to fetch campaign')
       }
 
-      // Fetch campaign leads
-      const leadsResponse = await getCampaignLeads(campaignId)
+      // Fetch campaign leads with server-side pagination
+      const leadsResponse = await getCampaignLeads(
+        campaignId,
+        statusFilter !== 'all' ? statusFilter : undefined,
+        debouncedSearch || undefined,
+        currentPage,
+        itemsPerPage,
+      )
       if (leadsResponse.data) {
         setLeads(leadsResponse.data.data || [])
         setPipelineCounts(leadsResponse.data.pipelineCounts || {})
+        setTotalLeads(leadsResponse.data.pagination?.total ?? 0)
+        setTotalPages(leadsResponse.data.pagination?.total_pages ?? 1)
       } else {
         setError(leadsResponse.error || leadsResponse.message || 'Failed to fetch campaign leads')
       }
@@ -54,7 +65,21 @@ export default function CampaignLeadsPage() {
     } finally {
       setLoading(false)
     }
-  }, [campaignId])
+  }, [campaignId, statusFilter, debouncedSearch, currentPage])
+
+  // Debounce search input 400 ms before triggering a server fetch
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm)
+      setCurrentPage(1)
+    }, 400)
+    return () => clearTimeout(timer)
+  }, [searchTerm])
+
+  // Reset to page 1 when status filter changes
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [statusFilter])
 
   useEffect(() => {
     void (async () => {
@@ -77,25 +102,8 @@ export default function CampaignLeadsPage() {
     }
   }
 
-  const filteredLeads = useMemo(() => {
-    let filtered = [...leads]
-
-    if (searchTerm.trim()) {
-      const term = searchTerm.toLowerCase()
-      filtered = filtered.filter(lead =>
-        (lead.name && lead.name.toLowerCase().includes(term)) ||
-        (lead.company && lead.company.toLowerCase().includes(term)) ||
-        (lead.title && lead.title.toLowerCase().includes(term)) ||
-        (lead.contactInfo?.email && lead.contactInfo.email.toLowerCase().includes(term))
-      )
-    }
-
-    if (statusFilter !== 'all') {
-      filtered = filtered.filter(lead => lead.state === statusFilter)
-    }
-
-    return filtered
-  }, [leads, searchTerm, statusFilter])
+  // Server handles filtering and pagination; leads is already the current page
+  const filteredLeads = leads
 
   const getStatusBadge = (status: string) => {
     switch (status?.toUpperCase()) {
@@ -120,11 +128,8 @@ export default function CampaignLeadsPage() {
     }
   }
 
-  // Pagination calculations
-  const totalPages = Math.ceil(filteredLeads.length / itemsPerPage)
-  const startIndex = (currentPage - 1) * itemsPerPage
-  const endIndex = startIndex + itemsPerPage
-  const paginatedLeads = filteredLeads.slice(startIndex, endIndex)
+  // Server-side pagination — leads is already the current page slice
+  const paginatedLeads = filteredLeads
 
   if (loading) {
     return (
@@ -249,7 +254,7 @@ export default function CampaignLeadsPage() {
       {/* Results Summary */}
       <div className="flex items-center justify-between">
         <div className="text-sm text-muted-foreground">
-          Showing {paginatedLeads.length} of {filteredLeads.length} leads
+          Showing {paginatedLeads.length} of {totalLeads} leads
           {searchTerm && ` matching "${searchTerm}"`}
           {statusFilter !== 'all' && ` with status "${statusFilter}"`}
         </div>
@@ -269,7 +274,7 @@ export default function CampaignLeadsPage() {
             variant="outline"
             size="sm"
             onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-            disabled={currentPage === totalPages}
+            disabled={currentPage >= totalPages}
           >
             <Icons.ChevronRight className="h-4 w-4" />
           </Button>

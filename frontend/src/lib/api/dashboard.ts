@@ -365,7 +365,8 @@ export async function getCampaignLeads(
   const params: Record<string, string> = {};
   if (status) params.status = status;
   if (search) params.search = search;
-  if (page) params.page = page.toString();
+  const resolvedLimit = limit ?? 50;
+  if (page && page > 1) params.offset = ((page - 1) * resolvedLimit).toString();
   if (limit) params.limit = limit.toString();
 
   // API returns { total, limit, offset, results: [{lead, deal}] }
@@ -406,7 +407,7 @@ export async function getCampaignLeads(
     ...raw,
     data: {
       data: leads,
-      pagination: { page: 1, limit: raw.data.limit, total: raw.data.total, total_pages: Math.ceil(raw.data.total / raw.data.limit) },
+      pagination: { page: Math.floor(raw.data.offset / raw.data.limit) + 1, limit: raw.data.limit, total: raw.data.total, total_pages: Math.ceil(raw.data.total / raw.data.limit) || 1 },
       filters: {},
       pipelineCounts: raw.data.pipelineCounts ?? {},
     },

@@ -882,6 +882,7 @@ async def get_campaign_leads(
     campaign_id: str,
     user_id: str = Depends(get_current_user),
     state: Optional[str] = Query(None),
+    search: Optional[str] = Query(None),
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
 ):
@@ -911,25 +912,45 @@ async def get_campaign_leads(
             detail="Database unavailable"
         )
 
-    # Build query
-    query = {"campaign_id": campaign_id}
-    if state:
-        query["state"] = state
-
-    # Get deals
-    total = collection.count_documents(query)
-    deals = list(collection.find(query).skip(offset).limit(limit).sort("creation_date", -1))
-
-    # Get unique lead IDs
-    lead_ids = list(set(str(d["lead_id"]) for d in deals))
-
-    # Fetch leads
     leads_collection = get_mongodb_collection("leads")
     if leads_collection is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Database unavailable"
         )
+
+    # Build query
+    query = {"campaign_id": campaign_id}
+    if state:
+        query["state"] = state
+
+    if search:
+        # Join with leads to filter by name/identifier — fetch all deals first then filter
+        all_deals = list(collection.find(query).sort("creation_date", -1))
+        all_lead_ids = list(set(str(d["lead_id"]) for d in all_deals))
+        term = search.lower()
+        matching_ids: set = set()
+        for lead_doc in leads_collection.find(
+            {"_id": {"$in": all_lead_ids}},
+            {"_id": 1, "full_name": 1, "public_identifier": 1, "headline": 1},
+        ):
+            if (
+                term in (lead_doc.get("full_name") or "").lower()
+                or term in (lead_doc.get("public_identifier") or "").lower()
+                or term in (lead_doc.get("headline") or "").lower()
+            ):
+                matching_ids.add(str(lead_doc["_id"]))
+        filtered_deals = [d for d in all_deals if str(d["lead_id"]) in matching_ids]
+        total = len(filtered_deals)
+        deals = filtered_deals[offset: offset + limit]
+    else:
+        total = collection.count_documents(query)
+        deals = list(collection.find(query).skip(offset).limit(limit).sort("creation_date", -1))
+
+    # Get unique lead IDs for the current page
+    lead_ids = list(set(str(d["lead_id"]) for d in deals))
+
+    # Fetch leads
     leads_data = {str(lead_doc["_id"]): lead_doc for lead_doc in leads_collection.find({"_id": {"$in": lead_ids}})}
 
     # Build response
