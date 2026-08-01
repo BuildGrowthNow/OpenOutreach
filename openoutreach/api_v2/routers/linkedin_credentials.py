@@ -703,6 +703,18 @@ async def verify_credential(
                 except Exception as e:
                     logger.error("Failed to save cookies after verification: %s", e)
 
+            # Discover the real LinkedIn public identifier while browser is open
+            if profile:
+                try:
+                    from linkedin_cli.setup.self_profile import discover_self_profile
+                    self_profile = discover_self_profile(session)
+                    public_id = self_profile.get("public_identifier")
+                    if public_id:
+                        profile.linkedin_username = public_id
+                        logger.info("Discovered LinkedIn username on verify: %s", public_id)
+                except Exception as e:
+                    logger.warning("Could not discover LinkedIn username during verify: %s", e)
+
             # Success
             credential.mark_verified()
             credential.verification_failures = 0
@@ -715,7 +727,7 @@ async def verify_credential(
                 profile.requires_verification = False
                 profile.verification_type = None
                 profile.session_updated_at = datetime.now(tz.utc)
-                profile.save(update_fields=["is_logged_in", "requires_verification", "verification_type", "session_updated_at"])
+                profile.save(update_fields=["is_logged_in", "requires_verification", "verification_type", "session_updated_at", "linkedin_username"])
 
             log_entry = LinkedInCredentialLog(
                 credential_id=credential._id,
