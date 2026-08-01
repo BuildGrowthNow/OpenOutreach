@@ -23,6 +23,10 @@ logger = logging.getLogger(__name__)
 # Maximum backoff to prevent deals from being frozen for weeks
 MAX_BACKOFF_HOURS = 48
 
+# Auto-fail PENDING deals that never accepted after this many days.
+# At 48h backoff cap this means roughly 10 unanswered checks before giving up.
+MAX_PENDING_DAYS = 21
+
 
 def _next_due_pending_deal(campaign):
     """Find the next due PENDING deal for a campaign using MongoDB."""
@@ -74,6 +78,23 @@ def handle_check_pending(task, session, qualifiers):
         return
 
     public_id = lead.public_identifier
+
+    # Auto-fail deals that have been PENDING for too long.
+    # pending_since is stamped on first PENDING entry; fall back to creation_date
+    # for legacy deals that pre-date the field.
+    now = datetime.now(timezone.utc)
+    _pending_anchor = deal.pending_since or deal.creation_date
+    if _pending_anchor is not None:
+        if _pending_anchor.tzinfo is None:
+            _pending_anchor = _pending_anchor.replace(tzinfo=timezone.utc)
+        if (now - _pending_anchor).days >= MAX_PENDING_DAYS:
+            logger.info(
+                "[%s] check_pending: %s has been PENDING %d+ days — auto-failing (unresponsive)",
+                campaign, public_id, MAX_PENDING_DAYS,
+            )
+            set_profile_state(session, public_id, models.Deal.DealState.FAILED, reason="unresponsive")
+            return
+
     logger.info(
         "[%s] check_pending %s",
         campaign,
