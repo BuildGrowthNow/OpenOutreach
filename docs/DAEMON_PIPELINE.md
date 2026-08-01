@@ -26,13 +26,14 @@ On start, the daemon:
 ```
 while True:
     refresh_pool()                      # re-scan for new/removed profiles every 5 min
+    shuffle(pool)                       # randomise order so no profile is perpetually first
     for each ProfileSession in pool:
         skip if paused (auth error, challenge, etc.)
         skip if outside user's active hours window
         task = Task.objects.claim_next(linkedin_profile_id=...)   # atomic MongoDB claim
         if no task: skip to next profile
         authenticate lazily             # launch browser + LinkedIn login on first task
-        build_qualifiers lazily         # warm-start Bayesian GP model from labeled history
+        build_qualifiers lazily         # warm-start Bayesian GP model; refreshes for new campaigns
         handler(task, session, qualifiers)
         task.mark_completed()
         _save_cookies(session)          # persist updated session cookies
@@ -40,12 +41,14 @@ while True:
     if no task was executed across all profiles:
         _reconcile_all(pool)            # plan fresh task slots for next 24h
         sleep up to 60s
+        # NOTE: rhythm timer is NOT reset on idle — only resets after an actual break
 ```
 
 **Key behaviors:**
 - **Active hours guard** (`seconds_until_active`, line 142): reads `SiteConfig.enable_active_hours`, `active_start_hour`, `active_end_hour`, `active_timezone`, `active_days` per user. If outside the window, the profile is paused until it opens. `active_days` is stored as `List[int]` with 1=Monday, 7=Sunday (1-indexed) — both `seconds_until_active` and `_working_intervals` in the scheduler parse this identically.
-- **Human rhythm breaks** (`_HumanRhythmBreak`, line 108): after a random burst duration, the daemon takes a multi-minute break, then resets. This mimics a human work session.
-- **Qualifier refresh:** `build_qualifiers_for` runs on every task iteration and adds qualifiers for any campaigns added since the daemon started — new campaigns are never silently missing from `ps.qualifiers`.
+- **Human rhythm breaks** (`_HumanRhythmBreak`, line 108): after a random burst duration, the daemon takes a multi-minute break, then resets. Idle gaps (no tasks) do not reset the burst timer — only a completed break does — so mimicry isn't defeated by low-volume periods.
+- **Profile shuffling:** pool iteration order is randomised each round-robin pass (`random.shuffle`). This prevents early-added profiles being perpetually served first at the expense of later-added ones.
+- **Qualifier refresh:** `build_qualifiers_for` diffs against the current campaign set on every task iteration and adds qualifiers for any campaigns added since the daemon started — new campaigns are never silently missing from `ps.qualifiers`.
 - **Auth failure handling**: a `CheckpointChallengeError` (LinkedIn CAPTCHA/verification) pauses the profile for 5 minutes and creates a UI notification. An `AuthenticationError` triggers re-authentication; if that also fails, the profile is paused 5 minutes.
 - **LLM errors** (`ModelHTTPError`): the task is failed and the profile is paused 10 minutes.
 
@@ -82,6 +85,8 @@ Reconcile does four things per campaign:
 **Slot creation is the ONLY place Task rows are inserted.** Handlers never reschedule themselves.
 
 **Bootstrap note:** `_reconcile_all` calls `ps.ensure_session()` before reconciling, so profiles that have never executed a task (no prior browser session) still get their first task slots planned on startup.
+
+**`SiteConfig` caching:** `SiteConfig.load(user_id)` caches the result in-process for 60 s (`_SITE_CONFIG_CACHE`). This eliminates redundant MongoDB reads on every daemon loop iteration across N profiles × M calls. The Settings API calls `SiteConfig.invalidate(user_id)` after every save so changes take effect within at most 60 s.
 
 ### Pacing Modes
 
@@ -139,7 +144,7 @@ find_candidate(session, qualifier)
                     └── search_source()     # searches LinkedIn for new profiles
 ```
 
-Each layer pulls from the one below only when empty. Each `qualify_source` iteration qualifies exactly one lead and shifts the GP model — preventing the "search forever without qualifying" bug.
+Each layer pulls from the one below only when empty. Each `qualify_source` iteration qualifies exactly one lead and shifts the GP model — preventing the "search forever without qualifying" bug. In exploit mode the search sub-loop is capped at **5 rounds per qualification call** so a persistently low-scoring pool cannot block qualification indefinitely.
 
 ### 6.2 Selecting Who to Qualify
 
@@ -235,7 +240,7 @@ When a deal transitions to CONNECTED (from either `handle_check_pending` or dire
 
 1. **Contact info capture** (`_capture_contact_info`, line 89): best-effort scrape of the LinkedIn contact-info overlay (email/phone). LinkedIn only exposes this for 1st-degree connections, so this is the first opportunity to capture it. Failures are swallowed — the transition never rolls back.
 
-2. **Immediate follow-up task enqueue** (`_enqueue_immediate_follow_up`, line 108): schedules a `follow_up` task for `scheduled_at = now`. This ensures the first outreach message fires on the very next task loop iteration, not hours later when the planner next runs.
+2. **Immediate follow-up task enqueue** (`_enqueue_immediate_follow_up`, line 108): schedules a `follow_up` task for `scheduled_at = now`. Dedup is **deal-scoped** (checked via `payload.deal_id`), not campaign-scoped — so a newly-connected lead always gets its own immediate slot even when other deals for the same campaign already have pending follow-up tasks. This ensures the first outreach message fires on the very next task loop iteration, not hours later when the planner next runs.
 
 ---
 
@@ -300,7 +305,7 @@ class FollowUpDecision:
 Back in `handle_follow_up` (line 283):
 
 **`action = "send_message"`:**
-- Calls `_replace_placeholders` to substitute any `[First Name]` / `[Company Name]` patterns the LLM generated despite instructions.
+- Calls `_replace_placeholders` to substitute any `[First Name]` / `[Company Name]` patterns the LLM generated despite instructions. Matching is case-insensitive (`re.IGNORECASE`) so mixed-case variants like `[First name]` or `[COMPANY NAME]` are also caught.
 - Strips em-dashes (replace with hyphens).
 - Calls `send_raw_message(session, profile, message)` via `linkedin_cli`.
 - On success:

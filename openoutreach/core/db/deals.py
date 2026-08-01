@@ -108,33 +108,47 @@ def _capture_contact_info(lead, session) -> None:
 def _enqueue_immediate_follow_up(deal, session) -> None:
     """Schedule a follow_up task for *now* so the first message fires on the
     next task-loop iteration rather than waiting for the next planner cycle.
-    No-op when a PENDING follow_up task already exists for this campaign."""
+
+    Dedup is deal-scoped: skips only when a PENDING follow_up task already
+    exists for this specific deal (checked via payload deal_id). A campaign-
+    level check would suppress the immediate enqueue for newly-connected leads
+    whenever any other deal already has a pending slot.
+    """
+    from openoutreach.mongodb.connection import get_mongodb_collection
     from openoutreach.mongodb.models import Task
-    from openoutreach.core.scheduler import _has_pending
     from datetime import datetime, timezone
 
     campaign_id = str(deal.campaign_id)
+    deal_id = str(deal._id)
     profile_id = str(session.linkedin_profile.pk) if session.linkedin_profile else None
     user_id = str(session.user_id) if hasattr(session, "user_id") and session.user_id else None
 
-    if _has_pending(Task.TaskType.FOLLOW_UP, campaign_id, linkedin_profile_id=profile_id):
-        logger.debug(
-            "Skipping immediate follow_up enqueue for deal %s — already pending",
-            deal._id,
-        )
-        return
+    task_col = get_mongodb_collection("tasks")
+    if task_col is not None:
+        existing = task_col.find_one({
+            "task_type": Task.TaskType.FOLLOW_UP,
+            "status": Task.Status.PENDING,
+            "payload.campaign_id": campaign_id,
+            "payload.deal_id": deal_id,
+        })
+        if existing:
+            logger.debug(
+                "Skipping immediate follow_up enqueue for deal %s — already pending",
+                deal_id,
+            )
+            return
 
     task = Task(
         task_type=Task.TaskType.FOLLOW_UP,
         scheduled_at=datetime.now(timezone.utc),
-        payload={"campaign_id": campaign_id},
+        payload={"campaign_id": campaign_id, "deal_id": deal_id},
         linkedin_profile_id=profile_id,
         user_id=user_id,
     )
     task.save()
     logger.debug(
         "Enqueued immediate follow_up for deal %s (campaign %s)",
-        deal._id, campaign_id,
+        deal_id, campaign_id,
     )
 
 

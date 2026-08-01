@@ -447,7 +447,9 @@ def run_daemon():
         # Round-robin across profiles: try to claim one task from any profile
         task_executed = False
 
-        for ps in list(pool.values()):
+        profile_sessions = list(pool.values())
+        random.shuffle(profile_sessions)
+        for ps in profile_sessions:
             if ps.is_paused():
                 continue
 
@@ -529,7 +531,7 @@ def run_daemon():
                     colored("[%s] Task FAILED", "red", attrs=["bold"])
                     + " (task=%s, campaign=%s, profile=%s)\n%s",
                     task.task_type, task.pk, campaign_id,
-                    ps.profile.linkedin_username, traceback.format_exc()[:500],
+                    ps.profile.linkedin_username, traceback.format_exc()[-2000:],
                 )
                 continue
 
@@ -567,7 +569,6 @@ def run_daemon():
                 h, m = int(min_wait // 3600), int(min_wait % 3600 // 60)
                 logger.info("No tasks ready — sleeping %dh%02dm", h, m)
             sleep_with_heartbeat(min(min_wait, 60), heartbeat, "idle")
-            rhythm.reset()
 
 
 def _reconcile_all(pool: dict[str, ProfileSession]) -> None:

@@ -130,10 +130,14 @@ def qualify_source(session, qualifier: BayesianQualifier) -> Generator[str, None
 
         # In exploit mode with no P > 0.5 candidates, keep searching
         # until the positive pool is non-empty or search is exhausted.
-        while _needs_search(qualifier, candidates):
+        # Cap at 5 search rounds per qualify iteration so a persistently
+        # low-scoring pool can't block qualification indefinitely.
+        _search_rounds = 0
+        while _needs_search(qualifier, candidates) and _search_rounds < 5:
             if next(search, None) is None:
                 break
             candidates = fetch_qualification_candidates(session)
+            _search_rounds += 1
 
         result = run_qualification(session, qualifier)
         if result is None:

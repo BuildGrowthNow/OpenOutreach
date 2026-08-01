@@ -84,22 +84,16 @@ def _replace_placeholders(message: str, deal) -> str:
         first_name = lead.public_identifier
 
     # Replace common placeholder patterns (case-insensitive)
-    replacements = {
-        r'\[First Name\]': first_name,
-        r'\[first name\]': first_name,
-        r'\[FIRST NAME\]': first_name,
-        r'\[Last Name\]': last_name,
-        r'\[last name\]': last_name,
-        r'\[LAST NAME\]': last_name,
-        r'\[Company Name\]': company,
-        r'\[company name\]': company,
-        r'\[COMPANY NAME\]': company,
-    }
+    replacements = [
+        (r'\[first name\]', first_name),
+        (r'\[last name\]', last_name),
+        (r'\[company name\]', company),
+    ]
 
     result = message
-    for pattern, replacement in replacements.items():
+    for pattern, replacement in replacements:
         if replacement:  # Only replace if we have data
-            result = re.sub(pattern, replacement, result)
+            result = re.sub(pattern, replacement, result, flags=re.IGNORECASE)
 
     return result
 

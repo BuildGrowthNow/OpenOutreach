@@ -158,6 +158,7 @@ async def update_settings(
 
     # Save updates
     config.save()
+    SiteConfig.invalidate(user_id)
 
     # Return updated config
     active_days_str = config.active_days

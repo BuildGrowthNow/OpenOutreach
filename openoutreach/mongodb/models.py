@@ -6,6 +6,7 @@ that use pymongo directly for data operations.
 """
 
 import logging
+import time
 from datetime import datetime, timezone as tz
 from typing import Any, ClassVar, Dict, List, Optional, TypeVar
 from uuid import uuid4
@@ -3892,6 +3893,13 @@ class LinkedInCredentialLogManager:
         return log, True
 
 
+# Per-user TTL cache for SiteConfig.load — avoids a MongoDB round-trip on
+# every daemon loop iteration. Keyed by user_id (None for the singleton).
+# Format: {user_id: (loaded_at_monotonic, SiteConfig)}
+_SITE_CONFIG_CACHE: dict = {}
+_SITE_CONFIG_TTL = 60.0  # seconds
+
+
 class SiteConfig:
     """
     MongoDB SiteConfig model.
@@ -4041,7 +4049,19 @@ class SiteConfig:
     @classmethod
     def load(cls, user_id: Optional[str] = None) -> "SiteConfig":
         """Load a SiteConfig. If user_id is given, loads that user's config;
-        otherwise returns the first document (backwards-compatible singleton)."""
+        otherwise returns the first document (backwards-compatible singleton).
+
+        Results are cached in-process for 60 s to avoid a MongoDB round-trip
+        on every daemon loop iteration. Call ``SiteConfig.invalidate(user_id)``
+        after writes that need to be seen immediately (e.g. API settings save).
+        """
+        cache_key = user_id
+        cached = _SITE_CONFIG_CACHE.get(cache_key)
+        if cached is not None:
+            loaded_at, config = cached
+            if time.monotonic() - loaded_at < _SITE_CONFIG_TTL:
+                return config
+
         collection = get_mongodb_collection("site_config")
         if collection is None:
             return cls()
@@ -4050,13 +4070,21 @@ class SiteConfig:
             query = {"user_id": user_id} if user_id else {}
             data = collection.find_one(query)
             if data:
-                return cls.from_dict(data)
-            config = cls(user_id=user_id)
-            config.save()
+                config = cls.from_dict(data)
+            else:
+                config = cls(user_id=user_id)
+                config.save()
+            _SITE_CONFIG_CACHE[cache_key] = (time.monotonic(), config)
             return config
         except Exception as e:
             logger.error(f"Failed to load site config: {e}")
             return cls()
+
+    @classmethod
+    def invalidate(cls, user_id: Optional[str] = None) -> None:
+        """Evict the in-process cache entry for *user_id* so the next
+        ``load()`` call fetches fresh data from MongoDB."""
+        _SITE_CONFIG_CACHE.pop(user_id, None)
 
     @classmethod
     def get(cls, config_id: str) -> Optional["SiteConfig"]:
