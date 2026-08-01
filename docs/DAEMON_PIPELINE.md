@@ -447,3 +447,20 @@ Fixes shipped in commit `4a15d69`.
 - `campaign_started` → expanded to explain the discovery-to-connect pipeline warm-up
 
 **Type chain** for #11/#13: `DealResponse` (Python) → `RawLeadDeal.deal` (dashboard.ts) → `Lead` interface (components.ts) → campaign-list.tsx UI.
+
+---
+
+## 16. Pipeline Bug Fixes — Batch 3 (issues #15–17)
+
+Fixes shipped in commits `1f94043` + `7b0b7d6`.
+
+| # | Issue | Fix |
+|---|---|---|
+| #15 | Stale task recovery only on idle | Added `STALE_RECOVERY_INTERVAL = 300` in `daemon.py`. A periodic timer in the main `while True` loop calls `_recover_stale_running_tasks()` every 5 min regardless of whether tasks are executing, so a crashed task is unblocked within 5 min instead of waiting until the queue drains |
+| #16 | 5-min delay for new LinkedIn profiles | `PROFILE_REFRESH_INTERVAL` reduced from 300 s to 60 s. New profiles are picked up and immediately reconciled within 1 min of creation |
+| #17 | PENDING deals stuck forever at 48h backoff | Added `Deal.pending_since: Optional[datetime]` (additive field, no migration). Stamped in `on_deal_state_entered` on first PENDING transition. `handle_check_pending` auto-fails with `reason="unresponsive"` any deal where `(now - pending_since) >= MAX_PENDING_DAYS (21)`. Falls back to `creation_date` for legacy deals without `pending_since` |
+
+**Constants:**
+- `MAX_PENDING_DAYS = 21` in `check_pending.py` — ~10 unanswered checks at 48h backoff cap
+- `STALE_RECOVERY_INTERVAL = 300` in `daemon.py`
+- `PROFILE_REFRESH_INTERVAL = 60` in `daemon.py`
