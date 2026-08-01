@@ -11,7 +11,6 @@ from .auth import (
     PasswordResetRequest,
     PasswordResetConfirm,
     PasswordUpdate,
-    SupabaseUserLink,
 )
 from .campaign import (
     CampaignCreate,
@@ -67,7 +66,6 @@ __all__ = [
     "PasswordResetRequest",
     "PasswordResetConfirm",
     "PasswordUpdate",
-    "SupabaseUserLink",
     # Campaign
     "CampaignCreate",
     "CampaignUpdate",

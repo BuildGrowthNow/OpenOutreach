@@ -1,8 +1,5 @@
 """
 User Model for Multi-Tenant MongoDB Auth
-
-Production-ready User model with local auth + Supabase support.
-Replaces SupabaseUser with proper multi-tenant User model.
 """
 
 import logging
@@ -21,7 +18,6 @@ class User:
     """
     Production MongoDB User model.
 
-    Supports both local authentication and Supabase SSO.
     Designed for multi-tenant architecture with proper user isolation.
     """
 
@@ -33,7 +29,6 @@ class User:
         full_name: str = "",
         is_active: bool = True,
         is_superuser: bool = False,
-        supabase_user_id: Optional[str] = None,
         org_id: Optional[str] = None,
         created_at: Optional[datetime] = None,
         updated_at: Optional[datetime] = None,
@@ -74,7 +69,6 @@ class User:
         self.full_name = full_name
         self.is_active = is_active
         self.is_superuser = is_superuser
-        self.supabase_user_id = supabase_user_id
         self.org_id = org_id
         self.created_at = created_at or datetime.now(tz.utc)
         self.updated_at = updated_at or datetime.now(tz.utc)
@@ -152,8 +146,6 @@ class User:
             "signup_ip": self.signup_ip,
             "trial_warning_sent_at": self.trial_warning_sent_at,
         }
-        if self.supabase_user_id is not None:
-            doc["supabase_user_id"] = self.supabase_user_id
         return doc
 
     @classmethod
@@ -166,7 +158,6 @@ class User:
             full_name=data.get("full_name", ""),
             is_active=data.get("is_active", True),
             is_superuser=data.get("is_superuser", False),
-            supabase_user_id=data.get("supabase_user_id"),
             org_id=data.get("org_id"),
             created_at=data.get("created_at"),
             updated_at=data.get("updated_at"),
@@ -210,9 +201,7 @@ class User:
 
         self.updated_at = datetime.now(tz.utc)
         doc = self.to_dict()
-        update: Dict[str, Any] = {"$set": doc}
-        if self.supabase_user_id is None:
-            update["$unset"] = {"supabase_user_id": ""}
+        update: Dict[str, Any] = {"$set": doc, "$unset": {"supabase_user_id": ""}}
         collection.update_one({"_id": self._id}, update, upsert=True)
         logger.info(f"Saved user: {self.email}")
         return self._id
@@ -235,16 +224,6 @@ class User:
             return None
 
         data = collection.find_one({"email": email.lower().strip()})
-        return cls.from_dict(data) if data else None
-
-    @classmethod
-    def get_by_supabase_id(cls, supabase_id: str) -> Optional["User"]:
-        """Get user by Supabase user ID."""
-        collection = get_mongodb_collection("users")
-        if collection is None:
-            return None
-
-        data = collection.find_one({"supabase_user_id": supabase_id})
         return cls.from_dict(data) if data else None
 
     def verify_password(self, password: str) -> bool:

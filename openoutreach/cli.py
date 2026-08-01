@@ -252,7 +252,7 @@ def _get_safe_config(settings):
     config = {}
     sensitive_keys = {
         'SECRET_KEY', 'JWT_SECRET_KEY', 'COOKIE_ENCRYPTION_KEY',
-        'LLM_API_KEY', 'LINKEDIN_PASSWORD', 'SUPABASE_SERVICE_KEY',
+        'LLM_API_KEY', 'LINKEDIN_PASSWORD',
         'FINDER_API_KEY', 'STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET'
     }
 

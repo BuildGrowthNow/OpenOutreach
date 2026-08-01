@@ -7,7 +7,7 @@ function getApiBase(): string {
   return '/api'
 }
 
-import { supabase } from "./supabase/client";
+import { useAuthStore } from "./authStoreV2";
 
 export interface ApiResponse<T> {
   data?: T;
@@ -118,21 +118,14 @@ function keysToSnakeDeep(obj: unknown): unknown {
   return obj;
 }
 
-async function getHeaders() {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  // Note: We don't need to manually add cookies because they're sent automatically
-  // by the browser when making same-origin requests
+function getHeaders(): Record<string, string> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
-
-  if (session?.access_token) {
-    headers["Authorization"] = `Bearer ${session.access_token}`;
+  const token = useAuthStore.getState().accessToken;
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
   }
-
   return headers;
 }
 
@@ -153,7 +146,7 @@ export async function get<T>(
       }
     });
   }
-  const headers = await getHeaders();
+  const headers = getHeaders();
   const response = await fetch(url.toString(), {
     headers,
     cache: "no-store",
@@ -174,7 +167,7 @@ export async function put<T>(
   body?: Record<string, unknown>,
 ): Promise<ApiResponse<T>> {
   const url = new URL(path, getApiBase());
-  const headers = await getHeaders();
+  const headers = getHeaders();
   const response = await fetch(url.toString(), {
     method: "PUT",
     headers,
@@ -197,7 +190,7 @@ export async function post<T>(
   body?: Record<string, unknown> | FormData,
 ): Promise<ApiResponse<T>> {
   const url = new URL(path, getApiBase());
-  const headers = await getHeaders();
+  const headers = getHeaders();
 
   let finalBody: BodyInit | undefined = undefined;
   const finalHeaders: Record<string, string> = { ...headers };
@@ -231,7 +224,7 @@ export async function patch<T>(
   body?: Record<string, unknown>,
 ): Promise<ApiResponse<T>> {
   const url = new URL(path, getApiBase());
-  const headers = await getHeaders();
+  const headers = getHeaders();
   const response = await fetch(url.toString(), {
     method: "PATCH",
     headers,
@@ -251,7 +244,7 @@ export async function patch<T>(
 
 export async function del<T>(path: string): Promise<ApiResponse<T>> {
   const url = new URL(path, getApiBase());
-  const headers = await getHeaders();
+  const headers = getHeaders();
   const response = await fetch(url.toString(), {
     method: "DELETE",
     headers,

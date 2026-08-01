@@ -27,13 +27,6 @@ class Settings(BaseSettings):
     MONGODB_ENABLED: bool = True
 
     # =========================================================================
-    # Supabase Authentication
-    # =========================================================================
-    SUPABASE_URL: Optional[str] = None
-    SUPABASE_ANON_KEY: Optional[str] = None
-    SUPABASE_SERVICE_KEY: Optional[str] = None
-
-    # =========================================================================
     # JWT Configuration
     # =========================================================================
     JWT_SECRET_KEY: Optional[str] = None

@@ -120,9 +120,6 @@ SILENCED_LOGGERS = (
     "pymongo.restricted",
     "pymongo-driver",
     "bson",
-    # Supabase - verbose authentication logs (DEBUG level)
-    "openoutreach.api.authentication.supabase",
-    "openoutreach.api.authentication.supabase.SupabaseJWTAuthentication",
 )
 
 

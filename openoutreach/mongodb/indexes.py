@@ -30,7 +30,6 @@ def ensure_all_indexes():
         # Users
         ('users', [
             ({'email': 1}, {'name': 'user_email_idx', 'unique': True}),
-            ({'supabase_user_id': 1}, {'name': 'user_supabase_idx', 'unique': True, 'partialFilterExpression': {'supabase_user_id': {'$type': 'string'}}}),
             ({'is_active': 1}, {'name': 'user_active_idx'}),
         ]),
 

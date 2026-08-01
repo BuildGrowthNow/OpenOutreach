@@ -1,12 +1,10 @@
 """
-Production FastAPI Auth Router - Multi-Tenant
+FastAPI Auth Router - Multi-Tenant
 
 Implements JWT authentication with proper security:
 - Local auth (email + password)
-- Supabase SSO support
 - HTTP-only refresh tokens
 - Password reset flow
-- Rate limiting ready
 """
 
 import logging

@@ -75,13 +75,6 @@ class PasswordUpdate(BaseModel):
     new_password: str = Field(..., min_length=6, description="New password")
 
 
-class SupabaseUserLink(BaseModel):
-    """Schema for linking Supabase user."""
-    supabase_user_id: str = Field(..., description="Supabase user ID")
-    email: EmailStr = Field(..., description="User email")
-    full_name: Optional[str] = Field(None, description="Full name")
-
-
 class DeletionScheduledResponse(BaseModel):
     """Schema for account deletion request response."""
     deletion_scheduled_at: str = Field(..., description="Timestamp when deletion was scheduled")
