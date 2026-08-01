@@ -239,6 +239,39 @@ def _connected_deals(campaign):
     return valid_deals
 
 
+def _close_stale_deals(campaign, session):
+    """Auto-fail CONNECTED deals that were never messaged and conversation is ancient."""
+    from openoutreach.mongodb.models import Lead
+    from openoutreach.crm.models import DealState
+
+    now = datetime.now(timezone.utc)
+    for deal in _connected_deals(campaign):
+        if deal.last_outgoing_at:
+            continue
+        message_collection = get_mongodb_collection("chat_messages")
+        if message_collection is None:
+            continue
+        last_msg = message_collection.find_one(
+            {"deal_id": deal._id},
+            sort=[("creation_date", -1)],
+        )
+        if last_msg is None:
+            age_days = STALE_CONVERSATION_DAYS
+        else:
+            last_date = last_msg.get("creation_date")
+            if last_date and last_date.tzinfo is None:
+                last_date = last_date.replace(tzinfo=timezone.utc)
+            age_days = (now - last_date).days if last_date else STALE_CONVERSATION_DAYS
+        if age_days >= STALE_CONVERSATION_DAYS:
+            lead = Lead.get(deal.lead_id)
+            public_id = lead.public_identifier if lead else str(deal.lead_id)
+            logger.info(
+                "[%s] follow_up: auto-failing stale never-messaged deal %s (%dd old)",
+                campaign, public_id, age_days,
+            )
+            set_profile_state(session, public_id, DealState.FAILED.value, reason="unresponsive")
+
+
 def _next_followup_deal(campaign):
     """Oldest CONNECTED deal in *campaign* not on a nudge cooldown."""
     for deal in _connected_deals(campaign):
@@ -271,6 +304,8 @@ def handle_follow_up(task, session, qualifiers):
             remaining,
         )
         return
+
+    _close_stale_deals(campaign, session)
 
     deal = _next_followup_deal(campaign)
     if deal is None:

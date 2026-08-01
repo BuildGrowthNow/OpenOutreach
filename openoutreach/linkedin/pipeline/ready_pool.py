@@ -84,14 +84,22 @@ def promote_to_ready(session, qualifier: BayesianQualifier, threshold: float) ->
         return promoted
 
     promoted = len(first_degree)
+    pool_drained = not get_ready_to_connect_profiles(session)
+
     for prob, p in zip(probs, valid):
+        pid = p.get("public_identifier", "?")
         if prob > threshold:
-            pid = p.get("public_identifier", "?")
             logger.info("%s READY_TO_CONNECT (P(f>0.5)=%.3f)", pid, prob)
-            set_profile_state(
-                session, p["public_identifier"], DealState.READY_TO_CONNECT.value
-            )
+            set_profile_state(session, p["public_identifier"], DealState.READY_TO_CONNECT.value)
             promoted += 1
+        elif pool_drained:
+            logger.info(
+                "%s READY_TO_CONNECT (pool drained bypass, P=%.3f < threshold=%.3f)",
+                pid, prob, threshold,
+            )
+            set_profile_state(session, p["public_identifier"], DealState.READY_TO_CONNECT.value)
+            promoted += 1
+            pool_drained = False  # only promote one per cycle when bypassing
 
     return promoted
 
