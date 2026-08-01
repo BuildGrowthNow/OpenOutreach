@@ -63,6 +63,7 @@ import {
   zincDialogHeaderClassName,
   zincInputClassName,
 } from "@/lib/modal-styles";
+import { useToast } from "@/components/ui/use-toast";
 
 interface CampaignAnalyticsResponse {
   stats: {
@@ -86,6 +87,7 @@ export default function CampaignDetailsPage() {
   const params = useParams();
   const router = useRouter();
   const campaignId = params.id as string;
+  const { toast } = useToast();
 
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const campaignStatusRef = useRef<string | undefined>(undefined);
@@ -310,14 +312,16 @@ export default function CampaignDetailsPage() {
       if (response.data) {
         setCampaign(response.data);
         setShowCompletionModal(false);
+        toast({ title: "Campaign completed", description: `"${campaign.name}" has been marked as completed.` });
         fetchCampaignData();
       } else {
-        setError(
-          response.error || response.message || "Failed to complete campaign",
-        );
+        const msg = response.error || response.message || "Failed to complete campaign";
+        setError(msg);
+        toast({ title: "Action failed", description: msg, variant: "destructive" });
       }
     } catch (err) {
       setError("An error occurred while completing the campaign");
+      toast({ title: "Action failed", description: "An error occurred while completing the campaign", variant: "destructive" });
       console.error("Error completing campaign:", err);
     }
   };
@@ -333,12 +337,16 @@ export default function CampaignDetailsPage() {
       });
       if (response.data) {
         setCampaign(response.data);
+        toast({ title: "Campaign paused", description: `"${campaign.name}" has been paused.` });
         fetchCampaignData(true);
       } else {
-        setError(response.error || "Failed to pause campaign");
+        const msg = response.error || "Failed to pause campaign";
+        setError(msg);
+        toast({ title: "Pause failed", description: msg, variant: "destructive" });
       }
     } catch (err) {
       setError("An error occurred while pausing the campaign");
+      toast({ title: "Pause failed", description: "An error occurred while pausing the campaign", variant: "destructive" });
     } finally {
       setActionLoading(false);
     }
@@ -355,12 +363,16 @@ export default function CampaignDetailsPage() {
       });
       if (response.data) {
         setCampaign(response.data);
+        toast({ title: "Campaign resumed", description: `"${campaign.name}" is now active.` });
         fetchCampaignData(true);
       } else {
-        setError(response.error || "Failed to resume campaign");
+        const msg = response.error || "Failed to resume campaign";
+        setError(msg);
+        toast({ title: "Resume failed", description: msg, variant: "destructive" });
       }
     } catch (err) {
       setError("An error occurred while resuming the campaign");
+      toast({ title: "Resume failed", description: "An error occurred while resuming the campaign", variant: "destructive" });
     } finally {
       setActionLoading(false);
     }

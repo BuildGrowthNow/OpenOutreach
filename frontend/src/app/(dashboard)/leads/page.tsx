@@ -15,6 +15,16 @@ import { Lead, Pagination, Message } from '@/lib/types/components'
 import { exportFilteredLeads } from '@/lib/export'
 import { LeadForm } from '@/components/leads/lead-form'
 import { MessageThread } from '@/components/messages/message-thread'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 
 const LeadsPage = () => {
   const router = useRouter()
@@ -40,6 +50,8 @@ const LeadsPage = () => {
     failed: 0
   })
   
+  const [leadToDisqualify, setLeadToDisqualify] = useState<Lead | null>(null)
+
   // Message thread state
   const [messageLead, setMessageLead] = useState<Lead | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
@@ -362,7 +374,7 @@ const LeadsPage = () => {
          loading={loading}
          onView={handleViewLead}
          onEdit={handleEditLead}
-         onDisqualify={handleDisqualifyLead}
+         onDisqualify={(lead) => setLeadToDisqualify(lead)}
          onMessage={handleSendMessage}
          onAddToCampaign={async (lead, campaignId) => {
            if (!campaignId) return
@@ -391,6 +403,27 @@ const LeadsPage = () => {
         onSubmit={handleSubmitLead}
         isSubmitting={isSubmitting}
       />
+
+      {/* Disqualify Confirmation */}
+      <AlertDialog open={!!leadToDisqualify} onOpenChange={(open) => { if (!open) setLeadToDisqualify(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Disqualify lead?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently disqualify <strong>{leadToDisqualify?.name || 'this lead'}</strong>. They will be excluded from all campaigns and cannot be re-qualified.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => { if (leadToDisqualify) { void handleDisqualifyLead(leadToDisqualify); setLeadToDisqualify(null) } }}
+            >
+              Disqualify
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
        {/* Message Thread Modal */}
       {messageLead && (

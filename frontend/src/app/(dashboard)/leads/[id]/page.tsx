@@ -15,6 +15,16 @@ import { LeadForm } from '@/components/leads/lead-form'
 import { AddToCampaignModal } from '@/components/modals/add-to-campaign-modal'
 import { useToast } from '@/components/ui/use-toast'
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import {
   getLead,
   updateLead,
   getMessages,
@@ -71,6 +81,7 @@ const LeadDetailsPage = () => {
   const [sendingMessage, setSendingMessage] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [showAddToCampaign, setShowAddToCampaign] = useState(false)
+  const [showDisqualifyConfirm, setShowDisqualifyConfirm] = useState(false)
 
 
   const fetchLeadDetails = useCallback(async () => {
@@ -323,7 +334,7 @@ const LeadDetailsPage = () => {
             <Icons.Globe className="mr-2 h-3.5 w-3.5" />
             {lead.publicIdentifier}
           </Badge>
-          <Button variant="destructive" onClick={handleDisqualify}>
+          <Button variant="destructive" onClick={() => setShowDisqualifyConfirm(true)}>
             <Icons.XCircle className="mr-2 h-4 w-4" />
             Disqualify
           </Button>
@@ -636,7 +647,7 @@ const LeadDetailsPage = () => {
                 <Icons.Link className="mr-2 h-4 w-4" />
                 View Campaigns
               </Button>
-              <Button variant="destructive" className="w-full justify-start" onClick={handleDisqualify}>
+              <Button variant="destructive" className="w-full justify-start" onClick={() => setShowDisqualifyConfirm(true)}>
                 <Icons.XCircle className="mr-2 h-4 w-4" />
                 Disqualify Lead
               </Button>
@@ -705,6 +716,27 @@ const LeadDetailsPage = () => {
           void fetchLeadDetails()
         }}
       />
+
+      {/* Disqualify Confirmation */}
+      <AlertDialog open={showDisqualifyConfirm} onOpenChange={setShowDisqualifyConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Disqualify lead?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently disqualify <strong>{lead.name || 'this lead'}</strong>. They will be excluded from all campaigns and cannot be re-qualified. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={handleDisqualify}
+            >
+              Disqualify
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

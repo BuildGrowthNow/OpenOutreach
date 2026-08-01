@@ -29,10 +29,12 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Breadcrumb } from "@/components/layout/breadcrumb";
 import { PlanLimitButton } from "@/components/billing/plan-limit-button";
 import { useUpgradeToast } from "@/lib/hooks/use-upgrade-toast";
+import { useToast } from "@/components/ui/use-toast";
 
 export default function CampaignsPage() {
   const router = useRouter();
   const handleUpgradeError = useUpgradeToast();
+  const { toast } = useToast();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -96,8 +98,10 @@ export default function CampaignsPage() {
     const result = await deleteCampaign(target.id);
     if (result.error) {
       setError(result.error);
+      toast({ title: "Delete failed", description: result.error, variant: "destructive" });
       return;
     }
+    toast({ title: "Campaign deleted", description: `"${target.name}" has been deleted.` });
     fetchCampaigns();
   };
 
@@ -106,13 +110,17 @@ export default function CampaignsPage() {
       setError(null);
       const response = await updateCampaign(campaign.id, { status: "active" });
       if (response.data) {
+        toast({ title: "Campaign started", description: `"${campaign.name}" is now active.` });
         fetchCampaigns();
       } else {
-        setError(response.error || response.message || "Failed to start campaign");
+        const msg = response.error || response.message || "Failed to start campaign";
+        setError(msg);
+        toast({ title: "Start failed", description: msg, variant: "destructive" });
       }
     } catch (err) {
       if (!handleUpgradeError(err)) {
         setError("An error occurred while starting the campaign");
+        toast({ title: "Start failed", description: "An error occurred while starting the campaign", variant: "destructive" });
       }
     }
   };
@@ -122,12 +130,16 @@ export default function CampaignsPage() {
       setError(null);
       const response = await updateCampaign(campaign.id, { status: "paused" });
       if (response.data) {
+        toast({ title: "Campaign paused", description: `"${campaign.name}" has been paused.` });
         fetchCampaigns();
       } else {
-        setError(response.error || response.message || "Failed to pause campaign");
+        const msg = response.error || response.message || "Failed to pause campaign";
+        setError(msg);
+        toast({ title: "Pause failed", description: msg, variant: "destructive" });
       }
     } catch (err) {
       setError("An error occurred while pausing the campaign");
+      toast({ title: "Pause failed", description: "An error occurred while pausing the campaign", variant: "destructive" });
     }
   };
 
