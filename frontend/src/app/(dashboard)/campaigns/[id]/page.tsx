@@ -122,9 +122,6 @@ export default function CampaignDetailsPage() {
 
   const [actionLoading, setActionLoading] = useState(false);
 
-  // Targeted polling state - only fetch status every 10 seconds
-  const [campaignStatus, setCampaignStatus] = useState<string | null>(null);
-
   const fetchCampaignData = useCallback(
     async (silent = false) => {
       try {

@@ -1,6 +1,5 @@
 'use client'
 
-// ChevronRight is imported but not used - kept for potential future use
 import { cn } from '@/lib/utils'
 import Link from 'next/link'
 
@@ -18,7 +17,7 @@ interface BreadcrumbProps {
 
 const Breadcrumb = ({
   items,
-  separator = <div className="h-4 w-4 text-muted-foreground">/</div>,
+  separator = <span aria-hidden="true" className="text-muted-foreground">/</span>,
   className
 }: BreadcrumbProps) => {
 

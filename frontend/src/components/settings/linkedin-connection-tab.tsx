@@ -595,25 +595,6 @@ export function LinkedInConnectionTab({
                 <Plus className="h-4 w-4 mr-2" />
                 Add Your First Account
               </PlanLimitButton>
-              <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-                <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto border border-zinc-800 bg-zinc-950 text-zinc-100 shadow-2xl">
-                  <DialogHeader className="border-b border-zinc-800/80 pb-4">
-                    <DialogTitle>Add LinkedIn Account</DialogTitle>
-                    <DialogDescription>
-                      Add your LinkedIn email, password, and an optional session
-                      cookie. Your LinkedIn profile is detected automatically
-                      after login.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <LinkedInCredentialForm
-                    onSuccess={() => {
-                      setIsAddDialogOpen(false);
-                      handleLinkedInCredentialsUpdate();
-                    }}
-                    onCancel={() => setIsAddDialogOpen(false)}
-                  />
-                </DialogContent>
-              </Dialog>
             </div>
           ) : (
             <div className="space-y-4">

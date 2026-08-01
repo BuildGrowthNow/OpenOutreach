@@ -352,7 +352,7 @@ const Header = ({ onMenuClick, className }: HeaderProps) => {
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className={`text-sm font-medium ${!notification.is_read ? 'font-semibold' : ''}`}>
+                        <p className={`text-sm ${!notification.is_read ? 'font-semibold' : 'font-medium'}`}>
                           {notification.title}
                         </p>
                         <p className="text-xs text-muted-foreground truncate mt-0.5">

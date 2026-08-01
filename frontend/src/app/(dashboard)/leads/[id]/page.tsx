@@ -86,8 +86,7 @@ const LeadDetailsPage = () => {
         if (response.data.profile) {
           setProfile(response.data.profile)
         }
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const rawDeals = (response.data as any).deals as LeadDeal[] | undefined
+        const rawDeals = (response.data as Lead & { deals?: LeadDeal[] }).deals
         if (rawDeals) setLeadDeals(rawDeals)
       } else {
         setError(response.error || 'Failed to fetch lead details')
@@ -325,7 +324,7 @@ const LeadDetailsPage = () => {
             {lead.publicIdentifier}
           </Badge>
           <Button variant="destructive" onClick={handleDisqualify}>
-            <Icons.Trash2 className="mr-2 h-4 w-4" />
+            <Icons.XCircle className="mr-2 h-4 w-4" />
             Disqualify
           </Button>
         </div>
@@ -638,7 +637,7 @@ const LeadDetailsPage = () => {
                 View Campaigns
               </Button>
               <Button variant="destructive" className="w-full justify-start" onClick={handleDisqualify}>
-                <Icons.Trash2 className="mr-2 h-4 w-4" />
+                <Icons.XCircle className="mr-2 h-4 w-4" />
                 Disqualify Lead
               </Button>
             </CardContent>

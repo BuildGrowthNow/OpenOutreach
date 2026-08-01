@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Logo } from '@/components/ui/logo'
 import { Icons } from '@/lib/types/components'
 import { useAuthStore } from '@/lib/authStoreV2'
+import { cn } from '@/lib/utils'
 
 interface SidebarItem {
   title: string
@@ -36,12 +37,10 @@ const Sidebar = ({ items, isOpen, setIsOpen }: SidebarProps) => {
 
       {/* Sidebar */}
       <aside
-        className={`
-          fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r bg-background
-          transition-transform duration-300 ease-in-out
-          ${isOpen ? 'translate-x-0' : '-translate-x-full'}
-          md:relative md:translate-x-0
-        `}
+        className={cn(
+          'fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r bg-background transition-transform duration-300 ease-in-out md:relative md:translate-x-0',
+          isOpen ? 'translate-x-0' : '-translate-x-full'
+        )}
       >
         {/* Logo */}
         <div className="flex h-16 items-center border-b px-6">
