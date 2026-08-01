@@ -711,9 +711,10 @@ def reconcile(session) -> None:
     connect_remaining = max(0, profile.connect_daily_limit - profile._daily_count("connect"))
     follow_up_remaining = max(0, profile.follow_up_daily_limit - profile._daily_count("follow_up"))
 
-    # Each campaign's fair share — floor division so we never exceed the budget
-    connect_cap = connect_remaining // n_campaigns
-    follow_up_cap = follow_up_remaining // n_campaigns
+    # Each campaign's fair share. Floor division keeps the total within budget;
+    # clamp to at least 1 so a new campaign isn't starved when remaining < n_campaigns.
+    connect_cap = max(1, connect_remaining // n_campaigns) if connect_remaining > 0 else 0
+    follow_up_cap = max(1, follow_up_remaining // n_campaigns) if follow_up_remaining > 0 else 0
 
     if n_campaigns > 1:
         logger.info(

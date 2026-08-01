@@ -25,6 +25,7 @@ export default function CampaignLeadsPage() {
   const [totalPages, setTotalPages] = useState(1)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [campaignStatus, setCampaignStatus] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
@@ -41,6 +42,8 @@ export default function CampaignLeadsPage() {
       const campaignResponse = await getCampaign(campaignId)
       if (!campaignResponse.data) {
         setError(campaignResponse.error || campaignResponse.message || 'Failed to fetch campaign')
+      } else {
+        setCampaignStatus(campaignResponse.data.status ?? null)
       }
 
       // Fetch campaign leads with server-side pagination
@@ -295,17 +298,27 @@ export default function CampaignLeadsPage() {
       ) : (
         <Card>
           <CardContent className="py-12">
-            <div className="text-center">
-              <Icons.Users className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No Leads Yet</h3>
-              <p className="text-sm text-muted-foreground mb-6 max-w-md mx-auto">
-                Start adding leads to this campaign to see them here. Leads can be added from the main leads page.
-              </p>
-              <Button onClick={() => window.location.href = '/leads'}>
-                <Icons.UserPlus className="mr-2 h-4 w-4" />
-                Visit Leads Page
-              </Button>
-            </div>
+            {campaignStatus === 'active' ? (
+              <div className="text-center space-y-4">
+                <div className="flex items-center justify-center gap-2">
+                  <span className="h-2.5 w-2.5 rounded-full bg-blue-500 animate-bounce [animation-delay:-0.3s]" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-blue-500 animate-bounce [animation-delay:-0.15s]" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-blue-500 animate-bounce" />
+                </div>
+                <h3 className="text-lg font-semibold">Discovering leads…</h3>
+                <p className="text-sm text-muted-foreground max-w-md mx-auto">
+                  The daemon is searching LinkedIn and qualifying prospects against your ICP. First leads appear within a few minutes.
+                </p>
+              </div>
+            ) : (
+              <div className="text-center">
+                <Icons.Users className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                <h3 className="text-lg font-semibold mb-2">No Leads Yet</h3>
+                <p className="text-sm text-muted-foreground mb-6 max-w-md mx-auto">
+                  Activate this campaign to start discovering leads automatically.
+                </p>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

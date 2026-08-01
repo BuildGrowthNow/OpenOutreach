@@ -838,17 +838,25 @@ export default function CampaignDetailsPage() {
             <CardContent>
               {leads.length > 0 ? (
                 <CampaignListComponent leads={leads} campaignId={campaignId} onLeadsUpdated={fetchLeadsSilent} />
+              ) : campaign?.status === "active" ? (
+                <div className="text-center py-12 space-y-4">
+                  <div className="flex items-center justify-center gap-2">
+                    <span className="h-2.5 w-2.5 rounded-full bg-blue-500 animate-bounce [animation-delay:-0.3s]" />
+                    <span className="h-2.5 w-2.5 rounded-full bg-blue-500 animate-bounce [animation-delay:-0.15s]" />
+                    <span className="h-2.5 w-2.5 rounded-full bg-blue-500 animate-bounce" />
+                  </div>
+                  <h3 className="text-lg font-semibold">Discovering leads…</h3>
+                  <p className="text-sm text-muted-foreground max-w-md mx-auto">
+                    The daemon is searching LinkedIn and qualifying prospects against your ICP. First leads appear within a few minutes.
+                  </p>
+                </div>
               ) : (
                 <div className="text-center py-12">
                   <Icons.Users className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
                   <h3 className="text-lg font-semibold mb-2">No Leads Yet</h3>
                   <p className="text-sm text-muted-foreground mb-6">
-                    Start adding leads to this campaign to see them here.
+                    Activate this campaign to start discovering leads automatically.
                   </p>
-                  <Button onClick={() => router.push("/leads")}>
-                    <Icons.UserPlus className="mr-2 h-4 w-4" />
-                    Add Leads
-                  </Button>
                 </div>
               )}
             </CardContent>

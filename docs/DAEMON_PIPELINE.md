@@ -49,6 +49,7 @@ while True:
 - **Human rhythm breaks** (`_HumanRhythmBreak`, line 108): after a random burst duration, the daemon takes a multi-minute break, then resets. Idle gaps (no tasks) do not reset the burst timer — only a completed break does — so mimicry isn't defeated by low-volume periods.
 - **Profile shuffling:** pool iteration order is randomised each round-robin pass (`random.shuffle`). This prevents early-added profiles being perpetually served first at the expense of later-added ones.
 - **Qualifier refresh:** `build_qualifiers_for` diffs against the current campaign set on every task iteration and adds qualifiers for any campaigns added since the daemon started — new campaigns are never silently missing from `ps.qualifiers`.
+- **Immediate reconcile on new profile** (`refresh_pool`, `daemon.py`): when a new `LinkedInProfile` enters the pool, `reconcile()` runs immediately for that profile rather than waiting for the next idle cycle. First task slots appear within seconds of the daemon detecting the profile (previously up to 5 min + idle wait).
 - **Auth failure handling**: a `CheckpointChallengeError` (LinkedIn CAPTCHA/verification) pauses the profile for 5 minutes and creates a UI notification. An `AuthenticationError` triggers re-authentication; if that also fails, the profile is paused 5 minutes.
 - **LLM errors** (`ModelHTTPError`): the task is failed and the profile is paused 10 minutes.
 
@@ -95,7 +96,7 @@ Reconcile does four things per campaign:
 - **Manual mode** (default): reads `SiteConfig.velocity` (actions/hr). Velocity ≥ 30/hr → burst immediately with 5–10s spacing. Velocity < 30/hr → Poisson-distributed across the active hours window.
 - **Smart mode** (opt-in via `SiteConfig.enable_smart_rate_limiting`): uses `SmartRateLimiter` + `aggressiveness_preset` to cluster tasks during business hours (9–17h), reduce during off-hours, and add jitter when the detectability score is high.
 
-When multiple campaigns are active, the daily budget is split evenly (`connect_cap = remaining_budget // n_campaigns`) so no single campaign starves the others (line 715).
+When multiple campaigns are active, the daily budget is split evenly (`connect_cap = remaining_budget // n_campaigns`, clamped to at least 1 when budget > 0) so no single campaign is starved — including newly-added campaigns that race with existing ones at reconcile time (line 715).
 
 ---
 

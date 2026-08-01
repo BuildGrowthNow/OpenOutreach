@@ -250,15 +250,22 @@ export function CampaignActivity({ campaignId, compact = false }: CampaignActivi
         >
           {entries.length > 0 ? (
             entries.map((entry) => <ActivityItem key={entry.id} entry={entry} />)
+          ) : pendingCount > 0 ? (
+            <div className="text-center py-8 space-y-3">
+              <div className="flex items-center justify-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-blue-500 animate-bounce [animation-delay:-0.3s]" />
+                <span className="h-2 w-2 rounded-full bg-blue-500 animate-bounce [animation-delay:-0.15s]" />
+                <span className="h-2 w-2 rounded-full bg-blue-500 animate-bounce" />
+              </div>
+              <p className="text-sm font-medium text-zinc-300">Finding leads…</p>
+              <p className="text-xs text-zinc-500 max-w-[220px] mx-auto">
+                The daemon is discovering and qualifying prospects. First results appear within a few minutes.
+              </p>
+            </div>
           ) : (
             <div className="text-center py-8">
               <Icons.Clock className="mx-auto h-8 w-8 text-zinc-700" />
               <p className="mt-2 text-sm text-zinc-500">No activity yet</p>
-              {nextTask && (
-                <p className="mt-1 text-xs text-zinc-600">
-                  First task scheduled — waiting to execute
-                </p>
-              )}
             </div>
           )}
         </div>

@@ -405,7 +405,7 @@ def run_daemon():
         active_profiles = _get_all_active_profiles()
         active_ids = {p.pk for p in active_profiles}
 
-        # Add new profiles
+        # Add new profiles and immediately plan their first task slots
         for profile in active_profiles:
             if profile.pk not in pool:
                 ps = ProfileSession(profile)
@@ -414,6 +414,12 @@ def run_daemon():
                     colored("Profile added to pool", "cyan") + ": %s (user=%s)",
                     profile.linkedin_username, profile.user_id or "unknown",
                 )
+                try:
+                    from openoutreach.core.scheduler import reconcile
+                    session = ps.ensure_session()
+                    reconcile(session)
+                except Exception as e:
+                    logger.debug("Immediate reconcile skipped for new profile %s: %s", profile.pk, e)
 
         # Remove deactivated profiles
         for pid in list(pool.keys()):
