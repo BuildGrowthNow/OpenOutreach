@@ -8,7 +8,7 @@ from typing import Optional
 from abc import ABC, abstractmethod
 
 from openoutreach.mongodb.models_user import User
-from openoutreach.config import Settings
+from openoutreach.config import Settings, settings as _settings
 
 logger = logging.getLogger(__name__)
 
@@ -191,7 +191,7 @@ def _send_billing_email(user: User, subject: str, html: str, text: str) -> bool:
         logger.warning(f"User {user._id} has no email address")
         return False
 
-    settings = Settings()
+    settings = _settings
     provider = _get_email_provider(settings)
 
     if not provider:
@@ -203,7 +203,7 @@ def _send_billing_email(user: User, subject: str, html: str, text: str) -> bool:
 
 def _settings_ctx() -> tuple[str, str, str, str]:
     """Return (brand_name, app_url, support_email, docs_url) from settings."""
-    s = Settings()
+    s = _settings
     brand = s.EMAIL_FROM_NAME or "Lengrowth Outreach"
     app_url = s.APP_URL or "http://localhost:3000"
     support = s.SUPPORT_EMAIL or "support@lengrowth.com"
@@ -309,7 +309,7 @@ def _note(text: str) -> str:
 
 def send_welcome_email(user: User) -> bool:
     """Send welcome email on signup with trial info."""
-    s = Settings()
+    s = _settings
     trial_days = s.TRIAL_DURATION_DAYS
     brand, app_url, support, _ = _settings_ctx()
 
