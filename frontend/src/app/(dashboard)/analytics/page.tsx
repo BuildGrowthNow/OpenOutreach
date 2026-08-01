@@ -309,9 +309,9 @@ export default function AnalyticsOverviewPage() {
         />
 
         <ProgressCard
-          title="Response Rate"
+          title="Reply Rate"
           value={`${roundTo1Decimal(stats.responseRate)}%`}
-          subtitle={`${stats.messagesReplied} / ${stats.messagesSent} replied`}
+          subtitle={`${stats.messagesReplied} conversations replied`}
           progress={Math.min(stats.responseRate, 100)}
           progressColor="blue"
           icon={<Icons.MessageCircle className="h-4 w-4" />}
@@ -320,7 +320,7 @@ export default function AnalyticsOverviewPage() {
         <ProgressCard
           title="Conversion Rate"
           value={`${roundTo1Decimal(stats.conversionRate)}%`}
-          subtitle={`${stats.conversions} conversions from ${totals.qualified} qualified`}
+          subtitle={`${stats.conversions} converted of ${stats.connectionsAccepted} accepted`}
           progress={Math.min(stats.conversionRate, 100)}
           progressColor="purple"
           icon={<Icons.Target className="h-4 w-4" />}
@@ -426,7 +426,7 @@ export default function AnalyticsOverviewPage() {
             <Card>
               <CardHeader>
                 <CardTitle>Leads per Campaign</CardTitle>
-                <CardDescription>Total leads · Connected · Completed</CardDescription>
+                <CardDescription>Total leads · Connected · Converted</CardDescription>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={220}>
@@ -442,7 +442,7 @@ export default function AnalyticsOverviewPage() {
                     <Legend />
                     <Bar dataKey="leads" name="Leads" fill="#3b82f6" radius={[4, 4, 0, 0]} maxBarSize={36} />
                     <Bar dataKey="connected" name="Connected" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={36} />
-                    <Bar dataKey="completed" name="Done" fill="#8b5cf6" radius={[4, 4, 0, 0]} maxBarSize={36} />
+                    <Bar dataKey="completed" name="Converted" fill="#8b5cf6" radius={[4, 4, 0, 0]} maxBarSize={36} />
                   </BarChart>
                 </ResponsiveContainer>
               </CardContent>
@@ -455,7 +455,7 @@ export default function AnalyticsOverviewPage() {
             <Card>
               <CardHeader>
                 <CardTitle>Campaign Comparison</CardTitle>
-                <CardDescription>Leads · Connected · Completed by campaign</CardDescription>
+                <CardDescription>Leads · Connected · Converted by campaign</CardDescription>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={220}>
@@ -471,7 +471,7 @@ export default function AnalyticsOverviewPage() {
                     <Legend />
                     <Bar dataKey="leads" name="Leads" fill="#3b82f6" radius={[4, 4, 0, 0]} maxBarSize={36} />
                     <Bar dataKey="connected" name="Connected" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={36} />
-                    <Bar dataKey="completed" name="Done" fill="#8b5cf6" radius={[4, 4, 0, 0]} maxBarSize={36} />
+                    <Bar dataKey="completed" name="Converted" fill="#8b5cf6" radius={[4, 4, 0, 0]} maxBarSize={36} />
                   </BarChart>
                 </ResponsiveContainer>
               </CardContent>
@@ -493,7 +493,7 @@ export default function AnalyticsOverviewPage() {
                         <th className="text-left py-3 px-4 font-semibold">Campaign</th>
                         <th className="text-left py-3 px-4 font-semibold">Leads</th>
                         <th className="text-left py-3 px-4 font-semibold">Accept Rate</th>
-                        <th className="text-left py-3 px-4 font-semibold">Response Rate</th>
+                        <th className="text-left py-3 px-4 font-semibold">Reply Rate</th>
                         <th className="text-left py-3 px-4 font-semibold">Conversion Rate</th>
                         <th className="text-left py-3 px-4 font-semibold">Status</th>
                       </tr>

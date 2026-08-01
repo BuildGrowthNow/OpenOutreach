@@ -50,7 +50,7 @@ const PIPELINE_LABELS: Record<string, string> = {
   ready_to_connect: "Ready to Connect",
   pending: "Pending",
   connected: "Connected",
-  completed: "Done",
+  completed: "Converted",
   failed: "Failed",
   no_email: "No Email",
 };
@@ -84,7 +84,7 @@ function KpiCard({ label, value, sub }: { label: string; value: string | number;
   );
 }
 
-function RateBadge({ value, label }: { value: number; label: string }) {
+function RateBadge({ value, label, sublabel }: { value: number; label: string; sublabel?: string }) {
   const color =
     value >= 30
       ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
@@ -93,7 +93,10 @@ function RateBadge({ value, label }: { value: number; label: string }) {
       : "bg-zinc-500/10 text-zinc-400 border-zinc-500/20";
   return (
     <div className="flex items-center justify-between py-2">
-      <span className="text-sm">{label}</span>
+      <div>
+        <span className="text-sm">{label}</span>
+        {sublabel && <div className="text-xs text-muted-foreground">{sublabel}</div>}
+      </div>
       <Badge variant="outline" className={color}>
         {value.toFixed(1)}%
       </Badge>
@@ -174,7 +177,7 @@ export default function CampaignAnalyticsPage() {
     { name: "Accepted", value: s.connections_accepted, fill: "#06b6d4" },
     { name: "Messaged", value: s.messages_sent, fill: "#3b82f6" },
     { name: "Replied", value: s.messages_replied, fill: "#a855f7" },
-    { name: "Done", value: s.conversions, fill: "#10b981" },
+    { name: "Converted", value: s.conversions, fill: "#10b981" },
   ];
 
   const pipelineData = analytics.pipeline
@@ -246,12 +249,12 @@ export default function CampaignAnalyticsPage() {
         <KpiCard
           label="Messages Sent"
           value={s.messages_sent}
-          sub={`${s.messages_replied} replied · ${s.response_rate.toFixed(1)}% rate`}
+          sub={`${s.messages_replied} conversations replied · ${s.response_rate.toFixed(1)}% reply rate`}
         />
         <KpiCard
-          label="Conversions"
+          label="Converted"
           value={s.conversions}
-          sub={`${s.conversion_rate.toFixed(1)}% of connections`}
+          sub={`${s.conversion_rate.toFixed(1)}% of accepted connections`}
         />
       </div>
 
@@ -290,11 +293,11 @@ export default function CampaignAnalyticsPage() {
             <CardDescription>Key performance percentages</CardDescription>
           </CardHeader>
           <CardContent className="space-y-1 pt-2">
-            <RateBadge value={s.connection_accept_rate} label="Connection Accept Rate" />
+            <RateBadge value={s.connection_accept_rate} label="Connection Accept Rate" sublabel="of requests sent" />
             <div className="h-px bg-border" />
-            <RateBadge value={s.response_rate} label="Message Response Rate" />
+            <RateBadge value={s.response_rate} label="Reply Rate" sublabel="conversations with a reply" />
             <div className="h-px bg-border" />
-            <RateBadge value={s.conversion_rate} label="Overall Conversion Rate" />
+            <RateBadge value={s.conversion_rate} label="Conversion Rate" sublabel="of accepted connections" />
             {s.errors > 0 && (
               <>
                 <div className="h-px bg-border" />
