@@ -42,6 +42,7 @@ class OverviewStats(BaseModel):
     connection_accept_rate: float = Field(default=0.0, serialization_alias="connectionAcceptRate")
     messages_sent: int = Field(default=0, serialization_alias="messagesSent")
     messages_replied: int = Field(default=0, serialization_alias="messagesReplied")
+    distinct_deals_messaged: int = Field(default=0, serialization_alias="distinctDealsMessaged")
     response_rate: float = Field(default=0.0, serialization_alias="responseRate")
     conversions: int = 0
     conversion_rate: float = Field(default=0.0, serialization_alias="conversionRate")
@@ -76,6 +77,7 @@ class CampaignStats(BaseModel):
     connections_accepted: int = Field(default=0, serialization_alias="connectionsAccepted")
     messages_sent: int = Field(default=0, serialization_alias="messagesSent")
     messages_replied: int = Field(default=0, serialization_alias="messagesReplied")
+    distinct_deals_messaged: int = Field(default=0, serialization_alias="distinctDealsMessaged")
     responses: int = 0
     connection_accept_rate: float = Field(default=0.0, serialization_alias="connectionAcceptRate")
     response_rate: float = Field(default=0.0, serialization_alias="responseRate")
@@ -202,6 +204,41 @@ def _get_connections_accepted_count(campaign_id: str, since: datetime | None = N
         return result[0]["total"] if result else 0
     except Exception as e:
         logger.error(f"Failed to count connections accepted: {e}")
+        return 0
+
+
+def _get_distinct_deals_messaged_count(campaign_id: str, since: datetime) -> int:
+    """Count distinct deals that received ≥1 outgoing message in time range."""
+    messages_collection = get_mongodb_collection("chat_messages")
+    if messages_collection is None:
+        return 0
+
+    try:
+        pipeline = [
+            {
+                "$match": {
+                    "deal_id": {"$exists": True},
+                    "is_outgoing": True,
+                    "creation_date": {"$gte": since},
+                }
+            },
+            {
+                "$lookup": {
+                    "from": "deals",
+                    "localField": "deal_id",
+                    "foreignField": "_id",
+                    "as": "deal",
+                }
+            },
+            {"$unwind": "$deal"},
+            {"$match": {"deal.campaign_id": campaign_id}},
+            {"$group": {"_id": "$deal_id"}},
+            {"$count": "total"},
+        ]
+        result = list(messages_collection.aggregate(pipeline))
+        return result[0]["total"] if result else 0
+    except Exception as e:
+        logger.error(f"Failed to count distinct deals messaged: {e}")
         return 0
 
 
@@ -376,40 +413,34 @@ async def get_analytics_overview(
     # Calculate messages replied (distinct deals with inbound messages)
     messages_collection = get_mongodb_collection("chat_messages")
     total_messages_replied = 0
+    total_distinct_deals_messaged = 0
     if messages_collection is not None:
         try:
-            pipeline = [
-                {
-                    "$match": {
-                        "is_outgoing": False,
-                        "creation_date": {"$gte": since}
-                    }
-                },
-                {
-                    "$lookup": {
-                        "from": "deals",
-                        "localField": "deal_id",
-                        "foreignField": "_id",
-                        "as": "deal"
-                    }
-                },
+            # Distinct deals with ≥1 inbound message (numerator)
+            replied_pipeline = [
+                {"$match": {"is_outgoing": False, "creation_date": {"$gte": since}}},
+                {"$lookup": {"from": "deals", "localField": "deal_id", "foreignField": "_id", "as": "deal"}},
                 {"$unwind": "$deal"},
-                {
-                    "$match": {
-                        "deal.campaign_id": {"$in": campaign_ids}
-                    }
-                },
-                {
-                    "$group": {
-                        "_id": "$deal_id"
-                    }
-                },
-                {"$count": "total"}
+                {"$match": {"deal.campaign_id": {"$in": campaign_ids}}},
+                {"$group": {"_id": "$deal_id"}},
+                {"$count": "total"},
             ]
-            result = list(messages_collection.aggregate(pipeline))
+            result = list(messages_collection.aggregate(replied_pipeline))
             total_messages_replied = result[0]["total"] if result else 0
+
+            # Distinct deals that received ≥1 outgoing message (denominator)
+            messaged_pipeline = [
+                {"$match": {"is_outgoing": True, "creation_date": {"$gte": since}}},
+                {"$lookup": {"from": "deals", "localField": "deal_id", "foreignField": "_id", "as": "deal"}},
+                {"$unwind": "$deal"},
+                {"$match": {"deal.campaign_id": {"$in": campaign_ids}}},
+                {"$group": {"_id": "$deal_id"}},
+                {"$count": "total"},
+            ]
+            result2 = list(messages_collection.aggregate(messaged_pipeline))
+            total_distinct_deals_messaged = result2[0]["total"] if result2 else 0
         except Exception as e:
-            logger.error(f"Failed to count total messages replied: {e}")
+            logger.error(f"Failed to count messages replied: {e}")
 
     total_conversions = deals_collection.count_documents({
         "campaign_id": {"$in": campaign_ids},
@@ -417,9 +448,10 @@ async def get_analytics_overview(
         "creation_date": {"$gte": since}
     })
 
-    # Calculate rates
+    # Calculate rates — response rate uses distinct-deals denominator (Fix #3)
+    # Conversion rate: both time-filtered in overview endpoint (Fix #5)
     connection_accept_rate = _calculate_rate(total_connections_accepted, total_connections_sent)
-    response_rate = _calculate_rate(total_messages_replied, total_messages_sent)
+    response_rate = _calculate_rate(total_messages_replied, total_distinct_deals_messaged)
     conversion_rate = _calculate_rate(total_conversions, total_connections_accepted)
 
     # ========== Build Per-Campaign Stats ==========
@@ -443,15 +475,17 @@ async def get_analytics_overview(
         connections_accepted = _get_connections_accepted_count(campaign._id, since)
         messages_sent = _get_action_logs_count(campaign._id, "follow_up", since)
         messages_replied = _get_messages_replied_count(campaign._id, since)
+        distinct_deals_messaged = _get_distinct_deals_messaged_count(campaign._id, since)
         conversions = deals_collection.count_documents({
             "campaign_id": campaign._id,
             "state": DealState.COMPLETED.value,
             "creation_date": {"$gte": since}
         })
 
-        # Calculate campaign rates
+        # Calculate campaign rates — response rate uses distinct-deals denominator (Fix #3)
         campaign_connection_rate = _calculate_rate(connections_accepted, connections_sent)
-        campaign_response_rate = _calculate_rate(messages_replied, messages_sent)
+        campaign_response_rate = _calculate_rate(messages_replied, distinct_deals_messaged)
+        # Conversion rate: both time-filtered for the overview endpoint (Fix #5)
         campaign_conversion_rate = _calculate_rate(conversions, connections_accepted)
 
         campaigns_data.append(
@@ -474,6 +508,7 @@ async def get_analytics_overview(
                     connections_accepted=connections_accepted,
                     messages_sent=messages_sent,
                     messages_replied=messages_replied,
+                    distinct_deals_messaged=distinct_deals_messaged,
                     responses=messages_replied,
                     connection_accept_rate=campaign_connection_rate,
                     response_rate=campaign_response_rate,
@@ -500,16 +535,19 @@ async def get_analytics_overview(
         connection_accept_rate=connection_accept_rate,
         messages_sent=total_messages_sent,
         messages_replied=total_messages_replied,
+        distinct_deals_messaged=total_distinct_deals_messaged,
         response_rate=response_rate,
         conversions=total_conversions,
         conversion_rate=conversion_rate,
     )
 
-    total_leads = (
-        leads_collection.count_documents({"user_id": user_id})
-        if leads_collection is not None
-        else 0
-    )
+    # When a specific campaign is selected, scope total_leads to that campaign's deals (Fix #4)
+    if campaign_id and leads_collection is not None:
+        total_leads = deals_collection.count_documents({"campaign_id": {"$in": campaign_ids}})
+    elif leads_collection is not None:
+        total_leads = leads_collection.count_documents({"user_id": user_id})
+    else:
+        total_leads = 0
 
     totals = OverviewTotals(
         leads=total_leads,

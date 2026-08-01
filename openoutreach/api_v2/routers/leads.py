@@ -475,6 +475,21 @@ async def get_lead(
                 "outcome": deal.get("outcome"),
             })
 
+    # Populate messagesCount and lastMessageAt from chat_messages (Fix #9)
+    accessible_deal_ids = [d["dealId"] for d in all_deals]
+    messages_count = 0
+    last_message_at = None
+    if accessible_deal_ids:
+        messages_col = get_mongodb_collection("chat_messages")
+        if messages_col is not None:
+            messages_count = messages_col.count_documents({"deal_id": {"$in": accessible_deal_ids}})
+            last_msg = messages_col.find_one(
+                {"deal_id": {"$in": accessible_deal_ids}},
+                sort=[("creation_date", -1)],
+            )
+            if last_msg and last_msg.get("creation_date"):
+                last_message_at = last_msg["creation_date"].isoformat()
+
     return {
         "id": str(lead_data["_id"]),
         "publicIdentifier": lead_data.get("public_identifier", ""),
@@ -499,6 +514,8 @@ async def get_lead(
         "profile": profile_shape,
         "deals": all_deals,
         "connectionDegree": lead_data.get("connection_degree"),
+        "messagesCount": messages_count,
+        "lastMessageAt": last_message_at,
     }
 
 

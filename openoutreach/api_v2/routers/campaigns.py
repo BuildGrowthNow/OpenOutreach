@@ -978,11 +978,29 @@ async def get_campaign_leads(
                 )
             })
 
+    # Fix #6: return pipeline counts as DB aggregates so UI shows full campaign totals
+    pipeline_agg = [
+        {"$match": {"campaign_id": campaign_id}},
+        {"$group": {"_id": "$state", "count": {"$sum": 1}}},
+    ]
+    state_counts: Dict[str, int] = {}
+    for row in collection.aggregate(pipeline_agg):
+        state_counts[row["_id"]] = row["count"]
+
     return {
         "total": total,
         "limit": limit,
         "offset": offset,
         "results": results,
+        "pipelineCounts": {
+            "qualified": state_counts.get("Qualified", 0),
+            "completed": state_counts.get("Completed", 0),
+            "failed": state_counts.get("Failed", 0),
+            "connected": state_counts.get("Connected", 0),
+            "pending": state_counts.get("Pending", 0),
+            "discovered": state_counts.get("Discovered", 0),
+            "readyToConnect": state_counts.get("ReadyToConnect", 0),
+        },
     }
 
 
@@ -1077,9 +1095,11 @@ async def get_campaign_analytics(
             "state": DealState.COMPLETED.value,
         })
 
+    distinct_deals_messaged = 0
     if messages_collection is not None:
         try:
-            pipeline = [
+            # Numerator: distinct deals with ≥1 inbound message
+            replied_pipeline = [
                 {"$match": {"is_outgoing": False, "creation_date": {"$gte": since}}},
                 {"$lookup": {"from": "deals", "localField": "deal_id", "foreignField": "_id", "as": "deal"}},
                 {"$unwind": "$deal"},
@@ -1087,13 +1107,27 @@ async def get_campaign_analytics(
                 {"$group": {"_id": "$deal_id"}},
                 {"$count": "total"},
             ]
-            result = list(messages_collection.aggregate(pipeline))
+            result = list(messages_collection.aggregate(replied_pipeline))
             messages_replied = result[0]["total"] if result else 0
+
+            # Denominator: distinct deals that received ≥1 outgoing message (Fix #3)
+            messaged_pipeline = [
+                {"$match": {"is_outgoing": True, "creation_date": {"$gte": since}}},
+                {"$lookup": {"from": "deals", "localField": "deal_id", "foreignField": "_id", "as": "deal"}},
+                {"$unwind": "$deal"},
+                {"$match": {"deal.campaign_id": campaign_id}},
+                {"$group": {"_id": "$deal_id"}},
+                {"$count": "total"},
+            ]
+            result2 = list(messages_collection.aggregate(messaged_pipeline))
+            distinct_deals_messaged = result2[0]["total"] if result2 else 0
         except Exception:
             pass
 
     connection_accept_rate = round((connections_accepted / connections_sent * 100), 2) if connections_sent else 0.0
-    response_rate = round((messages_replied / messages_sent * 100), 2) if messages_sent else 0.0
+    # Response rate: distinct replies / distinct deals messaged (Fix #3)
+    response_rate = round((messages_replied / distinct_deals_messaged * 100), 2) if distinct_deals_messaged else 0.0
+    # Conversion rate: all-time for campaign analytics — both sides unfiltered (Fix #5)
     conversion_rate = round((conversions / connections_accepted * 100), 2) if connections_accepted else 0.0
 
     # Pipeline counts

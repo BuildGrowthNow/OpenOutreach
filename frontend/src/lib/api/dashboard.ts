@@ -360,7 +360,7 @@ export async function getCampaignLeads(
   page?: number,
   limit?: number,
 ): Promise<
-  ApiResponse<{ data: Lead[]; pagination: Pagination; filters: LeadFilters }>
+  ApiResponse<{ data: Lead[]; pagination: Pagination; filters: LeadFilters; pipelineCounts: Record<string, number> }>
 > {
   const params: Record<string, string> = {};
   if (status) params.status = status;
@@ -373,12 +373,12 @@ export async function getCampaignLeads(
     lead: { id: string; public_identifier: string; url: string; full_name?: string; headline?: string; location?: string; disqualified?: boolean; created_at?: string };
     deal: { id: string; lead_id: string; campaign_id: string; state: string; outcome?: string; reason?: string; creation_date?: string };
   };
-  type RawResponse = { total: number; limit: number; offset: number; results: RawLeadDeal[] };
+  type RawResponse = { total: number; limit: number; offset: number; results: RawLeadDeal[]; pipelineCounts?: Record<string, number> };
 
   const raw = await get<RawResponse>(`/api/campaigns/${id}/leads`, params);
 
   if (!raw.data) {
-    return raw as unknown as ApiResponse<{ data: Lead[]; pagination: Pagination; filters: LeadFilters }>;
+    return raw as unknown as ApiResponse<{ data: Lead[]; pagination: Pagination; filters: LeadFilters; pipelineCounts: Record<string, number> }>;
   }
 
   const leads: Lead[] = (raw.data.results || []).map(({ lead, deal }) => {
@@ -408,6 +408,7 @@ export async function getCampaignLeads(
       data: leads,
       pagination: { page: 1, limit: raw.data.limit, total: raw.data.total, total_pages: Math.ceil(raw.data.total / raw.data.limit) },
       filters: {},
+      pipelineCounts: raw.data.pipelineCounts ?? {},
     },
   };
 }

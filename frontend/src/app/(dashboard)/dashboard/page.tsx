@@ -118,7 +118,6 @@ const Dashboard = () => {
   const messagesSent = stats?.messagesSent ?? 0
   const messagesReplied = stats?.messagesReplied ?? 0
 
-  const connectionRate = totalLeads > 0 ? `${roundTo1((connected / totalLeads) * 100)}%` : '—'
   const acceptRate = connectionsSent > 0 ? `${roundTo1((connectionsAccepted / connectionsSent) * 100)}%` : '—'
   const replyRate = messagesSent > 0 ? `${roundTo1((messagesReplied / messagesSent) * 100)}%` : '—'
 
@@ -191,7 +190,7 @@ const Dashboard = () => {
             title="Connected"
             value={connected}
             icon="Users"
-            description={`${connectionRate} connection rate (30d)`}
+            description={`${acceptRate} accept rate (30d)`}
           />
           <StatsCard
             title="Messages Sent"
@@ -223,10 +222,10 @@ const Dashboard = () => {
               highlight: messagesReplied > 0 ? 'green' : 'neutral',
             },
             {
-              label: 'Connection Rate',
-              value: connectionRate,
-              sub: `${connected} connected`,
-              highlight: connected > 0 ? 'green' : 'neutral',
+              label: 'Connections Accepted',
+              value: connectionsAccepted,
+              sub: `${acceptRate} accept rate`,
+              highlight: connectionsAccepted > 0 ? 'green' : 'neutral',
             },
             {
               label: 'Active Campaigns',
@@ -272,8 +271,8 @@ const Dashboard = () => {
               <div className="text-2xl font-bold">{replyRate}</div>
             </div>
             <div className="space-y-1">
-              <div className="text-sm text-muted-foreground">Connection Rate</div>
-              <div className="text-2xl font-bold">{connectionRate}</div>
+              <div className="text-sm text-muted-foreground">Connections Accepted</div>
+              <div className="text-2xl font-bold">{connectionsAccepted}</div>
             </div>
           </div>
         </CardContent>

@@ -20,6 +20,7 @@ export default function CampaignLeadsPage() {
   const campaignId = params.id as string
 
   const [leads, setLeads] = useState<Lead[]>([])
+  const [pipelineCounts, setPipelineCounts] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
@@ -43,6 +44,7 @@ export default function CampaignLeadsPage() {
       const leadsResponse = await getCampaignLeads(campaignId)
       if (leadsResponse.data) {
         setLeads(leadsResponse.data.data || [])
+        setPipelineCounts(leadsResponse.data.pipelineCounts || {})
       } else {
         setError(leadsResponse.error || leadsResponse.message || 'Failed to fetch campaign leads')
       }
@@ -184,19 +186,21 @@ export default function CampaignLeadsPage() {
         <CardContent className="pt-6">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="text-center">
-              <div className="text-2xl font-bold">{leads.length}</div>
+              <div className="text-2xl font-bold">
+                {(pipelineCounts.discovered ?? 0) + (pipelineCounts.qualified ?? 0) + (pipelineCounts.readyToConnect ?? 0) + (pipelineCounts.pending ?? 0) + (pipelineCounts.connected ?? 0) + (pipelineCounts.completed ?? 0) + (pipelineCounts.failed ?? 0)}
+              </div>
               <div className="text-sm text-muted-foreground">Total Leads</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold">{leads.filter(l => l.state === 'QUALIFIED').length}</div>
+              <div className="text-2xl font-bold">{pipelineCounts.qualified ?? 0}</div>
               <div className="text-sm text-muted-foreground">Qualified Leads</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold">{leads.filter(l => l.state === 'COMPLETED').length}</div>
+              <div className="text-2xl font-bold">{pipelineCounts.completed ?? 0}</div>
               <div className="text-sm text-muted-foreground">Done</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold">{leads.filter(l => l.state === 'FAILED').length}</div>
+              <div className="text-2xl font-bold">{pipelineCounts.failed ?? 0}</div>
               <div className="text-sm text-muted-foreground">Disqualified</div>
             </div>
           </div>
@@ -311,16 +315,17 @@ export default function CampaignLeadsPage() {
           <div className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {[
-                { status: 'DISCOVERED', label: 'Discovered', color: 'bg-zinc-500' },
-                { status: 'QUALIFIED', label: 'Qualified', color: 'bg-blue-500' },
-                { status: 'PENDING', label: 'Pending', color: 'bg-purple-500' },
-                { status: 'CONNECTED', label: 'Connected', color: 'bg-emerald-500' },
-                { status: 'COMPLETED', label: 'Done', color: 'bg-orange-500' },
-                { status: 'FAILED', label: 'Failed', color: 'bg-red-500' },
-                { status: 'NO_EMAIL', label: 'No Email', color: 'bg-gray-400' },
-              ].map(({ status, label, color }) => {
-                const count = leads.filter(l => l.state === status).length
-                const percentage = leads.length > 0 ? Math.round((count / leads.length) * 100) : 0
+                { status: 'DISCOVERED', key: 'discovered', label: 'Discovered', color: 'bg-zinc-500' },
+                { status: 'QUALIFIED', key: 'qualified', label: 'Qualified', color: 'bg-blue-500' },
+                { status: 'PENDING', key: 'pending', label: 'Pending', color: 'bg-purple-500' },
+                { status: 'CONNECTED', key: 'connected', label: 'Connected', color: 'bg-emerald-500' },
+                { status: 'COMPLETED', key: 'completed', label: 'Done', color: 'bg-orange-500' },
+                { status: 'FAILED', key: 'failed', label: 'Failed', color: 'bg-red-500' },
+                { status: 'NO_EMAIL', key: 'noEmail', label: 'No Email', color: 'bg-gray-400' },
+              ].map(({ status, key, label, color }) => {
+                const count = pipelineCounts[key] ?? 0
+                const total = Object.values(pipelineCounts).reduce((a, b) => a + b, 0)
+                const percentage = total > 0 ? Math.round((count / total) * 100) : 0
 
                 return (
                   <div key={status} className="space-y-2">

@@ -223,9 +223,10 @@ async def get_message_stats(
     query: dict = {"deal_id": {"$in": deal_ids}}
     total_sent = collection.count_documents({**query, "is_outgoing": True})
     total_received = collection.count_documents({**query, "is_outgoing": False})
-    # distinct deals that have at least one reply
+    # Fix #3: response rate = distinct deals with reply / distinct deals messaged
     replied_deal_ids = collection.distinct("deal_id", {**query, "is_outgoing": False})
-    response_rate = round((len(replied_deal_ids) / max(total_sent, 1)) * 100) if total_sent else 0
+    messaged_deal_ids = collection.distinct("deal_id", {**query, "is_outgoing": True})
+    response_rate = round((len(replied_deal_ids) / max(len(messaged_deal_ids), 1)) * 100) if messaged_deal_ids else 0
 
     if campaign_id:
         active_campaigns = 1
