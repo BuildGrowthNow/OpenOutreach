@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     # =========================================================================
     # Core Application Settings
     # =========================================================================
-    SECRET_KEY: str = "openoutreach-local-dev-key-change-in-production"
+    SECRET_KEY: str
     DEBUG: bool = False
     ALLOWED_HOSTS: str = "localhost,127.0.0.1"
     LOG_LEVEL: str = "INFO"
@@ -203,8 +203,8 @@ class Settings(BaseSettings):
     )
 
 
-# Global settings instance
-settings = Settings()
+# Global settings instance — SECRET_KEY loaded from env/.env at runtime
+settings = Settings()  # type: ignore[call-arg]
 
 
 # Ensure data directory exists

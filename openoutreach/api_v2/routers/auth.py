@@ -284,7 +284,7 @@ async def login(credentials: LoginRequest, response: Response, request: Request)
     return TokenResponse(
         access_token=access_token,
         token_type="bearer",
-        refresh_token=refresh_token,
+        refresh_token=None,
         expires_in=settings.JWT_ACCESS_TOKEN_LIFETIME_MINUTES * 60
     )
 
@@ -362,7 +362,7 @@ async def refresh_token(request: Request, response: Response):
         return TokenResponse(
             access_token=access_token,
             token_type="bearer",
-            refresh_token=refresh_token,  # Return existing refresh token
+            refresh_token=None,
             expires_in=settings.JWT_ACCESS_TOKEN_LIFETIME_MINUTES * 60
         )
 
@@ -502,14 +502,26 @@ async def verify_email(body: EmailVerifyRequest):
 
 
 @router.post("/resend-verification/")
-async def resend_verification(email: str):
+async def resend_verification(email: str, request: Request):
     """
     Resend email verification link.
 
     Always returns success to prevent email enumeration.
     """
+    from openoutreach.billing.rate_limiter import EmailRateLimiter
+
+    client_ip = _extract_client_ip(request) or "unknown"
+    allowed, error_msg = EmailRateLimiter.check(client_ip, "resend-verification")
+    if not allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=error_msg or "Rate limit exceeded"
+        )
+
     try:
         user = User.get_by_email(email)
+
+        EmailRateLimiter.record(client_ip, "resend-verification")
 
         if user and not user.email_verified:
             verification_token = jwt.encode(
@@ -537,6 +549,8 @@ async def resend_verification(email: str):
 
         return {"status": "success", "message": "If an unverified account exists, a verification link has been sent"}
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Resend verification error: {e}")
         return {"status": "success", "message": "If an unverified account exists, a verification link has been sent"}
@@ -546,14 +560,26 @@ async def resend_verification(email: str):
 
 
 @router.post("/password-reset/request/")
-async def password_reset_request(request: PasswordResetRequest):
+async def password_reset_request(request: PasswordResetRequest, http_request: Request):
     """
     Request a password reset.
 
     Always returns success to prevent email enumeration attacks.
     Sends email with reset link.
     """
+    from openoutreach.billing.rate_limiter import EmailRateLimiter
+
+    client_ip = _extract_client_ip(http_request) or "unknown"
+    allowed, error_msg = EmailRateLimiter.check(client_ip, "password-reset")
+    if not allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=error_msg or "Rate limit exceeded"
+        )
+
     try:
+        EmailRateLimiter.record(client_ip, "password-reset")
+
         user = User.get_by_email(request.email)
 
         if user and user.hashed_password:
@@ -562,6 +588,8 @@ async def password_reset_request(request: PasswordResetRequest):
 
         return {"status": "success", "message": "If an account exists, a reset link has been sent"}
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Password reset request error: {e}")
         return {"status": "success", "message": "If an account exists, a reset link has been sent"}

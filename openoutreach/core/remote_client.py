@@ -36,9 +36,6 @@ class DaemonConfig:
     active_days: list[int]
     poll_interval_seconds: int
     heartbeat_interval_seconds: int
-    mongodb_uri: Optional[str] = None
-    mongodb_name: str = "openoutreach"
-    secret_key: Optional[str] = None
     llm_api_key: Optional[str] = None
     llm_api_base: Optional[str] = None
     ai_model: Optional[str] = None
@@ -133,14 +130,24 @@ class RemoteClient:
             active_days=data["active_hours"]["days"],
             poll_interval_seconds=data["poll_interval_seconds"],
             heartbeat_interval_seconds=data["heartbeat_interval_seconds"],
-            mongodb_uri=data.get("mongodb_uri"),
-            mongodb_name=data.get("mongodb_name", "openoutreach"),
-            secret_key=data.get("server_env", {}).get("secret_key"),
             llm_api_key=data.get("server_env", {}).get("llm_api_key"),
             llm_api_base=data.get("server_env", {}).get("llm_api_base"),
             ai_model=data.get("server_env", {}).get("ai_model"),
             llm_provider=data.get("server_env", {}).get("llm_provider"),
         )
+
+    async def bootstrap(self, linkedin_profile_id: str) -> dict:
+        """Fetch one-time bootstrap secrets (secret_key + MongoDB URI).
+
+        Called once at daemon startup — not on the periodic config-refresh path.
+        Returns dict with secret_key, mongodb_uri, mongodb_name.
+        """
+        response = await self._request_with_retry(
+            "GET",
+            "/api/daemon/bootstrap",
+            params={"linkedin_profile_id": linkedin_profile_id},
+        )
+        return response.json()
 
     async def reconcile(self, linkedin_profile_id: str) -> dict:
         """Ask backend to schedule tasks for all active campaigns.

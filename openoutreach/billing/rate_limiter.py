@@ -58,6 +58,49 @@ class SignupRateLimiter:
             logger.error(f"Failed to record signup attempt for IP {ip_address}: {e}")
 
 
+class EmailRateLimiter:
+    """IP-based rate limiter for email-sending endpoints (5 per IP per hour)."""
+
+    MAX_PER_IP_PER_HOUR = 5
+    WINDOW_HOURS = 1
+    COLLECTION = "ip_email_attempts"
+
+    @staticmethod
+    def check(ip_address: str, endpoint: str) -> tuple[bool, str | None]:
+        """Check if IP can trigger another email send. Returns (allowed, error_message)."""
+        collection = get_mongodb_collection(EmailRateLimiter.COLLECTION)
+        if collection is None:
+            logger.warning("Could not check email rate limit: collection not available")
+            return True, None
+
+        cutoff = datetime.now(tz.utc) - timedelta(hours=EmailRateLimiter.WINDOW_HOURS)
+        count = collection.count_documents({
+            "ip_address": ip_address,
+            "endpoint": endpoint,
+            "created_at": {"$gte": cutoff},
+        })
+
+        if count >= EmailRateLimiter.MAX_PER_IP_PER_HOUR:
+            return False, "Too many requests. Please wait before trying again."
+
+        return True, None
+
+    @staticmethod
+    def record(ip_address: str, endpoint: str) -> None:
+        """Record an email-send attempt from an IP."""
+        collection = get_mongodb_collection(EmailRateLimiter.COLLECTION)
+        if collection is None:
+            return
+        try:
+            collection.insert_one({
+                "ip_address": ip_address,
+                "endpoint": endpoint,
+                "created_at": datetime.now(tz.utc),
+            })
+        except Exception as e:
+            logger.error("Failed to record email attempt for IP %s: %s", ip_address, e)
+
+
 class LinkedInCredentialValidator:
     """Validates LinkedIn credentials and enforces uniqueness."""
 

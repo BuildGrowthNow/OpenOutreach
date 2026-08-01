@@ -2,7 +2,7 @@
 WebSocket Router - Real-time notifications and campaign status
 """
 from datetime import datetime, timezone as _tz
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from typing import Dict, Optional, Set
 import logging
 
@@ -80,26 +80,46 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 
-@router.websocket("/ws/notifications/")
-async def notification_websocket(websocket: WebSocket, token: str = Query(...)):
-    """
-    WebSocket endpoint for user notifications.
-    Replaces Django NotificationConsumer.
+async def _ws_authenticate(websocket: WebSocket) -> Optional[str]:
+    """Accept the connection, wait for first auth message, return user_id or None.
 
-    Connect: ws://host/ws/notifications/?token=<jwt>
-    Receives: notification_message, notification_broadcast
-    Sends: ping → pong, mark_read → ack
+    Client must send {"type": "auth", "token": "<jwt>"} as the first message.
+    Closes with code 4001 on failure and returns None.
     """
-    # Authenticate
     from openoutreach.api_v2.dependencies_v2 import get_current_user
     from fastapi.security import HTTPAuthorizationCredentials
 
+    await websocket.accept()
     try:
-        creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
-        user_id = await get_current_user(creds)
+        first = await websocket.receive_json()
+    except Exception:
+        await websocket.close(code=4001)
+        return None
+
+    if first.get("type") != "auth" or not first.get("token"):
+        await websocket.close(code=4001)
+        return None
+
+    try:
+        creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials=first["token"])
+        return await get_current_user(creds)
     except Exception as e:
         logger.warning(f"WebSocket auth failed: {e}")
         await websocket.close(code=4001)
+        return None
+
+
+@router.websocket("/ws/notifications/")
+async def notification_websocket(websocket: WebSocket):
+    """
+    WebSocket endpoint for user notifications.
+
+    Connect: ws://host/ws/notifications/
+    First message must be: {"type": "auth", "token": "<jwt>"}
+    Then: ping → pong, mark_read → mark_read_ack
+    """
+    user_id = await _ws_authenticate(websocket)
+    if user_id is None:
         return
 
     await manager.connect_user(websocket, user_id)
@@ -130,31 +150,17 @@ async def notification_websocket(websocket: WebSocket, token: str = Query(...)):
 
 
 @router.websocket("/ws/campaigns/{campaign_id}/")
-async def campaign_status_websocket(
-    websocket: WebSocket,
-    campaign_id: str,
-    token: str = Query(...)
-):
+async def campaign_status_websocket(websocket: WebSocket, campaign_id: str):
     """
     WebSocket endpoint for campaign status updates.
-    Replaces Django CampaignStatusConsumer.
 
-    Connect: ws://host/ws/campaigns/<id>/?token=<jwt>
-    Receives: campaign_status_update, campaign_error
+    Connect: ws://host/ws/campaigns/<id>/
+    First message must be: {"type": "auth", "token": "<jwt>"}
     """
-    # Authenticate
-    from openoutreach.api_v2.dependencies_v2 import get_current_user
-    from fastapi.security import HTTPAuthorizationCredentials
-
-    try:
-        creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
-        user_id = await get_current_user(creds)
-    except Exception as e:
-        logger.warning(f"WebSocket auth failed: {e}")
-        await websocket.close(code=4001)
+    user_id = await _ws_authenticate(websocket)
+    if user_id is None:
         return
 
-    # Verify user has access to this campaign
     campaign = models.Campaign.get(campaign_id)
     if not campaign or campaign.user_id != user_id:
         await websocket.close(code=4003)

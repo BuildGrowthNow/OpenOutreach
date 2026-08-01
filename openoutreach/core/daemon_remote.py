@@ -224,22 +224,35 @@ class RemoteDaemon:
         assert self.config is not None
         logger.info("Config loaded: velocity=%d/hr", self.config.velocity)
 
-        # Bootstrap server-side env for the desktop process (no local .env available).
-        # Inject into os.environ so modules that read os.environ directly (e.g.
-        # mongodb/crypto.py) pick them up, and patch the pydantic settings object
-        # so modules that read settings.* (e.g. core/crypto.py, llm.py) also work.
-        self._apply_server_env(self.config)
+        # Fetch bootstrap secrets (secret_key + MongoDB URI) via dedicated endpoint.
+        # Separate from get_config so secrets are never mixed into the polling path.
+        try:
+            bootstrap = await self._startup_request(
+                "get bootstrap",
+                lambda: self.client.bootstrap(self.linkedin_profile_id),
+            )
+        except Exception as e:
+            logger.error("Failed to fetch bootstrap secrets: %s", e)
+            self.running = False
+            return
+
+        # Inject server-side env for the desktop process (no local .env available).
+        # Sets os.environ first (for mongodb/crypto.py), then patches the pydantic
+        # settings singleton (for core/crypto.py and llm.py).
+        self._apply_server_env(bootstrap, self.config)
 
         # Connect to Atlas using the URI provided by the backend
-        if self.config.mongodb_uri:
+        mongodb_uri = bootstrap.get("mongodb_uri")
+        mongodb_name = bootstrap.get("mongodb_name", "openoutreach")
+        if mongodb_uri:
             from openoutreach.mongodb.connection import initialize_mongodb_with_uri
-            ok = initialize_mongodb_with_uri(self.config.mongodb_uri, self.config.mongodb_name)
+            ok = initialize_mongodb_with_uri(mongodb_uri, mongodb_name)
             if ok:
-                logger.info("MongoDB Atlas connected (db: %s)", self.config.mongodb_name)
+                logger.info("MongoDB Atlas connected (db: %s)", mongodb_name)
             else:
                 logger.warning("MongoDB Atlas connection failed — task execution may be degraded")
         else:
-            logger.warning("No MongoDB URI in config — task execution will fail")
+            logger.warning("No MongoDB URI in bootstrap — task execution will fail")
 
         # Schedule tasks for active campaigns
         try:
@@ -265,32 +278,34 @@ class RemoteDaemon:
             logger.exception("Main loop crashed: %s", e)
             raise
 
-    def _apply_server_env(self, config) -> None:
+    def _apply_server_env(self, bootstrap: dict, config: "DaemonConfig") -> None:
         """Inject server-side env values for the desktop process.
 
         The desktop exe has no .env file, so modules that read os.environ or
         the pydantic settings singleton directly need these injected at runtime.
         Sets os.environ first (for mongodb/crypto.py), then patches the settings
         object (for core/crypto.py and llm.py).
+
+        bootstrap: dict from /api/daemon/bootstrap (secret_key, mongodb_uri, mongodb_name)
+        config: DaemonConfig from /api/daemon/config (llm fields)
         """
         import os
         from openoutreach.config import settings as app_settings
 
         mapping = {
-            "SECRET_KEY": config.secret_key,
+            "SECRET_KEY": bootstrap.get("secret_key"),
             "LLM_API_KEY": config.llm_api_key,
             "LLM_API_BASE": config.llm_api_base,
             "AI_MODEL": config.ai_model,
             "LLM_PROVIDER": config.llm_provider,
-            "MONGODB_URI": config.mongodb_uri,
-            "MONGODB_NAME": config.mongodb_name,
+            "MONGODB_URI": bootstrap.get("mongodb_uri"),
+            "MONGODB_NAME": bootstrap.get("mongodb_name", "openoutreach"),
             "MONGODB_ENABLED": "true",
         }
         for env_key, value in mapping.items():
             if value:
                 os.environ[env_key] = str(value)
                 try:
-                    # Pydantic fields are uppercase (LLM_API_KEY, not llm_api_key)
                     object.__setattr__(app_settings, env_key, value)
                 except Exception:
                     pass
@@ -452,10 +467,12 @@ class RemoteDaemon:
         if not self.browser:
             raise BrowserNotFoundError("Browser not detected")
 
-        # Extract proxy configuration from backend profile details
+        # Decrypt proxy credentials — server sends Fernet-encrypted values
+        from openoutreach.mongodb.crypto import safe_decrypt
+
         proxy_server = profile_details.get("proxy_server")
-        proxy_username = profile_details.get("proxy_username")
-        proxy_password = profile_details.get("proxy_password")
+        proxy_username = safe_decrypt(profile_details.get("proxy_username_encrypted") or "")
+        proxy_password = safe_decrypt(profile_details.get("proxy_password_encrypted") or "")
 
         logger.info("Launching %s (channel: %s)", self.browser.name, self.browser.channel)
 
@@ -489,9 +506,11 @@ class RemoteDaemon:
                 browser_info.channel != "webkit" and is_new_profile and not storage_state
             )
             if needs_auth:
+                from openoutreach.mongodb.crypto import safe_decrypt
+                password = safe_decrypt(creds.get("encrypted_password") or "")
                 session.linkedin_profile.linkedin_username = creds["email"]
-                session.linkedin_profile.linkedin_password = creds["password"]
-                authenticate(session, username=creds["email"], password=creds["password"])
+                session.linkedin_profile.linkedin_password = password
+                authenticate(session, username=creds["email"], password=password)
                 # Return fresh cookies so the async caller can sync them to the backend
                 return context.storage_state()
             # No fresh auth — ensure the page is on linkedin.com so that

@@ -320,16 +320,39 @@ async def get_daemon_config(
         },
         "poll_interval_seconds": 30,
         "heartbeat_interval_seconds": 30,
-        # Desktop daemon bootstraps from these — it has no local .env
-        "mongodb_uri": app_settings.MONGODB_URI or None,
-        "mongodb_name": app_settings.MONGODB_NAME,
         "server_env": {
-            "secret_key": app_settings.SECRET_KEY,
             "llm_api_key": app_settings.LLM_API_KEY or None,
             "llm_api_base": app_settings.LLM_API_BASE or None,
             "ai_model": app_settings.AI_MODEL or None,
             "llm_provider": app_settings.LLM_PROVIDER or None,
         },
+    }
+
+
+@router.get("/bootstrap")
+async def bootstrap_daemon(
+    linkedin_profile_id: str,
+    user_id: str = Depends(get_current_user),
+):
+    """One-time bootstrap payload for the desktop daemon on startup.
+
+    Returns the MongoDB URI and SECRET_KEY needed for cookie encryption/decryption
+    and JWT signing. Separate from /config so the secret is never mixed into the
+    regularly-polled config response.
+    """
+    profile = LinkedInProfile.objects.get(
+        _id=linkedin_profile_id,
+        user_id=user_id,
+    )
+    if not profile:
+        raise HTTPException(404, "LinkedIn profile not found")
+
+    from openoutreach.config import settings as app_settings
+
+    return {
+        "secret_key": app_settings.SECRET_KEY,
+        "mongodb_uri": app_settings.MONGODB_URI or None,
+        "mongodb_name": app_settings.MONGODB_NAME,
     }
 
 
@@ -441,7 +464,7 @@ async def get_credentials(
 
     return {
         "email": cred.get_email(),
-        "password": cred.get_password(),
+        "encrypted_password": cred.password_encrypted,
         "cookie_data": cookie_data_json,
     }
 
@@ -503,15 +526,19 @@ async def get_profile_details(
     if not profile:
         raise HTTPException(404, "LinkedIn profile not found")
 
+    from openoutreach.mongodb.crypto import encrypt_text
+
+    def _maybe_encrypt(val: Optional[str]) -> Optional[str]:
+        return encrypt_text(val) if val else None
+
     return {
         "id": str(profile._id),
         "user_id": profile.user_id,
         "linkedin_username": profile.linkedin_username or "",
-        "linkedin_password": profile.linkedin_password or "",
         "cookie_data": profile.cookie_data or {},
         "proxy_server": profile.proxy_server or None,
-        "proxy_username": profile.proxy_username or None,
-        "proxy_password": profile.proxy_password or None,
+        "proxy_username_encrypted": _maybe_encrypt(profile.proxy_username),
+        "proxy_password_encrypted": _maybe_encrypt(profile.proxy_password),
         "connect_daily_limit": profile.connect_daily_limit or 50,
         "follow_up_daily_limit": profile.follow_up_daily_limit or 30,
     }
