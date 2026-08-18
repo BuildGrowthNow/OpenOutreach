@@ -29,13 +29,13 @@ const toastVariants = cva(
   {
     variants: {
       variant: {
-        default: 'border bg-background text-foreground',
+        default: 'border border-zinc-800 bg-zinc-900 text-zinc-100',
         destructive:
-          'destructive group border-destructive bg-destructive text-destructive-foreground',
-        success: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
-        error: 'border-rose-500/20 bg-rose-500/10 text-rose-600 dark:text-rose-400',
-        info: 'border-blue-500/20 bg-blue-500/10 text-blue-600 dark:text-blue-400',
-        warning: 'border-amber-500/20 bg-amber-500/10 text-amber-600 dark:text-amber-400',
+          'destructive group border-rose-800 bg-zinc-900 text-rose-400',
+        success: 'border-emerald-700/50 bg-zinc-900 text-emerald-400',
+        error: 'border-rose-700/50 bg-zinc-900 text-rose-400',
+        info: 'border-blue-700/50 bg-zinc-900 text-blue-400',
+        warning: 'border-amber-700/50 bg-zinc-900 text-amber-400',
       },
     },
     defaultVariants: {
@@ -84,7 +84,7 @@ const ToastClose = React.forwardRef<
   <ToastPrimitives.Close
     ref={ref}
     className={cn(
-      'absolute right-2 top-2 rounded-md p-1 text-foreground/50 opacity-0 transition-opacity hover:text-foreground focus:opacity-100 focus:outline-none focus:ring-2 group-hover:opacity-100 group-[.destructive]:text-red-300 group-[.destructive]:hover:text-red-50 group-[.destructive]:focus:ring-red-400 group-[.destructive]:focus:ring-offset-red-600',
+      'absolute right-2 top-2 rounded-md p-1 text-zinc-400 opacity-0 transition-opacity hover:text-zinc-100 focus:opacity-100 focus:outline-none focus:ring-2 group-hover:opacity-100 group-[.destructive]:text-red-300 group-[.destructive]:hover:text-red-50 group-[.destructive]:focus:ring-red-400 group-[.destructive]:focus:ring-offset-red-600',
       className
     )}
     toast-close=""

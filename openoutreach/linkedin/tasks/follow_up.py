@@ -394,23 +394,26 @@ def handle_follow_up(task, session, qualifiers):
         # Strip em-dashes — the LLM occasionally ignores the hard constraint
         message = message.replace("—", "-").replace("–", "-")
         logger.info("[%s] follow_up message for %s: %s", campaign, public_id, message)
+
+        # Pre-stamp last_outgoing_at BEFORE sending so the duplicate guard survives
+        # a crash between send and save. If send fails we clear it and save again.
+        now = datetime.now(timezone.utc)
+        deal.last_outgoing_at = now
+        deal.follow_up_cycled_at = now
+        deal.save(update_fields=["last_outgoing_at", "follow_up_cycled_at"])
+        _last_send_times[str(deal._id)] = now
+
         sent = send_raw_message(session, profile, message)
         if not sent:
             logger.warning(
                 "follow_up for %s: send failed — keeping CONNECTED, will retry next cycle",
                 public_id,
             )
+            # Clear pre-stamp so the next cycle retries instead of waiting MIN_DAYS
+            deal.last_outgoing_at = None
+            deal.save(update_fields=["last_outgoing_at"])
+            _last_send_times.pop(str(deal._id), None)
             return
-        now = datetime.now(timezone.utc)
-        # Stamp in-memory lock so back-to-back queued tasks skip this deal
-        # before LinkedIn's API propagates the just-sent message to the DB.
-        _last_send_times[str(deal._id)] = now
-        # Persist last_outgoing_at immediately — before any post-send logging
-        # or sync that could throw, so the guard survives exceptions and restarts.
-        # follow_up_cycled_at is used for queue ordering; creation_date is never mutated.
-        deal.last_outgoing_at = now
-        deal.follow_up_cycled_at = now
-        deal.save(update_fields=["last_outgoing_at", "follow_up_cycled_at"])
         # Record action with smart rate limiter
         smart_record_action(
             session.linkedin_profile, ActionLog.ActionType.FOLLOW_UP, campaign
