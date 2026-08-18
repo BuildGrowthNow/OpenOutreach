@@ -35,6 +35,9 @@ class CampaignCreate(BaseModel):
     target_company_size: Optional[str] = None  # Target company size description
     follow_up_strategy: Optional[str] = None  # Follow-up strategy text
     target_degrees: Optional[List[int]] = None  # Target connection degrees (1, 2, 3)
+    channel_sequence: Optional[List[str]] = None  # e.g. ["whatsapp", "linkedin"]
+    channel_settings: Optional[Dict[str, Any]] = None  # per-channel config
+    whatsapp_profile_id: Optional[str] = None  # WhatsAppProfile executing WA tasks
 
     class Config:
         json_schema_extra = {
@@ -68,6 +71,9 @@ class CampaignUpdate(BaseModel):
     target_company_size: Optional[str] = None
     follow_up_strategy: Optional[str] = None
     target_degrees: Optional[List[int]] = None
+    channel_sequence: Optional[List[str]] = None
+    channel_settings: Optional[Dict[str, Any]] = None
+    whatsapp_profile_id: Optional[str] = None
 
 
 class CampaignStats(BaseModel):
@@ -99,6 +105,9 @@ class CampaignResponse(BaseModel):
     target_degrees: List[int] = [1, 2, 3]
     created_at: str
     stats: CampaignStats = CampaignStats()
+    channel_sequence: List[str] = ["linkedin"]
+    channel_settings: Optional[Dict[str, Any]] = None
+    whatsapp_profile_id: Optional[str] = None
 
 
 class PaginationInfo(BaseModel):
@@ -283,6 +292,9 @@ async def list_campaigns(
                 follow_up_strategy=doc.get("follow_up_strategy"),
                 target_degrees=doc.get("target_degrees", [1, 2, 3]),
                 created_at=doc.get("created_at").isoformat() if doc.get("created_at") else "",
+                channel_sequence=doc.get("channel_sequence") or ["linkedin"],
+                channel_settings=doc.get("channel_settings"),
+                whatsapp_profile_id=doc.get("whatsapp_profile_id"),
                 stats=CampaignStats(
                     totalLeads=s.get("totalLeads", 0),
                     connected=s.get("connected", 0),
@@ -390,6 +402,9 @@ async def create_campaign(
             target_company_size=data.target_company_size,
             follow_up_strategy=data.follow_up_strategy,
             target_degrees=data.target_degrees if data.target_degrees is not None else [1, 2, 3],
+            channel_sequence=data.channel_sequence or ["linkedin"],
+            channel_settings=data.channel_settings,
+            whatsapp_profile_id=data.whatsapp_profile_id,
             status="draft",  # New campaigns start as draft
             is_paused=True,  # Keep is_paused in sync with draft status
         )
@@ -414,6 +429,9 @@ async def create_campaign(
             follow_up_strategy=campaign.follow_up_strategy,
             target_degrees=campaign.target_degrees,
             created_at=campaign.created_at.isoformat() if campaign.created_at else "",
+            channel_sequence=campaign.channel_sequence or ["linkedin"],
+            channel_settings=campaign.channel_settings,
+            whatsapp_profile_id=campaign.whatsapp_profile_id,
         )
 
     except HTTPException:
@@ -451,6 +469,9 @@ async def get_campaign(
         follow_up_strategy=campaign.follow_up_strategy,
         target_degrees=campaign.target_degrees,
         created_at=campaign.created_at.isoformat() if campaign.created_at else "",
+        channel_sequence=campaign.channel_sequence or ["linkedin"],
+        channel_settings=campaign.channel_settings,
+        whatsapp_profile_id=campaign.whatsapp_profile_id,
     )
 
 
@@ -523,6 +544,12 @@ async def update_campaign(
             updates["follow_up_strategy"] = data.follow_up_strategy
         if data.target_degrees is not None:
             updates["target_degrees"] = data.target_degrees
+        if data.channel_sequence is not None:
+            updates["channel_sequence"] = data.channel_sequence
+        if data.channel_settings is not None:
+            updates["channel_settings"] = data.channel_settings
+        if data.whatsapp_profile_id is not None:
+            updates["whatsapp_profile_id"] = data.whatsapp_profile_id
 
         # Handle status/is_paused synchronization
         # Priority: if status is provided, use it; otherwise use is_paused
@@ -597,6 +624,9 @@ async def update_campaign(
             follow_up_strategy=updated_campaign.follow_up_strategy,
             target_degrees=updated_campaign.target_degrees,
             created_at=updated_campaign.created_at.isoformat() if updated_campaign.created_at else "",
+            channel_sequence=updated_campaign.channel_sequence or ["linkedin"],
+            channel_settings=updated_campaign.channel_settings,
+            whatsapp_profile_id=updated_campaign.whatsapp_profile_id,
         )
 
     except HTTPException:
@@ -780,6 +810,9 @@ async def pause_campaign(
             follow_up_strategy=updated_campaign.follow_up_strategy,
             target_degrees=updated_campaign.target_degrees,
             created_at=updated_campaign.created_at.isoformat() if updated_campaign.created_at else "",
+            channel_sequence=updated_campaign.channel_sequence or ["linkedin"],
+            channel_settings=updated_campaign.channel_settings,
+            whatsapp_profile_id=updated_campaign.whatsapp_profile_id,
         )
 
     except HTTPException:
@@ -881,6 +914,9 @@ async def resume_campaign(
             follow_up_strategy=updated_campaign.follow_up_strategy,
             target_degrees=updated_campaign.target_degrees,
             created_at=updated_campaign.created_at.isoformat() if updated_campaign.created_at else "",
+            channel_sequence=updated_campaign.channel_sequence or ["linkedin"],
+            channel_settings=updated_campaign.channel_settings,
+            whatsapp_profile_id=updated_campaign.whatsapp_profile_id,
         )
 
     except HTTPException:
@@ -902,6 +938,7 @@ class LeadResponse(BaseModel):
     location: Optional[str] = None
     disqualified: bool = False
     created_at: Optional[str] = None
+    phone: Optional[str] = None
 
 
 class DealResponse(BaseModel):
@@ -915,6 +952,7 @@ class DealResponse(BaseModel):
     last_outgoing_at: Optional[str] = None
     next_follow_up_at: Optional[str] = None
     unanswered_count: int = 0
+    active_channel: str = "linkedin"
 
 
 @router.get("/{campaign_id}/leads")
@@ -1070,6 +1108,7 @@ async def get_campaign_leads(
                     location=location,
                     disqualified=lead_data.get("disqualified", False),
                     created_at=lead_data.get("creation_date").isoformat() if lead_data.get("creation_date") else None,
+                    phone=lead_data.get("phone"),
                 ),
                 "deal": DealResponse(
                     id=deal_id_str,
@@ -1082,6 +1121,7 @@ async def get_campaign_leads(
                     last_outgoing_at=last_outgoing_at.isoformat() + "Z" if last_outgoing_at else None,
                     next_follow_up_at=nudge.get("next_follow_up_at"),
                     unanswered_count=nudge.get("unanswered_count", 0),
+                    active_channel=deal.get("active_channel", "linkedin"),
                 )
             })
 

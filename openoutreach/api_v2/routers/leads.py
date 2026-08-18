@@ -198,6 +198,8 @@ async def list_leads(
                 "creationDate": created.isoformat() if hasattr(created, "isoformat") else (created or ""),
                 "updateDate": updated.isoformat() if hasattr(updated, "isoformat") else (updated or ""),
                 "disqualified": lead_data.get("disqualified", False),
+                "phone": lead_data.get("phone"),
+                "activeChannel": deal.get("active_channel", "linkedin"),
                 "contactInfo": {
                     "email": best_email,
                     "apiEmail": api_email,
@@ -504,6 +506,8 @@ async def get_lead(
         "creationDate": created.isoformat() if hasattr(created, "isoformat") else (str(created) if created else ""),
         "updateDate": updated.isoformat() if hasattr(updated, "isoformat") else (str(updated) if updated else ""),
         "disqualified": lead_data.get("disqualified", False),
+        "phone": lead_data.get("phone"),
+        "activeChannel": accessible_deal.get("active_channel", "linkedin"),
         "notes": lead_data.get("notes"),
         "contactInfo": {
             "email": best_email,

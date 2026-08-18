@@ -254,6 +254,8 @@ export interface Lead {
     overlayEmail?: string;
     phoneNumbers?: string[];
   };
+  phone?: string;
+  activeChannel?: string;
   messagesCount?: number;
   lastMessageAt?: string;
   notes?: string;
@@ -304,6 +306,9 @@ export interface Campaign {
   updatedAt: string;
   stats?: CampaignStats;
   nextActionAt?: string | null;
+  channelSequence?: string[];
+  channelSettings?: Record<string, unknown>;
+  whatsappProfileId?: string;
 }
 
 export interface Message {

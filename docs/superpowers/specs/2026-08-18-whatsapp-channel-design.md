@@ -238,9 +238,9 @@ The existing follow-up agent works for WhatsApp without modification:
 - [x] Messages page: channel filter pills (All/LinkedIn/WhatsApp) + channel icons on message rows
 
 ### Phase 4 — Multi-channel campaign config
-- [ ] Campaign creation UI — Channels step (checkboxes, drag reorder, per-channel templates)
-- [ ] Scheduler channel routing: check lead availability, switch `Deal.active_channel` on exhaustion
-- [ ] Leads table: channel availability icons + active channel badge
+- [x] Campaign creation UI — Channels step (checkboxes, drag reorder, per-channel templates)
+- [x] Scheduler channel routing: check lead availability, switch `Deal.active_channel` on exhaustion
+- [x] Leads table: channel availability icons + active channel badge
 
 ### Phase 5 — Maps scraper
 - [ ] `openoutreach/whatsapp/pipeline/maps_scraper.py` — Google + Bing + DDG backends

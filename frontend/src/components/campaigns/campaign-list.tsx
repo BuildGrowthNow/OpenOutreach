@@ -30,6 +30,7 @@ import {
 } from '@/components/ui/tooltip'
 import { Icons } from '@/lib/types/components'
 import { Lead, DealState } from '@/lib/types/components'
+import { Smartphone } from 'lucide-react'
 import { stateColorMapping } from '@/components/dashboard/campaign-card'
 import { cn } from '@/lib/utils'
 
@@ -227,13 +228,14 @@ export function CampaignList({ leads, campaignId, className, onLeadsUpdated }: C
                   {getSortIcon('date')}
                 </div>
               </TableHead>
+              <TableHead>Channels</TableHead>
               <TableHead>Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {sortedLeads.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center py-8">
+                <TableCell colSpan={6} className="text-center py-8">
                   <Icons.Users className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
                   <p className="text-sm text-muted-foreground">
                     {searchQuery
@@ -350,6 +352,27 @@ export function CampaignList({ leads, campaignId, className, onLeadsUpdated }: C
                   <TableCell>
                     <div className="text-sm">
                       {new Date(lead.creationDate).toLocaleDateString()}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1.5">
+                      {lead.phone && (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="text-emerald-500">
+                                <Smartphone className="h-3.5 w-3.5" />
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent><p>WhatsApp available</p></TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
+                      {lead.activeChannel === 'whatsapp' && (
+                        <Badge variant="outline" className="text-xs border-emerald-500/20 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10">
+                          WA
+                        </Badge>
+                      )}
                     </div>
                   </TableCell>
                   <TableCell>

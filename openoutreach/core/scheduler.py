@@ -697,6 +697,68 @@ def _recover_stale_running_tasks(linkedin_profile_id: str | None = None) -> int:
     return count
 
 
+def _route_deal_channels(campaign) -> None:
+    """Set Deal.active_channel based on campaign.channel_sequence and lead availability.
+
+    Called on every reconcile pass before task planning.
+    - QUALIFIED deals at default channel: if whatsapp precedes linkedin in sequence
+      and lead.phone is set → set active_channel = "whatsapp"
+    - FAILED deals with active_channel = "whatsapp": if linkedin is in sequence
+      and lead has linkedin_url → reset to QUALIFIED + active_channel = "linkedin"
+    """
+    from openoutreach.mongodb.connection import get_mongodb_collection
+
+    channel_sequence = getattr(campaign, "channel_sequence", None) or ["linkedin"]
+    if len(channel_sequence) <= 1:
+        return
+
+    deals_col = get_mongodb_collection("deals")
+    leads_col = get_mongodb_collection("leads")
+    if deals_col is None or leads_col is None:
+        return
+
+    has_wa = "whatsapp" in channel_sequence
+    has_li = "linkedin" in channel_sequence
+    wa_before_li = (
+        has_wa and has_li
+        and channel_sequence.index("whatsapp") < channel_sequence.index("linkedin")
+    ) or (has_wa and not has_li)
+
+    if wa_before_li:
+        for deal_doc in deals_col.find(
+            {
+                "campaign_id": campaign.pk,
+                "state": "Qualified",
+                "active_channel": {"$in": ["linkedin", None]},
+            },
+            {"_id": 1, "lead_id": 1},
+        ):
+            if leads_col.find_one(
+                {"_id": deal_doc["lead_id"], "phone": {"$exists": True, "$ne": None}},
+                {"_id": 1},
+            ):
+                deals_col.update_one({"_id": deal_doc["_id"]}, {"$set": {"active_channel": "whatsapp"}})
+
+    if has_li:
+        for deal_doc in deals_col.find(
+            {
+                "campaign_id": campaign.pk,
+                "state": "Failed",
+                "active_channel": "whatsapp",
+            },
+            {"_id": 1, "lead_id": 1},
+        ):
+            if leads_col.find_one(
+                {"_id": deal_doc["lead_id"], "linkedin_url": {"$exists": True, "$ne": None}},
+                {"_id": 1},
+            ):
+                deals_col.update_one(
+                    {"_id": deal_doc["_id"]},
+                    {"$set": {"state": "Qualified", "active_channel": "linkedin"}},
+                )
+                logger.info("Channel switch: deal %s WA exhausted → linkedin", deal_doc["_id"])
+
+
 def reconcile(session) -> None:
     """Recover stale RUNNING tasks, then ensure every (campaign, task_type)
     whose pending queue is empty gets a fresh 24h plan. Runs on daemon
@@ -727,6 +789,7 @@ def reconcile(session) -> None:
         )
 
     for campaign in campaigns:
+        _route_deal_channels(campaign)
         plan_connect_window(session, campaign, connect_cap=connect_cap)
         plan_follow_up_window(session, campaign, follow_up_cap=follow_up_cap)
         plan_check_pending_window(session, campaign)

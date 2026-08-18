@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -15,6 +16,13 @@ import { apiClient } from '@/lib/apiClientV2';
 interface LinkedInProfile {
   id: string;
   linkedin_username: string;
+}
+
+interface WhatsAppProfile {
+  id: string;
+  phone_number?: string;
+  display_name?: string;
+  status: string;
 }
 
 interface CreateCampaignWizardProps {
@@ -38,6 +46,12 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
   const [targetCompanySize, setTargetCompanySize] = useState('');
   const [bookingLink, setBookingLink] = useState('');
 
+  // Step 3 fields — Channels
+  const [enableWhatsApp, setEnableWhatsApp] = useState(false);
+  const [waProfileId, setWaProfileId] = useState('');
+  const [waMessageTemplate, setWaMessageTemplate] = useState('');
+  const [waProfiles, setWaProfiles] = useState<WhatsAppProfile[]>([]);
+
   // UI state
   const [step, setStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
@@ -50,6 +64,18 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
       if (res.data?.profiles?.length) {
         setProfiles(res.data.profiles)
         setProfileId(res.data.profiles[0].id)
+      }
+    }
+    void load()
+  }, [])
+
+  useEffect(() => {
+    const load = async () => {
+      const res = await apiClient.get<{ profiles: WhatsAppProfile[] }>('/whatsapp/profiles')
+      if (res.data?.profiles?.length) {
+        const connected = res.data.profiles.filter(p => p.status === 'connected')
+        setWaProfiles(connected)
+        if (connected.length) setWaProfileId(connected[0].id)
       }
     }
     void load()
@@ -82,6 +108,15 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
     }
   };
 
+  const handleNextToChannels = () => {
+    setError('');
+    if (icpTitles.length === 0) {
+      setError('Add at least one target job title so the AI knows who to search for');
+      return;
+    }
+    setStep(3);
+  };
+
   const handleAddTitle = () => {
     const title = icpInput.trim();
     if (title && !icpTitles.includes(title)) {
@@ -106,9 +141,24 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
     e.preventDefault();
     setError('');
 
-    if (icpTitles.length === 0) {
-      setError('Add at least one target job title so the AI knows who to search for');
+    if (enableWhatsApp && !waProfileId) {
+      setError('Select a connected WhatsApp number or disable WhatsApp channel');
       return;
+    }
+    if (enableWhatsApp && !waMessageTemplate.trim()) {
+      setError('Add a WhatsApp message template for the initial outreach');
+      return;
+    }
+
+    const channelSequence = enableWhatsApp ? ['whatsapp', 'linkedin'] : ['linkedin'];
+    const channelSettings: Record<string, unknown> = {
+      linkedin: { max_attempts: 5 },
+    };
+    if (enableWhatsApp) {
+      channelSettings.whatsapp = {
+        max_attempts: 3,
+        message_template: waMessageTemplate.trim(),
+      };
     }
 
     try {
@@ -123,6 +173,9 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
         velocity: 20,
         icp_titles: icpTitles,
         target_company_size: targetCompanySize.trim() || undefined,
+        channel_sequence: channelSequence,
+        channel_settings: channelSettings,
+        whatsapp_profile_id: enableWhatsApp ? waProfileId : undefined,
       });
 
       if (res.error || !res.data) {
@@ -167,12 +220,13 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
         </div>
         <h2 className="text-2xl font-semibold">Create Campaign</h2>
         <p className="text-sm text-muted-foreground">
-          Step {step} of 2 — {step === 1 ? 'Define your offer' : 'Who are you targeting?'}
+          Step {step} of 3 — {step === 1 ? 'Define your offer' : step === 2 ? 'Who are you targeting?' : 'Channels'}
         </p>
         {/* Step indicator */}
         <div className="flex items-center justify-center gap-2 pt-2">
           <div className={`h-1.5 w-12 rounded-full transition-colors ${step >= 1 ? 'bg-emerald-500' : 'bg-zinc-200 dark:bg-zinc-700'}`} />
           <div className={`h-1.5 w-12 rounded-full transition-colors ${step >= 2 ? 'bg-emerald-500' : 'bg-zinc-200 dark:bg-zinc-700'}`} />
+          <div className={`h-1.5 w-12 rounded-full transition-colors ${step >= 3 ? 'bg-emerald-500' : 'bg-zinc-200 dark:bg-zinc-700'}`} />
         </div>
       </div>
 
@@ -269,7 +323,7 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
 
       {/* Step 2: Targeting */}
       {step === 2 && (
-        <form onSubmit={handleSubmit} className="space-y-5">
+        <div className="space-y-5">
           <div className="space-y-2">
             <Label className="text-base">
               Target Job Titles
@@ -358,6 +412,99 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
               type="button"
               variant="outline"
               onClick={() => { setStep(1); setError(''); }}
+              className="gap-2"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back
+            </Button>
+            <Button
+              type="button"
+              onClick={handleNextToChannels}
+              className="flex-1 h-11 text-base gap-2"
+            >
+              Next: Channels
+              <ArrowRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Step 3: Channels */}
+      {step === 3 && (
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 p-3 rounded-lg border bg-muted/30">
+              <Checkbox id="ch-linkedin" checked disabled />
+              <div>
+                <Label htmlFor="ch-linkedin" className="text-base font-medium cursor-default">LinkedIn</Label>
+                <p className="text-xs text-muted-foreground">Always active — connection requests + follow-ups</p>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-3 p-3 rounded-lg border">
+              <Checkbox
+                id="ch-whatsapp"
+                checked={enableWhatsApp}
+                onCheckedChange={(checked) => setEnableWhatsApp(Boolean(checked))}
+                className="mt-0.5"
+              />
+              <div className="flex-1 space-y-3">
+                <div>
+                  <Label htmlFor="ch-whatsapp" className="text-base font-medium cursor-pointer">WhatsApp</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Message leads with a phone number via WhatsApp Web
+                    {waProfiles.length === 0 && ' — connect a number in Settings → WhatsApp first'}
+                  </p>
+                </div>
+
+                {enableWhatsApp && (
+                  <>
+                    {waProfiles.length > 0 ? (
+                      <div className="space-y-2">
+                        <Label className="text-sm">WhatsApp Number</Label>
+                        <Select value={waProfileId} onValueChange={(v) => v && setWaProfileId(v)}>
+                          <SelectTrigger className="h-10">
+                            <SelectValue placeholder="Select number" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {waProfiles.map((p) => (
+                              <SelectItem key={p.id} value={p.id}>
+                                {p.display_name || p.phone_number || p.id}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-amber-600 dark:text-amber-400">
+                        No connected WhatsApp numbers found. Connect one in Settings → WhatsApp.
+                      </p>
+                    )}
+
+                    <div className="space-y-2">
+                      <Label className="text-sm">Initial Message Template</Label>
+                      <Textarea
+                        value={waMessageTemplate}
+                        onChange={(e) => setWaMessageTemplate(e.target.value)}
+                        placeholder="Hi {first_name}, I came across your profile and wanted to reach out about..."
+                        rows={4}
+                        className="resize-none text-sm"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Sent as the first WhatsApp message to each lead
+                      </p>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex gap-3 pt-4 border-t">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => { setStep(2); setError(''); }}
               className="gap-2"
             >
               <ArrowLeft className="h-4 w-4" />
