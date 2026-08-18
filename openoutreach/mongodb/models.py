@@ -311,6 +311,7 @@ class Lead:
         """Scrape + persist the LinkedIn contact-info overlay once connected.
 
         Idempotent: non-null contact_info means we already tried.
+        Also writes Lead.phone from the first phone_number found, if not already set.
         """
         if self.contact_info is not None:
             return
@@ -320,7 +321,28 @@ class Lead:
         api = PlaywrightLinkedinAPI(session=session)
         contact, _raw = api.get_contact_info(public_identifier=self.public_identifier)
         self.contact_info = contact
-        self.save(update_fields=["contact_info"])
+
+        update_fields = ["contact_info"]
+
+        if self.phone is None and contact:
+            phone_numbers = contact.get("phone_numbers") or []
+            if phone_numbers:
+                raw = phone_numbers[0]
+                normalized: Optional[str] = None
+                try:
+                    import phonenumbers
+                    parsed = phonenumbers.parse(raw, None)
+                    if phonenumbers.is_valid_number(parsed):
+                        normalized = phonenumbers.format_number(
+                            parsed, phonenumbers.PhoneNumberFormat.E164
+                        )
+                except Exception:
+                    pass
+                self.phone = normalized if normalized else raw
+                self.phone_source = "linkedin_contact"
+                update_fields.extend(["phone", "phone_source"])
+
+        self.save(update_fields=update_fields)
 
     def resolve_api_email(self) -> Optional[bool]:
         """Resolve + persist a work email via the finder.
@@ -685,6 +707,10 @@ class Campaign:
         channel_sequence: Optional[List[str]] = None,
         channel_settings: Optional[Dict[str, Any]] = None,
         whatsapp_profile_id: Optional[str] = None,
+        lead_source: str = "linkedin_search",
+        maps_query: Optional[str] = None,
+        maps_country_code: Optional[str] = None,
+        maps_backends: Optional[List[str]] = None,
     ):
         self._id = _id or str(uuid4())
         self.name = name
@@ -710,6 +736,10 @@ class Campaign:
         self.channel_sequence = channel_sequence if channel_sequence is not None else ["linkedin"]
         self.channel_settings = channel_settings if channel_settings is not None else {}
         self.whatsapp_profile_id = whatsapp_profile_id
+        self.lead_source = lead_source
+        self.maps_query = maps_query
+        self.maps_country_code = maps_country_code
+        self.maps_backends = maps_backends if maps_backends is not None else []
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert model instance to dictionary for MongoDB storage."""
@@ -743,6 +773,12 @@ class Campaign:
         data["channel_settings"] = self.channel_settings
         if self.whatsapp_profile_id is not None:
             data["whatsapp_profile_id"] = self.whatsapp_profile_id
+        data["lead_source"] = self.lead_source
+        data["maps_backends"] = self.maps_backends
+        if self.maps_query is not None:
+            data["maps_query"] = self.maps_query
+        if self.maps_country_code is not None:
+            data["maps_country_code"] = self.maps_country_code
         return data
 
     @classmethod
@@ -773,6 +809,10 @@ class Campaign:
             channel_sequence=data.get("channel_sequence"),
             channel_settings=data.get("channel_settings"),
             whatsapp_profile_id=data.get("whatsapp_profile_id"),
+            lead_source=data.get("lead_source", "linkedin_search"),
+            maps_query=data.get("maps_query"),
+            maps_country_code=data.get("maps_country_code"),
+            maps_backends=data.get("maps_backends"),
         )
 
     def has_access(self, user_id: str) -> bool:

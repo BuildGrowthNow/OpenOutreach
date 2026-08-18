@@ -52,6 +52,12 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
   const [waMessageTemplate, setWaMessageTemplate] = useState('');
   const [waProfiles, setWaProfiles] = useState<WhatsAppProfile[]>([]);
 
+  // Step 3 fields — Lead Source
+  const [leadSource, setLeadSource] = useState<'linkedin_search' | 'google_maps' | 'csv_import'>('linkedin_search');
+  const [mapsQuery, setMapsQuery] = useState('');
+  const [mapsCountryCode, setMapsCountryCode] = useState('US');
+  const [mapsBackends, setMapsBackends] = useState<string[]>(['google_maps', 'bing_maps', 'duckduckgo_maps']);
+
   // UI state
   const [step, setStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
@@ -137,6 +143,12 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
     setIcpTitles(icpTitles.filter(t => t !== title));
   };
 
+  const toggleMapsBackend = (backend: string) => {
+    setMapsBackends(prev =>
+      prev.includes(backend) ? prev.filter(b => b !== backend) : [...prev, backend]
+    );
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -176,6 +188,10 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
         channel_sequence: channelSequence,
         channel_settings: channelSettings,
         whatsapp_profile_id: enableWhatsApp ? waProfileId : undefined,
+        lead_source: leadSource,
+        maps_query: leadSource === 'google_maps' ? mapsQuery.trim() || undefined : undefined,
+        maps_country_code: leadSource === 'google_maps' ? mapsCountryCode : undefined,
+        maps_backends: leadSource === 'google_maps' ? mapsBackends : undefined,
       });
 
       if (res.error || !res.data) {
@@ -498,6 +514,78 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
                 )}
               </div>
             </div>
+          </div>
+
+          {/* Lead Source */}
+          <div className="space-y-3 pt-2">
+            <Label className="text-base">Lead Source</Label>
+            <Select value={leadSource} onValueChange={(v) => setLeadSource(v as typeof leadSource)}>
+              <SelectTrigger className="h-10">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="linkedin_search">LinkedIn Search</SelectItem>
+                <SelectItem value="google_maps">Google Maps</SelectItem>
+                <SelectItem value="csv_import">CSV Import</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {leadSource === 'google_maps' && (
+              <div className="space-y-3 pl-1">
+                <div className="space-y-1">
+                  <Label className="text-sm">Search Query</Label>
+                  <Input
+                    value={mapsQuery}
+                    onChange={(e) => setMapsQuery(e.target.value)}
+                    placeholder="e.g. plumbers in New York"
+                    className="h-10 text-sm"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-sm">Country</Label>
+                  <Select value={mapsCountryCode} onValueChange={(v) => v && setMapsCountryCode(v)}>
+                    <SelectTrigger className="h-10">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="US">United States</SelectItem>
+                      <SelectItem value="GB">United Kingdom</SelectItem>
+                      <SelectItem value="CA">Canada</SelectItem>
+                      <SelectItem value="AU">Australia</SelectItem>
+                      <SelectItem value="DE">Germany</SelectItem>
+                      <SelectItem value="FR">France</SelectItem>
+                      <SelectItem value="ES">Spain</SelectItem>
+                      <SelectItem value="IT">Italy</SelectItem>
+                      <SelectItem value="BR">Brazil</SelectItem>
+                      <SelectItem value="MX">Mexico</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-sm">Backends</Label>
+                  <div className="flex flex-col gap-1.5">
+                    {(['google_maps', 'bing_maps', 'duckduckgo_maps'] as const).map((b) => (
+                      <div key={b} className="flex items-center gap-2">
+                        <Checkbox
+                          id={`backend-${b}`}
+                          checked={mapsBackends.includes(b)}
+                          onCheckedChange={() => toggleMapsBackend(b)}
+                        />
+                        <Label htmlFor={`backend-${b}`} className="text-sm font-normal cursor-pointer">
+                          {b === 'google_maps' ? 'Google Maps' : b === 'bing_maps' ? 'Bing Maps' : 'DuckDuckGo Maps'}
+                        </Label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {leadSource === 'csv_import' && (
+              <p className="text-xs text-muted-foreground pl-1">
+                After creating the campaign, upload a CSV file from the campaign leads page.
+              </p>
+            )}
           </div>
 
           <div className="flex gap-3 pt-4 border-t">

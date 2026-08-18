@@ -243,11 +243,11 @@ The existing follow-up agent works for WhatsApp without modification:
 - [x] Leads table: channel availability icons + active channel badge
 
 ### Phase 5 — Maps scraper
-- [ ] `openoutreach/whatsapp/pipeline/maps_scraper.py` — Google + Bing + DDG backends
-- [ ] `phonenumbers` added to `requirements/base.txt`
-- [ ] Campaign creation UI — Lead Source selector + Google Maps config fields
-- [ ] CSV import: map `phone` column → `Lead.phone`
-- [ ] LinkedIn contact capture: write `Lead.phone` when phone found in contact overlay
+- [x] `openoutreach/whatsapp/pipeline/maps_scraper.py` — Google + Bing + DDG backends
+- [x] `phonenumbers` added to `requirements/base.txt`
+- [x] Campaign creation UI — Lead Source selector + Google Maps config fields
+- [x] CSV import: map `phone` column → `Lead.phone`
+- [x] LinkedIn contact capture: write `Lead.phone` when phone found in contact overlay
 
 ### Phase 6 — Desktop tray WhatsApp
 - [ ] Tray menu: WhatsApp status + "Scan QR" option

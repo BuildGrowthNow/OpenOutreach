@@ -22,6 +22,7 @@ pytz
 tenacity
 psutil
 cryptography>=39.0.0
+phonenumbers
 
 # FastAPI + MongoDB Dependencies
 -r fastapi.txt

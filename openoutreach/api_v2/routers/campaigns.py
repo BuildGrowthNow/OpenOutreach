@@ -38,6 +38,10 @@ class CampaignCreate(BaseModel):
     channel_sequence: Optional[List[str]] = None  # e.g. ["whatsapp", "linkedin"]
     channel_settings: Optional[Dict[str, Any]] = None  # per-channel config
     whatsapp_profile_id: Optional[str] = None  # WhatsAppProfile executing WA tasks
+    lead_source: Optional[str] = None  # "linkedin_search" | "google_maps" | "csv_import"
+    maps_query: Optional[str] = None
+    maps_country_code: Optional[str] = None
+    maps_backends: Optional[List[str]] = None
 
     class Config:
         json_schema_extra = {
@@ -74,6 +78,10 @@ class CampaignUpdate(BaseModel):
     channel_sequence: Optional[List[str]] = None
     channel_settings: Optional[Dict[str, Any]] = None
     whatsapp_profile_id: Optional[str] = None
+    lead_source: Optional[str] = None
+    maps_query: Optional[str] = None
+    maps_country_code: Optional[str] = None
+    maps_backends: Optional[List[str]] = None
 
 
 class CampaignStats(BaseModel):
@@ -108,6 +116,10 @@ class CampaignResponse(BaseModel):
     channel_sequence: List[str] = ["linkedin"]
     channel_settings: Optional[Dict[str, Any]] = None
     whatsapp_profile_id: Optional[str] = None
+    lead_source: str = "linkedin_search"
+    maps_query: Optional[str] = None
+    maps_country_code: Optional[str] = None
+    maps_backends: List[str] = []
 
 
 class PaginationInfo(BaseModel):
@@ -295,6 +307,10 @@ async def list_campaigns(
                 channel_sequence=doc.get("channel_sequence") or ["linkedin"],
                 channel_settings=doc.get("channel_settings"),
                 whatsapp_profile_id=doc.get("whatsapp_profile_id"),
+                lead_source=doc.get("lead_source", "linkedin_search"),
+                maps_query=doc.get("maps_query"),
+                maps_country_code=doc.get("maps_country_code"),
+                maps_backends=doc.get("maps_backends") or [],
                 stats=CampaignStats(
                     totalLeads=s.get("totalLeads", 0),
                     connected=s.get("connected", 0),
@@ -405,6 +421,10 @@ async def create_campaign(
             channel_sequence=data.channel_sequence or ["linkedin"],
             channel_settings=data.channel_settings,
             whatsapp_profile_id=data.whatsapp_profile_id,
+            lead_source=data.lead_source or "linkedin_search",
+            maps_query=data.maps_query,
+            maps_country_code=data.maps_country_code,
+            maps_backends=data.maps_backends or [],
             status="draft",  # New campaigns start as draft
             is_paused=True,  # Keep is_paused in sync with draft status
         )
@@ -432,6 +452,10 @@ async def create_campaign(
             channel_sequence=campaign.channel_sequence or ["linkedin"],
             channel_settings=campaign.channel_settings,
             whatsapp_profile_id=campaign.whatsapp_profile_id,
+            lead_source=campaign.lead_source,
+            maps_query=campaign.maps_query,
+            maps_country_code=campaign.maps_country_code,
+            maps_backends=campaign.maps_backends,
         )
 
     except HTTPException:
@@ -472,6 +496,10 @@ async def get_campaign(
         channel_sequence=campaign.channel_sequence or ["linkedin"],
         channel_settings=campaign.channel_settings,
         whatsapp_profile_id=campaign.whatsapp_profile_id,
+        lead_source=campaign.lead_source,
+        maps_query=campaign.maps_query,
+        maps_country_code=campaign.maps_country_code,
+        maps_backends=campaign.maps_backends,
     )
 
 
@@ -550,6 +578,14 @@ async def update_campaign(
             updates["channel_settings"] = data.channel_settings
         if data.whatsapp_profile_id is not None:
             updates["whatsapp_profile_id"] = data.whatsapp_profile_id
+        if data.lead_source is not None:
+            updates["lead_source"] = data.lead_source
+        if data.maps_query is not None:
+            updates["maps_query"] = data.maps_query
+        if data.maps_country_code is not None:
+            updates["maps_country_code"] = data.maps_country_code
+        if data.maps_backends is not None:
+            updates["maps_backends"] = data.maps_backends
 
         # Handle status/is_paused synchronization
         # Priority: if status is provided, use it; otherwise use is_paused
@@ -627,6 +663,10 @@ async def update_campaign(
             channel_sequence=updated_campaign.channel_sequence or ["linkedin"],
             channel_settings=updated_campaign.channel_settings,
             whatsapp_profile_id=updated_campaign.whatsapp_profile_id,
+            lead_source=updated_campaign.lead_source,
+            maps_query=updated_campaign.maps_query,
+            maps_country_code=updated_campaign.maps_country_code,
+            maps_backends=updated_campaign.maps_backends,
         )
 
     except HTTPException:
@@ -813,6 +853,10 @@ async def pause_campaign(
             channel_sequence=updated_campaign.channel_sequence or ["linkedin"],
             channel_settings=updated_campaign.channel_settings,
             whatsapp_profile_id=updated_campaign.whatsapp_profile_id,
+            lead_source=updated_campaign.lead_source,
+            maps_query=updated_campaign.maps_query,
+            maps_country_code=updated_campaign.maps_country_code,
+            maps_backends=updated_campaign.maps_backends,
         )
 
     except HTTPException:
@@ -917,6 +961,10 @@ async def resume_campaign(
             channel_sequence=updated_campaign.channel_sequence or ["linkedin"],
             channel_settings=updated_campaign.channel_settings,
             whatsapp_profile_id=updated_campaign.whatsapp_profile_id,
+            lead_source=updated_campaign.lead_source,
+            maps_query=updated_campaign.maps_query,
+            maps_country_code=updated_campaign.maps_country_code,
+            maps_backends=updated_campaign.maps_backends,
         )
 
     except HTTPException:
@@ -1448,3 +1496,156 @@ async def get_campaign_activity(
             "hasMore": has_more,
         },
     }
+
+
+class CsvImportResponse(BaseModel):
+    added: int
+    skipped: int
+    errors: List[str]
+
+
+@router.post("/{campaign_id}/import-csv")
+async def import_leads_csv(
+    campaign_id: str,
+    file: bytes = __import__("fastapi").Body(..., media_type="text/csv"),
+    user_id: str = Depends(get_current_user),
+):
+    """Import leads from a CSV file. Detects phone column and writes Lead.phone."""
+    import csv as csv_mod
+    import io
+    from datetime import datetime, timezone as _tz
+    from uuid import uuid4
+
+    campaign = models.Campaign.get(campaign_id)
+    if not campaign or not campaign.has_access(user_id):
+        raise HTTPException(status_code=404, detail="Campaign not found")
+
+    country_code = campaign.maps_country_code or "US"
+
+    try:
+        text = file.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        text = file.decode("latin-1")
+
+    reader = csv_mod.DictReader(io.StringIO(text))
+    if reader.fieldnames is None:
+        raise HTTPException(status_code=400, detail="CSV has no header row")
+
+    phone_col = next(
+        (
+            col for col in reader.fieldnames
+            if col.strip().lower() in {"phone", "phone_number", "mobile", "tel"}
+        ),
+        None,
+    )
+
+    leads_col = get_mongodb_collection("leads")
+    deals_col = get_mongodb_collection("deals")
+    if leads_col is None or deals_col is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+
+    _phone_col_name = phone_col
+
+    def _norm(raw: str) -> Optional[str]:
+        try:
+            import phonenumbers
+            parsed = phonenumbers.parse(raw, country_code.upper())
+            if phonenumbers.is_valid_number(parsed):
+                return phonenumbers.format_number(
+                    parsed, phonenumbers.PhoneNumberFormat.E164
+                )
+        except Exception:
+            pass
+        return None
+
+    added = 0
+    skipped = 0
+    errors: List[str] = []
+    now = datetime.now(_tz.utc)
+
+    for row in reader:
+        linkedin_url = (
+            row.get("linkedin_url") or row.get("linkedin") or row.get("url") or ""
+        ).strip()
+        full_name = (
+            row.get("full_name") or row.get("name") or row.get("first_name", "")
+        ).strip()
+        raw_phone = (row.get(_phone_col_name or "", "") or "").strip() if _phone_col_name else ""
+
+        normalized_phone: Optional[str] = None
+        if raw_phone:
+            normalized_phone = _norm(raw_phone)
+
+        # Must have linkedin_url or phone to create a lead
+        if not linkedin_url and not normalized_phone:
+            skipped += 1
+            continue
+
+        # Determine public_identifier from linkedin_url
+        public_identifier = ""
+        if linkedin_url:
+            parts = [p for p in linkedin_url.rstrip("/").split("/") if p]
+            public_identifier = parts[-1] if parts else ""
+
+        filter_q: dict = {}
+        if normalized_phone:
+            filter_q = {"phone": normalized_phone}
+        elif public_identifier:
+            filter_q = {"public_identifier": public_identifier}
+        else:
+            filter_q = {"linkedin_url": linkedin_url}
+
+        set_on_insert: dict = {
+            "_id": str(uuid4()),
+            "linkedin_url": linkedin_url or None,
+            "public_identifier": public_identifier,
+            "full_name": full_name or None,
+            "user_id": user_id,
+            "disqualified": False,
+            "created_at": now,
+        }
+        if normalized_phone:
+            set_on_insert["phone"] = normalized_phone
+            set_on_insert["phone_source"] = "csv_import"
+
+        try:
+            result = leads_col.update_one(
+                filter_q,
+                {"$setOnInsert": set_on_insert},
+                upsert=True,
+            )
+
+            if result.upserted_id is not None:
+                actual_lead_id = str(result.upserted_id)
+                added += 1
+            else:
+                doc = leads_col.find_one(filter_q, {"_id": 1})
+                actual_lead_id = str(doc["_id"]) if doc else set_on_insert["_id"]
+
+                # If existing lead has no phone and we have one, write it
+                if normalized_phone:
+                    leads_col.update_one(
+                        {"_id": actual_lead_id, "phone": None},
+                        {"$set": {"phone": normalized_phone, "phone_source": "csv_import"}},
+                    )
+
+                skipped += 1
+
+            # Create Deal if none exists
+            existing = deals_col.find_one(
+                {"lead_id": actual_lead_id, "campaign_id": campaign_id}
+            )
+            if not existing:
+                from openoutreach.crm.models.deal import DealState
+                deals_col.insert_one({
+                    "_id": str(uuid4()),
+                    "lead_id": actual_lead_id,
+                    "campaign_id": campaign_id,
+                    "state": DealState.DISCOVERED,
+                    "user_id": user_id,
+                    "created_at": now,
+                })
+        except Exception as exc:
+            errors.append(str(exc))
+
+    return CsvImportResponse(added=added, skipped=skipped, errors=errors)
