@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -10,7 +10,8 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Icons } from '@/lib/types/components'
-import { getCampaignLeads, getCampaign, exportLeads } from '@/lib/api/dashboard'
+import { Phone, Smartphone, Upload } from 'lucide-react'
+import { getCampaignLeads, getCampaign, exportLeads, importCsvLeads } from '@/lib/api/dashboard'
 import { cn } from '@/lib/utils'
 import { CampaignList } from '@/components/campaigns/campaign-list'
 import { Lead } from '@/lib/types/components'
@@ -32,6 +33,10 @@ export default function CampaignLeadsPage() {
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 20
   const [exporting, setExporting] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const [importResult, setImportResult] = useState<{ added: number; skipped: number; errors: string[] } | null>(null)
+  const [channelFilter, setChannelFilter] = useState<'all' | 'linkedin' | 'whatsapp'>('all')
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const fetchCampaignData = useCallback(async () => {
     try {
@@ -94,6 +99,24 @@ export default function CampaignLeadsPage() {
     await fetchCampaignData()
   }
 
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setImporting(true)
+    setImportResult(null)
+    try {
+      const text = await file.text()
+      const result = await importCsvLeads(campaignId, text)
+      setImportResult(result)
+      if (result.added > 0) refreshData()
+    } catch (err) {
+      setImportResult({ added: 0, skipped: 0, errors: [err instanceof Error ? err.message : 'Import failed'] })
+    } finally {
+      setImporting(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
   const handleExport = async (filtered: boolean) => {
     setExporting(true)
     try {
@@ -105,8 +128,10 @@ export default function CampaignLeadsPage() {
     }
   }
 
-  // Server handles filtering and pagination; leads is already the current page
-  const filteredLeads = leads
+  // Server handles status/search filtering; channel filter is client-side
+  const filteredLeads = channelFilter === 'all'
+    ? leads
+    : leads.filter(l => (l.activeChannel || 'linkedin') === channelFilter)
 
   const getStatusBadge = (status: string) => {
     switch (status?.toUpperCase()) {
@@ -249,6 +274,25 @@ export default function CampaignLeadsPage() {
                   <SelectItem value="NO_EMAIL">No Email</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+            {/* Channel filter pills */}
+            <div className="flex gap-1.5 shrink-0">
+              {(['all', 'linkedin', 'whatsapp'] as const).map((ch) => (
+                <button
+                  key={ch}
+                  onClick={() => setChannelFilter(ch)}
+                  className={cn(
+                    'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors',
+                    channelFilter === ch
+                      ? 'bg-foreground text-background border-foreground'
+                      : 'bg-transparent text-muted-foreground border-border hover:border-foreground/40'
+                  )}
+                >
+                  {ch === 'linkedin' && <Phone className="h-3 w-3" />}
+                  {ch === 'whatsapp' && <Smartphone className="h-3 w-3" />}
+                  {ch === 'all' ? 'All' : ch === 'linkedin' ? 'LinkedIn' : 'WhatsApp'}
+                </button>
+              ))}
             </div>
           </div>
         </CardContent>
@@ -398,7 +442,7 @@ export default function CampaignLeadsPage() {
           <CardTitle>Export & Actions</CardTitle>
           <CardDescription>Manage campaign leads</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-3">
           <div className="flex flex-wrap gap-3">
             <Button variant="outline" onClick={() => handleExport(false)} disabled={exporting}>
               {exporting ? <Icons.RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Icons.Download className="mr-2 h-4 w-4" />}
@@ -408,19 +452,31 @@ export default function CampaignLeadsPage() {
               {exporting ? <Icons.RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Icons.FileText className="mr-2 h-4 w-4" />}
               Export Filtered Leads
             </Button>
-            <Button variant="outline">
-              <Icons.Plus className="mr-2 h-4 w-4" />
-              Add Selected to List
-            </Button>
-            <Button variant="outline">
-              <Icons.Filter className="mr-2 h-4 w-4" />
-              Bulk Update Status
-            </Button>
-            <Button variant="outline">
-              <Icons.Tag className="mr-2 h-4 w-4" />
-              Bulk Add Tags
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv,text/csv"
+              className="hidden"
+              onChange={handleImport}
+            />
+            <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={importing}>
+              {importing ? <Icons.RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+              Import CSV
             </Button>
           </div>
+          {importResult && (
+            <div className={cn(
+              'rounded-md px-4 py-2 text-sm',
+              importResult.errors.length > 0
+                ? 'bg-red-500/10 text-red-600 dark:text-red-400'
+                : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+            )}>
+              {importResult.errors.length > 0
+                ? `Import error: ${importResult.errors[0]}`
+                : `Imported ${importResult.added} new lead${importResult.added !== 1 ? 's' : ''}, skipped ${importResult.skipped} existing.`
+              }
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

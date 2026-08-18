@@ -498,6 +498,26 @@ export async function updateLead(
   return patch(`/api/leads/${id}`, data);
 }
 
+export async function importCsvLeads(
+  campaignId: string,
+  csvText: string,
+): Promise<{ added: number; skipped: number; errors: string[] }> {
+  const { useAuthStore } = await import('../authStoreV2');
+  const token = useAuthStore.getState().accessToken;
+  const headers: Record<string, string> = {
+    'Content-Type': 'text/csv',
+    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+  };
+  const res = await fetch(`/api/campaigns/${campaignId}/import-csv`, {
+    method: 'POST',
+    headers,
+    body: csvText,
+    credentials: 'include',
+  });
+  if (!res.ok) throw new Error(`Import failed: ${res.status}`);
+  return res.json();
+}
+
 export async function exportLeads(campaignId?: string, state?: string): Promise<void> {
   const params: Record<string, string> = {};
   if (campaignId) params.campaign_id = campaignId;
