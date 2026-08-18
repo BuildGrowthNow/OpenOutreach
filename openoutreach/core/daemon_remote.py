@@ -290,7 +290,6 @@ class RemoteDaemon:
         config: DaemonConfig from /api/daemon/config (llm fields)
         """
         import os
-        from openoutreach.config import settings as app_settings
 
         mapping = {
             "SECRET_KEY": bootstrap.get("secret_key"),
@@ -302,9 +301,16 @@ class RemoteDaemon:
             "MONGODB_NAME": bootstrap.get("mongodb_name", "openoutreach"),
             "MONGODB_ENABLED": "true",
         }
+        # Populate os.environ BEFORE importing config — config.py instantiates
+        # Settings() at module level and requires SECRET_KEY to be present.
         for env_key, value in mapping.items():
             if value:
                 os.environ[env_key] = str(value)
+
+        from openoutreach.config import settings as app_settings
+
+        for env_key, value in mapping.items():
+            if value:
                 try:
                     object.__setattr__(app_settings, env_key, value)
                 except Exception:
