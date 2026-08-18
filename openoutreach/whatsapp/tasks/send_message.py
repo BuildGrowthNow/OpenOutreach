@@ -10,6 +10,22 @@ from openoutreach.mongodb.connection import get_mongodb_collection
 logger = logging.getLogger(__name__)
 
 
+def _substitute_template(template: str, lead) -> str:
+    """Replace {name}, {first_name}, {last_name}, {company} placeholders."""
+    full_name = (getattr(lead, "full_name", "") or "").strip()
+    parts = full_name.split(None, 1)
+    first = parts[0] if parts else ""
+    last = parts[1] if len(parts) > 1 else ""
+    company = getattr(lead, "company", "") or ""
+    return (
+        template
+        .replace("{name}", full_name or first or "there")
+        .replace("{first_name}", first or "there")
+        .replace("{last_name}", last)
+        .replace("{company}", company)
+    )
+
+
 def handle_whatsapp_message(task, wa_session, qualifiers):  # noqa: ARG001
     """Send initial WhatsApp outreach to one eligible QUALIFIED lead.
 
@@ -71,11 +87,21 @@ def handle_whatsapp_message(task, wa_session, qualifiers):  # noqa: ARG001
             logger.warning("WA send_message [%s]: no message_template in channel_settings", campaign)
             return
 
-        success = wa_session.send_message(lead.phone, message_template)
+        message = _substitute_template(message_template, lead)
+        success = wa_session.send_message(lead.phone, message)
         if not success:
             logger.warning(
                 "WA send_message [%s]: send failed for lead %s", campaign, lead.phone
             )
+            # Check for ban — mark profile accordingly so the daemon can pause WA
+            if wa_session.detect_ban():
+                from openoutreach.whatsapp.models.profile import STATUS_BANNED
+                wa_session.wa_profile.status = STATUS_BANNED
+                wa_session.wa_profile.save(update_fields=["status"])
+                logger.error(
+                    "WA send_message: profile %s appears BANNED — marking and halting",
+                    wa_session.wa_profile,
+                )
             return
 
         now = datetime.now(timezone.utc)
@@ -89,7 +115,7 @@ def handle_whatsapp_message(task, wa_session, qualifiers):  # noqa: ARG001
         from openoutreach.mongodb.models_extended import ChatMessage
         ChatMessage(
             deal_id=str(deal._id),
-            content=message_template,
+            content=message,
             is_outgoing=True,
             creation_date=now,
             user_id=deal.user_id,
@@ -101,11 +127,12 @@ def handle_whatsapp_message(task, wa_session, qualifiers):  # noqa: ARG001
             linkedin_profile_id=wa_session.wa_profile._id,
             campaign_id=campaign_id,
             action_type="whatsapp_message",
+            user_id=deal.user_id,
             details={
                 "deal_id": str(deal._id),
                 "lead_id": str(lead._id),
                 "phone": lead.phone,
-                "message_preview": message_template[:100],
+                "message_preview": message[:100],
             },
         ).save()
 

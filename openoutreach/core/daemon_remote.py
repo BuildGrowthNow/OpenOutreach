@@ -87,6 +87,9 @@ class RemoteDaemon:
         # WhatsApp session pool: keyed by whatsapp_profile_id
         self._whatsapp_sessions: dict[str, Any] = {}
 
+        # user_id resolved from the /api/daemon/profile endpoint after startup
+        self._user_id: Optional[str] = None
+
         self.data_dir.mkdir(parents=True, exist_ok=True)
 
     def _default_data_dir(self) -> Path:
@@ -281,6 +284,7 @@ class RemoteDaemon:
                 self._task_loop(),
                 self._config_refresh_loop(),
                 self._subscription_check_loop(),
+                self._wa_health_check_loop(),
                 return_exceptions=True,
             )
         except Exception as e:
@@ -360,6 +364,10 @@ class RemoteDaemon:
 
         # Fetch proxy config from backend — no local MongoDB required
         profile_details = await self.client.get_profile_details(self.linkedin_profile_id)
+
+        # Cache user_id so _start_wa_sessions can use it before any task runs
+        if not self._user_id:
+            self._user_id = profile_details.get("user_id")
 
         # Daily limits come from the config already loaded from the API
         connect_daily_limit = self.config.daily_connect_limit if self.config else 50
@@ -608,9 +616,9 @@ class RemoteDaemon:
         if not self.config:
             return
 
-        user_id = getattr(self.session, "user_id", None) if self.session else None
+        user_id = self._user_id
         if not user_id:
-            logger.debug("No user_id resolved — skipping WA session start")
+            logger.warning("user_id not resolved — skipping WA session start (profile_details missing user_id)")
             return
 
         profiles = WhatsAppProfile.find_by_user_id(user_id)
@@ -635,6 +643,54 @@ class RemoteDaemon:
             except Exception as e:
                 logger.debug("WA session close error for %s: %s", profile_id, e)
         self._whatsapp_sessions.clear()
+
+    async def _wa_health_check_loop(self) -> None:
+        """Periodically verify WA sessions are still authenticated.
+
+        Checks every 5 minutes. Marks disconnected/banned profiles and attempts
+        a single reconnect. WA Web sessions expire after ~14 days; this loop
+        detects expiry and surfaces the status so the user sees "Disconnected"
+        in the UI and can re-scan the QR code.
+        """
+        _WA_HEALTH_INTERVAL = 300  # 5 minutes
+
+        while self.running:
+            await asyncio.sleep(_WA_HEALTH_INTERVAL)
+            if not self._whatsapp_sessions:
+                continue
+
+            for profile_id, wa_session in list(self._whatsapp_sessions.items()):
+                try:
+                    alive = await self._run_on_pw_thread(wa_session.is_alive)
+                    if alive:
+                        continue
+
+                    banned = await self._run_on_pw_thread(wa_session.detect_ban)
+                    new_status = "banned" if banned else "disconnected"
+                    logger.warning(
+                        "WA health check: session %s is %s — marking profile",
+                        wa_session, new_status,
+                    )
+                    wa_session.wa_profile.status = new_status
+                    wa_session.wa_profile.save(update_fields=["status"])
+                    del self._whatsapp_sessions[profile_id]
+
+                    if not banned:
+                        # Attempt reconnect — start_whatsapp_session will try
+                        # stored session_data first; falls back to QR poll if stale.
+                        try:
+                            from openoutreach.whatsapp.browser.launch import start_whatsapp_session
+                            await self._run_on_pw_thread(lambda s=wa_session: start_whatsapp_session(s))
+                            self._whatsapp_sessions[profile_id] = wa_session
+                            logger.info("WA health check: reconnected %s", wa_session)
+                        except Exception as reconnect_err:
+                            logger.warning(
+                                "WA health check: reconnect failed for %s: %s",
+                                wa_session, reconnect_err,
+                            )
+
+                except Exception as e:
+                    logger.debug("WA health check error for %s: %s", profile_id, e)
 
     async def _heartbeat_loop(self):
         """Send periodic heartbeats to backend."""

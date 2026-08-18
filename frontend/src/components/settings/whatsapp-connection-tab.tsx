@@ -46,12 +46,24 @@ function QrPoller({ profileId, onConnected }: { profileId: string; onConnected: 
     try {
       const url = getQrUrl(profileId);
       const res = await fetch(`${url}?t=${Date.now()}`, { credentials: "include" });
+      if (res.status === 202) {
+        // Daemon still generating QR — extend deadline to avoid premature timeout
+        deadlineRef.current = Math.max(deadlineRef.current, Date.now() + 30_000);
+        return;
+      }
       if (res.ok) {
-        const blob = await res.blob();
-        setQrSrc(URL.createObjectURL(blob));
-      } else if (res.status === 404) {
-        // QR cleared — profile either authenticated or session expired
-        onConnected();
+        const contentType = res.headers.get("content-type") ?? "";
+        if (contentType.includes("image")) {
+          const blob = await res.blob();
+          setQrSrc(URL.createObjectURL(blob));
+        } else {
+          // JSON 200 → already connected (status: "connected")
+          onConnected();
+          if (intervalRef.current) clearInterval(intervalRef.current);
+        }
+      }
+      // 404 = profile not found — stop polling to avoid infinite loop
+      if (res.status === 404) {
         if (intervalRef.current) clearInterval(intervalRef.current);
       }
     } catch {

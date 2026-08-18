@@ -42,7 +42,7 @@ def handle_whatsapp_follow_up(task, wa_session, qualifiers):  # noqa: ARG001
             "campaign_id": campaign_id,
             "state": Deal.DealState.CONNECTED,
             "active_channel": "whatsapp",
-            "outcome": "",
+            "outcome": {"$in": ["", None]},
         },
         sort=[("last_outgoing_at", 1), ("follow_up_cycled_at", 1)],
     )
@@ -122,6 +122,7 @@ def handle_whatsapp_follow_up(task, wa_session, qualifiers):  # noqa: ARG001
             linkedin_profile_id=wa_profile._id,
             campaign_id=campaign_id,
             action_type="whatsapp_follow_up",
+            user_id=deal.user_id,
             details={
                 "deal_id": str(deal._id),
                 "phone": lead.phone,

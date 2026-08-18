@@ -5,7 +5,7 @@ import base64
 import logging
 import time
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from openoutreach.whatsapp.browser.qr import capture_qr_png, extract_phone_and_name, is_authenticated
 from openoutreach.whatsapp.models.profile import STATUS_CONNECTED, STATUS_DISCONNECTED, WhatsAppProfile
@@ -58,7 +58,7 @@ def start_whatsapp_session(wa_session: "WASession") -> None:
     browser = pw.chromium.launch(headless=True, args=["--no-sandbox", "--disable-setuid-sandbox"])
     wa_session.browser = browser
 
-    stored = profile.session_data
+    stored: Any = profile.session_data
     context = browser.new_context(storage_state=stored if stored else None)
     wa_session.context = context
 

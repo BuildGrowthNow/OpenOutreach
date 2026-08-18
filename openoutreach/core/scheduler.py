@@ -831,8 +831,9 @@ def plan_whatsapp_window(campaign, whatsapp_profile_id: str, user_id: str) -> in
 
     from openoutreach.mongodb.models import SiteConfig
     config = SiteConfig.load(user_id=user_id)
-    n = min(eligible, 20)
-    velocity = config.velocity if config.velocity > 0 else 20
+    wa_limit = config.wa_daily_limit if config.wa_daily_limit > 0 else 20
+    n = min(eligible, wa_limit)
+    velocity = max(1, wa_limit // 8)  # spread sends over ~8 active hours
 
     created = _plan_slots(
         Task.TaskType.WHATSAPP_MESSAGE, campaign.pk, n, velocity,
@@ -861,7 +862,7 @@ def plan_whatsapp_follow_up_window(campaign, whatsapp_profile_id: str, user_id: 
         "campaign_id": campaign.pk,
         "state": "Connected",
         "active_channel": "whatsapp",
-        "outcome": "",
+        "outcome": {"$in": ["", None]},
     })
     if connected == 0:
         return 0

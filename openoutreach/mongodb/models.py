@@ -4008,6 +4008,7 @@ class SiteConfig:
         ai_writing_style: str = "",
         ai_say_rules: str = "",
         ai_avoid_rules: str = "",
+        wa_daily_limit: int = 20,
     ):
         self._id = _id or str(uuid4())
         self.user_id = user_id
@@ -4035,6 +4036,7 @@ class SiteConfig:
         self.ai_writing_style = ai_writing_style
         self.ai_say_rules = ai_say_rules
         self.ai_avoid_rules = ai_avoid_rules
+        self.wa_daily_limit = wa_daily_limit
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert model instance to dictionary for MongoDB storage."""
@@ -4065,6 +4067,7 @@ class SiteConfig:
             "ai_writing_style": self.ai_writing_style,
             "ai_say_rules": self.ai_say_rules,
             "ai_avoid_rules": self.ai_avoid_rules,
+            "wa_daily_limit": self.wa_daily_limit,
         }
         return data
 
@@ -4098,6 +4101,7 @@ class SiteConfig:
             ai_writing_style=data.get("ai_writing_style", ""),
             ai_say_rules=data.get("ai_say_rules", ""),
             ai_avoid_rules=data.get("ai_avoid_rules", ""),
+            wa_daily_limit=data.get("wa_daily_limit", 20),
         )
 
     def save(self) -> str:

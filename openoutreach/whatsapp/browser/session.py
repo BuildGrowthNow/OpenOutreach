@@ -88,6 +88,36 @@ class WASession:
             logger.warning("check_inbox failed: %s", e)
             return []
 
+    def is_alive(self) -> bool:
+        """Return True if the WA Web session is still authenticated.
+
+        Must be called from the Playwright thread.
+        """
+        if not self.page:
+            return False
+        from openoutreach.whatsapp.browser.qr import is_authenticated
+        try:
+            return is_authenticated(self.page)
+        except Exception:
+            return False
+
+    def detect_ban(self) -> bool:
+        """Return True if WA Web shows a ban / account-suspended message.
+
+        Must be called from the Playwright thread.
+        """
+        if not self.page:
+            return False
+        try:
+            result = self.page.evaluate("""() => {
+                const text = document.body ? document.body.innerText : '';
+                return text.includes('not allowed to use WhatsApp')
+                    || text.includes('account has been suspended');
+            }""")
+            return bool(result)
+        except Exception:
+            return False
+
     def close(self) -> None:
         """Close browser and clean up. Safe to call from Playwright thread."""
         from openoutreach.whatsapp.browser.launch import close_whatsapp_session

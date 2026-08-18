@@ -114,14 +114,23 @@ async def get_qr(
 ):
     """Return the current QR PNG for a disconnected profile.
 
-    Returns 200 image/png while QR is available, 404 when profile is not
-    found or is already authenticated (no QR stored).
+    200 image/png  — QR is ready to scan
+    200 JSON       — {"status": "connected"} when already authenticated
+    202 JSON       — {"status": "pending"} when daemon is still generating QR
+    404            — profile not found or does not belong to user
     """
+    from fastapi.responses import JSONResponse
+
     profile = WhatsAppProfile.get(profile_id)
     if not profile or profile.user_id != user_id:
         raise HTTPException(status_code=404, detail="WhatsApp profile not found")
+
+    if profile.status == STATUS_CONNECTED:
+        return JSONResponse({"status": "connected"})
+
     if not profile.qr_png_b64:
-        raise HTTPException(status_code=404, detail="No QR available")
+        return JSONResponse({"status": "pending"}, status_code=202)
+
     try:
         png_bytes = base64.b64decode(profile.qr_png_b64)
     except Exception:

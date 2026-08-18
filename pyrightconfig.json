@@ -1,6 +1,7 @@
 {
   "include": ["openoutreach", "linkedin_cli"],
   "exclude": ["openoutreach/desktop"],
+  "extraPaths": ["."],
   "venvPath": ".",
   "venv": ".venv",
   "pythonVersion": "3.11",

@@ -565,6 +565,7 @@ class ActionLog:
         status: str = "",
         error_message: str = "",
         duration_ms: Optional[float] = None,
+        user_id: Optional[str] = None,
     ):
         self._id = _id or str(uuid4())
         self.linkedin_profile_id = linkedin_profile_id
@@ -575,6 +576,7 @@ class ActionLog:
         self.status = status
         self.error_message = error_message
         self.duration_ms = duration_ms
+        self.user_id = user_id
 
     @property
     def pk(self):
@@ -603,6 +605,7 @@ class ActionLog:
             "status": self.status,
             "error_message": self.error_message,
             "duration_ms": self.duration_ms,
+            "user_id": self.user_id,
         }
 
     @classmethod
@@ -618,6 +621,7 @@ class ActionLog:
             status=data.get("status", ""),
             error_message=data.get("error_message", ""),
             duration_ms=data.get("duration_ms"),
+            user_id=data.get("user_id"),
         )
 
     def save(self) -> str:
