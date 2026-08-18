@@ -14,7 +14,7 @@ pyinstaller>=6.0,<7.0
 pystray>=0.19,<1.0
 
 # Native webview window (renders the web app in a native OS window)
-pywebview>=4.0
+pywebview>=5.0
 
 # Image handling (for icons)
 Pillow>=10.0,<12.0

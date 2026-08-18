@@ -410,7 +410,13 @@ class TrayApp:
         _wv_data.mkdir(parents=True, exist_ok=True)
 
         # pywebview.start() is blocking — run in current thread
-        webview.start(debug=False, user_data_path=str(_wv_data))
+        # user_data_path was added in pywebview 5.x; guard for frozen builds on 4.x
+        _wv_ver = getattr(webview, "__version__", "4.0")
+        _wv_major = int(str(_wv_ver).split(".")[0])
+        if _wv_major >= 5:
+            webview.start(debug=False, user_data_path=str(_wv_data))  # type: ignore[call-arg]
+        else:
+            webview.start(debug=False)  # type: ignore[call-arg]
 
     def _on_loaded(self):
         """Called after each page navigation — re-inject the desktop globals."""
