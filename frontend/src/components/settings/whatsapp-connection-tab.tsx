@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useAuthStore } from "@/lib/auth-store";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -36,6 +37,7 @@ function QrPoller({ profileId, onConnected }: { profileId: string; onConnected: 
   const [timedOut, setTimedOut] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const deadlineRef = useRef(Date.now() + 120_000);
+  const token = useAuthStore((state) => state.token);
 
   const poll = useCallback(async () => {
     if (Date.now() > deadlineRef.current) {
@@ -45,7 +47,8 @@ function QrPoller({ profileId, onConnected }: { profileId: string; onConnected: 
     }
     try {
       const url = getQrUrl(profileId);
-      const res = await fetch(`${url}?t=${Date.now()}`, { credentials: "include" });
+      const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
+      const res = await fetch(`${url}?t=${Date.now()}`, { headers });
       if (res.status === 202) {
         // Daemon still generating QR — extend deadline to avoid premature timeout
         deadlineRef.current = Math.max(deadlineRef.current, Date.now() + 30_000);
@@ -69,7 +72,7 @@ function QrPoller({ profileId, onConnected }: { profileId: string; onConnected: 
     } catch {
       // transient error — keep polling
     }
-  }, [profileId, onConnected]);
+  }, [profileId, onConnected, token]);
 
   useEffect(() => {
     poll();

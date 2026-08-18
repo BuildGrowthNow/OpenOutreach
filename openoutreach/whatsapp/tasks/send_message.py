@@ -109,7 +109,7 @@ def handle_whatsapp_message(task, wa_session, qualifiers):  # noqa: ARG001
         # Advance deal to PENDING
         deal.state = Deal.DealState.PENDING
         deal.last_outgoing_at = now
-        deal.save()
+        deal.save(update_fields=["state", "last_outgoing_at"])
 
         # Save ChatMessage
         from openoutreach.mongodb.models_extended import ChatMessage

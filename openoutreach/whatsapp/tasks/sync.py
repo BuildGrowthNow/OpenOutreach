@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime, timezone
+from typing import Optional
 
 from openoutreach.mongodb.connection import get_mongodb_collection
 
@@ -51,6 +53,55 @@ _EXTRACT_MESSAGES_JS = """() => {
         };
     }).filter(m => m.content);
 }"""
+
+def _parse_wa_timestamp(ts_text: str) -> Optional[datetime]:
+    """Parse WA Web data-pre-plain-text into a UTC datetime.
+
+    WA Web sets data-pre-plain-text to strings like:
+      "[10:30, 8/18/2026] John Doe:"  (en-US, M/D/YYYY)
+      "[10:30, 18/8/2026] John Doe:"  (en-GB, D/M/YYYY)
+      "[10:30 AM, 8/18/2026] John:"   (12-hour)
+
+    Tries both M/D/YYYY and D/M/YYYY interpretations and returns the first valid date.
+    Returns None if the format is unrecognised.
+    """
+    if not ts_text:
+        return None
+    m = re.search(
+        r'\[(\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AP]M)?),\s*(\d{1,2}/\d{1,2}/\d{4})\]',
+        ts_text,
+        re.IGNORECASE,
+    )
+    if not m:
+        return None
+    time_part = m.group(1).strip().upper()
+    date_part = m.group(2).strip()
+
+    parsed_time = None
+    for fmt in ("%I:%M %p", "%H:%M", "%I:%M:%S %p", "%H:%M:%S"):
+        try:
+            parsed_time = datetime.strptime(time_part, fmt).time()
+            break
+        except ValueError:
+            continue
+    if parsed_time is None:
+        return None
+
+    parts = date_part.split("/")
+    if len(parts) != 3:
+        return None
+    a, b, year = int(parts[0]), int(parts[1]), int(parts[2])
+
+    for month, day in ((a, b), (b, a)):
+        if not (1 <= month <= 12 and 1 <= day <= 31):
+            continue
+        try:
+            return datetime(year, month, day, parsed_time.hour, parsed_time.minute,
+                            parsed_time.second, tzinfo=timezone.utc)
+        except ValueError:
+            continue
+    return None
+
 
 # Per-deal consecutive empty-scrape counter — surfaces selector drift early
 _empty_scrape_count: dict[str, int] = {}
@@ -143,24 +194,38 @@ def handle_whatsapp_sync(task, wa_session, qualifiers):  # noqa: ARG001
         )
         last_saved_content = last_saved.get("content", "") if last_saved else ""
 
+        # Find the start index of new messages using last-occurrence matching.
+        # Using the LAST occurrence of last_saved_content handles the case where
+        # a lead sends the same text twice — the earlier duplicate is skipped
+        # and we start after the most recent match.
+        # If last_saved is not found in the current DOM window (it scrolled out),
+        # all DOM messages are treated as new (they come after the saved history).
+        if not last_saved_content:
+            new_raw = raw_msgs
+        else:
+            cutoff_idx = None
+            for i in range(len(raw_msgs) - 1, -1, -1):
+                if (raw_msgs[i].get("content") or "").strip() == last_saved_content:
+                    cutoff_idx = i
+                    break
+            new_raw = raw_msgs[cutoff_idx + 1:] if cutoff_idx is not None else raw_msgs
+
         new_messages = []
-        seen_cutoff = not bool(last_saved_content)
-        for raw in raw_msgs:
+        for raw in new_raw:
             content = (raw.get("content") or "").strip()
             if not content:
                 continue
-            if not seen_cutoff:
-                if content == last_saved_content:
-                    seen_cutoff = True
-                continue
 
             is_outgoing = bool(raw.get("is_outgoing", False))
-            now = datetime.now(timezone.utc)
+            # Use the timestamp from the DOM when parseable; fall back to now.
+            ts = _parse_wa_timestamp(raw.get("ts_text") or "")
+            creation_date = ts if ts is not None else datetime.now(timezone.utc)
+
             msg = ChatMessage(
                 deal_id=str(deal._id),
                 content=content,
                 is_outgoing=is_outgoing,
-                creation_date=now,
+                creation_date=creation_date,
                 user_id=deal.user_id,
                 channel="whatsapp",
             )

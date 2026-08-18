@@ -31,6 +31,7 @@ from __future__ import annotations
 import datetime
 import logging
 import random
+import threading
 from datetime import datetime as Datetime, timedelta, timezone as tz
 from zoneinfo import ZoneInfo
 
@@ -794,6 +795,7 @@ def reconcile(session) -> None:
         plan_follow_up_window(session, campaign, follow_up_cap=follow_up_cap)
         plan_check_pending_window(session, campaign)
         _retry_no_email_deals(campaign)
+        _maybe_trigger_maps_scrape(campaign, profile.user_id)
 
         # WhatsApp channel planners — only when campaign has WA configured
         wa_profile_id = getattr(campaign, "whatsapp_profile_id", None)
@@ -969,3 +971,61 @@ def _retry_no_email_deals(campaign) -> None:
                 )
         except Exception as exc:
             logger.warning("[%s] NO_EMAIL retry error for deal %s: %s", campaign, doc.get("_id"), exc)
+
+
+# ── Maps scraper trigger ───────────────────────────────────────────────
+
+# Tracks campaigns currently being scraped to prevent concurrent duplicate runs.
+_maps_scraping: set = set()
+
+
+def _maybe_trigger_maps_scrape(campaign, user_id: str) -> None:
+    """Trigger google_maps scraping in a background thread if the campaign has no leads yet.
+
+    No-op when:
+    - campaign.lead_source != "google_maps"
+    - campaign.maps_query is empty
+    - campaign already has at least one deal (leads exist)
+    - a scrape for this campaign is already running
+    """
+    if getattr(campaign, "lead_source", "linkedin_search") != "google_maps":
+        return
+    maps_query = getattr(campaign, "maps_query", None)
+    if not maps_query:
+        return
+    if campaign.pk in _maps_scraping:
+        return
+
+    from openoutreach.mongodb.connection import get_mongodb_collection
+    deals_col = get_mongodb_collection("deals")
+    if deals_col is None:
+        return
+
+    if deals_col.count_documents({"campaign_id": campaign.pk}, limit=1):
+        return
+
+    _maps_scraping.add(campaign.pk)
+
+    country_code = getattr(campaign, "maps_country_code", None) or "US"
+    backends = getattr(campaign, "maps_backends", None) or None
+    campaign_id = campaign.pk
+
+    def _run() -> None:
+        try:
+            from openoutreach.whatsapp.pipeline.maps_scraper import create_leads_from_maps
+            created = create_leads_from_maps(
+                query=maps_query,
+                country_code=country_code,
+                campaign_id=campaign_id,
+                user_id=user_id,
+                backends=backends,
+            )
+            logger.info("Maps scrape [%s]: created %d new leads", campaign_id, created)
+        except Exception as exc:
+            logger.error("Maps scrape [%s] failed: %s", campaign_id, exc)
+        finally:
+            _maps_scraping.discard(campaign_id)
+
+    t = threading.Thread(target=_run, daemon=True, name=f"maps-scrape-{campaign_id}")
+    t.start()
+    logger.info("Maps scrape triggered for campaign %s (query=%r)", campaign_id, maps_query)

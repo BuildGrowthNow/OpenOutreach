@@ -5,10 +5,12 @@ claims tasks scoped by linkedin_profile_id, and round-robins across all users.
 from __future__ import annotations
 
 import logging
+import queue
 import random
+import threading
 import time
 from datetime import datetime, timedelta, timezone as tz
-from typing import Optional
+from typing import Any, Optional
 from zoneinfo import ZoneInfo
 
 from pydantic_ai.exceptions import ModelHTTPError
@@ -23,6 +25,137 @@ from openoutreach.mongodb.models import Campaign, SiteConfig, Task
 logger = logging.getLogger(__name__)
 
 _HANDLERS: dict = {}
+
+
+# ── WhatsApp session pool (cloud daemon) ──────────────────────────────
+
+_WA_PW_QUEUE: queue.Queue = queue.Queue()
+_WA_PW_THREAD: Optional[threading.Thread] = None
+_WA_SESSIONS: dict[str, Any] = {}
+_WA_HEALTH_INTERVAL = 300  # 5 minutes
+_WA_SESSION_REFRESH_INTERVAL = 300  # 5 minutes
+
+
+def _start_wa_pw_thread() -> None:
+    global _WA_PW_THREAD
+
+    def _worker() -> None:
+        while True:
+            item = _WA_PW_QUEUE.get()
+            if item is None:
+                break
+            item()
+
+    _WA_PW_THREAD = threading.Thread(target=_worker, daemon=True, name="wa-pw-worker")
+    _WA_PW_THREAD.start()
+
+
+def _run_on_wa_thread(fn, timeout: float = 120) -> Any:
+    """Submit fn to the WA Playwright thread and block until it finishes."""
+    evt = threading.Event()
+    result: list = [None, None]  # [value, exception]
+
+    def _call() -> None:
+        try:
+            result[0] = fn()
+        except Exception as exc:
+            result[1] = exc
+        evt.set()
+
+    _WA_PW_QUEUE.put(_call)
+    if not evt.wait(timeout=timeout):
+        raise TimeoutError("WA Playwright thread timeout")
+    if result[1] is not None:
+        raise result[1]
+    return result[0]
+
+
+def _refresh_wa_sessions() -> None:
+    """Ensure a WA session exists for every non-banned WhatsApp profile."""
+    try:
+        from openoutreach.whatsapp.browser.launch import start_whatsapp_session
+        from openoutreach.whatsapp.browser.session import WASession
+        from openoutreach.whatsapp.models.profile import WhatsAppProfile
+    except ImportError as e:
+        logger.debug("WA modules not available: %s", e)
+        return
+
+    from openoutreach.mongodb.connection import get_mongodb_collection
+    col = get_mongodb_collection("whatsapp_profiles")
+    if col is None:
+        return
+
+    docs = list(col.find({"status": {"$ne": "banned"}}))
+    current_ids = {doc["_id"] for doc in docs}
+
+    for pid in list(_WA_SESSIONS.keys()):
+        if pid not in current_ids:
+            try:
+                _run_on_wa_thread(lambda s=_WA_SESSIONS[pid]: s.close(), timeout=30)
+            except Exception as e:
+                logger.debug("WA session close error %s: %s", pid, e)
+            del _WA_SESSIONS[pid]
+
+    for doc in docs:
+        pid = doc["_id"]
+        if pid in _WA_SESSIONS:
+            continue
+        try:
+            profile = WhatsAppProfile.from_dict(doc)
+            wa_session = WASession(profile)
+            _run_on_wa_thread(lambda s=wa_session: start_whatsapp_session(s))
+            _WA_SESSIONS[pid] = wa_session
+            logger.info("WA session started: %s", wa_session)
+        except Exception as e:
+            logger.warning("WA session start failed for profile %s: %s", pid, e)
+
+
+def _wa_health_check() -> None:
+    """Verify WA sessions are still alive; reconnect or mark disconnected."""
+    try:
+        from openoutreach.whatsapp.browser.launch import start_whatsapp_session
+    except ImportError:
+        return
+
+    for profile_id, wa_session in list(_WA_SESSIONS.items()):
+        try:
+            alive = _run_on_wa_thread(wa_session.is_alive, timeout=30)
+            if alive:
+                continue
+
+            banned = _run_on_wa_thread(wa_session.detect_ban, timeout=30)
+            new_status = "banned" if banned else "disconnected"
+            wa_session.wa_profile.status = new_status
+            wa_session.wa_profile.save(update_fields=["status"])
+            del _WA_SESSIONS[profile_id]
+            logger.warning("WA health: session %s is %s", wa_session, new_status)
+
+            if not banned:
+                try:
+                    _run_on_wa_thread(lambda s=wa_session: start_whatsapp_session(s))
+                    _WA_SESSIONS[profile_id] = wa_session
+                    logger.info("WA health: reconnected %s", wa_session)
+                except Exception as reconnect_err:
+                    logger.warning("WA health: reconnect failed: %s", reconnect_err)
+        except Exception as e:
+            logger.debug("WA health check error %s: %s", profile_id, e)
+
+
+def _execute_wa_task(task, wa_session) -> None:
+    """Dispatch one WA task on the WA Playwright thread."""
+    from openoutreach.whatsapp.tasks.send_message import handle_whatsapp_message
+    from openoutreach.whatsapp.tasks.follow_up import handle_whatsapp_follow_up
+    from openoutreach.whatsapp.tasks.sync import handle_whatsapp_sync
+
+    _wa_handlers = {
+        Task.TaskType.WHATSAPP_MESSAGE: handle_whatsapp_message,
+        Task.TaskType.WHATSAPP_FOLLOW_UP: handle_whatsapp_follow_up,
+        Task.TaskType.WHATSAPP_SYNC: handle_whatsapp_sync,
+    }
+    handler = _wa_handlers.get(task.task_type)
+    if handler is None:
+        raise ValueError(f"Unknown WA task type: {task.task_type}")
+    _run_on_wa_thread(lambda: handler(task, wa_session, {}))
 
 
 def _register_handlers():
@@ -388,6 +521,10 @@ def run_daemon():
     ensure_all_indexes()
     _register_handlers()
 
+    # Start dedicated WA Playwright thread and initialise WA sessions.
+    _start_wa_pw_thread()
+    _refresh_wa_sessions()
+
     cfg = CAMPAIGN_CONFIG
     heartbeat = Heartbeat()
     rhythm = _HumanRhythmBreak(heartbeat)
@@ -396,6 +533,8 @@ def run_daemon():
     pool: dict[str, ProfileSession] = {}
     last_profile_refresh = 0.0
     last_stale_recovery: float = 0.0
+    last_wa_refresh: float = 0.0
+    last_wa_health: float = 0.0
 
     def refresh_pool():
         nonlocal last_profile_refresh
@@ -574,6 +713,53 @@ def run_daemon():
             task_executed = True
             rhythm.maybe_break()
             break  # After executing one task, restart the round-robin
+
+        # Periodic WA session refresh and health check
+        now_mono = time.monotonic()
+        if now_mono - last_wa_refresh >= _WA_SESSION_REFRESH_INTERVAL:
+            last_wa_refresh = now_mono
+            _refresh_wa_sessions()
+        if now_mono - last_wa_health >= _WA_HEALTH_INTERVAL:
+            last_wa_health = now_mono
+            _wa_health_check()
+
+        # WA task claiming — one task per cycle, round-robins across WA sessions
+        if not task_executed and _WA_SESSIONS:
+            for wa_profile_id, wa_session in list(_WA_SESSIONS.items()):
+                wa_task = Task.objects.claim_next(linkedin_profile_id=wa_profile_id)
+                if wa_task is None:
+                    continue
+
+                campaign_id = wa_task.payload.get("campaign_id")
+                if not campaign_id:
+                    wa_task.mark_failed()
+                    continue
+
+                campaign = Campaign.get(campaign_id)
+                if not campaign or campaign.status != Campaign.Status.ACTIVE:
+                    wa_task.mark_failed()
+                    continue
+
+                wa_task.mark_running()
+                try:
+                    _execute_wa_task(wa_task, wa_session)
+                    wa_task.mark_completed()
+                    logger.info(
+                        colored("[%s] WA COMPLETED", "green", attrs=["bold"])
+                        + " (wa_profile=%s, campaign=%s)",
+                        wa_task.task_type, wa_profile_id, campaign_id,
+                    )
+                    task_executed = True
+                except Exception:
+                    import traceback
+                    wa_task.mark_failed()
+                    logger.error(
+                        colored("[%s] WA Task FAILED", "red", attrs=["bold"])
+                        + " (wa_profile=%s, campaign=%s)\n%s",
+                        wa_task.task_type, wa_profile_id, campaign_id,
+                        traceback.format_exc()[-2000:],
+                    )
+                break
 
         if not task_executed:
             _reconcile_all(pool)
