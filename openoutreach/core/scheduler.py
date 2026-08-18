@@ -732,8 +732,126 @@ def reconcile(session) -> None:
         plan_check_pending_window(session, campaign)
         _retry_no_email_deals(campaign)
 
+        # WhatsApp channel planners — only when campaign has WA configured
+        wa_profile_id = getattr(campaign, "whatsapp_profile_id", None)
+        if wa_profile_id and "whatsapp" in (getattr(campaign, "channel_sequence", None) or []):
+            _user_id = profile.user_id
+            plan_whatsapp_window(campaign, wa_profile_id, _user_id)
+            plan_whatsapp_follow_up_window(campaign, wa_profile_id, _user_id)
+            plan_whatsapp_sync_window(campaign, wa_profile_id, _user_id)
+
     pending_count = Task.objects.pending().count()
     logger.info("Task queue reconciled: %d pending tasks", pending_count)
+
+
+def plan_whatsapp_window(campaign, whatsapp_profile_id: str, user_id: str) -> int:
+    """Plan the next 24h of whatsapp_message slots for *campaign*.
+
+    No-op when a PENDING whatsapp_message task already exists.
+    Uses Task.linkedin_profile_id to store the whatsapp_profile_id.
+    """
+    if _has_pending(Task.TaskType.WHATSAPP_MESSAGE, campaign.pk, linkedin_profile_id=whatsapp_profile_id):
+        return 0
+
+    from openoutreach.mongodb.connection import get_mongodb_collection
+    deals_col = get_mongodb_collection("deals")
+    if deals_col is None:
+        return 0
+
+    eligible = deals_col.count_documents({
+        "campaign_id": campaign.pk,
+        "state": "Qualified",
+        "active_channel": "whatsapp",
+    })
+    if eligible == 0:
+        return 0
+
+    from openoutreach.mongodb.models import SiteConfig
+    config = SiteConfig.load(user_id=user_id)
+    n = min(eligible, 20)
+    velocity = config.velocity if config.velocity > 0 else 20
+
+    created = _plan_slots(
+        Task.TaskType.WHATSAPP_MESSAGE, campaign.pk, n, velocity,
+        linkedin_profile_id=whatsapp_profile_id,
+        user_id=user_id,
+    )
+    if created:
+        logger.info("[%s] planned %d whatsapp_message slots", campaign, created)
+    return created
+
+
+def plan_whatsapp_follow_up_window(campaign, whatsapp_profile_id: str, user_id: str) -> int:
+    """Plan the next 24h of whatsapp_follow_up slots for *campaign*.
+
+    No-op when a PENDING whatsapp_follow_up task already exists or no CONNECTED WA deals.
+    """
+    if _has_pending(Task.TaskType.WHATSAPP_FOLLOW_UP, campaign.pk, linkedin_profile_id=whatsapp_profile_id):
+        return 0
+
+    from openoutreach.mongodb.connection import get_mongodb_collection
+    deals_col = get_mongodb_collection("deals")
+    if deals_col is None:
+        return 0
+
+    connected = deals_col.count_documents({
+        "campaign_id": campaign.pk,
+        "state": "Connected",
+        "active_channel": "whatsapp",
+        "outcome": "",
+    })
+    if connected == 0:
+        return 0
+
+    from openoutreach.mongodb.models import SiteConfig
+    config = SiteConfig.load(user_id=user_id)
+    n = min(connected, 10)
+    velocity = config.velocity if config.velocity > 0 else 20
+
+    created = _plan_slots(
+        Task.TaskType.WHATSAPP_FOLLOW_UP, campaign.pk, n, velocity,
+        linkedin_profile_id=whatsapp_profile_id,
+        user_id=user_id,
+    )
+    if created:
+        logger.info("[%s] planned %d whatsapp_follow_up slots", campaign, created)
+    return created
+
+
+def plan_whatsapp_sync_window(campaign, whatsapp_profile_id: str, user_id: str) -> int:
+    """Plan the next 24h of whatsapp_sync slots for *campaign*.
+
+    Schedules sync slots for open PENDING/CONNECTED WA deals.
+    No-op when a PENDING whatsapp_sync task already exists.
+    """
+    if _has_pending(Task.TaskType.WHATSAPP_SYNC, campaign.pk, linkedin_profile_id=whatsapp_profile_id):
+        return 0
+
+    from openoutreach.mongodb.connection import get_mongodb_collection
+    deals_col = get_mongodb_collection("deals")
+    if deals_col is None:
+        return 0
+
+    open_count = deals_col.count_documents({
+        "campaign_id": campaign.pk,
+        "state": {"$in": ["Pending", "Connected"]},
+        "active_channel": "whatsapp",
+    })
+    if open_count == 0:
+        return 0
+
+    # One sync task per 30 minutes, capped at 48 per day
+    n = min(48, max(1, open_count * 2))
+    velocity = 2  # 2 syncs per hour
+
+    created = _plan_slots(
+        Task.TaskType.WHATSAPP_SYNC, campaign.pk, n, velocity,
+        linkedin_profile_id=whatsapp_profile_id,
+        user_id=user_id,
+    )
+    if created:
+        logger.info("[%s] planned %d whatsapp_sync slots", campaign, created)
+    return created
 
 
 def _retry_no_email_deals(campaign) -> None:

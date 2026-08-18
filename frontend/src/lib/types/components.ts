@@ -320,6 +320,7 @@ export interface Message {
   creationDate: string;
   recipientName: string;
   recipientUrl?: string;
+  channel?: string;
 }
 
 export interface HealthStatus {

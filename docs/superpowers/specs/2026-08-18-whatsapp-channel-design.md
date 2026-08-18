@@ -230,12 +230,12 @@ The existing follow-up agent works for WhatsApp without modification:
 - [x] Frontend: WhatsApp tab in Settings with QR display + connection status
 
 ### Phase 3 — Messaging tasks + AI follow-up
-- [ ] `openoutreach/whatsapp/tasks/send_message.py` — initial outreach handler
-- [ ] `openoutreach/whatsapp/tasks/follow_up.py` — follow-up handler (reuses follow-up agent)
-- [ ] `openoutreach/whatsapp/tasks/sync.py` — inbox sync → `ChatMessage(channel="whatsapp")`
-- [ ] `core/scheduler.py` — `plan_whatsapp_window()`, channel routing logic
-- [ ] `RemoteDaemon` — wire WA task handlers into reconcile loop
-- [ ] Messages page: channel filter + channel badges on message bubbles
+- [x] `openoutreach/whatsapp/tasks/send_message.py` — initial outreach handler
+- [x] `openoutreach/whatsapp/tasks/follow_up.py` — follow-up handler (reuses follow-up agent)
+- [x] `openoutreach/whatsapp/tasks/sync.py` — inbox sync → `ChatMessage(channel="whatsapp")`
+- [x] `core/scheduler.py` — `plan_whatsapp_window()`, `plan_whatsapp_follow_up_window()`, `plan_whatsapp_sync_window()`, reconcile routing
+- [x] `RemoteDaemon` — wire WA task handlers into `_execute_task`
+- [x] Messages page: channel filter pills (All/LinkedIn/WhatsApp) + channel icons on message rows
 
 ### Phase 4 — Multi-channel campaign config
 - [ ] Campaign creation UI — Channels step (checkboxes, drag reorder, per-channel templates)

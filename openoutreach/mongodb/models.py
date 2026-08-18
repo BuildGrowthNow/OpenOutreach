@@ -4295,6 +4295,9 @@ class Task:
         CHECK_PENDING = "check_pending"
         FOLLOW_UP = "follow_up"
         SEND_MANUAL_MESSAGE = "send_manual_message"
+        WHATSAPP_MESSAGE = "whatsapp_message"
+        WHATSAPP_FOLLOW_UP = "whatsapp_follow_up"
+        WHATSAPP_SYNC = "whatsapp_sync"
 
     class Status:
         PENDING = "pending"

@@ -26,6 +26,7 @@ class MessageResponse(BaseModel):
     recipientName: Optional[str] = None
     recipientUrl: Optional[str] = None
     sender: str = "me"
+    channel: str = "linkedin"
 
     @field_validator("creationDate", mode="before")
     @classmethod
@@ -165,6 +166,7 @@ async def list_messages(
             sender="me" if is_outgoing else "them",
             recipientName=lead_name or msg.get("sender_name") or "",
             recipientUrl=lead_doc.get("linkedin_url", "") if lead_doc else "",
+            channel=msg.get("channel", "linkedin"),
         ))
 
     return {

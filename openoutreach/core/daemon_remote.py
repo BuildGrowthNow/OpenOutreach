@@ -764,6 +764,48 @@ class RemoteDaemon:
             "send_manual_message": handle_send_manual_message,
         }
 
+        # WhatsApp task handlers — looked up by whatsapp_profile_id (stored in linkedin_profile_id)
+        task_type = task["task_type"]
+        if task_type in ("whatsapp_message", "whatsapp_follow_up", "whatsapp_sync"):
+            from openoutreach.whatsapp.tasks.send_message import handle_whatsapp_message
+            from openoutreach.whatsapp.tasks.follow_up import handle_whatsapp_follow_up
+            from openoutreach.whatsapp.tasks.sync import handle_whatsapp_sync
+
+            wa_profile_id = task.get("linkedin_profile_id")
+            wa_session = self._whatsapp_sessions.get(wa_profile_id) if wa_profile_id else None
+            if wa_session is None:
+                raise ValueError(
+                    f"No WA session for profile_id={wa_profile_id} — is the WA profile connected?"
+                )
+
+            wa_handlers = {
+                "whatsapp_message": handle_whatsapp_message,
+                "whatsapp_follow_up": handle_whatsapp_follow_up,
+                "whatsapp_sync": handle_whatsapp_sync,
+            }
+            wa_handler = wa_handlers[task_type]
+
+            campaign_id = task.get("payload", {}).get("campaign_id")
+            if not campaign_id:
+                raise ValueError("WA task missing campaign_id in payload")
+
+            campaign = Campaign.get(campaign_id)
+            if not campaign or campaign.status != Campaign.Status.ACTIVE:
+                logger.info(
+                    "Skipping WA task — campaign %s not active (status=%s)",
+                    campaign_id, campaign.status if campaign else "not found",
+                )
+                return None
+
+            task_obj = type("Task", (), {
+                "task_type": task_type,
+                "payload": task.get("payload", {}),
+                "campaign_id": campaign_id,
+            })()
+
+            qualifiers = self._build_qualifiers_for_campaign(campaign)
+            return wa_handler(task=task_obj, wa_session=wa_session, qualifiers=qualifiers)
+
         handler = handlers.get(task["task_type"])
         if not handler:
             raise ValueError(f"Unknown task type: {task['task_type']}")

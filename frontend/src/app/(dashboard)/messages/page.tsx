@@ -11,7 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Icons } from "@/lib/types/components";
-import { Send, ExternalLink } from "lucide-react";
+import { Send, ExternalLink, Phone, Smartphone } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -51,6 +51,13 @@ interface MessageRowProps {
   onClick: () => void;
 }
 
+function ChannelIcon({ channel }: { channel?: string }) {
+  if (channel === "whatsapp") {
+    return <Smartphone className="h-3 w-3 text-green-500 shrink-0" />;
+  }
+  return <Phone className="h-3 w-3 text-blue-400 shrink-0" />;
+}
+
 function MessageRow({ message, onClick }: MessageRowProps) {
   return (
     <div
@@ -65,6 +72,7 @@ function MessageRow({ message, onClick }: MessageRowProps) {
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between mb-1 gap-2">
           <div className="flex items-center gap-2 min-w-0">
+            <ChannelIcon channel={message.channel} />
             <Badge
               variant="outline"
               className={
@@ -307,6 +315,7 @@ const MessagesPage = () => {
   const [campaignFilter, setCampaignFilter] = useState<string>(
     searchParams.get("campaign") || "all"
   );
+  const [channelFilter, setChannelFilter] = useState<string>("all");
   const [dateRange, setDateRange] = useState<string>("all");
   const [hasResponseFilter, setHasResponseFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
@@ -412,6 +421,11 @@ const MessagesPage = () => {
   // ── client-side filters (date + response status) ──────────────────────────
   const filteredMessages = useMemo(() => {
     return messages.filter((m) => {
+      // Channel filter
+      if (channelFilter !== "all") {
+        const ch = m.channel || "linkedin";
+        if (ch !== channelFilter) return false;
+      }
       // Date range
       if (dateRange !== "all" && m.creationDate) {
         const created = new Date(m.creationDate);
@@ -574,6 +588,23 @@ const MessagesPage = () => {
               <CardTitle className="text-base">Filters</CardTitle>
             </CardHeader>
             <CardContent>
+              <div className="flex gap-2 mb-4 flex-wrap">
+                {(["all", "linkedin", "whatsapp"] as const).map((ch) => (
+                  <button
+                    key={ch}
+                    onClick={() => setChannelFilter(ch)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                      channelFilter === ch
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "border-border hover:bg-muted/50"
+                    }`}
+                  >
+                    {ch === "linkedin" && <Phone className="h-3 w-3" />}
+                    {ch === "whatsapp" && <Smartphone className="h-3 w-3" />}
+                    {ch === "all" ? "All" : ch === "linkedin" ? "LinkedIn" : "WhatsApp"}
+                  </button>
+                ))}
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="space-y-2">
                   <Label>Campaign</Label>
