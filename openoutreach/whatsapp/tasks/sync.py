@@ -9,14 +9,40 @@ from openoutreach.mongodb.connection import get_mongodb_collection
 
 logger = logging.getLogger(__name__)
 
-# JS snippet to extract messages from an open WA Web conversation panel
+# JS snippet to extract messages from an open WA Web conversation panel.
+# Each selector list is tried in order so the scrape survives WA Web redesigns
+# that rename data-testid attributes without changing DOM structure.
 _EXTRACT_MESSAGES_JS = """() => {
-    const msgs = Array.from(
-        document.querySelectorAll('[data-testid="msg-container"]')
-    );
+    function qs(el, selectors) {
+        for (const s of selectors) {
+            const found = el.querySelector(s);
+            if (found) return found;
+        }
+        return null;
+    }
+    const containerSelectors = [
+        '[data-testid="msg-container"]',
+        '.message-in',
+        '.message-out',
+        '[class*="message-"]'
+    ];
+    let msgs = [];
+    for (const s of containerSelectors) {
+        const found = Array.from(document.querySelectorAll(s));
+        if (found.length > 0) { msgs = found; break; }
+    }
     return msgs.map(el => {
-        const out = !!el.querySelector('[data-testid="msg-dblcheck"], [data-testid="msg-check"]');
-        const body = el.querySelector('[data-testid="msg-text"], .copyable-text');
+        const out = !!(
+            el.querySelector('[data-testid="msg-dblcheck"], [data-testid="msg-check"]') ||
+            el.classList.contains('message-out')
+        );
+        const body = qs(el, [
+            '[data-testid="msg-text"]',
+            '.copyable-text',
+            'span.selectable-text',
+            'span[dir="ltr"]',
+            'span[dir="rtl"]'
+        ]);
         const ts = el.querySelector('[data-testid="msg-meta"]');
         return {
             content: body ? body.innerText : null,
@@ -25,6 +51,10 @@ _EXTRACT_MESSAGES_JS = """() => {
         };
     }).filter(m => m.content);
 }"""
+
+# Per-deal consecutive empty-scrape counter — surfaces selector drift early
+_empty_scrape_count: dict[str, int] = {}
+_EMPTY_SCRAPE_WARN_THRESHOLD = 3
 
 
 def _navigate_to_chat(wa_session, phone: str) -> bool:
@@ -94,7 +124,17 @@ def handle_whatsapp_sync(task, wa_session, qualifiers):  # noqa: ARG001
             continue
 
         if not raw_msgs:
+            deal_key = str(deal._id)
+            _empty_scrape_count[deal_key] = _empty_scrape_count.get(deal_key, 0) + 1
+            count = _empty_scrape_count[deal_key]
+            if count >= _EMPTY_SCRAPE_WARN_THRESHOLD:
+                logger.warning(
+                    "WA sync [%s]: deal %s returned 0 messages for %d consecutive scrapes "
+                    "— WA Web selectors may have changed",
+                    campaign, deal._id, count,
+                )
             continue
+        _empty_scrape_count.pop(str(deal._id), None)  # reset on successful scrape
 
         # Determine cutoff: only process messages newer than latest saved WA message
         last_saved = messages_col.find_one(

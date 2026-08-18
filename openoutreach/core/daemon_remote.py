@@ -84,6 +84,13 @@ class RemoteDaemon:
         self._pw_queue: queue.Queue = queue.Queue()
         self._pw_thread: Optional[threading.Thread] = None
 
+        # Separate Playwright thread for WhatsApp so slow LinkedIn navigation
+        # does not block WA sends (and vice-versa).  Each sync_playwright()
+        # context is bound to its creation thread, so WA objects must only be
+        # accessed from _wa_pw_thread.
+        self._wa_pw_queue: queue.Queue = queue.Queue()
+        self._wa_pw_thread: Optional[threading.Thread] = None
+
         # WhatsApp session pool: keyed by whatsapp_profile_id
         self._whatsapp_sessions: dict[str, Any] = {}
 
@@ -133,6 +140,36 @@ class RemoteDaemon:
         self._pw_queue.put(None)
         if self._pw_thread:
             self._pw_thread.join(timeout=10)
+
+    def _start_wa_pw_thread(self) -> None:
+        """Start the dedicated Playwright thread for WhatsApp sessions."""
+        def _worker():
+            while True:
+                item = self._wa_pw_queue.get()
+                if item is None:
+                    break
+                fn, fut, loop = item
+                try:
+                    result = fn()
+                    loop.call_soon_threadsafe(fut.set_result, result)
+                except Exception as exc:
+                    loop.call_soon_threadsafe(fut.set_exception, exc)
+
+        self._wa_pw_thread = threading.Thread(target=_worker, daemon=True, name="wa-pw-worker")
+        self._wa_pw_thread.start()
+
+    def _stop_wa_pw_thread(self) -> None:
+        """Send the sentinel to stop the WA Playwright thread."""
+        self._wa_pw_queue.put(None)
+        if self._wa_pw_thread:
+            self._wa_pw_thread.join(timeout=10)
+
+    async def _run_on_wa_pw_thread(self, fn: Callable) -> Any:
+        """Schedule *fn* on the WA Playwright thread and await its result."""
+        loop = asyncio.get_event_loop()
+        fut: asyncio.Future = loop.create_future()
+        self._wa_pw_queue.put((fn, fut, loop))
+        return await fut
 
     async def _run_on_pw_thread(self, fn: Callable) -> Any:
         """Schedule *fn* on the Playwright thread and await its result."""
@@ -187,6 +224,7 @@ class RemoteDaemon:
         self.running = True
         self.start_time = datetime.now(tz.utc)
         self._start_pw_thread()
+        self._start_wa_pw_thread()
 
         # Check subscription status — retry through deploys (502/503) for up to 5 min
         try:
@@ -345,12 +383,13 @@ class RemoteDaemon:
             except Exception as e:
                 logger.debug("Session close error: %s", e)
 
-        # Close WhatsApp sessions before stopping Playwright thread
+        # Close WhatsApp sessions before stopping WA Playwright thread
         try:
             await self._stop_wa_sessions()
         except Exception as e:
             logger.debug("WA sessions stop error: %s", e)
 
+        self._stop_wa_pw_thread()
         self._stop_pw_thread()
         await self.client.close()
 
@@ -630,7 +669,7 @@ class RemoteDaemon:
             wa_session = WASession(profile)
             self._whatsapp_sessions[profile._id] = wa_session
             try:
-                await self._run_on_pw_thread(lambda s=wa_session: start_whatsapp_session(s))
+                await self._run_on_wa_pw_thread(lambda s=wa_session: start_whatsapp_session(s))
                 logger.info("WA session started: %s", wa_session)
             except Exception as e:
                 logger.warning("WA session start failed for %s: %s", profile, e)
@@ -639,7 +678,7 @@ class RemoteDaemon:
         """Close all WhatsApp browser sessions gracefully."""
         for profile_id, wa_session in list(self._whatsapp_sessions.items()):
             try:
-                await self._run_on_pw_thread(wa_session.close)
+                await self._run_on_wa_pw_thread(wa_session.close)
             except Exception as e:
                 logger.debug("WA session close error for %s: %s", profile_id, e)
         self._whatsapp_sessions.clear()
@@ -661,11 +700,11 @@ class RemoteDaemon:
 
             for profile_id, wa_session in list(self._whatsapp_sessions.items()):
                 try:
-                    alive = await self._run_on_pw_thread(wa_session.is_alive)
+                    alive = await self._run_on_wa_pw_thread(wa_session.is_alive)
                     if alive:
                         continue
 
-                    banned = await self._run_on_pw_thread(wa_session.detect_ban)
+                    banned = await self._run_on_wa_pw_thread(wa_session.detect_ban)
                     new_status = "banned" if banned else "disconnected"
                     logger.warning(
                         "WA health check: session %s is %s — marking profile",
@@ -680,7 +719,7 @@ class RemoteDaemon:
                         # stored session_data first; falls back to QR poll if stale.
                         try:
                             from openoutreach.whatsapp.browser.launch import start_whatsapp_session
-                            await self._run_on_pw_thread(lambda s=wa_session: start_whatsapp_session(s))
+                            await self._run_on_wa_pw_thread(lambda s=wa_session: start_whatsapp_session(s))
                             self._whatsapp_sessions[profile_id] = wa_session
                             logger.info("WA health check: reconnected %s", wa_session)
                         except Exception as reconnect_err:
@@ -737,8 +776,15 @@ class RemoteDaemon:
                 logger.info("Executing: %s (%s)", task["task_type"], task["task_id"])
                 start = datetime.now(tz.utc)
 
+                _wa_task_types = {"whatsapp_message", "whatsapp_follow_up", "whatsapp_sync"}
+                _run_task = (
+                    self._run_on_wa_pw_thread
+                    if task["task_type"] in _wa_task_types
+                    else self._run_on_pw_thread
+                )
+
                 try:
-                    result = await self._run_on_pw_thread(lambda t=task: self._execute_task(t))
+                    result = await _run_task(lambda t=task: self._execute_task(t))
 
                     duration_ms = int((datetime.now(tz.utc) - start).total_seconds() * 1000)
                     await self.client.report_result(

@@ -797,7 +797,14 @@ def reconcile(session) -> None:
 
         # WhatsApp channel planners — only when campaign has WA configured
         wa_profile_id = getattr(campaign, "whatsapp_profile_id", None)
-        if wa_profile_id and "whatsapp" in (getattr(campaign, "channel_sequence", None) or []):
+        channel_seq = getattr(campaign, "channel_sequence", None) or []
+        if not wa_profile_id and "whatsapp" in channel_seq:
+            logger.debug(
+                "Campaign %s has 'whatsapp' in channel_sequence but no whatsapp_profile_id — "
+                "skipping WA planners (connect a WhatsApp profile in campaign settings)",
+                campaign.pk,
+            )
+        if wa_profile_id and "whatsapp" in channel_seq:
             _user_id = profile.user_id
             plan_whatsapp_window(campaign, wa_profile_id, _user_id)
             plan_whatsapp_follow_up_window(campaign, wa_profile_id, _user_id)
