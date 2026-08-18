@@ -48,6 +48,8 @@ class Lead:
         user_id: Optional[str] = None,
         creation_date: Optional[datetime] = None,
         update_date: Optional[datetime] = None,
+        phone: Optional[str] = None,
+        phone_source: Optional[str] = None,
     ):
         self._id = _id or str(uuid4())
         self.linkedin_url = linkedin_url
@@ -63,6 +65,8 @@ class Lead:
         self.user_id = user_id
         self.creation_date = creation_date or datetime.now(tz.utc)
         self.update_date = update_date or datetime.now(tz.utc)
+        self.phone = phone
+        self.phone_source = phone_source
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert model instance to dictionary for MongoDB storage."""
@@ -90,6 +94,10 @@ class Lead:
             data["connection_degree"] = self.connection_degree
         if self.user_id is not None:
             data["user_id"] = self.user_id
+        if self.phone is not None:
+            data["phone"] = self.phone
+        if self.phone_source is not None:
+            data["phone_source"] = self.phone_source
         return data
 
     @classmethod
@@ -110,6 +118,8 @@ class Lead:
             user_id=data.get("user_id"),
             creation_date=data.get("creation_date"),
             update_date=data.get("update_date"),
+            phone=data.get("phone"),
+            phone_source=data.get("phone_source"),
         )
 
     def save(self, update_fields: Optional[List[str]] = None) -> str:
@@ -672,6 +682,9 @@ class Campaign:
         follow_up_strategy: Optional[str] = None,
         target_degrees: Optional[List[int]] = None,
         created_at: Optional[datetime] = None,
+        channel_sequence: Optional[List[str]] = None,
+        channel_settings: Optional[Dict[str, Any]] = None,
+        whatsapp_profile_id: Optional[str] = None,
     ):
         self._id = _id or str(uuid4())
         self.name = name
@@ -694,6 +707,9 @@ class Campaign:
         self.follow_up_strategy = follow_up_strategy
         self.target_degrees = target_degrees if target_degrees is not None else [1, 2, 3]
         self.created_at = created_at or datetime.now(tz.utc)
+        self.channel_sequence = channel_sequence if channel_sequence is not None else ["linkedin"]
+        self.channel_settings = channel_settings if channel_settings is not None else {}
+        self.whatsapp_profile_id = whatsapp_profile_id
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert model instance to dictionary for MongoDB storage."""
@@ -723,6 +739,10 @@ class Campaign:
             data["target_company_size"] = self.target_company_size
         if self.follow_up_strategy is not None:
             data["follow_up_strategy"] = self.follow_up_strategy
+        data["channel_sequence"] = self.channel_sequence
+        data["channel_settings"] = self.channel_settings
+        if self.whatsapp_profile_id is not None:
+            data["whatsapp_profile_id"] = self.whatsapp_profile_id
         return data
 
     @classmethod
@@ -750,6 +770,9 @@ class Campaign:
             follow_up_strategy=data.get("follow_up_strategy"),
             target_degrees=data.get("target_degrees"),
             created_at=data.get("created_at"),
+            channel_sequence=data.get("channel_sequence"),
+            channel_settings=data.get("channel_settings"),
+            whatsapp_profile_id=data.get("whatsapp_profile_id"),
         )
 
     def has_access(self, user_id: str) -> bool:
@@ -977,6 +1000,7 @@ class Deal:
         creation_date: Optional[datetime] = None,
         last_outgoing_at: Optional[datetime] = None,
         follow_up_cycled_at: Optional[datetime] = None,
+        active_channel: str = "linkedin",
     ):
         self._id = _id or str(uuid4())
         self.lead_id = lead_id
@@ -994,6 +1018,7 @@ class Deal:
         self.creation_date = creation_date or datetime.now(tz.utc)
         self.last_outgoing_at = last_outgoing_at
         self.follow_up_cycled_at = follow_up_cycled_at
+        self.active_channel = active_channel
         self._lead: Optional["Lead"] = None
         self.campaign: Optional["Campaign"] = None
 
@@ -1047,6 +1072,7 @@ class Deal:
             data["last_outgoing_at"] = self.last_outgoing_at
         if self.follow_up_cycled_at:
             data["follow_up_cycled_at"] = self.follow_up_cycled_at
+        data["active_channel"] = self.active_channel
         return data
 
     @classmethod
@@ -1069,6 +1095,7 @@ class Deal:
             creation_date=data.get("creation_date"),
             last_outgoing_at=data.get("last_outgoing_at"),
             follow_up_cycled_at=data.get("follow_up_cycled_at"),
+            active_channel=data.get("active_channel", "linkedin"),
         )
 
     def save(self, update_fields: Optional[List[str]] = None) -> str:

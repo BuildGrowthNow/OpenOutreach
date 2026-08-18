@@ -168,3 +168,7 @@ app.include_router(billing_router, tags=["billing"])
 
 # Admin
 app.include_router(admin.router, tags=["admin"])
+
+# WhatsApp channel
+from openoutreach.whatsapp.api.router import router as whatsapp_router
+app.include_router(whatsapp_router, prefix="/api/whatsapp", tags=["whatsapp"])

@@ -32,6 +32,7 @@ class ChatMessage:
         is_outgoing: bool = True,
         creation_date: Optional[datetime] = None,
         user_id: Optional[str] = None,
+        channel: str = "linkedin",
     ):
         self._id = _id or str(uuid4())
         self.deal_id = deal_id
@@ -41,6 +42,7 @@ class ChatMessage:
         self.is_outgoing = is_outgoing
         self.creation_date = creation_date or datetime.now(timezone.utc)
         self.user_id = user_id
+        self.channel = channel
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -52,6 +54,7 @@ class ChatMessage:
             "is_outgoing": self.is_outgoing,
             "creation_date": self.creation_date,
             "user_id": self.user_id,
+            "channel": self.channel,
         }
 
     @classmethod
@@ -65,6 +68,7 @@ class ChatMessage:
             is_outgoing=data.get("is_outgoing", True),
             creation_date=data.get("creation_date"),
             user_id=data.get("user_id"),
+            channel=data.get("channel", "linkedin"),
         )
 
     def save(self) -> str:

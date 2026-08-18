@@ -66,6 +66,14 @@ def ensure_all_indexes():
             ({'linkedin_url': 1}, {'name': 'lead_url_idx'}),
             ({'user_id': 1}, {'name': 'lead_user_idx'}),
             ({'disqualified': 1}, {'name': 'lead_disqualified_idx'}),
+            ({'phone': 1}, {'name': 'lead_phone_unique_idx', 'unique': True, 'sparse': True}),
+        ]),
+
+        # WhatsApp Profiles
+        ('whatsapp_profiles', [
+            ({'user_id': 1}, {'name': 'wa_profile_user_idx'}),
+            ({'status': 1}, {'name': 'wa_profile_status_idx'}),
+            ({'phone_number': 1}, {'name': 'wa_profile_phone_unique_idx', 'unique': True, 'sparse': True}),
         ]),
 
         # LinkedIn Profiles

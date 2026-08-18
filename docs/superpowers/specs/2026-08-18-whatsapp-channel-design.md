@@ -214,12 +214,12 @@ The existing follow-up agent works for WhatsApp without modification:
 ## Phased Implementation
 
 ### Phase 1 — Foundation (data models + WhatsApp profile)
-- [ ] Add `phone`, `phone_source` to `Lead` model + sparse unique index
-- [ ] Add `channel_sequence`, `channel_settings`, `whatsapp_profile_id` to `Campaign`
-- [ ] Add `active_channel` to `Deal`
-- [ ] Add `channel` field to `ChatMessage` (default `"linkedin"`, no migration needed)
-- [ ] Create `WhatsAppProfile` model (`openoutreach/whatsapp/models/profile.py`)
-- [ ] FastAPI CRUD endpoints for `WhatsAppProfile` (`/api/whatsapp/profiles`)
+- [x] Add `phone`, `phone_source` to `Lead` model + sparse unique index
+- [x] Add `channel_sequence`, `channel_settings`, `whatsapp_profile_id` to `Campaign`
+- [x] Add `active_channel` to `Deal`
+- [x] Add `channel` field to `ChatMessage` (default `"linkedin"`, no migration needed)
+- [x] Create `WhatsAppProfile` model (`openoutreach/whatsapp/models/profile.py`)
+- [x] FastAPI CRUD endpoints for `WhatsAppProfile` (`/api/whatsapp/profiles`)
 
 ### Phase 2 — WhatsApp session + QR auth
 - [ ] `openoutreach/whatsapp/browser/launch.py` — Playwright launch, session load/save
