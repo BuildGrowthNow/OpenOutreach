@@ -222,12 +222,12 @@ The existing follow-up agent works for WhatsApp without modification:
 - [x] FastAPI CRUD endpoints for `WhatsAppProfile` (`/api/whatsapp/profiles`)
 
 ### Phase 2 — WhatsApp session + QR auth
-- [ ] `openoutreach/whatsapp/browser/launch.py` — Playwright launch, session load/save
-- [ ] `openoutreach/whatsapp/browser/qr.py` — QR PNG capture, auth detection
-- [ ] `openoutreach/whatsapp/browser/session.py` — `WASession` wrapper (`send_message`, `check_inbox`)
-- [ ] `GET /api/whatsapp/qr/{profile_id}` endpoint
-- [ ] `RemoteDaemon` gains `_whatsapp_sessions` pool
-- [ ] Frontend: WhatsApp tab in Settings with QR display + connection status
+- [x] `openoutreach/whatsapp/browser/launch.py` — Playwright launch, session load/save
+- [x] `openoutreach/whatsapp/browser/qr.py` — QR PNG capture, auth detection
+- [x] `openoutreach/whatsapp/browser/session.py` — `WASession` wrapper (`send_message`, `check_inbox`)
+- [x] `GET /api/whatsapp/qr/{profile_id}` endpoint
+- [x] `RemoteDaemon` gains `_whatsapp_sessions` pool
+- [x] Frontend: WhatsApp tab in Settings with QR display + connection status
 
 ### Phase 3 — Messaging tasks + AI follow-up
 - [ ] `openoutreach/whatsapp/tasks/send_message.py` — initial outreach handler

@@ -1,7 +1,9 @@
+import base64
 import logging
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import Response
 from pydantic import BaseModel
 
 from openoutreach.api_v2.dependencies_v2 import get_current_user
@@ -103,3 +105,25 @@ async def delete_profile(
     if not profile or profile.user_id != user_id:
         raise HTTPException(status_code=404, detail="WhatsApp profile not found")
     WhatsAppProfile.delete(profile_id)
+
+
+@router.get("/qr/{profile_id}")
+async def get_qr(
+    profile_id: str,
+    user_id: str = Depends(get_current_user),
+):
+    """Return the current QR PNG for a disconnected profile.
+
+    Returns 200 image/png while QR is available, 404 when profile is not
+    found or is already authenticated (no QR stored).
+    """
+    profile = WhatsAppProfile.get(profile_id)
+    if not profile or profile.user_id != user_id:
+        raise HTTPException(status_code=404, detail="WhatsApp profile not found")
+    if not profile.qr_png_b64:
+        raise HTTPException(status_code=404, detail="No QR available")
+    try:
+        png_bytes = base64.b64decode(profile.qr_png_b64)
+    except Exception:
+        raise HTTPException(status_code=500, detail="QR data corrupted")
+    return Response(content=png_bytes, media_type="image/png")

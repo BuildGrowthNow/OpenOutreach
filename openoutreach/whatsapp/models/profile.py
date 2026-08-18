@@ -31,6 +31,8 @@ class WhatsAppProfile:
         status: str = STATUS_DISCONNECTED,
         last_seen: Optional[datetime] = None,
         created_at: Optional[datetime] = None,
+        qr_png_b64: Optional[str] = None,
+        qr_generated_at: Optional[datetime] = None,
     ):
         self._id = _id or str(uuid4())
         self.user_id = user_id
@@ -40,6 +42,8 @@ class WhatsAppProfile:
         self.status = status
         self.last_seen = last_seen
         self.created_at = created_at or datetime.now(timezone.utc)
+        self.qr_png_b64 = qr_png_b64
+        self.qr_generated_at = qr_generated_at
 
     @property
     def pk(self) -> str:
@@ -93,6 +97,10 @@ class WhatsAppProfile:
             data["session_data_encrypted"] = self.session_data_encrypted
         if self.last_seen is not None:
             data["last_seen"] = self.last_seen
+        if self.qr_png_b64 is not None:
+            data["qr_png_b64"] = self.qr_png_b64
+        if self.qr_generated_at is not None:
+            data["qr_generated_at"] = self.qr_generated_at
         return data
 
     @classmethod
@@ -106,6 +114,8 @@ class WhatsAppProfile:
             status=data.get("status", STATUS_DISCONNECTED),
             last_seen=data.get("last_seen"),
             created_at=data.get("created_at"),
+            qr_png_b64=data.get("qr_png_b64"),
+            qr_generated_at=data.get("qr_generated_at"),
         )
 
     def save(self, update_fields: Optional[List[str]] = None) -> str:

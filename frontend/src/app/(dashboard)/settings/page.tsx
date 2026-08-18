@@ -25,6 +25,7 @@ import { LinkedInConnectionTab } from "@/components/settings/linkedin-connection
 import RateLimitForm from "@/components/settings/rate-limit-form";
 import LlmSettingsForm from "@/components/settings/llm-settings-form";
 import ActiveHoursForm from "@/components/settings/active-hours-form";
+import { WhatsappConnectionTab } from "@/components/settings/whatsapp-connection-tab";
 
 function SettingsLoadingSkeleton() {
   return (
@@ -208,7 +209,7 @@ export default function SettingsPage() {
       </div>
 
       <Tabs defaultValue="linkedin" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2 gap-2 rounded-xl bg-muted p-1 sm:grid-cols-5">
+        <TabsList className="grid w-full grid-cols-2 gap-2 rounded-xl bg-muted p-1 sm:grid-cols-6">
           <TabsTrigger value="linkedin" className="flex items-center gap-2 py-2">
             <Icons.Link className="h-4 w-4 shrink-0" />
             LinkedIn Connection
@@ -224,6 +225,10 @@ export default function SettingsPage() {
           <TabsTrigger value="active-hours" className="flex items-center gap-2 py-2">
             <Icons.Clock className="h-4 w-4 shrink-0" />
             Active Hours
+          </TabsTrigger>
+          <TabsTrigger value="whatsapp" className="flex items-center gap-2 py-2">
+            <Icons.MessageCircle className="h-4 w-4 shrink-0" />
+            WhatsApp
           </TabsTrigger>
           <TabsTrigger value="billing" className="flex items-center gap-2 py-2">
             <Icons.CreditCard className="h-4 w-4 shrink-0" />
@@ -317,6 +322,10 @@ export default function SettingsPage() {
 
         <TabsContent value="active-hours" className="space-y-6">
           <ActiveHoursForm settings={settings} onUpdate={handleSettingsUpdate} />
+        </TabsContent>
+
+        <TabsContent value="whatsapp" className="space-y-6">
+          <WhatsappConnectionTab />
         </TabsContent>
 
         <TabsContent value="billing" className="space-y-6">

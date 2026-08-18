@@ -84,6 +84,9 @@ class RemoteDaemon:
         self._pw_queue: queue.Queue = queue.Queue()
         self._pw_thread: Optional[threading.Thread] = None
 
+        # WhatsApp session pool: keyed by whatsapp_profile_id
+        self._whatsapp_sessions: dict[str, Any] = {}
+
         self.data_dir.mkdir(parents=True, exist_ok=True)
 
     def _default_data_dir(self) -> Path:
@@ -265,6 +268,12 @@ class RemoteDaemon:
         # Start browser session
         await self._start_session()
 
+        # Start WhatsApp sessions (non-blocking — WA is optional)
+        try:
+            await self._start_wa_sessions()
+        except Exception as e:
+            logger.warning("WA session startup error: %s", e)
+
         # Run loops concurrently
         try:
             await asyncio.gather(
@@ -331,6 +340,12 @@ class RemoteDaemon:
                 await self._run_on_pw_thread(session.close)
             except Exception as e:
                 logger.debug("Session close error: %s", e)
+
+        # Close WhatsApp sessions before stopping Playwright thread
+        try:
+            await self._stop_wa_sessions()
+        except Exception as e:
+            logger.debug("WA sessions stop error: %s", e)
 
         self._stop_pw_thread()
         await self.client.close()
@@ -575,6 +590,51 @@ class RemoteDaemon:
             linkedin_username=discovered_username,
         )
         logger.info("Logged in to LinkedIn")
+
+    async def _start_wa_sessions(self) -> None:
+        """Start WhatsApp browser sessions for all WhatsAppProfiles owned by this user.
+
+        Called after MongoDB is connected and server env is applied.
+        Each session launches on the shared Playwright thread.
+        """
+        try:
+            from openoutreach.whatsapp.browser.launch import start_whatsapp_session
+            from openoutreach.whatsapp.browser.session import WASession
+            from openoutreach.whatsapp.models.profile import WhatsAppProfile
+        except Exception as e:
+            logger.warning("WhatsApp module not available: %s", e)
+            return
+
+        if not self.config:
+            return
+
+        user_id = getattr(self.session, "user_id", None) if self.session else None
+        if not user_id:
+            logger.debug("No user_id resolved — skipping WA session start")
+            return
+
+        profiles = WhatsAppProfile.find_by_user_id(user_id)
+        if not profiles:
+            logger.debug("No WhatsApp profiles for user %s", user_id)
+            return
+
+        for profile in profiles:
+            wa_session = WASession(profile)
+            self._whatsapp_sessions[profile._id] = wa_session
+            try:
+                await self._run_on_pw_thread(lambda s=wa_session: start_whatsapp_session(s))
+                logger.info("WA session started: %s", wa_session)
+            except Exception as e:
+                logger.warning("WA session start failed for %s: %s", profile, e)
+
+    async def _stop_wa_sessions(self) -> None:
+        """Close all WhatsApp browser sessions gracefully."""
+        for profile_id, wa_session in list(self._whatsapp_sessions.items()):
+            try:
+                await self._run_on_pw_thread(wa_session.close)
+            except Exception as e:
+                logger.debug("WA session close error for %s: %s", profile_id, e)
+        self._whatsapp_sessions.clear()
 
     async def _heartbeat_loop(self):
         """Send periodic heartbeats to backend."""
