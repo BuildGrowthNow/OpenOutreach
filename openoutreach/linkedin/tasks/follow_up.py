@@ -366,6 +366,24 @@ def handle_follow_up(task, session, qualifiers):
 
     materialize_profile_summary_if_missing(deal, session)
 
+    # Sync conversation BEFORE the LLM decision so manually sent LinkedIn messages
+    # (sent outside the platform) are in chat_messages. Without this, the agent
+    # sees "No recent messages" and sends a duplicate opener.
+    from openoutreach.linkedin.db.chat import sync_conversation as _pre_sync
+    try:
+        _pre_sync(session, public_id)
+    except Exception:
+        logger.debug("pre-decision sync failed for %s (best-effort)", public_id)
+
+    # Re-check cooldown with fresh chat_messages — catches manual sends just synced.
+    if _too_soon_to_nudge(deal):
+        logger.info(
+            "[%s] follow_up: post-sync cooldown triggered for %s "
+            "(manual or recent message detected) — skip",
+            campaign, public_id,
+        )
+        return
+
     # Safety guard: never let the agent close a deal it has never messaged.
     # The LLM can see profile summary and wrongly decide "wrong_fit" before
     # sending a single word. If that happens, skip this cycle — the deal stays
