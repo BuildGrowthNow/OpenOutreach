@@ -130,10 +130,14 @@ The exe is **never committed to git**. Distribution is via GitHub Releases on th
    - Build the Windows exe via PyInstaller.
    - Create a GitHub Release named `Desktop v1.0.7`.
    - Attach `Lengrowth.exe` (Windows standalone) and `Lengrowth-Windows-Setup.exe` (NSIS installer) as release assets.
-6. **Upload the NSIS installer to R2** so the Microsoft Store and download page always get a direct, non-redirecting URL:
+6. **Upload the NSIS installer to R2** (done locally — not CI) so the Microsoft Store and download page always get a direct, non-redirecting URL. Wait for CI to finish, then:
    ```bash
-   # Download from the new GitHub release, then upload:
-   wrangler r2 object put lengrowth-downloads/Lengrowth-Windows-Setup.exe --file ./Lengrowth-Windows-Setup.exe --remote
+   # 1. Get the release tag (CI appends short SHA: v1.7.3-abc1234)
+   gh release list --repo Lengrowth/outbound --limit 1
+   # 2. Download installer from the new release
+   gh release download <tag> --repo Lengrowth/outbound --pattern "Lengrowth-Windows-Setup.exe" --dir /tmp/desktop-release
+   # 3. Upload to R2
+   npx wrangler r2 object put lengrowth-downloads/Lengrowth-Windows-Setup.exe --file /tmp/desktop-release/Lengrowth-Windows-Setup.exe --remote
    ```
    - R2 bucket: `lengrowth-downloads` (Cloudflare, Eastern Europe)
    - Public URL: `https://dl.lengrowth.com/Lengrowth-Windows-Setup.exe`
