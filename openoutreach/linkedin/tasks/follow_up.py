@@ -147,7 +147,8 @@ def _too_soon_to_nudge(deal) -> bool:
 
     message_collection = get_mongodb_collection("chat_messages")
     if message_collection is None:
-        return False
+        # DB unavailable — be conservative, skip rather than risk a duplicate
+        return True
 
     # Load messages sorted newest-first
     messages = list(message_collection.find(
@@ -174,8 +175,17 @@ def _too_soon_to_nudge(deal) -> bool:
         )
         return True
 
-    # If the last message is incoming, no nudge cooldown applies
+    # If the last message is incoming, no nudge cooldown applies — UNLESS
+    # last_outgoing_at was stamped very recently, which means sync may have
+    # misclassified our outgoing message as incoming (self_urn mismatch).
     if not last.get("is_outgoing", False):
+        if last_out is not None and (now - last_out).total_seconds() < 3600:
+            logger.debug(
+                "deal %s: last message looks incoming but last_outgoing_at was %ds ago "
+                "— possible sync misclassification, applying 1h cooldown",
+                deal._id, int((now - last_out).total_seconds()),
+            )
+            return True
         return False
 
     # Guard 4: post-send DB lock (<60s) — guards against racing tasks before API propagation
