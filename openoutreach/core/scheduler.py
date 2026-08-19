@@ -654,6 +654,7 @@ def on_deal_state_entered(deal) -> None:
 
 
 STALE_RUNNING_THRESHOLD_MINUTES = 30
+MAPS_REFILL_THRESHOLD = 20
 
 
 def _recover_stale_running_tasks(linkedin_profile_id: str | None = None) -> int:
@@ -995,12 +996,12 @@ _maps_scraping: set = set()
 
 
 def _maybe_trigger_maps_scrape(campaign, user_id: str) -> None:
-    """Trigger google_maps scraping in a background thread if the campaign has no leads yet.
+    """Trigger google_maps scraping in a background thread when active WA leads fall below threshold.
 
     No-op when:
     - campaign.lead_source != "google_maps"
     - campaign.maps_query is empty
-    - campaign already has at least one deal (leads exist)
+    - active (Qualified/Pending) WA deals >= MAPS_REFILL_THRESHOLD
     - a scrape for this campaign is already running
     """
     if getattr(campaign, "lead_source", "linkedin_search") != "google_maps":
@@ -1016,7 +1017,12 @@ def _maybe_trigger_maps_scrape(campaign, user_id: str) -> None:
     if deals_col is None:
         return
 
-    if deals_col.count_documents({"campaign_id": campaign.pk}, limit=1):
+    active_wa_count = deals_col.count_documents({
+        "campaign_id": campaign.pk,
+        "state": {"$in": ["Qualified", "Pending"]},
+        "active_channel": "whatsapp",
+    })
+    if active_wa_count >= MAPS_REFILL_THRESHOLD:
         return
 
     _maps_scraping.add(campaign.pk)
