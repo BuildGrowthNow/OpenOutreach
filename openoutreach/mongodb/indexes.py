@@ -37,6 +37,7 @@ def ensure_all_indexes():
         ('tasks', [
             ({'status': 1, 'scheduled_at': 1}, {'name': 'task_queue_idx'}),
             ({'linkedin_profile_id': 1, 'status': 1, 'scheduled_at': 1}, {'name': 'task_profile_queue_idx'}),
+            ({'linkedin_profile_id': 1, 'channel': 1, 'status': 1, 'scheduled_at': 1}, {'name': 'task_profile_channel_queue_idx'}),
             ({'user_id': 1, 'status': 1}, {'name': 'task_user_status_idx'}),
             ({'payload.campaign_id': 1}, {'name': 'task_campaign_idx'}),
             ({'payload.deal_id': 1, 'task_type': 1, 'status': 1}, {'name': 'task_deal_type_idx'}),
@@ -53,6 +54,7 @@ def ensure_all_indexes():
         # Deals
         ('deals', [
             ({'campaign_id': 1, 'state': 1}, {'name': 'deal_campaign_state_idx'}),
+            ({'campaign_id': 1, 'state': 1, 'active_channel': 1}, {'name': 'deal_campaign_state_channel_idx'}),
             ({'lead_id': 1}, {'name': 'deal_lead_idx'}),
             ({'user_id': 1}, {'name': 'deal_user_idx'}),
             ({'lead_id': 1, 'campaign_id': 1}, {'name': 'deal_lead_campaign_unique', 'unique': True}),
