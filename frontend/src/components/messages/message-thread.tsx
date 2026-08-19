@@ -22,6 +22,35 @@ function LinkedinIcon({ className }: { className?: string }) {
   )
 }
 
+function WaTicks({ status }: { status: string }) {
+  if (status === 'read') {
+    return (
+      <span className="text-sky-300" title="Read">
+        <svg viewBox="0 0 16 11" className="inline h-3 w-4 fill-current" aria-hidden="true">
+          <path d="M11.071.653a.75.75 0 0 0-1.06 1.06l-5.657 5.657L2.69 5.706a.75.75 0 1 0-1.06 1.06l2.474 2.475a.75.75 0 0 0 1.06 0l6.188-6.188a.75.75 0 0 0 0-1.06l-.281-.34zM14.3.653a.75.75 0 0 0-1.06 1.06L7.053 7.9a.75.75 0 0 0 1.06 1.06L14.3 1.714a.75.75 0 0 0 0-1.06z" />
+        </svg>
+      </span>
+    )
+  }
+  if (status === 'delivered') {
+    return (
+      <span className="text-blue-200" title="Delivered">
+        <svg viewBox="0 0 16 11" className="inline h-3 w-4 fill-current" aria-hidden="true">
+          <path d="M11.071.653a.75.75 0 0 0-1.06 1.06l-5.657 5.657L2.69 5.706a.75.75 0 1 0-1.06 1.06l2.474 2.475a.75.75 0 0 0 1.06 0l6.188-6.188a.75.75 0 0 0 0-1.06l-.281-.34zM14.3.653a.75.75 0 0 0-1.06 1.06L7.053 7.9a.75.75 0 0 0 1.06 1.06L14.3 1.714a.75.75 0 0 0 0-1.06z" />
+        </svg>
+      </span>
+    )
+  }
+  // sent — single tick
+  return (
+    <span className="text-blue-200" title="Sent">
+      <svg viewBox="0 0 8 11" className="inline h-3 w-2 fill-current" aria-hidden="true">
+        <path d="M7.071.653a.75.75 0 0 0-1.06 1.06L1.354 6.37a.75.75 0 1 0 1.06 1.06L7.072 1.714a.75.75 0 0 0 0-1.06z" />
+      </svg>
+    </span>
+  )
+}
+
 function ChannelIcon({ channel }: { channel?: string }) {
   if (channel === 'whatsapp') {
     return <MessageCircle className="h-3 w-3 text-emerald-400 shrink-0" aria-label="WhatsApp" />
@@ -169,12 +198,17 @@ export function MessageThread({
                     {/* Message content */}
                     <div className="text-sm whitespace-pre-wrap">{message.content}</div>
 
-                    {/* Message timestamp */}
-                    <div className={`text-xs mt-2 ${isOutgoing ? 'text-blue-200' : 'text-muted-foreground'} text-right`}>
-                      {message.creationDate
-                        ? formatDistanceToNow(new Date(message.creationDate), { addSuffix: true })
-                        : 'Recently'
-                      }
+                    {/* Message timestamp + WA delivery ticks */}
+                    <div className={`text-xs mt-2 flex items-center justify-end gap-1 ${isOutgoing ? 'text-blue-200' : 'text-muted-foreground'}`}>
+                      <span>
+                        {message.creationDate
+                          ? formatDistanceToNow(new Date(message.creationDate), { addSuffix: true })
+                          : 'Recently'
+                        }
+                      </span>
+                      {isOutgoing && message.channel === 'whatsapp' && message.waDeliveryStatus && (
+                        <WaTicks status={message.waDeliveryStatus} />
+                      )}
                     </div>
                   </div>
                 </div>

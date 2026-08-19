@@ -33,9 +33,49 @@ const waSettingsSchema = z.object({
 
 type WaSettingsForm = z.infer<typeof waSettingsSchema>;
 
+interface WarmupStatus {
+  warmupAgeDays?: number;
+  warmupEffectiveLimit?: number;
+  warmupDone?: boolean;
+  warmupTotalDays?: number;
+}
+
 interface Props {
-  initialData: NonNullable<Settings["whatsapp"]>;
+  initialData: NonNullable<Settings["whatsapp"]> & WarmupStatus;
   onSuccess: () => void;
+}
+
+function WarmupCard({ data }: { data: WarmupStatus & { dailyLimit?: number } }) {
+  const ageDays = data.warmupAgeDays ?? 0;
+  const totalDays = data.warmupTotalDays ?? 30;
+  const effectiveLimit = data.warmupEffectiveLimit ?? data.dailyLimit ?? 20;
+  const done = data.warmupDone ?? false;
+  const pct = done ? 100 : Math.round((ageDays / totalDays) * 100);
+
+  return (
+    <div className="rounded-lg border p-4 space-y-2">
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-medium">Warmup status</span>
+        {done ? (
+          <span className="text-xs font-medium text-emerald-500">Complete</span>
+        ) : (
+          <span className="text-xs text-muted-foreground">Day {ageDays} of {totalDays}</span>
+        )}
+      </div>
+      <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+        <div
+          className="h-full rounded-full bg-emerald-500 transition-all"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <p className="text-xs text-muted-foreground">
+        {done
+          ? `Sending at full ceiling of ${data.dailyLimit ?? effectiveLimit} messages/day.`
+          : `Sending ${effectiveLimit} messages/day today — ceiling reached on day ${totalDays}.`
+        }
+      </p>
+    </div>
+  );
 }
 
 function parseDays(raw: string): number[] {
@@ -114,12 +154,14 @@ export default function WhatsappSettingsForm({ initialData, onSuccess }: Props) 
       <CardContent>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <WarmupCard data={initialData} />
+
             <FormField
               control={form.control}
               name="dailyLimit"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Daily message limit</FormLabel>
+                  <FormLabel>Daily limit ceiling</FormLabel>
                   <FormControl>
                     <Input
                       type="number"
@@ -130,7 +172,8 @@ export default function WhatsappSettingsForm({ initialData, onSuccess }: Props) 
                     />
                   </FormControl>
                   <FormDescription>
-                    Maximum WhatsApp follow-up messages sent per day across all campaigns.
+                    Maximum messages/day once warmup completes (day 30+). During warmup the actual
+                    limit ramps up automatically — this field is the post-warmup ceiling.
                   </FormDescription>
                   <FormMessage />
                 </FormItem>

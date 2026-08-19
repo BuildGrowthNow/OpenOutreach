@@ -21,6 +21,43 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Settings"])
 
 
+def _wa_settings_with_warmup(user_id: str, config: SiteConfig) -> dict:
+    """Build the 'whatsapp' settings dict, enriched with warmup state."""
+    from openoutreach.whatsapp.models.profile import WhatsAppProfile
+    from openoutreach.whatsapp.warmup import effective_wa_daily_limit, _WARMUP_CURVE
+    from datetime import datetime, timezone
+
+    max_limit = getattr(config, "wa_daily_limit", 20)
+
+    # Find the earliest WhatsApp profile created_at for this user.
+    profiles = WhatsAppProfile.find_by_user_id(user_id)
+    earliest_created_at = None
+    for p in profiles:
+        if p.created_at and (earliest_created_at is None or p.created_at < earliest_created_at):
+            earliest_created_at = p.created_at
+
+    age_days = 0
+    if earliest_created_at:
+        if earliest_created_at.tzinfo is None:
+            earliest_created_at = earliest_created_at.replace(tzinfo=timezone.utc)
+        age_days = max(0, (datetime.now(timezone.utc) - earliest_created_at).days)
+
+    effective_limit = effective_wa_daily_limit(earliest_created_at, max_limit)
+    warmup_done = age_days >= _WARMUP_CURVE[-1][0]  # past last breakpoint
+
+    return {
+        "dailyLimit": max_limit,
+        "warmupAgeDays": age_days,
+        "warmupEffectiveLimit": effective_limit,
+        "warmupDone": warmup_done,
+        "warmupTotalDays": _WARMUP_CURVE[-1][0],
+        "enableActiveHours": getattr(config, "wa_enable_active_hours", False),
+        "activeStartHour": getattr(config, "wa_active_start_hour", 8),
+        "activeEndHour": getattr(config, "wa_active_end_hour", 21),
+        "activeDays": _wa_active_days_str(config),
+    }
+
+
 def _wa_active_days_str(config: SiteConfig) -> str:
     days = getattr(config, "wa_active_days", None)
     if isinstance(days, list):
@@ -122,11 +159,7 @@ async def get_settings(
             "bettercontactApiKey": config.bettercontact_api_key or "",
         },
         "whatsapp": {
-            "dailyLimit": getattr(config, "wa_daily_limit", 20),
-            "enableActiveHours": getattr(config, "wa_enable_active_hours", False),
-            "activeStartHour": getattr(config, "wa_active_start_hour", 8),
-            "activeEndHour": getattr(config, "wa_active_end_hour", 21),
-            "activeDays": _wa_active_days_str(config),
+            **_wa_settings_with_warmup(user_id, config),
         },
     }
 

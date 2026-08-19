@@ -326,6 +326,7 @@ export interface Message {
   recipientName: string;
   recipientUrl?: string;
   channel?: string;
+  waDeliveryStatus?: string;
 }
 
 export interface HealthStatus {

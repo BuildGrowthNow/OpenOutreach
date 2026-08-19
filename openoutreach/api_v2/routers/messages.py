@@ -27,6 +27,7 @@ class MessageResponse(BaseModel):
     recipientUrl: Optional[str] = None
     sender: str = "me"
     channel: str = "linkedin"
+    waDeliveryStatus: Optional[str] = None
 
     @field_validator("creationDate", mode="before")
     @classmethod
@@ -195,6 +196,7 @@ async def list_messages(
             recipientName=lead_name or msg.get("sender_name") or "",
             recipientUrl=lead_doc.get("linkedin_url", "") if lead_doc else "",
             channel=msg.get("channel", "linkedin"),
+            waDeliveryStatus=msg.get("wa_delivery_status"),
         ))
 
     return {
@@ -247,8 +249,6 @@ async def get_message_stats(
             {"campaign_id": {"$in": accessible_campaign_ids}}, {"_id": 1, "campaign_id": 1}
         ))
         deal_ids = [str(d["_id"]) for d in deals]
-        # Build campaign-id set for activeCampaigns count
-        deal_campaign_ids = {str(d["campaign_id"]) for d in deals if d.get("campaign_id")}
 
     query: dict = {"deal_id": {"$in": deal_ids}}
     total_sent = collection.count_documents({**query, "is_outgoing": True})

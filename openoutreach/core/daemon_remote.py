@@ -315,6 +315,15 @@ class RemoteDaemon:
         except Exception as e:
             logger.warning("WA session startup error: %s", e)
 
+        # Validate WA phone numbers then re-reconcile so the task queue reflects
+        # registration status before the task loop starts consuming tasks.
+        await self._run_wa_preflight_validation()
+        if self._whatsapp_sessions:
+            try:
+                await self.client.reconcile(self.linkedin_profile_id)
+            except Exception as e:
+                logger.warning("Post-WA reconcile failed: %s", e)
+
         # Run loops concurrently
         try:
             await asyncio.gather(
@@ -990,6 +999,21 @@ class RemoteDaemon:
 
         return {campaign.pk: q}
 
+    async def _run_wa_preflight_validation(self) -> None:
+        """Validate phone numbers for QUALIFIED WA leads before reconcile.
+
+        Runs validate_wa_phones on every live WA session so unregistered leads
+        are FAILED before plan_whatsapp_window plans MESSAGE tasks for them.
+        """
+        if not self._whatsapp_sessions:
+            return
+        from openoutreach.whatsapp.tasks.validate import validate_wa_phones
+        for wa_session in list(self._whatsapp_sessions.values()):
+            try:
+                await self._run_on_wa_pw_thread(lambda s=wa_session: validate_wa_phones(s))
+            except Exception as e:
+                logger.warning("WA pre-flight validation error for %s: %s", wa_session, e)
+
     async def _config_refresh_loop(self):
         """Periodically refresh config and reconcile tasks."""
         while self.running:
@@ -998,6 +1022,7 @@ class RemoteDaemon:
                 self.config = await self.client.get_config(self.linkedin_profile_id)
             except Exception as e:
                 logger.warning("Config refresh failed: %s", e)
+            await self._run_wa_preflight_validation()
             try:
                 await self.client.reconcile(self.linkedin_profile_id)
             except Exception as e:
