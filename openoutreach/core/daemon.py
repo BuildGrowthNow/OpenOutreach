@@ -616,7 +616,7 @@ def run_daemon():
                 continue
 
             # Claim next task for this profile
-            task = Task.objects.claim_next(linkedin_profile_id=ps.profile_id)
+            task = Task.objects.claim_next(linkedin_profile_id=ps.profile_id, channel="linkedin")
             if task is None:
                 continue
 
@@ -726,7 +726,7 @@ def run_daemon():
         # WA task claiming — one task per cycle, round-robins across WA sessions
         if not task_executed and _WA_SESSIONS:
             for wa_profile_id, wa_session in list(_WA_SESSIONS.items()):
-                wa_task = Task.objects.claim_next(linkedin_profile_id=wa_profile_id)
+                wa_task = Task.objects.claim_next(linkedin_profile_id=wa_profile_id, channel="whatsapp")
                 if wa_task is None:
                     continue
 

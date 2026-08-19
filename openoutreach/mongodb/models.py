@@ -4374,6 +4374,7 @@ class Task:
         payload: Optional[Dict[str, Any]] = None,
         user_id: Optional[str] = None,
         linkedin_profile_id: Optional[str] = None,
+        channel: str = "linkedin",
         created_at: Optional[datetime] = None,
         started_at: Optional[datetime] = None,
         completed_at: Optional[datetime] = None,
@@ -4385,6 +4386,7 @@ class Task:
         self.payload = payload or {}
         self.user_id = user_id
         self.linkedin_profile_id = linkedin_profile_id
+        self.channel = channel
         self.created_at = created_at or datetime.now(tz.utc)
         self.started_at = started_at
         self.completed_at = completed_at
@@ -4399,6 +4401,7 @@ class Task:
             "payload": self.payload,
             "created_at": self.created_at,
         }
+        data["channel"] = self.channel
         if self.user_id:
             data["user_id"] = self.user_id
         if self.linkedin_profile_id:
@@ -4420,6 +4423,7 @@ class Task:
             payload=data.get("payload", {}),
             user_id=data.get("user_id"),
             linkedin_profile_id=data.get("linkedin_profile_id"),
+            channel=data.get("channel", "linkedin"),
             created_at=data.get("created_at"),
             started_at=data.get("started_at"),
             completed_at=data.get("completed_at"),
@@ -4629,7 +4633,7 @@ class TaskManager:
         """Return a filtered view of pending tasks."""
         return _FilteredTaskManager({"status": Task.STATUS_PENDING})
 
-    def claim_next(self, linkedin_profile_id: Optional[str] = None) -> Optional["Task"]:
+    def claim_next(self, linkedin_profile_id: Optional[str] = None, channel: Optional[str] = None) -> Optional["Task"]:
         """Atomically claim the next pending task, optionally scoped to a profile."""
         collection = self._get_collection()
         if collection is None:
@@ -4639,6 +4643,8 @@ class TaskManager:
         query = {"status": Task.STATUS_PENDING, "scheduled_at": {"$lte": now}}
         if linkedin_profile_id:
             query["linkedin_profile_id"] = linkedin_profile_id
+        if channel is not None:
+            query["channel"] = channel
         from pymongo import ReturnDocument
         doc = collection.find_one_and_update(
             query,
@@ -4650,7 +4656,7 @@ class TaskManager:
             return Task.from_dict(doc)
         return None
 
-    def seconds_to_next(self, linkedin_profile_id: Optional[str] = None) -> Optional[float]:
+    def seconds_to_next(self, linkedin_profile_id: Optional[str] = None, channel: Optional[str] = None) -> Optional[float]:
         """Seconds until next pending task is due, optionally scoped to a profile."""
         collection = self._get_collection()
         if collection is None:
@@ -4659,6 +4665,8 @@ class TaskManager:
         query = {"status": Task.STATUS_PENDING}
         if linkedin_profile_id:
             query["linkedin_profile_id"] = linkedin_profile_id
+        if channel is not None:
+            query["channel"] = channel
         doc = collection.find_one(
             query,
             sort=[("scheduled_at", 1)],

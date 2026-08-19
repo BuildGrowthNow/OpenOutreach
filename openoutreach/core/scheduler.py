@@ -329,7 +329,7 @@ def _seconds_to_timestamp(seconds: float, intervals: list[tuple]):
 # ── Per-type planners ─────────────────────────────────────────────────
 
 
-def _has_pending(task_type: str, campaign_id: str, linkedin_profile_id: str | None = None) -> bool:
+def _has_pending(task_type: str, campaign_id: str, linkedin_profile_id: str | None = None, channel: str | None = None) -> bool:
     """Return True if any PENDING or RUNNING task of this type already exists for the campaign.
 
     Counts RUNNING tasks too: a task that is currently executing has status=RUNNING
@@ -347,6 +347,8 @@ def _has_pending(task_type: str, campaign_id: str, linkedin_profile_id: str | No
     }
     if linkedin_profile_id:
         query["linkedin_profile_id"] = linkedin_profile_id
+    if channel is not None:
+        query["channel"] = channel
     return col.count_documents(query, limit=1) > 0
 
 
@@ -354,6 +356,7 @@ def _create_lazy_slots(
     task_type: str, campaign_id: str, times: list,
     linkedin_profile_id: str | None = None,
     user_id: str | None = None,
+    channel: str = "linkedin",
 ) -> int:
     if not times:
         return 0
@@ -364,6 +367,7 @@ def _create_lazy_slots(
             payload={"campaign_id": campaign_id},
             linkedin_profile_id=linkedin_profile_id,
             user_id=user_id,
+            channel=channel,
         )
         for t in times
     ]
@@ -381,6 +385,7 @@ def _plan_slots(
     time_aware: bool = False,
     linkedin_profile_id: str | None = None,
     user_id: str | None = None,
+    channel: str = "linkedin",
 ) -> int:
     """Schedule *n* lazy slots spaced according to velocity and smart context."""
     if n <= 0:
@@ -396,6 +401,7 @@ def _plan_slots(
         task_type, campaign_id, times,
         linkedin_profile_id=linkedin_profile_id,
         user_id=user_id,
+        channel=channel,
     )
 
 
@@ -822,7 +828,7 @@ def plan_whatsapp_window(campaign, whatsapp_profile_id: str, user_id: str) -> in
     No-op when a PENDING whatsapp_message task already exists.
     Uses Task.linkedin_profile_id to store the whatsapp_profile_id.
     """
-    if _has_pending(Task.TaskType.WHATSAPP_MESSAGE, campaign.pk, linkedin_profile_id=whatsapp_profile_id):
+    if _has_pending(Task.TaskType.WHATSAPP_MESSAGE, campaign.pk, linkedin_profile_id=whatsapp_profile_id, channel="whatsapp"):
         return 0
 
     from openoutreach.mongodb.connection import get_mongodb_collection
@@ -848,6 +854,7 @@ def plan_whatsapp_window(campaign, whatsapp_profile_id: str, user_id: str) -> in
         Task.TaskType.WHATSAPP_MESSAGE, campaign.pk, n, velocity,
         linkedin_profile_id=whatsapp_profile_id,
         user_id=user_id,
+        channel="whatsapp",
     )
     if created:
         logger.info("[%s] planned %d whatsapp_message slots", campaign, created)
@@ -859,7 +866,7 @@ def plan_whatsapp_follow_up_window(campaign, whatsapp_profile_id: str, user_id: 
 
     No-op when a PENDING whatsapp_follow_up task already exists or no CONNECTED WA deals.
     """
-    if _has_pending(Task.TaskType.WHATSAPP_FOLLOW_UP, campaign.pk, linkedin_profile_id=whatsapp_profile_id):
+    if _has_pending(Task.TaskType.WHATSAPP_FOLLOW_UP, campaign.pk, linkedin_profile_id=whatsapp_profile_id, channel="whatsapp"):
         return 0
 
     from openoutreach.mongodb.connection import get_mongodb_collection
@@ -885,6 +892,7 @@ def plan_whatsapp_follow_up_window(campaign, whatsapp_profile_id: str, user_id: 
         Task.TaskType.WHATSAPP_FOLLOW_UP, campaign.pk, n, velocity,
         linkedin_profile_id=whatsapp_profile_id,
         user_id=user_id,
+        channel="whatsapp",
     )
     if created:
         logger.info("[%s] planned %d whatsapp_follow_up slots", campaign, created)
@@ -897,7 +905,7 @@ def plan_whatsapp_sync_window(campaign, whatsapp_profile_id: str, user_id: str) 
     Schedules sync slots for open PENDING/CONNECTED WA deals.
     No-op when a PENDING whatsapp_sync task already exists.
     """
-    if _has_pending(Task.TaskType.WHATSAPP_SYNC, campaign.pk, linkedin_profile_id=whatsapp_profile_id):
+    if _has_pending(Task.TaskType.WHATSAPP_SYNC, campaign.pk, linkedin_profile_id=whatsapp_profile_id, channel="whatsapp"):
         return 0
 
     from openoutreach.mongodb.connection import get_mongodb_collection
@@ -921,6 +929,7 @@ def plan_whatsapp_sync_window(campaign, whatsapp_profile_id: str, user_id: str) 
         Task.TaskType.WHATSAPP_SYNC, campaign.pk, n, velocity,
         linkedin_profile_id=whatsapp_profile_id,
         user_id=user_id,
+        channel="whatsapp",
     )
     if created:
         logger.info("[%s] planned %d whatsapp_sync slots", campaign, created)
