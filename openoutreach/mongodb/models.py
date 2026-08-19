@@ -4640,10 +4640,12 @@ class TaskManager:
             return None
         from datetime import datetime, timezone as _tz
         now = datetime.now(_tz.utc)
-        query = {"status": Task.STATUS_PENDING, "scheduled_at": {"$lte": now}}
+        query: Dict[str, Any] = {"status": Task.STATUS_PENDING, "scheduled_at": {"$lte": now}}
         if linkedin_profile_id:
             query["linkedin_profile_id"] = linkedin_profile_id
-        if channel is not None:
+        if channel == "linkedin":
+            query["$or"] = [{"channel": "linkedin"}, {"channel": {"$exists": False}}]
+        elif channel is not None:
             query["channel"] = channel
         from pymongo import ReturnDocument
         doc = collection.find_one_and_update(
@@ -4662,10 +4664,12 @@ class TaskManager:
         if collection is None:
             return None
         from datetime import datetime, timezone as _tz
-        query = {"status": Task.STATUS_PENDING}
+        query: Dict[str, Any] = {"status": Task.STATUS_PENDING}
         if linkedin_profile_id:
             query["linkedin_profile_id"] = linkedin_profile_id
-        if channel is not None:
+        if channel == "linkedin":
+            query["$or"] = [{"channel": "linkedin"}, {"channel": {"$exists": False}}]
+        elif channel is not None:
             query["channel"] = channel
         doc = collection.find_one(
             query,
