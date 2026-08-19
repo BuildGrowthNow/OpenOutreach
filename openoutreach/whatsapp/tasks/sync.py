@@ -287,6 +287,15 @@ def handle_whatsapp_sync(task, wa_session, qualifiers):  # noqa: ARG001
                 continue
 
             delivery_status = raw.get("delivery_status") if is_outgoing else None
+
+            intent = None
+            if not is_outgoing:
+                try:
+                    from openoutreach.core.db.intent import classify_reply_intent
+                    intent = classify_reply_intent(content, user_id=deal.user_id)
+                except Exception:
+                    pass
+
             msg = ChatMessage(
                 deal_id=str(deal._id),
                 content=content,
@@ -296,6 +305,7 @@ def handle_whatsapp_sync(task, wa_session, qualifiers):  # noqa: ARG001
                 channel="whatsapp",
                 wa_msg_hash=wa_hash,
                 wa_delivery_status=delivery_status,
+                reply_intent=intent,
             )
             msg.save()
             new_messages.append(msg)

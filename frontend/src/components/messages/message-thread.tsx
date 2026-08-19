@@ -22,6 +22,23 @@ function LinkedinIcon({ className }: { className?: string }) {
   )
 }
 
+const INTENT_STYLES: Record<string, { label: string; cls: string }> = {
+  interested:   { label: 'Interested',    cls: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
+  objection:    { label: 'Objection',     cls: 'bg-amber-500/20  text-amber-400  border-amber-500/30'  },
+  wrong_person: { label: 'Wrong person',  cls: 'bg-zinc-500/20   text-zinc-400   border-zinc-500/30'   },
+  not_now:      { label: 'Not now',       cls: 'bg-blue-500/20   text-blue-400   border-blue-500/30'   },
+}
+
+function IntentBadge({ intent }: { intent: string }) {
+  const s = INTENT_STYLES[intent]
+  if (!s) return null
+  return (
+    <span className={`mt-1 inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-medium ${s.cls}`}>
+      {s.label}
+    </span>
+  )
+}
+
 function WaTicks({ status }: { status: string }) {
   if (status === 'read') {
     return (
@@ -197,6 +214,11 @@ export function MessageThread({
 
                     {/* Message content */}
                     <div className="text-sm whitespace-pre-wrap">{message.content}</div>
+
+                    {/* Reply intent badge (inbound only) */}
+                    {!isOutgoing && message.replyIntent && (
+                      <IntentBadge intent={message.replyIntent} />
+                    )}
 
                     {/* Message timestamp + WA delivery ticks */}
                     <div className={`text-xs mt-2 flex items-center justify-end gap-1 ${isOutgoing ? 'text-blue-200' : 'text-muted-foreground'}`}>

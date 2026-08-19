@@ -39,6 +39,20 @@ def _substitute_template(template: str, lead) -> str:
     )
 
 
+def _lead_active_in_other_campaign(lead_id: str, current_campaign_id: str) -> bool:
+    """Return True if the lead has a PENDING/CONNECTED WA deal in any other campaign."""
+    deals_col = get_mongodb_collection("deals")
+    if deals_col is None:
+        return False
+    from openoutreach.mongodb.models import Deal
+    return deals_col.count_documents({
+        "lead_id": lead_id,
+        "campaign_id": {"$ne": current_campaign_id},
+        "active_channel": "whatsapp",
+        "state": {"$in": [Deal.DealState.PENDING, Deal.DealState.CONNECTED]},
+    }, limit=1) > 0
+
+
 def handle_whatsapp_message(task, wa_session, qualifiers):  # noqa: ARG001
     """Send initial WhatsApp outreach to one eligible QUALIFIED lead.
 
@@ -91,6 +105,14 @@ def handle_whatsapp_message(task, wa_session, qualifiers):  # noqa: ARG001
             }, limit=1)
             if already_sent:
                 continue
+
+        # Cross-campaign dedup: skip if this lead is already being worked in another WA campaign.
+        if _lead_active_in_other_campaign(str(lead._id), campaign_id):
+            logger.debug(
+                "WA send_message [%s]: lead %s active in another WA campaign — skipping",
+                campaign, lead._id,
+            )
+            continue
 
         # Safety net: validate.py runs pre-flight before reconcile so this branch
         # is rarely hit, but catches any that slipped through (e.g. first 5-min window).

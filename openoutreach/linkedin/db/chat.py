@@ -130,6 +130,20 @@ def _sync_from_api(session, public_identifier: str, deal) -> list:
 
             # Track newly created messages
             if result.upserted_id:
+                if not is_outgoing:
+                    try:
+                        from openoutreach.core.db.intent import classify_reply_intent
+                        intent = classify_reply_intent(
+                            parsed["text"],
+                            user_id=str(session.linkedin_profile.user_id),
+                        )
+                        if intent:
+                            messages_collection.update_one(
+                                {"_id": result.upserted_id},
+                                {"$set": {"reply_intent": intent}},
+                            )
+                    except Exception:
+                        pass
                 obj = ChatMessage.get_by_deal_and_urn(deal.pk, parsed["entityUrn"])
                 if obj:
                     new_messages.append(obj)

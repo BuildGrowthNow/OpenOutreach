@@ -105,6 +105,61 @@ def _capture_contact_info(lead, session) -> None:
         )
 
 
+def _maybe_bridge_to_whatsapp(deal, session) -> bool:
+    """Route a newly-CONNECTED deal to WhatsApp if the lead has a phone and campaign has WA.
+
+    Returns True when bridged — caller should skip LinkedIn follow-up enqueue.
+    """
+    from openoutreach.mongodb.connection import get_mongodb_collection
+    from openoutreach.mongodb.models import Campaign, Task
+    from datetime import datetime, timezone
+
+    lead = getattr(deal, "lead", None)
+    if not lead or not getattr(lead, "phone", None):
+        return False
+
+    campaign = Campaign.get(deal.campaign_id)
+    if not campaign:
+        return False
+
+    channel_seq = getattr(campaign, "channel_sequence", None) or ["linkedin"]
+    wa_profile_id = getattr(campaign, "whatsapp_profile_id", None)
+    if "whatsapp" not in channel_seq or not wa_profile_id:
+        return False
+
+    deal.active_channel = "whatsapp"
+    deal.save()
+
+    campaign_id = str(deal.campaign_id)
+    user_id = str(getattr(deal, "user_id", "") or "")
+
+    task_col = get_mongodb_collection("tasks")
+    if task_col is not None:
+        existing = task_col.find_one({
+            "task_type": Task.TaskType.WHATSAPP_FOLLOW_UP,
+            "status": Task.Status.PENDING,
+            "payload.campaign_id": campaign_id,
+        })
+        if existing:
+            logger.debug("WA bridge: follow_up task already pending for campaign %s", campaign_id)
+            return True
+
+    task = Task(
+        task_type=Task.TaskType.WHATSAPP_FOLLOW_UP,
+        scheduled_at=datetime.now(timezone.utc),
+        payload={"campaign_id": campaign_id},
+        linkedin_profile_id=str(wa_profile_id),
+        user_id=user_id,
+        channel="whatsapp",
+    )
+    task.save()
+    logger.info(
+        "WA bridge: deal %s routed to whatsapp (phone=%s) — immediate follow_up enqueued",
+        deal._id, lead.phone,
+    )
+    return True
+
+
 def _enqueue_immediate_follow_up(deal, session) -> None:
     """Schedule a follow_up task for *now* so the first message fires on the
     next task-loop iteration rather than waiting for the next planner cycle.
@@ -207,7 +262,8 @@ def set_profile_state(
     if state_changed and ps == DealState.CONNECTED:
         if deal.lead:
             _capture_contact_info(deal.lead, session)
-        _enqueue_immediate_follow_up(deal, session)
+        if not _maybe_bridge_to_whatsapp(deal, session):
+            _enqueue_immediate_follow_up(deal, session)
 
 
 # ── State queries ──

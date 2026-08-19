@@ -357,6 +357,23 @@ def handle_follow_up(task, session, qualifiers):
         logger.warning("[%s] follow_up: Lead not found for deal %s — skipped", campaign, deal._id)
         return
 
+    # Cross-campaign dedup: skip if this lead is already PENDING/CONNECTED in another LI campaign.
+    from openoutreach.mongodb.connection import get_mongodb_collection as _get_col
+    _deals_col = _get_col("deals")
+    if _deals_col is not None:
+        _busy = _deals_col.count_documents({
+            "lead_id": str(deal.lead_id),
+            "campaign_id": {"$ne": str(campaign.pk)},
+            "active_channel": "linkedin",
+            "state": {"$in": ["Pending", "Connected"]},
+        }, limit=1) > 0
+        if _busy:
+            logger.debug(
+                "[%s] follow_up: lead %s active in another LI campaign — skipping",
+                campaign, deal.lead_id,
+            )
+            return
+
     public_id = lead.public_identifier
     logger.info(
         "[%s] follow_up %s",

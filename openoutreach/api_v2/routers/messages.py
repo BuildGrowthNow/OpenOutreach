@@ -28,6 +28,7 @@ class MessageResponse(BaseModel):
     sender: str = "me"
     channel: str = "linkedin"
     waDeliveryStatus: Optional[str] = None
+    replyIntent: Optional[str] = None
 
     @field_validator("creationDate", mode="before")
     @classmethod
@@ -197,6 +198,7 @@ async def list_messages(
             recipientUrl=lead_doc.get("linkedin_url", "") if lead_doc else "",
             channel=msg.get("channel", "linkedin"),
             waDeliveryStatus=msg.get("wa_delivery_status"),
+            replyIntent=msg.get("reply_intent"),
         ))
 
     return {

@@ -36,6 +36,7 @@ class ChatMessage:
         channel: str = "linkedin",
         wa_msg_hash: Optional[str] = None,
         wa_delivery_status: Optional[str] = None,
+        reply_intent: Optional[str] = None,
     ):
         self._id = _id or str(uuid4())
         self.deal_id = deal_id
@@ -48,6 +49,7 @@ class ChatMessage:
         self.channel = channel
         self.wa_msg_hash = wa_msg_hash
         self.wa_delivery_status = wa_delivery_status  # "sent" | "delivered" | "read" | None
+        self.reply_intent = reply_intent  # "interested" | "objection" | "wrong_person" | "not_now" | None
 
     @staticmethod
     def compute_wa_hash(deal_id: str, is_outgoing: bool, content: str) -> str:
@@ -71,6 +73,8 @@ class ChatMessage:
             d["wa_msg_hash"] = self.wa_msg_hash
         if self.wa_delivery_status is not None:
             d["wa_delivery_status"] = self.wa_delivery_status
+        if self.reply_intent is not None:
+            d["reply_intent"] = self.reply_intent
         return d
 
     @classmethod
@@ -87,6 +91,7 @@ class ChatMessage:
             channel=data.get("channel", "linkedin"),
             wa_msg_hash=data.get("wa_msg_hash"),
             wa_delivery_status=data.get("wa_delivery_status"),
+            reply_intent=data.get("reply_intent"),
         )
 
     def save(self) -> str:
