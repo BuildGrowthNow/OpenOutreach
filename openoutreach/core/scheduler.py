@@ -1037,6 +1037,10 @@ def _maybe_trigger_lead_scrape(campaign, user_id: str) -> None:
 
     country_code = getattr(campaign, "maps_country_code", None) or "US"
     campaign_id = campaign.pk
+    # Combine keyword + location into a single search string
+    maps_location = getattr(campaign, "maps_location", None)
+    if maps_location:
+        maps_query = f"{maps_query} {maps_location}"
 
     def _run_maps() -> None:
         try:

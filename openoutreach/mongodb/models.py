@@ -727,6 +727,7 @@ class Campaign:
         maps_country_code: Optional[str] = None,
         maps_backends: Optional[List[str]] = None,
         classified_sites: Optional[List[str]] = None,
+        maps_location: Optional[str] = None,
     ):
         self._id = _id or str(uuid4())
         self.name = name
@@ -757,6 +758,7 @@ class Campaign:
         self.maps_country_code = maps_country_code
         self.maps_backends = maps_backends if maps_backends is not None else []
         self.classified_sites = classified_sites if classified_sites is not None else []
+        self.maps_location = maps_location
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert model instance to dictionary for MongoDB storage."""
@@ -797,6 +799,8 @@ class Campaign:
         if self.maps_country_code is not None:
             data["maps_country_code"] = self.maps_country_code
         data["classified_sites"] = self.classified_sites
+        if self.maps_location is not None:
+            data["maps_location"] = self.maps_location
         return data
 
     @classmethod
@@ -832,6 +836,7 @@ class Campaign:
             maps_country_code=data.get("maps_country_code"),
             maps_backends=data.get("maps_backends"),
             classified_sites=data.get("classified_sites"),
+            maps_location=data.get("maps_location"),
         )
 
     def has_access(self, user_id: str) -> bool:

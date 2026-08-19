@@ -42,6 +42,8 @@ class CampaignCreate(BaseModel):
     maps_query: Optional[str] = None
     maps_country_code: Optional[str] = None
     maps_backends: Optional[List[str]] = None
+    maps_location: Optional[str] = None
+    classified_sites: Optional[List[str]] = None
 
     class Config:
         json_schema_extra = {
@@ -82,6 +84,8 @@ class CampaignUpdate(BaseModel):
     maps_query: Optional[str] = None
     maps_country_code: Optional[str] = None
     maps_backends: Optional[List[str]] = None
+    maps_location: Optional[str] = None
+    classified_sites: Optional[List[str]] = None
 
 
 class CampaignStats(BaseModel):
@@ -120,6 +124,8 @@ class CampaignResponse(BaseModel):
     maps_query: Optional[str] = None
     maps_country_code: Optional[str] = None
     maps_backends: List[str] = []
+    maps_location: Optional[str] = None
+    classified_sites: List[str] = []
 
 
 class PaginationInfo(BaseModel):
@@ -311,6 +317,8 @@ async def list_campaigns(
                 maps_query=doc.get("maps_query"),
                 maps_country_code=doc.get("maps_country_code"),
                 maps_backends=doc.get("maps_backends") or [],
+                maps_location=doc.get("maps_location"),
+                classified_sites=doc.get("classified_sites") or [],
                 stats=CampaignStats(
                     totalLeads=s.get("totalLeads", 0),
                     connected=s.get("connected", 0),
@@ -425,6 +433,8 @@ async def create_campaign(
             maps_query=data.maps_query,
             maps_country_code=data.maps_country_code,
             maps_backends=data.maps_backends or [],
+            maps_location=data.maps_location,
+            classified_sites=data.classified_sites or [],
             status="draft",  # New campaigns start as draft
             is_paused=True,  # Keep is_paused in sync with draft status
         )
@@ -456,6 +466,8 @@ async def create_campaign(
             maps_query=campaign.maps_query,
             maps_country_code=campaign.maps_country_code,
             maps_backends=campaign.maps_backends,
+            maps_location=campaign.maps_location,
+            classified_sites=campaign.classified_sites or [],
         )
 
     except HTTPException:
@@ -586,6 +598,10 @@ async def update_campaign(
             updates["maps_country_code"] = data.maps_country_code
         if data.maps_backends is not None:
             updates["maps_backends"] = data.maps_backends
+        if data.maps_location is not None:
+            updates["maps_location"] = data.maps_location
+        if data.classified_sites is not None:
+            updates["classified_sites"] = data.classified_sites
 
         # Handle status/is_paused synchronization
         # Priority: if status is provided, use it; otherwise use is_paused
@@ -667,6 +683,8 @@ async def update_campaign(
             maps_query=updated_campaign.maps_query,
             maps_country_code=updated_campaign.maps_country_code,
             maps_backends=updated_campaign.maps_backends,
+            maps_location=updated_campaign.maps_location,
+            classified_sites=updated_campaign.classified_sites or [],
         )
 
     except HTTPException:
@@ -857,6 +875,8 @@ async def pause_campaign(
             maps_query=updated_campaign.maps_query,
             maps_country_code=updated_campaign.maps_country_code,
             maps_backends=updated_campaign.maps_backends,
+            maps_location=updated_campaign.maps_location,
+            classified_sites=updated_campaign.classified_sites or [],
         )
 
     except HTTPException:
@@ -965,6 +985,8 @@ async def resume_campaign(
             maps_query=updated_campaign.maps_query,
             maps_country_code=updated_campaign.maps_country_code,
             maps_backends=updated_campaign.maps_backends,
+            maps_location=updated_campaign.maps_location,
+            classified_sites=updated_campaign.classified_sites or [],
         )
 
     except HTTPException:
