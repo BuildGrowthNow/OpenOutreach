@@ -1,0 +1,99 @@
+"""Shared upsert helpers for all WA lead-source scrapers."""
+from __future__ import annotations
+
+import logging
+from dataclasses import dataclass
+from datetime import datetime, timezone as tz
+from typing import List, Optional
+from uuid import uuid4
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class BusinessListing:
+    """Normalised business lead from any scraper backend."""
+
+    name: str           # business / company name → stored as Lead.company
+    phone: str          # E.164, e.g. "+15551234567"
+    source: str         # scraper identifier
+    website: Optional[str] = None
+    address: Optional[str] = None
+    category: Optional[str] = None  # → stored as Lead.headline
+    rating: Optional[float] = None
+    review_count: Optional[int] = None
+
+
+def upsert_listings_as_leads(
+    listings: List[BusinessListing],
+    campaign_id: str,
+    user_id: str,
+) -> int:
+    """Dedup by phone, upsert Leads + Deals. Returns count of new leads created."""
+    from openoutreach.mongodb.connection import get_mongodb_collection
+    from openoutreach.mongodb.models import Deal
+
+    seen_phones: set = set()
+    unique: List[BusinessListing] = []
+    for lst in listings:
+        if lst.phone not in seen_phones:
+            seen_phones.add(lst.phone)
+            unique.append(lst)
+
+    leads_col = get_mongodb_collection("leads")
+    deals_col = get_mongodb_collection("deals")
+    if leads_col is None or deals_col is None:
+        raise RuntimeError("MongoDB leads/deals collection unavailable")
+
+    created = 0
+    now = datetime.now(tz.utc)
+
+    for lst in unique:
+        lead_id = str(uuid4())
+        set_on_insert: dict = {
+            "_id": lead_id,
+            "phone": lst.phone,
+            "phone_source": lst.source,
+            "company": lst.name,
+            "linkedin_url": None,
+            "public_identifier": "",
+            "user_id": user_id,
+            "disqualified": False,
+            "created_at": now,
+        }
+        if lst.category:
+            set_on_insert["headline"] = lst.category
+        if lst.website:
+            set_on_insert["website"] = lst.website
+        if lst.address:
+            set_on_insert["address"] = lst.address
+        if lst.rating is not None:
+            set_on_insert["rating"] = lst.rating
+        if lst.review_count is not None:
+            set_on_insert["review_count"] = lst.review_count
+
+        result = leads_col.update_one(
+            {"phone": lst.phone},
+            {"$setOnInsert": set_on_insert},
+            upsert=True,
+        )
+
+        if result.upserted_id is not None:
+            actual_lead_id = str(result.upserted_id)
+            created += 1
+        else:
+            doc = leads_col.find_one({"phone": lst.phone}, {"_id": 1})
+            actual_lead_id = str(doc["_id"]) if doc else lead_id
+
+        if not deals_col.find_one({"lead_id": actual_lead_id, "campaign_id": campaign_id}):
+            deals_col.insert_one({
+                "_id": str(uuid4()),
+                "lead_id": actual_lead_id,
+                "campaign_id": campaign_id,
+                "state": Deal.DealState.DISCOVERED,
+                "user_id": user_id,
+                "created_at": now,
+            })
+
+    logger.info("upsert: %d new leads for campaign %s", created, campaign_id)
+    return created

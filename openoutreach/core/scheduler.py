@@ -802,7 +802,7 @@ def reconcile(session) -> None:
         plan_follow_up_window(session, campaign, follow_up_cap=follow_up_cap)
         plan_check_pending_window(session, campaign)
         _retry_no_email_deals(campaign)
-        _maybe_trigger_maps_scrape(campaign, profile.user_id)
+        _maybe_trigger_lead_scrape(campaign, profile.user_id)
 
         # WhatsApp channel planners — only when campaign has WA configured
         wa_profile_id = getattr(campaign, "whatsapp_profile_id", None)
@@ -995,17 +995,25 @@ def _retry_no_email_deals(campaign) -> None:
 _maps_scraping: set = set()
 
 
-def _maybe_trigger_maps_scrape(campaign, user_id: str) -> None:
-    """Trigger google_maps scraping in a background thread when active WA leads fall below threshold.
+def _maybe_trigger_lead_scrape(campaign, user_id: str) -> None:
+    """Trigger a lead-scraping background thread when active WA leads fall below threshold.
+
+    Dispatches to the correct scraper based on campaign.lead_source:
+    - google_maps / bing_maps / duckduckgo_maps → maps_scraper
+    - classified_ads                             → classified_scraper
+    - facebook_pages                             → facebook_scraper
+    - wa_groups                                  → wa_groups_scraper
 
     No-op when:
-    - campaign.lead_source != "google_maps"
-    - campaign.maps_query is empty
-    - active (Qualified/Pending) WA deals >= MAPS_REFILL_THRESHOLD
+    - lead_source is linkedin_search
+    - maps_query is empty
+    - active WA deals >= MAPS_REFILL_THRESHOLD
     - a scrape for this campaign is already running
     """
-    if getattr(campaign, "lead_source", "linkedin_search") != "google_maps":
+    lead_source = getattr(campaign, "lead_source", "linkedin_search") or "linkedin_search"
+    if lead_source == "linkedin_search":
         return
+
     maps_query = getattr(campaign, "maps_query", None)
     if not maps_query:
         return
@@ -1028,12 +1036,12 @@ def _maybe_trigger_maps_scrape(campaign, user_id: str) -> None:
     _maps_scraping.add(campaign.pk)
 
     country_code = getattr(campaign, "maps_country_code", None) or "US"
-    backends = getattr(campaign, "maps_backends", None) or None
     campaign_id = campaign.pk
 
-    def _run() -> None:
+    def _run_maps() -> None:
         try:
             from openoutreach.whatsapp.pipeline.maps_scraper import create_leads_from_maps
+            backends = getattr(campaign, "maps_backends", None) or None
             created = create_leads_from_maps(
                 query=maps_query,
                 country_code=country_code,
@@ -1047,6 +1055,79 @@ def _maybe_trigger_maps_scrape(campaign, user_id: str) -> None:
         finally:
             _maps_scraping.discard(campaign_id)
 
-    t = threading.Thread(target=_run, daemon=True, name=f"maps-scrape-{campaign_id}")
+    def _run_classified() -> None:
+        try:
+            from openoutreach.whatsapp.pipeline.classified_scraper import create_leads_from_classified
+            sites = getattr(campaign, "classified_sites", None) or None
+            created = create_leads_from_classified(
+                query=maps_query,
+                country_code=country_code,
+                campaign_id=campaign_id,
+                user_id=user_id,
+                sites=sites,
+            )
+            logger.info("Classified scrape [%s]: created %d new leads", campaign_id, created)
+        except Exception as exc:
+            logger.error("Classified scrape [%s] failed: %s", campaign_id, exc)
+        finally:
+            _maps_scraping.discard(campaign_id)
+
+    def _run_facebook() -> None:
+        try:
+            from openoutreach.whatsapp.pipeline.facebook_scraper import create_leads_from_facebook
+            created = create_leads_from_facebook(
+                query=maps_query,
+                country_code=country_code,
+                campaign_id=campaign_id,
+                user_id=user_id,
+            )
+            logger.info("Facebook scrape [%s]: created %d new leads", campaign_id, created)
+        except Exception as exc:
+            logger.error("Facebook scrape [%s] failed: %s", campaign_id, exc)
+        finally:
+            _maps_scraping.discard(campaign_id)
+
+    def _run_wa_groups() -> None:
+        try:
+            from openoutreach.whatsapp.pipeline.wa_groups_scraper import create_leads_from_wa_links
+            created = create_leads_from_wa_links(
+                query=maps_query,
+                country_code=country_code,
+                campaign_id=campaign_id,
+                user_id=user_id,
+            )
+            logger.info("WA groups scrape [%s]: created %d new leads", campaign_id, created)
+        except Exception as exc:
+            logger.error("WA groups scrape [%s] failed: %s", campaign_id, exc)
+        finally:
+            _maps_scraping.discard(campaign_id)
+
+    _run_map = {
+        "google_maps": _run_maps,
+        "bing_maps": _run_maps,
+        "duckduckgo_maps": _run_maps,
+        "classified_ads": _run_classified,
+        "facebook_pages": _run_facebook,
+        "wa_groups": _run_wa_groups,
+    }
+    run_fn = _run_map.get(lead_source)
+    if run_fn is None:
+        _maps_scraping.discard(campaign_id)
+        logger.warning(
+            "Unknown lead_source %r for campaign %s — no scraper triggered",
+            lead_source, campaign_id,
+        )
+        return
+
+    t = threading.Thread(
+        target=run_fn, daemon=True, name=f"scrape-{lead_source}-{campaign_id}"
+    )
     t.start()
-    logger.info("Maps scrape triggered for campaign %s (query=%r)", campaign_id, maps_query)
+    logger.info(
+        "Lead scrape triggered: source=%s campaign=%s query=%r",
+        lead_source, campaign_id, maps_query,
+    )
+
+
+# Backward-compat alias (tests that patch _maybe_trigger_maps_scrape still work)
+_maybe_trigger_maps_scrape = _maybe_trigger_lead_scrape

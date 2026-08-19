@@ -8,8 +8,9 @@ from __future__ import annotations
 
 import logging
 import urllib.parse
-from dataclasses import dataclass
 from typing import List, Optional
+
+from openoutreach.whatsapp.pipeline.upsert import BusinessListing, upsert_listings_as_leads
 
 logger = logging.getLogger(__name__)
 
@@ -17,18 +18,6 @@ _DEFAULT_BACKENDS = ["google_maps", "bing_maps", "duckduckgo_maps"]
 _MAX_LISTINGS = 50
 _SCROLL_REPEATS = 3
 _SCROLL_PAUSE_MS = 1000
-
-
-@dataclass
-class BusinessListing:
-    name: str
-    phone: str  # E.164, e.g. "+15551234567"
-    website: Optional[str]
-    address: Optional[str]
-    category: Optional[str]
-    source: str  # "google_maps" | "bing_maps" | "duckduckgo_maps"
-    rating: Optional[float] = None
-    review_count: Optional[int] = None
 
 
 def _normalize_phone(raw: str, country_code: str) -> Optional[str]:
@@ -306,97 +295,15 @@ def create_leads_from_maps(
 
     Returns count of new leads created.
     """
-    from datetime import datetime, timezone as tz
-    from uuid import uuid4
-
-    from openoutreach.mongodb.connection import get_mongodb_collection
-    from openoutreach.mongodb.models import Deal
-
     active_backends = backends if backends is not None else _DEFAULT_BACKENDS
 
     all_listings: List[BusinessListing] = []
     for backend in active_backends:
         try:
             results = scrape(query, country_code, backend)
-            logger.info(
-                "maps_scraper: %s returned %d listings", backend, len(results)
-            )
+            logger.info("maps_scraper: %s returned %d listings", backend, len(results))
             all_listings.extend(results)
         except Exception as exc:
             logger.warning("maps_scraper: backend %s failed: %s", backend, exc)
 
-    # Dedup by phone across all backends
-    seen_phones: set = set()
-    unique: List[BusinessListing] = []
-    for listing in all_listings:
-        if listing.phone not in seen_phones:
-            seen_phones.add(listing.phone)
-            unique.append(listing)
-
-    leads_col = get_mongodb_collection("leads")
-    deals_col = get_mongodb_collection("deals")
-    if leads_col is None or deals_col is None:
-        raise RuntimeError("MongoDB leads/deals collection unavailable")
-
-    created = 0
-    now = datetime.now(tz.utc)
-
-    for listing in unique:
-        lead_id = str(uuid4())
-
-        set_on_insert: dict = {
-            "_id": lead_id,
-            "phone": listing.phone,
-            "phone_source": listing.source,
-            "company": listing.name,
-            "linkedin_url": None,
-            "public_identifier": "",
-            "user_id": user_id,
-            "disqualified": False,
-            "created_at": now,
-        }
-        if listing.category:
-            set_on_insert["headline"] = listing.category
-        if listing.website:
-            set_on_insert["website"] = listing.website
-        if listing.address:
-            set_on_insert["address"] = listing.address
-        if listing.rating is not None:
-            set_on_insert["rating"] = listing.rating
-        if listing.review_count is not None:
-            set_on_insert["review_count"] = listing.review_count
-
-        result = leads_col.update_one(
-            {"phone": listing.phone},
-            {"$setOnInsert": set_on_insert},
-            upsert=True,
-        )
-
-        # Resolve the actual lead _id (upserted or existing)
-        if result.upserted_id is not None:
-            actual_lead_id = str(result.upserted_id)
-            created += 1
-        else:
-            doc = leads_col.find_one({"phone": listing.phone}, {"_id": 1})
-            actual_lead_id = str(doc["_id"]) if doc else lead_id
-
-        # Create Deal if none exists for this lead+campaign
-        existing_deal = deals_col.find_one(
-            {"lead_id": actual_lead_id, "campaign_id": campaign_id}
-        )
-        if not existing_deal:
-            deals_col.insert_one(
-                {
-                    "_id": str(uuid4()),
-                    "lead_id": actual_lead_id,
-                    "campaign_id": campaign_id,
-                    "state": Deal.DealState.DISCOVERED,
-                    "user_id": user_id,
-                    "created_at": now,
-                }
-            )
-
-    logger.info(
-        "maps_scraper: created %d new leads for campaign %s", created, campaign_id
-    )
-    return created
+    return upsert_listings_as_leads(all_listings, campaign_id, user_id)
