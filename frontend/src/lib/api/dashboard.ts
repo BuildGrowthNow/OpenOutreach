@@ -371,7 +371,7 @@ export async function getCampaignLeads(
 
   // API returns { total, limit, offset, results: [{lead, deal}] }
   type RawLeadDeal = {
-    lead: { id: string; public_identifier: string; url: string; full_name?: string; headline?: string; location?: string; disqualified?: boolean; created_at?: string };
+    lead: { id: string; public_identifier: string; url: string; full_name?: string; company?: string; headline?: string; location?: string; disqualified?: boolean; created_at?: string };
     deal: { id: string; lead_id: string; campaign_id: string; state: string; outcome?: string; reason?: string; creation_date?: string; last_outgoing_at?: string; next_follow_up_at?: string; unanswered_count?: number };
   };
   type RawResponse = { total: number; limit: number; offset: number; results: RawLeadDeal[]; pipelineCounts?: Record<string, number> };
@@ -383,10 +383,12 @@ export async function getCampaignLeads(
   }
 
   const leads: Lead[] = (raw.data.results || []).map(({ lead, deal }) => {
-    // Extract company from headline if it contains " at " — e.g. "Founder at Acme Corp"
     const headline = lead.headline || undefined;
-    const atIdx = headline ? headline.toLowerCase().indexOf(' at ') : -1;
-    const company = atIdx > -1 ? headline!.slice(atIdx + 4).trim() : undefined;
+    // Prefer structured company field; fall back to headline " at X" parse for legacy leads
+    const company = lead.company || (() => {
+      const atIdx = headline ? headline.toLowerCase().indexOf(' at ') : -1;
+      return atIdx > -1 ? headline!.slice(atIdx + 4).trim() : undefined;
+    })();
 
     return {
       id: lead.id,

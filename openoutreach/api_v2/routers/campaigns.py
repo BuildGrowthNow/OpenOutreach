@@ -982,6 +982,7 @@ class LeadResponse(BaseModel):
     public_identifier: str
     url: str
     full_name: Optional[str] = None
+    company: Optional[str] = None
     headline: Optional[str] = None
     location: Optional[str] = None
     disqualified: bool = False
@@ -1143,6 +1144,12 @@ async def get_campaign_leads(
                 or profile_inner.get("locationName")
                 or cp.get("location")
             )
+            # company: stored directly or derived from headline " at X" for legacy leads
+            company = lead_data.get("company")
+            if not company and headline:
+                at_idx = headline.lower().find(" at ")
+                if at_idx > -1:
+                    company = headline[at_idx + 4:].strip() or None
             deal_id_str = str(deal["_id"])
             nudge = deal_nudge_info.get(deal_id_str, {})
             last_outgoing_at = deal.get("last_outgoing_at")
@@ -1152,6 +1159,7 @@ async def get_campaign_leads(
                     public_identifier=lead_data.get("public_identifier", ""),
                     url=lead_data.get("linkedin_url", lead_data.get("url", "")),
                     full_name=full_name,
+                    company=company,
                     headline=headline,
                     location=location,
                     disqualified=lead_data.get("disqualified", False),
@@ -1600,6 +1608,9 @@ async def import_leads_csv(
         full_name = (
             row.get("full_name") or row.get("name") or row.get("first_name", "")
         ).strip()
+        csv_company = (
+            row.get("company") or row.get("company_name") or row.get("organization", "")
+        ).strip() or None
         raw_phone = (row.get(_phone_col_name or "", "") or "").strip() if _phone_col_name else ""
 
         normalized_phone: Optional[str] = None
@@ -1634,6 +1645,8 @@ async def import_leads_csv(
             "disqualified": False,
             "created_at": now,
         }
+        if csv_company:
+            set_on_insert["company"] = csv_company
         if normalized_phone:
             set_on_insert["phone"] = normalized_phone
             set_on_insert["phone_source"] = "csv_import"

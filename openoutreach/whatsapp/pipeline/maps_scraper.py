@@ -27,6 +27,8 @@ class BusinessListing:
     address: Optional[str]
     category: Optional[str]
     source: str  # "google_maps" | "bing_maps" | "duckduckgo_maps"
+    rating: Optional[float] = None
+    review_count: Optional[int] = None
 
 
 def _normalize_phone(raw: str, country_code: str) -> Optional[str]:
@@ -115,14 +117,44 @@ def _scrape_google_maps(page, query: str, country_code: str) -> List[BusinessLis
                     or None
                 )
 
+            category_el = page.query_selector(
+                'button[jsaction*="category"], .DkEaL, [data-section-id="speciality"] .mgr77e'
+            )
+            category = category_el.inner_text().strip() if category_el else None
+
+            rating: Optional[float] = None
+            review_count: Optional[int] = None
+            rating_el = page.query_selector('[data-value="Rating"], .MW4etd')
+            if rating_el:
+                try:
+                    rating = float(rating_el.inner_text().strip())
+                except (ValueError, AttributeError):
+                    pass
+            reviews_el = page.query_selector('.UY7F9, [aria-label*="reviews"]')
+            if reviews_el:
+                raw_rc = (
+                    reviews_el.get_attribute("aria-label")
+                    or reviews_el.inner_text()
+                    or ""
+                )
+                import re as _re
+                m = _re.search(r"[\d,]+", raw_rc.replace(",", ""))
+                if m:
+                    try:
+                        review_count = int(m.group().replace(",", ""))
+                    except ValueError:
+                        pass
+
             listings.append(
                 BusinessListing(
                     name=name or "Unknown",
                     phone=normalized,
                     website=website,
                     address=address,
-                    category=None,
+                    category=category,
                     source="google_maps",
+                    rating=rating,
+                    review_count=review_count,
                 )
             )
         except Exception as exc:
@@ -316,17 +348,23 @@ def create_leads_from_maps(
             "_id": lead_id,
             "phone": listing.phone,
             "phone_source": listing.source,
-            "full_name": listing.name,
+            "company": listing.name,
             "linkedin_url": None,
             "public_identifier": "",
             "user_id": user_id,
             "disqualified": False,
             "created_at": now,
         }
+        if listing.category:
+            set_on_insert["headline"] = listing.category
         if listing.website:
             set_on_insert["website"] = listing.website
         if listing.address:
             set_on_insert["address"] = listing.address
+        if listing.rating is not None:
+            set_on_insert["rating"] = listing.rating
+        if listing.review_count is not None:
+            set_on_insert["review_count"] = listing.review_count
 
         result = leads_col.update_one(
             {"phone": listing.phone},

@@ -50,6 +50,9 @@ class Lead:
         update_date: Optional[datetime] = None,
         phone: Optional[str] = None,
         phone_source: Optional[str] = None,
+        full_name: Optional[str] = None,
+        company: Optional[str] = None,
+        headline: Optional[str] = None,
     ):
         self._id = _id or str(uuid4())
         self.linkedin_url = linkedin_url
@@ -67,6 +70,9 @@ class Lead:
         self.update_date = update_date or datetime.now(tz.utc)
         self.phone = phone
         self.phone_source = phone_source
+        self.full_name = full_name
+        self.company = company
+        self.headline = headline
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert model instance to dictionary for MongoDB storage."""
@@ -98,6 +104,12 @@ class Lead:
             data["phone"] = self.phone
         if self.phone_source is not None:
             data["phone_source"] = self.phone_source
+        if self.full_name is not None:
+            data["full_name"] = self.full_name
+        if self.company is not None:
+            data["company"] = self.company
+        if self.headline is not None:
+            data["headline"] = self.headline
         return data
 
     @classmethod
@@ -120,6 +132,9 @@ class Lead:
             update_date=data.get("update_date"),
             phone=data.get("phone"),
             phone_source=data.get("phone_source"),
+            full_name=data.get("full_name"),
+            company=data.get("company"),
+            headline=data.get("headline"),
         )
 
     def save(self, update_fields: Optional[List[str]] = None) -> str:
