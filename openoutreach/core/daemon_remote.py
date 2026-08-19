@@ -329,6 +329,7 @@ class RemoteDaemon:
             await asyncio.gather(
                 self._heartbeat_loop(),
                 self._task_loop(),
+                self._wa_task_loop(),
                 self._config_refresh_loop(),
                 self._subscription_check_loop(),
                 self._wa_health_check_loop(),
@@ -691,6 +692,47 @@ class RemoteDaemon:
             except Exception as e:
                 logger.debug("WA session close error for %s: %s", profile_id, e)
         self._whatsapp_sessions.clear()
+
+    async def _wa_task_loop(self) -> None:
+        """Claim and execute WhatsApp tasks directly from MongoDB, one per WA profile per cycle."""
+        from openoutreach.mongodb.models import Task
+
+        while self.running:
+            if not self._is_active_time() or not self._whatsapp_sessions:
+                await asyncio.sleep(self.config.poll_interval_seconds if self.config else 10)
+                continue
+
+            for wa_profile_id, wa_session in list(self._whatsapp_sessions.items()):
+                wa_task = Task.objects.claim_next(
+                    linkedin_profile_id=wa_profile_id, channel="whatsapp"
+                )
+                if wa_task is None:
+                    continue
+
+                logger.info(
+                    "WA executing: %s (profile=%s)", wa_task.task_type, wa_profile_id
+                )
+                try:
+                    task_dict = {
+                        "task_type": wa_task.task_type,
+                        "task_id": str(wa_task.pk),
+                        "payload": wa_task.payload,
+                        "linkedin_profile_id": wa_profile_id,
+                    }
+                    wa_task.mark_running()
+                    await self._run_on_wa_pw_thread(
+                        lambda t=task_dict: self._execute_task(t)
+                    )
+                    wa_task.mark_completed()
+                    self.last_task_at = datetime.now(tz.utc)
+                except Exception as e:
+                    wa_task.mark_failed()
+                    logger.error(
+                        "WA task failed (profile=%s, type=%s): %s",
+                        wa_profile_id, wa_task.task_type, e,
+                    )
+
+            await asyncio.sleep(self.config.poll_interval_seconds if self.config else 10)
 
     async def _wa_health_check_loop(self) -> None:
         """Periodically verify WA sessions are still authenticated.
