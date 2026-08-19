@@ -94,6 +94,9 @@ class RemoteDaemon:
         # WhatsApp session pool: keyed by whatsapp_profile_id
         self._whatsapp_sessions: dict[str, Any] = {}
 
+        # Reconnect attempt counter per WA profile — reset on success, capped at _WA_MAX_RECONNECT_ATTEMPTS
+        self._wa_reconnect_attempts: dict[str, int] = {}
+
         # user_id resolved from the /api/daemon/profile endpoint after startup
         self._user_id: Optional[str] = None
 
@@ -695,12 +698,31 @@ class RemoteDaemon:
 
     async def _wa_task_loop(self) -> None:
         """Claim and execute WhatsApp tasks directly from MongoDB, one per WA profile per cycle."""
+        import time as _time
         from openoutreach.mongodb.models import Task
+        from openoutreach.core.scheduler import _recover_stale_running_tasks
+
+        _STALE_RECOVERY_INTERVAL = 1800  # 30 minutes
+        _last_stale_recovery = 0.0
 
         while self.running:
             if not self._is_active_time() or not self._whatsapp_sessions:
                 await asyncio.sleep(self.config.poll_interval_seconds if self.config else 10)
                 continue
+
+            now_mono = _time.monotonic()
+            if now_mono - _last_stale_recovery >= _STALE_RECOVERY_INTERVAL:
+                _last_stale_recovery = now_mono
+                for wa_profile_id in list(self._whatsapp_sessions):
+                    try:
+                        recovered = _recover_stale_running_tasks(linkedin_profile_id=wa_profile_id)
+                        if recovered:
+                            logger.info(
+                                "WA task loop: recovered %d stale tasks for wa_profile %s",
+                                recovered, wa_profile_id,
+                            )
+                    except Exception as e:
+                        logger.debug("WA stale recovery error for %s: %s", wa_profile_id, e)
 
             for wa_profile_id, wa_session in list(self._whatsapp_sessions.items()):
                 wa_task = Task.objects.claim_next(
@@ -738,11 +760,12 @@ class RemoteDaemon:
         """Periodically verify WA sessions are still authenticated.
 
         Checks every 5 minutes. Marks disconnected/banned profiles and attempts
-        a single reconnect. WA Web sessions expire after ~14 days; this loop
-        detects expiry and surfaces the status so the user sees "Disconnected"
-        in the UI and can re-scan the QR code.
+        reconnect up to _WA_MAX_RECONNECT_ATTEMPTS times before giving up.
+        WA Web sessions expire after ~14 days; this loop detects expiry and
+        surfaces the status so the user sees "Disconnected" in the UI.
         """
         _WA_HEALTH_INTERVAL = 300  # 5 minutes
+        _WA_MAX_RECONNECT_ATTEMPTS = 3
 
         while self.running:
             await asyncio.sleep(_WA_HEALTH_INTERVAL)
@@ -753,6 +776,7 @@ class RemoteDaemon:
                 try:
                     alive = await self._run_on_wa_pw_thread(wa_session.is_alive)
                     if alive:
+                        self._wa_reconnect_attempts.pop(profile_id, None)
                         continue
 
                     banned = await self._run_on_wa_pw_thread(wa_session.detect_ban)
@@ -765,19 +789,36 @@ class RemoteDaemon:
                     wa_session.wa_profile.save(update_fields=["status"])
                     del self._whatsapp_sessions[profile_id]
 
-                    if not banned:
-                        # Attempt reconnect — start_whatsapp_session will try
-                        # stored session_data first; falls back to QR poll if stale.
-                        try:
-                            from openoutreach.whatsapp.browser.launch import start_whatsapp_session
-                            await self._run_on_wa_pw_thread(lambda s=wa_session: start_whatsapp_session(s))
-                            self._whatsapp_sessions[profile_id] = wa_session
-                            logger.info("WA health check: reconnected %s", wa_session)
-                        except Exception as reconnect_err:
-                            logger.warning(
-                                "WA health check: reconnect failed for %s: %s",
-                                wa_session, reconnect_err,
-                            )
+                    if banned:
+                        logger.error(
+                            "WA health check: profile %s is BANNED — manual review required",
+                            wa_session.wa_profile,
+                        )
+                        self._wa_reconnect_attempts.pop(profile_id, None)
+                        continue
+
+                    # Attempt reconnect with retry cap.
+                    attempts = self._wa_reconnect_attempts.get(profile_id, 0)
+                    if attempts >= _WA_MAX_RECONNECT_ATTEMPTS:
+                        logger.warning(
+                            "WA health check: profile %s exhausted %d reconnect attempts — "
+                            "waiting for user to re-scan QR",
+                            profile_id, _WA_MAX_RECONNECT_ATTEMPTS,
+                        )
+                        continue
+
+                    self._wa_reconnect_attempts[profile_id] = attempts + 1
+                    try:
+                        from openoutreach.whatsapp.browser.launch import start_whatsapp_session
+                        await self._run_on_wa_pw_thread(lambda s=wa_session: start_whatsapp_session(s))
+                        self._whatsapp_sessions[profile_id] = wa_session
+                        self._wa_reconnect_attempts.pop(profile_id, None)
+                        logger.info("WA health check: reconnected %s (attempt %d)", wa_session, attempts + 1)
+                    except Exception as reconnect_err:
+                        logger.warning(
+                            "WA health check: reconnect attempt %d/%d failed for %s: %s",
+                            attempts + 1, _WA_MAX_RECONNECT_ATTEMPTS, wa_session, reconnect_err,
+                        )
 
                 except Exception as e:
                     logger.debug("WA health check error for %s: %s", profile_id, e)

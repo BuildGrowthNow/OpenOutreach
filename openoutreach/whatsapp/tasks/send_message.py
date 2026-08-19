@@ -60,8 +60,15 @@ def handle_whatsapp_message(task, wa_session, qualifiers):  # noqa: ARG001
     Picks the oldest QUALIFIED deal where active_channel=="whatsapp",
     lead.phone is set, and no whatsapp_message ActionLog exists yet.
     """
-    from openoutreach.mongodb.models import Campaign, Deal, Lead
+    from openoutreach.mongodb.models import Campaign, Deal, Lead, SiteConfig
     from openoutreach.linkedin.models import ActionLog
+    from openoutreach.whatsapp.tasks.follow_up import _wa_is_active_now
+
+    wa_profile = wa_session.wa_profile
+    config = SiteConfig.load(user_id=wa_profile.user_id)
+    if not _wa_is_active_now(config):
+        logger.debug("WA send_message: outside WA active hours — skipping")
+        return
 
     campaign_id = task.payload["campaign_id"]
     campaign = Campaign.get(campaign_id)

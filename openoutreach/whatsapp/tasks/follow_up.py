@@ -19,7 +19,8 @@ def _wa_is_active_now(config) -> bool:
     tz_name = getattr(config, "active_timezone", "UTC") or "UTC"
     try:
         tz = pytz.timezone(tz_name)
-    except Exception:
+    except pytz.exceptions.UnknownTimeZoneError:
+        logger.warning("_wa_is_active_now: unknown timezone %r — defaulting to UTC", tz_name)
         tz = pytz.utc
     now = datetime.now(timezone.utc).astimezone(tz)
     start = getattr(config, "wa_active_start_hour", 8)
@@ -139,6 +140,16 @@ def handle_whatsapp_follow_up(task, wa_session, qualifiers):  # noqa: ARG001
         success = wa_session.send_message(lead.phone, message)
         if not success:
             logger.warning("WA follow_up: send failed for %s", lead.phone)
+            banned = wa_session.detect_ban()
+            if banned:
+                from openoutreach.whatsapp.models.profile import STATUS_BANNED
+                wa_session.wa_profile.status = STATUS_BANNED
+                wa_session.wa_profile.save(update_fields=["status"])
+                logger.error(
+                    "WA follow_up: profile %s appears BANNED — marking and halting",
+                    wa_session.wa_profile,
+                )
+                return
             deal.last_outgoing_at = None
             deal.save(update_fields=["last_outgoing_at"])
             return
