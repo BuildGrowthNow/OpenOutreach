@@ -9,6 +9,25 @@ import { Badge } from '@/components/ui/badge'
 import { Icons } from '@/lib/types/components'
 import { Message } from '@/lib/types/components'
 import { formatDistanceToNow } from 'date-fns'
+import { MessageCircle } from 'lucide-react'
+import { cn } from '@/lib/utils'
+
+type ChannelFilter = 'all' | 'linkedin' | 'whatsapp'
+
+function LinkedinIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-label="LinkedIn" role="img">
+      <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6zM2 9h4v12H2zm2-4a2 2 0 1 0 0 4 2 2 0 0 0 0-4z" />
+    </svg>
+  )
+}
+
+function ChannelIcon({ channel }: { channel?: string }) {
+  if (channel === 'whatsapp') {
+    return <MessageCircle className="h-3 w-3 text-emerald-400 shrink-0" aria-label="WhatsApp" />
+  }
+  return <LinkedinIcon className="h-3 w-3 text-blue-400 shrink-0" />
+}
 
 interface MessageThreadProps {
   messages?: Message[]
@@ -26,7 +45,16 @@ export function MessageThread({
   leadName = 'Lead'
 }: MessageThreadProps) {
   const [newMessage, setNewMessage] = useState('')
+  const [channelFilter, setChannelFilter] = useState<ChannelFilter>('all')
   const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  const hasWA = messages.some(m => m.channel === 'whatsapp')
+  const hasLI = messages.some(m => !m.channel || m.channel === 'linkedin')
+  const showChannelTabs = hasWA && hasLI
+
+  const filteredMessages = channelFilter === 'all'
+    ? messages
+    : messages.filter(m => channelFilter === 'whatsapp' ? m.channel === 'whatsapp' : (!m.channel || m.channel === 'linkedin'))
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -70,11 +98,31 @@ export function MessageThread({
   return (
     <Card className="h-full flex flex-col">
       <CardHeader className="border-b">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-2">
           <CardTitle>Conversation with {leadName}</CardTitle>
           <div className="flex items-center gap-2">
+            {showChannelTabs && (
+              <div className="flex gap-1">
+                {(['all', 'linkedin', 'whatsapp'] as ChannelFilter[]).map((ch) => (
+                  <button
+                    key={ch}
+                    onClick={() => setChannelFilter(ch)}
+                    className={cn(
+                      'flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition-colors',
+                      channelFilter === ch
+                        ? 'bg-foreground text-background border-foreground'
+                        : 'bg-transparent text-muted-foreground border-border hover:border-foreground/40'
+                    )}
+                  >
+                    {ch === 'linkedin' && <LinkedinIcon className="h-3 w-3" />}
+                    {ch === 'whatsapp' && <MessageCircle className="h-3 w-3" />}
+                    {ch === 'all' ? 'All' : ch === 'linkedin' ? 'LinkedIn' : 'WhatsApp'}
+                  </button>
+                ))}
+              </div>
+            )}
             <Badge variant="outline" className="px-2 py-1 text-xs">
-              {messages.length} {messages.length === 1 ? 'message' : 'messages'}
+              {filteredMessages.length} {filteredMessages.length === 1 ? 'message' : 'messages'}
             </Badge>
           </div>
         </div>
@@ -82,7 +130,7 @@ export function MessageThread({
       <CardContent className="flex-1 flex flex-col p-4">
         {/* Messages Container */}
         <div className="flex-1 overflow-y-auto space-y-4 mb-4 p-2">
-          {messages.length === 0 ? (
+          {filteredMessages.length === 0 ? (
             <div className="text-center py-8">
               <Icons.MessageSquare className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
               <div className="text-muted-foreground">No messages yet</div>
@@ -91,11 +139,11 @@ export function MessageThread({
               </div>
             </div>
           ) : (
-            messages.map((message, index) => {
+            filteredMessages.map((message, index) => {
               const isOutgoing = message.isOutgoing === true
-              const isFirstInGroup = index === 0 || messages[index - 1].isOutgoing !== message.isOutgoing
-              const isLastInGroup = index === messages.length - 1 || messages[index + 1].isOutgoing !== message.isOutgoing
-              
+              const isFirstInGroup = index === 0 || filteredMessages[index - 1].isOutgoing !== message.isOutgoing
+              const isLastInGroup = index === filteredMessages.length - 1 || filteredMessages[index + 1].isOutgoing !== message.isOutgoing
+
               return (
                 <div
                   key={message.id || index}
@@ -110,19 +158,20 @@ export function MessageThread({
                       isFirstInGroup ? 'mt-4' : 'mt-1'
                     } ${isLastInGroup ? 'mb-2' : 'mb-1'}`}
                   >
-                    {/* Sender info if first in group */}
+                    {/* Sender info + channel icon if first in group */}
                     {isFirstInGroup && (
-                      <div className={`text-xs ${isOutgoing ? 'text-blue-200' : 'text-muted-foreground'} mb-1`}>
-                        {message.sender || (isOutgoing ? 'You' : leadName)}
+                      <div className={`flex items-center gap-1 text-xs ${isOutgoing ? 'text-blue-200' : 'text-muted-foreground'} mb-1`}>
+                        <ChannelIcon channel={message.channel} />
+                        <span>{message.sender || (isOutgoing ? 'You' : leadName)}</span>
                       </div>
                     )}
-                    
+
                     {/* Message content */}
                     <div className="text-sm whitespace-pre-wrap">{message.content}</div>
-                    
+
                     {/* Message timestamp */}
                     <div className={`text-xs mt-2 ${isOutgoing ? 'text-blue-200' : 'text-muted-foreground'} text-right`}>
-                      {message.creationDate 
+                      {message.creationDate
                         ? formatDistanceToNow(new Date(message.creationDate), { addSuffix: true })
                         : 'Recently'
                       }

@@ -311,7 +311,7 @@ export default function AnalyticsOverviewPage() {
         <ProgressCard
           title="Reply Rate"
           value={`${roundTo1Decimal(stats.responseRate)}%`}
-          subtitle={`${stats.messagesReplied} conversations replied`}
+          subtitle={`${stats.messagesReplied} conversations replied · all channels`}
           progress={Math.min(stats.responseRate, 100)}
           progressColor="blue"
           icon={<Icons.MessageCircle className="h-4 w-4" />}

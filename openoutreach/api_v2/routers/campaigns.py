@@ -1274,6 +1274,9 @@ async def get_campaign_analytics(
     conversions = 0
     errors = 0
 
+    _LI_MSG_TYPES = ["follow_up", "send_manual_message"]
+    _WA_MSG_TYPES = ["whatsapp_message", "whatsapp_follow_up"]
+
     if action_logs_collection is not None:
         connections_sent = action_logs_collection.count_documents({
             "campaign_id": campaign_id,
@@ -1283,7 +1286,7 @@ async def get_campaign_analytics(
         })
         messages_sent = action_logs_collection.count_documents({
             "campaign_id": campaign_id,
-            "action_type": "follow_up",
+            "action_type": {"$in": _LI_MSG_TYPES},
             "status": {"$nin": ["failed", "error"]},
             "created_at": {"$gte": since},
         })
@@ -1313,39 +1316,51 @@ async def get_campaign_analytics(
         })
 
     distinct_deals_messaged = 0
+    li_messages_sent = messages_sent
+    li_messages_replied = 0
+    li_distinct_messaged = 0
+    wa_messages_sent = 0
+    wa_messages_replied = 0
+    wa_distinct_messaged = 0
+
+    if action_logs_collection is not None:
+        wa_messages_sent = action_logs_collection.count_documents({
+            "campaign_id": campaign_id,
+            "action_type": {"$in": _WA_MSG_TYPES},
+            "status": {"$nin": ["failed", "error"]},
+            "created_at": {"$gte": since},
+        })
+
     if messages_collection is not None:
         try:
-            # Numerator: distinct deals with ≥1 inbound message
-            replied_pipeline = [
-                {"$match": {"is_outgoing": False, "creation_date": {"$gte": since}}},
-                {"$lookup": {"from": "deals", "localField": "deal_id", "foreignField": "_id", "as": "deal"}},
-                {"$unwind": "$deal"},
-                {"$match": {"deal.campaign_id": campaign_id}},
-                {"$group": {"_id": "$deal_id"}},
-                {"$count": "total"},
-            ]
-            result = list(messages_collection.aggregate(replied_pipeline))
-            messages_replied = result[0]["total"] if result else 0
+            def _agg_count(match_extra: Dict[str, Any]) -> int:
+                base: Dict[str, Any] = {"creation_date": {"$gte": since}}
+                base.update(match_extra)
+                pipeline = [
+                    {"$match": base},
+                    {"$lookup": {"from": "deals", "localField": "deal_id", "foreignField": "_id", "as": "deal"}},
+                    {"$unwind": "$deal"},
+                    {"$match": {"deal.campaign_id": campaign_id}},
+                    {"$group": {"_id": "$deal_id"}},
+                    {"$count": "total"},
+                ]
+                res = list(messages_collection.aggregate(pipeline))
+                return res[0]["total"] if res else 0
 
-            # Denominator: distinct deals that received ≥1 outgoing message (Fix #3)
-            messaged_pipeline = [
-                {"$match": {"is_outgoing": True, "creation_date": {"$gte": since}}},
-                {"$lookup": {"from": "deals", "localField": "deal_id", "foreignField": "_id", "as": "deal"}},
-                {"$unwind": "$deal"},
-                {"$match": {"deal.campaign_id": campaign_id}},
-                {"$group": {"_id": "$deal_id"}},
-                {"$count": "total"},
-            ]
-            result2 = list(messages_collection.aggregate(messaged_pipeline))
-            distinct_deals_messaged = result2[0]["total"] if result2 else 0
+            messages_replied = _agg_count({"is_outgoing": False})
+            distinct_deals_messaged = _agg_count({"is_outgoing": True})
+            li_messages_replied = _agg_count({"is_outgoing": False, "channel": "linkedin"})
+            li_distinct_messaged = _agg_count({"is_outgoing": True, "channel": "linkedin"})
+            wa_messages_replied = _agg_count({"is_outgoing": False, "channel": "whatsapp"})
+            wa_distinct_messaged = _agg_count({"is_outgoing": True, "channel": "whatsapp"})
         except Exception:
             pass
 
     connection_accept_rate = round((connections_accepted / connections_sent * 100), 2) if connections_sent else 0.0
-    # Response rate: distinct replies / distinct deals messaged (Fix #3)
     response_rate = round((messages_replied / distinct_deals_messaged * 100), 2) if distinct_deals_messaged else 0.0
-    # Conversion rate: all-time for campaign analytics — both sides unfiltered (Fix #5)
     conversion_rate = round((conversions / connections_accepted * 100), 2) if connections_accepted else 0.0
+    li_response_rate = round((li_messages_replied / li_distinct_messaged * 100), 2) if li_distinct_messaged else 0.0
+    wa_response_rate = round((wa_messages_replied / wa_distinct_messaged * 100), 2) if wa_distinct_messaged else 0.0
 
     # Pipeline counts
     pipeline_stats: Dict[str, int] = {}
@@ -1363,7 +1378,7 @@ async def get_campaign_analytics(
             "connections_sent": connections_sent,
             "connections_accepted": connections_accepted,
             "connection_accept_rate": connection_accept_rate,
-            "messages_sent": messages_sent,
+            "messages_sent": messages_sent + wa_messages_sent,
             "messages_replied": messages_replied,
             "responses": messages_replied,
             "response_rate": response_rate,
@@ -1371,6 +1386,21 @@ async def get_campaign_analytics(
             "conversion_rate": conversion_rate,
             "errors": errors,
             "rate_limit_warnings": 0,
+        },
+        "channels": {
+            "linkedin": {
+                "connections_sent": connections_sent,
+                "connections_accepted": connections_accepted,
+                "connection_accept_rate": connection_accept_rate,
+                "messages_sent": li_messages_sent,
+                "messages_replied": li_messages_replied,
+                "response_rate": li_response_rate,
+            },
+            "whatsapp": {
+                "messages_sent": wa_messages_sent,
+                "messages_replied": wa_messages_replied,
+                "response_rate": wa_response_rate,
+            },
         },
         "daily_breakdown": [],
         "pipeline": pipeline_stats,

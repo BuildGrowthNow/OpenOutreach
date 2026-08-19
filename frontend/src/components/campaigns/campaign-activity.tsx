@@ -7,11 +7,33 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Icons } from "@/lib/types/components";
+import { MessageCircle } from "lucide-react";
 import {
   getCampaignActivity,
   type ActivityEntry,
   type NextTask,
 } from "@/lib/api/dashboard";
+
+const WA_ACTION_TYPES = new Set(["whatsapp_message", "whatsapp_follow_up"]);
+const LI_ACTION_TYPES = new Set(["connect", "check_pending", "follow_up", "connect_skipped", "send_manual_message"]);
+
+function LinkedinIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-label="LinkedIn" role="img">
+      <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6zM2 9h4v12H2zm2-4a2 2 0 1 0 0 4 2 2 0 0 0 0-4z" />
+    </svg>
+  );
+}
+
+function ChannelIcon({ type }: { type: string }) {
+  if (WA_ACTION_TYPES.has(type)) {
+    return <MessageCircle className="h-3 w-3 shrink-0 text-emerald-400" aria-label="WhatsApp" />;
+  }
+  if (LI_ACTION_TYPES.has(type)) {
+    return <LinkedinIcon className="h-3 w-3 shrink-0 text-blue-400" />;
+  }
+  return null;
+}
 
 const TYPE_LABELS: Record<string, string> = {
   connect: "Connection Request",
@@ -24,6 +46,8 @@ const TYPE_LABELS: Record<string, string> = {
   lead_discovered: "Lead Discovered",
   lead_qualified: "Lead Qualified",
   lead_disqualified: "Lead Disqualified",
+  whatsapp_message: "WhatsApp Message",
+  whatsapp_follow_up: "WhatsApp Follow Up",
 };
 
 function formatActivityDescription(entry: ActivityEntry): string {
@@ -117,17 +141,20 @@ function ActivityItem({ entry }: { entry: ActivityEntry }) {
   return (
     <div className="flex items-center justify-between gap-3 py-2.5 px-3 rounded-md hover:bg-zinc-900/50 transition-colors">
       <div className="flex items-center gap-3 min-w-0">
-        <div
-          className={`h-2 w-2 rounded-full shrink-0 ${
-            entry.status === "completed"
-              ? "bg-emerald-500"
-              : entry.status === "running"
-                ? "bg-blue-500 animate-pulse"
-                : entry.status === "failed"
-                  ? "bg-red-500"
-                  : "bg-zinc-500"
-          }`}
-        />
+        <div className="flex items-center gap-1.5 shrink-0">
+          <div
+            className={`h-2 w-2 rounded-full ${
+              entry.status === "completed"
+                ? "bg-emerald-500"
+                : entry.status === "running"
+                  ? "bg-blue-500 animate-pulse"
+                  : entry.status === "failed"
+                    ? "bg-red-500"
+                    : "bg-zinc-500"
+            }`}
+          />
+          <ChannelIcon type={entry.type} />
+        </div>
         <div className="min-w-0">
           <p className="text-sm font-medium text-zinc-100 truncate">{description}</p>
           {entry.error ? (

@@ -56,6 +56,14 @@ import { CampaignActivity } from "@/components/campaigns/campaign-activity";
 import { DailyProgress } from "@/components/campaigns/daily-progress";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import {
   zincDialogContentClassName,
@@ -1093,6 +1101,13 @@ function CampaignAnalyticsCharts({ analytics }: { analytics: CampaignAnalyticsRe
   );
 }
 
+interface WAProfileOption {
+  id: string;
+  phone_number?: string;
+  display_name?: string;
+  status: string;
+}
+
 function CampaignSettingsForm({
   campaign,
   saving,
@@ -1115,6 +1130,23 @@ function CampaignSettingsForm({
   const [icpInput, setIcpInput] = useState("");
   const [targetCompanySize, setTargetCompanySize] = useState(getStr("targetCompanySize", "target_company_size"));
   const [followUpStrategy, setFollowUpStrategy] = useState(getStr("followUpStrategy", "follow_up_strategy"));
+  const [channelSequence, setChannelSequence] = useState<string[]>(() => {
+    const seq = getArr("channelSequence", "channel_sequence");
+    return seq.length ? seq : ["linkedin"];
+  });
+  const [waProfileId, setWaProfileId] = useState(getStr("whatsappProfileId", "whatsapp_profile_id"));
+  const [waProfiles, setWaProfiles] = useState<WAProfileOption[]>([]);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const { apiClient } = await import("@/lib/apiClientV2");
+        const res = await apiClient.get<{ profiles: WAProfileOption[] }>("/whatsapp/profiles");
+        if (res.data?.profiles) setWaProfiles(res.data.profiles.filter((p: WAProfileOption) => p.status === "connected"));
+      } catch { /* WA not configured */ }
+    };
+    void load();
+  }, []);
 
   useEffect(() => {
     const c2 = campaign as unknown as Record<string, unknown>;
@@ -1127,7 +1159,16 @@ function CampaignSettingsForm({
     setIcpTitles(a("icpTitles", "icp_titles"));
     setTargetCompanySize(s("targetCompanySize", "target_company_size"));
     setFollowUpStrategy(s("followUpStrategy", "follow_up_strategy"));
+    const seq = a("channelSequence", "channel_sequence");
+    setChannelSequence(seq.length ? seq : ["linkedin"]);
+    setWaProfileId(s("whatsappProfileId", "whatsapp_profile_id"));
   }, [campaign]);
+
+  const enableWA = channelSequence.includes("whatsapp");
+  const toggleWA = (on: boolean) => {
+    setChannelSequence(on ? ["linkedin", "whatsapp"] : ["linkedin"]);
+    if (!on) setWaProfileId("");
+  };
 
   const handleAddTitle = () => {
     const title = icpInput.trim();
@@ -1147,6 +1188,8 @@ function CampaignSettingsForm({
       icp_titles: icpTitles,
       target_company_size: targetCompanySize.trim() || undefined,
       follow_up_strategy: followUpStrategy.trim() || undefined,
+      channel_sequence: channelSequence,
+      whatsapp_profile_id: waProfileId || undefined,
     } as unknown as Partial<Campaign>);
   };
 
@@ -1289,6 +1332,67 @@ function CampaignSettingsForm({
               Leads who clearly work at companies outside this range (e.g. Google, Spotify) will be disqualified
             </p>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Channels</CardTitle>
+          <CardDescription>Configure outreach channels for this campaign</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label>LinkedIn</Label>
+              <p className="text-xs text-muted-foreground">Always enabled — primary outreach channel</p>
+            </div>
+            <Switch checked={true} disabled />
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label htmlFor="wa-toggle">WhatsApp</Label>
+              <p className="text-xs text-muted-foreground">Send follow-ups via WhatsApp when lead has a phone number</p>
+            </div>
+            <Switch
+              id="wa-toggle"
+              checked={enableWA}
+              onCheckedChange={toggleWA}
+              disabled={waProfiles.length === 0}
+            />
+          </div>
+
+          {enableWA && (
+            <div className="space-y-2 pt-1">
+              <Label htmlFor="wa-profile-select">WhatsApp Profile</Label>
+              {waProfiles.length === 0 ? (
+                <p className="text-xs text-muted-foreground">No connected WhatsApp profiles. Configure one in Settings.</p>
+              ) : (
+                <Select value={waProfileId} onValueChange={(v) => setWaProfileId(v ?? "")}>
+                  <SelectTrigger id="wa-profile-select">
+                    <SelectValue placeholder="Select a WhatsApp profile" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {waProfiles.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.display_name || p.phone_number || p.id}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+          )}
+
+          {waProfiles.length === 0 && !enableWA && (
+            <p className="text-xs text-muted-foreground">
+              No connected WhatsApp profiles found.{" "}
+              <a href="/settings?tab=whatsapp" className="underline text-blue-400 hover:text-blue-300">
+                Connect one in Settings
+              </a>{" "}
+              to enable WhatsApp outreach.
+            </p>
+          )}
         </CardContent>
       </Card>
 

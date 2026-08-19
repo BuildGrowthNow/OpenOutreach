@@ -155,12 +155,12 @@ const Header = ({ onMenuClick, className }: HeaderProps) => {
   }, [isAuthenticated])
 
   const getWaHealthStatus = () => {
-    if (!waProfiles.length) return null
+    if (!waProfiles.length) return { label: 'WhatsApp', color: 'bg-slate-500', tooltip: 'WhatsApp: Not configured' }
     const hasBanned = waProfiles.some((p) => p.status === 'banned')
-    if (hasBanned) return { label: 'WA Banned', color: 'bg-red-500' }
+    if (hasBanned) return { label: 'WA Banned', color: 'bg-red-500', tooltip: 'WhatsApp: Account banned' }
     const hasConnected = waProfiles.some((p) => p.status === 'connected')
-    if (hasConnected) return { label: 'WA Active', color: 'bg-green-500' }
-    return { label: 'WA Disconnected', color: 'bg-slate-500' }
+    if (hasConnected) return { label: 'WA Active', color: 'bg-green-500', tooltip: 'WhatsApp: Connected' }
+    return { label: 'WA Disconnected', color: 'bg-slate-500', tooltip: 'WhatsApp: Disconnected — scan QR to connect' }
   }
 
   const waStatus = getWaHealthStatus()
@@ -299,38 +299,36 @@ const Header = ({ onMenuClick, className }: HeaderProps) => {
               <span className="text-xs text-muted-foreground">Checking...</span>
             </div>
           ) : (
-            <>
+            <div className="flex items-center gap-1.5">
               <div
                 className="cursor-pointer hover:opacity-90 transition-opacity"
                 title={getTooltipContent()}
                 onClick={handleBadgeClick}
               >
                 <Badge variant="outline" className={cn(
-                  'gap-2 px-3 py-1 cursor-pointer',
+                  'gap-1.5 px-2.5 py-1 cursor-pointer',
                   healthStatus.color,
                   'text-white border-transparent'
                 )}>
-                  <span className="h-2 w-2 rounded-full bg-current" />
-                  {healthStatus.label}
+                  <svg viewBox="0 0 24 24" fill="currentColor" className="h-3 w-3" aria-label="LinkedIn" role="img"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6zM2 9h4v12H2zm2-4a2 2 0 1 0 0 4 2 2 0 0 0 0-4z" /></svg>
+                  <span className="hidden lg:inline">{healthStatus.label}</span>
                 </Badge>
               </div>
-              {waStatus && (
-                <div
-                  className="cursor-pointer hover:opacity-90 transition-opacity"
-                  title={`WhatsApp: ${waStatus.label}`}
-                  onClick={() => { window.location.href = '/settings?tab=whatsapp' }}
-                >
-                  <Badge variant="outline" className={cn(
-                    'gap-2 px-3 py-1 cursor-pointer',
-                    waStatus.color,
-                    'text-white border-transparent'
-                  )}>
-                    <MessageCircle className="h-3 w-3" />
-                    {waStatus.label}
-                  </Badge>
-                </div>
-              )}
-            </>
+              <div
+                className="cursor-pointer hover:opacity-90 transition-opacity"
+                title={waStatus.tooltip}
+                onClick={() => { window.location.href = '/settings?tab=whatsapp' }}
+              >
+                <Badge variant="outline" className={cn(
+                  'gap-1.5 px-2.5 py-1 cursor-pointer',
+                  waStatus.color,
+                  'text-white border-transparent'
+                )}>
+                  <MessageCircle className="h-3 w-3" />
+                  <span className="hidden lg:inline">{waStatus.label}</span>
+                </Badge>
+              </div>
+            </div>
           )}
         </div>
 
