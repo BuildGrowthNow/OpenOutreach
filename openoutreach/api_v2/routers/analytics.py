@@ -46,6 +46,8 @@ class OverviewStats(BaseModel):
     response_rate: float = Field(default=0.0, serialization_alias="responseRate")
     conversions: int = 0
     conversion_rate: float = Field(default=0.0, serialization_alias="conversionRate")
+    wa_connections_sent: int = Field(default=0, serialization_alias="waConnectionsSent")
+    wa_messages_sent: int = Field(default=0, serialization_alias="waMessagesSent")
 
 
 class OverviewTotals(BaseModel):
@@ -82,6 +84,8 @@ class CampaignStats(BaseModel):
     connection_accept_rate: float = Field(default=0.0, serialization_alias="connectionAcceptRate")
     response_rate: float = Field(default=0.0, serialization_alias="responseRate")
     conversion_rate: float = Field(default=0.0, serialization_alias="conversionRate")
+    wa_connections_sent: int = Field(default=0, serialization_alias="waConnectionsSent")
+    wa_messages_sent: int = Field(default=0, serialization_alias="waMessagesSent")
 
 
 class CampaignOverview(BaseModel):
@@ -156,6 +160,24 @@ def _get_action_logs_count(campaign_id: str, action_type: str, since: datetime) 
         })
     except Exception as e:
         logger.error(f"Failed to count action logs for type '{action_type}': {e}")
+        return 0
+
+
+def _get_action_logs_count_multi(
+    campaign_id: str, action_types: list[str], since: datetime
+) -> int:
+    action_logs_collection = get_mongodb_collection("action_logs")
+    if action_logs_collection is None:
+        return 0
+    try:
+        return action_logs_collection.count_documents({
+            "campaign_id": campaign_id,
+            "action_type": {"$in": action_types},
+            "status": {"$nin": ["failed", "error"]},
+            "created_at": {"$gte": since},
+        })
+    except Exception as e:
+        logger.error("Failed to count action logs for types %s: %s", action_types, e)
         return 0
 
 
@@ -409,6 +431,18 @@ async def get_analytics_overview(
         "status": {"$nin": ["failed", "error"]},
         "created_at": {"$gte": since}
     })
+    total_wa_connections_sent = action_logs_collection.count_documents({
+        "campaign_id": {"$in": campaign_ids},
+        "action_type": "whatsapp_message",
+        "status": {"$nin": ["failed", "error"]},
+        "created_at": {"$gte": since},
+    })
+    total_wa_messages_sent = action_logs_collection.count_documents({
+        "campaign_id": {"$in": campaign_ids},
+        "action_type": {"$in": ["whatsapp_message", "whatsapp_follow_up"]},
+        "status": {"$nin": ["failed", "error"]},
+        "created_at": {"$gte": since},
+    })
 
     # Calculate messages replied (distinct deals with inbound messages)
     messages_collection = get_mongodb_collection("chat_messages")
@@ -474,6 +508,10 @@ async def get_analytics_overview(
         connections_sent = _get_action_logs_count(campaign._id, "connect", since)
         connections_accepted = _get_connections_accepted_count(campaign._id, since)
         messages_sent = _get_action_logs_count(campaign._id, "follow_up", since)
+        wa_connections_sent = _get_action_logs_count(campaign._id, "whatsapp_message", since)
+        wa_messages_sent = _get_action_logs_count_multi(
+            campaign._id, ["whatsapp_message", "whatsapp_follow_up"], since
+        )
         messages_replied = _get_messages_replied_count(campaign._id, since)
         distinct_deals_messaged = _get_distinct_deals_messaged_count(campaign._id, since)
         conversions = deals_collection.count_documents({
@@ -513,6 +551,8 @@ async def get_analytics_overview(
                     connection_accept_rate=campaign_connection_rate,
                     response_rate=campaign_response_rate,
                     conversion_rate=campaign_conversion_rate,
+                    wa_connections_sent=wa_connections_sent,
+                    wa_messages_sent=wa_messages_sent,
                 )
             )
         )
@@ -539,6 +579,8 @@ async def get_analytics_overview(
         response_rate=response_rate,
         conversions=total_conversions,
         conversion_rate=conversion_rate,
+        wa_connections_sent=total_wa_connections_sent,
+        wa_messages_sent=total_wa_messages_sent,
     )
 
     # When a specific campaign is selected, scope total_leads to that campaign's deals (Fix #4)
