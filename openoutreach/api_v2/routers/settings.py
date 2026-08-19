@@ -21,6 +21,13 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Settings"])
 
 
+def _wa_active_days_str(config: SiteConfig) -> str:
+    days = getattr(config, "wa_active_days", None)
+    if isinstance(days, list):
+        return ",".join(map(str, days))
+    return days or "1,2,3,4,5,6,7"
+
+
 def _get_linkedin_profile_info(user_id: str) -> tuple[str, str]:
     """Return (username, first_campaign_name) for the user's first active LinkedIn profile."""
     username = ""
@@ -113,6 +120,13 @@ async def get_settings(
         "finder": {
             "apiKey": config.finder_api_key or "",
             "bettercontactApiKey": config.bettercontact_api_key or "",
+        },
+        "whatsapp": {
+            "dailyLimit": getattr(config, "wa_daily_limit", 20),
+            "enableActiveHours": getattr(config, "wa_enable_active_hours", False),
+            "activeStartHour": getattr(config, "wa_active_start_hour", 8),
+            "activeEndHour": getattr(config, "wa_active_end_hour", 21),
+            "activeDays": _wa_active_days_str(config),
         },
     }
 

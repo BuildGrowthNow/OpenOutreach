@@ -26,6 +26,7 @@ import RateLimitForm from "@/components/settings/rate-limit-form";
 import LlmSettingsForm from "@/components/settings/llm-settings-form";
 import ActiveHoursForm from "@/components/settings/active-hours-form";
 import { WhatsappConnectionTab } from "@/components/settings/whatsapp-connection-tab";
+import WhatsappSettingsForm from "@/components/settings/whatsapp-settings-form";
 
 function SettingsLoadingSkeleton() {
   return (
@@ -326,6 +327,12 @@ export default function SettingsPage() {
 
         <TabsContent value="whatsapp" className="space-y-6">
           <WhatsappConnectionTab />
+          {settings.whatsapp && (
+            <WhatsappSettingsForm
+              initialData={settings.whatsapp}
+              onSuccess={handleSettingsUpdate}
+            />
+          )}
         </TabsContent>
 
         <TabsContent value="billing" className="space-y-6">

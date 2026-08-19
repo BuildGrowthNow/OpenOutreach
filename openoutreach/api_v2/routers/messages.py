@@ -54,6 +54,7 @@ async def list_messages(
     user_id: str = Depends(get_current_user),
     campaign_id: Optional[str] = None,
     deal_id: Optional[str] = None,
+    lead_id: Optional[str] = None,
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
 ):
@@ -71,7 +72,34 @@ async def list_messages(
     # Build query
     query = {}
 
-    if deal_id:
+    if lead_id:
+        # Return all messages across every deal belonging to this lead,
+        # as long as the lead's deals belong to campaigns the user can access.
+        deals_collection = get_mongodb_collection("deals")
+        if deals_collection is None:
+            raise HTTPException(status_code=503, detail="Database unavailable")
+        campaigns_collection = get_mongodb_collection("campaigns")
+        if campaigns_collection is None:
+            raise HTTPException(status_code=503, detail="Database unavailable")
+        accessible_campaign_ids = [
+            str(c["_id"])
+            for c in campaigns_collection.find(
+                {"$or": [{"user_id": user_id}, {"team_member_ids": user_id}]},
+                {"_id": 1},
+            )
+        ]
+        lead_deal_ids = [
+            str(d["_id"])
+            for d in deals_collection.find(
+                {"lead_id": lead_id, "campaign_id": {"$in": accessible_campaign_ids}},
+                {"_id": 1},
+            )
+        ]
+        if not lead_deal_ids:
+            return {"data": [], "pagination": {"total": 0, "limit": limit, "offset": offset, "has_more": False}}
+        query["deal_id"] = {"$in": lead_deal_ids}
+
+    elif deal_id:
         # Verify deal access via campaign
         deal = models.Deal.get(deal_id)
         if not deal:

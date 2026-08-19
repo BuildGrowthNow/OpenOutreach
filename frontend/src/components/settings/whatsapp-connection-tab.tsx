@@ -16,6 +16,7 @@ import {
   createWhatsAppProfile,
   deleteWhatsAppProfile,
   getQrUrl,
+  resetQr,
   type WhatsAppProfile,
 } from "@/lib/api/whatsapp";
 import { MessageCircle, Phone, Trash2, RefreshCw } from "lucide-react";
@@ -35,58 +36,84 @@ const STATUS_VARIANTS: Record<string, "default" | "secondary" | "destructive"> =
 function QrPoller({ profileId, onConnected }: { profileId: string; onConnected: () => void }) {
   const [qrSrc, setQrSrc] = useState<string | null>(null);
   const [timedOut, setTimedOut] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const deadlineRef = useRef(Date.now() + 120_000);
   const token = useAuthStore((state) => state.token);
 
-  const poll = useCallback(async () => {
-    if (Date.now() > deadlineRef.current) {
-      setTimedOut(true);
-      if (intervalRef.current) clearInterval(intervalRef.current);
-      return;
+  const stopPolling = () => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
     }
-    try {
-      const url = getQrUrl(profileId);
-      const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
-      const res = await fetch(`${url}?t=${Date.now()}`, { headers });
-      if (res.status === 202) {
-        // Daemon still generating QR — extend deadline to avoid premature timeout
-        deadlineRef.current = Math.max(deadlineRef.current, Date.now() + 30_000);
+  };
+
+  const startPolling = useCallback(() => {
+    stopPolling();
+    deadlineRef.current = Date.now() + 120_000;
+    setTimedOut(false);
+    setQrSrc(null);
+
+    const doPoll = async () => {
+      if (Date.now() > deadlineRef.current) {
+        setTimedOut(true);
+        stopPolling();
         return;
       }
-      if (res.ok) {
-        const contentType = res.headers.get("content-type") ?? "";
-        if (contentType.includes("image")) {
-          const blob = await res.blob();
-          setQrSrc(URL.createObjectURL(blob));
-        } else {
-          // JSON 200 → already connected (status: "connected")
-          onConnected();
-          if (intervalRef.current) clearInterval(intervalRef.current);
+      try {
+        const url = getQrUrl(profileId);
+        const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
+        const res = await fetch(`${url}?t=${Date.now()}`, { headers });
+        if (res.status === 202) {
+          deadlineRef.current = Math.max(deadlineRef.current, Date.now() + 30_000);
+          return;
         }
+        if (res.ok) {
+          const contentType = res.headers.get("content-type") ?? "";
+          if (contentType.includes("image")) {
+            const blob = await res.blob();
+            setQrSrc(URL.createObjectURL(blob));
+          } else {
+            onConnected();
+            stopPolling();
+          }
+        }
+        if (res.status === 404) stopPolling();
+      } catch {
+        // transient error — keep polling
       }
-      // 404 = profile not found — stop polling to avoid infinite loop
-      if (res.status === 404) {
-        if (intervalRef.current) clearInterval(intervalRef.current);
-      }
-    } catch {
-      // transient error — keep polling
-    }
+    };
+
+    void doPoll();
+    intervalRef.current = setInterval(doPoll, 2000);
   }, [profileId, onConnected, token]);
 
   useEffect(() => {
-    poll();
-    intervalRef.current = setInterval(poll, 2000);
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-  }, [poll]);
+    startPolling();
+    return stopPolling;
+  }, [startPolling]);
+
+  const handleRefresh = async () => {
+    setResetting(true);
+    try {
+      await resetQr(profileId);
+    } catch {
+      // best-effort — daemon will regenerate anyway
+    } finally {
+      setResetting(false);
+    }
+    startPolling();
+  };
 
   if (timedOut) {
     return (
-      <p className="text-sm text-muted-foreground">
-        QR code expired. Delete this profile and try again.
-      </p>
+      <div className="space-y-2">
+        <p className="text-sm text-muted-foreground">QR code expired.</p>
+        <Button variant="outline" size="sm" onClick={() => void handleRefresh()} disabled={resetting}>
+          {resetting ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+          Refresh QR
+        </Button>
+      </div>
     );
   }
 

@@ -107,6 +107,21 @@ async def delete_profile(
     WhatsAppProfile.delete(profile_id)
 
 
+@router.post("/qr/{profile_id}/reset", status_code=204)
+async def reset_qr(
+    profile_id: str,
+    user_id: str = Depends(get_current_user),
+):
+    """Clear the stored QR so the daemon regenerates it on the next poll cycle."""
+    profile = WhatsAppProfile.get(profile_id)
+    if not profile or profile.user_id != user_id:
+        raise HTTPException(status_code=404, detail="WhatsApp profile not found")
+    if profile.status == STATUS_CONNECTED:
+        raise HTTPException(status_code=400, detail="Profile already connected")
+    profile.qr_png_b64 = None
+    profile.save(update_fields=["qr_png_b64"])
+
+
 @router.get("/qr/{profile_id}")
 async def get_qr(
     profile_id: str,

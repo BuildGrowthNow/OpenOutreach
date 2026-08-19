@@ -18,7 +18,8 @@ import { Badge } from '@/components/ui/badge'
 import { useEffect, useState } from 'react'
 import { getLinkedInProfileHealth } from '@/lib/api/dashboard'
 import { LinkedInProfileHealthResponse } from '@/lib/types/components'
-import { AlertCircle } from 'lucide-react'
+import { AlertCircle, MessageCircle } from 'lucide-react'
+import { listWhatsAppProfiles, type WhatsAppProfile } from '@/lib/api/whatsapp'
 import { getNotificationSummary, markNotificationAsRead, Notification } from '@/lib/api/notifications'
 import { ProfileSwitcher } from './profile-switcher'
 
@@ -36,6 +37,7 @@ const Header = ({ onMenuClick, className }: HeaderProps) => {
   const [linkedinHealth, setLinkedinHealth] = useState<LinkedInProfileHealthResponse | null>(null)
   const [loadingHealth, setLoadingHealth] = useState(true)
   const [isDesktop, setIsDesktop] = useState(false)
+  const [waProfiles, setWaProfiles] = useState<WhatsAppProfile[]>([])
 
   useEffect(() => {
     setIsDesktop(!!(window as unknown as Record<string, unknown>)['__LENGROWTH_DESKTOP__'])
@@ -137,18 +139,31 @@ const Header = ({ onMenuClick, className }: HeaderProps) => {
     if (isAuthenticated) {
       (async () => {
         try {
-          const response = await getLinkedInProfileHealth()
-          if (response.data) {
-            setLinkedinHealth(response.data)
-          }
+          const [healthRes, waRes] = await Promise.all([
+            getLinkedInProfileHealth(),
+            listWhatsAppProfiles().catch(() => [] as WhatsAppProfile[]),
+          ])
+          if (healthRes.data) setLinkedinHealth(healthRes.data)
+          setWaProfiles(waRes)
         } catch (error) {
-          console.error('Failed to fetch LinkedIn profile health:', error)
+          console.error('Failed to fetch profile health:', error)
         } finally {
           setLoadingHealth(false)
         }
       })()
     }
   }, [isAuthenticated])
+
+  const getWaHealthStatus = () => {
+    if (!waProfiles.length) return null
+    const hasBanned = waProfiles.some((p) => p.status === 'banned')
+    if (hasBanned) return { label: 'WA Banned', color: 'bg-red-500' }
+    const hasConnected = waProfiles.some((p) => p.status === 'connected')
+    if (hasConnected) return { label: 'WA Active', color: 'bg-green-500' }
+    return { label: 'WA Disconnected', color: 'bg-slate-500' }
+  }
+
+  const waStatus = getWaHealthStatus()
 
   // Fetch notifications on mount and when auth status changes
   useEffect(() => {
@@ -284,20 +299,38 @@ const Header = ({ onMenuClick, className }: HeaderProps) => {
               <span className="text-xs text-muted-foreground">Checking...</span>
             </div>
           ) : (
-            <div
-              className="cursor-pointer hover:opacity-90 transition-opacity"
-              title={getTooltipContent()}
-              onClick={handleBadgeClick}
-            >
-              <Badge variant="outline" className={cn(
-                'gap-2 px-3 py-1 cursor-pointer',
-                healthStatus.color,
-                'text-white border-transparent'
-              )}>
-                <span className="h-2 w-2 rounded-full bg-current" />
-                {healthStatus.label}
-              </Badge>
-            </div>
+            <>
+              <div
+                className="cursor-pointer hover:opacity-90 transition-opacity"
+                title={getTooltipContent()}
+                onClick={handleBadgeClick}
+              >
+                <Badge variant="outline" className={cn(
+                  'gap-2 px-3 py-1 cursor-pointer',
+                  healthStatus.color,
+                  'text-white border-transparent'
+                )}>
+                  <span className="h-2 w-2 rounded-full bg-current" />
+                  {healthStatus.label}
+                </Badge>
+              </div>
+              {waStatus && (
+                <div
+                  className="cursor-pointer hover:opacity-90 transition-opacity"
+                  title={`WhatsApp: ${waStatus.label}`}
+                  onClick={() => { window.location.href = '/settings?tab=whatsapp' }}
+                >
+                  <Badge variant="outline" className={cn(
+                    'gap-2 px-3 py-1 cursor-pointer',
+                    waStatus.color,
+                    'text-white border-transparent'
+                  )}>
+                    <MessageCircle className="h-3 w-3" />
+                    {waStatus.label}
+                  </Badge>
+                </div>
+              )}
+            </>
           )}
         </div>
 

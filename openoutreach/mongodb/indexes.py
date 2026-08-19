@@ -97,6 +97,7 @@ def ensure_all_indexes():
             ({'deal_id': 1, 'creation_date': -1}, {'name': 'message_deal_time_idx'}),
             ({'deal_id': 1, 'linkedin_urn': 1}, {'name': 'message_deal_urn_unique', 'unique': True}),
             ({'is_outgoing': 1, 'creation_date': -1}, {'name': 'message_direction_time_idx'}),
+            ({'wa_msg_hash': 1}, {'name': 'message_wa_hash_idx', 'unique': True, 'sparse': True}),
         ]),
 
         # Notifications

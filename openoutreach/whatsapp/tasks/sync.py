@@ -217,9 +217,12 @@ def handle_whatsapp_sync(task, wa_session, qualifiers):  # noqa: ARG001
                 continue
 
             is_outgoing = bool(raw.get("is_outgoing", False))
-            # Use the timestamp from the DOM when parseable; fall back to now.
             ts = _parse_wa_timestamp(raw.get("ts_text") or "")
             creation_date = ts if ts is not None else datetime.now(timezone.utc)
+
+            wa_hash = ChatMessage.compute_wa_hash(str(deal._id), is_outgoing, content)
+            if messages_col.find_one({"wa_msg_hash": wa_hash}):
+                continue
 
             msg = ChatMessage(
                 deal_id=str(deal._id),
@@ -228,6 +231,7 @@ def handle_whatsapp_sync(task, wa_session, qualifiers):  # noqa: ARG001
                 creation_date=creation_date,
                 user_id=deal.user_id,
                 channel="whatsapp",
+                wa_msg_hash=wa_hash,
             )
             msg.save()
             new_messages.append(msg)

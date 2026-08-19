@@ -5,6 +5,7 @@ This module contains all the missing MongoDB models needed to complete Phase 1.
 These models follow the same pattern as the existing models in models.py.
 """
 
+import hashlib
 import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -33,6 +34,7 @@ class ChatMessage:
         creation_date: Optional[datetime] = None,
         user_id: Optional[str] = None,
         channel: str = "linkedin",
+        wa_msg_hash: Optional[str] = None,
     ):
         self._id = _id or str(uuid4())
         self.deal_id = deal_id
@@ -43,9 +45,16 @@ class ChatMessage:
         self.creation_date = creation_date or datetime.now(timezone.utc)
         self.user_id = user_id
         self.channel = channel
+        self.wa_msg_hash = wa_msg_hash
+
+    @staticmethod
+    def compute_wa_hash(deal_id: str, is_outgoing: bool, content: str) -> str:
+        """SHA-256 of deal+direction+content. Used to deduplicate WA messages."""
+        raw = f"{deal_id}|{is_outgoing}|{content.strip()}"
+        return hashlib.sha256(raw.encode()).hexdigest()
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        d: Dict[str, Any] = {
             "_id": self._id,
             "deal_id": self.deal_id,
             "content": self.content,
@@ -56,6 +65,9 @@ class ChatMessage:
             "user_id": self.user_id,
             "channel": self.channel,
         }
+        if self.wa_msg_hash is not None:
+            d["wa_msg_hash"] = self.wa_msg_hash
+        return d
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "ChatMessage":
@@ -69,6 +81,7 @@ class ChatMessage:
             creation_date=data.get("creation_date"),
             user_id=data.get("user_id"),
             channel=data.get("channel", "linkedin"),
+            wa_msg_hash=data.get("wa_msg_hash"),
         )
 
     def save(self) -> str:

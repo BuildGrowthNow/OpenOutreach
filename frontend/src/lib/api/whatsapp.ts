@@ -32,3 +32,7 @@ export async function deleteWhatsAppProfile(profileId: string): Promise<void> {
 export function getQrUrl(profileId: string): string {
   return `/api/whatsapp/qr/${profileId}`;
 }
+
+export async function resetQr(profileId: string): Promise<void> {
+  await apiClient.post(`/whatsapp/qr/${profileId}/reset`, {});
+}

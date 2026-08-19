@@ -41,6 +41,11 @@ class SiteConfigResponse(BaseModel):
     bettercontact_api_key: str = Field(default="", description="BetterContact API key")
     contacts_api_token: str = Field(default="", description="Contacts API token")
     contacts_api_url: str = Field(default="", description="Contacts API URL")
+    wa_daily_limit: int = Field(default=20, ge=0, description="WhatsApp daily message limit")
+    wa_enable_active_hours: bool = Field(default=False, description="Enable WhatsApp-specific active hours")
+    wa_active_start_hour: int = Field(default=8, ge=0, le=23, description="WhatsApp active hours start (0-23)")
+    wa_active_end_hour: int = Field(default=21, ge=0, le=23, description="WhatsApp active hours end (0-23)")
+    wa_active_days: str = Field(default="1,2,3,4,5,6,7", description="Comma-separated active days for WhatsApp (1=Monday, 7=Sunday)")
 
     class Config:
         json_schema_extra = {
@@ -95,6 +100,11 @@ class SiteConfigUpdate(BaseModel):
     bettercontact_api_key: Optional[str] = Field(None, description="Update BetterContact API key")
     contacts_api_token: Optional[str] = Field(None, description="Update Contacts API token")
     contacts_api_url: Optional[str] = Field(None, description="Update Contacts API URL")
+    wa_daily_limit: Optional[int] = Field(None, ge=0, description="Update WhatsApp daily message limit")
+    wa_enable_active_hours: Optional[bool] = Field(None, description="Update WhatsApp active hours toggle")
+    wa_active_start_hour: Optional[int] = Field(None, ge=0, le=23, description="Update WhatsApp active hours start")
+    wa_active_end_hour: Optional[int] = Field(None, ge=0, le=23, description="Update WhatsApp active hours end")
+    wa_active_days: Optional[str] = Field(None, description="Update WhatsApp active days (comma-separated)")
 
     @model_validator(mode="before")
     @classmethod
@@ -159,6 +169,19 @@ class SiteConfigUpdate(BaseModel):
             data.setdefault("linkedin_username", lp["username"])
         if lp.get("campaign") is not None:
             data.setdefault("linkedin_campaign", lp["campaign"])
+
+        # whatsapp sub-object
+        wa = data.pop("whatsapp", None) or {}
+        if wa.get("dailyLimit") is not None:
+            data.setdefault("wa_daily_limit", wa["dailyLimit"])
+        if wa.get("enableActiveHours") is not None:
+            data.setdefault("wa_enable_active_hours", wa["enableActiveHours"])
+        if wa.get("activeStartHour") is not None:
+            data.setdefault("wa_active_start_hour", wa["activeStartHour"])
+        if wa.get("activeEndHour") is not None:
+            data.setdefault("wa_active_end_hour", wa["activeEndHour"])
+        if wa.get("activeDays") is not None:
+            data.setdefault("wa_active_days", wa["activeDays"])
 
         return data
 

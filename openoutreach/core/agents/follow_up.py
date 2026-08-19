@@ -190,7 +190,7 @@ def _load_recent_messages(deal, limit: int = RECENT_MESSAGES_WINDOW) -> list:
     return list(reversed(messages))
 
 
-def _render_system_prompt(session, deal, recent_messages: list) -> str:
+def _render_system_prompt(session, deal, recent_messages: list, channel: str = "linkedin") -> str:
     """Render the agent system prompt from the Jinja2 template."""
     from datetime import datetime, timezone as tz
     from openoutreach.mongodb.models import Campaign
@@ -218,6 +218,7 @@ def _render_system_prompt(session, deal, recent_messages: list) -> str:
     now = datetime.now(tz.utc)
     return template.render(
         self_name=self_name,
+        channel=channel,
         contact_email=session.linkedin_profile.linkedin_username,
         product_pitch=campaign.product_pitch or "",
         campaign_objective=campaign.campaign_objective or "",

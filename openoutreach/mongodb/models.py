@@ -4009,6 +4009,10 @@ class SiteConfig:
         ai_say_rules: str = "",
         ai_avoid_rules: str = "",
         wa_daily_limit: int = 20,
+        wa_enable_active_hours: bool = False,
+        wa_active_start_hour: int = 8,
+        wa_active_end_hour: int = 21,
+        wa_active_days: Optional[List[int]] = None,
     ):
         self._id = _id or str(uuid4())
         self.user_id = user_id
@@ -4037,6 +4041,10 @@ class SiteConfig:
         self.ai_say_rules = ai_say_rules
         self.ai_avoid_rules = ai_avoid_rules
         self.wa_daily_limit = wa_daily_limit
+        self.wa_enable_active_hours = wa_enable_active_hours
+        self.wa_active_start_hour = wa_active_start_hour
+        self.wa_active_end_hour = wa_active_end_hour
+        self.wa_active_days = wa_active_days if wa_active_days is not None else [1, 2, 3, 4, 5, 6, 7]
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert model instance to dictionary for MongoDB storage."""
@@ -4068,6 +4076,10 @@ class SiteConfig:
             "ai_say_rules": self.ai_say_rules,
             "ai_avoid_rules": self.ai_avoid_rules,
             "wa_daily_limit": self.wa_daily_limit,
+            "wa_enable_active_hours": self.wa_enable_active_hours,
+            "wa_active_start_hour": self.wa_active_start_hour,
+            "wa_active_end_hour": self.wa_active_end_hour,
+            "wa_active_days": self.wa_active_days,
         }
         return data
 
@@ -4102,6 +4114,10 @@ class SiteConfig:
             ai_say_rules=data.get("ai_say_rules", ""),
             ai_avoid_rules=data.get("ai_avoid_rules", ""),
             wa_daily_limit=data.get("wa_daily_limit", 20),
+            wa_enable_active_hours=data.get("wa_enable_active_hours", False),
+            wa_active_start_hour=data.get("wa_active_start_hour", 8),
+            wa_active_end_hour=data.get("wa_active_end_hour", 21),
+            wa_active_days=data.get("wa_active_days"),
         )
 
     def save(self) -> str:

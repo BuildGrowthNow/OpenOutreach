@@ -727,6 +727,13 @@ export interface Settings {
     username: string;
     campaign: string;
   };
+  whatsapp?: {
+    dailyLimit: number;
+    enableActiveHours: boolean;
+    activeStartHour: number;
+    activeEndHour: number;
+    activeDays: string;
+  };
 }
 
 export async function getSettings(): Promise<ApiResponse<Settings>> {
@@ -739,6 +746,7 @@ export async function updateSettings(
     rateLimits?: Partial<Settings["rateLimits"]>;
     activeHours?: Partial<Settings["activeHours"]>;
     linkedinProfile?: Partial<Settings["linkedinProfile"]>;
+    whatsapp?: Partial<NonNullable<Settings["whatsapp"]>>;
   }>,
 ): Promise<ApiResponse<Settings>> {
   return patch("/api/settings", data);

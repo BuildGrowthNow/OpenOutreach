@@ -232,8 +232,11 @@ function ThreadModal({
                     }`}
                   >
                     {!prevSameDir && (
-                      <p className={`text-xs mb-1 ${isOut ? "text-blue-200" : "text-zinc-400"}`}>
+                      <p className={`text-xs mb-1 flex items-center gap-1.5 ${isOut ? "text-blue-200" : "text-zinc-400"}`}>
                         {isOut ? "You" : (msg.senderName || message.recipientName || "Lead")}
+                        {msg.channel === "whatsapp" && (
+                          <Smartphone className="h-3 w-3 text-green-400 shrink-0" />
+                        )}
                       </p>
                     )}
                     <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
@@ -373,11 +376,22 @@ const MessagesPage = () => {
     }
   }, [campaignFilter, currentPage]);
 
-  const fetchThread = useCallback(async (dealId: string) => {
+  const fetchThread = useCallback(async (dealId: string, leadId?: string | null) => {
     try {
       setThreadLoading(true);
-      const response = await getMessages(undefined, dealId);
-      if (response.data) setThreadMessages((response.data.data || []).slice().reverse());
+      const response = leadId
+        ? await getMessages(undefined, undefined, leadId, 1, 100)
+        : await getMessages(undefined, dealId);
+      if (response.data) {
+        const sorted = (response.data.data || [])
+          .slice()
+          .sort((a, b) => {
+            const ta = a.creationDate ? new Date(a.creationDate).getTime() : 0;
+            const tb = b.creationDate ? new Date(b.creationDate).getTime() : 0;
+            return ta - tb;
+          });
+        setThreadMessages(sorted);
+      }
     } catch (err) {
       console.error("Error fetching thread:", err);
     } finally {
@@ -403,7 +417,7 @@ const MessagesPage = () => {
   const openThread = (message: Message) => {
     setSelectedMessage(message);
     setThreadMessages([]);
-    void fetchThread(message.dealId);
+    void fetchThread(message.dealId, message.leadId);
   };
 
   const closeThread = () => {

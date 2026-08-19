@@ -10,6 +10,33 @@ from openoutreach.mongodb.connection import get_mongodb_collection
 logger = logging.getLogger(__name__)
 
 
+def _wa_is_active_now(config) -> bool:
+    """Return True if current time is within WA-specific active hours (when enabled)."""
+    if not getattr(config, "wa_enable_active_hours", False):
+        return True
+    from datetime import datetime, timezone
+    import pytz
+    tz_name = getattr(config, "active_timezone", "UTC") or "UTC"
+    try:
+        tz = pytz.timezone(tz_name)
+    except Exception:
+        tz = pytz.utc
+    now = datetime.now(timezone.utc).astimezone(tz)
+    start = getattr(config, "wa_active_start_hour", 8)
+    end = getattr(config, "wa_active_end_hour", 21)
+    wa_days = getattr(config, "wa_active_days", None)
+    if isinstance(wa_days, list):
+        active_days = wa_days
+    elif isinstance(wa_days, str):
+        active_days = [int(d) for d in wa_days.split(",") if d.strip().isdigit()]
+    else:
+        active_days = list(range(1, 8))
+    isoweekday = now.isoweekday()  # 1=Monday … 7=Sunday
+    if active_days and isoweekday not in active_days:
+        return False
+    return start <= now.hour < end
+
+
 def handle_whatsapp_follow_up(task, wa_session, qualifiers):  # noqa: ARG001
     """Run AI follow-up for one eligible CONNECTED WhatsApp deal.
 
@@ -26,6 +53,13 @@ def handle_whatsapp_follow_up(task, wa_session, qualifiers):  # noqa: ARG001
     )
     from openoutreach.core.llm import get_llm_model, run_agent_sync
     from pydantic_ai import Agent
+
+    from openoutreach.mongodb.models import SiteConfig
+    wa_profile = wa_session.wa_profile
+    config = SiteConfig.load(user_id=wa_profile.user_id)
+    if not _wa_is_active_now(config):
+        logger.debug("WA follow_up: outside WA active hours — skipping")
+        return
 
     campaign_id = task.payload["campaign_id"]
     campaign = Campaign.get(campaign_id)
@@ -77,7 +111,7 @@ def handle_whatsapp_follow_up(task, wa_session, qualifiers):  # noqa: ARG001
 
     session_like = _MinimalSession()
     recent = _load_recent_messages(deal)
-    system_prompt = _render_system_prompt(session_like, deal, recent)
+    system_prompt = _render_system_prompt(session_like, deal, recent, channel="whatsapp")
 
     agent = Agent(
         get_llm_model(user_id=session_like.user_id),
