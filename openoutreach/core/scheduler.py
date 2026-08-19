@@ -836,10 +836,16 @@ def plan_whatsapp_window(campaign, whatsapp_profile_id: str, user_id: str) -> in
     if deals_col is None:
         return 0
 
+    from openoutreach.whatsapp.tasks.send_message import MAX_WA_MESSAGE_ATTEMPTS
+
     eligible = deals_col.count_documents({
         "campaign_id": campaign.pk,
         "state": "Qualified",
         "active_channel": "whatsapp",
+        "$or": [
+            {"connect_attempts": {"$exists": False}},
+            {"connect_attempts": {"$lt": MAX_WA_MESSAGE_ATTEMPTS}},
+        ],
     })
     if eligible == 0:
         return 0

@@ -9,6 +9,19 @@ from openoutreach.mongodb.connection import get_mongodb_collection
 
 logger = logging.getLogger(__name__)
 
+MAX_WA_MESSAGE_ATTEMPTS = 3
+
+
+def _handle_send_failure(deal, *, banned: bool) -> None:
+    if banned:
+        return
+    from openoutreach.mongodb.models import Deal
+    deal.connect_attempts += 1
+    if deal.connect_attempts >= MAX_WA_MESSAGE_ATTEMPTS:
+        deal.state = Deal.DealState.FAILED
+        deal.reason = f"WA send failed after {deal.connect_attempts} attempts"
+    deal.save()
+
 
 def _substitute_template(template: str, lead) -> str:
     """Replace {name}, {first_name}, {last_name}, {company} placeholders."""
@@ -93,14 +106,21 @@ def handle_whatsapp_message(task, wa_session, qualifiers):  # noqa: ARG001
             logger.warning(
                 "WA send_message [%s]: send failed for lead %s", campaign, lead.phone
             )
-            # Check for ban — mark profile accordingly so the daemon can pause WA
-            if wa_session.detect_ban():
+            banned = wa_session.detect_ban()
+            if banned:
                 from openoutreach.whatsapp.models.profile import STATUS_BANNED
                 wa_session.wa_profile.status = STATUS_BANNED
                 wa_session.wa_profile.save(update_fields=["status"])
                 logger.error(
                     "WA send_message: profile %s appears BANNED — marking and halting",
                     wa_session.wa_profile,
+                )
+                return
+            _handle_send_failure(deal, banned=False)
+            if deal.state == Deal.DealState.FAILED:
+                logger.warning(
+                    "WA send_message [%s]: deal %s exhausted after %d attempts — marking FAILED",
+                    campaign, deal._id, deal.connect_attempts,
                 )
             return
 
