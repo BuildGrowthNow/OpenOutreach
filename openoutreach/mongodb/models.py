@@ -50,6 +50,7 @@ class Lead:
         update_date: Optional[datetime] = None,
         phone: Optional[str] = None,
         phone_source: Optional[str] = None,
+        phone_on_whatsapp: Optional[bool] = None,
         full_name: Optional[str] = None,
         company: Optional[str] = None,
         headline: Optional[str] = None,
@@ -70,6 +71,7 @@ class Lead:
         self.update_date = update_date or datetime.now(tz.utc)
         self.phone = phone
         self.phone_source = phone_source
+        self.phone_on_whatsapp = phone_on_whatsapp  # None=unknown, True=registered, False=not on WA
         self.full_name = full_name
         self.company = company
         self.headline = headline
@@ -104,6 +106,8 @@ class Lead:
             data["phone"] = self.phone
         if self.phone_source is not None:
             data["phone_source"] = self.phone_source
+        if self.phone_on_whatsapp is not None:
+            data["phone_on_whatsapp"] = self.phone_on_whatsapp
         if self.full_name is not None:
             data["full_name"] = self.full_name
         if self.company is not None:
@@ -132,6 +136,7 @@ class Lead:
             update_date=data.get("update_date"),
             phone=data.get("phone"),
             phone_source=data.get("phone_source"),
+            phone_on_whatsapp=data.get("phone_on_whatsapp"),
             full_name=data.get("full_name"),
             company=data.get("company"),
             headline=data.get("headline"),

@@ -101,6 +101,46 @@ class WASession:
         except Exception:
             return False
 
+    def is_registered(self, phone: str) -> bool:
+        """Return True if the phone number has a WhatsApp account.
+
+        Navigates to the WA Web send URL and waits for either the chat panel
+        (registered) or the "not on WhatsApp" popup (unregistered). Returns
+        True on any timeout or unexpected DOM state to avoid false negatives —
+        the send handler will then attempt the send and handle the failure.
+        """
+        if not self.page:
+            raise RuntimeError("WASession not started")
+
+        url = _SEND_URL.format(phone=phone.lstrip("+"), text="")
+        self.page.goto(url)
+        try:
+            self.page.wait_for_selector(
+                f"{_CHAT_LOAD_SELECTOR}, [data-testid='popup-contents']",
+                timeout=12000,
+            )
+        except Exception:
+            # Can't determine — assume registered to avoid losing real leads
+            logger.warning("is_registered: timed out for %s — assuming registered", phone)
+            return True
+
+        try:
+            result = self.page.evaluate("""() => {
+                const popup = document.querySelector('[data-testid="popup-contents"]');
+                if (!popup) return false;
+                const text = (popup.innerText || '').toLowerCase();
+                return text.includes('not on whatsapp')
+                    || text.includes('phone number shared via url is invalid')
+                    || text.includes('invalid phone number');
+            }""")
+            if result:
+                logger.info("is_registered: %s is NOT on WhatsApp", phone)
+                return False
+        except Exception as e:
+            logger.warning("is_registered: evaluation failed for %s: %s — assuming registered", phone, e)
+
+        return True
+
     def detect_ban(self) -> bool:
         """Return True if WA Web shows a ban / account-suspended message.
 

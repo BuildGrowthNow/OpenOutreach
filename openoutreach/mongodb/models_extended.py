@@ -35,6 +35,7 @@ class ChatMessage:
         user_id: Optional[str] = None,
         channel: str = "linkedin",
         wa_msg_hash: Optional[str] = None,
+        wa_delivery_status: Optional[str] = None,
     ):
         self._id = _id or str(uuid4())
         self.deal_id = deal_id
@@ -46,6 +47,7 @@ class ChatMessage:
         self.user_id = user_id
         self.channel = channel
         self.wa_msg_hash = wa_msg_hash
+        self.wa_delivery_status = wa_delivery_status  # "sent" | "delivered" | "read" | None
 
     @staticmethod
     def compute_wa_hash(deal_id: str, is_outgoing: bool, content: str) -> str:
@@ -67,6 +69,8 @@ class ChatMessage:
         }
         if self.wa_msg_hash is not None:
             d["wa_msg_hash"] = self.wa_msg_hash
+        if self.wa_delivery_status is not None:
+            d["wa_delivery_status"] = self.wa_delivery_status
         return d
 
     @classmethod
@@ -82,6 +86,7 @@ class ChatMessage:
             user_id=data.get("user_id"),
             channel=data.get("channel", "linkedin"),
             wa_msg_hash=data.get("wa_msg_hash"),
+            wa_delivery_status=data.get("wa_delivery_status"),
         )
 
     def save(self) -> str:

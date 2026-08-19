@@ -852,8 +852,13 @@ def plan_whatsapp_window(campaign, whatsapp_profile_id: str, user_id: str) -> in
         return 0
 
     from openoutreach.mongodb.models import SiteConfig
+    from openoutreach.whatsapp.models.profile import WhatsAppProfile
+    from openoutreach.whatsapp.warmup import effective_wa_daily_limit
+
     config = SiteConfig.load(user_id=user_id)
-    wa_limit = config.wa_daily_limit if config.wa_daily_limit > 0 else 20
+    wa_profile = WhatsAppProfile.get(whatsapp_profile_id)
+    profile_created_at = wa_profile.created_at if wa_profile else None
+    wa_limit = effective_wa_daily_limit(profile_created_at, config.wa_daily_limit)
     n = min(eligible, wa_limit)
     velocity = max(1, wa_limit // 8)  # spread sends over ~8 active hours
 

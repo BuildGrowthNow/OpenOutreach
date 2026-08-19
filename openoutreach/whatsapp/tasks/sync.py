@@ -9,11 +9,20 @@ from typing import Optional
 
 from openoutreach.mongodb.connection import get_mongodb_collection
 
+# Delivery status rank — higher rank = further along the chain; never downgrade.
+_STATUS_RANK = {"sent": 1, "delivered": 2, "read": 3}
+
 logger = logging.getLogger(__name__)
 
 # JS snippet to extract messages from an open WA Web conversation panel.
 # Each selector list is tried in order so the scrape survives WA Web redesigns
 # that rename data-testid attributes without changing DOM structure.
+#
+# Delivery status detection for outgoing messages:
+#   "read"      — double blue tick  (aria-label contains "Read" on msg-dblcheck)
+#   "delivered" — double grey tick  (msg-dblcheck present, no "Read" aria-label)
+#   "sent"      — single grey tick  (msg-check present, no double-tick)
+#   null        — incoming messages or unknown
 _EXTRACT_MESSAGES_JS = """() => {
     function qs(el, selectors) {
         for (const s of selectors) {
@@ -46,10 +55,23 @@ _EXTRACT_MESSAGES_JS = """() => {
             'span[dir="rtl"]'
         ]);
         const ts = el.querySelector('[data-testid="msg-meta"]');
+
+        let delivery_status = null;
+        if (out) {
+            const dblcheck = el.querySelector('[data-testid="msg-dblcheck"]');
+            if (dblcheck) {
+                const label = dblcheck.getAttribute('aria-label') || '';
+                delivery_status = label.toLowerCase().includes('read') ? 'read' : 'delivered';
+            } else if (el.querySelector('[data-testid="msg-check"]')) {
+                delivery_status = 'sent';
+            }
+        }
+
         return {
             content: body ? body.innerText : null,
             is_outgoing: out,
-            ts_text: ts ? ts.getAttribute('data-pre-plain-text') : null
+            ts_text: ts ? ts.getAttribute('data-pre-plain-text') : null,
+            delivery_status: delivery_status
         };
     }).filter(m => m.content);
 }"""
@@ -122,6 +144,42 @@ def _navigate_to_chat(wa_session, phone: str) -> bool:
         return False
 
 
+def _upgrade_delivery_statuses(messages_col, deal_id: str, raw_msgs: list) -> None:
+    """Advance wa_delivery_status for outgoing messages when the DOM shows a higher rank.
+
+    Never downgrades (read→delivered is ignored). Only touches messages that
+    have a wa_msg_hash stored in the DB, so messages saved before this feature
+    was deployed are updated on next sync once they appear in the DOM window.
+    """
+    from openoutreach.mongodb.models_extended import ChatMessage
+
+    for raw in raw_msgs:
+        if not raw.get("is_outgoing"):
+            continue
+        new_status = raw.get("delivery_status")
+        if not new_status or new_status not in _STATUS_RANK:
+            continue
+        content = (raw.get("content") or "").strip()
+        if not content:
+            continue
+
+        wa_hash = ChatMessage.compute_wa_hash(deal_id, True, content)
+        existing = messages_col.find_one(
+            {"wa_msg_hash": wa_hash},
+            projection={"_id": 1, "wa_delivery_status": 1},
+        )
+        if not existing:
+            continue
+
+        stored_status = existing.get("wa_delivery_status")
+        stored_rank = _STATUS_RANK.get(stored_status, 0) if stored_status else 0
+        if _STATUS_RANK[new_status] > stored_rank:
+            messages_col.update_one(
+                {"_id": existing["_id"]},
+                {"$set": {"wa_delivery_status": new_status}},
+            )
+
+
 def handle_whatsapp_sync(task, wa_session, qualifiers):  # noqa: ARG001
     """Sync incoming WhatsApp messages for all open WA deals in this campaign.
 
@@ -187,6 +245,10 @@ def handle_whatsapp_sync(task, wa_session, qualifiers):  # noqa: ARG001
             continue
         _empty_scrape_count.pop(str(deal._id), None)  # reset on successful scrape
 
+        # Update delivery status of existing outgoing messages when it advances.
+        # We match by wa_msg_hash and only write when the new rank > stored rank.
+        _upgrade_delivery_statuses(messages_col, str(deal._id), raw_msgs)
+
         # Determine cutoff: only process messages newer than latest saved WA message
         last_saved = messages_col.find_one(
             {"deal_id": str(deal._id), "channel": "whatsapp"},
@@ -224,6 +286,7 @@ def handle_whatsapp_sync(task, wa_session, qualifiers):  # noqa: ARG001
             if messages_col.find_one({"wa_msg_hash": wa_hash}):
                 continue
 
+            delivery_status = raw.get("delivery_status") if is_outgoing else None
             msg = ChatMessage(
                 deal_id=str(deal._id),
                 content=content,
@@ -232,6 +295,7 @@ def handle_whatsapp_sync(task, wa_session, qualifiers):  # noqa: ARG001
                 user_id=deal.user_id,
                 channel="whatsapp",
                 wa_msg_hash=wa_hash,
+                wa_delivery_status=delivery_status,
             )
             msg.save()
             new_messages.append(msg)

@@ -92,6 +92,31 @@ def handle_whatsapp_message(task, wa_session, qualifiers):  # noqa: ARG001
             if already_sent:
                 continue
 
+        # Pre-flight: skip numbers known to not be on WhatsApp; validate unknowns.
+        if lead.phone_on_whatsapp is False:
+            logger.info(
+                "WA send_message [%s]: %s flagged not on WhatsApp — skipping",
+                campaign, lead.phone,
+            )
+            deal.state = Deal.DealState.FAILED
+            deal.reason = "phone_not_on_whatsapp"
+            deal.save(update_fields=["state", "reason"])
+            continue
+
+        if lead.phone_on_whatsapp is None:
+            registered = wa_session.is_registered(lead.phone)
+            lead.phone_on_whatsapp = registered
+            lead.save(update_fields=["phone_on_whatsapp"])
+            if not registered:
+                logger.info(
+                    "WA send_message [%s]: %s is not on WhatsApp — marking FAILED",
+                    campaign, lead.phone,
+                )
+                deal.state = Deal.DealState.FAILED
+                deal.reason = "phone_not_on_whatsapp"
+                deal.save(update_fields=["state", "reason"])
+                continue
+
         message_template = (
             campaign.channel_settings.get("whatsapp", {}).get("message_template", "")
             if campaign.channel_settings else ""
