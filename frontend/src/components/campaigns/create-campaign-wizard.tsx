@@ -77,12 +77,11 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
 
   useEffect(() => {
     const load = async () => {
-      const res = await apiClient.get<{ profiles: WhatsAppProfile[] }>('/whatsapp/profiles')
-      if (res.data?.profiles?.length) {
-        const connected = res.data.profiles.filter(p => p.status === 'connected')
-        setWaProfiles(connected)
-        if (connected.length) setWaProfileId(connected[0].id)
-      }
+      const res = await apiClient.get<WhatsAppProfile[]>('/whatsapp/profiles')
+      const all = res.data ?? []
+      const connected = all.filter(p => p.status === 'connected')
+      setWaProfiles(connected)
+      if (connected.length) setWaProfileId(connected[0].id)
     }
     void load()
   }, [])
@@ -98,10 +97,6 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
     }
     if (!campaignObjective.trim()) {
       setError('Please describe your campaign goal');
-      return false;
-    }
-    if (!profileId) {
-      setError('No LinkedIn profile found. Please connect your LinkedIn account in Settings first.');
       return false;
     }
     return true;
@@ -153,6 +148,10 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
     e.preventDefault();
     setError('');
 
+    if (leadSource === 'linkedin_search' && !profileId) {
+      setError('No LinkedIn profile found. Connect your LinkedIn account in Settings first.');
+      return;
+    }
     if (enableWhatsApp && !waProfileId) {
       setError('Select a connected WhatsApp number or disable WhatsApp channel');
       return;
@@ -180,7 +179,7 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
         name: name.trim(),
         product_pitch: productPitch.trim(),
         campaign_objective: campaignObjective.trim(),
-        linkedin_profile_id: profileId,
+        linkedin_profile_id: profileId || undefined,
         booking_link: bookingLink.trim(),
         velocity: 20,
         icp_titles: icpTitles,
@@ -327,7 +326,6 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
             <Button
               type="button"
               onClick={handleNext}
-              disabled={!profileId}
               className="flex-1 h-11 text-base gap-2"
             >
               Next: Targeting

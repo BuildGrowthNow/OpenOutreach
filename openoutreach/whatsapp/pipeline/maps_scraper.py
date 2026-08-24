@@ -127,10 +127,10 @@ def _scrape_google_maps(page, query: str, country_code: str) -> List[BusinessLis
                     or ""
                 )
                 import re as _re
-                m = _re.search(r"[\d,]+", raw_rc.replace(",", ""))
+                m = _re.search(r"\d+", raw_rc.replace(",", ""))
                 if m:
                     try:
-                        review_count = int(m.group().replace(",", ""))
+                        review_count = int(m.group())
                     except ValueError:
                         pass
 

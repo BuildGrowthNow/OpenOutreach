@@ -27,7 +27,7 @@ class CampaignCreate(BaseModel):
     name: str
     product_pitch: str
     campaign_objective: str
-    linkedin_profile_id: str  # Required: which profile executes
+    linkedin_profile_id: Optional[str] = None  # Required for linkedin channel; optional for WA-only
     booking_link: Optional[str] = ""
     velocity: int = 20
     team_member_ids: Optional[List[str]] = None  # Optional: share with team
@@ -385,8 +385,10 @@ async def create_campaign(
                 detail=error_msg or "Cannot create campaign - plan limit reached"
             )
 
-        # Verify user owns the LinkedIn profile
-        if profiles_collection is not None:
+        # Verify user owns the LinkedIn profile (only when one is provided)
+        channel_seq = data.channel_sequence or ["linkedin"]
+        linkedin_required = "linkedin" in channel_seq
+        if data.linkedin_profile_id and profiles_collection is not None:
             profile_doc = profiles_collection.find_one({
                 "_id": data.linkedin_profile_id,
                 "user_id": user_id
@@ -396,8 +398,11 @@ async def create_campaign(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="LinkedIn profile not found or access denied"
                 )
-        else:
-            logger.warning("LinkedIn profiles collection unavailable, skipping ownership check")
+        elif linkedin_required and not data.linkedin_profile_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="linkedin_profile_id is required when linkedin channel is active"
+            )
 
         # Verify team members exist
         team_ids = data.team_member_ids or []

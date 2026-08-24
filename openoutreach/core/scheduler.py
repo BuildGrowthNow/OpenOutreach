@@ -705,6 +705,48 @@ def _recover_stale_running_tasks(linkedin_profile_id: str | None = None) -> int:
     return count
 
 
+def _auto_qualify_wa_leads(campaign) -> None:
+    """Promote DISCOVERED deals to QUALIFIED for WA/maps campaigns.
+
+    LinkedIn campaigns use the ML+LLM qualify pipeline. For non-linkedin-search
+    campaigns (maps, classified, etc.) the leads are phone-only and have no
+    LinkedIn profile to score — auto-qualify any DISCOVERED deal where the
+    lead.phone is populated.
+    """
+    lead_source = getattr(campaign, "lead_source", "linkedin_search") or "linkedin_search"
+    if lead_source == "linkedin_search":
+        return
+
+    channel_sequence = getattr(campaign, "channel_sequence", None) or ["linkedin"]
+    if "whatsapp" not in channel_sequence:
+        return
+
+    from openoutreach.mongodb.connection import get_mongodb_collection
+
+    deals_col = get_mongodb_collection("deals")
+    leads_col = get_mongodb_collection("leads")
+    if deals_col is None or leads_col is None:
+        return
+
+    promoted = 0
+    for deal_doc in deals_col.find(
+        {"campaign_id": campaign.pk, "state": "Discovered"},
+        {"_id": 1, "lead_id": 1},
+    ):
+        if leads_col.find_one(
+            {"_id": deal_doc["lead_id"], "phone": {"$exists": True, "$ne": None}},
+            {"_id": 1},
+        ):
+            deals_col.update_one(
+                {"_id": deal_doc["_id"]},
+                {"$set": {"state": "Qualified"}},
+            )
+            promoted += 1
+
+    if promoted:
+        logger.info("_auto_qualify_wa_leads [%s]: promoted %d leads", campaign.pk, promoted)
+
+
 def _route_deal_channels(campaign) -> None:
     """Set Deal.active_channel based on campaign.channel_sequence and lead availability.
 
@@ -797,6 +839,7 @@ def reconcile(session) -> None:
         )
 
     for campaign in campaigns:
+        _auto_qualify_wa_leads(campaign)
         _route_deal_channels(campaign)
         plan_connect_window(session, campaign, connect_cap=connect_cap)
         plan_follow_up_window(session, campaign, follow_up_cap=follow_up_cap)

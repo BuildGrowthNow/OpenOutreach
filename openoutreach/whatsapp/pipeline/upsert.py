@@ -59,7 +59,8 @@ def upsert_listings_as_leads(
             "public_identifier": "",
             "user_id": user_id,
             "disqualified": False,
-            "created_at": now,
+            "creation_date": now,
+            "update_date": now,
         }
         if lst.category:
             set_on_insert["headline"] = lst.category
@@ -92,7 +93,8 @@ def upsert_listings_as_leads(
                 "campaign_id": campaign_id,
                 "state": Deal.DealState.DISCOVERED,
                 "user_id": user_id,
-                "created_at": now,
+                "creation_date": now,
+                "active_channel": "linkedin",
             })
 
     logger.info("upsert: %d new leads for campaign %s", created, campaign_id)
