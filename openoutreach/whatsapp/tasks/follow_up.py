@@ -177,9 +177,9 @@ def handle_whatsapp_follow_up(task, wa_session, qualifiers):  # noqa: ARG001
         ).save()
 
     elif decision.action == "mark_completed":
-        from openoutreach.crm.models import DealState
+        from openoutreach.mongodb.models import Deal
         outcome = decision.outcome or ""
-        deal.state = DealState.COMPLETED.value
+        deal.state = Deal.DealState.COMPLETED
         deal.outcome = outcome
         deal.save()
         logger.info("WA follow_up [%s]: completed deal %s outcome=%s", campaign, deal._id, outcome)

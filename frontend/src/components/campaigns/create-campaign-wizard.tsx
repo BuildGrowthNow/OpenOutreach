@@ -517,7 +517,13 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
           {/* Lead Source */}
           <div className="space-y-3 pt-2">
             <Label className="text-base">Lead Source</Label>
-            <Select value={leadSource} onValueChange={(v) => setLeadSource(v as typeof leadSource)}>
+            <Select value={leadSource} onValueChange={(v) => {
+              const src = v as typeof leadSource;
+              setLeadSource(src);
+              if (src === 'google_maps' && waProfiles.length > 0) {
+                setEnableWhatsApp(true);
+              }
+            }}>
               <SelectTrigger className="h-10">
                 <SelectValue />
               </SelectTrigger>

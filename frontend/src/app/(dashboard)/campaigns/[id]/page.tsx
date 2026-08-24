@@ -1135,6 +1135,11 @@ function CampaignSettingsForm({
     return seq.length ? seq : ["linkedin"];
   });
   const [waProfileId, setWaProfileId] = useState(getStr("whatsappProfileId", "whatsapp_profile_id"));
+  const [waMessageTemplate, setWaMessageTemplate] = useState(() => {
+    const cs = (c["channelSettings"] || c["channel_settings"]) as Record<string, unknown> | undefined;
+    const waSettings = cs?.["whatsapp"] as Record<string, unknown> | undefined;
+    return String(waSettings?.["message_template"] || "");
+  });
   const [waProfiles, setWaProfiles] = useState<WAProfileOption[]>([]);
 
   useEffect(() => {
@@ -1163,6 +1168,9 @@ function CampaignSettingsForm({
     const seq = a("channelSequence", "channel_sequence");
     setChannelSequence(seq.length ? seq : ["linkedin"]);
     setWaProfileId(s("whatsappProfileId", "whatsapp_profile_id"));
+    const cs2 = (c2["channelSettings"] || c2["channel_settings"]) as Record<string, unknown> | undefined;
+    const waS = cs2?.["whatsapp"] as Record<string, unknown> | undefined;
+    setWaMessageTemplate(String(waS?.["message_template"] || ""));
   }, [campaign]);
 
   const enableWA = channelSequence.includes("whatsapp");
@@ -1180,6 +1188,13 @@ function CampaignSettingsForm({
   };
 
   const handleSave = async () => {
+    const channelSettings: Record<string, unknown> = { linkedin: { max_attempts: 5 } };
+    if (enableWA && waMessageTemplate.trim()) {
+      channelSettings.whatsapp = {
+        max_attempts: 3,
+        message_template: waMessageTemplate.trim(),
+      };
+    }
     // API expects snake_case field names
     await onSave({
       name: name.trim(),
@@ -1190,6 +1205,7 @@ function CampaignSettingsForm({
       target_company_size: targetCompanySize.trim() || undefined,
       follow_up_strategy: followUpStrategy.trim() || undefined,
       channel_sequence: channelSequence,
+      channel_settings: channelSettings,
       whatsapp_profile_id: waProfileId || undefined,
     } as unknown as Partial<Campaign>);
   };
@@ -1364,24 +1380,40 @@ function CampaignSettingsForm({
           </div>
 
           {enableWA && (
-            <div className="space-y-2 pt-1">
-              <Label htmlFor="wa-profile-select">WhatsApp Profile</Label>
-              {waProfiles.length === 0 ? (
-                <p className="text-xs text-muted-foreground">No connected WhatsApp profiles. Configure one in Settings.</p>
-              ) : (
-                <Select value={waProfileId} onValueChange={(v) => setWaProfileId(v ?? "")}>
-                  <SelectTrigger id="wa-profile-select">
-                    <SelectValue placeholder="Select a WhatsApp profile" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {waProfiles.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>
-                        {p.display_name || p.phone_number || p.id}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
+            <div className="space-y-3 pt-1">
+              <div className="space-y-2">
+                <Label htmlFor="wa-profile-select">WhatsApp Profile</Label>
+                {waProfiles.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">No connected WhatsApp profiles. Configure one in Settings.</p>
+                ) : (
+                  <Select value={waProfileId} onValueChange={(v) => setWaProfileId(v ?? "")}>
+                    <SelectTrigger id="wa-profile-select">
+                      <SelectValue placeholder="Select a WhatsApp profile" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {waProfiles.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.display_name || p.phone_number || p.id}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="wa-message-template">Initial Message Template</Label>
+                <textarea
+                  id="wa-message-template"
+                  value={waMessageTemplate}
+                  onChange={(e) => setWaMessageTemplate(e.target.value)}
+                  placeholder="Hi {first_name}, I came across your business and wanted to reach out..."
+                  rows={4}
+                  className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Available placeholders: {"{name}"}, {"{first_name}"}, {"{last_name}"}, {"{company}"}
+                </p>
+              </div>
             </div>
           )}
 

@@ -372,10 +372,15 @@ async def reconcile_tasks(
     """
     from openoutreach.mongodb.connection import get_mongodb_collection
     from openoutreach.core.scheduler import (
+        _auto_qualify_wa_leads,
         _recover_stale_running_tasks,
+        _route_deal_channels,
         plan_check_pending_window,
         plan_connect_window,
         plan_follow_up_window,
+        plan_whatsapp_window,
+        plan_whatsapp_follow_up_window,
+        plan_whatsapp_sync_window,
     )
 
     profile = LinkedInProfile.objects.get(
@@ -421,10 +426,40 @@ async def reconcile_tasks(
         tasks_created += plan_follow_up_window(session, campaign)
         tasks_created += plan_check_pending_window(session, campaign)
 
-    logger.info("Reconcile for profile %s: %d tasks created across %d campaigns",
-                linkedin_profile_id, tasks_created, len(campaigns_data))
+        # WhatsApp task planning — only when campaign has WA configured
+        wa_profile_id = getattr(campaign, "whatsapp_profile_id", None)
+        channel_seq = getattr(campaign, "channel_sequence", None) or []
+        if wa_profile_id and "whatsapp" in channel_seq:
+            _auto_qualify_wa_leads(campaign)
+            _route_deal_channels(campaign)
+            tasks_created += plan_whatsapp_window(campaign, wa_profile_id, user_id)
+            tasks_created += plan_whatsapp_follow_up_window(campaign, wa_profile_id, user_id)
+            tasks_created += plan_whatsapp_sync_window(campaign, wa_profile_id, user_id)
 
-    return {"tasks_created": tasks_created, "campaigns": len(campaigns_data)}
+    # Also plan WA tasks for campaigns linked to WA but not to this LinkedIn profile
+    wa_campaigns_data = list(campaigns_collection.find({
+        "user_id": user_id,
+        "whatsapp_profile_id": {"$exists": True, "$ne": None},
+        "linkedin_profile_id": {"$ne": linkedin_profile_id},
+        "status": "active",
+        "is_paused": False,
+    }))
+    for doc in wa_campaigns_data:
+        campaign = Campaign.from_dict(doc)
+        wa_profile_id = campaign.whatsapp_profile_id
+        channel_seq = getattr(campaign, "channel_sequence", None) or []
+        if wa_profile_id and "whatsapp" in channel_seq:
+            _auto_qualify_wa_leads(campaign)
+            _route_deal_channels(campaign)
+            tasks_created += plan_whatsapp_window(campaign, wa_profile_id, user_id)
+            tasks_created += plan_whatsapp_follow_up_window(campaign, wa_profile_id, user_id)
+            tasks_created += plan_whatsapp_sync_window(campaign, wa_profile_id, user_id)
+
+    total_campaigns = len(campaigns_data) + len(wa_campaigns_data)
+    logger.info("Reconcile for profile %s: %d tasks created across %d campaigns",
+                linkedin_profile_id, tasks_created, total_campaigns)
+
+    return {"tasks_created": tasks_created, "campaigns": total_campaigns}
 
 
 @router.get("/credentials")
