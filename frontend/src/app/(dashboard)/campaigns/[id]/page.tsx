@@ -1103,8 +1103,8 @@ function CampaignAnalyticsCharts({ analytics }: { analytics: CampaignAnalyticsRe
 
 interface WAProfileOption {
   id: string;
-  phone_number?: string;
-  display_name?: string;
+  phoneNumber?: string;
+  displayName?: string;
   status: string;
 }
 
@@ -1393,7 +1393,7 @@ function CampaignSettingsForm({
                     <SelectContent>
                       {waProfiles.map((p) => (
                         <SelectItem key={p.id} value={p.id}>
-                          {p.display_name || p.phone_number || p.id}
+                          {p.displayName || p.phoneNumber || p.id}
                         </SelectItem>
                       ))}
                     </SelectContent>
