@@ -62,9 +62,9 @@ export function Footer() {
             <h3 className="text-white font-semibold text-sm mb-5">Company</h3>
             <ul className="space-y-3">
               <li>
-                <Link href="https://www.lengrowth.com/contact" className="text-zinc-500 text-sm hover:text-white transition-colors duration-200">
+                <a href="mailto:support@lengrowth.com" className="text-zinc-500 text-sm hover:text-white transition-colors duration-200">
                   Contact
-                </Link>
+                </a>
               </li>
               <li>
                 <a href="https://www.lengrowth.com" target="_blank" rel="noopener noreferrer" className="text-zinc-500 text-sm hover:text-white transition-colors duration-200">

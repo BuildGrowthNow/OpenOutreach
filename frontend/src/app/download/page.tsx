@@ -80,7 +80,7 @@ const steps = [
 const benefits = [
   {
     title: "Your account stays healthy",
-    body: "Activity runs through your real internet connection — not a shared server — so your LinkedIn usage looks completely normal.",
+    body: "Activity runs through your real internet connection — not a shared server — so your LinkedIn and WhatsApp usage looks completely normal.",
   },
   {
     title: "Full control, always",
@@ -88,7 +88,7 @@ const benefits = [
   },
   {
     title: "Credentials stay on your machine",
-    body: "Your LinkedIn login is stored securely in your system keychain. It never leaves your device.",
+    body: "Your LinkedIn and WhatsApp credentials are stored securely in your system keychain. They never leave your device.",
   },
   {
     title: "Auto-starts, auto-updates",
@@ -149,7 +149,7 @@ export default function DownloadPage() {
             className="text-5xl sm:text-6xl font-extrabold text-white tracking-tight mb-6"
             style={{ lineHeight: 1.08 }}
           >
-            LinkedIn outreach,{" "}
+            LinkedIn & WhatsApp outreach,{" "}
             <span className="bg-gradient-to-r from-emerald-400 via-emerald-300 to-teal-300 bg-clip-text text-transparent">
               running on your computer.
             </span>

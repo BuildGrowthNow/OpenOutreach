@@ -33,13 +33,13 @@ const plans: Plan[] = [
   {
     name: 'starter',
     displayName: 'Starter',
-    tagline: 'Solo founders testing LinkedIn outreach',
+    tagline: 'Solo founders testing outreach',
     monthlyPrice: 19,
     annualPrice: 16,
     maxLinkedInAccounts: 1,
     maxCampaigns: 3,
     features: [
-      '1 LinkedIn account',
+      '1 LinkedIn + 1 WhatsApp account',
       '3 active campaigns',
       'AI-written messages',
       'AI follow-up sequences',
@@ -71,7 +71,7 @@ const plans: Plan[] = [
     maxCampaigns: null,
     features: [
       'Everything in Pro',
-      '3 LinkedIn accounts',
+      '3 LinkedIn + 3 WhatsApp accounts',
       'Priority support',
     ],
   },
@@ -85,7 +85,7 @@ const plans: Plan[] = [
     maxCampaigns: null,
     features: [
       'Everything in Business',
-      '10 LinkedIn accounts',
+      '10 LinkedIn + 10 WhatsApp accounts',
       'Priority support',
     ],
   },
@@ -111,7 +111,7 @@ const plans: Plan[] = [
 
 const comparisonFeatures: ComparisonFeature[] = [
   { name: 'LinkedIn + WhatsApp Outreach', starter: true, pro: true, business: true, agency: true, cloud: true },
-  { name: 'LinkedIn Accounts', starter: true, pro: true, business: true, agency: true, cloud: true },
+  { name: 'LinkedIn + WhatsApp Accounts', starter: true, pro: true, business: true, agency: true, cloud: true },
   { name: 'Active Campaigns', starter: true, pro: true, business: true, agency: true, cloud: true },
   { name: 'AI-Written Messages', starter: true, pro: true, business: true, agency: true, cloud: true },
   { name: 'Automated Follow-ups', starter: true, pro: true, business: true, agency: true, cloud: true },
@@ -153,7 +153,7 @@ const faqs = [
   {
     question: "Can I change plans?",
     answer:
-      "Yes — upgrades take effect immediately with prorated charges. Downgrades take effect at the end of your billing cycle. If you downgrade to a plan with fewer LinkedIn account slots, the oldest accounts are automatically deactivated to fit the new limit.",
+      "Yes — upgrades take effect immediately with prorated charges. Downgrades take effect at the end of your billing cycle. If you downgrade to a plan with fewer account slots, the oldest accounts are automatically deactivated to fit the new limit.",
   },
   {
     question: "Do you offer refunds?",
