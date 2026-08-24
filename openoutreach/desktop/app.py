@@ -573,9 +573,9 @@ class TrayApp:
             profile_id = self.auth.get_profile_id()
 
         if not profile_id:
-            logger.error("No LinkedIn profile found")
+            logger.error("No outreach profile found")
             if self.icon:
-                self.icon.notify("No LinkedIn Profile", "Add a LinkedIn profile in the dashboard first.")
+                self.icon.notify("No Profile Found", "Add a LinkedIn or WhatsApp profile in the dashboard first.")
             return
 
         def on_token_refresh(new_token: str):
