@@ -29,10 +29,13 @@ def effective_wa_daily_limit(
 
     Returns min(warmup_value, max_limit) so the configured ceiling still caps
     the curve (useful for operators who want conservative ramp-up).
-    If max_limit is 0 or negative, 20 is used as the floor.
+    If max_limit is 0 or negative, returns 0 (fully paused).
     """
+    if max_limit <= 0:
+        return 0
+
     if profile_created_at is None:
-        return min(20, max(max_limit, 20))
+        return min(20, max_limit)
 
     now = datetime.now(timezone.utc)
     if profile_created_at.tzinfo is None:
@@ -41,9 +44,7 @@ def effective_wa_daily_limit(
     age_days = (now - profile_created_at).days
     warmup_value = _interpolate_limit(age_days)
 
-    # Honour the operator ceiling, but never go below 1
-    effective_max = max(max_limit, 1)
-    return min(warmup_value, effective_max)
+    return min(warmup_value, max_limit)
 
 
 def _interpolate_limit(age_days: int) -> int:

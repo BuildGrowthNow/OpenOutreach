@@ -75,7 +75,7 @@ def upsert_listings_as_leads(
             set_on_insert["review_count"] = lst.review_count
 
         result = leads_col.update_one(
-            {"phone": lst.phone},
+            {"phone": lst.phone, "user_id": user_id},
             {"$setOnInsert": set_on_insert},
             upsert=True,
         )
@@ -84,7 +84,7 @@ def upsert_listings_as_leads(
             actual_lead_id = str(result.upserted_id)
             created += 1
         else:
-            doc = leads_col.find_one({"phone": lst.phone}, {"_id": 1})
+            doc = leads_col.find_one({"phone": lst.phone, "user_id": user_id}, {"_id": 1})
             actual_lead_id = str(doc["_id"]) if doc else lead_id
 
         if not deals_col.find_one({"lead_id": actual_lead_id, "campaign_id": campaign_id}):
