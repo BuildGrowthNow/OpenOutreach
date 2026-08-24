@@ -125,6 +125,48 @@ def _next_wa_followup_deal(campaign_id: str, deals_col):
     return None
 
 
+def _notify_wa_unmessaged(deal_doc, user_id: str) -> None:
+    """Create a notification if a WA deal has been CONNECTED 48h+ with no outgoing message."""
+    try:
+        from openoutreach.mongodb.models_extended import Notification
+        from openoutreach.mongodb.connection import get_mongodb_collection
+
+        creation = deal_doc.get("creation_date")
+        if not creation:
+            return
+        if creation.tzinfo is None:
+            creation = creation.replace(tzinfo=timezone.utc)
+        age_hours = (datetime.now(timezone.utc) - creation).total_seconds() / 3600
+        if age_hours < 48:
+            return
+
+        messages_col = get_mongodb_collection("chat_messages")
+        if messages_col is None:
+            return
+        has_outgoing = messages_col.count_documents({
+            "deal_id": str(deal_doc["_id"]),
+            "channel": "whatsapp",
+            "is_outgoing": True,
+        }, limit=1)
+        if has_outgoing:
+            return
+
+        notif_col = get_mongodb_collection("notifications")
+        dedup_key = f"wa_unmessaged_48h_{deal_doc['_id']}"
+        if notif_col is None or notif_col.count_documents({"data.dedup_key": dedup_key}, limit=1):
+            return
+
+        Notification(
+            recipient_id=user_id,
+            notification_type="campaign_warning",
+            title="WhatsApp lead not yet messaged",
+            message=f"A WhatsApp lead has been connected for {int(age_hours)}h without receiving a message.",
+            data={"dedup_key": dedup_key, "deal_id": str(deal_doc["_id"])},
+        ).save()
+    except Exception as e:
+        logger.debug("Could not create WA unmessaged notification: %s", e)
+
+
 def handle_whatsapp_follow_up(task, wa_session, qualifiers):  # noqa: ARG001
     """Run AI follow-up for one eligible CONNECTED WhatsApp deal.
 
@@ -161,6 +203,13 @@ def handle_whatsapp_follow_up(task, wa_session, qualifiers):  # noqa: ARG001
 
     deal_doc = _next_wa_followup_deal(campaign_id, deals_col)
     if not deal_doc:
+        # Check for unmessaged deals and notify
+        for d in deals_col.find(
+            {"campaign_id": campaign_id, "state": Deal.DealState.CONNECTED, "active_channel": "whatsapp"},
+            {"_id": 1, "creation_date": 1, "user_id": 1},
+            limit=10,
+        ):
+            _notify_wa_unmessaged(d, d.get("user_id", wa_session.wa_profile.user_id))
         logger.info("WA follow_up [%s]: no eligible CONNECTED WA deals", campaign)
         return
 

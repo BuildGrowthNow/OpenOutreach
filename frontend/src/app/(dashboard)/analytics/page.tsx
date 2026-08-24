@@ -336,6 +336,41 @@ export default function AnalyticsOverviewPage() {
         />
       </div>
 
+      {(stats.waConnectionsSent || stats.waMessagesSent) ? (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card>
+            <CardContent className="pt-4 pb-4">
+              <div className="flex items-center gap-2 mb-1">
+                <Icons.MessageCircle className="h-4 w-4 text-emerald-500" />
+                <span className="text-sm font-medium text-muted-foreground">WhatsApp Sent</span>
+              </div>
+              <p className="text-2xl font-bold">{stats.waConnectionsSent || 0}</p>
+              <p className="text-xs text-muted-foreground">initial messages</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-4 pb-4">
+              <div className="flex items-center gap-2 mb-1">
+                <Icons.MessageCircle className="h-4 w-4 text-emerald-500" />
+                <span className="text-sm font-medium text-muted-foreground">WA Follow-ups</span>
+              </div>
+              <p className="text-2xl font-bold">{(stats.waMessagesSent || 0) - (stats.waConnectionsSent || 0)}</p>
+              <p className="text-xs text-muted-foreground">follow-up messages</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-4 pb-4">
+              <div className="flex items-center gap-2 mb-1">
+                <Icons.MessageCircle className="h-4 w-4 text-emerald-500" />
+                <span className="text-sm font-medium text-muted-foreground">WA Total</span>
+              </div>
+              <p className="text-2xl font-bold">{stats.waMessagesSent || 0}</p>
+              <p className="text-xs text-muted-foreground">all WA messages sent</p>
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
+
       <Tabs defaultValue="overview" className="space-y-6">
         <TabsList>
           <TabsTrigger value="overview">

@@ -226,6 +226,8 @@ export interface AnalyticsOverviewResponse {
     responseRate: number;
     conversions: number;
     conversionRate: number;
+    waConnectionsSent?: number;
+    waMessagesSent?: number;
   };
   totals: {
     leads: number;

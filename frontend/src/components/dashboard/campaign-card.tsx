@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Icons } from '@/lib/types/components'
 import { Campaign, DealState, CampaignStatus } from '@/lib/types/components'
+import { MessageCircle } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
 import { formatDistanceToNow } from 'date-fns'
@@ -83,7 +84,12 @@ const CampaignCard = ({
     >
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-2">
-          <CardTitle className="text-base leading-tight">{campaign.name}</CardTitle>
+          <div className="flex items-center gap-1.5">
+            <CardTitle className="text-base leading-tight">{campaign.name}</CardTitle>
+            {(campaign.channelSequence || []).includes('whatsapp') && (
+              <MessageCircle className="h-3 w-3 text-emerald-500 shrink-0" aria-label="WhatsApp enabled" />
+            )}
+          </div>
           <div className="flex items-center gap-2 shrink-0">
             <Badge variant="outline" className={cn('text-xs', statusColors[campaign.status as keyof typeof statusColors])}>
               {campaign.status.charAt(0).toUpperCase() + campaign.status.slice(1)}
