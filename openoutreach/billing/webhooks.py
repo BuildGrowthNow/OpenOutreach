@@ -120,6 +120,7 @@ def _sync_plan_limits(user: User) -> None:
         return
 
     user.linkedin_account_limit = plan_def.get("max_linkedin_accounts", 1)
+    user.whatsapp_account_limit = plan_def.get("max_whatsapp_accounts", 1)
     user.campaign_limit = plan_def.get("max_campaigns")
 
 
@@ -202,6 +203,7 @@ def handle_customer_subscription_updated(event: dict[str, Any]) -> None:
 
     if old_plan != plan_name and plan_name:
         _enforce_linkedin_account_limit(user._id, user.linkedin_account_limit)
+        _enforce_wa_account_limit(user._id, user.whatsapp_account_limit)
         if old_plan and plan_name:
             try:
                 # Determine if upgrade or downgrade based on plan hierarchy
@@ -475,6 +477,30 @@ def _deactivate_user_profiles(user_id: str) -> None:
         logger.info(f"Deactivated {result.modified_count} profiles for user {user_id}")
     except Exception as e:
         logger.error(f"Failed to deactivate profiles for user {user_id}: {e}")
+
+
+def _enforce_wa_account_limit(user_id: str, limit: int) -> None:
+    """Delete excess WhatsApp profiles beyond the account limit."""
+    wa_collection = get_mongodb_collection("whatsapp_profiles")
+    if wa_collection is None:
+        logger.warning("Could not enforce WA account limits: collection not available")
+        return
+
+    try:
+        profiles = list(
+            wa_collection.find(
+                {"user_id": user_id},
+                sort=[("created_at", 1)],
+            )
+        )
+
+        if len(profiles) > limit:
+            excess = profiles[limit:]
+            excess_ids = [p["_id"] for p in excess]
+            wa_collection.delete_many({"_id": {"$in": excess_ids}})
+            logger.info(f"Deleted {len(excess)} excess WA profiles for user {user_id}")
+    except Exception as e:
+        logger.error(f"Failed to enforce WA account limits for user {user_id}: {e}")
 
 
 def _enforce_linkedin_account_limit(user_id: str, limit: int) -> None:

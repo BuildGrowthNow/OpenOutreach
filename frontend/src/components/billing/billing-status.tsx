@@ -92,6 +92,10 @@ export function BillingStatusCard({
             <p className="font-medium">{status.linkedin_account_limit}</p>
           </div>
           <div>
+            <p className="text-sm text-muted-foreground">WhatsApp Accounts</p>
+            <p className="font-medium">{status.whatsapp_account_limit}</p>
+          </div>
+          <div>
             <p className="text-sm text-muted-foreground">Campaigns</p>
             <p className="font-medium">
               {status.campaign_limit === null ? "Unlimited" : status.campaign_limit}

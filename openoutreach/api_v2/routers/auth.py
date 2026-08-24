@@ -475,6 +475,7 @@ async def verify_email(body: EmailVerifyRequest):
             plan_def = get_plan(user.plan)
             if plan_def:
                 user.linkedin_account_limit = plan_def["max_linkedin_accounts"]
+                user.whatsapp_account_limit = plan_def["max_whatsapp_accounts"]
                 user.campaign_limit = plan_def["max_campaigns"]
 
         user.save()

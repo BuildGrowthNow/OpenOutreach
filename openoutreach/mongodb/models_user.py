@@ -44,6 +44,7 @@ class User:
         trial_ends_at: Optional[datetime] = None,
         current_period_end: Optional[datetime] = None,
         linkedin_account_limit: int = 1,
+        whatsapp_account_limit: int = 1,
         campaign_limit: Optional[int] = None,
         cloud_profiles: int = 0,
         admin_notes: Optional[str] = None,
@@ -84,6 +85,7 @@ class User:
         self.trial_ends_at = trial_ends_at
         self.current_period_end = current_period_end
         self.linkedin_account_limit = linkedin_account_limit
+        self.whatsapp_account_limit = whatsapp_account_limit
         self.campaign_limit = campaign_limit
         self.cloud_profiles = cloud_profiles
         self.admin_notes = admin_notes
@@ -127,6 +129,7 @@ class User:
             "trial_ends_at": self.trial_ends_at,
             "current_period_end": self.current_period_end,
             "linkedin_account_limit": self.linkedin_account_limit,
+            "whatsapp_account_limit": self.whatsapp_account_limit,
             "campaign_limit": self.campaign_limit,
             "cloud_profiles": self.cloud_profiles,
             "admin_notes": self.admin_notes,
@@ -173,6 +176,7 @@ class User:
             trial_ends_at=data.get("trial_ends_at"),
             current_period_end=data.get("current_period_end"),
             linkedin_account_limit=data.get("linkedin_account_limit", 1),
+            whatsapp_account_limit=data.get("whatsapp_account_limit", 1),
             campaign_limit=data.get("campaign_limit"),
             cloud_profiles=data.get("cloud_profiles", 0),
             admin_notes=data.get("admin_notes"),

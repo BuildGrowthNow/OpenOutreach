@@ -12,6 +12,7 @@ class PlanDefinition(TypedDict):
     monthly_price: int
     annual_price: int
     max_linkedin_accounts: int
+    max_whatsapp_accounts: int
     max_campaigns: int | None
     features: list[str]
 
@@ -23,6 +24,7 @@ PLANS: list[PlanDefinition] = [
         "monthly_price": 1900,
         "annual_price": 19200,
         "max_linkedin_accounts": 1,
+        "max_whatsapp_accounts": 1,
         "max_campaigns": 3,
         "features": [
             "1 LinkedIn account",
@@ -39,6 +41,7 @@ PLANS: list[PlanDefinition] = [
         "monthly_price": 4900,
         "annual_price": 49200,
         "max_linkedin_accounts": 1,
+        "max_whatsapp_accounts": 1,
         "max_campaigns": None,
         "features": [
             "Everything in Starter",
@@ -51,6 +54,7 @@ PLANS: list[PlanDefinition] = [
         "monthly_price": 9900,
         "annual_price": 99600,
         "max_linkedin_accounts": 3,
+        "max_whatsapp_accounts": 3,
         "max_campaigns": None,
         "features": [
             "Everything in Pro",
@@ -64,6 +68,7 @@ PLANS: list[PlanDefinition] = [
         "monthly_price": 24900,
         "annual_price": 249600,
         "max_linkedin_accounts": 10,
+        "max_whatsapp_accounts": 10,
         "max_campaigns": None,
         "features": [
             "Everything in Business",
@@ -77,6 +82,7 @@ PLANS: list[PlanDefinition] = [
         "monthly_price": 29900,
         "annual_price": 0,
         "max_linkedin_accounts": 1,
+        "max_whatsapp_accounts": 1,
         "max_campaigns": None,
         "features": [
             "Fully managed execution",
@@ -93,6 +99,7 @@ PLANS: list[PlanDefinition] = [
         "monthly_price": 29900,
         "annual_price": 0,
         "max_linkedin_accounts": 0,
+        "max_whatsapp_accounts": 0,
         "max_campaigns": None,
         "features": ["Managed cloud execution"],
     },
@@ -102,6 +109,7 @@ PLANS: list[PlanDefinition] = [
         "monthly_price": 0,
         "annual_price": 14900,
         "max_linkedin_accounts": 1,
+        "max_whatsapp_accounts": 1,
         "max_campaigns": None,
         "features": [
             "Everything in Pro",

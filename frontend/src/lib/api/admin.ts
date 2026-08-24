@@ -38,6 +38,7 @@ export interface AdminUserDetail {
   trial_ends_at: string | null
   current_period_end: string | null
   linkedin_account_limit: number
+  whatsapp_account_limit: number
   campaign_limit: number | null
   cloud_profiles: number
   is_admin: boolean
@@ -252,6 +253,7 @@ export interface SetPlanRequest {
   plan: string
   billing_period?: string
   linkedin_account_limit?: number
+  whatsapp_account_limit?: number
   campaign_limit?: number
   cloud_profiles?: number
 }

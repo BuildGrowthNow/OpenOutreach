@@ -34,6 +34,7 @@ class UserDetailResponse(BaseModel):
     trial_ends_at: Optional[str]
     current_period_end: Optional[str]
     linkedin_account_limit: int
+    whatsapp_account_limit: int
     campaign_limit: Optional[int]
     cloud_profiles: int
     is_admin: bool
@@ -192,6 +193,7 @@ def _build_user_detail_response(user: User) -> UserDetailResponse:
         trial_ends_at=_dt(user.trial_ends_at),
         current_period_end=_dt(user.current_period_end),
         linkedin_account_limit=user.linkedin_account_limit,
+        whatsapp_account_limit=user.whatsapp_account_limit,
         campaign_limit=user.campaign_limit,
         cloud_profiles=user.cloud_profiles,
         is_admin=user.is_admin,
@@ -330,6 +332,7 @@ async def update_user(user_id: str, request: UserUpdateRequest) -> UserDetailRes
             )
         user.plan = request.plan
         user.linkedin_account_limit = plan["max_linkedin_accounts"]
+        user.whatsapp_account_limit = plan["max_whatsapp_accounts"]
         user.campaign_limit = plan["max_campaigns"]
         # Admin-assigned plan always activates the user — clear trial state
         user.subscription_status = "active"
@@ -939,6 +942,7 @@ class SetPlanRequest(BaseModel):
     plan: str
     billing_period: Optional[str] = None
     linkedin_account_limit: Optional[int] = None
+    whatsapp_account_limit: Optional[int] = None
     campaign_limit: Optional[int] = None
     cloud_profiles: Optional[int] = None
 
@@ -973,6 +977,11 @@ async def set_user_plan(
         body.linkedin_account_limit
         if body.linkedin_account_limit is not None
         else (plan["max_linkedin_accounts"] if plan else user.linkedin_account_limit)
+    )
+    user.whatsapp_account_limit = (
+        body.whatsapp_account_limit
+        if body.whatsapp_account_limit is not None
+        else (plan["max_whatsapp_accounts"] if plan else user.whatsapp_account_limit)
     )
     user.campaign_limit = (
         body.campaign_limit

@@ -1,5 +1,5 @@
 """
-Downgrade handler - deactivates excess LinkedIn profiles when plan downgraded.
+Downgrade handler - deactivates excess LinkedIn/WhatsApp profiles when plan downgraded.
 Ensures users comply with new plan limits after downgrade.
 """
 
@@ -53,3 +53,43 @@ def handle_plan_downgrade(user: User, new_limit: int) -> dict[str, int]:
     logger.info(f"Deactivated {count} LinkedIn profiles for user {user._id} due to plan downgrade")
 
     return {"deactivated": count, "error": False}
+
+
+def handle_wa_plan_downgrade(user: User, new_limit: int) -> dict[str, int]:
+    """
+    Delete excess WhatsApp profiles when user downgrades plan.
+    Deletes oldest profiles first to minimize disruption.
+
+    Args:
+        user: The user object
+        new_limit: New WhatsApp account limit
+
+    Returns:
+        {"deleted": count, "error": False/True}
+    """
+    collection = get_mongodb_collection("whatsapp_profiles")
+    if collection is None:
+        logger.error("WhatsApp profiles collection not available")
+        return {"deleted": 0, "error": True}
+
+    profiles = list(
+        collection.find(
+            {"user_id": user._id},
+            sort=[("created_at", 1)],
+        )
+    )
+
+    current_count = len(profiles)
+    if current_count <= new_limit:
+        logger.info(f"User has {current_count} WA profiles, limit is {new_limit}, no deletion needed")
+        return {"deleted": 0, "error": False}
+
+    profiles_to_delete = profiles[new_limit:]
+    profile_ids = [p["_id"] for p in profiles_to_delete]
+
+    result = collection.delete_many({"_id": {"$in": profile_ids}})
+
+    count = result.deleted_count
+    logger.info(f"Deleted {count} WhatsApp profiles for user {user._id} due to plan downgrade")
+
+    return {"deleted": count, "error": False}

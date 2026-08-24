@@ -25,7 +25,7 @@ from openoutreach.billing.plans import get_plan, get_all_plans
 from openoutreach.billing.config import get_site_config, is_lifetime_deal_active
 from openoutreach.billing.webhooks import process_webhook_event
 from openoutreach.billing.enforcement import PlanEnforcer
-from openoutreach.billing.downgrade_handler import handle_plan_downgrade
+from openoutreach.billing.downgrade_handler import handle_plan_downgrade, handle_wa_plan_downgrade
 from openoutreach.billing.referrals import (
     apply_referral_code,
     get_referral_dashboard,
@@ -60,6 +60,7 @@ class PlanResponse(BaseModel):
     monthly_price: int
     annual_price: int
     max_linkedin_accounts: int
+    max_whatsapp_accounts: int
     max_campaigns: Optional[int]
     features: list[str]
 
@@ -72,6 +73,7 @@ class BillingStatusResponse(BaseModel):
     trial_ends_at: Optional[str]
     current_period_end: Optional[str]
     linkedin_account_limit: int
+    whatsapp_account_limit: int
     campaign_limit: Optional[int]
     cloud_profiles: int
     user_status: str
@@ -166,6 +168,7 @@ async def list_plans() -> list[PlanResponse]:
             monthly_price=p["monthly_price"],
             annual_price=p["annual_price"],
             max_linkedin_accounts=p["max_linkedin_accounts"],
+            max_whatsapp_accounts=p["max_whatsapp_accounts"],
             max_campaigns=p["max_campaigns"],
             features=p["features"],
         )
@@ -208,6 +211,7 @@ async def billing_status(
         trial_ends_at=user.trial_ends_at.isoformat() if user.trial_ends_at else None,
         current_period_end=user.current_period_end.isoformat() if user.current_period_end else None,
         linkedin_account_limit=user.linkedin_account_limit,
+        whatsapp_account_limit=user.whatsapp_account_limit,
         campaign_limit=user.campaign_limit,
         cloud_profiles=user.cloud_profiles,
         user_status=user.status,
@@ -230,9 +234,11 @@ async def get_current_usage(
     try:
         profiles_coll = get_mongodb_collection("linkedin_profiles")
         campaigns_coll = get_mongodb_collection("campaigns")
+        wa_profiles_coll = get_mongodb_collection("whatsapp_profiles")
 
         linkedin_accounts_used = 0
         campaigns_used = 0
+        whatsapp_accounts_used = 0
 
         if profiles_coll is not None:
             creds_coll = get_mongodb_collection("linkedin_credentials")
@@ -258,9 +264,14 @@ async def get_current_usage(
                 "is_paused": False,
             })
 
+        if wa_profiles_coll is not None:
+            whatsapp_accounts_used = wa_profiles_coll.count_documents({"user_id": user_id})
+
         return {
             "linkedin_accounts_used": linkedin_accounts_used,
             "linkedin_accounts_limit": user.linkedin_account_limit,
+            "whatsapp_accounts_used": whatsapp_accounts_used,
+            "whatsapp_accounts_limit": user.whatsapp_account_limit,
             "campaigns_used": campaigns_used,
             "campaigns_limit": user.campaign_limit,
         }
@@ -269,6 +280,8 @@ async def get_current_usage(
         return {
             "linkedin_accounts_used": 0,
             "linkedin_accounts_limit": user.linkedin_account_limit,
+            "whatsapp_accounts_used": 0,
+            "whatsapp_accounts_limit": user.whatsapp_account_limit,
             "campaigns_used": 0,
             "campaigns_limit": user.campaign_limit,
         }
@@ -516,16 +529,21 @@ async def change_plan(
                 detail="Failed to update subscription",
             )
 
-        old_limit = user.linkedin_account_limit
+        old_linkedin_limit = user.linkedin_account_limit
+        old_wa_limit = user.whatsapp_account_limit
         user.plan = request.plan_name
         user.billing_period = request.billing_period
-        new_limit = plan["max_linkedin_accounts"]
-        user.linkedin_account_limit = new_limit
+        new_linkedin_limit = plan["max_linkedin_accounts"]
+        new_wa_limit = plan["max_whatsapp_accounts"]
+        user.linkedin_account_limit = new_linkedin_limit
+        user.whatsapp_account_limit = new_wa_limit
         user.campaign_limit = plan["max_campaigns"]
         user.save()
 
-        if not is_upgrade and new_limit < old_limit:
-            handle_plan_downgrade(user, new_limit)
+        if not is_upgrade and new_linkedin_limit < old_linkedin_limit:
+            handle_plan_downgrade(user, new_linkedin_limit)
+        if not is_upgrade and new_wa_limit < old_wa_limit:
+            handle_wa_plan_downgrade(user, new_wa_limit)
 
         return {"status": "success", "message": "Plan changed successfully"}
 

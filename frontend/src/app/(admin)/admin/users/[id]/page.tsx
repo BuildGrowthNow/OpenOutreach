@@ -156,6 +156,7 @@ export default function AdminUserDetailPage() {
   const [editPlan, setEditPlan] = useState('')
   const [editBillingPeriod, setEditBillingPeriod] = useState('')
   const [editLinkedInLimit, setEditLinkedInLimit] = useState('')
+  const [editWhatsAppLimit, setEditWhatsAppLimit] = useState('')
   const [editCampaignLimit, setEditCampaignLimit] = useState('')
   const [editCloudProfiles, setEditCloudProfiles] = useState('')
 
@@ -178,6 +179,7 @@ export default function AdminUserDetailPage() {
       setEditPlan(res.data.plan)
       setEditBillingPeriod(res.data.billing_period ?? 'monthly')
       setEditLinkedInLimit(res.data.linkedin_account_limit.toString())
+      setEditWhatsAppLimit(res.data.whatsapp_account_limit.toString())
       setEditCampaignLimit(res.data.campaign_limit?.toString() ?? '')
       setEditCloudProfiles(res.data.cloud_profiles.toString())
     }
@@ -243,6 +245,7 @@ export default function AdminUserDetailPage() {
       plan: editPlan,
       billing_period: editBillingPeriod || undefined,
       linkedin_account_limit: editLinkedInLimit ? Number(editLinkedInLimit) : undefined,
+      whatsapp_account_limit: editWhatsAppLimit ? Number(editWhatsAppLimit) : undefined,
       campaign_limit: editCampaignLimit ? Number(editCampaignLimit) : undefined,
       cloud_profiles: editCloudProfiles ? Number(editCloudProfiles) : undefined,
     })
@@ -567,6 +570,10 @@ export default function AdminUserDetailPage() {
                 <div className="space-y-1">
                   <Label>LinkedIn account limit</Label>
                   <Input type="number" value={editLinkedInLimit} onChange={e => setEditLinkedInLimit(e.target.value)} />
+                </div>
+                <div className="space-y-1">
+                  <Label>WhatsApp account limit</Label>
+                  <Input type="number" value={editWhatsAppLimit} onChange={e => setEditWhatsAppLimit(e.target.value)} />
                 </div>
                 <div className="space-y-1">
                   <Label>Campaign limit</Label>

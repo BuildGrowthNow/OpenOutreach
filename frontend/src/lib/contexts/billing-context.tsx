@@ -1,12 +1,12 @@
 "use client";
 
 import { createContext, useContext, ReactNode, useEffect, useState, useCallback } from "react";
-import { BillingStatus, getBillingStatus, getUsage } from "@/lib/api/billing";
+import { BillingStatus, BillingUsage, getBillingStatus, getUsage } from "@/lib/api/billing";
 import { useAuthStore } from "@/lib/authStoreV2";
 
 interface BillingContextType {
   billingStatus: BillingStatus | null;
-  usage: { linkedin_accounts_used: number; campaigns_used: number } | null;
+  usage: BillingUsage | null;
   loading: boolean;
   refetch: () => Promise<void>;
 }
@@ -15,7 +15,7 @@ const BillingContext = createContext<BillingContextType | undefined>(undefined);
 
 export function BillingProvider({ children }: { children: ReactNode }) {
   const [billingStatus, setBillingStatus] = useState<BillingStatus | null>(null);
-  const [usage, setUsage] = useState<{ linkedin_accounts_used: number; campaigns_used: number } | null>(null);
+  const [usage, setUsage] = useState<BillingUsage | null>(null);
   const [loading, setLoading] = useState(true);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 

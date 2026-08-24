@@ -53,6 +53,19 @@ async def create_profile(
     body: WhatsAppProfileCreate,
     user_id: str = Depends(get_current_user),
 ):
+    from openoutreach.mongodb.models_user import User
+    from openoutreach.mongodb.connection import get_mongodb_collection
+
+    user = User.get(user_id)
+    if user:
+        coll = get_mongodb_collection("whatsapp_profiles")
+        current_count = coll.count_documents({"user_id": user_id}) if coll is not None else 0
+        if current_count >= user.whatsapp_account_limit:
+            raise HTTPException(
+                status_code=403,
+                detail=f"WhatsApp account limit reached ({current_count}/{user.whatsapp_account_limit}). Upgrade your plan to add more.",
+            )
+
     profile = WhatsAppProfile(
         user_id=user_id,
         display_name=body.display_name,

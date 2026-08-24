@@ -91,6 +91,15 @@ export function PlanComparison({ plans, currentPlan }: PlanComparisonProps) {
               </TableCell>
             ))}
           </TableRow>
+          {/* WhatsApp accounts row */}
+          <TableRow>
+            <TableCell className="font-semibold">WhatsApp Accounts</TableCell>
+            {orderedPlans.map((plan) => (
+              <TableCell key={plan.name} className="text-center font-medium">
+                {plan.max_whatsapp_accounts === 0 ? "1 (managed)" : plan.max_whatsapp_accounts}
+              </TableCell>
+            ))}
+          </TableRow>
           {/* Campaigns row */}
           <TableRow>
             <TableCell className="font-semibold">Campaigns</TableCell>

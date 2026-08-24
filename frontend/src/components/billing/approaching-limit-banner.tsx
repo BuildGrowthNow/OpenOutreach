@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { AlertTriangle } from "lucide-react";
 
 interface ApproachingLimitBannerProps {
-  resourceType: "campaigns" | "linkedin_accounts";
+  resourceType: "campaigns" | "linkedin_accounts" | "whatsapp_accounts";
   used: number;
   limit: number;
   onUpgradeClick: () => void;
@@ -23,7 +23,12 @@ export function ApproachingLimitBanner({
     return null;
   }
 
-  const resourceLabel = resourceType === "campaigns" ? "campaigns" : "LinkedIn accounts";
+  const resourceLabel =
+    resourceType === "campaigns"
+      ? "campaigns"
+      : resourceType === "whatsapp_accounts"
+      ? "WhatsApp accounts"
+      : "LinkedIn accounts";
   const atLimit = used > limit;
 
   return (

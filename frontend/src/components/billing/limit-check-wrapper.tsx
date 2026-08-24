@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 
 interface LimitCheckWrapperProps {
-  limitType: "linkedin_accounts" | "campaigns";
+  limitType: "linkedin_accounts" | "campaigns" | "whatsapp_accounts";
   children: ReactNode;
 }
 
@@ -19,17 +19,27 @@ export function LimitCheckWrapper({ limitType, children }: LimitCheckWrapperProp
     return <>{children}</>;
   }
 
-  const isLinkedInLimit = limitType === "linkedin_accounts";
-  const used = isLinkedInLimit ? usage.linkedin_accounts_used : usage.campaigns_used;
-  const limit = isLinkedInLimit
-    ? billingStatus.linkedin_account_limit
-    : billingStatus.campaign_limit;
+  let used: number;
+  let limit: number | null;
+  let resourceName: string;
+
+  if (limitType === "linkedin_accounts") {
+    used = usage.linkedin_accounts_used;
+    limit = billingStatus.linkedin_account_limit;
+    resourceName = "LinkedIn accounts";
+  } else if (limitType === "whatsapp_accounts") {
+    used = usage.whatsapp_accounts_used;
+    limit = billingStatus.whatsapp_account_limit;
+    resourceName = "WhatsApp accounts";
+  } else {
+    used = usage.campaigns_used;
+    limit = billingStatus.campaign_limit;
+    resourceName = "campaigns";
+  }
 
   if (!limit || used < limit) {
     return <>{children}</>;
   }
-
-  const resourceName = isLinkedInLimit ? "LinkedIn accounts" : "campaigns";
 
   return (
     <div className="space-y-3">

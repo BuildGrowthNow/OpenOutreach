@@ -42,7 +42,7 @@ export function PlanLimitButton({
 
   const tooltipText = !subscriptionActive
     ? "An active subscription is required. Click to choose a plan."
-    : `You've used ${used}/${limit} ${resource === "campaigns" ? "campaigns" : "LinkedIn accounts"}. Upgrade to add more.`;
+    : `You've used ${used}/${limit} ${resource === "campaigns" ? "campaigns" : resource === "whatsapp_accounts" ? "WhatsApp accounts" : "LinkedIn accounts"}. Upgrade to add more.`;
 
   return (
     <TooltipProvider>

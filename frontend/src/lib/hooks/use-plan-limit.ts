@@ -1,6 +1,6 @@
 import { useBilling } from "@/lib/contexts/billing-context";
 
-export type LimitResource = "campaigns" | "linkedin_accounts";
+export type LimitResource = "campaigns" | "linkedin_accounts" | "whatsapp_accounts";
 
 interface PlanLimitResult {
   atLimit: boolean;
@@ -25,6 +25,17 @@ export function usePlanLimit(resource: LimitResource): PlanLimitResult {
   if (resource === "campaigns") {
     const limit = billingStatus.campaign_limit ?? null;
     const used = usage.campaigns_used ?? 0;
+    return {
+      atLimit: limit !== null && used >= limit,
+      used,
+      limit,
+      subscriptionActive,
+    };
+  }
+
+  if (resource === "whatsapp_accounts") {
+    const limit = billingStatus.whatsapp_account_limit ?? null;
+    const used = usage.whatsapp_accounts_used ?? 0;
     return {
       atLimit: limit !== null && used >= limit,
       used,

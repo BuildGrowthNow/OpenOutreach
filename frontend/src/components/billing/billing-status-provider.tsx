@@ -40,6 +40,10 @@ export function BillingStatusProvider({
     return usage?.linkedin_accounts_used || 0;
   }, [usage?.linkedin_accounts_used]);
 
+  const whatsappAccountsUsed = useMemo(() => {
+    return usage?.whatsapp_accounts_used || 0;
+  }, [usage?.whatsapp_accounts_used]);
+
   const campaignsUsed = useMemo(() => {
     return usage?.campaigns_used || 0;
   }, [usage?.campaigns_used]);
@@ -82,6 +86,15 @@ export function BillingStatusProvider({
                 resourceType="linkedin_accounts"
                 used={linkedInAccountsUsed}
                 limit={billingStatus.linkedin_account_limit}
+                onUpgradeClick={handleUpgradeClick}
+              />
+            )}
+
+            {billingStatus && (
+              <ApproachingLimitBanner
+                resourceType="whatsapp_accounts"
+                used={whatsappAccountsUsed}
+                limit={billingStatus.whatsapp_account_limit}
                 onUpgradeClick={handleUpgradeClick}
               />
             )}
