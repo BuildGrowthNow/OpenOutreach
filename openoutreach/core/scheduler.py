@@ -739,7 +739,7 @@ def _auto_qualify_wa_leads(campaign) -> None:
         ):
             deals_col.update_one(
                 {"_id": deal_doc["_id"]},
-                {"$set": {"state": "Qualified"}},
+                {"$set": {"state": "Qualified", "active_channel": "whatsapp"}},
             )
             promoted += 1
 
@@ -886,7 +886,6 @@ def plan_whatsapp_window(campaign, whatsapp_profile_id: str, user_id: str) -> in
         "campaign_id": campaign.pk,
         "state": "Qualified",
         "active_channel": "whatsapp",
-        "phone_on_whatsapp": {"$ne": False},  # exclude confirmed-unregistered leads
         "$or": [
             {"connect_attempts": {"$exists": False}},
             {"connect_attempts": {"$lt": MAX_WA_MESSAGE_ATTEMPTS}},

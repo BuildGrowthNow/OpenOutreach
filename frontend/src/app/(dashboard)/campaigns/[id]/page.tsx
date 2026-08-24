@@ -1141,8 +1141,9 @@ function CampaignSettingsForm({
     const load = async () => {
       try {
         const { apiClient } = await import("@/lib/apiClientV2");
-        const res = await apiClient.get<{ profiles: WAProfileOption[] }>("/whatsapp/profiles");
-        if (res.data?.profiles) setWaProfiles(res.data.profiles.filter((p: WAProfileOption) => p.status === "connected"));
+        const res = await apiClient.get<WAProfileOption[]>("/whatsapp/profiles");
+        const all = res.data ?? [];
+        setWaProfiles(all.filter((p: WAProfileOption) => p.status === "connected"));
       } catch { /* WA not configured */ }
     };
     void load();
@@ -1166,7 +1167,7 @@ function CampaignSettingsForm({
 
   const enableWA = channelSequence.includes("whatsapp");
   const toggleWA = (on: boolean) => {
-    setChannelSequence(on ? ["linkedin", "whatsapp"] : ["linkedin"]);
+    setChannelSequence(on ? ["whatsapp", "linkedin"] : ["linkedin"]);
     if (!on) setWaProfileId("");
   };
 

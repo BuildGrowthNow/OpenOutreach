@@ -507,6 +507,7 @@ async def get_campaign(
         user_id=campaign.user_id,
         team_member_ids=campaign.team_member_ids,
         icp_titles=campaign.icp_titles,
+        target_company_size=campaign.target_company_size,
         follow_up_strategy=campaign.follow_up_strategy,
         target_degrees=campaign.target_degrees,
         created_at=campaign.created_at.isoformat() if campaign.created_at else "",
@@ -516,7 +517,9 @@ async def get_campaign(
         lead_source=campaign.lead_source,
         maps_query=campaign.maps_query,
         maps_country_code=campaign.maps_country_code,
-        maps_backends=campaign.maps_backends,
+        maps_backends=campaign.maps_backends or [],
+        maps_location=campaign.maps_location,
+        classified_sites=campaign.classified_sites or [],
     )
 
 

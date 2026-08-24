@@ -28,6 +28,7 @@ def upsert_listings_as_leads(
     listings: List[BusinessListing],
     campaign_id: str,
     user_id: str,
+    channel: str = "whatsapp",
 ) -> int:
     """Dedup by phone, upsert Leads + Deals. Returns count of new leads created."""
     from openoutreach.mongodb.connection import get_mongodb_collection
@@ -94,7 +95,7 @@ def upsert_listings_as_leads(
                 "state": Deal.DealState.DISCOVERED,
                 "user_id": user_id,
                 "creation_date": now,
-                "active_channel": "linkedin",
+                "active_channel": channel,
             })
 
     logger.info("upsert: %d new leads for campaign %s", created, campaign_id)
