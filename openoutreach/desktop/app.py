@@ -39,7 +39,7 @@ from openoutreach.desktop.updater import (
 logger = logging.getLogger(__name__)
 
 _AUTOSTART_NAME = "LengrowthOutreach"
-_MACOS_LAUNCHAGENT_LABEL = "io.lengrowth.linkedin"
+_MACOS_LAUNCHAGENT_LABEL = "io.lengrowth.outreach"
 
 _WINDOW_TITLE = "Lengrowth"
 _WINDOW_W = 1480

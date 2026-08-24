@@ -425,7 +425,7 @@ def create_msix() -> bool:
          xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
          xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities">
 
-  <Identity Name="io.lengrowth.linkedin"
+  <Identity Name="io.lengrowth.outreach"
             Publisher="CN=Lengrowth"
             Version="{msix_version}"
             ProcessorArchitecture="x64" />
@@ -433,7 +433,7 @@ def create_msix() -> bool:
   <Properties>
     <DisplayName>Lengrowth Outreach</DisplayName>
     <PublisherDisplayName>Lengrowth Outreach</PublisherDisplayName>
-    <Description>Your LinkedIn co-pilot for B2B lead gen</Description>
+    <Description>B2B outreach automation for LinkedIn and WhatsApp</Description>
     <Logo>Assets\\Square150x150Logo.png</Logo>
   </Properties>
 
@@ -455,7 +455,7 @@ def create_msix() -> bool:
                  Executable="Lengrowth.exe"
                  EntryPoint="Windows.FullTrustApplication">
       <uap:VisualElements DisplayName="Lengrowth"
-                          Description="LinkedIn automation"
+                          Description="Outreach automation"
                           BackgroundColor="#22c55e"
                           Square150x150Logo="Assets\\Square150x150Logo.png"
                           Square44x44Logo="Assets\\Square44x44Logo.png">
@@ -551,7 +551,7 @@ RequestExecutionLevel user
 
 ; Welcome page
 !define MUI_WELCOMEPAGE_TITLE "Welcome to Lengrowth Outreach {version}"
-!define MUI_WELCOMEPAGE_TEXT "Fill your calendar with qualified meetings.$\\r$\\n$\\r$\\nDefine your ideal customer once. Lengrowth finds them on LinkedIn, writes a unique message for each, and follows up until they're ready to talk — completely hands-off.$\\r$\\n$\\r$\\nThis wizard will guide you through the installation. Click Next to continue."
+!define MUI_WELCOMEPAGE_TEXT "Fill your calendar with qualified meetings.$\\r$\\n$\\r$\\nDefine your ideal customer once. Lengrowth finds them on LinkedIn and WhatsApp, writes a unique message for each, and follows up until they're ready to talk — completely hands-off.$\\r$\\n$\\r$\\nThis wizard will guide you through the installation. Click Next to continue."
 
 ; Finish page
 !define MUI_FINISHPAGE_RUN "$INSTDIR\\Lengrowth.exe"
