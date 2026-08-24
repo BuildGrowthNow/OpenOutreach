@@ -686,12 +686,12 @@ class RemoteDaemon:
 
         user_id = self._user_id
         if not user_id:
-            logger.warning("user_id not resolved - skipping WA session start (profile_details missing user_id)")
+            logger.warning("WA startup: user_id not resolved - skipping WA session start")
             return
 
         profiles = WhatsAppProfile.find_by_user_id(user_id)
+        logger.info("WA startup: found %d profile(s) for user %s", len(profiles), user_id)
         if not profiles:
-            logger.debug("No WhatsApp profiles for user %s", user_id)
             return
 
         for profile in profiles:
@@ -731,7 +731,11 @@ class RemoteDaemon:
                     from openoutreach.whatsapp.browser.launch import start_whatsapp_session
                     from openoutreach.whatsapp.browser.session import WASession
                     from openoutreach.whatsapp.models.profile import WhatsAppProfile
-                    for profile in WhatsAppProfile.find_by_user_id(self._user_id):
+                    _all_profiles = WhatsAppProfile.find_by_user_id(self._user_id)
+                    _new = [p for p in _all_profiles if p._id not in self._whatsapp_sessions]
+                    if _new:
+                        logger.info("WA task loop: %d new profile(s) detected for user %s", len(_new), self._user_id)
+                    for profile in _new:
                         if profile._id not in self._whatsapp_sessions:
                             wa_session = WASession(profile)
                             self._whatsapp_sessions[profile._id] = wa_session

@@ -85,7 +85,7 @@ def start_whatsapp_session(wa_session: "WASession") -> None:
         if png and png != last_qr_bytes:
             _write_qr_to_db(profile, png)
             last_qr_bytes = png
-            logger.debug("QR updated in DB for %s", profile)
+            logger.info("QR code written to DB for %s - ready to scan", profile)
 
         time.sleep(_QR_POLL_INTERVAL_S)
     else:
