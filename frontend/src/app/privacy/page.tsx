@@ -48,12 +48,12 @@ export default function PrivacyPage() {
                 <li>Phone number (optional)</li>
               </ul>
 
-              <h3 className="text-lg font-semibold text-white mt-6 mb-3">2.2 LinkedIn Data</h3>
+              <h3 className="text-lg font-semibold text-white mt-6 mb-3">2.2 LinkedIn & WhatsApp Data</h3>
               <p>
                 To provide the Service, we collect and store:
               </p>
               <ul className="list-disc list-inside space-y-2 ml-2">
-                <li><strong>LinkedIn Credentials:</strong> Email and password (encrypted at rest using AES-256)</li>
+                <li><strong>LinkedIn & WhatsApp Credentials:</strong> Login details and session data (encrypted at rest using AES-256)</li>
                 <li><strong>Session Cookies:</strong> Authentication tokens for secure API access (encrypted)</li>
                 <li><strong>Profile Data:</strong> Public profile information, connections, messages, and activity</li>
                 <li><strong>Account Settings:</strong> Visibility settings, notification preferences</li>

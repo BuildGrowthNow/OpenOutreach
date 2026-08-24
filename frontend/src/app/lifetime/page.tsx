@@ -7,8 +7,7 @@ import { Check, ArrowRight, Zap, Lock, Infinity } from 'lucide-react';
 import { Navbar } from '@/components/landing/Navbar';
 import { Footer } from '@/components/landing/Footer';
 
-const LAUNCH_DATE = new Date('2026-07-19T00:00:00Z');
-const END_DATE = new Date(LAUNCH_DATE.getTime() + 30 * 24 * 60 * 60 * 1000);
+const END_DATE = new Date('2026-09-30T23:59:59Z');
 const TOTAL_SPOTS = 100;
 const BASELINE_SPOTS = 23; // pre-launch buyers shown for social proof
 
@@ -327,11 +326,11 @@ export default function LifetimeDealPage() {
               <h4 className="text-sm font-bold text-zinc-300 mb-4">Lifetime Deal Terms</h4>
               <ul className="space-y-1.5 text-xs text-zinc-500">
                 <li>Non-transferable and non-refundable (14-day unused exception applies)</li>
-                <li>Includes Pro plan features; 1 LinkedIn account limit</li>
+                <li>Includes Pro plan features; 1 LinkedIn + 1 WhatsApp account limit</li>
                 <li>Desktop execution only — runs on your machine</li>
                 <li>Requires your own LLM API key for AI features</li>
                 <li>Cloud tier ($299/mo managed) not included</li>
-                <li>Capped at 100 buyers, valid through August 18, 2026</li>
+                <li>Capped at 100 buyers, valid through September 30, 2026</li>
                 <li>All future Pro plan updates included at no cost</li>
               </ul>
             </div>
