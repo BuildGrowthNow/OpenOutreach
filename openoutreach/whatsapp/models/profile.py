@@ -124,7 +124,12 @@ class WhatsAppProfile:
             raise RuntimeError("MongoDB collection 'whatsapp_profiles' not available")
         if update_fields:
             full = self.to_dict()
-            doc = {f: full[f] for f in update_fields if f in full}
+            doc = {}
+            for f in update_fields:
+                if f in full:
+                    doc[f] = full[f]
+                elif hasattr(self, f):
+                    doc[f] = getattr(self, f)  # include None values (e.g. clearing qr_png_b64)
         else:
             doc = self.to_dict()
         result = collection.update_one({"_id": self._id}, {"$set": doc}, upsert=True)

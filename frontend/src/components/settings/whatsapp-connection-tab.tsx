@@ -144,9 +144,11 @@ function QrPoller({ profileId, onConnected }: { profileId: string; onConnected: 
 function ProfileCard({
   profile,
   onDelete,
+  onRefresh,
 }: {
   profile: WhatsAppProfile;
   onDelete: (id: string) => void;
+  onRefresh?: () => void;
 }) {
   const [showQr, setShowQr] = useState(profile.status === "disconnected");
   const [deleting, setDeleting] = useState(false);
@@ -192,7 +194,7 @@ function ProfileCard({
       {profile.status === "disconnected" && (
         <CardContent>
           {showQr ? (
-            <QrPoller profileId={profile.id} onConnected={() => setShowQr(false)} />
+            <QrPoller profileId={profile.id} onConnected={() => { setShowQr(false); onRefresh?.(); }} />
           ) : (
             <Button variant="outline" size="sm" onClick={() => setShowQr(true)}>
               Show QR code
@@ -294,7 +296,7 @@ export function WhatsappConnectionTab() {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {profiles.map((p) => (
-            <ProfileCard key={p.id} profile={p} onDelete={handleDelete} />
+            <ProfileCard key={p.id} profile={p} onDelete={handleDelete} onRefresh={load} />
           ))}
         </div>
       )}

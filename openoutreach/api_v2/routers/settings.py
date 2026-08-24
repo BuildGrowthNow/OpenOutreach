@@ -201,6 +201,8 @@ async def update_settings(
 
     for field, value in update_data.items():
         if hasattr(config, field):
+            if field in ("wa_active_days", "active_days") and isinstance(value, str):
+                value = [int(d.strip()) for d in value.split(",") if d.strip().isdigit()]
             setattr(config, field, value)
 
     # Save updates
