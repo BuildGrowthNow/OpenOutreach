@@ -82,7 +82,11 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const { isAdmin } = useAuthStore()
 
   useEffect(() => {
-    setIsDesktop(!!(window as unknown as Record<string, unknown>)['__LENGROWTH_DESKTOP__'])
+    const check = () => !!(window as unknown as Record<string, unknown>)['__LENGROWTH_DESKTOP__']
+    if (check()) { setIsDesktop(true); return }
+    // pywebview injects the flag after the loaded event — retry briefly
+    const timer = setTimeout(() => setIsDesktop(check()), 300)
+    return () => clearTimeout(timer)
   }, [])
 
   const navItems = [

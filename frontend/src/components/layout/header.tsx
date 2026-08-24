@@ -20,7 +20,6 @@ import { getLinkedInProfileHealth } from '@/lib/api/dashboard'
 import { LinkedInProfileHealthResponse } from '@/lib/types/components'
 import { listWhatsAppProfiles, type WhatsAppProfile } from '@/lib/api/whatsapp'
 import { getNotificationSummary, markNotificationAsRead, Notification } from '@/lib/api/notifications'
-import { ProfileSwitcher } from './profile-switcher'
 
 interface HeaderProps {
   onMenuClick: () => void
@@ -290,8 +289,6 @@ const Header = ({ onMenuClick, className }: HeaderProps) => {
             </span>
           )}
 
-          <ProfileSwitcher />
-
           {!loadingHealth && (
             <div className="flex items-center gap-2">
               <button
@@ -326,16 +323,14 @@ const Header = ({ onMenuClick, className }: HeaderProps) => {
             <Button variant="ghost" size="icon" className="relative">
               <Bell className="h-5 w-5" />
               {unreadCount > 0 && (
-                <span className="absolute right-1 top-1 h-5 w-5 rounded-full bg-red-500 text-white text-[10px] flex items-center justify-center font-bold animate-pulse">
-                  {unreadCount > 9 ? '9+' : unreadCount}
-                </span>
+                <span className="absolute bottom-1.5 right-1.5 h-2.5 w-2.5 rounded-full bg-red-500 border-2 border-background" />
               )}
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-96">
-            <div className="px-4 py-3 border-b">
+          <DropdownMenuContent align="end" className="w-96 bg-zinc-900 border-zinc-700">
+            <div className="px-4 py-3 border-b border-zinc-700">
               <div className="flex items-center justify-between">
-                <h3 className="font-semibold">Notifications</h3>
+                <h3 className="font-semibold text-zinc-100">Notifications</h3>
                 {unreadCount > 0 && (
                   <Badge variant="secondary" className="text-xs">
                     {unreadCount} unread
@@ -360,7 +355,7 @@ const Header = ({ onMenuClick, className }: HeaderProps) => {
                   {notifications.map((notification) => (
                     <DropdownMenuItem
                       key={notification.id}
-                      className={`flex gap-3 p-3 border-b last:border-0 hover:bg-accent ${!notification.is_read ? 'bg-accent/50' : ''}`}
+                      className={`flex gap-3 p-3 border-b border-zinc-700 last:border-0 hover:bg-zinc-800 ${!notification.is_read ? 'bg-zinc-800/50' : ''}`}
                       onClick={() => handleNotificationClick(notification.id)}
                     >
                       <div className="flex-shrink-0">

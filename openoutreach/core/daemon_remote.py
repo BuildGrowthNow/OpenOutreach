@@ -607,7 +607,7 @@ class RemoteDaemon:
         try:
             fresh_state = await self._run_on_pw_thread(lambda: _launch_and_auth(True))
         except Exception as e:
-            from linkedin_cli.exceptions import CheckpointChallengeError
+            from linkedin_cli.exceptions import CheckpointChallengeError, AuthenticationError
             from playwright._impl._errors import TargetClosedError
             if isinstance(e, TargetClosedError) and not is_new_profile:
                 # Browser crashed on launch — likely corrupted profile from prior unclean shutdown.
@@ -635,6 +635,12 @@ class RemoteDaemon:
                     )
                     self._show_verification_notification(is_desktop=True)
                     raise
+            elif isinstance(e, AuthenticationError) and is_new_profile:
+                # Fresh profile login failed in headless — relaunch headed so
+                # the user can see what LinkedIn is showing (CAPTCHA, error, etc.)
+                logger.warning("Login failed headless on fresh profile — relaunching headed: %s", e)
+                await self._run_on_pw_thread(session.close)
+                fresh_state = await self._run_on_pw_thread(lambda: _launch_and_auth(False))
             else:
                 logger.error("Login failed: %s", e)
                 raise
