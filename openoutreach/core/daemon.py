@@ -777,6 +777,11 @@ def run_daemon():
                         wa_task.task_type, wa_profile_id, campaign_id,
                     )
                     task_executed = True
+                    try:
+                        from openoutreach.whatsapp.browser.launch import _save_session
+                        _run_on_wa_thread(lambda s=wa_session: _save_session(s))
+                    except Exception:
+                        pass
                 except Exception:
                     import traceback
                     wa_task.mark_failed()

@@ -747,6 +747,11 @@ class RemoteDaemon:
                     )
                     wa_task.mark_completed()
                     self.last_task_at = datetime.now(tz.utc)
+                    try:
+                        from openoutreach.whatsapp.browser.launch import _save_session
+                        await self._run_on_wa_pw_thread(lambda s=wa_session: _save_session(s))
+                    except Exception:
+                        pass
                 except Exception as e:
                     wa_task.mark_failed()
                     logger.error(
@@ -989,7 +994,7 @@ class RemoteDaemon:
                     "Skipping WA task — campaign %s not active (status=%s)",
                     campaign_id, campaign.status if campaign else "not found",
                 )
-                return None
+                raise ValueError(f"Campaign {campaign_id} not active — task skipped")
 
             task_obj = type("Task", (), {
                 "task_type": task_type,

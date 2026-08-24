@@ -67,9 +67,19 @@ interface Stats {
   errors: number;
 }
 
+interface ChannelStats {
+  messages_sent: number;
+  messages_replied: number;
+  response_rate: number;
+}
+
 interface AnalyticsData {
   stats: Stats;
   pipeline?: Record<string, number>;
+  channels?: {
+    linkedin?: ChannelStats;
+    whatsapp?: ChannelStats;
+  };
 }
 
 function KpiCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
@@ -257,6 +267,37 @@ export default function CampaignAnalyticsPage() {
           sub={`${s.conversion_rate.toFixed(1)}% of accepted connections`}
         />
       </div>
+
+      {/* Channel breakdown — only when WA data exists */}
+      {analytics.channels?.whatsapp && analytics.channels.whatsapp.messages_sent > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Channel Breakdown</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="rounded-lg border p-3 space-y-1">
+                <div className="flex items-center gap-1.5 text-sm font-medium text-blue-500">
+                  <Icons.Users className="h-3.5 w-3.5" /> LinkedIn
+                </div>
+                <p className="text-xl font-bold">{analytics.channels.linkedin?.messages_sent ?? 0}</p>
+                <p className="text-xs text-muted-foreground">
+                  {analytics.channels.linkedin?.messages_replied ?? 0} replied · {(analytics.channels.linkedin?.response_rate ?? 0).toFixed(1)}%
+                </p>
+              </div>
+              <div className="rounded-lg border p-3 space-y-1">
+                <div className="flex items-center gap-1.5 text-sm font-medium text-emerald-500">
+                  <Icons.MessageCircle className="h-3.5 w-3.5" /> WhatsApp
+                </div>
+                <p className="text-xl font-bold">{analytics.channels.whatsapp.messages_sent}</p>
+                <p className="text-xs text-muted-foreground">
+                  {analytics.channels.whatsapp.messages_replied} replied · {analytics.channels.whatsapp.response_rate.toFixed(1)}%
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Outreach funnel */}
