@@ -1,4 +1,4 @@
-# Vendored from mem0ai/mem0 — Apache 2.0.
+# Vendored from mem0ai/mem0 - Apache 2.0.
 # Source: https://github.com/mem0ai/mem0/blob/main/mem0/configs/prompts.py
 # Pinned: c239d8a483120143707c42e459b48fb3c7261afb (2026-04-11)
 #

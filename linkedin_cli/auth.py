@@ -3,7 +3,7 @@
 The auth flow is declared, not coded: each step is a ``@auth_flow.transition``
 action annotated with the page state it runs *from* and the states it may legally
 *produce*. The generic :meth:`PageFlow.run` loop (in ``page_state``) does the
-driving — observe the live page, dispatch to the action for that state, repeat
+driving - observe the live page, dispatch to the action for that state, repeat
 until the feed. There is no hand-written loop or dispatch table here.
 
 Both the standalone CLI (``linkedin-cli login``) and the daemon
@@ -57,7 +57,7 @@ def _from_login(session) -> None:
     """Login form → submit credentials.
 
     Landing back on the login page (rejected credentials) is outside the declared
-    ``then`` and so raises — which also enforces the never-resubmit rule: every
+    ``then`` and so raises - which also enforces the never-resubmit rule: every
     credential resubmit hardens LinkedIn's block, so we try exactly once.
     """
     if not getattr(session, "username", None):
@@ -95,4 +95,4 @@ def authenticate(session, *, username=None, password=None) -> None:
     except IllegalPageTransition as exc:
         raise AuthenticationError(str(exc)) from exc
 
-    logger.info(colored("Authenticated — on the feed", "green", attrs=["bold"]))
+    logger.info(colored("Authenticated - on the feed", "green", attrs=["bold"]))

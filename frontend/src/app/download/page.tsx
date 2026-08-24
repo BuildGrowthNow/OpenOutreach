@@ -80,7 +80,7 @@ const steps = [
 const benefits = [
   {
     title: "Your account stays healthy",
-    body: "Activity runs through your real internet connection — not a shared server — so your LinkedIn and WhatsApp usage looks completely normal.",
+    body: "Activity runs through your real internet connection - not a shared server - so your LinkedIn and WhatsApp usage looks completely normal.",
   },
   {
     title: "Full control, always",
@@ -107,7 +107,7 @@ export default function DownloadPage() {
     fetch(GITHUB_API_LATEST, { headers: { Accept: "application/vnd.github+json" } })
       .then((r) => r.json())
       .then((data) => {
-        // tag_name is like "v1.2.2-abc1234" — extract the semver part
+        // tag_name is like "v1.2.2-abc1234" - extract the semver part
         const tag: string = data?.tag_name ?? ""
         const match = tag.match(/v?(\d+\.\d+\.\d+)/)
         if (match) setLatestVersion(match[1])
@@ -156,7 +156,7 @@ export default function DownloadPage() {
           </h1>
           <p className="text-lg sm:text-xl text-zinc-400 leading-relaxed">
             Install the Lengrowth desktop app and your campaigns run
-            automatically in the background — no browser tabs, no manual
+            automatically in the background - no browser tabs, no manual
             clicking, no interruptions.
           </p>
         </div>
@@ -198,7 +198,7 @@ export default function DownloadPage() {
                   Download Installer (.exe){latestVersion && <span className="opacity-70 font-normal">v{latestVersion}</span>}
                 </a>
                 <p className="text-center text-xs text-zinc-600">
-                  Recommended — start menu shortcut &amp; auto-start included
+                  Recommended - start menu shortcut &amp; auto-start included
                 </p>
                 <a
                   href={DOWNLOADS.windowsStandalone}
@@ -209,7 +209,7 @@ export default function DownloadPage() {
                   Standalone (.exe)
                 </a>
                 <p className="text-center text-xs text-zinc-600">
-                  No installation — run directly from any folder
+                  No installation - run directly from any folder
                 </p>
               </div>
 

@@ -427,7 +427,7 @@ async def reconcile_tasks(
         tasks_created += plan_follow_up_window(session, campaign)
         tasks_created += plan_check_pending_window(session, campaign)
 
-        # WhatsApp task planning — only when campaign has WA configured
+        # WhatsApp task planning - only when campaign has WA configured
         wa_profile_id = getattr(campaign, "whatsapp_profile_id", None)
         channel_seq = getattr(campaign, "channel_sequence", None) or []
         if wa_profile_id and "whatsapp" in channel_seq:

@@ -50,7 +50,7 @@ for _pkg in [
     try:
         datas += copy_metadata(_pkg)
     except Exception:
-        pass  # package not installed in this build environment — skip
+        pass  # package not installed in this build environment - skip
 
 # Platform-specific hidden imports
 hiddenimports = [
@@ -140,7 +140,7 @@ hiddenimports = [
 ]
 
 # Packages to completely exclude (heavy/unused in desktop context)
-# NOTE: scipy and numpy are USED by the ML qualifier — do not exclude them.
+# NOTE: scipy and numpy are USED by the ML qualifier - do not exclude them.
 excludes = [
     "matplotlib",
     "pandas",

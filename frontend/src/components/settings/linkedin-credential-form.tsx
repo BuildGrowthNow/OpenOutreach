@@ -131,7 +131,7 @@ export default function LinkedInCredentialForm({
       credentialId = response.data.id;
       if (!initialData) createdCredentialId = credentialId;
 
-      // 2. Verify immediately — desktop mode: just mark stored, daemon does real login
+      // 2. Verify immediately - desktop mode: just mark stored, daemon does real login
       const verifyResp = await verifyLinkedInCredentials(credentialId, {
         testLogin: executionMode !== "desktop",
       });
@@ -152,7 +152,7 @@ export default function LinkedInCredentialForm({
         return;
       }
 
-      // 3. Check if challenge — open VNC modal
+      // 3. Check if challenge - open VNC modal
       const errorType = verifyData?.details?.errorType;
       if (errorType === "awaiting_challenge") {
         setChallengeCredentialId(credentialId);
@@ -175,7 +175,7 @@ export default function LinkedInCredentialForm({
       const isNetworkError = message.includes("fetch") || message.includes("network") || message.includes("timeout") || message.includes("CORS");
 
       if (isNetworkError) {
-        setError("Verification is taking longer than expected. Check the credential card status — it may still complete.");
+        setError("Verification is taking longer than expected. Check the credential card status - it may still complete.");
         toast({
           title: "Connection issue",
           description: "The verification may still be in progress. Check the credential card status in a moment.",
@@ -441,7 +441,7 @@ export default function LinkedInCredentialForm({
                     </div>
                     <div className="flex items-start">
                       <Icons.CheckCircle className="mr-2 mt-0.5 h-3 w-3 text-green-500/80" />
-                      <span>Your login session is kept securely on Lengrowth — never stored in your browser.</span>
+                      <span>Your login session is kept securely on Lengrowth - never stored in your browser.</span>
                     </div>
                   </div>
                 </CardContent>
@@ -470,7 +470,7 @@ export default function LinkedInCredentialForm({
                     <li className="flex items-start">
                       <Icons.CheckCircle className="mr-2 mt-0.5 h-3 w-3 text-blue-400/80" />
                       <span>
-                        Once verified, Lengrowth handles everything automatically — your personal browser is never touched.
+                        Once verified, Lengrowth handles everything automatically - your personal browser is never touched.
                       </span>
                     </li>
                   </ul>

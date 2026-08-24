@@ -146,7 +146,7 @@ class SmartRateLimitContext:
         """Calculate effective rate limit based on all context factors."""
         base_limit = self._get_base_limit(action_type)
 
-        # Always compute time/day multipliers fresh — never trust stored values.
+        # Always compute time/day multipliers fresh - never trust stored values.
         # Caller should pass user-local now so hour/weekday match the user's timezone.
         self._update_time_context(now or datetime.now(tz.utc))
 

@@ -334,13 +334,13 @@ export function ProxyConfigForm({ profileId, onConfigUpdate }: ProxyConfigFormPr
           <AlertDescription>
             <ul className="mt-2 list-disc space-y-1 pl-4 text-xs">
               <li>
-                <strong>Desktop app users:</strong> No proxy needed — your own internet connection is used
+                <strong>Desktop app users:</strong> No proxy needed - your own internet connection is used
               </li>
               <li>
                 <strong>Lengrowth Cloud users:</strong> A mobile proxy is recommended ($50-150/month for unlimited usage)
               </li>
               <li>
-                <strong>Avoid:</strong> Datacenter or hosting IPs — LinkedIn blocks these
+                <strong>Avoid:</strong> Datacenter or hosting IPs - LinkedIn blocks these
               </li>
               <li>
                 <strong>Cost estimate:</strong> One IP can cover 2-3 accounts ($25-75 per account/month)

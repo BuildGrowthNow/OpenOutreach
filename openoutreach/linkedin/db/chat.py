@@ -7,7 +7,7 @@ def _get_lead_and_deal(session, public_identifier: str):
     """Return (lead, deal) for a public identifier in the active campaign.
 
     The conversation is owned by the Deal (per lead+campaign), so sync needs it.
-    Returns (lead, None) when no Deal exists yet — the caller skips the upsert.
+    Returns (lead, None) when no Deal exists yet - the caller skips the upsert.
     """
     from openoutreach.mongodb.models import Deal, Lead
 
@@ -30,7 +30,7 @@ def sync_conversation(session, public_identifier: str) -> list[dict]:
     lead, deal = _get_lead_and_deal(session, public_identifier)
     if deal is None:
         logger.debug(
-            "sync: no deal for %s in %s — skipping", public_identifier, session.campaign
+            "sync: no deal for %s in %s - skipping", public_identifier, session.campaign
         )
         return []
 

@@ -3,7 +3,7 @@
 The browser is the source of truth: LinkedIn can bounce us to a login, an
 authwall, or a checkpoint at any moment, so control loops re-read the page
 rather than trust a remembered state. This module is that single, pure
-classifier. It reads only the URL *path* — never the query string, whose
+classifier. It reads only the URL *path* - never the query string, whose
 ``?session_redirect=…%2Ffeed%2F`` once fooled a whole-URL substring check into
 thinking an unauthenticated login page was the feed.
 """
@@ -61,8 +61,8 @@ def transition(*, when: PageState, then: PageState | set[PageState]):
     The decorated action takes a session (anything exposing a live ``page``) and
     drives the browser. The wrapper enforces, against the *live* page:
 
-    - **precondition** — the page must be in ``when`` before the action runs;
-    - **postcondition** — the action must leave the page in one of ``then``.
+    - **precondition** - the page must be in ``when`` before the action runs;
+    - **postcondition** - the action must leave the page in one of ``then``.
 
     Either violation raises :class:`IllegalPageTransition`. Enforcing the
     postcondition *after* the action (re-reading the page) is what a held-state
@@ -104,10 +104,10 @@ class PageFlow:
     """A page-state flow: a set of ``@transition`` actions plus one generic driver.
 
     Declare a flow with a goal state, then attach its transitions as decorated
-    actions — each registers under its precondition (``when``). :meth:`run` is the
+    actions - each registers under its precondition (``when``). :meth:`run` is the
     observe→act loop, written once for every flow: re-read the live page, dispatch
     to the action for that state, repeat until the goal. There is no per-flow loop
-    and no hand-built dispatch table — a flow *is* its annotated transitions.
+    and no hand-built dispatch table - a flow *is* its annotated transitions.
     """
 
     def __init__(self, name: str, *, goal: PageState):

@@ -142,7 +142,7 @@ export default function LlmSettingsForm({ initialData, onSuccess }: LlmSettingsF
             avoidRules: values.avoidRules.trim(),
           }
         : {
-            // clearing custom LLM — remove key/model/provider so platform default takes over
+            // clearing custom LLM - remove key/model/provider so platform default takes over
             provider: '',
             apiKey: '',
             model: '',
@@ -203,7 +203,7 @@ export default function LlmSettingsForm({ initialData, onSuccess }: LlmSettingsF
                   <>
                     <p className="font-medium text-zinc-100">Running on Lengrowth AI</p>
                     <p className="mt-0.5 text-sm text-zinc-400">
-                      No setup needed — we handle the AI. You can still customise tone and messaging rules below.
+                      No setup needed - we handle the AI. You can still customise tone and messaging rules below.
                     </p>
                   </>
                 )}
@@ -221,7 +221,7 @@ export default function LlmSettingsForm({ initialData, onSuccess }: LlmSettingsF
           </div>
         </div>
 
-        {/* Custom LLM fields — only shown when user opts in */}
+        {/* Custom LLM fields - only shown when user opts in */}
         {useCustomLlm && (
           <div className="space-y-6 rounded-lg border border-zinc-800 bg-zinc-950/40 p-5">
             <div className="grid gap-4 lg:grid-cols-3">
@@ -360,7 +360,7 @@ export default function LlmSettingsForm({ initialData, onSuccess }: LlmSettingsF
           </div>
         )}
 
-        {/* Prompt guardrails — always visible */}
+        {/* Prompt guardrails - always visible */}
         <div className="space-y-2">
           <p className="text-sm font-medium text-zinc-200">Messaging rules</p>
           <p className="text-xs text-zinc-500">These apply regardless of which AI you use.</p>

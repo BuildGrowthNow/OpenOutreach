@@ -165,7 +165,7 @@ class Lead:
                 doc = self.to_dict()
                 collection.update_one({"_id": self._id}, {"$set": doc}, upsert=True)
         except DuplicateKeyError:
-            # Concurrent insert on public_identifier — load the winner's _id
+            # Concurrent insert on public_identifier - load the winner's _id
             existing = collection.find_one({"public_identifier": self.public_identifier})
             if existing:
                 self._id = str(existing["_id"])
@@ -290,7 +290,7 @@ class Lead:
         return LeadManager()
 
     # ------------------------------------------------------------------
-    # Lazy accessors — live Voyager scrape on demand
+    # Lazy accessors - live Voyager scrape on demand
     # ------------------------------------------------------------------
 
     def get_profile(self, session) -> Optional[Dict[str, Any]]:
@@ -317,7 +317,7 @@ class Lead:
             existing = Lead.find_by_urn(urn)
             if existing and existing._id != self._id:
                 logger.warning(
-                    "URN %s already owned by another lead — skipping for %s",
+                    "URN %s already owned by another lead - skipping for %s",
                     urn,
                     self.public_identifier,
                 )
@@ -1188,7 +1188,7 @@ class Deal:
         try:
             result = collection.update_one({"_id": self._id}, {"$set": doc}, upsert=True)
         except DuplicateKeyError:
-            # (lead_id, campaign_id) already exists from a concurrent insert — load it
+            # (lead_id, campaign_id) already exists from a concurrent insert - load it
             existing = collection.find_one(
                 {"lead_id": self.lead_id, "campaign_id": self.campaign_id}
             )
@@ -3394,7 +3394,7 @@ class LinkedInCredentials:
                 return self._mark_verified(session, mark_as_active)
 
             logger.warning(
-                "Challenge detected for %s (state=%s) — browser kept alive for VNC",
+                "Challenge detected for %s (state=%s) - browser kept alive for VNC",
                 self.get_public_email(), page_state,
             )
             self.status = self.STATUS_LOCKED
@@ -3994,7 +3994,7 @@ class LinkedInCredentialLogManager:
         return log, True
 
 
-# Per-user TTL cache for SiteConfig.load — avoids a MongoDB round-trip on
+# Per-user TTL cache for SiteConfig.load - avoids a MongoDB round-trip on
 # every daemon loop iteration. Keyed by user_id (None for the singleton).
 # Format: {user_id: (loaded_at_monotonic, SiteConfig)}
 _SITE_CONFIG_CACHE: dict = {}

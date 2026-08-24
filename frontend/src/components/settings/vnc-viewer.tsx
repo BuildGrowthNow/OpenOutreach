@@ -121,7 +121,7 @@ export function VncViewer({ vncUrl, embedded, profileId }: VncViewerProps) {
           <Alert>
             <Icons.Info className="h-4 w-4" />
             <AlertDescription>
-              Use this viewer to complete LinkedIn security challenges directly — no extra tools needed.
+              Use this viewer to complete LinkedIn security challenges directly - no extra tools needed.
             </AlertDescription>
           </Alert>
           <Button onClick={handleOpenViewer} className="w-full">

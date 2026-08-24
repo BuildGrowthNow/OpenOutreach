@@ -1,7 +1,7 @@
 """Self-hosted onboarding prompt definitions.
 
 Vendored from the (retired) openoutreach-cli. Only the self-hosted profile
-is kept — the cloud-only VPN questions and their geo lookups are dropped.
+is kept - the cloud-only VPN questions and their geo lookups are dropped.
 """
 
 from __future__ import annotations
@@ -60,7 +60,7 @@ LLM_API_KEY = Password("llm_api_key", "LLM API key (e.g. sk-...)")
 AI_MODEL = Text("ai_model", "AI model (e.g. gpt-4o, claude-sonnet-4-5-20250929)")
 LLM_API_BASE = Text(
     "llm_api_base",
-    "LLM API base URL (only for openai_compatible — OpenRouter / Together / Ollama / vLLM)",
+    "LLM API base URL (only for openai_compatible - OpenRouter / Together / Ollama / vLLM)",
     required=False,
 )
 

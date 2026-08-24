@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 class MailboxManager:
-    """Pool-level send pacing — the daily-cap accounting the task and planner share."""
+    """Pool-level send pacing - the daily-cap accounting the task and planner share."""
 
     def __init__(self):
         self.collection = None
@@ -117,7 +117,7 @@ class MailboxManager:
 class Mailbox:
     """One SMTP inbox. host/port default to IceMail's Google Workspace boxes.
 
-    A row exists only once its credentials pass the import auth-check — the
+    A row exists only once its credentials pass the import auth-check - the
     provider has no health API, so the import is the gate. Send-time failures
     are not swallowed: a bad send fails its task and is retried, the box is
     left untouched (re-import with fixed credentials to repair it).
@@ -275,7 +275,7 @@ Mailbox.objects = MailboxManager()
 
 
 def has_mailbox() -> bool:
-    """True when ≥1 mailbox is configured — i.e. email is a viable channel to
+    """True when ≥1 mailbox is configured - i.e. email is a viable channel to
     send from. Gates email enrichment: with no mailbox there's nothing to send,
     so resolving an address is pointless and the deal should take the connect leg."""
     return Mailbox.objects.exists()

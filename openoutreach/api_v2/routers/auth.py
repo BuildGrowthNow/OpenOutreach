@@ -266,7 +266,7 @@ async def login(credentials: LoginRequest, response: Response, request: Request)
     )
 
     # Set readable billing_status cookie so Next.js middleware can gate pages
-    # without a network round-trip. Not HTTP-only — intentionally readable by JS.
+    # without a network round-trip. Not HTTP-only - intentionally readable by JS.
     response.set_cookie(
         key="billing_status",
         value=user.subscription_status or "none",

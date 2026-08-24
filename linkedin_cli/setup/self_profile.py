@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 def discover_self_profile(session) -> dict:
     """Scrape the logged-in member's own profile via Voyager (``me``).
 
-    Pure platform read — no persistence. Returns the parsed profile dict,
+    Pure platform read - no persistence. Returns the parsed profile dict,
     which carries at least ``public_identifier``, ``urn``, and ``full_name``.
     Raises ``AuthenticationError`` if the API call fails (expired/blocked session).
     """

@@ -118,7 +118,7 @@ export default function AdminPlatformPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Platform Health</h1>
           <p className="text-muted-foreground mt-1">
-            Live status — auto-refreshes every 30 seconds
+            Live status - auto-refreshes every 30 seconds
             {lastRefreshed && (
               <span className="ml-2 text-xs">· last updated {lastRefreshed.toLocaleTimeString()}</span>
             )}

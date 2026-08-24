@@ -2,9 +2,9 @@
 
 Two public entry points:
 
-- `get_llm_model()` — builds a `pydantic_ai.Model` from `SiteConfig`,
+- `get_llm_model()` - builds a `pydantic_ai.Model` from `SiteConfig`,
   routing to the right provider.
-- `run_agent_sync(coro)` — drives a pydantic-ai coroutine to completion
+- `run_agent_sync(coro)` - drives a pydantic-ai coroutine to completion
   from sync code, on a dedicated worker thread with a long-lived event
   loop. Used everywhere instead of `Agent.run_sync`.
 
@@ -23,7 +23,7 @@ Why a persistent worker thread (not `Agent.run_sync`, not `asyncio.run`):
 
 A single long-lived loop on a dedicated thread eliminates both: all HTTP
 clients live on the same loop forever, and the runner thread's asyncio
-slot stays inside this module — the caller thread is never touched.
+slot stays inside this module - the caller thread is never touched.
 """
 
 from __future__ import annotations
@@ -47,7 +47,7 @@ class _AgentRunner:
     """Owns one persistent asyncio loop on a dedicated daemon thread.
 
     Construct lazily via `_get_runner()` so importing this module is free.
-    The thread is a daemon, so no explicit shutdown is needed — it ends
+    The thread is a daemon, so no explicit shutdown is needed - it ends
     with the process.
     """
 
@@ -184,7 +184,7 @@ def _validated_site_config(user_id: str | None = None):
     """Load `SiteConfig` and assert the required LLM fields are populated.
 
     Falls back to .env values (via settings) when the user hasn't configured
-    LLM settings in the database — allows a platform-level default key.
+    LLM settings in the database - allows a platform-level default key.
     """
     from openoutreach.core.models import SiteConfig
     from openoutreach.config import settings
@@ -192,7 +192,7 @@ def _validated_site_config(user_id: str | None = None):
     cfg = SiteConfig.load(user_id=user_id)
 
     if not cfg.llm_api_key:
-        # Lifetime plan users must supply their own key — they are not entitled to the
+        # Lifetime plan users must supply their own key - they are not entitled to the
         # platform-managed LLM key.
         if user_id:
             from openoutreach.mongodb.models_user import User
@@ -203,7 +203,7 @@ def _validated_site_config(user_id: str | None = None):
                     "Add it in Settings → LLM / AI Settings."
                 )
 
-        # No custom key — use the full platform LLM config (key, provider, model, base).
+        # No custom key - use the full platform LLM config (key, provider, model, base).
         # Always override provider here: core/models.py defaults it to "openai" even when
         # the DB has no value, so `not cfg.llm_provider` would never be true.
         cfg.llm_api_key = settings.LLM_API_KEY
@@ -211,7 +211,7 @@ def _validated_site_config(user_id: str | None = None):
         cfg.ai_model = cfg.ai_model or settings.AI_MODEL
         cfg.llm_api_base = cfg.llm_api_base or settings.LLM_API_BASE or ""
     else:
-        # Custom key set — fill in any missing fields from platform defaults
+        # Custom key set - fill in any missing fields from platform defaults
         if not cfg.ai_model and settings.AI_MODEL:
             cfg.ai_model = settings.AI_MODEL
         if not cfg.llm_api_base and settings.LLM_API_BASE:

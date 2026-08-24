@@ -1,5 +1,5 @@
 # openoutreach/contacts/service.py
-"""The central contacts store (the hub) — ask the hub before paying BetterContact,
+"""The central contacts store (the hub) - ask the hub before paying BetterContact,
 give back what we find.
 
 Two best-effort calls; a missing token or an outage degrades to a no-op and never
@@ -8,7 +8,7 @@ paid + harvested resolutions lower everyone's BetterContact spend as coverage gr
 
 The geo-gate that keeps EEA/UK/CH out of the store is enforced **server-side** (the
 only trusted boundary). The cheap ``is_eea_located`` check here just avoids a
-pointless round-trip for a lead we already know is out of scope — it reads the
+pointless round-trip for a lead we already know is out of scope - it reads the
 lead's own ``country_code`` (persisted at discovery), so there is no extra scrape.
 """
 
@@ -26,14 +26,14 @@ logger = logging.getLogger(__name__)
 DEFAULT_API_URL = "https://hub.openoutreach.app"
 _TIMEOUT_S = 30
 
-# Where a contributed address came from — the wire values the hub maps to its
+# Where a contributed address came from - the wire values the hub maps to its
 # Contribution.Origin (an unrecognized value degrades to "unknown" server-side).
 ORIGIN_BETTERCONTACT = "bettercontact"  # paid BetterContact hit
 ORIGIN_PROFILE_INFO = "profile_info"  # 1st-degree contact-info overlay
 
 
 def resolve(lead) -> str | None:
-    """A stored email for *lead*, or ``None`` — a miss, no token yet, or an
+    """A stored email for *lead*, or ``None`` - a miss, no token yet, or an
     outage all return ``None``, so the caller falls back to BetterContact."""
     config = SiteConfig.load(user_id=getattr(lead, "user_id", None))
     if not config.contacts_api_token:
@@ -59,14 +59,14 @@ def resolve(lead) -> str | None:
     email = emails[0] if emails else None
     if email:
         logger.info(
-            "hub: resolved %s for %s (saved a paid lookup) — %s credits available",
+            "hub: resolved %s for %s (saved a paid lookup) - %s credits available",
             email,
             lead.public_identifier,
             credits,
         )
     else:
         logger.info(
-            "hub: no stored email for %s — falling back to BetterContact (store balance: %s credits)",
+            "hub: no stored email for %s - falling back to BetterContact (store balance: %s credits)",
             lead.public_identifier,
             credits,
         )
@@ -74,7 +74,7 @@ def resolve(lead) -> str | None:
 
 
 def contribute(session, lead, emails: list[str], origin: str) -> None:
-    """Give *lead*'s email(s) to the store — best-effort, non-EU only.
+    """Give *lead*'s email(s) to the store - best-effort, non-EU only.
 
     ``origin`` records where the address came from (``ORIGIN_BETTERCONTACT`` /
     ``ORIGIN_PROFILE_INFO``). The first contribution registers and mints the
@@ -82,23 +82,23 @@ def contribute(session, lead, emails: list[str], origin: str) -> None:
     ones reuse it.
 
     Honors the operator's ``contribute_to_hub`` opt-in: opted out, the whole
-    give-back is skipped (no email, no vector — and so no give-to-get credit).
+    give-back is skipped (no email, no vector - and so no give-to-get credit).
     """
     if not session.linkedin_profile.contribute_to_hub:
         logger.debug(
-            "hub: operator opted out of the store — skipping %s", lead.public_identifier
+            "hub: operator opted out of the store - skipping %s", lead.public_identifier
         )
         return
     emails = [e for e in emails if e]
     if not emails:
         logger.debug(
-            "hub: nothing to contribute for %s — no email captured",
+            "hub: nothing to contribute for %s - no email captured",
             lead.public_identifier,
         )
         return
     if is_eea_located(lead.country_code):
         logger.debug(
-            "hub: skipping %s (%s) — EEA/UK/CH lead, out of store scope",
+            "hub: skipping %s (%s) - EEA/UK/CH lead, out of store scope",
             lead.public_identifier,
             lead.country_code,
         )
@@ -124,8 +124,8 @@ def _attach_embedding(lead, record: dict) -> None:
     """Add the cached profile vector to *record*, in place, when it's in hand.
 
     The operator's opt-in is already checked in ``contribute``, so this only asks
-    whether a vector exists. Reads the cached bytes (``lead.embedding``) — never
-    ``get_embedding``, which would re-scrape — so a lead that was never embedded
+    whether a vector exists. Reads the cached bytes (``lead.embedding``) - never
+    ``get_embedding``, which would re-scrape - so a lead that was never embedded
     contributes nothing extra. The 384 floats go on the wire as a JSON list; the
     hub packs them to f16 bytes and validates the length.
     """
@@ -152,7 +152,7 @@ def _register(config: SiteConfig, session, record: dict, lead) -> None:
         return
     config.contacts_api_token = token
     config.save()
-    logger.info("hub: registered — API token earned and stored")
+    logger.info("hub: registered - API token earned and stored")
 
 
 def _send(
@@ -172,7 +172,7 @@ def _send(
         return None
     payload = resp.json()
     logger.info(
-        "hub: contributed %s (%s) to the central store — %s credits available",
+        "hub: contributed %s (%s) to the central store - %s credits available",
         lead.public_identifier,
         lead.country_code,
         payload["credits"],

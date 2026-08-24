@@ -40,16 +40,16 @@ DEFAULT_FOLLOW_UP_DAILY_LIMIT = 25
 DEFAULT_EMAIL_DAILY_LIMIT = 30
 
 # ----------------------------------------------------------------------
-# Active-hours schedule — DEPRECATED: now read from SiteConfig DB fields
+# Active-hours schedule - DEPRECATED: now read from SiteConfig DB fields
 # (enable_active_hours, active_start_hour, active_end_hour, active_timezone,
 # active_days). The daemon and scheduler both read from SiteConfig, so
 # frontend Settings → Rate Limits controls runtime behavior directly.
 # These constants are kept only for backwards compatibility with old code.
 # ----------------------------------------------------------------------
-ENABLE_ACTIVE_HOURS = True  # deprecated — use SiteConfig.enable_active_hours
-ACTIVE_START_HOUR = 9  # deprecated — use SiteConfig.active_start_hour
-ACTIVE_END_HOUR = 19  # deprecated — use SiteConfig.active_end_hour
-ACTIVE_TIMEZONE = system_timezone()  # deprecated — use SiteConfig.active_timezone
+ENABLE_ACTIVE_HOURS = True  # deprecated - use SiteConfig.enable_active_hours
+ACTIVE_START_HOUR = 9  # deprecated - use SiteConfig.active_start_hour
+ACTIVE_END_HOUR = 19  # deprecated - use SiteConfig.active_end_hour
+ACTIVE_TIMEZONE = system_timezone()  # deprecated - use SiteConfig.active_timezone
 
 # ----------------------------------------------------------------------
 # Planner cap for check_pending: at most this many lazy slots per 24h
@@ -59,7 +59,7 @@ ACTIVE_TIMEZONE = system_timezone()  # deprecated — use SiteConfig.active_time
 CHECK_PENDING_DAILY_CAP = 100
 
 # ----------------------------------------------------------------------
-# Campaign config (timing + ML defaults — hardcoded, no YAML)
+# Campaign config (timing + ML defaults - hardcoded, no YAML)
 # ----------------------------------------------------------------------
 CAMPAIGN_CONFIG = {
     "check_pending_recheck_after_hours": 2,

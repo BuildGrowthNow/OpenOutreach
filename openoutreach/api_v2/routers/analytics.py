@@ -482,7 +482,7 @@ async def get_analytics_overview(
         "creation_date": {"$gte": since}
     })
 
-    # Calculate rates — response rate uses distinct-deals denominator (Fix #3)
+    # Calculate rates - response rate uses distinct-deals denominator (Fix #3)
     # Conversion rate: both time-filtered in overview endpoint (Fix #5)
     connection_accept_rate = _calculate_rate(total_connections_accepted, total_connections_sent)
     response_rate = _calculate_rate(total_messages_replied, total_distinct_deals_messaged)
@@ -520,7 +520,7 @@ async def get_analytics_overview(
             "creation_date": {"$gte": since}
         })
 
-        # Calculate campaign rates — response rate uses distinct-deals denominator (Fix #3)
+        # Calculate campaign rates - response rate uses distinct-deals denominator (Fix #3)
         campaign_connection_rate = _calculate_rate(connections_accepted, connections_sent)
         campaign_response_rate = _calculate_rate(messages_replied, distinct_deals_messaged)
         # Conversion rate: both time-filtered for the overview endpoint (Fix #5)
@@ -633,7 +633,7 @@ async def get_recent_activity(
     if action_logs_collection is None:
         return {"data": []}
 
-    # Scope by user's campaign_ids — action_logs don't store user_id directly
+    # Scope by user's campaign_ids - action_logs don't store user_id directly
     campaigns_collection = get_mongodb_collection("campaigns")
     user_campaign_ids: list[str] = []
     if campaigns_collection is not None:

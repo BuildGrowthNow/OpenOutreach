@@ -46,7 +46,7 @@ def _clear_qr_from_db(profile: WhatsAppProfile) -> None:
 def start_whatsapp_session(wa_session: "WASession") -> None:
     """Launch Chromium, load stored session, authenticate via QR if needed.
 
-    Runs on the Playwright thread — all sync Playwright calls are safe here.
+    Runs on the Playwright thread - all sync Playwright calls are safe here.
     Updates wa_session.page / context / browser / playwright in-place.
     """
     from playwright.sync_api import sync_playwright

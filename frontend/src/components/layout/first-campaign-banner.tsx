@@ -31,7 +31,7 @@ export function FirstCampaignBanner() {
       <div className="flex items-center gap-3 text-sm font-medium">
         <Rocket className="h-4 w-4 shrink-0" />
         <span>
-          You&apos;re all set — launch your first outreach campaign.{' '}
+          You&apos;re all set - launch your first outreach campaign.{' '}
           <button
             onClick={() => router.push('/campaigns')}
             className="underline underline-offset-2 hover:text-emerald-100 transition-colors"

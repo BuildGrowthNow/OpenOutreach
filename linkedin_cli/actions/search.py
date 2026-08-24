@@ -70,8 +70,8 @@ def visit_profile(session: "LinkedInSession", profile: Dict[str, Any]):
 def _search_url(keyword: str, page: int = 1, network=None) -> str:
     """Build a People-search results URL, optionally filtered by connection degree.
 
-    *network* is an optional list of degree codes — ``F`` (1st), ``S`` (2nd),
-    ``O`` (3rd+) — passed to LinkedIn's ``network`` facet as a JSON array.
+    *network* is an optional list of degree codes - ``F`` (1st), ``S`` (2nd),
+    ``O`` (3rd+) - passed to LinkedIn's ``network`` facet as a JSON array.
     """
     params = {"keywords": keyword, "origin": "FACETED_SEARCH"}
     if network:
@@ -86,7 +86,7 @@ def search_people(session: "LinkedInSession", keyword: str, page: int = 1, netwo
     """Search LinkedIn People; return the result page as a structured envelope.
 
     *network* optionally filters by connection degree (a list of `F`/`S`/`O`
-    codes). Results carry only ``{public_identifier, url}`` — no `urn`; a
+    codes). Results carry only ``{public_identifier, url}`` - no `urn`; a
     follow-up `profile` scrape per url resolves the rest. Returns::
 
         {"query": ..., "page": ..., "network": [...]|None,

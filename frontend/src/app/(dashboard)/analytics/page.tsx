@@ -456,7 +456,7 @@ export default function AnalyticsOverviewPage() {
             </Card>
           </div>
 
-          {/* Per-campaign bars — only shown when viewing all campaigns */}
+          {/* Per-campaign bars - only shown when viewing all campaigns */}
           {campaignBarData.length > 0 && (
             <Card>
               <CardHeader>

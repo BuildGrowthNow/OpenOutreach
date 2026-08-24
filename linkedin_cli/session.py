@@ -1,12 +1,12 @@
 """The session contract every linkedin_cli verb runs against.
 
 linkedin_cli owns no browser lifecycle and no persistence. Each verb is handed
-a *session* — an object that exposes a live Playwright page/context plus a few
-lifecycle hooks — and drives LinkedIn through it. The concrete session is the
+a *session* - an object that exposes a live Playwright page/context plus a few
+lifecycle hooks - and drives LinkedIn through it. The concrete session is the
 caller's job: OpenOutreach's daemon backs it with its Django ``AccountSession``;
 the standalone CLI backs it with a Playwright CLI session adapter.
 
-``LinkedInSession`` is the typed boundary between the two — it lists exactly what
+``LinkedInSession`` is the typed boundary between the two - it lists exactly what
 the platform code touches, and nothing about campaigns, leads, or the DB.
 """
 from __future__ import annotations
@@ -29,7 +29,7 @@ class LinkedInSession(Protocol):
     """Browser session a linkedin_cli verb attaches to.
 
     Implementations own browser launch, the persistent profile, auth/cookies,
-    and fingerprint — none of which live here. The verbs only ever read
+    and fingerprint - none of which live here. The verbs only ever read
     ``page``/``context``, resolve their own identity via ``self_profile``, and
     call the lifecycle hooks below.
     """
@@ -65,7 +65,7 @@ class LinkedInSession(Protocol):
 #
 # The launcher (``linkedin-cli session open``) owns the bound browser and
 # records its websocket endpoint here; verb processes look it up by name. This
-# is the only on-disk state linkedin_cli keeps — a pointer to a running browser,
+# is the only on-disk state linkedin_cli keeps - a pointer to a running browser,
 # not auth/cookies (those live in the launcher's persistent profile).
 
 def linkedin_cli_home() -> Path:
@@ -156,7 +156,7 @@ class PlaywrightCliSession:
             self.page.wait_for_load_state("domcontentloaded")
 
     def close(self) -> None:
-        # Disconnect this client only — the launcher owns the browser/profile.
+        # Disconnect this client only - the launcher owns the browser/profile.
         try:
             if self._browser:
                 self._browser.close()

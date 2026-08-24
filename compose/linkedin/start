@@ -3,7 +3,7 @@
 
 set -euo pipefail
 
-# Virtual display (always needed — Playwright launches headed mode)
+# Virtual display (always needed - Playwright launches headed mode)
 rm -f /tmp/.X99-lock
 Xvfb :99 -screen 0 1920x1080x24 &
 sleep 1
@@ -81,13 +81,13 @@ gosu ubuntu python -m openoutreach.cli runserver --host 0.0.0.0 --port 8001 &
 API_PID=$!
 echo "FastAPI started with PID $API_PID"
 
-# Run the daemon (MongoDB-native task queue) — non-fatal if it crashes
+# Run the daemon (MongoDB-native task queue) - non-fatal if it crashes
 echo "Starting daemon..."
 gosu ubuntu python -m openoutreach.cli rundaemon "$@" &
 DAEMON_PID=$!
 echo "Daemon started with PID $DAEMON_PID"
 
-# Wait for critical services (Next.js + FastAPI) — daemon crash is non-fatal
+# Wait for critical services (Next.js + FastAPI) - daemon crash is non-fatal
 wait -n $NEXTJS_PID $API_PID
 EXIT_CODE=$?
 echo "A critical process exited with status $EXIT_CODE, shutting down..."

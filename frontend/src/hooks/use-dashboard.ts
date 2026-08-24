@@ -139,7 +139,7 @@ export function useDashboard() {
         setRecentActivity(response.data.data || [])
       }
     } catch {
-      // silently ignore — activity feed is non-critical
+      // silently ignore - activity feed is non-critical
     } finally {
       setRecentActivityLoading(false)
     }

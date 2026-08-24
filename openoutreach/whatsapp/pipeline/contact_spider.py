@@ -2,7 +2,7 @@
 
 Finds leads in a campaign that have a website but no phone, fetches their
 contact/about pages, extracts E.164 numbers via tel: links or regex, and
-writes them back to Lead.phone.  No Playwright needed — pure HTTP.
+writes them back to Lead.phone.  No Playwright needed - pure HTTP.
 """
 from __future__ import annotations
 

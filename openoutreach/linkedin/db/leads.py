@@ -55,7 +55,7 @@ def create_enriched_lead(session, url: str, profile: Dict[str, Any]) -> Optional
 
     if urn and Lead.get_by_urn(urn) is not None:
         logger.info(
-            "Lead with URN %s already exists — skipping duplicate %s",
+            "Lead with URN %s already exists - skipping duplicate %s",
             urn,
             public_id,
         )
@@ -206,7 +206,7 @@ def discover_and_enrich(session, urls):
     """For each new URL, call Voyager API, create enriched Lead (with embedding).
 
     Skips URLs that already have a Lead, caps at enrich_max_per_page (DOM
-    order — LinkedIn's own relevance), and pauses a human-ish
+    order - LinkedIn's own relevance), and pauses a human-ish
     [enrich_min_delay_seconds, enrich_max_delay_seconds] between scrapes.
     """
     from linkedin_cli.api.client import PlaywrightLinkedinAPI
@@ -238,11 +238,11 @@ def discover_and_enrich(session, urls):
         try:
             profile, _raw = api.get_profile(profile_url=url)
         except Exception:
-            logger.warning("Voyager API failed for %s — skipping", url)
+            logger.warning("Voyager API failed for %s - skipping", url)
             continue
 
         if not profile:
-            logger.warning("Empty profile for %s — skipping", url)
+            logger.warning("Empty profile for %s - skipping", url)
             continue
 
         if create_enriched_lead(session, url, profile) is not None:
@@ -256,7 +256,7 @@ def discover_and_enrich(session, urls):
 def _cache_urn_from_profile(lead, profile: Dict[str, Any]):
     """Promote ``profile['urn']`` onto the Lead row if not already cached.
 
-    The only durable field we extract from a fresh scrape — everything
+    The only durable field we extract from a fresh scrape - everything
     else lives in memory for the lifetime of the caller's dict.
     """
     urn = profile.get("urn") or None

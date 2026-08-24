@@ -1,6 +1,6 @@
 # Docker Installation and Usage
 
-## Quick Start (Pre-built Image — Recommended)
+## Quick Start (Pre-built Image - Recommended)
 
 Pre-built production images are published to GitHub Container Registry on every push to `master`.
 
@@ -24,7 +24,7 @@ The interactive onboarding will guide you through LinkedIn credentials, LLM API 
 
 ### Live Browser View (noVNC)
 
-The container ships a noVNC web viewer for watching the automation live — and for clearing a LinkedIn security checkpoint by hand when one appears. Open it in any browser (no password):
+The container ships a noVNC web viewer for watching the automation live - and for clearing a LinkedIn security checkpoint by hand when one appears. Open it in any browser (no password):
 
 ```
 http://localhost:6080/vnc.html
@@ -35,7 +35,7 @@ Prefer a native VNC client? One is also exposed on `localhost:5900`. On Linux wi
 vinagre vnc://127.0.0.1:5900
 ```
 
-> Both ports must be published *and* `ENABLE_VNC=true` must be set for the viewers to work — see the `-e ENABLE_VNC=true -p 6080:6080 -p 5900:5900` flags in the run command above.
+> Both ports must be published *and* `ENABLE_VNC=true` must be set for the viewers to work - see the `-e ENABLE_VNC=true -p 6080:6080 -p 5900:5900` flags in the run command above.
 
 > **Seeing `SyntaxError: ... does not provide an export named 'encodeUTF8'`?** That's a stale browser cache of noVNC assets from an older image, not a container bug. Hard-reload the page (Ctrl+Shift+R) or open it in a private window.
 

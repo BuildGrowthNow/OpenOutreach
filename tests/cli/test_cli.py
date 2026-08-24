@@ -1,4 +1,4 @@
-"""Tests for the linkedin_cli verb CLI — dispatch, error mapping, handle parsing.
+"""Tests for the linkedin_cli verb CLI - dispatch, error mapping, handle parsing.
 
 The session is mocked at the boundary (no real browser): we inject a fake
 session via ``read_session`` + ``PlaywrightCliSession`` so the verb runner is
@@ -137,7 +137,7 @@ def test_human_profile_is_a_brief_summary():
         "positions": [1, 2, 3], "educations": [1],
     })
     assert summary.splitlines() == [
-        "Alice Smith — Engineer",
+        "Alice Smith - Engineer",
         "Berlin · Software",
         "3 positions · 1 schools",
         "(--json for the full record)",

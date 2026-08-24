@@ -44,7 +44,7 @@ interface AuthState {
   resendVerification: (email: string) => Promise<{ error: string | null }>
 }
 
-// API base URL — use relative path so requests go through the Next.js proxy
+// API base URL - use relative path so requests go through the Next.js proxy
 // (avoids CORS issues when the backend is on a different domain)
 const API_BASE = '/api'
 
@@ -278,7 +278,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       // On desktop, try to get the refresh token from the system keychain if the
       // HTTP-only cookie is gone (i.e. after the webview is restarted).
-      // Poll briefly for pywebview.api — it's injected by pywebview's bridge but
+      // Poll briefly for pywebview.api - it's injected by pywebview's bridge but
       // may not be fully registered when the first useEffect fires.
       let body: string | undefined
       if (typeof window !== 'undefined' && typeof (window as unknown as { pywebview?: unknown }).pywebview !== 'undefined') {

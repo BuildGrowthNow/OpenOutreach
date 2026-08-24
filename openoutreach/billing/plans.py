@@ -113,7 +113,7 @@ PLANS: list[PlanDefinition] = [
         "max_campaigns": None,
         "features": [
             "Everything in Pro",
-            "Lifetime access — pay once",
+            "Lifetime access - pay once",
             "All future updates included",
         ],
     },

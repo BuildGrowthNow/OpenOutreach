@@ -27,7 +27,7 @@ def capture_failure(session: Any, error: BaseException) -> None:
 
     page: Any | None = getattr(session, "page", None)
     if page is None or page.is_closed():
-        logger.debug("No live page — skipping HTML/screenshot capture")
+        logger.debug("No live page - skipping HTML/screenshot capture")
         (folder / "page.html").write_text("<!-- page was None or closed -->")
         return
 

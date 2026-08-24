@@ -1,5 +1,5 @@
 # openoutreach/linkedin/tasks/check_pending.py
-"""Check pending task — re-checks one due PENDING deal in the campaign.
+"""Check pending task - re-checks one due PENDING deal in the campaign.
 
 Lazy: the slot carries only ``campaign_id``. The handler picks the
 oldest-due PENDING deal at execution time. If the recheck leaves the
@@ -69,12 +69,12 @@ def handle_check_pending(task, session, qualifiers):
     campaign = session.campaign
     deal = _next_due_pending_deal(campaign)
     if deal is None:
-        logger.info("[%s] check_pending: no due PENDING deals — slot skipped", campaign)
+        logger.info("[%s] check_pending: no due PENDING deals - slot skipped", campaign)
         return
 
     lead = Lead.get(deal.lead_id)
     if not lead:
-        logger.warning("[%s] check_pending: Lead not found for deal %s — skipped", campaign, deal._id)
+        logger.warning("[%s] check_pending: Lead not found for deal %s - skipped", campaign, deal._id)
         return
 
     public_id = lead.public_identifier
@@ -89,7 +89,7 @@ def handle_check_pending(task, session, qualifiers):
             _pending_anchor = _pending_anchor.replace(tzinfo=timezone.utc)
         if (now - _pending_anchor).days >= MAX_PENDING_DAYS:
             logger.info(
-                "[%s] check_pending: %s has been PENDING %d+ days — auto-failing (unresponsive)",
+                "[%s] check_pending: %s has been PENDING %d+ days - auto-failing (unresponsive)",
                 campaign, public_id, MAX_PENDING_DAYS,
             )
             set_profile_state(session, public_id, models.Deal.DealState.FAILED, reason="unresponsive")
@@ -114,10 +114,10 @@ def handle_check_pending(task, session, qualifiers):
         return
 
     if new_state == models.Deal.DealState.PENDING:
-        # Still pending — double the backoff before set_profile_state so the
+        # Still pending - double the backoff before set_profile_state so the
         # state hook re-stamps next_check_pending_at with the doubled value.
         old = deal.backoff_hours or 0
         new = _double_backoff(deal)
-        logger.info("%s still pending — backoff %.1fh → %.1fh", public_id, old, new)
+        logger.info("%s still pending - backoff %.1fh → %.1fh", public_id, old, new)
 
     set_profile_state(session, public_id, new_state)

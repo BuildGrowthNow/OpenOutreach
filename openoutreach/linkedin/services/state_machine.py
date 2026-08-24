@@ -3,7 +3,7 @@
 """State Machine Engine for Campaign workflow automation.
 
 NOTE: This module is part of the disabled State Machine feature (behind feature flag).
-Models and manager patterns are partially ported from Django — not production-ready.
+Models and manager patterns are partially ported from Django - not production-ready.
 """
 
 from __future__ import annotations

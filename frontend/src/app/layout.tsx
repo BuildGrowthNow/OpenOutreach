@@ -30,7 +30,7 @@ const lato = Lato({
 })
 
 export const metadata: Metadata = {
-  title: "Lengrowth Outreach — LinkedIn Growth Automation",
+  title: "Lengrowth Outreach - LinkedIn Growth Automation",
   description: "Scale your LinkedIn presence with AI-powered automation and smart workflows",
   icons: {
     icon: [

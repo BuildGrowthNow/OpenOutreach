@@ -8,23 +8,23 @@ import { TextReveal } from './text-reveal';
 const faqs = [
   {
     question: "Will my LinkedIn or WhatsApp account get restricted?",
-    answer: "Lengrowth mimics human timing on both channels — random delays, daily limits, activity spread across hours. On desktop plans, it uses your own machine and IP, making activity indistinguishable from normal browsing. On the Cloud plan, we handle everything on managed infrastructure. Most users run both channels for months without any issues.",
+    answer: "Lengrowth mimics human timing on both channels - random delays, daily limits, activity spread across hours. On desktop plans, it uses your own machine and IP, making activity indistinguishable from normal browsing. On the Cloud plan, we handle everything on managed infrastructure. Most users run both channels for months without any issues.",
   },
   {
     question: "How does WhatsApp outreach work?",
-    answer: "Lengrowth finds leads with phone numbers from Google Maps, Facebook, classified listings, and other sources — then messages them directly on WhatsApp. Same AI personalization, same follow-up sequences, same unified inbox as LinkedIn. You scan a QR code once to connect your WhatsApp account, and the desktop app handles the rest.",
+    answer: "Lengrowth finds leads with phone numbers from Google Maps, Facebook, classified listings, and other sources - then messages them directly on WhatsApp. Same AI personalization, same follow-up sequences, same unified inbox as LinkedIn. You scan a QR code once to connect your WhatsApp account, and the desktop app handles the rest.",
   },
   {
     question: "How is this different from other outreach tools?",
-    answer: "Most tools are LinkedIn-only and run on shared cloud IPs that platforms already flag. Lengrowth runs two independent channels — LinkedIn and WhatsApp — on your own machine and IP, so activity looks exactly like normal browsing. No proxy costs, no shared infrastructure. Plus the AI writes genuinely personalized messages, not template swaps.",
+    answer: "Most tools are LinkedIn-only and run on shared cloud IPs that platforms already flag. Lengrowth runs two independent channels - LinkedIn and WhatsApp - on your own machine and IP, so activity looks exactly like normal browsing. No proxy costs, no shared infrastructure. Plus the AI writes genuinely personalized messages, not template swaps.",
   },
   {
     question: "Do the AI messages actually sound good?",
-    answer: "The AI reads each prospect's full profile — experience, posts, about section — and writes a short, specific message referencing something real. It's not 'Hi {first_name}, I noticed we're in the same industry.' People respond because it doesn't feel automated.",
+    answer: "The AI reads each prospect's full profile - experience, posts, about section - and writes a short, specific message referencing something real. It's not 'Hi {first_name}, I noticed we're in the same industry.' People respond because it doesn't feel automated.",
   },
   {
     question: "What happens when someone replies?",
-    answer: "The sequence stops immediately. The reply lands in your Lengrowth inbox and you take over the conversation manually. We're an outreach tool, not a chatbot — you handle the selling.",
+    answer: "The sequence stops immediately. The reply lands in your Lengrowth inbox and you take over the conversation manually. We're an outreach tool, not a chatbot - you handle the selling.",
   },
   {
     question: "What if I already have a CRM?",
@@ -32,7 +32,7 @@ const faqs = [
   },
   {
     question: "Is there a free trial?",
-    answer: "Yes — 7 days full access on the Starter plan. No credit card required to start.",
+    answer: "Yes - 7 days full access on the Starter plan. No credit card required to start.",
   },
 ];
 

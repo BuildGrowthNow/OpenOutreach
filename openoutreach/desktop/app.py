@@ -418,7 +418,7 @@ class TrayApp:
             _wv_data = Path.home() / ".lengrowth" / "webview2"
         _wv_data.mkdir(parents=True, exist_ok=True)
 
-        # pywebview.start() is blocking — run in current thread
+        # pywebview.start() is blocking - run in current thread
         # user_data_path was added in pywebview 5.x; guard for frozen builds on 4.x
         _wv_ver = getattr(webview, "__version__", "4.0")
         _wv_major = int(str(_wv_ver).split(".")[0])
@@ -428,7 +428,7 @@ class TrayApp:
             webview.start(debug=False)  # type: ignore[call-arg]
 
     def _on_loaded(self):
-        """Called after each page navigation — re-inject the desktop globals."""
+        """Called after each page navigation - re-inject the desktop globals."""
         if self._window:
             try:
                 self._window.evaluate_js(_INJECT_JS)
@@ -436,7 +436,7 @@ class TrayApp:
                 logger.debug("JS inject failed: %s", e)
 
     def _on_window_closed(self):
-        """Called when the user closes the window — hide it, don't quit."""
+        """Called when the user closes the window - hide it, don't quit."""
         self._window = None
         logger.info("Window closed")
 
@@ -449,7 +449,7 @@ class TrayApp:
             except Exception:
                 pass
 
-        # Window was closed — open a new one in a background thread so the tray
+        # Window was closed - open a new one in a background thread so the tray
         # keeps running.  Guard with _window_thread so we never call
         # webview.start() twice concurrently (pywebview doesn't support that).
         if self._window_thread is not None and self._window_thread.is_alive():
@@ -488,7 +488,7 @@ class TrayApp:
             prompt_update(self._pending_update)
 
     def _on_apply_update(self):
-        """Tray: apply a previously downloaded update — replace exe and restart."""
+        """Tray: apply a previously downloaded update - replace exe and restart."""
         if not can_auto_update():
             if self._pending_update:
                 prompt_update(self._pending_update)
@@ -505,10 +505,10 @@ class TrayApp:
                         self._window.destroy()
                     except Exception:
                         pass
-                # apply_update_windows calls os._exit — never returns
+                # apply_update_windows calls os._exit - never returns
                 apply_update_windows(exe_path, download_url=download_url)
                 return
-        # exe gone — fall back to browser download
+        # exe gone - fall back to browser download
         if self._pending_update:
             prompt_update(self._pending_update)
 
@@ -533,7 +533,7 @@ class TrayApp:
             icon.notify("Login successful", "Lengrowth is ready")
 
         # Daemon start is deferred until the frontend calls confirm_auth() after
-        # successful login/initialize — avoids starting with stale credentials if
+        # successful login/initialize - avoids starting with stale credentials if
         # the user switches accounts.
 
         if self.config.autostart:
@@ -568,7 +568,7 @@ class TrayApp:
 
         # Always resolve fresh profile_id so a credential delete+recreate doesn't
         # leave a stale ID in the keychain causing 404s on every daemon start.
-        # _resolve_profile_id may refresh the token internally on 401 — re-read
+        # _resolve_profile_id may refresh the token internally on 401 - re-read
         # token afterwards so the daemon gets the latest one.
         resolved = self._resolve_profile_id(token)
         token = self.auth.get_token() or token  # pick up refreshed token if any
@@ -579,7 +579,7 @@ class TrayApp:
                 self.auth.login(token, resolved, refresh_token=refresh_token)
             profile_id = resolved
         else:
-            # API unreachable — fall back to keychain so we can still start offline
+            # API unreachable - fall back to keychain so we can still start offline
             profile_id = self.auth.get_profile_id()
 
         if not profile_id:
@@ -614,7 +614,7 @@ class TrayApp:
             except Exception as e:
                 from openoutreach.core.daemon_remote import BrowserNotFoundError
                 logger.exception("Daemon error: %s", e)
-                msg = "No supported browser found." if isinstance(e, BrowserNotFoundError) else "Daemon error — check logs."
+                msg = "No supported browser found." if isinstance(e, BrowserNotFoundError) else "Daemon error - check logs."
                 if self.icon:
                     self.icon.notify("Daemon Error", msg)
             finally:
@@ -684,7 +684,7 @@ class TrayApp:
             return _fetch(token)
         except urllib.error.HTTPError as e:
             if e.code == 401:
-                # Token expired — try refreshing before giving up
+                # Token expired - try refreshing before giving up
                 refresh_token = self.auth.get_refresh_token()
                 if refresh_token:
                     new_token = self._try_refresh_token(refresh_token)
@@ -729,7 +729,7 @@ class TrayApp:
 
         On Windows frozen exe: if a pending update exe is on disk, apply it immediately
         (PowerShell replace + restart) before the window opens.
-        If no pending update exists, start the background checker — the app opens normally
+        If no pending update exists, start the background checker - the app opens normally
         and the download happens silently in the background.
         """
         # Phase 1: apply any previously downloaded update
@@ -744,14 +744,14 @@ class TrayApp:
                 except Exception:
                     is_upgrade = False
                 if not is_upgrade:
-                    # Pending is same or older than running version — discard
+                    # Pending is same or older than running version - discard
                     logger.info("Discarding stale pending_update.json (pending v%s <= running v%s)", ver, __version__)
                     clear_pending_update()
                 else:
                     logger.info("Applying previously downloaded update v%s from %s", ver, exe_path)
                     download_url = pending.get("download_url", "")
                     apply_update_windows(exe_path, download_url=download_url)
-                    # apply_update_windows calls os._exit — never reaches here
+                    # apply_update_windows calls os._exit - never reaches here
 
         # Phase 2: non-blocking background download (app opens immediately)
         self._start_background_update_check()
@@ -769,7 +769,7 @@ class TrayApp:
                     return
                 ver = info["version"]
                 if can_auto_update():
-                    logger.info("Update v%s available — downloading in background", ver)
+                    logger.info("Update v%s available - downloading in background", ver)
                     path = await download_update(info["download_url"], version=ver)
                     if path:
                         save_pending_update(info, path)
@@ -815,7 +815,7 @@ class TrayApp:
                     if info and not self._pending_update:
                         ver = info["version"]
                         if can_auto_update():
-                            logger.info("Periodic check: update v%s available — downloading in background", ver)
+                            logger.info("Periodic check: update v%s available - downloading in background", ver)
                             path = await download_update(info["download_url"], version=ver)
                             if path:
                                 save_pending_update(info, path)
@@ -874,7 +874,7 @@ class TrayApp:
 
         # Eagerly validate the stored token before opening the window so
         # _start_window knows whether to open /dashboard or /login.
-        # This must run synchronously here — _on_setup fires in a background
+        # This must run synchronously here - _on_setup fires in a background
         # thread (tray) and can race with _start_window otherwise.
         if self.auth.is_logged_in() and self._token_valid is None:
             refresh_token = self.auth.get_refresh_token()
@@ -905,7 +905,7 @@ class TrayApp:
         )
         tray_thread.start()
 
-        # Open the main window — this blocks until the app quits
+        # Open the main window - this blocks until the app quits
         self._start_window()
 
 

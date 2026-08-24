@@ -3,7 +3,7 @@
 
 No error handling by design: a failed send raises and the EMAIL task is marked
 FAILED by the daemon, then retried on the next cycle. The mailbox is left
-untouched — re-import with fixed credentials to repair a dead box.
+untouched - re-import with fixed credentials to repair a dead box.
 """
 
 from __future__ import annotations

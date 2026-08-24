@@ -258,7 +258,7 @@ async def get_current_usage(
                 linkedin_accounts_used = 0
 
         if campaigns_coll is not None:
-            # Count active (non-paused) campaigns — must match PlanEnforcer.can_create_campaign
+            # Count active (non-paused) campaigns - must match PlanEnforcer.can_create_campaign
             campaigns_used = campaigns_coll.count_documents({
                 "user_id": user_id,
                 "is_paused": False,

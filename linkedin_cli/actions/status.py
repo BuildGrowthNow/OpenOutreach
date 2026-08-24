@@ -32,7 +32,7 @@ SELECTORS = {
 def _fetch_degree(session, public_identifier: str, profile: Dict[str, Any]) -> Optional[int]:
     """Return connection degree from API, trying two decorations.
 
-    1. Full profile scrape (FullProfileWithEntities) — mutates ``profile``
+    1. Full profile scrape (FullProfileWithEntities) - mutates ``profile``
        in place with the fresh fields and reads ``connection_degree``
        from the response.
     2. If that returns None, fall back to the lightweight
@@ -82,11 +82,11 @@ def _inspect_ui(session, profile: Dict[str, Any]) -> ProfileState:
         return ProfileState.QUALIFIED
 
     if top_card.locator(SELECTORS["message_button"]).count() > 0:
-        logger.debug("UI → 'Message' button detected, no Connect/Pending — already CONNECTED")
+        logger.debug("UI → 'Message' button detected, no Connect/Pending - already CONNECTED")
         return ProfileState.CONNECTED
 
     logger.warning(
-        "UI → no connect/pending/message indicators for %s — page dumped, returning QUALIFIED as fallback",
+        "UI → no connect/pending/message indicators for %s - page dumped, returning QUALIFIED as fallback",
         profile.get("public_identifier"),
     )
     dump_page_html(session, profile, category="status")
@@ -115,8 +115,8 @@ def get_connection_status(
     """Detect connection status via API with UI fallback.
 
     Priority:
-      1. API degree (two decorations) — degree 1 = CONNECTED.
-      2. For degree 2/3 or None — UI inspection decides between
+      1. API degree (two decorations) - degree 1 = CONNECTED.
+      2. For degree 2/3 or None - UI inspection decides between
          PENDING, QUALIFIED, and CONNECTED.
     """
     public_identifier: str = profile.get("public_identifier") or ""
@@ -129,5 +129,5 @@ def get_connection_status(
         logger.debug("API degree 1 → CONNECTED")
         return ProfileState.CONNECTED
 
-    # degree 2/3 or None — let the UI decide
+    # degree 2/3 or None - let the UI decide
     return _inspect_ui(session, profile)

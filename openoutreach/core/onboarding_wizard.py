@@ -206,7 +206,7 @@ class MultilineText(Question):
     """Inline multiline text input (Enter for newline, Ctrl+D to submit).
 
     Required fields prompt directly.
-    Optional fields first ask a yes/no gate — answer "no" to skip.
+    Optional fields first ask a yes/no gate - answer "no" to skip.
     """
 
     def _prompt(self, default, **_):

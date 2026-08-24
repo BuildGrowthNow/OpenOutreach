@@ -271,7 +271,7 @@ def parse_linkedin_voyager_response(
                 if edu:
                     educations.append(_enrich_education(edu, urn_map))
 
-    # Resolve geo — try direct *geo first, then nested geoLocation.*geo
+    # Resolve geo - try direct *geo first, then nested geoLocation.*geo
     geo_entity = _resolve_star_field(profile_entity, urn_map, "*geo")
     if not geo_entity:
         geo_location = profile_entity.get("geoLocation")

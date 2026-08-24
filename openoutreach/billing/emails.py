@@ -316,7 +316,7 @@ def send_welcome_email(user: User) -> bool:
     body = (
         _h1(f"Welcome to {brand}!")
         + _p(f"Hi {user.full_name or 'there'},")
-        + _p(f"Your free {trial_days}-day trial has started. You have full access to {brand} Pro — no credit card required.")
+        + _p(f"Your free {trial_days}-day trial has started. You have full access to {brand} Pro - no credit card required.")
         + _section_heading("Your trial includes")
         + _ul([
             "Up to 1 LinkedIn account",
@@ -338,7 +338,7 @@ def send_welcome_email(user: User) -> bool:
 
 Hi {user.full_name or 'there'},
 
-Your free {trial_days}-day trial has started. You have full access to {brand} Pro — no credit card required.
+Your free {trial_days}-day trial has started. You have full access to {brand} Pro - no credit card required.
 
 Your trial includes:
 - Up to 1 LinkedIn account
@@ -368,10 +368,10 @@ def send_trial_expiry_warning(user: User, days_remaining: int) -> bool:
         + _p(f"Your {brand} trial expires <strong style=\"color:#f4f4f5;\">tomorrow</strong>. After that, your campaigns will pause.")
         + _section_heading("Available plans")
         + _ul([
-            "<strong style=\"color:#f4f4f5;\">Starter — $19/month:</strong> 1 LinkedIn account, 3 campaigns",
-            "<strong style=\"color:#f4f4f5;\">Pro — $49/month:</strong> 1 LinkedIn account, unlimited campaigns, voice notes, API access",
-            "<strong style=\"color:#f4f4f5;\">Business — $99/month:</strong> 3 LinkedIn accounts, team members, priority support",
-            "<strong style=\"color:#f4f4f5;\">Agency — $249/month:</strong> 10 LinkedIn accounts, white-label branding, unlimited team members",
+            "<strong style=\"color:#f4f4f5;\">Starter - $19/month:</strong> 1 LinkedIn account, 3 campaigns",
+            "<strong style=\"color:#f4f4f5;\">Pro - $49/month:</strong> 1 LinkedIn account, unlimited campaigns, voice notes, API access",
+            "<strong style=\"color:#f4f4f5;\">Business - $99/month:</strong> 3 LinkedIn accounts, team members, priority support",
+            "<strong style=\"color:#f4f4f5;\">Agency - $249/month:</strong> 10 LinkedIn accounts, white-label branding, unlimited team members",
         ])
         + _btn(f"{app_url}/settings/plan", "Choose a Plan")
         + _divider()
@@ -387,10 +387,10 @@ Hi {user.full_name or 'there'},
 Your {brand} trial expires tomorrow. After that, your campaigns will pause.
 
 Available plans:
-- Starter — $19/month: 1 LinkedIn account, 3 campaigns
-- Pro — $49/month: 1 LinkedIn account, unlimited campaigns, voice notes, API access
-- Business — $99/month: 3 LinkedIn accounts, team members, priority support
-- Agency — $249/month: 10 LinkedIn accounts, white-label branding, unlimited team members
+- Starter - $19/month: 1 LinkedIn account, 3 campaigns
+- Pro - $49/month: 1 LinkedIn account, unlimited campaigns, voice notes, API access
+- Business - $99/month: 3 LinkedIn accounts, team members, priority support
+- Agency - $249/month: 10 LinkedIn accounts, white-label branding, unlimited team members
 
 Choose a plan: {app_url}/settings/plan
 
@@ -411,7 +411,7 @@ def send_trial_expired(user: User) -> bool:
         + _p("Subscribe to a plan to reactivate your campaigns and get back to work.")
         + _btn(f"{app_url}/settings/plan", "Subscribe Now")
         + _divider()
-        + _p(f'Still deciding? Our team can help — <a href="mailto:{support}" style="color:#10b981;text-decoration:none;">get in touch</a>.', "font-size:13px;color:#71717a;")
+        + _p(f'Still deciding? Our team can help - <a href="mailto:{support}" style="color:#10b981;text-decoration:none;">get in touch</a>.', "font-size:13px;color:#71717a;")
         + _note("Your data will be preserved for 30 days. After that, it will be permanently deleted.")
     )
 
@@ -617,7 +617,7 @@ def send_lifetime_deal_purchase(user: User) -> bool:
     body = (
         _h1("Lifetime Deal activated!")
         + _p(f"Hi {user.full_name or 'there'},")
-        + _p(f"Thank you for your purchase! You've activated the {brand} Lifetime Deal — Pro-equivalent access <strong style=\"color:#f4f4f5;\">forever</strong>.")
+        + _p(f"Thank you for your purchase! You've activated the {brand} Lifetime Deal - Pro-equivalent access <strong style=\"color:#f4f4f5;\">forever</strong>.")
         + _section_heading("What's included")
         + _ul([
             "1 LinkedIn account",
@@ -627,9 +627,9 @@ def send_lifetime_deal_purchase(user: User) -> bool:
             "Sales Navigator access",
             "Full API access",
             "Desktop daemon execution (runs on your machine)",
-            "<strong style=\"color:#f4f4f5;\">No recurring charges — ever</strong>",
+            "<strong style=\"color:#f4f4f5;\">No recurring charges - ever</strong>",
         ])
-        + _note("The lifetime deal uses the desktop daemon for campaign execution — automation runs on your computer using your own residential IP. The Cloud tier ($299/month) is not included. Download the desktop app from the dashboard to get started.")
+        + _note("The lifetime deal uses the desktop daemon for campaign execution - automation runs on your computer using your own residential IP. The Cloud tier ($299/month) is not included. Download the desktop app from the dashboard to get started.")
         + _btn(app_url, "Go to Dashboard")
         + _divider()
         + _p(f'Need help? Check our <a href="{docs_url}" style="color:#10b981;text-decoration:none;">documentation</a> or reach out to <a href="mailto:{support}" style="color:#10b981;text-decoration:none;">{support}</a>.', "font-size:13px;color:#71717a;")
@@ -642,7 +642,7 @@ def send_lifetime_deal_purchase(user: User) -> bool:
 
 Hi {user.full_name or 'there'},
 
-Thank you for your purchase! You've activated the {brand} Lifetime Deal — Pro-equivalent access forever.
+Thank you for your purchase! You've activated the {brand} Lifetime Deal - Pro-equivalent access forever.
 
 What's included:
 - 1 LinkedIn account
@@ -652,7 +652,7 @@ What's included:
 - Sales Navigator access
 - Full API access
 - Desktop daemon execution (runs on your machine)
-- No recurring charges — ever
+- No recurring charges - ever
 
 Note: The lifetime deal uses the desktop daemon for execution. The Cloud tier ($299/month) is not included.
 

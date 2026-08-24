@@ -490,12 +490,12 @@ async def delete_credential(
                 )
                 other_creds = [c for c in remaining if str(c._id) != str(credential_id)]
                 if other_creds:
-                    # Other credentials still reference this profile — only clear secrets
+                    # Other credentials still reference this profile - only clear secrets
                     profile.linkedin_password = None
                     profile.cookie_data_encrypted = None
                     profile.save(update_fields=["linkedin_password", "cookie_data_encrypted"])
                 else:
-                    # Last credential — delete the profile entirely so it no longer
+                    # Last credential - delete the profile entirely so it no longer
                     # counts toward the account limit and avoids the null unique-index conflict.
                     # Also cascade: delete all pending tasks and pause all campaigns for this profile
                     # so orphaned records don't pile up and confuse future profile IDs.
@@ -564,7 +564,7 @@ async def verify_credential(
         )
 
     if not data.test_login:
-        # Desktop mode: daemon handles real login — mark active immediately
+        # Desktop mode: daemon handles real login - mark active immediately
         credential.status = LinkedInCredentials.STATUS_ACTIVE
         credential.last_verified = datetime.now(tz.utc)
         credential.save(update_fields=["status", "last_verified"])
@@ -584,7 +584,7 @@ async def verify_credential(
             status=LinkedInCredentials.STATUS_ACTIVE
         )
 
-    # Actual browser-based verification — requires cloud execution access
+    # Actual browser-based verification - requires cloud execution access
     # (desktop-only users must verify via their local desktop app instead)
     verify_user = User.get(user_id)
     if not verify_user:

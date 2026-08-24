@@ -181,7 +181,7 @@ _EMAIL_RECIPE = "com.linkedin.voyager.dash.deco.relationships.ProfileWithEmailRe
 
 
 def _mini_profile(public_id, first, last, urn_suffix):
-    """A MiniProfile entity — no location, no geo, no positions.
+    """A MiniProfile entity - no location, no geo, no positions.
 
     Real MiniProfiles omit location/geo keys entirely (rather than
     setting them to None), so this helper mirrors that structure.
@@ -202,7 +202,7 @@ def _full_profile(
     industry_urn=None, position_groups_urn=None, education_urn=None,
     member_rel_urn=None, headline=None, summary=None,
 ):
-    """A FullProfileWithEntities entity — the target profile."""
+    """A FullProfileWithEntities entity - the target profile."""
     entity = {
         "entityUrn": f"urn:li:fsd_profile:{urn_suffix}",
         "$type": _PROFILE_TYPE,
@@ -317,7 +317,7 @@ class TestFullProfileSelection:
         assert with_id["country_code"] == without_id["country_code"]
 
     def test_three_profile_entities(self):
-        """MiniProfile + IweWarned + FullProfile — only FullProfile has geo."""
+        """MiniProfile + IweWarned + FullProfile - only FullProfile has geo."""
         iwe_profile = _mini_profile("iwe-user", "Ian", "W", "CCC02")
         iwe_profile["$recipeTypes"] = [_IWE_RECIPE]
 
@@ -427,7 +427,7 @@ class TestGeoLocationResolution:
         assert profile["country_code"] == "fr"
 
     def test_geo_via_geoUrn_fallback(self):
-        """geoLocation has geoUrn but no *geo — parser tries both keys."""
+        """geoLocation has geoUrn but no *geo - parser tries both keys."""
         entity = _full_profile("user-d", "Urn", "Fallback", "FFF04", country_code="be")
         entity["geoLocation"] = {
             "geoUrn": "urn:li:fsd_geo:800002",

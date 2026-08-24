@@ -9,11 +9,11 @@ class DealState(str, Enum):
     """OpenOutreach-owned funnel state for a Deal.
 
     OpenOutreach owns these values, not linkedin_cli. The library's connect/status
-    verbs only *observe* three of them off the LinkedIn UI — QUALIFIED, PENDING,
-    CONNECTED — and hand them back as plain strings over the CLI boundary; every
+    verbs only *observe* three of them off the LinkedIn UI - QUALIFIED, PENDING,
+    CONNECTED - and hand them back as plain strings over the CLI boundary; every
     other state is written only here: DISCOVERED (initial state for all new leads),
     READY_TO_CONNECT (passed the GP threshold), COMPLETED/FAILED (outcome), and
-    NO_EMAIL (enrichment found no address — the deal is held out of the connect pool
+    NO_EMAIL (enrichment found no address - the deal is held out of the connect pool
     without advancing the LinkedIn state machine). String values match the library's
     UI states so lifting a returned string into this enum is a plain ``DealState(value)``
     lookup at the boundary.

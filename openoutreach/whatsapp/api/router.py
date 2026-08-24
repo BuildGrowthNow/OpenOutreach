@@ -142,10 +142,10 @@ async def get_qr(
 ):
     """Return the current QR PNG for a disconnected profile.
 
-    200 image/png  — QR is ready to scan
-    200 JSON       — {"status": "connected"} when already authenticated
-    202 JSON       — {"status": "pending"} when daemon is still generating QR
-    404            — profile not found or does not belong to user
+    200 image/png  - QR is ready to scan
+    200 JSON       - {"status": "connected"} when already authenticated
+    202 JSON       - {"status": "pending"} when daemon is still generating QR
+    404            - profile not found or does not belong to user
     """
     from fastapi.responses import JSONResponse
 

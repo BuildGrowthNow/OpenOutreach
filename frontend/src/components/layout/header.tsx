@@ -158,7 +158,7 @@ const Header = ({ onMenuClick, className }: HeaderProps) => {
     if (hasBanned) return { label: 'WA Banned', color: 'bg-red-500', tooltip: 'WhatsApp: Account banned' }
     const hasConnected = waProfiles.some((p) => p.status === 'connected')
     if (hasConnected) return { label: 'WA Active', color: 'bg-green-500', tooltip: 'WhatsApp: Connected' }
-    return { label: 'WA Disconnected', color: 'bg-slate-500', tooltip: 'WhatsApp: Disconnected — scan QR to connect' }
+    return { label: 'WA Disconnected', color: 'bg-slate-500', tooltip: 'WhatsApp: Disconnected - scan QR to connect' }
   }
 
   const waStatus = getWaHealthStatus()

@@ -126,7 +126,7 @@ export default function AdminDashboardPage() {
         </Alert>
       )}
 
-      {/* Row 1 — user metrics */}
+      {/* Row 1 - user metrics */}
       <div>
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Users</h2>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
@@ -145,7 +145,7 @@ export default function AdminDashboardPage() {
         </div>
       </div>
 
-      {/* Row 2 — finance KPIs */}
+      {/* Row 2 - finance KPIs */}
       <div>
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Finance</h2>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -162,7 +162,7 @@ export default function AdminDashboardPage() {
         </div>
       </div>
 
-      {/* Row 3 — platform */}
+      {/* Row 3 - platform */}
       <div>
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Platform</h2>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">

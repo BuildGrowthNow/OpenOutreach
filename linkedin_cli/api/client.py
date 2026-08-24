@@ -156,7 +156,7 @@ class PlaywrightLinkedinAPI:
             extracted_info = parse_linkedin_voyager_response(data, public_identifier=public_identifier)
         except ValueError as e:
             logger.warning(
-                "Voyager profile parse failed for %s — decoration ID may be stale: %s",
+                "Voyager profile parse failed for %s - decoration ID may be stale: %s",
                 public_identifier, e,
             )
             return None, data
@@ -209,7 +209,7 @@ class PlaywrightLinkedinAPI:
         Forges the same server-driven-UI POST the web app fires when you open
         a profile's "Contact info" overlay, and parses the RSC stream it
         returns. Returns ``(parsed_dict, raw_text)``; only fields the member
-        exposes to your network appear — email is typically present only for
+        exposes to your network appear - email is typically present only for
         1st-degree connections.
         """
         screen = self.SDUI_CONTACT_SCREEN

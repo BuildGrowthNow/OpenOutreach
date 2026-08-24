@@ -58,7 +58,7 @@ function WaTicks({ status }: { status: string }) {
       </span>
     )
   }
-  // sent — single tick
+  // sent - single tick
   return (
     <span className="text-blue-200" title="Sent">
       <svg viewBox="0 0 8 11" className="inline h-3 w-2 fill-current" aria-hidden="true">

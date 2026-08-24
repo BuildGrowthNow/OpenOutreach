@@ -268,7 +268,7 @@ export default function CampaignAnalyticsPage() {
         />
       </div>
 
-      {/* Channel breakdown — only when WA data exists */}
+      {/* Channel breakdown - only when WA data exists */}
       {analytics.channels?.whatsapp && analytics.channels.whatsapp.messages_sent > 0 && (
         <Card>
           <CardHeader className="pb-3">

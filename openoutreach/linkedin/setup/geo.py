@@ -1,14 +1,14 @@
 # openoutreach/linkedin/setup/geo.py
-"""Country-code jurisdiction detection — two separate regime lines.
+"""Country-code jurisdiction detection - two separate regime lines.
 
 Both read the logged-in user's (or a lead's) ISO-2 country code from the
 Voyager API ``location.countryCode`` field, but answer different questions:
 
-- ``is_gdpr_protected`` / ``GDPR_COUNTRY_CODES`` — the broad *email-marketing
+- ``is_gdpr_protected`` / ``GDPR_COUNTRY_CODES`` - the broad *email-marketing
   opt-in* set (EU/EEA + UK + CH + CA/BR/AU/JP/KR/NZ).  Drives newsletter
   auto-subscription: non-protected accounts get ``subscribe_newsletter``
   auto-enabled; protected accounts keep their existing config.
-- ``is_eea_located`` / ``EEA_UK_CH`` — the narrower *data-collection regime*
+- ``is_eea_located`` / ``EEA_UK_CH`` - the narrower *data-collection regime*
   set (EU/EEA + UK + CH only).  Gates contribution into the central contacts
   store and the user-level forced-give-back override.
 """
@@ -84,7 +84,7 @@ def is_gdpr_protected(country_code: str | None) -> bool:
 # Narrower than GDPR_COUNTRY_CODES above: the set that governs whether we
 # may *collect* a profile into the central contacts store, NOT the broader
 # email-marketing-consent set.  EU-27 + EEA (NO/IS/LI) + UK + Switzerland
-# only — deliberately excludes ca/br/au/jp/kr/nz (their email-opt-in laws
+# only - deliberately excludes ca/br/au/jp/kr/nz (their email-opt-in laws
 # don't bear on collection), so Brazil/Canada/etc. leads are collectable.
 EEA_UK_CH: set[str] = {
     # EU member states
@@ -132,7 +132,7 @@ def is_eea_located(country_code: str | None) -> bool:
     Gates contribution to the central contacts store (a located profile is
     dropped, never stored) and the user-level forced-give-back override.
     Missing / ``None`` / blank codes default to ``True`` (err on the side of
-    exclusion — a false drop costs one lead, a false keep is the only risk).
+    exclusion - a false drop costs one lead, a false keep is the only risk).
     """
     if not country_code or not country_code.strip():
         return True
@@ -169,7 +169,7 @@ def apply_gdpr_contribution_override(session, country_code: str | None):
     the **narrower data-collection line** (``is_eea_located``), not the broad
     newsletter set: contribution is about sharing contact data, so it tracks the
     same jurisdictions the store's collection gate uses. The onboarding wizard no
-    longer asks — nationality is the single source of truth: an operator outside
+    longer asks - nationality is the single source of truth: an operator outside
     the EEA/UK/CH contributes (and earns give-to-get credits); an EEA/UK/CH (or
     unknown-location) operator does not. Runs once per profile, gated by
     ``newsletter_processed`` in ``rundaemon``.

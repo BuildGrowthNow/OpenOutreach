@@ -9,7 +9,7 @@ from typing import Optional
 
 from openoutreach.mongodb.connection import get_mongodb_collection
 
-# Delivery status rank — higher rank = further along the chain; never downgrade.
+# Delivery status rank - higher rank = further along the chain; never downgrade.
 _STATUS_RANK = {"sent": 1, "delivered": 2, "read": 3}
 
 logger = logging.getLogger(__name__)
@@ -19,10 +19,10 @@ logger = logging.getLogger(__name__)
 # that rename data-testid attributes without changing DOM structure.
 #
 # Delivery status detection for outgoing messages:
-#   "read"      — double blue tick  (aria-label contains "Read" on msg-dblcheck)
-#   "delivered" — double grey tick  (msg-dblcheck present, no "Read" aria-label)
-#   "sent"      — single grey tick  (msg-check present, no double-tick)
-#   null        — incoming messages or unknown
+#   "read"      - double blue tick  (aria-label contains "Read" on msg-dblcheck)
+#   "delivered" - double grey tick  (msg-dblcheck present, no "Read" aria-label)
+#   "sent"      - single grey tick  (msg-check present, no double-tick)
+#   null        - incoming messages or unknown
 _EXTRACT_MESSAGES_JS = """() => {
     function qs(el, selectors) {
         for (const s of selectors) {
@@ -125,7 +125,7 @@ def _parse_wa_timestamp(ts_text: str) -> Optional[datetime]:
     return None
 
 
-# Per-deal consecutive empty-scrape counter — surfaces selector drift early
+# Per-deal consecutive empty-scrape counter - surfaces selector drift early
 _empty_scrape_count: dict[str, int] = {}
 _EMPTY_SCRAPE_WARN_THRESHOLD = 3
 
@@ -258,7 +258,7 @@ def handle_whatsapp_sync(task, wa_session, qualifiers):  # noqa: ARG001
 
         # Find the start index of new messages using last-occurrence matching.
         # Using the LAST occurrence of last_saved_content handles the case where
-        # a lead sends the same text twice — the earlier duplicate is skipped
+        # a lead sends the same text twice - the earlier duplicate is skipped
         # and we start after the most recent match.
         # If last_saved is not found in the current DOM window (it scrolled out),
         # all DOM messages are treated as new (they come after the saved history).

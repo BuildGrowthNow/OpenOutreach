@@ -55,7 +55,7 @@ jobs:
             cd ~/OpenOutreach
           "
 
-          # Deploy with docker-compose — build new image first, then recreate
+          # Deploy with docker-compose - build new image first, then recreate
           # (avoids a hard down→up gap that causes 502s for desktop daemons)
           ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o IdentitiesOnly=yes "${EC2_USER}@${EC2_HOST}" "
             set -e

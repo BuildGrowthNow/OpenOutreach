@@ -37,7 +37,7 @@ export function CtaSection() {
                 className="inline-flex items-center gap-2 mb-10 rounded-full border border-emerald-500/25 bg-emerald-500/[0.08] px-5 py-2 text-sm font-medium text-emerald-400 hover:bg-emerald-500/[0.12] hover:border-emerald-500/40 transition-all duration-300"
               >
                 <Zap className="h-3.5 w-3.5" />
-                Limited lifetime deal — 100 spots, $149 once
+                Limited lifetime deal - 100 spots, $149 once
                 <ArrowRight className="h-3.5 w-3.5" />
               </Link>
 

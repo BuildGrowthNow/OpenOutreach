@@ -2,7 +2,7 @@
 """Resolve a work email for a qualified lead, on demand.
 
 `resolve_email` is the public entry point; BetterContact is the one provider
-(see bettercontact.py). Called lazily when a lead needs an email — it submits
+(see bettercontact.py). Called lazily when a lead needs an email - it submits
 the lookup and waits for the result. A missing API key or a miss yields None,
 never an error, so enrichment can't take down the daemon.
 """
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 class FinderUnavailable(Exception):
-    """The finder could not run — no API key configured, or the service was
+    """The finder could not run - no API key configured, or the service was
     unreachable. Distinct from a genuine miss (finder ran, found no email)."""
 
 
@@ -42,7 +42,7 @@ def resolve_email(query: FinderQuery, user_id: str | None = None) -> FinderResul
 
     Returns the result on a hit, None on a genuine miss (finder ran, found
     nothing). Raises FinderUnavailable when no key is set or the service is
-    unreachable — the caller treats that differently from a real miss.
+    unreachable - the caller treats that differently from a real miss.
     """
     from openoutreach.core.models import SiteConfig
     from openoutreach.emails import bettercontact

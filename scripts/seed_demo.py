@@ -3,7 +3,7 @@ Demo seed script for video recording.
 
 Creates a fully-populated fake campaign for fern2gue@gmail.com with realistic
 leads, deals spread across all funnel stages, chat conversations, and activity
-logs. Nothing is queued to run — the campaign shows as active but is frozen.
+logs. Nothing is queued to run - the campaign shows as active but is frozen.
 
 Usage:
     python scripts/seed_demo.py
@@ -84,7 +84,7 @@ LEADS_DATA = [
     },
     {
         "first_name": "Liam", "last_name": "Chen",
-        "headline": "Founder & CEO @ LeadMagnet — B2B Prospecting",
+        "headline": "Founder & CEO @ LeadMagnet - B2B Prospecting",
         "location_name": "Seattle, Washington",
         "company": "LeadMagnet", "title": "Founder & CEO",
         "email": "liam@leadmagnet.app",
@@ -392,7 +392,7 @@ def main() -> None:
     assert profiles_col is not None
     profile_doc = profiles_col.find_one({"user_id": user_id})
     if not profile_doc:
-        # Create a placeholder profile — no cookies, not logged in
+        # Create a placeholder profile - no cookies, not logged in
         linkedin_profile_id = uid()
         profiles_col.insert_one({
             "_id": linkedin_profile_id,
@@ -433,7 +433,7 @@ def main() -> None:
         "is_paused": False,
         "product_pitch": (
             "Lengrowth is a LinkedIn outreach automation platform for B2B sales teams. "
-            "We automate connection requests, follow-ups, and conversation tracking — "
+            "We automate connection requests, follow-ups, and conversation tracking - "
             "while keeping each message personalized. Sales teams using Lengrowth book "
             "3-5x more qualified meetings without increasing headcount."
         ),
@@ -552,7 +552,7 @@ def main() -> None:
 
     print(f"Created {len(LEADS_DATA)} leads and deals")
 
-    # 6. Action logs — spread over 14 days to populate activity feed
+    # 6. Action logs - spread over 14 days to populate activity feed
     action_log_entries = []
 
     # Connects: one per non-Discovered lead, spread over days 1-10

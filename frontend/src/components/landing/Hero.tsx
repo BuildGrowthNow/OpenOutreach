@@ -62,7 +62,7 @@ export function Hero() {
           >
             Define your ideal customer once. Lengrowth finds them on LinkedIn
             or WhatsApp, writes a unique message for each, and follows up until
-            they&apos;re ready to talk — completely hands-off.
+            they&apos;re ready to talk - completely hands-off.
           </motion.p>
 
           {/* CTAs */}

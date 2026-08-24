@@ -63,13 +63,13 @@ function formatActivityDescription(entry: ActivityEntry): string {
 
       case "connect_skipped":
         return lead_name && reason
-          ? `Skipped ${lead_name} — ${reason}`
+          ? `Skipped ${lead_name} - ${reason}`
           : lead_name ? `Skipped ${lead_name}` : baseLabel;
 
       case "follow_up":
         if (entry.details?.state === "wait") {
           return lead_name
-            ? `Waiting before next message to ${lead_name} — AI holding off`
+            ? `Waiting before next message to ${lead_name} - AI holding off`
             : "AI decided to wait before next message";
         }
         if (lead_name && message_preview) {
@@ -78,7 +78,7 @@ function formatActivityDescription(entry: ActivityEntry): string {
         return lead_name ? `Sent follow-up to ${lead_name}` : baseLabel;
 
       case "campaign_started":
-        return "Campaign started — daemon discovering and qualifying leads. First connections sent once prospects are qualified (usually within minutes).";
+        return "Campaign started - daemon discovering and qualifying leads. First connections sent once prospects are qualified (usually within minutes).";
 
       case "lead_discovered":
         if (lead_name && headline) {

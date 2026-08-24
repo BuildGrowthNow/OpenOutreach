@@ -4,7 +4,7 @@ class AuthenticationError(Exception):
 
 
 class TerminalStateError(Exception):
-    """Profile is already done or dead — caller must skip it"""
+    """Profile is already done or dead - caller must skip it"""
     pass
 
 
@@ -28,7 +28,7 @@ class IllegalPageTransition(Exception):
 
     Raised by the ``transition`` decorator (see ``page_state``) when the live
     page violates the action's declared precondition (``when``) or postcondition
-    (``then``) — e.g. submitting credentials and landing back on the login page
+    (``then``) - e.g. submitting credentials and landing back on the login page
     (rejected creds) instead of the feed or a checkpoint.
     """
     pass
@@ -39,7 +39,7 @@ class CheckpointChallengeError(Exception):
 
     Carries the challenge URL so the user knows where to go to clear it.
     Raised from the login flow; the daemon must NOT call reauthenticate()
-    when it sees this — that just hardens the block.
+    when it sees this - that just hardens the block.
     """
     def __init__(self, url: str):
         self.url = url

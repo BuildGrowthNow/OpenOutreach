@@ -1,5 +1,5 @@
 # openoutreach/whatsapp/tasks/follow_up.py
-"""WhatsApp follow-up handler — reuses the LLM follow-up agent."""
+"""WhatsApp follow-up handler - reuses the LLM follow-up agent."""
 from __future__ import annotations
 
 import logging
@@ -20,7 +20,7 @@ def _wa_is_active_now(config) -> bool:
     try:
         tz = pytz.timezone(tz_name)
     except pytz.exceptions.UnknownTimeZoneError:
-        logger.warning("_wa_is_active_now: unknown timezone %r — defaulting to UTC", tz_name)
+        logger.warning("_wa_is_active_now: unknown timezone %r - defaulting to UTC", tz_name)
         tz = pytz.utc
     now = datetime.now(timezone.utc).astimezone(tz)
     start = getattr(config, "wa_active_start_hour", 8)
@@ -102,7 +102,7 @@ def _next_wa_followup_deal(campaign_id: str, deals_col):
         if not last_msg.get("is_outgoing", False):
             return deal_doc
 
-        # Last message is outgoing — count unanswered nudges since last inbound reply
+        # Last message is outgoing - count unanswered nudges since last inbound reply
         last_inbound = messages_col.find_one(
             {"deal_id": deal_id, "channel": "whatsapp", "is_outgoing": False},
             sort=[("creation_date", -1)],
@@ -188,7 +188,7 @@ def handle_whatsapp_follow_up(task, wa_session, qualifiers):  # noqa: ARG001
     wa_profile = wa_session.wa_profile
     config = SiteConfig.load(user_id=wa_profile.user_id)
     if not _wa_is_active_now(config):
-        logger.debug("WA follow_up: outside WA active hours — skipping")
+        logger.debug("WA follow_up: outside WA active hours - skipping")
         return
 
     campaign_id = task.payload["campaign_id"]
@@ -274,7 +274,7 @@ def handle_whatsapp_follow_up(task, wa_session, qualifiers):  # noqa: ARG001
                 wa_session.wa_profile.status = STATUS_BANNED
                 wa_session.wa_profile.save(update_fields=["status"])
                 logger.error(
-                    "WA follow_up: profile %s appears BANNED — marking and halting",
+                    "WA follow_up: profile %s appears BANNED - marking and halting",
                     wa_session.wa_profile,
                 )
                 return

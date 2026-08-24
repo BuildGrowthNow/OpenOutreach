@@ -616,7 +616,7 @@ export function LinkedInConnectionTab({
         </CardContent>
       </Card>
 
-      {/* Desktop Daemon Status — shown on web only; redundant on the desktop app */}
+      {/* Desktop Daemon Status - shown on web only; redundant on the desktop app */}
       {!isDesktopApp && <DaemonStatusCard />}
 
       {/* Proxy Configuration - Show only for cloud daemon (not desktop daemon) */}

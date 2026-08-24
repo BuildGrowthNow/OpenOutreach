@@ -3,7 +3,7 @@
 
 Runs every `rundaemon` start after onboarding. Until both a BetterContact key
 and a working mailbox exist, it prompts (on a TTY) or logs (headless) the next setup
-step — copy drawn from the GLF angle in marketing/email-sequence.md, filled with
+step - copy drawn from the GLF angle in marketing/email-sequence.md, filled with
 the user's own pipeline numbers. Never blocks: email is a deferrable upgrade.
 """
 
@@ -55,26 +55,26 @@ def email_state() -> str:
 
 # ── Nudge copy ───────────────────────────────────────────────────
 
-# GAIN — the discovery engine already worked; email is the reach you're missing.
+# GAIN - the discovery engine already worked; email is the reach you're missing.
 NO_BETTERCONTACT_NUDGE = """
 📧  LinkedIn finds the right people; email is how you reach them.
     Your model qualified {qualified} leads, but LinkedIn sends only ~{connect_cap}/day
-    and most never accept. Email reaches the whole list — automatically, as they qualify.
+    and most never accept. Email reaches the whole list - automatically, as they qualify.
     Turn on BetterContact email finding (paid; the affiliate fee keeps OpenOutreach free).
     Your first 50 lookups are free with the subscription, so you can try it at no cost:
       {bettercontact_url}
-    Next you'll add a sending provider — finding an address isn't reaching it. What
+    Next you'll add a sending provider - finding an address isn't reaching it. What
     this means and why a separate sending domain:
       {explainer_url}
 """
 
-# URGENCY — the ~2-week warmup clock (always true); a loss-aversion line only
+# URGENCY - the ~2-week warmup clock (always true); a loss-aversion line only
 # when the pipeline numbers are real (they're zero right after BetterContact is set).
 NO_MAILBOX_NUDGE = """
 📧  Set up email sending. {icemail} mailboxes need a ~2-week warmup, and the clock
-    only starts once you add them — so the sooner they're warming, the sooner you
+    only starts once you add them - so the sooner they're warming, the sooner you
     reach the leads who never accept a LinkedIn connection.
-{waiting_line}    Add your sending mailboxes ({icemail} — paid; warmup is hands-off):
+{waiting_line}    Add your sending mailboxes ({icemail} - paid; warmup is hands-off):
       {sender_url}
 """
 
@@ -110,7 +110,7 @@ def render(state: str, stats: dict, *, hyperlink: bool = False) -> str:
 
 
 def _waiting_line(stats: dict) -> str:
-    """The mailbox nudge's loss-aversion line — shown only when its number is real.
+    """The mailbox nudge's loss-aversion line - shown only when its number is real.
 
     Right after BetterContact is enabled nothing has resolved yet, so both counts are
     zero and the line is omitted; the warmup urgency carries the message. Returns a
@@ -124,7 +124,7 @@ def _waiting_line(stats: dict) -> str:
 
 
 def pipeline_stats() -> dict:
-    """The user's own numbers — what makes the nudge land instead of nag."""
+    """The user's own numbers - what makes the nudge land instead of nag."""
     from openoutreach.mongodb.connection import get_mongodb_collection
 
     # Get first active profile
@@ -173,7 +173,7 @@ def import_mailboxes(
 def _store_mailboxes(rows: list[tuple[str, str]], daily_limit: int) -> ImportReport:
     """Auth-check each ``(email, app_password)`` and store only the ones that log in.
 
-    A row exists iff it authenticated — there is no inactive state to carry.
+    A row exists iff it authenticated - there is no inactive state to carry.
     ``daily_limit`` is the warm-safe sends/day applied to each stored box.
     """
     report = ImportReport()
@@ -235,14 +235,14 @@ def _walk_setup_steps() -> None:
     """Prompt each remaining step in turn, stopping at the first one skipped.
 
     A skipped step (empty input / Ctrl+D) leaves the setup state unchanged, which
-    ends the walk; the rest are re-asked next launch — no opt-out, by design.
+    ends the walk; the rest are re-asked next launch - no opt-out, by design.
     """
     while True:
         state = email_state()
         if state == CONFIGURED:
             return
         if not _prompt_step(state):
-            return  # skipped — leave the remaining steps for next launch
+            return  # skipped - leave the remaining steps for next launch
 
 
 def _prompt_step(state: str) -> bool:
@@ -257,7 +257,7 @@ def _prompt_step(state: str) -> bool:
 
 
 def _collect_bettercontact_key() -> None:
-    print("  Your first 50 lookups are free with the subscription — try it at no cost.")
+    print("  Your first 50 lookups are free with the subscription - try it at no cost.")
     key = Password(
         "bettercontact_api_key",
         "BetterContact API key (Enter to skip):",
@@ -269,7 +269,7 @@ def _collect_bettercontact_key() -> None:
     cfg.bettercontact_api_key = str(key)
     cfg.save()
     logger.info(
-        "BetterContact key saved — enrichment is on; emails resolve as leads qualify."
+        "BetterContact key saved - enrichment is on; emails resolve as leads qualify."
     )
 
 
@@ -313,7 +313,7 @@ def _ask_for_daily_limit() -> int:
 
 _PASTE_GUIDANCE = """\
   Open the App Passwords tab in the {icemail} XLS you downloaded (columns: Email,
-  App Password) — NOT the login-credentials tab. Copy its rows with the header,
+  App Password) - NOT the login-credentials tab. Copy its rows with the header,
   paste below, then Ctrl+D to submit. (Enter = newline; No to skip.)
 """
 
@@ -333,7 +333,7 @@ def _print_report(report: ImportReport) -> None:
     for email, reason in report.failures:
         print(f"  ✗ {email}: {reason}")
     if not report.parsed:
-        print("  No mailboxes found — include the header row (Email, App Password).")
+        print("  No mailboxes found - include the header row (Email, App Password).")
         return
     print(
         f"  Parsed {report.parsed} mailbox(es); {report.stored} authenticated and saved."

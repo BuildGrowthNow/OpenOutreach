@@ -81,7 +81,7 @@ function QrPoller({ profileId, onConnected }: { profileId: string; onConnected: 
         }
         if (res.status === 404) stopPolling();
       } catch {
-        // transient error — keep polling
+        // transient error - keep polling
       }
     };
 
@@ -99,7 +99,7 @@ function QrPoller({ profileId, onConnected }: { profileId: string; onConnected: 
     try {
       await resetQr(profileId);
     } catch {
-      // best-effort — daemon will regenerate anyway
+      // best-effort - daemon will regenerate anyway
     } finally {
       setResetting(false);
     }

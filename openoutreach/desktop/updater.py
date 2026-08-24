@@ -51,7 +51,7 @@ def load_pending_update() -> Optional[dict]:
         data = json.loads(_PENDING_UPDATE_FILE.read_text(encoding="utf-8"))
         exe_path = data.get("exe_path", "")
         if not exe_path or not Path(exe_path).exists():
-            # Stale entry — the temp file was cleaned up
+            # Stale entry - the temp file was cleaned up
             clear_pending_update()
             return None
         return data
@@ -74,7 +74,7 @@ def is_frozen() -> bool:
 
 
 def can_auto_update() -> bool:
-    """True only for the distributed Windows exe — the one case where we can safely
+    """True only for the distributed Windows exe - the one case where we can safely
     replace the running binary."""
     return sys.platform == "win32" and is_frozen()
 
@@ -193,7 +193,7 @@ def apply_update_windows(new_exe_path: str, download_url: str = "") -> None:
     """Replace the current exe with new_exe_path and restart.
 
     Uses a hidden PowerShell script that waits for the current process to exit
-    by PID, copies the new exe over, then relaunches it — no visible CMD window.
+    by PID, copies the new exe over, then relaunches it - no visible CMD window.
     On copy failure opens the download page in the browser as a fallback.
     """
     current_exe = sys.executable
@@ -231,7 +231,7 @@ while ((Get-Process -Id $pid_to_wait -ErrorAction SilentlyContinue) -and (Get-Da
 }}
 
 if (Get-Process -Id $pid_to_wait -ErrorAction SilentlyContinue) {{
-    Write-Log "ERROR: old process still running after 30s — aborting"
+    Write-Log "ERROR: old process still running after 30s - aborting"
     Start-Process $fallback_url
     exit 1
 }}
@@ -251,7 +251,7 @@ try {{
     exit 1
 }}
 
-# Clean up temp exe and pending marker — prevents reapply loop on next launch
+# Clean up temp exe and pending marker - prevents reapply loop on next launch
 Remove-Item -Path $source -Force -ErrorAction SilentlyContinue
 Remove-Item -Path $pending_json -Force -ErrorAction SilentlyContinue
 
@@ -284,7 +284,7 @@ Remove-Item -Path '{ps_path.replace("'", "''")}' -Force -ErrorAction SilentlyCon
             creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NO_WINDOW,
             close_fds=True,
         )
-        logger.info("Update PowerShell script launched — exiting for replacement")
+        logger.info("Update PowerShell script launched - exiting for replacement")
     except Exception as e:
         logger.error("Failed to launch update script: %s", e)
         return

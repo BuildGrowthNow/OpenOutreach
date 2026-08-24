@@ -156,7 +156,7 @@ export default function CampaignLeadsPage() {
     }
   }
 
-  // Server-side pagination — leads is already the current page slice
+  // Server-side pagination - leads is already the current page slice
   const paginatedLeads = filteredLeads
 
   if (loading) {

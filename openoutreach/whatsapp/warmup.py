@@ -1,5 +1,5 @@
 # openoutreach/whatsapp/warmup.py
-"""WhatsApp number warmup — computes effective daily send limit based on profile age.
+"""WhatsApp number warmup - computes effective daily send limit based on profile age.
 
 New WA numbers that blast at full velocity on day 1 get banned. This module
 enforces a ramp: day 1→20, day 7→60, day 30+→max_limit (configured ceiling).
@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Optional
 
-# (age_days, limit) breakpoints — linear interpolation between them
+# (age_days, limit) breakpoints - linear interpolation between them
 _WARMUP_CURVE = [
     (0, 20),
     (7, 60),

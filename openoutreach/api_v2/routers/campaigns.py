@@ -136,7 +136,7 @@ class PaginationInfo(BaseModel):
 
 
 class CampaignListResponse(BaseModel):
-    """Response schema for campaign list — matches frontend { data, pagination } shape."""
+    """Response schema for campaign list - matches frontend { data, pagination } shape."""
     data: List[CampaignResponse]
     pagination: PaginationInfo
 
@@ -907,7 +907,7 @@ async def resume_campaign(
 
     Helper endpoint that sets status="active" and is_paused=False.
     Multi-tenant: verifies user has access (owner OR team member).
-    Enforces plan campaign limit — resuming counts the same as creating.
+    Enforces plan campaign limit - resuming counts the same as creating.
     """
     from openoutreach.mongodb.models_user import User
     from openoutreach.billing.enforcement import PlanEnforcer
@@ -1082,7 +1082,7 @@ async def get_campaign_leads(
         query["state"] = state
 
     if search:
-        # Join with leads to filter by name/identifier — fetch all deals first then filter
+        # Join with leads to filter by name/identifier - fetch all deals first then filter
         all_deals = list(collection.find(query).sort("creation_date", -1))
         all_lead_ids = list(set(str(d["lead_id"]) for d in all_deals))
         term = search.lower()

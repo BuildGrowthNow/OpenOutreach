@@ -26,7 +26,7 @@ class AccountSession:
         self.linkedin_profile = linkedin_profile
         self.user = linkedin_profile.user
 
-        # Active campaign — set by the daemon before each lane execution
+        # Active campaign - set by the daemon before each lane execution
         self.campaign: Optional[Any] = None
 
         # Playwright objects – created on first access or after crash
@@ -95,7 +95,7 @@ class AccountSession:
         """Force a fresh login: close browser, clear saved cookies, re-launch."""
         from openoutreach.linkedin.browser.launch import start_browser_session
 
-        logger.warning("Re-authenticating %s — clearing saved session", self)
+        logger.warning("Re-authenticating %s - clearing saved session", self)
         self.close()
         self.linkedin_profile.cookie_data = None
         self.linkedin_profile.save(update_fields=["cookie_data_encrypted"])
@@ -114,7 +114,7 @@ class AccountSession:
                 expires = cookie.get("expires", -1)
                 if expires > 0 and expires < time.time():
                     logger.warning(
-                        "Auth cookie expired for %s — re-authenticating", self
+                        "Auth cookie expired for %s - re-authenticating", self
                     )
                     self.close()
                     start_browser_session(session=self)

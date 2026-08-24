@@ -46,13 +46,13 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
   const [targetCompanySize, setTargetCompanySize] = useState('');
   const [bookingLink, setBookingLink] = useState('');
 
-  // Step 3 fields — Channels
+  // Step 3 fields - Channels
   const [enableWhatsApp, setEnableWhatsApp] = useState(false);
   const [waProfileId, setWaProfileId] = useState('');
   const [waMessageTemplate, setWaMessageTemplate] = useState('');
   const [waProfiles, setWaProfiles] = useState<WhatsAppProfile[]>([]);
 
-  // Step 3 fields — Lead Source
+  // Step 3 fields - Lead Source
   const [leadSource, setLeadSource] = useState<'linkedin_search' | 'google_maps' | 'csv_import'>('linkedin_search');
   const [mapsQuery, setMapsQuery] = useState('');
   const [mapsCountryCode, setMapsCountryCode] = useState('US');
@@ -235,7 +235,7 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
         </div>
         <h2 className="text-2xl font-semibold">Create Campaign</h2>
         <p className="text-sm text-muted-foreground">
-          Step {step} of 3 — {step === 1 ? 'Define your offer' : step === 2 ? 'Who are you targeting?' : 'Channels'}
+          Step {step} of 3 - {step === 1 ? 'Define your offer' : step === 2 ? 'Who are you targeting?' : 'Channels'}
         </p>
         {/* Step indicator */}
         <div className="flex items-center justify-center gap-2 pt-2">
@@ -295,7 +295,7 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
               className="text-base resize-none"
             />
             <p className="text-xs text-muted-foreground">
-              Be specific — this guides who the AI searches for
+              Be specific - this guides who the AI searches for
             </p>
           </div>
 
@@ -417,7 +417,7 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
               type="url"
             />
             <p className="text-xs text-muted-foreground">
-              Calendly, Cal.com, or similar — the AI includes this when a lead shows interest
+              Calendly, Cal.com, or similar - the AI includes this when a lead shows interest
             </p>
           </div>
 
@@ -451,7 +451,7 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
               <Checkbox id="ch-linkedin" checked disabled />
               <div>
                 <Label htmlFor="ch-linkedin" className="text-base font-medium cursor-default">LinkedIn</Label>
-                <p className="text-xs text-muted-foreground">Always active — connection requests + follow-ups</p>
+                <p className="text-xs text-muted-foreground">Always active - connection requests + follow-ups</p>
               </div>
             </div>
 
@@ -467,7 +467,7 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
                   <Label htmlFor="ch-whatsapp" className="text-base font-medium cursor-pointer">WhatsApp</Label>
                   <p className="text-xs text-muted-foreground">
                     Message leads with a phone number via WhatsApp Web
-                    {waProfiles.length === 0 && ' — connect a number in Settings → WhatsApp first'}
+                    {waProfiles.length === 0 && ' - connect a number in Settings → WhatsApp first'}
                   </p>
                 </div>
 

@@ -189,20 +189,20 @@ export default function PlanPage() {
         ))}
       </div>
 
-      {/* Lifetime deal — standalone banner */}
+      {/* Lifetime deal - standalone banner */}
       {lifetimeDealActive && lifetimePlan && (
         <Card className={`border-amber-500/50 bg-amber-500/5 ${currentPlan === "lifetime" ? "border-2 border-amber-500" : ""}`}>
           <CardContent className="flex flex-col sm:flex-row items-start sm:items-center gap-6 pt-6">
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-1">
                 <Icons.Zap className="h-5 w-5 text-amber-500" />
-                <span className="font-bold text-lg">Lifetime Pro — $149 once</span>
+                <span className="font-bold text-lg">Lifetime Pro - $149 once</span>
                 {currentPlan === "lifetime" && (
                   <span className="text-xs bg-amber-500 text-white px-2 py-0.5 rounded-full font-semibold">Current Plan</span>
                 )}
               </div>
               <p className="text-sm text-muted-foreground mb-3">
-                Pay once, use forever. All Pro features included — no monthly fees, ever. Limited spots remaining.
+                Pay once, use forever. All Pro features included - no monthly fees, ever. Limited spots remaining.
               </p>
               <ul className="flex flex-wrap gap-x-6 gap-y-1">
                 {lifetimePlan.features.map((f) => (

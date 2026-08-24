@@ -17,19 +17,19 @@
 
 ## Core Rules
 
-- 1 LinkedIn account is unique globally — cannot be connected to multiple user accounts
+- 1 LinkedIn account is unique globally - cannot be connected to multiple user accounts
 - Plan limits enforced server-side (hard block, not soft warnings)
 - Downgrade: excess LinkedIn profiles deactivated (user chooses which to keep)
 - Trial expiry: immediate block, no grace period (already got 3 free days)
 - Admin is a platform-level role, separate from workspace team roles
-- Both login paths (web app + desktop app) funnel into the same subscription — one account, one plan
-- Cloud add-on is internal/upsell only — not on public pricing page at launch
-- No free tier — trial is the only free path, then you pay or lose access
+- Both login paths (web app + desktop app) funnel into the same subscription - one account, one plan
+- Cloud add-on is internal/upsell only - not on public pricing page at launch
+- No free tier - trial is the only free path, then you pay or lose access
 - Lifetime deals are time-limited (30 days from launch), non-refundable, and give Pro-equivalent forever
 
 ---
 
-## Phase 1: Foundation — Models, Stripe Setup, Admin Role
+## Phase 1: Foundation - Models, Stripe Setup, Admin Role
 
 **Goal**: Database models for plans/subscriptions, Stripe product/price setup, admin user distinction.
 
@@ -92,12 +92,12 @@
 
 ---
 
-## Phase 2: Stripe Integration — Checkout, Webhooks, Portal
+## Phase 2: Stripe Integration - Checkout, Webhooks, Portal
 
 **Goal**: Users can subscribe, Stripe events update our DB, users manage billing via portal.
 
 ### 2.1 Checkout Flow
-- [x] `POST /api/billing/checkout` — creates Stripe Checkout Session:
+- [x] `POST /api/billing/checkout` - creates Stripe Checkout Session:
   - Input: `plan_name`, `billing_period` (monthly/annual/lifetime)
   - Looks up correct Stripe price ID from `StripePlan` collection (dynamic, never hardcoded)
   - Sets `trial_period_days: 3` for new users (requires card)
@@ -106,13 +106,13 @@
   - Returns `checkout_url` for redirect
   - `success_url` → `/settings/billing?success=true`
   - `cancel_url` → `/settings/billing?canceled=true`
-- [x] `POST /api/billing/portal` — creates Stripe Customer Portal Session:
+- [x] `POST /api/billing/portal` - creates Stripe Customer Portal Session:
   - Returns portal URL for managing subscription (cancel, switch plan, update card)
-- [x] `GET /api/billing/status` — returns current plan, status, limits, period end, trial info
-- [x] `GET /api/billing/invoices` — returns list of recent invoices with details
+- [x] `GET /api/billing/status` - returns current plan, status, limits, period end, trial info
+- [x] `GET /api/billing/invoices` - returns list of recent invoices with details
 
 ### 2.2 Webhook Handler
-- [x] `POST /api/billing/webhooks/stripe` — verify signature, handle events:
+- [x] `POST /api/billing/webhooks/stripe` - verify signature, handle events:
   - [x] `checkout.session.completed` → activate subscription, set plan fields, handle lifetime deals
   - [x] `customer.subscription.created` → set subscription status, sync plan limits
   - [x] `customer.subscription.updated` → update plan/status/period_end, enforce account limits on downgrade
@@ -124,16 +124,16 @@
 - [x] Webhook retry handling (events are safely re-processed if duplicated)
 
 ### 2.3 Plan Change Logic
-- [x] `POST /api/billing/plan-change` — change subscription plan:
+- [x] `POST /api/billing/plan-change` - change subscription plan:
   - [x] Upgrade: immediate (prorated via Stripe with `proration_behavior: create_prorations`)
   - [x] Downgrade: at end of current period (Stripe `proration_behavior: none`)
   - [x] On downgrade activation: if user has more LinkedIn accounts than new limit, deactivate excess (mark `is_active=False` on LinkedInProfile, oldest first)
   - [x] Validates plan exists and billing_period is valid
   - [x] Syncs plan limits from plan definition to user on change
-- [x] Lifetime deal: one-time checkout, no subscription — set `plan=lifetime`, `billing_period=lifetime`, no `current_period_end`
+- [x] Lifetime deal: one-time checkout, no subscription - set `plan=lifetime`, `billing_period=lifetime`, no `current_period_end`
 
 ### 2.4 Cloud Add-on
-- [x] `POST /api/billing/cloud-addon` — update cloud profile seats count:
+- [x] `POST /api/billing/cloud-addon` - update cloud profile seats count:
   - Input: `quantity` (integer >= 0)
   - Updates `user.cloud_profiles` field
   - Returns updated cloud_profiles count
@@ -142,7 +142,7 @@
 
 ---
 
-## Phase 3: Plan Enforcement — Limits & Blocks
+## Phase 3: Plan Enforcement - Limits & Blocks
 
 **Goal**: Server-side enforcement of plan limits across all operations.
 
@@ -186,7 +186,7 @@
 
 ---
 
-## Phase 4: User-Facing Pages — Billing & Plan Management
+## Phase 4: User-Facing Pages - Billing & Plan Management
 
 **Goal**: Settings pages for users to view/manage their subscription.
 
@@ -223,19 +223,19 @@
 **Goal**: Platform admins can manage users, view finance, approve/block accounts.
 
 ### 5.1 Admin Routes & Auth
-- [x] `GET /api/admin/users` — paginated user list with filters (status, plan, search)
-- [x] `GET /api/admin/users/:id` — full user detail (plan, subscription, LinkedIn profiles, campaigns, activity)
-- [x] `PATCH /api/admin/users/:id` — update status (block/unblock), update plan override, add notes
-- [x] `GET /api/admin/finance` — revenue dashboard data (MRR, churn, trial conversions)
-- [x] `GET /api/admin/finance/invoices` — all platform invoices (Stripe API aggregate)
+- [x] `GET /api/admin/users` - paginated user list with filters (status, plan, search)
+- [x] `GET /api/admin/users/:id` - full user detail (plan, subscription, LinkedIn profiles, campaigns, activity)
+- [x] `PATCH /api/admin/users/:id` - update status (block/unblock), update plan override, add notes
+- [x] `GET /api/admin/finance` - revenue dashboard data (MRR, churn, trial conversions)
+- [x] `GET /api/admin/finance/invoices` - all platform invoices (Stripe API aggregate)
 - [x] Admin auth: middleware checks `user.is_admin` + `admin_role` permissions
 
 ### 5.2 Admin Frontend Pages
-- [ ] `/admin` — dashboard: active users, MRR, trials expiring soon, recent signups
-- [ ] `/admin/users` — user table: name, email, plan, status, signup date, last active, actions
-- [ ] `/admin/users/:id` — user detail: subscription info, LinkedIn profiles, campaigns, logs, action buttons
-- [ ] `/admin/finance` — revenue metrics: MRR, ARR, churn rate, LTV, trial→paid conversion rate
-- [ ] `/admin/finance/invoices` — invoice list with status, filterable
+- [ ] `/admin` - dashboard: active users, MRR, trials expiring soon, recent signups
+- [ ] `/admin/users` - user table: name, email, plan, status, signup date, last active, actions
+- [ ] `/admin/users/:id` - user detail: subscription info, LinkedIn profiles, campaigns, logs, action buttons
+- [ ] `/admin/finance` - revenue metrics: MRR, ARR, churn rate, LTV, trial→paid conversion rate
+- [ ] `/admin/finance/invoices` - invoice list with status, filterable
 
 ### 5.3 Admin Actions
 - [x] Block user: sets status=blocked, stops daemon, returns 403 on next API call
@@ -251,7 +251,7 @@
 
 ---
 
-## Phase 6: Public Marketing Pages — Pricing, Terms, Privacy
+## Phase 6: Public Marketing Pages - Pricing, Terms, Privacy
 
 **Goal**: Public-facing pages for the marketing site.
 
@@ -267,7 +267,7 @@
 - [x] Acceptance of terms
 - [x] Service description
 - [x] User obligations (LinkedIn TOS compliance, no spam, no fake accounts)
-- [x] Payment terms (auto-renewal, cancellation, refunds — none after 14 days)
+- [x] Payment terms (auto-renewal, cancellation, refunds - none after 14 days)
 - [x] Limitation of liability (LinkedIn account restrictions are user's risk)
 - [x] Termination (we can terminate for abuse, user can cancel anytime)
 - [x] Data handling (reference privacy policy)
@@ -298,14 +298,14 @@
 **Goal**: Automated emails for billing lifecycle events.
 
 ### 7.1 Stripe-Managed Emails (configure in Stripe Dashboard)
-- [x] Payment receipt (on successful charge) — via Stripe dashboard configuration
-- [x] Payment failed (retry warning) — via Stripe dashboard configuration
-- [x] Subscription canceled confirmation — via Stripe dashboard configuration
-- [x] Upcoming renewal reminder (3 days before) — via Stripe dashboard configuration
+- [x] Payment receipt (on successful charge) - via Stripe dashboard configuration
+- [x] Payment failed (retry warning) - via Stripe dashboard configuration
+- [x] Subscription canceled confirmation - via Stripe dashboard configuration
+- [x] Upcoming renewal reminder (3 days before) - via Stripe dashboard configuration
 
 ### 7.2 App-Managed Emails (via SendGrid/Resend/SES)
 - [x] Welcome email on signup (with trial info, getting started guide)
-- [x] Trial ending soon (1 day before expiry): "Your trial ends tomorrow — choose a plan"
+- [x] Trial ending soon (1 day before expiry): "Your trial ends tomorrow - choose a plan"
 - [x] Trial expired: "Your trial has ended. Your campaigns are paused."
 - [x] Plan upgraded: confirmation + new limits
 - [x] Plan downgraded: effective date + what changes
@@ -313,10 +313,10 @@
 - [x] Lifetime deal purchase: thank you + what's included
 
 ### 7.3 Email Infrastructure
-- [x] Choose provider: Resend (simple, cheap) or SES (if scale needed) — Resend + SMTP + SES backends implemented
-- [x] Transactional email templates (HTML + plain text) — 7 email templates with full HTML + text
-- [x] Unsubscribe handling for marketing emails (required by law) — managed by email provider (Resend/SES)
-- [x] Email sending utility in `openoutreach/billing/emails.py` — complete email service with pluggable providers
+- [x] Choose provider: Resend (simple, cheap) or SES (if scale needed) - Resend + SMTP + SES backends implemented
+- [x] Transactional email templates (HTML + plain text) - 7 email templates with full HTML + text
+- [x] Unsubscribe handling for marketing emails (required by law) - managed by email provider (Resend/SES)
+- [x] Email sending utility in `openoutreach/billing/emails.py` - complete email service with pluggable providers
 
 ---
 
@@ -376,14 +376,14 @@
 
 ## Phase 10: Account Lifecycle & Data
 
-**Goal**: Handle the full user lifecycle — signup, trial, subscription, cancellation, deletion.
+**Goal**: Handle the full user lifecycle - signup, trial, subscription, cancellation, deletion.
 
 ### 10.1 Signup Flow Changes
 - [x] Signup creates user with `status=active`, `subscription_status=none`
 - [x] After signup, redirect to plan selection / checkout (credit card required)
 - [x] On checkout complete: set `subscription_status=trialing`, `trial_ends_at=now+3days`
 - [x] User cannot access dashboard until checkout is complete (force billing page)
-- [x] Desktop app login: same flow — after auth callback, check if subscription exists, redirect to billing if not
+- [x] Desktop app login: same flow - after auth callback, check if subscription exists, redirect to billing if not
 
 ### 10.2 Account Deletion
 - [x] User can request account deletion from settings
@@ -413,7 +413,7 @@
 ### 11.1 Desktop Daemon Plan Checks
 - [x] Remote daemon checks subscription status on startup and every config refresh cycle
 - [x] If subscription expired/canceled: daemon stops gracefully with user notification
-- [x] If trial ended: daemon stops, shows system tray notification "Trial ended — subscribe to continue"
+- [x] If trial ended: daemon stops, shows system tray notification "Trial ended - subscribe to continue"
 - [x] If user blocked by admin: daemon stops, shows reason
 
 ### 11.2 Desktop App Plan UI
@@ -528,7 +528,7 @@ Phase 12 (Referrals/Promos)      → Post-launch [depends on Phase 2]
 
 ### Stripe Product/Price Management
 ```
-# No hardcoded price IDs — everything is dynamic:
+# No hardcoded price IDs - everything is dynamic:
 # 1. Plans defined in billing/plans.py (source of truth)
 # 2. sync_stripe_products() creates/updates products+prices on Stripe
 # 3. Resulting Stripe IDs stored in MongoDB StripePlan collection
@@ -582,6 +582,6 @@ frontend/src/
 ```
 
 ### Key Dependencies
-- `stripe` (Python SDK) — backend
+- `stripe` (Python SDK) - backend
 - No new frontend deps needed (use existing shadcn/ui components)
 - Email: `resend` Python SDK (or `boto3` for SES)

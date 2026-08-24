@@ -1,5 +1,5 @@
 # openoutreach/linkedin/tasks/send_manual_message.py
-"""Send manual message task — sends a manual message to a lead via Playwright."""
+"""Send manual message task - sends a manual message to a lead via Playwright."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ def handle_send_manual_message(task, session, qualifiers):
     msg = Message.get(message_id)
     if not msg:
         logger.error(
-            "[%s] send_manual_message: Message %s not found — task skipped",
+            "[%s] send_manual_message: Message %s not found - task skipped",
             campaign,
             message_id,
         )
@@ -31,7 +31,7 @@ def handle_send_manual_message(task, session, qualifiers):
     deal = Deal.get(msg.deal_id) if hasattr(msg, 'deal_id') else None
     if not deal:
         logger.error(
-            "[%s] send_manual_message: Deal not found for message %s — task skipped",
+            "[%s] send_manual_message: Deal not found for message %s - task skipped",
             campaign,
             message_id,
         )
@@ -40,7 +40,7 @@ def handle_send_manual_message(task, session, qualifiers):
     lead = Lead.get(deal.lead_id)
     if not lead:
         logger.error(
-            "[%s] send_manual_message: Lead not found for deal %s — task skipped",
+            "[%s] send_manual_message: Lead not found for deal %s - task skipped",
             campaign,
             deal._id,
         )

@@ -2,10 +2,10 @@
 """LLM-based reply intent classification.
 
 Labels each incoming message as one of:
-  "interested"   — lead wants to learn more / buy / schedule a call
-  "objection"    — pushback on price, timing, fit, but still engaging
-  "wrong_person" — forwarded to wrong contact, or not the decision-maker
-  "not_now"      — polite deferral (busy, on holiday, check back later)
+  "interested"   - lead wants to learn more / buy / schedule a call
+  "objection"    - pushback on price, timing, fit, but still engaging
+  "wrong_person" - forwarded to wrong contact, or not the decision-maker
+  "not_now"      - polite deferral (busy, on holiday, check back later)
 
 Returns None when the LLM is unavailable or the content is too short to classify.
 """
@@ -19,10 +19,10 @@ logger = logging.getLogger(__name__)
 _INTENT_SYSTEM = """\
 You are a sales-conversation classifier. Given one incoming reply from a prospect, \
 classify their intent as exactly one of:
-  interested   — positive signal, wants more info, ready to talk, asks questions
-  objection    — raises a concern or pushback but still engaging
-  wrong_person — message was forwarded or addressed to someone else
-  not_now      — polite deferral, asks to reconnect later
+  interested   - positive signal, wants more info, ready to talk, asks questions
+  objection    - raises a concern or pushback but still engaging
+  wrong_person - message was forwarded or addressed to someone else
+  not_now      - polite deferral, asks to reconnect later
 
 Reply with ONLY the single label, no punctuation, no explanation."""
 
@@ -47,7 +47,7 @@ def classify_reply_intent(content: str, user_id: Optional[str] = None) -> Option
         )
         label = (run_agent_sync(agent.run(content.strip())).output or "").strip().lower().replace("-", "_")
         if label not in _INTENTS:
-            logger.debug("Intent classifier returned unexpected label %r — discarding", label)
+            logger.debug("Intent classifier returned unexpected label %r - discarding", label)
             return None
         return label
     except Exception as exc:

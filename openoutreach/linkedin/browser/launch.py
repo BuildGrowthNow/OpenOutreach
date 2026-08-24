@@ -2,8 +2,8 @@
 """Persist + orchestrate the daemon's LinkedIn browser session.
 
 Cookie persistence (to the Django DB) and the launch/login orchestration are
-OpenOutreach concerns, so they live here. The reusable *mechanics* — launching a
-stealthed browser, driving the login form, clearing checkpoints — stay in the
+OpenOutreach concerns, so they live here. The reusable *mechanics* - launching a
+stealthed browser, driving the login form, clearing checkpoints - stay in the
 Django-free ``linkedin_cli.browser`` library and are called from here.
 """
 
@@ -142,7 +142,7 @@ def start_browser_session(session: Any) -> None:
             error_message="Saved session invalid",
         )
 
-    # "domcontentloaded" — "load" waits for every subresource (analytics
+    # "domcontentloaded" - "load" waits for every subresource (analytics
     # beacons, lazy media) and on LinkedIn that event may never fire,
     # hanging the daemon for the duration of the browser timeout.
     session.page.wait_for_load_state("domcontentloaded")

@@ -59,7 +59,7 @@ def run_qualification(session, qualifier: BayesianQualifier) -> str | None:
         cap = max(30, daily_limit * 3)
         if backlog >= cap:
             logger.info(
-                "[%s] qualify: backlog %d ≥ cap %d — pausing (drain connects first)",
+                "[%s] qualify: backlog %d ≥ cap %d - pausing (drain connects first)",
                 session.campaign, backlog, cap,
             )
             # Fire a UI notification once per cap event (dedup by unread key).
@@ -75,7 +75,7 @@ def run_qualification(session, qualifier: BayesianQualifier) -> str | None:
                     Notification(
                         recipient_id=user_id,
                         notification_type="campaign_warning",
-                        title="Qualification paused — connect queue full",
+                        title="Qualification paused - connect queue full",
                         message=(
                             f"Campaign \"{session.campaign}\" has {backlog} qualified leads waiting "
                             f"(cap {cap}). Qualification resumes automatically as connections are sent."
@@ -121,7 +121,7 @@ def run_qualification(session, qualifier: BayesianQualifier) -> str | None:
     embedding = candidate.embedding_array
     if embedding is None:
         logger.warning(
-            "No embedding for lead %d (%s) — disqualifying", lead_id, public_id
+            "No embedding for lead %d (%s) - disqualifying", lead_id, public_id
         )
         return None
 
@@ -137,10 +137,10 @@ def run_qualification(session, qualifier: BayesianQualifier) -> str | None:
             if selection_score
             else ""
         )
-        logger.debug("%s (%s%s) — querying LLM", public_id, stats, sel)
+        logger.debug("%s (%s%s) - querying LLM", public_id, stats, sel)
     else:
         logger.debug(
-            "%s GP not fitted (%d obs) — querying LLM", public_id, qualifier.n_obs
+            "%s GP not fitted (%d obs) - querying LLM", public_id, qualifier.n_obs
         )
 
     profile_text = _fetch_profile_text(session, lead_id, public_id)
@@ -206,7 +206,7 @@ def _save_qualification_result(
         # Enrich at the QUALIFIED gate (only qualified leads ever reach here).
         # Tri-state: True = hit (proceed QUALIFIED), False = genuine miss (park
         # in NO_EMAIL, out of the connect pool), None = finder off/unreachable
-        # (leave QUALIFIED to retry — a miss is free to re-attempt).
+        # (leave QUALIFIED to retry - a miss is free to re-attempt).
         from openoutreach.mongodb.models import Lead as LeadModel
         lead = LeadModel.get(deal.lead_id)
         if lead and lead.resolve_api_email() is False:

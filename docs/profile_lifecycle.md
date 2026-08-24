@@ -14,7 +14,7 @@ Discovery → Enrichment + Embedding → Qualification (LLM) → QUALIFIED → R
 
 ## 1. Discovery
 
-**Where:** `browser/nav.py` — `goto_page()` → `_extract_in_urls()` → `_discover_and_enrich()`
+**Where:** `browser/nav.py` - `goto_page()` → `_extract_in_urls()` → `_discover_and_enrich()`
 
 Every time the daemon navigates to a LinkedIn page (search results, profile
 pages, feed), all `/in/` URLs on the page are extracted. New URLs (those
@@ -40,7 +40,7 @@ per profile, capped at `enrich_max_per_page` (default 10) per discovered page.
 > **Robustness fallback:** Lazy helpers (`ensure_lead_enriched`,
 > `ensure_profile_embedded`) exist in `db/enrichment.py` for rare edge
 > cases (manual lead creation, interrupted enrichment, DB inconsistency).
-> They log a warning when triggered — this is not normal flow.
+> They log a warning when triggered - this is not normal flow.
 
 ## 3. Qualification (LLM only)
 
@@ -51,8 +51,8 @@ selection depends on label balance:
 
 | Condition | Strategy | Method |
 |-----------|----------|--------|
-| `n_negatives > n_positives` | **Exploit** — pick highest predicted probability | `qualifier.predict_probs()` |
-| Otherwise | **Explore** — pick highest BALD score | `qualifier.compute_bald()` |
+| `n_negatives > n_positives` | **Exploit** - pick highest predicted probability | `qualifier.predict_probs()` |
+| Otherwise | **Explore** - pick highest BALD score | `qualifier.compute_bald()` |
 
 All qualification decisions go through the LLM via `qualify_lead.j2` prompt.
 The GP model is used only for candidate selection strategy, not for auto-decisions.
@@ -76,7 +76,7 @@ must pass a GP confidence gate:
 
 - `promote_to_ready()` loads all QUALIFIED profiles, computes P(f > 0.5) via the GP model
 - Profiles with probability above `min_ready_to_connect_prob` (default 0.9) are promoted to READY_TO_CONNECT
-- During cold start (GP not fitted), no profiles are promoted — the connect task keeps triggering qualifications until enough labels accumulate
+- During cold start (GP not fitted), no profiles are promoted - the connect task keeps triggering qualifications until enough labels accumulate
 
 ## 5. Connect (READY_TO_CONNECT → PENDING)
 
@@ -86,9 +86,9 @@ The connect handler picks the top READY_TO_CONNECT profile from the pool
 (`pipeline/pools.py:find_candidate()` → `pipeline/ready_pool.py:find_ready_candidate()`).
 
 If the pool is empty, the **backfill chain** runs via composable generators:
-1. `ready_source()` — check if any QUALIFIED profiles pass the GP gate via `promote_to_ready()`
-2. `qualify_source()` — qualify the next unlabeled profile via `run_qualification()`
-3. `search_source()` — discover new profiles via `run_search()`
+1. `ready_source()` - check if any QUALIFIED profiles pass the GP gate via `promote_to_ready()`
+2. `qualify_source()` - qualify the next unlabeled profile via `run_qualification()`
+3. `search_source()` - discover new profiles via `run_search()`
 
 Each generator pulls from the next when empty. Each `qualify_source` iteration
 produces exactly one label, preventing infinite-search-without-qualifying.
@@ -137,8 +137,8 @@ interval is 72 hours if the agent doesn't specify one. Rate-limited to
 
 ## 8. Terminal States
 
-- **COMPLETED** — conversation completed by the agent (booked, declined, or went cold)
-- **FAILED** — unrecoverable error at any state, or LLM rejection (campaign-scoped "Disqualified" closing reason)
+- **COMPLETED** - conversation completed by the agent (booked, declined, or went cold)
+- **FAILED** - unrecoverable error at any state, or LLM rejection (campaign-scoped "Disqualified" closing reason)
 
 ---
 

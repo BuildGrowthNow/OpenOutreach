@@ -2,7 +2,7 @@
 
 Strategy: search DuckDuckGo for `wa.me/+<country_code>` patterns on business
 websites. Each `wa.me/<phone>` link is a direct contact link published by a
-business — higher-intent than classified listings because the business itself
+business - higher-intent than classified listings because the business itself
 placed it on their site.
 
 Also visits top SERP result pages to harvest additional wa.me / tel links

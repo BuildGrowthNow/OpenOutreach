@@ -12,7 +12,7 @@
 
 ## What is OpenOutreach?
 
-OpenOutreach is a self-hosted LinkedIn automation platform for B2B lead generation. You don't need a contact list — describe your product and target market and the system autonomously discovers, qualifies, and contacts the right people on LinkedIn.
+OpenOutreach is a self-hosted LinkedIn automation platform for B2B lead generation. You don't need a contact list - describe your product and target market and the system autonomously discovers, qualifies, and contacts the right people on LinkedIn.
 
 **How it works:**
 
@@ -65,18 +65,18 @@ cd frontend && npm install && npm run dev   # Next.js at localhost:3000
 
 ## Desktop App
 
-OpenOutreach ships a native desktop daemon for **macOS and Windows** (v1.5.8). Instead of running the browser automation on a cloud server (which requires expensive mobile proxies), the desktop daemon runs Playwright on your own machine using your residential IP — the same IP LinkedIn already knows.
+OpenOutreach ships a native desktop daemon for **macOS and Windows** (v1.5.8). Instead of running the browser automation on a cloud server (which requires expensive mobile proxies), the desktop daemon runs Playwright on your own machine using your residential IP - the same IP LinkedIn already knows.
 
 **Why this matters:** LinkedIn blocks cloud provider IP ranges (AWS, GCP, Azure). Running on your own machine with your own IP eliminates proxy costs ($25–75/profile/month) and reduces detection risk.
 
 ### Desktop Features
 
-- **System tray app** — start/stop the daemon from the menu bar with real-time status
-- **Secure credential storage** — credentials stored in your OS keychain (macOS Keychain / Windows Credential Manager)
-- **Auto-updates** — checks GitHub releases every 6 hours and notifies you of new versions
-- **One-click login** — opens the web app in your browser and captures the JWT token via the `openoutreach://` protocol handler
-- **Automatic browser detection** — finds your installed Chrome, Edge, or Safari automatically
-- **Full feature parity** — same task execution, active hours, rate limits, and campaign support as the cloud daemon
+- **System tray app** - start/stop the daemon from the menu bar with real-time status
+- **Secure credential storage** - credentials stored in your OS keychain (macOS Keychain / Windows Credential Manager)
+- **Auto-updates** - checks GitHub releases every 6 hours and notifies you of new versions
+- **One-click login** - opens the web app in your browser and captures the JWT token via the `openoutreach://` protocol handler
+- **Automatic browser detection** - finds your installed Chrome, Edge, or Safari automatically
+- **Full feature parity** - same task execution, active hours, rate limits, and campaign support as the cloud daemon
 
 ### Download
 
@@ -93,18 +93,18 @@ Download the latest release from [GitHub Releases](https://github.com/Lengrowth/
 
 | Feature | Description |
 |---------|-------------|
-| **Autonomous lead discovery** | LLM generates LinkedIn search queries from your product description — no contact lists needed |
+| **Autonomous lead discovery** | LLM generates LinkedIn search queries from your product description - no contact lists needed |
 | **Bayesian active learning** | Gaussian Process model on 384-dim profile embeddings learns your ICP via explore/exploit; cold-starts with pure LLM qualification |
 | **AI follow-up agent** | Manages multi-turn conversations using profile summaries, chat history, and your messaging guardrails |
 | **Stealth browser automation** | Playwright + stealth plugins mimic real user behavior; bandwidth optimization blocks third-party assets (60–70% bandwidth reduction) |
 | **Voyager API scraping** | LinkedIn's internal API for accurate structured profile data |
 | **Smart rate limiting** | Time-of-day weighting, aggressiveness presets (very slow → very aggressive), and detectability-score adjustments |
 | **Active hours** | Per-user timezone, start/end hours, and active-days config so the daemon only runs when it looks natural |
-| **Email enrichment** | BetterContact integration — automatically finds work emails for qualified leads; billing is per-hit only |
-| **Deal summaries** | mem0-style incremental JSON fact lists per lead — profile summary + chat summary consumed by the follow-up agent |
+| **Email enrichment** | BetterContact integration - automatically finds work emails for qualified leads; billing is per-hit only |
+| **Deal summaries** | mem0-style incremental JSON fact lists per lead - profile summary + chat summary consumed by the follow-up agent |
 | **Multi-tenant** | Multiple users, multiple LinkedIn profiles, per-user settings, full data isolation |
 | **VNC browser viewer** | Live noVNC iframe in Settings so you can solve LinkedIn CAPTCHAs or security checks from the web UI |
-| **Analytics** | Live connection rates, response rates, conversion funnels — no hard-coded placeholders |
+| **Analytics** | Live connection rates, response rates, conversion funnels - no hard-coded placeholders |
 | **Billing & subscriptions** | Stripe integration with plan enforcement on every mutating endpoint and both daemons |
 
 ---
@@ -120,7 +120,7 @@ Download the latest release from [GitHub Releases](https://github.com/Lengrowth/
 
 3-day free trial (full Pro access, credit card required). Lifetime deal available at launch ($149 one-time, Pro-equivalent).
 
-Cloud execution add-on: +$299/profile/month (server-side browser via proxy, for users who prefer not to run the desktop app). Trial users cannot use cloud execution — desktop app required during trial.
+Cloud execution add-on: +$299/profile/month (server-side browser via proxy, for users who prefer not to run the desktop app). Trial users cannot use cloud execution - desktop app required during trial.
 
 ---
 
@@ -149,7 +149,7 @@ The daemon runs a persistent task queue with three self-scheduling task types:
 - **Backend**: FastAPI + MongoDB (zero Django), JWT auth, multi-tenant
 - **Frontend**: Next.js 14+ (App Router), TypeScript, Tailwind CSS, shadcn/ui
 - **Daemon**: Playwright + stealth, LinkedIn Voyager API, per-profile browser sessions
-- **Desktop**: pystray, keyring, PyInstaller — distributed via GitHub Releases
+- **Desktop**: pystray, keyring, PyInstaller - distributed via GitHub Releases
 - **ML**: sklearn GPR, FastEmbed (384-dim), BALD active learning
 - **Billing**: Stripe (subscriptions, webhooks, customer portal)
 - **Infra**: Docker on AWS EC2, MongoDB Atlas
@@ -181,7 +181,7 @@ The daemon runs a persistent task queue with three self-scheduling task types:
         └──────────────────────────┘
 ```
 
-The cloud daemon (EC2) and desktop daemon (user's machine) both pull tasks from the same queue and report results back to the same API — same code path, different execution environment.
+The cloud daemon (EC2) and desktop daemon (user's machine) both pull tasks from the same queue and report results back to the same API - same code path, different execution environment.
 
 ---
 
@@ -239,7 +239,7 @@ linkedin-cli message alice-smith --session work --text "Hi Alice"
 linkedin-cli thread alice-smith --session work
 ```
 
-The library uses a bind+connect transport: a session owner `browser.bind()`s the browser, clients `chromium.connect()`. Each verb returns a result dict — brief human summary by default, full dict with `--json`.
+The library uses a bind+connect transport: a session owner `browser.bind()`s the browser, clients `chromium.connect()`. Each verb returns a result dict - brief human summary by default, full dict with `--json`.
 
 ---
 
@@ -288,4 +288,4 @@ openoutreach sync-stripe   # sync plans to Stripe
 
 Use of this software may violate LinkedIn's Terms of Service. By using it you accept full responsibility for your account's compliance. See [LEGAL_NOTICE.md](LEGAL_NOTICE.md) for full terms.
 
-**Use at your own risk — no liability assumed.**
+**Use at your own risk - no liability assumed.**

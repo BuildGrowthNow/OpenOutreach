@@ -92,7 +92,7 @@ const plans: Plan[] = [
   {
     name: 'cloud',
     displayName: 'Cloud',
-    tagline: 'Fully managed — we handle everything',
+    tagline: 'Fully managed - we handle everything',
     monthlyPrice: 299,
     annualPrice: 0,
     maxLinkedInAccounts: 1,
@@ -133,17 +133,17 @@ const faqs = [
   {
     question: "Can my LinkedIn or WhatsApp account get restricted?",
     answer:
-      "Lengrowth is designed specifically to avoid this. Actions are spread across the day, volumes stay within normal usage ranges, and timing varies to mimic human behaviour on both channels. Thousands of accounts run without issue. That said, no tool can guarantee LinkedIn or WhatsApp won't change their policies — you take that risk knowingly.",
+      "Lengrowth is designed specifically to avoid this. Actions are spread across the day, volumes stay within normal usage ranges, and timing varies to mimic human behaviour on both channels. Thousands of accounts run without issue. That said, no tool can guarantee LinkedIn or WhatsApp won't change their policies - you take that risk knowingly.",
   },
   {
     question: "How does WhatsApp outreach work?",
     answer:
-      "Lengrowth finds leads with phone numbers from Google Maps, Facebook, classified listings, and other sources — then messages them directly on WhatsApp using the same AI personalization and follow-up sequences as LinkedIn. You scan a QR code once to connect your WhatsApp, and the desktop app handles the rest. All conversations appear in the same unified inbox.",
+      "Lengrowth finds leads with phone numbers from Google Maps, Facebook, classified listings, and other sources - then messages them directly on WhatsApp using the same AI personalization and follow-up sequences as LinkedIn. You scan a QR code once to connect your WhatsApp, and the desktop app handles the rest. All conversations appear in the same unified inbox.",
   },
   {
     question: "What's the difference between the desktop plans and Cloud?",
     answer:
-      "Desktop plans (Starter → Agency) run the automation software on your own computer using your own internet connection — giving you full control. Cloud runs it on our managed infrastructure with AI already configured. Cloud costs more but requires nothing from you.",
+      "Desktop plans (Starter → Agency) run the automation software on your own computer using your own internet connection - giving you full control. Cloud runs it on our managed infrastructure with AI already configured. Cloud costs more but requires nothing from you.",
   },
   {
     question: "Do I need technical skills to set it up?",
@@ -153,7 +153,7 @@ const faqs = [
   {
     question: "Can I change plans?",
     answer:
-      "Yes — upgrades take effect immediately with prorated charges. Downgrades take effect at the end of your billing cycle. If you downgrade to a plan with fewer account slots, the oldest accounts are automatically deactivated to fit the new limit.",
+      "Yes - upgrades take effect immediately with prorated charges. Downgrades take effect at the end of your billing cycle. If you downgrade to a plan with fewer account slots, the oldest accounts are automatically deactivated to fit the new limit.",
   },
   {
     question: "Do you offer refunds?",
@@ -178,12 +178,12 @@ export default function PricingPage() {
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-50">
-      {/* Lifetime banner — fixed above navbar */}
+      {/* Lifetime banner - fixed above navbar */}
       <div className="fixed top-0 left-0 right-0 z-[60] bg-zinc-950 border-b border-emerald-500/20">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-2.5 flex flex-col sm:flex-row items-center justify-center gap-2 text-center">
           <span className="flex items-center gap-1.5 text-sm font-medium text-emerald-300">
             <Zap className="h-4 w-4 shrink-0" />
-            Limited lifetime deal — Pro features forever for $149 one-time.
+            Limited lifetime deal - Pro features forever for $149 one-time.
           </span>
           <Link href="/lifetime" className="text-sm font-bold text-emerald-400 hover:text-emerald-300 underline underline-offset-2 transition-colors">
             Claim yours →
@@ -310,14 +310,14 @@ export default function PricingPage() {
             <div className="flex flex-col lg:flex-row lg:items-center gap-8">
               <div className="flex-1">
                 <h3 className="text-2xl font-bold text-white mb-1">Cloud</h3>
-                <p className="text-xs text-zinc-500 mb-4">Fully managed — we handle everything</p>
+                <p className="text-xs text-zinc-500 mb-4">Fully managed - we handle everything</p>
                 <div className="flex items-baseline gap-1 mb-4">
                   <span className="text-4xl font-extrabold text-white">$299</span>
                   <span className="text-zinc-500 text-sm">/mo</span>
                 </div>
                 <p className="text-sm text-zinc-400 max-w-lg">
                   We run your campaigns on our infrastructure with AI already configured.
-                  No desktop app, no setup — just results. Optional hands-on campaign
+                  No desktop app, no setup - just results. Optional hands-on campaign
                   adjustments included on request.
                 </p>
               </div>

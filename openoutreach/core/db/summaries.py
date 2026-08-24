@@ -21,7 +21,7 @@ from openoutreach.core.vendor.mem0.memory.utils import extract_json, remove_code
 logger = logging.getLogger(__name__)
 
 
-# Vendored fact-extraction prompt — modeled on mem0's FACT_RETRIEVAL_PROMPT.
+# Vendored fact-extraction prompt - modeled on mem0's FACT_RETRIEVAL_PROMPT.
 # Kept inline so we don't pull mem0ai's transitive deps (qdrant, grpcio,
 # sqlalchemy, posthog, ~12 MB) just for one constant string.
 _FACT_EXTRACTION_PROMPT = """\
@@ -53,13 +53,13 @@ def _build_identity_binding(seller_name: str) -> str:
 
     Closes the bug where a [Lead] message greeting the seller by name
     (`"Hola Diego, gracias..."`) causes the LLM to infer `the lead's name is
-    Diego` — the [Me]/[Lead] tags carry no name binding on their own.
+    Diego` - the [Me]/[Lead] tags carry no name binding on their own.
     """
     return (
         f"\nIdentity binding (read carefully):\n"
         f"- [Me] is named {seller_name}.\n"
         f"- When a [Lead] message mentions `{seller_name}`, that is a reference "
-        f"to [Me] — never attribute it as a fact about the lead."
+        f"to [Me] - never attribute it as a fact about the lead."
     )
 
 
@@ -79,7 +79,7 @@ class FactList(BaseModel):
 
 
 class _MemoryAction(BaseModel):
-    """One entry in mem0's reconciliation response — matches DEFAULT_UPDATE_MEMORY_PROMPT schema."""
+    """One entry in mem0's reconciliation response - matches DEFAULT_UPDATE_MEMORY_PROMPT schema."""
 
     id: str
     text: str
@@ -298,7 +298,7 @@ def _request_memory_actions(
     prompt = (
         f"Context: in the source conversation, [Me] is {seller_name}. "
         f"Existing facts that describe `{seller_name}` as if they were the lead "
-        f"are contamination — issue a DELETE for them.\n\n{base}"
+        f"are contamination - issue a DELETE for them.\n\n{base}"
     )
 
     agent = Agent(get_llm_model(user_id=user_id), model_settings={"temperature": 0.0, "timeout": 60})

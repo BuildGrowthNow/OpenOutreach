@@ -1,4 +1,4 @@
-"""Maps scraper — multi-backend Playwright scraper for phone leads.
+"""Maps scraper - multi-backend Playwright scraper for phone leads.
 
 Supported backends: google_maps, bing_maps, duckduckgo_maps.
 Entry point: create_leads_from_maps(...)

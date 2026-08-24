@@ -38,7 +38,7 @@ def test_classify_page_by_path(url, expected):
 
 def test_classify_ignores_redirect_query_param():
     """The regression: a /login URL carrying the feed in ?session_redirect= must
-    classify as LOGIN, not FEED — the query string is not part of the judgement."""
+    classify as LOGIN, not FEED - the query string is not part of the judgement."""
     url = ("https://www.linkedin.com/login/"
            "?session_redirect=https%3A%2F%2Fwww.linkedin.com%2Ffeed%2F")
     assert classify_page(_FakePage(url)) is PageState.LOGIN  # pyright: ignore[reportArgumentType]

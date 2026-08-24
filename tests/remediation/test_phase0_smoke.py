@@ -1,5 +1,5 @@
 """
-Phase 0.3 Smoke Test Harness — Exit Criteria Tests
+Phase 0.3 Smoke Test Harness - Exit Criteria Tests
 
 These six tests verify critical user journeys work before Phase 1–3 fixes:
 
@@ -412,7 +412,7 @@ class TestSmoke6DesktopRefresh:
 # =============================================================================
 
 """
-Phase 0.3 Smoke Tests — Exit Criteria Met
+Phase 0.3 Smoke Tests - Exit Criteria Met
 
 ✓ Test 1: Auth flow works (register user, set password, verify)
 ✓ Test 2: Billing model works (mocked Stripe checkout)

@@ -1,7 +1,7 @@
 # openoutreach/core/agents/follow_up.py
 """Follow-up agent: reads conversation, returns a structured decision.
 
-Single LLM call with structured output — no tool-calling loop.
+Single LLM call with structured output - no tool-calling loop.
 The handler in tasks/follow_up.py executes the decision.
 """
 
@@ -48,7 +48,7 @@ class FollowUpDecision(BaseModel):
         description="Why the conversation ended. Required when action='mark_completed'.",
     )
     follow_up_hours: float = Field(
-        description="Hours until next follow-up. Always required — you decide the pace.",
+        description="Hours until next follow-up. Always required - you decide the pace.",
     )
 
     @model_validator(mode="after")

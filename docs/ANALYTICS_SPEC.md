@@ -31,8 +31,8 @@ For each component: what it displays, the exact calculation, and which backend q
 | Card | Value | Formula |
 |---|---|---|
 | Active Campaigns | `campaigns.length` | Count of campaign docs returned by `GET /api/campaigns` filtered to `status=active`. Frontend count, not a DB aggregate. |
-| Total Leads | `totals.leads` | `leads.count_documents({user_id})` — all lead docs owned by user regardless of state or campaign. |
-| Connected | `totals.connected` | `deals.count_documents({campaign_id: {$in: user_campaign_ids}, state: "Connected"})` — all CONNECTED deals across all campaigns, not time-filtered. |
+| Total Leads | `totals.leads` | `leads.count_documents({user_id})` - all lead docs owned by user regardless of state or campaign. |
+| Connected | `totals.connected` | `deals.count_documents({campaign_id: {$in: user_campaign_ids}, state: "Connected"})` - all CONNECTED deals across all campaigns, not time-filtered. |
 | Messages Sent | `stats.messagesSent` | `action_logs.count_documents({campaign_id: {$in: …}, action_type: "follow_up", status: {$nin: ["failed","error"]}, created_at: {$gte: now-30d}})` |
 
 Sub-text on Connected card: `"X% accept rate (30d)"` where `X = (stats.connectionsAccepted / stats.connectionsSent) * 100`. Computed on frontend. Shows `—` when `connectionsSent = 0`.
@@ -45,10 +45,10 @@ Sub-text on Messages Sent card: `"Reply rate Y%"` where `Y = (stats.messagesRepl
 |---|---|---|
 | Accept Rate | `X%` or `—` | Frontend: `(stats.connectionsAccepted / stats.connectionsSent) * 100`. Shows `—` when denominator is 0. |
 | Reply Rate | `Y%` or `—` | Frontend: `(stats.messagesReplied / stats.messagesSent) * 100`. |
-| Connections Accepted | count | `stats.connectionsAccepted` — 30-day window. Sub: `"X% accept rate"`. |
+| Connections Accepted | count | `stats.connectionsAccepted` - 30-day window. Sub: `"X% accept rate"`. |
 | Active Campaigns | count | `campaigns.length` (fetched list of active campaigns). |
 | Total Leads | count | `totals.leads` from overview response. |
-| Connections Sent | count | `stats.connectionsSent` — 30-day action log count. |
+| Connections Sent | count | `stats.connectionsSent` - 30-day action log count. |
 
 ### 1.3 30-Day Metrics Row (4 values)
 
@@ -57,7 +57,7 @@ Sub-text on Messages Sent card: `"Reply rate Y%"` where `Y = (stats.messagesRepl
 | Connections Sent | `stats.connectionsSent` |
 | Accept Rate | Frontend: `stats.connectionsAccepted / stats.connectionsSent * 100` |
 | Reply Rate | Frontend: `stats.messagesReplied / stats.messagesSent * 100` |
-| Connections Accepted | `stats.connectionsAccepted` — raw count (time-consistent with other 30d columns) |
+| Connections Accepted | `stats.connectionsAccepted` - raw count (time-consistent with other 30d columns) |
 
 ### 1.4 Recent Activity Feed
 
@@ -72,7 +72,7 @@ Sub-text on Messages Sent card: `"Reply rate Y%"` where `Y = (stats.messagesRepl
 
 **Endpoint:** `GET /api/analytics/overview?campaign_id={id}&period={7d|30d|90d}`
 
-All time-filtered metrics use `since = now() - period_days`. Pipeline counts (DISCOVERED/QUALIFIED/etc.) are **not** time-filtered — they reflect current state.
+All time-filtered metrics use `since = now() - period_days`. Pipeline counts (DISCOVERED/QUALIFIED/etc.) are **not** time-filtered - they reflect current state.
 
 ### 2.1 Progress Cards (top row, 4 cards)
 
@@ -81,7 +81,7 @@ All time-filtered metrics use `since = now() - period_days`. Pipeline counts (DI
 | Connection Accept Rate | `X%` | `stats.connectionAcceptRate` | `round((connections_accepted / connections_sent) * 100, 2)`. Zero-safe. |
 | Response Rate | `Y%` | `stats.responseRate` | `round((distinct_deals_with_reply / distinct_deals_messaged) * 100, 2)`. Zero-safe. Both are distinct deal counts. |
 | Conversion Rate | `Z%` | `stats.conversionRate` | `round((conversions / connections_accepted) * 100, 2)`. Zero-safe. |
-| Total Leads | count | `totals.leads` | When `campaign_id` param is set: `deals.count_documents({campaign_id: {$in: campaign_ids}})`. Without filter: `leads.count_documents({user_id})` — all user leads. |
+| Total Leads | count | `totals.leads` | When `campaign_id` param is set: `deals.count_documents({campaign_id: {$in: campaign_ids}})`. Without filter: `leads.count_documents({user_id})` - all user leads. |
 
 **connections_accepted** excludes 1st-degree leads. Pipeline:
 ```
@@ -110,11 +110,11 @@ chat_messages.aggregate([
 ])
 ```
 
-**conversions** = `deals.count_documents({campaign_id, state:"Completed", creation_date:{$gte:since}})` — time-filtered completions.
+**conversions** = `deals.count_documents({campaign_id, state:"Completed", creation_date:{$gte:since}})` - time-filtered completions.
 
 ### 2.2 Lead Pipeline Donut Chart
 
-7 segments. Each = `deals.count_documents({campaign_id:{$in:…}, state:X})` — NOT time-filtered.
+7 segments. Each = `deals.count_documents({campaign_id:{$in:…}, state:X})` - NOT time-filtered.
 
 | Segment | State value | Color |
 |---|---|---|
@@ -143,8 +143,8 @@ One row per campaign. Columns:
 |---|---|---|
 | Campaign Name | `campaign.name` | Direct |
 | Status | `campaign.status` | Badge: active=green, paused=amber, draft=gray |
-| Total Leads | `stats.totalLeads` | `deals.count_documents({campaign_id})` — all deals for campaign |
-| In-Funnel Leads | `stats.activeLeads` | `qualified + ready_to_connect + pending + connected` deal counts — leads that have entered the funnel but not yet completed/failed |
+| Total Leads | `stats.totalLeads` | `deals.count_documents({campaign_id})` - all deals for campaign |
+| In-Funnel Leads | `stats.activeLeads` | `qualified + ready_to_connect + pending + connected` deal counts - leads that have entered the funnel but not yet completed/failed |
 | Accept Rate | `stats.connectionAcceptRate` | Same formula as 2.1, scoped to campaign |
 | Response Rate | `stats.responseRate` | Same formula as 2.1, scoped to campaign |
 | Conversion Rate | `stats.conversionRate` | Same formula as 2.1, scoped to campaign |
@@ -170,7 +170,7 @@ Columns:
 | Outcome | `deal.outcome` | Shown when present: `converted`, `not_interested`, `wrong_fit`, etc. |
 | Campaign | `campaign_names[deal.campaign_id]` | Batch-fetched campaign name lookup |
 | Email | `lead.api_email` (BetterContact) or `lead.contact_info.email` (LinkedIn overlay) | Prefers api_email |
-| Disqualified | `lead.disqualified` | Boolean flag — shown as badge when true |
+| Disqualified | `lead.disqualified` | Boolean flag - shown as badge when true |
 | Created | `lead.creation_date` | |
 
 **Filters:**
@@ -205,9 +205,9 @@ Email resolution: `api_email` (BetterContact) falling back to `contact_info.emai
 ## 4. Messages Page (`/messages`)
 
 **Endpoints:**
-- `GET /api/messages/stats?campaign_id={id}` — stat cards
-- `GET /api/messages?campaign_id={id}&deal_id={id}&limit=50&offset={n}` — message list
-- `GET /api/messages/deals/{deal_id}/messages?sync=true` — thread view (also syncs from LinkedIn)
+- `GET /api/messages/stats?campaign_id={id}` - stat cards
+- `GET /api/messages?campaign_id={id}&deal_id={id}&limit=50&offset={n}` - message list
+- `GET /api/messages/deals/{deal_id}/messages?sync=true` - thread view (also syncs from LinkedIn)
 
 ### 4.1 Stat Cards (4 cards)
 
@@ -215,7 +215,7 @@ Email resolution: `api_email` (BetterContact) falling back to `contact_info.emai
 |---|---|---|---|
 | Total Sent | count | `totalSent` | `chat_messages.count_documents({deal_id: {$in: accessible_deal_ids}, is_outgoing: true})` |
 | Total Received | count | `totalReceived` | `chat_messages.count_documents({deal_id: {$in: …}, is_outgoing: false})` |
-| Response Rate | `%` | `responseRate` | `round((distinct_deal_ids_with_reply / distinct_deal_ids_messaged) * 100)`. Both are distinct deal ID counts — `chat_messages.distinct("deal_id", {is_outgoing:false})` / `chat_messages.distinct("deal_id", {is_outgoing:true})`. Returns 0 when no deals messaged. |
+| Response Rate | `%` | `responseRate` | `round((distinct_deal_ids_with_reply / distinct_deal_ids_messaged) * 100)`. Both are distinct deal ID counts - `chat_messages.distinct("deal_id", {is_outgoing:false})` / `chat_messages.distinct("deal_id", {is_outgoing:true})`. Returns 0 when no deals messaged. |
 | Campaigns with Messages | count | `activeCampaigns` | Count of distinct `deal.campaign_id` values from deals that have at least one message. |
 
 Note: "Campaigns with Messages" = campaigns with at least one sent or received message (not campaigns with `status=active`).
@@ -226,22 +226,22 @@ One row per message, sorted by `creation_date` descending.
 
 | Field | Source |
 |---|---|
-| Direction badge | `message.isOutgoing` — outgoing=blue, incoming=gray |
+| Direction badge | `message.isOutgoing` - outgoing=blue, incoming=gray |
 | Recipient Name | `lead.full_name` via deal→lead lookup |
 | Campaign Name | `campaign.name` via deal→campaign lookup |
 | Content (clipped) | `message.content` |
-| Timestamp | `message.creationDate` — rendered relative ("2h ago") |
+| Timestamp | `message.creationDate` - rendered relative ("2h ago") |
 | `sender` field | `"me"` if outgoing, `"them"` if incoming |
 
 **Filters (frontend-driven):**
-- Campaign dropdown — passes `campaign_id` query param
-- Search — client-side filter on rendered name/content
-- Date range: all/today/7d/30d/90d — passed as additional query params or client-filtered
-- Response status: all/with response/without response — client-filtered on whether deal has any `is_outgoing=false` message
+- Campaign dropdown - passes `campaign_id` query param
+- Search - client-side filter on rendered name/content
+- Date range: all/today/7d/30d/90d - passed as additional query params or client-filtered
+- Response status: all/with response/without response - client-filtered on whether deal has any `is_outgoing=false` message
 
 ### 4.3 Thread View (Modal)
 
-- `GET /api/messages/deals/{deal_id}/messages?sync=true` — triggers live LinkedIn conversation sync before returning stored messages
+- `GET /api/messages/deals/{deal_id}/messages?sync=true` - triggers live LinkedIn conversation sync before returning stored messages
 - Displays all messages for the deal sorted by `creation_date` ascending
 - Outgoing: right-aligned blue; Incoming: left-aligned gray
 - Reply field: 1000-character limit, enqueues a daemon task
@@ -269,32 +269,32 @@ Per-campaign stats are batch-aggregated in the list endpoint:
 
 | Metric | Source | Formula |
 |---|---|---|
-| Total Leads | `stats.totalLeads` | `deals.aggregate($group by campaign_id, $sum:1)` — count of all deals for campaign regardless of state |
-| Connections Sent | `stats.connected` | `action_logs.aggregate({action_type:"connect", status:{$nin:["failed","error"]}} → $group by campaign_id, $sum:1)` — all-time, no time filter |
+| Total Leads | `stats.totalLeads` | `deals.aggregate($group by campaign_id, $sum:1)` - count of all deals for campaign regardless of state |
+| Connections Sent | `stats.connected` | `action_logs.aggregate({action_type:"connect", status:{$nin:["failed","error"]}} → $group by campaign_id, $sum:1)` - all-time, no time filter |
 | Completed | `stats.completed` | `deals.aggregate($group, $sum if state=="Completed")` |
 
 Note: `messagesSent` and `messagesReplied` are **not** included in the list endpoint's `CampaignStats`. Those appear on the campaign detail and analytics tabs.
 
 ---
 
-## 6. Campaign Detail — Overview Tab (`/campaigns/{id}`)
+## 6. Campaign Detail - Overview Tab (`/campaigns/{id}`)
 
 **Endpoints:**
-- `GET /api/campaigns/{id}` — campaign doc
-- `GET /api/campaigns/{id}/analytics?period=30d` — stats
-- `GET /api/campaigns/{id}/activity` — activity log + next task
+- `GET /api/campaigns/{id}` - campaign doc
+- `GET /api/campaigns/{id}/analytics?period=30d` - stats
+- `GET /api/campaigns/{id}/activity` - activity log + next task
 
 ### 6.1 Analytics Stats Card (8 metrics)
 
 | Metric | Field | Formula |
 |---|---|---|
 | Connections Sent | `stats.connections_sent` | `action_logs.count({campaign_id, action_type:"connect", status:{$nin:[…]}, created_at:{$gte:since}})` |
-| Connections Accepted | `stats.connections_accepted` | CONNECTED deals excluding 1st-degree (same pipeline as §2.1) — **not** time-filtered in campaign analytics endpoint |
+| Connections Accepted | `stats.connections_accepted` | CONNECTED deals excluding 1st-degree (same pipeline as §2.1) - **not** time-filtered in campaign analytics endpoint |
 | Connection Accept Rate | `stats.connection_accept_rate` | `round(accepted / sent * 100, 2)`. Zero-safe. |
 | Messages Sent | `stats.messages_sent` | `action_logs.count({campaign_id, action_type:"follow_up", status:{$nin:[…]}, created_at:{$gte:since}})` |
 | Messages Replied | `stats.messages_replied` | Distinct deals with inbound messages in period (same pipeline as §2.1) |
 | Response Rate | `stats.response_rate` | `round(replied / sent * 100, 2)`. Zero-safe. |
-| Conversions | `stats.conversions` | `deals.count({campaign_id, state:"Completed"})` — **not** time-filtered in this endpoint |
+| Conversions | `stats.conversions` | `deals.count({campaign_id, state:"Completed"})` - **not** time-filtered in this endpoint |
 | Conversion Rate | `stats.conversion_rate` | `round(conversions / accepted * 100, 2)`. Zero-safe. |
 | Errors | `stats.errors` | `action_logs.count({campaign_id, status:{$in:["failed","error"]}, created_at:{$gte:since}})` |
 
@@ -306,14 +306,14 @@ Source: `GET /api/campaigns/{id}/activity?page=1&limit=20`
 - Each row: type, status, timestamp, lead name, duration_ms
 
 **Next Task card:**
-- `tasks.find_one({payload.campaign_id, status:"pending"}).sort(scheduled_at,1)` — the earliest pending task
+- `tasks.find_one({payload.campaign_id, status:"pending"}).sort(scheduled_at,1)` - the earliest pending task
 - Shows: task type, `scheduled_at` timestamp, ETA in seconds
 
 **Pending Count:** `tasks.count_documents({payload.campaign_id, status:"pending"})`
 
 ---
 
-## 7. Campaign Detail — Analytics Tab (`/campaigns/{id}/analytics`)
+## 7. Campaign Detail - Analytics Tab (`/campaigns/{id}/analytics`)
 
 **Endpoint:** `GET /api/campaigns/{id}/analytics?period={7d|30d|90d|all}`
 
@@ -350,7 +350,7 @@ Bars represent the funnel stages, each bar shorter than the last:
 
 ### 7.4 Lead Pipeline Breakdown (Donut)
 
-Same as §2.2, filtered to campaign. Source: `pipeline` object in response — one key per DealState, each = `deals.count_documents({campaign_id, state:X})`.
+Same as §2.2, filtered to campaign. Source: `pipeline` object in response - one key per DealState, each = `deals.count_documents({campaign_id, state:X})`.
 
 ---
 
@@ -378,7 +378,7 @@ Keys: `discovered`, `qualified`, `readyToConnect`, `pending`, `connected`, `comp
 
 ### 8.2 Lead Status Distribution (7 bars)
 
-Each bar = count of deals in that state. Source: `pipelineCounts` from response envelope (server-side aggregates — NOT client-side filtered):
+Each bar = count of deals in that state. Source: `pipelineCounts` from response envelope (server-side aggregates - NOT client-side filtered):
 - Bar width = `(pipelineCounts[key] / totalPipelineCount) * 100%`
 - States shown: Discovered, Qualified, Pending, Connected, Completed, Failed, No Email
 
@@ -462,14 +462,14 @@ Source: `lead.profile` object built from `lead.cached_profile` (Voyager JSON).
 
 ### 9.3 Messages Tab
 
-- Source: `GET /api/leads/{id}/messages` — all messages across all accessible deals for this lead
+- Source: `GET /api/leads/{id}/messages` - all messages across all accessible deals for this lead
 - Polled every 10 seconds while tab is active
 - Displayed via `MessageThread` component: chronological, outgoing right-aligned blue, incoming left-aligned gray
 - Reply sends `POST /api/leads/{id}/messages` → creates `Message` record + enqueues `SEND_MANUAL_MESSAGE` daemon task
 
 ### 9.4 Campaigns Tab
 
-Source: `lead.deals[]` from the detail response — all campaigns where this lead appears and user has access.
+Source: `lead.deals[]` from the detail response - all campaigns where this lead appears and user has access.
 
 | Column | Source |
 |---|---|
@@ -477,7 +477,7 @@ Source: `lead.deals[]` from the detail response — all campaigns where this lea
 | State badge | `deal.state` |
 | Outcome badge | `deal.outcome` (if present) |
 
-### 9.5 Sidebar — Metadata card
+### 9.5 Sidebar - Metadata card
 
 | Field | Source | Notes |
 |---|---|---|
@@ -492,7 +492,7 @@ Source: `lead.deals[]` from the detail response — all campaigns where this lea
 ### 9.6 Notes
 
 - Stored in `lead.notes` (free text)
-- Save: `PATCH /api/leads/{id}` with `{notes: "..."}` — updates `leads.notes` field
+- Save: `PATCH /api/leads/{id}` with `{notes: "..."}` - updates `leads.notes` field
 
 ---
 
@@ -502,7 +502,7 @@ Full-page version of the activity log from Campaign Overview tab §6.2.
 
 **Endpoint:** `GET /api/campaigns/{id}/activity?page={n}&limit=20`
 
-Same data as §6.2 but `compact=false` — shows more detail per row. No additional metrics beyond what §6.2 documents.
+Same data as §6.2 but `compact=false` - shows more detail per row. No additional metrics beyond what §6.2 documents.
 
 ---
 
@@ -521,7 +521,7 @@ Same data as §6.2 but `compact=false` — shows more detail per row. No additio
 
 | Service | Status source | Latency source |
 |---|---|---|
-| Database | `healthStatus.services.database` mapped: `"operational"` → `connected`, `"degraded"` → `degraded`, other → `disconnected` | `healthStatus.database.latency_ms` (often 0 — not reliably populated) |
+| Database | `healthStatus.services.database` mapped: `"operational"` → `connected`, `"degraded"` → `degraded`, other → `disconnected` | `healthStatus.database.latency_ms` (often 0 - not reliably populated) |
 | API | `healthStatus.status === "operational"` → `connected`, else `degraded` | `healthStatus.api.latency_ms` (often 0) |
 
 ### 11.3 Database Status card
@@ -531,7 +531,7 @@ Same data as §6.2 but `compact=false` — shows more detail per row. No additio
 | Database Type | Hard-coded string `"MongoDB"` |
 | Connection Status | `healthStatus.services.database === "operational"` → `"Connected"` with pulsing green dot, else `"Disconnected"` with red dot |
 
-**Note:** Latency values shown in Service Timeline are populated as 0 by default — the health endpoint does not currently measure real latency.
+**Note:** Latency values shown in Service Timeline are populated as 0 by default - the health endpoint does not currently measure real latency.
 
 ---
 
@@ -543,15 +543,15 @@ Same data as §6.2 but `compact=false` — shows more detail per row. No additio
 
 | Card | Value | Source |
 |---|---|---|
-| LinkedIn profile | `@{username}` or `"Not connected yet"` | `settings.linkedinProfile.username` from `LinkedInProfile.linkedin_username` — empty if unresolved (login email, not yet scraped) |
+| LinkedIn profile | `@{username}` or `"Not connected yet"` | `settings.linkedinProfile.username` from `LinkedInProfile.linkedin_username` - empty if unresolved (login email, not yet scraped) |
 | Daily sending profile | `{N} connect / {M} follow-up` | `settings.rateLimits.dailyConnectionLimit` / `settings.rateLimits.dailyFollowUpLimit` from `SiteConfig` |
-| LLM configuration | Provider name or `"Lengrowth AI"` | `settings.llm.provider` — shows `"Lengrowth AI"` when no API key configured (platform default) |
+| LLM configuration | Provider name or `"Lengrowth AI"` | `settings.llm.provider` - shows `"Lengrowth AI"` when no API key configured (platform default) |
 
 Sub-text on sending card: `"Velocity {V}/hour"` from `settings.rateLimits.velocity`.
 
-Sub-text on LLM card: badge row — shows `Style`, `Prefer`, `Avoid` badges if those guardrail fields are non-empty; otherwise `"Defaults only"`.
+Sub-text on LLM card: badge row - shows `Style`, `Prefer`, `Avoid` badges if those guardrail fields are non-empty; otherwise `"Defaults only"`.
 
-### 12.2 Rate Limits Tab — Daily Usage Cards (3 cards)
+### 12.2 Rate Limits Tab - Daily Usage Cards (3 cards)
 
 Source: `GET /api/settings/daily-usage`
 
@@ -564,7 +564,7 @@ Source: `GET /api/settings/daily-usage`
 
 Day boundaries use user's `SiteConfig.active_timezone` (default UTC).
 
-### 12.3 Rate Limits Tab — Form Fields
+### 12.3 Rate Limits Tab - Form Fields
 
 Reads/writes `SiteConfig` via `PATCH /api/settings`:
 
@@ -577,7 +577,7 @@ Reads/writes `SiteConfig` via `PATCH /api/settings`:
 | Enable smart rate limiting | `enable_smart_rate_limiting` | bool |
 | Aggressiveness preset | `aggressiveness_preset` | enum: `very_slow/slow/average/aggressive/very_aggressive` |
 
-### 12.4 LLM / AI Settings Tab — Form Fields
+### 12.4 LLM / AI Settings Tab - Form Fields
 
 | Field | SiteConfig key | Purpose |
 |---|---|---|
@@ -589,7 +589,7 @@ Reads/writes `SiteConfig` via `PATCH /api/settings`:
 | Say Rules | `ai_say_rules` | Phrases/topics to emphasize |
 | Avoid Rules | `ai_avoid_rules` | Phrases/topics to avoid |
 
-### 12.5 Active Hours Tab — Form Fields
+### 12.5 Active Hours Tab - Form Fields
 
 | Field | SiteConfig key | Type |
 |---|---|---|
@@ -608,7 +608,7 @@ Reads/writes `SiteConfig` via `PATCH /api/settings`:
 ### 13.1 Trial Banner
 
 Shown when `billingStatus.subscription_status === "trialing"`.
-Displays `billingStatus.trial_ends_at` — absolute date from Stripe subscription.
+Displays `billingStatus.trial_ends_at` - absolute date from Stripe subscription.
 
 ### 13.2 Billing Status Card
 
@@ -671,7 +671,7 @@ Only shown when `isLifetimeDealActive === true` (from `GET /api/billing/lifetime
 
 ## 15. Campaign Health API (backend only, no dedicated UI page)
 
-Endpoint group at `GET /api/campaigns/{id}/health`, `/health/metrics`, `/health/alerts`, `/health/recovery-actions`. Not linked from navigation — backend infrastructure only.
+Endpoint group at `GET /api/campaigns/{id}/health`, `/health/metrics`, `/health/alerts`, `/health/recovery-actions`. Not linked from navigation - backend infrastructure only.
 
 ### Health Score formula
 
@@ -694,5 +694,5 @@ Source collections: `campaign_health_metrics`, `health_alerts`, `recovery_action
 
 | Page | Issue |
 |---|---|
-| Health page (`/health`) | Latency values always 0 — health endpoint does not measure real latency |
-| Campaigns list (§5.1) | Tab counts (Active/Paused/Draft) are client-side from first 100 campaigns — if user has >100 campaigns, counts are wrong |
+| Health page (`/health`) | Latency values always 0 - health endpoint does not measure real latency |
+| Campaigns list (§5.1) | Tab counts (Active/Paused/Draft) are client-side from first 100 campaigns - if user has >100 campaigns, counts are wrong |

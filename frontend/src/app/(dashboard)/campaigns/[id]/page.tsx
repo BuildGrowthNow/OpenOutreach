@@ -266,7 +266,7 @@ export default function CampaignDetailsPage() {
         setLeads(leadsResponse.data.data || []);
       }
     } catch {
-      // silent — don't surface polling errors to the user
+      // silent - don't surface polling errors to the user
     }
   }, [campaignId]);
 
@@ -764,7 +764,7 @@ export default function CampaignDetailsPage() {
                           <DialogHeader className={zincDialogHeaderClassName}>
                             <DialogTitle>Archive Campaign</DialogTitle>
                             <DialogDescription>
-                              This stops all automation and marks the campaign as completed. The campaign and its leads remain visible — nothing is deleted.
+                              This stops all automation and marks the campaign as completed. The campaign and its leads remain visible - nothing is deleted.
                             </DialogDescription>
                           </DialogHeader>
                           <div className="space-y-4 py-4">
@@ -1117,7 +1117,7 @@ function CampaignSettingsForm({
   saving: boolean;
   onSave: (data: Partial<Campaign>) => Promise<void>;
 }) {
-  // API returns snake_case, TS interface declares camelCase — read both
+  // API returns snake_case, TS interface declares camelCase - read both
   const c = campaign as unknown as Record<string, unknown>;
   const getStr = (camel: string, snake: string) => String(c[camel] || c[snake] || "");
   const getArr = (camel: string, snake: string) => (c[camel] || c[snake] || []) as string[];
@@ -1361,7 +1361,7 @@ function CampaignSettingsForm({
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
               <Label>LinkedIn</Label>
-              <p className="text-xs text-muted-foreground">Always enabled — primary outreach channel</p>
+              <p className="text-xs text-muted-foreground">Always enabled - primary outreach channel</p>
             </div>
             <Switch checked={true} disabled />
           </div>

@@ -2,14 +2,14 @@
 """Parse IceMail's 'App Passwords' sheet, pasted from the exported XLS.
 
 The IceMail export is a multi-sheet XLS. The one we need is the **App Passwords**
-sheet — ``First Name | Last Name | Email | App Password | Secret Key | Admin`` —
+sheet - ``First Name | Last Name | Email | App Password | Secret Key | Admin`` —
 because Google Workspace boxes have 2-step verification on, so SMTP only accepts a
 16-char **app password**, not the account login password. We read the ``Email`` and
 ``App Password`` columns by name (host/port are the Google-box constants on the
 Mailbox model) and strip the display spaces Google shows in app passwords.
 
-The other sheet — the login-credentials one (``Email | Password | Recovery Email
-| …``) — carries the *login* password, which Gmail rejects for SMTP (534-5.7.9).
+The other sheet - the login-credentials one (``Email | Password | Recovery Email
+| …``) - carries the *login* password, which Gmail rejects for SMTP (534-5.7.9).
 Pasting it is the easy mistake, so we detect it and say which sheet to use instead.
 """
 
@@ -19,7 +19,7 @@ import csv
 
 _WRONG_SHEET = (
     "That looks like the login-credentials tab (it has a 'Password' column). "
-    "Gmail rejects the login password for sending — in the same IceMail XLS you "
+    "Gmail rejects the login password for sending - in the same IceMail XLS you "
     "downloaded, switch to the **App Passwords** tab (columns: Email, App Password) "
     "and paste that one instead."
 )
@@ -35,7 +35,7 @@ def parse_mailboxes(pasted: str) -> list[tuple[str, str]]:
     """Return ``(email, app_password)`` pairs from a pasted App-Passwords block.
 
     The paste must include the header row. Raises ``ValueError`` with sheet-specific
-    guidance when the App Password column is absent — including the common case of
+    guidance when the App Password column is absent - including the common case of
     pasting the login-credentials sheet by mistake.
     """
     lines = [ln for ln in pasted.splitlines() if ln.strip()]
@@ -63,7 +63,7 @@ def parse_mailboxes(pasted: str) -> list[tuple[str, str]]:
             continue
         email = row[i_email].strip()
         # Google shows app passwords in 4 space-separated groups; the spaces are
-        # display-only — strip them to the canonical 16-char form for SMTP auth.
+        # display-only - strip them to the canonical 16-char form for SMTP auth.
         app_password = row[i_pw].replace(" ", "")
         if email and app_password:
             pairs.append((email, app_password))

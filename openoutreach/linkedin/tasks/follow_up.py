@@ -1,5 +1,5 @@
 # openoutreach/linkedin/tasks/follow_up.py
-"""Follow-up task — runs the agentic follow-up for one eligible CONNECTED deal."""
+"""Follow-up task - runs the agentic follow-up for one eligible CONNECTED deal."""
 
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ _IN_MEMORY_LOCK_SECONDS = 300  # 5 minutes
 
 # If the most recent message (in either direction) is older than this and
 # no outgoing message has ever been sent, the conversation is treated as
-# stale — skip it rather than cold-replying to an ancient inbound message.
+# stale - skip it rather than cold-replying to an ancient inbound message.
 STALE_CONVERSATION_DAYS = 30
 
 
@@ -103,7 +103,7 @@ def _too_soon_to_nudge(deal) -> bool:
 
     Guards:
     1. Persistent post-send lock (deal.last_outgoing_at): after a successful
-       send this field is stamped immediately — before sync_conversation —
+       send this field is stamped immediately - before sync_conversation —
        so it survives LinkedIn API propagation delay and daemon restarts.
        Required minimum cooldown = unanswered_count * MIN_DAYS_PER_UNANSWERED,
        with a hard floor of _IN_MEMORY_LOCK_SECONDS to prevent same-minute
@@ -122,13 +122,13 @@ def _too_soon_to_nudge(deal) -> bool:
     now = datetime.now(timezone.utc)
     deal_id = str(deal._id)
 
-    # Guard 1: persistent field — survives restarts, set before sync_conversation
+    # Guard 1: persistent field - survives restarts, set before sync_conversation
     last_out = _aware(deal.last_outgoing_at) if deal.last_outgoing_at else None
     if last_out is not None and last_out > datetime.min.replace(tzinfo=timezone.utc):
         seconds_since = (now - last_out).total_seconds()
         if seconds_since < _IN_MEMORY_LOCK_SECONDS:
             logger.debug(
-                "deal %s: persistent post-send lock (%ds ago) — skip",
+                "deal %s: persistent post-send lock (%ds ago) - skip",
                 deal_id, int(seconds_since),
             )
             return True
@@ -139,7 +139,7 @@ def _too_soon_to_nudge(deal) -> bool:
         seconds_since = (now - sent_at).total_seconds()
         if seconds_since < _IN_MEMORY_LOCK_SECONDS:
             logger.debug(
-                "deal %s: in-memory post-send lock (%ds ago) — skip",
+                "deal %s: in-memory post-send lock (%ds ago) - skip",
                 deal_id, int(seconds_since),
             )
             return True
@@ -147,7 +147,7 @@ def _too_soon_to_nudge(deal) -> bool:
 
     message_collection = get_mongodb_collection("chat_messages")
     if message_collection is None:
-        # DB unavailable — be conservative, skip rather than risk a duplicate
+        # DB unavailable - be conservative, skip rather than risk a duplicate
         return True
 
     # Load messages sorted newest-first
@@ -170,12 +170,12 @@ def _too_soon_to_nudge(deal) -> bool:
     age_days = (now - last_date).days
     if age_days >= STALE_CONVERSATION_DAYS:
         logger.info(
-            "deal %s: stale conversation (%dd since last message) — skip",
+            "deal %s: stale conversation (%dd since last message) - skip",
             deal._id, age_days,
         )
         return True
 
-    # If the last message is incoming, no nudge cooldown applies — UNLESS
+    # If the last message is incoming, no nudge cooldown applies - UNLESS
     # last_outgoing_at was stamped very recently, which means sync may have
     # misclassified our outgoing message as incoming (self_urn mismatch).
     if not last.get("is_outgoing", False):
@@ -188,11 +188,11 @@ def _too_soon_to_nudge(deal) -> bool:
             return True
         return False
 
-    # Guard 4: post-send DB lock (<60s) — guards against racing tasks before API propagation
+    # Guard 4: post-send DB lock (<60s) - guards against racing tasks before API propagation
     seconds_since_last_outgoing = (now - last_date).total_seconds()
     if seconds_since_last_outgoing < 60:
         logger.debug(
-            "deal %s: post-send lock (last outgoing %ds ago) — skip",
+            "deal %s: post-send lock (last outgoing %ds ago) - skip",
             deal._id, int(seconds_since_last_outgoing),
         )
         return True
@@ -277,7 +277,7 @@ def _close_stale_deals(campaign, session):
             )
             set_profile_state(session, public_id, DealState.FAILED.value, reason="unresponsive")
         elif age_days >= 2:
-            # Warn operator: lead connected but no message sent in 48h — likely a scheduling gap.
+            # Warn operator: lead connected but no message sent in 48h - likely a scheduling gap.
             # Dedup by deal_id so we fire once per deal, not once per daemon loop.
             try:
                 from openoutreach.mongodb.models_extended import Notification
@@ -329,7 +329,7 @@ def handle_follow_up(task, session, qualifiers):
             session.linkedin_profile, ActionLog.ActionType.FOLLOW_UP, campaign
         )
         logger.info(
-            "[%s] follow_up: smart rate limit reached (remaining: %d) — slot skipped",
+            "[%s] follow_up: smart rate limit reached (remaining: %d) - slot skipped",
             campaign,
             remaining,
         )
@@ -342,19 +342,19 @@ def handle_follow_up(task, session, qualifiers):
         connected = len(_connected_deals(campaign))
         if connected:
             logger.info(
-                "[%s] follow_up: %d connected lead(s), all within nudge cooldown — nothing due",
+                "[%s] follow_up: %d connected lead(s), all within nudge cooldown - nothing due",
                 campaign,
                 connected,
             )
         else:
             logger.info(
-                "[%s] follow_up: no connected leads yet — nobody to follow up", campaign
+                "[%s] follow_up: no connected leads yet - nobody to follow up", campaign
             )
         return
 
     lead = Lead.get(deal.lead_id)
     if not lead:
-        logger.warning("[%s] follow_up: Lead not found for deal %s — skipped", campaign, deal._id)
+        logger.warning("[%s] follow_up: Lead not found for deal %s - skipped", campaign, deal._id)
         return
 
     # Cross-campaign dedup: skip if this lead is already PENDING/CONNECTED in another LI campaign.
@@ -369,7 +369,7 @@ def handle_follow_up(task, session, qualifiers):
         }, limit=1) > 0
         if _busy:
             logger.debug(
-                "[%s] follow_up: lead %s active in another LI campaign — skipping",
+                "[%s] follow_up: lead %s active in another LI campaign - skipping",
                 campaign, deal.lead_id,
             )
             return
@@ -392,25 +392,25 @@ def handle_follow_up(task, session, qualifiers):
     except Exception:
         logger.debug("pre-decision sync failed for %s (best-effort)", public_id)
 
-    # Re-check cooldown with fresh chat_messages — catches manual sends just synced.
+    # Re-check cooldown with fresh chat_messages - catches manual sends just synced.
     if _too_soon_to_nudge(deal):
         logger.info(
             "[%s] follow_up: post-sync cooldown triggered for %s "
-            "(manual or recent message detected) — skip",
+            "(manual or recent message detected) - skip",
             campaign, public_id,
         )
         return
 
     # Safety guard: never let the agent close a deal it has never messaged.
     # The LLM can see profile summary and wrongly decide "wrong_fit" before
-    # sending a single word. If that happens, skip this cycle — the deal stays
+    # sending a single word. If that happens, skip this cycle - the deal stays
     # CONNECTED and the operator can review it manually.
     never_messaged = not deal.last_outgoing_at
     decision = run_follow_up_agent(session, deal)
     if decision.action == "mark_completed" and never_messaged:
         logger.warning(
             "[%s] follow_up: agent tried to close %s before sending any message "
-            "(outcome=%s) — skipping, deal stays CONNECTED for manual review",
+            "(outcome=%s) - skipping, deal stays CONNECTED for manual review",
             campaign, public_id, decision.outcome,
         )
         try:
@@ -436,7 +436,7 @@ def handle_follow_up(task, session, qualifiers):
         message = decision.message or ""
         # Replace any placeholders the LLM may have generated
         message = _replace_placeholders(message, deal)
-        # Strip em-dashes — the LLM occasionally ignores the hard constraint
+        # Strip em-dashes - the LLM occasionally ignores the hard constraint
         message = message.replace("—", "-").replace("–", "-")
         logger.info("[%s] follow_up message for %s: %s", campaign, public_id, message)
 
@@ -451,7 +451,7 @@ def handle_follow_up(task, session, qualifiers):
         sent = send_raw_message(session, profile, message)
         if not sent:
             logger.warning(
-                "follow_up for %s: send failed — keeping CONNECTED, will retry next cycle",
+                "follow_up for %s: send failed - keeping CONNECTED, will retry next cycle",
                 public_id,
             )
             # Clear pre-stamp so the next cycle retries instead of waiting MIN_DAYS

@@ -525,7 +525,7 @@ export default function AdminUserDetailPage() {
               </CardHeader>
               <CardContent>
                 <Textarea
-                  placeholder="Internal notes — auto-saved on blur"
+                  placeholder="Internal notes - auto-saved on blur"
                   value={adminNotes}
                   onChange={e => setAdminNotes(e.target.value)}
                   onBlur={handleNotesBlur}

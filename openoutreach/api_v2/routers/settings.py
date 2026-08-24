@@ -78,7 +78,7 @@ def _get_linkedin_profile_info(user_id: str) -> tuple[str, str]:
 
         if profile:
             raw = profile.linkedin_username or ""
-            # linkedin_username may hold the login email before first login — show it as-is
+            # linkedin_username may hold the login email before first login - show it as-is
             # but strip an email so the UI doesn't show "fern2gue@gmail.com" as the handle
             if "@" in raw and "." in raw.split("@")[-1]:
                 username = ""  # not yet resolved to a real handle

@@ -162,7 +162,7 @@ export default function AdminAuditPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Audit Log</h1>
-          <p className="text-muted-foreground mt-1">{total} total entries — all admin actions</p>
+          <p className="text-muted-foreground mt-1">{total} total entries - all admin actions</p>
         </div>
         <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing}>
           <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />

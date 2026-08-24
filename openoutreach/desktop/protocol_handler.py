@@ -70,7 +70,7 @@ def register_protocol_handler():
                 if current == desired_command:
                     return  # Already registered correctly
         except FileNotFoundError:
-            pass  # Key doesn't exist yet — proceed with creation
+            pass  # Key doesn't exist yet - proceed with creation
 
         key_path = r"Software\Classes\lengrowth"
         with winreg.CreateKey(winreg.HKEY_CURRENT_USER, key_path) as key:

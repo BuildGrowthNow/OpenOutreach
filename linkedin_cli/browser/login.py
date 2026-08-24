@@ -76,7 +76,7 @@ def await_checkpoint_clear(page, timeout_s: int = CHECKPOINT_RESOLVE_TIMEOUT_S) 
     The browser runs headed (noVNC at http://localhost:6080/vnc.html), so the
     user can solve the challenge by hand. Returns True once the page leaves
     ``/checkpoint/``, or False if it is still there after *timeout_s*. We never
-    resubmit credentials — every automated retry hardens the block; the only
+    resubmit credentials - every automated retry hardens the block; the only
     escape is a human.
     """
     banner = "*" * 64
@@ -95,7 +95,7 @@ def await_checkpoint_clear(page, timeout_s: int = CHECKPOINT_RESOLVE_TIMEOUT_S) 
     deadline = time.monotonic() + timeout_s
     while time.monotonic() < deadline:
         if classify_page(page) is not PageState.CHECKPOINT:
-            logger.info(colored("Checkpoint cleared — continuing", "green", attrs=["bold"]))
+            logger.info(colored("Checkpoint cleared - continuing", "green", attrs=["bold"]))
             return True
         time.sleep(CHECKPOINT_POLL_S)
     return False
@@ -104,7 +104,7 @@ def await_checkpoint_clear(page, timeout_s: int = CHECKPOINT_RESOLVE_TIMEOUT_S) 
 def submit_login_form(session, username, password):
     """Fill and submit LinkedIn's login form (credentials supplied by the caller).
 
-    Does *not* assert the outcome — the caller (the auth flow's ``@transition``)
+    Does *not* assert the outcome - the caller (the auth flow's ``@transition``)
     re-reads the page to decide what the submit produced: the feed, a checkpoint,
     or, on rejected credentials, the login page again.
     """

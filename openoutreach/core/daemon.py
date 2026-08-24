@@ -245,7 +245,7 @@ class Heartbeat:
         if now - self._last < self._interval:
             return
         self._last = now
-        logger.info(colored("alive", "cyan") + " — %s", context)
+        logger.info(colored("alive", "cyan") + " - %s", context)
 
 
 def sleep_with_heartbeat(seconds: float, heartbeat: Heartbeat, context: str) -> None:
@@ -605,7 +605,7 @@ def run_daemon():
         )
         ps.qualifiers.update(new_qualifiers)
 
-    logger.info(colored("Daemon starting", "green", attrs=["bold"]) + " — multi-profile mode")
+    logger.info(colored("Daemon starting", "green", attrs=["bold"]) + " - multi-profile mode")
 
     while True:
         refresh_pool()
@@ -620,7 +620,7 @@ def run_daemon():
             _recover_stale_running_tasks()
 
         if not pool:
-            logger.info("No active profiles with credentials — sleeping 60s")
+            logger.info("No active profiles with credentials - sleeping 60s")
             sleep_with_heartbeat(60, heartbeat, "no profiles")
             continue
 
@@ -683,7 +683,7 @@ def run_daemon():
                 ps.pause(300)
                 continue
             except AuthenticationError:
-                logger.warning("Session expired for %s — re-authenticating",
+                logger.warning("Session expired for %s - re-authenticating",
                                ps.profile.linkedin_username)
                 try:
                     session.reauthenticate()
@@ -750,7 +750,7 @@ def run_daemon():
             last_wa_validation = now_mono
             _run_wa_preflight_validation()
 
-        # WA task claiming — one task per cycle, round-robins across WA sessions
+        # WA task claiming - one task per cycle, round-robins across WA sessions
         if not task_executed and _WA_SESSIONS:
             for wa_profile_id, wa_session in list(_WA_SESSIONS.items()):
                 wa_task = Task.objects.claim_next(linkedin_profile_id=wa_profile_id, channel="whatsapp")
@@ -802,7 +802,7 @@ def run_daemon():
 
             if min_wait > 60:
                 h, m = int(min_wait // 3600), int(min_wait % 3600 // 60)
-                logger.info("No tasks ready — sleeping %dh%02dm", h, m)
+                logger.info("No tasks ready - sleeping %dh%02dm", h, m)
             sleep_with_heartbeat(min(min_wait, 60), heartbeat, "idle")
 
 

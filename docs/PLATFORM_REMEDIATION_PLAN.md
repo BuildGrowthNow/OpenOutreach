@@ -1,14 +1,14 @@
 # Platform Remediation Plan
 
 **Status:** Phases 0–6 Complete (Phase 0 ✅ 2026-07-19 | Phase 1 ✅ 2026-07-19)  
-**Goal:** Make the full product path work end-to-end — signup → plan → LinkedIn connect → campaign → leads → follow-up — on web and desktop, with one auth system, one API contract, and hard billing enforcement.  
+**Goal:** Make the full product path work end-to-end - signup → plan → LinkedIn connect → campaign → leads → follow-up - on web and desktop, with one auth system, one API contract, and hard billing enforcement.  
 **Latest Work:** 
 - Phase 0.3: Added smoke test harness (6 production-ready tests covering critical journeys)
 - Phase 0 & 1: All exit criteria met; remediation plan fully verified
 - Phases 2–6: Already complete (documented in prior commits)
 **Source:** Combined audits of auth, billing (Phases 7–12), LinkedIn/campaign/lead funnel, desktop, and frontend↔API mismatches (2026-07).
 
-Mark items `- [x]` as completed. Do not open parallel “mini plans” — update this document.
+Mark items `- [x]` as completed. Do not open parallel “mini plans” - update this document.
 
 ---
 
@@ -16,7 +16,7 @@ Mark items `- [x]` as completed. Do not open parallel “mini plans” — updat
 
 1. **One identity system:** JWT only (`users` collection + `authStoreV2` + `apiClientV2`). Remove Supabase from the product path.
 2. **One API contract:** Frontend talks only to `api_v2`. No Django-era paths, trailing-slash habits, or inventing fields the backend does not return.
-3. **Server is source of truth:** Plan limits, blocked/deleted users, and feature gates are enforced on mutating endpoints and daemons — UI locks are optional UX, never security.
+3. **Server is source of truth:** Plan limits, blocked/deleted users, and feature gates are enforced on mutating endpoints and daemons - UI locks are optional UX, never security.
 4. **Stub = hide or implement:** Never leave nav/pages calling empty routers.
 5. **Crash on unexpected errors** (project rule); recover only expected failures (401 refresh, Stripe retry, finder unavailable).
 6. **Production-ready only:** No mock analytics, no “email sent” lies, no placeholder download URLs.
@@ -78,7 +78,7 @@ Mark items `- [x]` as completed. Do not open parallel “mini plans” — updat
 
 ---
 
-## Phase 0 — Baseline, freeze, and acceptance harness
+## Phase 0 - Baseline, freeze, and acceptance harness
 
 **Goal:** Stop the bleeding and measure “done.”  
 **Exit criteria:** Checklist of critical user journeys with failing tests or manual scripts; no new features until Phase 3 exit.
@@ -115,11 +115,11 @@ Working tree may have partial fixes. Re-verify and keep or re-open:
 
 - [x] `cleanup_expired_deletions` query: confirm **single** `deletion_scheduled_at` key with `$exists/$ne/$lt` (B7) ✅ Verified in `account_lifecycle.py`
 - [x] `reactivate_subscription` exists in `stripe_service.py` and is correct (B6) ✅ Verified functional implementation
-- [x] `apply_coupon_to_checkout` — confirm removed vs still dead; wire or delete docs (B10) ✅ Marked as removed dead code in `coupons.py`
+- [x] `apply_coupon_to_checkout` - confirm removed vs still dead; wire or delete docs (B10) ✅ Marked as removed dead code in `coupons.py`
 
 ---
 
-## Phase 1 — Auth unification (JWT only)
+## Phase 1 - Auth unification (JWT only)
 
 **Goal:** One signup/login/session path for web + desktop.  
 **Depends on:** Phase 0.1  
@@ -178,7 +178,7 @@ Working tree may have partial fixes. Re-verify and keep or re-open:
 
 ---
 
-## Phase 2 — Kill Django-era frontend contract
+## Phase 2 - Kill Django-era frontend contract
 
 **Goal:** Frontend and `api_v2` share one contract; no 404s on core pages.  
 **Depends on:** Phase 1 (auth client)  
@@ -208,7 +208,7 @@ For each stub/mismatch, either **implement** or **remove UI**:
 - [x] `GET /api/settings/` → current user’s `SiteConfig` (create defaults if missing)
 - [x] `PUT/PATCH /api/settings/` → update pacing, active hours, LLM fields, AI guardrails
 - [x] `GET /api/settings/daily-usage/` (or under LinkedIn) → real ActionLog counts
-- [x] Always `SiteConfig.load(user_id=...)` — never global singleton
+- [x] Always `SiteConfig.load(user_id=...)` - never global singleton
 - [x] Align field names with frontend forms (camelCase via existing transformer)
 - [x] Auth + blocked/subscription checks on write
 
@@ -223,11 +223,11 @@ For each stub/mismatch, either **implement** or **remove UI**:
   - Daemon should read `status` field
 - [x] Endpoints:
   - `GET /api/campaigns/` → `{ campaigns: Campaign[], count }` ✅ Already correct
-  - `POST /api/campaigns/` — require `linkedin_profile_id` ✅ Already required
-  - `PATCH /api/campaigns/{id}/` — accept `status` and/or `is_paused` consistently ✅ Done
+  - `POST /api/campaigns/` - require `linkedin_profile_id` ✅ Already required
+  - `PATCH /api/campaigns/{id}/` - accept `status` and/or `is_paused` consistently ✅ Done
   - Added: `POST /api/campaigns/{id}/pause/` + `/resume/` ✅ Done
 - [x] Added `icp_titles` and `follow_up_strategy` fields to Campaign model
-- [ ] Wire `PlanEnforcer.can_create_campaign` on create (B2) — deferred to Phase 4
+- [ ] Wire `PlanEnforcer.can_create_campaign` on create (B2) - deferred to Phase 4
 - [x] `/api/campaigns/{id}/status` not used by frontend, no action needed
 
 ### 2.4 Leads / messages path alignment (stubs ready for Phase 3 logic)
@@ -247,9 +247,9 @@ For each stub/mismatch, either **implement** or **remove UI**:
 
 ### 2.6 Client cleanup
 
-- [ ] Grep frontend for `/api/` paths; delete dead helpers — deferred (out of scope for Phase 2)
+- [ ] Grep frontend for `/api/` paths; delete dead helpers - deferred (out of scope for Phase 2)
 - [x] Trailing-slash policy: FastAPI routes use no trailing slash (already consistent)
-- [ ] Replace Lengrowth host defaults — deferred to Phase 5 (desktop app)
+- [ ] Replace Lengrowth host defaults - deferred to Phase 5 (desktop app)
 
 ### 2.7 Phase 2 tests
 
@@ -258,11 +258,11 @@ For each stub/mismatch, either **implement** or **remove UI**:
 - [x] Settings API endpoints verified functional
 - [x] Campaign pause/resume endpoints verified
 - [x] Analytics queries use correct DealState enum values
-- [ ] Integration tests (manual) — recommend testing in Phase 3 after full funnel works
+- [ ] Integration tests (manual) - recommend testing in Phase 3 after full funnel works
 
 ---
 
-## Phase 3 — Core funnel (LinkedIn → campaign → leads → follow-up)
+## Phase 3 - Core funnel (LinkedIn → campaign → leads → follow-up)
 
 **Goal:** Automation path produces qualified leads and messages.  
 **Depends on:** Phase 2  
@@ -275,40 +275,40 @@ For each stub/mismatch, either **implement** or **remove UI**:
 - [x] On verify success: write encrypted cookies to the **real** `LinkedInProfile`, not `MockProfile` with `pass` setter.
 - [x] Confirm-after-VNC path also persists cookies (uses real `LinkedInProfile` via `verify_profile`).
 - [x] Replace silent `pass` on cookie save failure with `logger.error` + continue (credential verify endpoint).
-- [ ] Do not log proxy passwords (D22 from review) — deferred (no proxy password logging found in current code).
+- [ ] Do not log proxy passwords (D22 from review) - deferred (no proxy password logging found in current code).
 
 ### 3.2 VNC hardening (C3)
 
 **Files:** `vnc_manager.py`, `vnc-viewer.tsx`
 
 - [x] Remove `-nopw`; set per-session password via `-passwdfile rm:` (auto-deletes after read).
-- [ ] Move VNC URL fetch to `useEffect`; fix public URL/port for Docker/HTTPS (env-based websockify base) — frontend deferred.
-- [ ] AuthZ: only owning user can open VNC for their profile — deferred (requires API endpoint for VNC token).
+- [ ] Move VNC URL fetch to `useEffect`; fix public URL/port for Docker/HTTPS (env-based websockify base) - frontend deferred.
+- [ ] AuthZ: only owning user can open VNC for their profile - deferred (requires API endpoint for VNC token).
 
-### 3.3 Deal state machine fix (F1–F3) — **highest funnel priority**
+### 3.3 Deal state machine fix (F1–F3) - **highest funnel priority**
 
 **Files:** `linkedin/db/leads.py`, `mongodb/models.py` Deal, `qualify.py`, `pools.py`
 
 - [x] **Discovery** creates Deal with `state=DealState.DISCOVERED` (`"Discovered"`), reason `"Discovered via search"`.
-- [x] `find_unevaluated` queries `DISCOVERED` state — matches discovery state correctly.
+- [x] `find_unevaluated` queries `DISCOVERED` state - matches discovery state correctly.
 - [x] `promote_lead_to_deal`: explicitly sets `state=QUALIFIED` and reason; save.
-- [x] Rejection path: `FAILED` + outcome `wrong_fit` (campaign-scoped) via `create_disqualified_deal` — already implemented in `qualify.py`.
+- [x] Rejection path: `FAILED` + outcome `wrong_fit` (campaign-scoped) via `create_disqualified_deal` - already implemented in `qualify.py`.
 - [x] **Cross-campaign:** if `lead_exists`, creates Deal in `DISCOVERED` state for current campaign (uses existing lead id).
-- [ ] Data migration script: optionally rewrite existing `"Qualified"` deals with reason `"Discovered via search"` and no LLM reason back to `Discovered` — deferred (manual migration, document irreversible).
+- [ ] Data migration script: optionally rewrite existing `"Qualified"` deals with reason `"Discovered via search"` and no LLM reason back to `Discovered` - deferred (manual migration, document irreversible).
 
 ### 3.4 Campaign model fields (F12)
 
-- [x] Add to Mongo `Campaign`: `icp_titles` (list/str), `follow_up_strategy` (str) — already on Campaign model.
-- [x] Expose on create/update schemas + wizard steps — already in campaigns router.
-- [x] Pipeline/search/qualify/follow-up read from campaign document — `qualify.py` reads `campaign.icp_titles`, follow-up reads `campaign.follow_up_strategy`.
+- [x] Add to Mongo `Campaign`: `icp_titles` (list/str), `follow_up_strategy` (str) - already on Campaign model.
+- [x] Expose on create/update schemas + wizard steps - already in campaigns router.
+- [x] Pipeline/search/qualify/follow-up read from campaign document - `qualify.py` reads `campaign.icp_titles`, follow-up reads `campaign.follow_up_strategy`.
 
 ### 3.5 Follow-up agent crash (F4, F13)
 
 **Files:** `core/agents/follow_up.py`, `linkedin/tasks/follow_up.py`
 
-- [x] Resolve campaign via `Campaign.get(deal.campaign_id)` — never `deal.campaign`.
+- [x] Resolve campaign via `Campaign.get(deal.campaign_id)` - never `deal.campaign`.
 - [x] On send failure: keep `CONNECTED`; **do not** demote to `QUALIFIED`.
-- [x] Ensure `seller_name` binding still applied (unchanged — `session.self_profile` provides it).
+- [x] Ensure `seller_name` binding still applied (unchanged - `session.self_profile` provides it).
 - [x] Resolve lead via `Lead.get(deal.lead_id)` instead of `deal.lead` which may be None.
 
 ### 3.6 Leads & messages write APIs (F5, F6, P2)
@@ -317,17 +317,17 @@ For each stub/mismatch, either **implement** or **remove UI**:
 
 Implement at minimum:
 
-- [x] `PATCH /api/leads/{id}` — editable fields (notes, disqualified)
-- [x] `PATCH /api/leads/{id}/campaigns/{campaign_id}/state` — operator qualify/disqualify (validates against DealState enum)
-- [x] `POST /api/leads/{id}/add-to-campaign/` — creates Deal in DISCOVERED state
-- [x] Notes CRUD — notes editable via `PATCH /api/leads/{id}` body
-- [x] `POST /api/leads/{id}/messages` — enqueues `send_manual_message` task scoped to profile; returns `queued` status (does not pretend sync send)
-- [x] `GET` messages already present — `GET /api/leads/{id}/messages` aligned with UI
-- [x] Campaign leads route alias (F6) — `GET /api/leads/campaigns/{campaign_id}/leads` exists
+- [x] `PATCH /api/leads/{id}` - editable fields (notes, disqualified)
+- [x] `PATCH /api/leads/{id}/campaigns/{campaign_id}/state` - operator qualify/disqualify (validates against DealState enum)
+- [x] `POST /api/leads/{id}/add-to-campaign/` - creates Deal in DISCOVERED state
+- [x] Notes CRUD - notes editable via `PATCH /api/leads/{id}` body
+- [x] `POST /api/leads/{id}/messages` - enqueues `send_manual_message` task scoped to profile; returns `queued` status (does not pretend sync send)
+- [x] `GET` messages already present - `GET /api/leads/{id}/messages` aligned with UI
+- [x] Campaign leads route alias (F6) - `GET /api/leads/campaigns/{campaign_id}/leads` exists
 
 ### 3.7 Scheduler / daemon pause + multi-tenant config (F8, D6)
 
-- [x] Reconcile / claim skip paused campaigns — daemon checks `campaign.status != Campaign.Status.ACTIVE`.
+- [x] Reconcile / claim skip paused campaigns - daemon checks `campaign.status != Campaign.Status.ACTIVE`.
 - [x] `SiteConfig.load(user_id=profile.user_id)` in scheduler (`plan_check_pending_window`), follow-up agent, daemon active-hours.
 - [x] Stale RUNNING recovery: only tasks older than 30 minutes; never reset fresh RUNNING.
 
@@ -340,7 +340,7 @@ Implement at minimum:
 
 ---
 
-## Phase 4 — Billing enforcement & lifecycle
+## Phase 4 - Billing enforcement & lifecycle
 
 **Goal:** No unpaid automation; trials/deletions/referrals behave as documented.  
 **Depends on:** Phase 1 (user identity), Phase 2 (settings/campaign gates)  
@@ -358,7 +358,7 @@ Implement at minimum:
   - [x] LinkedIn credential create (already present at line 170-172 in `linkedin_credentials.py`)
   - [x] Daemon claim/execute: `can_run_tasks()` in **cloud** `daemon.py` (line 371) and **remote** `daemon_remote.py` (line 99-101) before task run
 - [ ] Lead imports / bulk actions (no bulk endpoints found - deferred)
-- [ ] Desktop `app.py`: before start, `GET /billing/status` — refuse start if not trialing/active/lifetime (requires desktop UI work - deferred to Phase 5)
+- [ ] Desktop `app.py`: before start, `GET /billing/status` - refuse start if not trialing/active/lifetime (requires desktop UI work - deferred to Phase 5)
 - [ ] Frontend: force redirect when `subscription_status in {none, expired, canceled}` (except billing/settings/support); fix empty effect in dashboard layout (frontend work - deferred)
 - [ ] Overlays cover `none` and `expired`, not only expired (frontend work - deferred)
 
@@ -419,7 +419,7 @@ Implement at minimum:
 
 ---
 
-## Phase 5 — Desktop & remote daemon reliability
+## Phase 5 - Desktop & remote daemon reliability
 
 **Goal:** Desktop is a thin client on residential IP; auth and billing work.  
 **Depends on:** Phase 1 (JWT callback), Phase 4 (billing check)  
@@ -427,43 +427,43 @@ Implement at minimum:
 
 ### 5.1 Auth & URL construction (D1, D4, D5)
 
-- [x] Desktop opens `{APP_URL}/login?desktop=true&callback=openoutreach://auth` — Already implemented
-- [x] Replace fragile `linkedin-api.` → `linkedin.` — Implemented via URL parsing in app.py
-- [ ] Fix download CTA to real GitHub releases org/repo — Out of scope (desktop building separate)
-- [x] Rename notifications from “Lengrowth” → “OpenOutreach” — Done across daemon_remote.py, app.py, config.py
+- [x] Desktop opens `{APP_URL}/login?desktop=true&callback=openoutreach://auth` - Already implemented
+- [x] Replace fragile `linkedin-api.` → `linkedin.` - Implemented via URL parsing in app.py
+- [ ] Fix download CTA to real GitHub releases org/repo - Out of scope (desktop building separate)
+- [x] Rename notifications from “Lengrowth” → “OpenOutreach” - Done across daemon_remote.py, app.py, config.py
 
 ### 5.2 Remote client resilience (D3, D4)
 
 **Files:** `core/remote_client.py`, `daemon_remote.py`, `desktop/app.py`
 
-- [x] Route **all** HTTP through `_request` with retry + 401 refresh — Already implemented in remote_client.py
-- [x] Startup billing/status check: retry refresh once on 401 before crash — Added retry logic in daemon_remote.py:start()
-- [x] On token refresh: update keychain **and** inject new token into running client — Added on_token_refresh callback to RemoteClient, wired to desktop app auth.update_token()
-- [x] Persist refresh failures to tray error state — Error notifications already in place via show_system_notification()
+- [x] Route **all** HTTP through `_request` with retry + 401 refresh - Already implemented in remote_client.py
+- [x] Startup billing/status check: retry refresh once on 401 before crash - Added retry logic in daemon_remote.py:start()
+- [x] On token refresh: update keychain **and** inject new token into running client - Added on_token_refresh callback to RemoteClient, wired to desktop app auth.update_token()
+- [x] Persist refresh failures to tray error state - Error notifications already in place via show_system_notification()
 
-### 5.3 Thin client architecture (D2) — **large**
+### 5.3 Thin client architecture (D2) - **large**
 
-- [x] Daemon API returns task payload with everything needed to execute **or** dedicated `GET /daemon/profile/{id}` + `GET /daemon/campaign/{id}` authenticated endpoints — Implemented endpoints in daemon.py:get_profile_details, get_campaign_details
-- [x] Remove `LinkedInProfile.get` / `Campaign.get` local Mongo requirement from happy path — Endpoints provide all needed fields; no local DB required for happy path
-- [x] Keep optional local cache only if explicitly configured — No local cache enforcement; daemon can fetch on-demand via API
-- [ ] `session.wait()` — Deferred (not called in current codebase)
+- [x] Daemon API returns task payload with everything needed to execute **or** dedicated `GET /daemon/profile/{id}` + `GET /daemon/campaign/{id}` authenticated endpoints - Implemented endpoints in daemon.py:get_profile_details, get_campaign_details
+- [x] Remove `LinkedInProfile.get` / `Campaign.get` local Mongo requirement from happy path - Endpoints provide all needed fields; no local DB required for happy path
+- [x] Keep optional local cache only if explicitly configured - No local cache enforcement; daemon can fetch on-demand via API
+- [ ] `session.wait()` - Deferred (not called in current codebase)
 
 ### 5.4 Config & health (D5, D6)
 
-- [x] Daemon config endpoint: `SiteConfig.load(user_id=...)`; real `cooldown_minutes` — Improved get_daemon_config to use SiteConfig.load() with real user settings
-- [x] Desktop heartbeat / health: `POST /daemon/heartbeat` so web UI shows online/offline — Already implemented in daemon.py:daemon_heartbeat
-- [x] Update checker thread respects `_stopping` — Already in place in app.py:_start_update_checker
-- [x] BrowserNotFoundError → tray message with install guidance — Added specific handling in desktop/app.py:_start_daemon with helpful error message
+- [x] Daemon config endpoint: `SiteConfig.load(user_id=...)`; real `cooldown_minutes` - Improved get_daemon_config to use SiteConfig.load() with real user settings
+- [x] Desktop heartbeat / health: `POST /daemon/heartbeat` so web UI shows online/offline - Already implemented in daemon.py:daemon_heartbeat
+- [x] Update checker thread respects `_stopping` - Already in place in app.py:_start_update_checker
+- [x] BrowserNotFoundError → tray message with install guidance - Added specific handling in desktop/app.py:_start_daemon with helpful error message
 
 ### 5.5 Phase 5 tests
 
-- [x] Mock 401 then refresh succeeds on claim — Added in tests/api_v2/test_phase5_desktop.py:TestRemoteClientTokenRefresh
-- [ ] Daemon starts refused when subscription expired — Manual testing recommended; requires subscription check integration test
-- [ ] No Mongo → still executes connect handler with API-provided campaign dict — Manual integration test; verify daemon executes via API-fetched profile/campaign
+- [x] Mock 401 then refresh succeeds on claim - Added in tests/api_v2/test_phase5_desktop.py:TestRemoteClientTokenRefresh
+- [ ] Daemon starts refused when subscription expired - Manual testing recommended; requires subscription check integration test
+- [ ] No Mongo → still executes connect handler with API-provided campaign dict - Manual integration test; verify daemon executes via API-fetched profile/campaign
 
 ---
 
-## Phase 6 — Secondary surfaces (post-launch or parallel track)
+## Phase 6 - Secondary surfaces (post-launch or parallel track)
 
 **Goal:** Hide/defer links, templates, ghost mode, email, state machine, admin UI until core is stable and production-ready.  
 **Depends on:** Phase 3–5 stable (core funnel proven green)  
@@ -598,7 +598,7 @@ Implement at minimum:
 
 ---
 
-## Phase 7 — Hardening, GDPR, polish
+## Phase 7 - Hardening, GDPR, polish
 
 **Goal:** Production ops quality.
 
@@ -646,7 +646,7 @@ A new user can:
 
 ---
 
-## Appendix A — Canonical API
+## Appendix A - Canonical API
 
 ### Auth
 | Method | Path | Request | Response | Notes |
@@ -681,7 +681,7 @@ _To be documented in Phase 2._
 
 ---
 
-## Appendix B — Explicit non-goals (until Phase 6+)
+## Appendix B - Explicit non-goals (until Phase 6+)
 
 - Rebuilding state machine editor UX  
 - Full email sequencing product  
@@ -691,7 +691,7 @@ _To be documented in Phase 2._
 
 ---
 
-## Appendix C — File ownership map (quick)
+## Appendix C - File ownership map (quick)
 
 | Concern | Primary files |
 |---------|----------------|

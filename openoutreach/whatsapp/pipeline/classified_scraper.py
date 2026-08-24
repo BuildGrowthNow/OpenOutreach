@@ -1,4 +1,4 @@
-"""Classified ads scraper — Craigslist, OLX, MercadoLibre, Gumtree.
+"""Classified ads scraper - Craigslist, OLX, MercadoLibre, Gumtree.
 
 Each backend searches the site for `query`, opens listing detail pages, and
 extracts phone numbers from tel: links or visible body text.

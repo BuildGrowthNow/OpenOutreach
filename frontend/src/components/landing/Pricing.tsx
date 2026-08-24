@@ -42,7 +42,7 @@ const pricingTiers: PricingTier[] = [
   {
     name: 'Cloud',
     price: '$299',
-    description: 'Fully managed — we run everything for you',
+    description: 'Fully managed - we run everything for you',
     features: [
       'Managed cloud execution',
       'AI included (Sonnet)',

@@ -1,6 +1,6 @@
 """Parsers for LinkedIn's server-driven-UI (RSC) responses.
 
-Some flagship-web surfaces — including the profile "Contact info" overlay —
+Some flagship-web surfaces - including the profile "Contact info" overlay —
 are rendered via server-driven UI: a POST returns an RSC stream (React flight
 format) rather than a Voyager JSON blob.  These helpers extract the fields we
 care about from that text payload.
@@ -15,10 +15,10 @@ an optional single-character tag prefix:
     <blank line>
 
 Tags used by LinkedIn:
-  J   — plain JSON value (string, number, object, array)
-  M   — module descriptor (ignored)
-  S   — string chunk (ignored)
-  E   — error chunk (logged but not fatal)
+  J   - plain JSON value (string, number, object, array)
+  M   - module descriptor (ignored)
+  S   - string chunk (ignored)
+  E   - error chunk (logged but not fatal)
 
 The ``J`` tag is the most common; some rows carry no tag at all and begin
 directly with a JSON-parseable character (``{``, ``[``, ``"``).
@@ -55,7 +55,7 @@ _MAILTO_RE = re.compile(r"mailto:([^\"\\<>\s]+)")
 _TEL_RE = re.compile(r"tel:([^\"\\<>\s]+)")
 
 # LinkedIn's newer RSC format (React Flight / Next.js) encodes contact data as
-# plain string props inside component trees — no mailto:/tel: URI wrappers.
+# plain string props inside component trees - no mailto:/tel: URI wrappers.
 # These patterns catch bare email addresses and phone numbers in that format.
 # Email: standard RFC 5322 local@domain.tld, anchored by JSON string delimiters.
 _EMAIL_RE = re.compile(
@@ -96,7 +96,7 @@ def _collect_contact_urls(obj: Any, emails: list[str], phones: list[str]) -> Non
     elif isinstance(obj, (list, tuple)):
         for item in obj:
             _collect_contact_urls(item, emails, phones)
-    # Numbers, booleans, None — nothing to extract.
+    # Numbers, booleans, None - nothing to extract.
 
 
 def _try_decode_row(row: str) -> Any:
@@ -119,7 +119,7 @@ def _try_decode_row(row: str) -> Any:
             logger.debug("RSC error chunk (unparseable): %.120s", stripped)
         return None
 
-    # Skip module descriptor rows ("M:…") — they carry import metadata only.
+    # Skip module descriptor rows ("M:…") - they carry import metadata only.
     if stripped.startswith("M:"):
         return None
 
@@ -128,7 +128,7 @@ def _try_decode_row(row: str) -> Any:
     # or third character is ":", advance past the prefix.
     content = stripped
     if len(stripped) >= 2 and stripped[1] == ":":
-        # "J:{rest}" — but rest may itself start "N:" (J:0:{...})
+        # "J:{rest}" - but rest may itself start "N:" (J:0:{...})
         rest = stripped[2:]
         # Check for a second colon that separates the index from the payload.
         colon_pos = rest.find(":")
@@ -154,7 +154,7 @@ def _try_decode_row(row: str) -> Any:
 def _parse_rsc_chunks(rsc_text: str) -> tuple[list[str], list[str]]:
     """Walk every JSON-decodeable RSC row and collect mailto/tel values.
 
-    Returns ``(emails, phone_numbers)`` — un-deduplicated, in document order.
+    Returns ``(emails, phone_numbers)`` - un-deduplicated, in document order.
     """
     emails: list[str] = []
     phones: list[str] = []
@@ -171,12 +171,12 @@ def _parse_rsc_chunks(rsc_text: str) -> tuple[list[str], list[str]]:
 # ── Regex fallback ────────────────────────────────────────────────────────────
 
 def _parse_rsc_regex(rsc_text: str) -> tuple[list[str], list[str]]:
-    """Regex scan over the raw text — catches values missed by the JSON walker.
+    """Regex scan over the raw text - catches values missed by the JSON walker.
 
     Three passes in priority order:
-    1. ``mailto:`` URIs — classic RSC format.
-    2. ``tel:`` URIs — classic RSC format.
-    3. Bare email / phone strings — newer React Flight / Next.js RSC format
+    1. ``mailto:`` URIs - classic RSC format.
+    2. ``tel:`` URIs - classic RSC format.
+    3. Bare email / phone strings - newer React Flight / Next.js RSC format
        where contact data appears as plain JSON string props with no URI prefix.
     """
     emails = _MAILTO_RE.findall(rsc_text) + _EMAIL_RE.findall(rsc_text)
@@ -191,7 +191,7 @@ def _warn_empty_result(rsc_text: str) -> None:
     snippet = rsc_text[:400].replace("\n", " ↵ ")
     logger.warning(
         "parse_contact_info: non-trivial payload (%d bytes) but no mailto/tel "
-        "found — LinkedIn may have changed the RSC format.  "
+        "found - LinkedIn may have changed the RSC format.  "
         "Raw snippet: %.400s",
         len(rsc_text),
         snippet,
@@ -217,11 +217,11 @@ def parse_contact_info(rsc_text: str) -> dict:
 
     Runs two complementary extraction passes and merges the results:
 
-    1. **RSC chunk parser** — decodes each flight row as JSON and recursively
+    1. **RSC chunk parser** - decodes each flight row as JSON and recursively
        walks the object graph collecting ``mailto:`` / ``tel:`` string values.
        Precise: only extracts real URL-valued fields.
 
-    2. **Regex fallback** — scans the raw text for ``mailto:`` / ``tel:``
+    2. **Regex fallback** - scans the raw text for ``mailto:`` / ``tel:``
        patterns.  Catches values in malformed or non-JSON rows that the
        structured walker cannot reach.
 
@@ -231,7 +231,7 @@ def parse_contact_info(rsc_text: str) -> dict:
 
     Returns ``{email, emails, phone_numbers}``.  ``email`` is the first address
     found (or ``None``).  Only fields the member exposes to your network appear
-    — email is typically present only for 1st-degree connections.
+    - email is typically present only for 1st-degree connections.
     """
     # Pass 1: structured RSC chunk walk.
     chunk_emails, chunk_phones = _parse_rsc_chunks(rsc_text)

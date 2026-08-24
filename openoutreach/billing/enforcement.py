@@ -32,7 +32,7 @@ class PlanEnforcer:
         if profiles_col is None or creds_col is None:
             return False, "Database error"
 
-        # Only count profiles that have at least one credential — orphaned profiles
+        # Only count profiles that have at least one credential - orphaned profiles
         # (auto-created but credential deleted after failed verification) must not consume a slot.
         active_profile_ids = [
             doc["_id"]

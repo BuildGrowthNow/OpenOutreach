@@ -1,29 +1,29 @@
-"""linkedin-cli — drive LinkedIn interactions inside a bound browser session.
+"""linkedin-cli - drive LinkedIn interactions inside a bound browser session.
 
 ``session open`` launches + binds a persistent browser (the session owner); the
 verbs connect to it and drive LinkedIn. One session = one account; pick it with
 ``--session <name>`` (or ``$LINKEDIN_CLI_SESSION``).
 
-Output contract — design decisions, kept here so they travel with the package:
+Output contract - design decisions, kept here so they travel with the package:
 
-* **Every verb produces a dict** — its canonical result. That one dict is both
+* **Every verb produces a dict** - its canonical result. That one dict is both
   the ``--json`` payload and the source the human renderer summarises, so the
   two views can never drift.
 * **Human-readable by default; ``--json`` on every verb for the full dict.**
   Per clig.dev ("humans first", "keep it brief, err toward less output"), the
   default is a short, scannable per-verb summary (``status`` → ``Connected``,
   ``profile`` → a few lines); ``--json`` emits the whole dict for machines.
-* **No ``--out``/file flag — print to stdout, let the caller redirect.** To save
+* **No ``--out``/file flag - print to stdout, let the caller redirect.** To save
   a result: ``linkedin-cli profile alice --json > alice.json``. This matches the
   composability convention (clig.dev; ``kubectl -o``, ``aws --output``,
   ``gh --json``) and keeps the tool free of file-lifecycle concerns.
 * **stdout carries only the result; logs and errors go to stderr.** Errors are an
   ``error: <type>: <message>`` line + non-zero exit (``type`` mirrors
-  ``exceptions.py``). A verb that ran is exit 0 — ``message`` reports send success
+  ``exceptions.py``). A verb that ran is exit 0 - ``message`` reports send success
   in its dict (``sent``), not via the exit code.
 
 This module is the composition root: it owns policy (e.g. interaction pacing)
-and injects it into the session — the session/action layers read no config.
+and injects it into the session - the session/action layers read no config.
 """
 from __future__ import annotations
 
@@ -113,7 +113,7 @@ def _human_profile(result: dict) -> str:
         result.get("location_name"),
         industry.get("name") if isinstance(industry, dict) else None,
     ) if x)
-    lines = [" — ".join(x for x in (result.get("full_name"), result.get("headline")) if x)]
+    lines = [" - ".join(x for x in (result.get("full_name"), result.get("headline")) if x)]
     if subtitle:
         lines.append(subtitle)
     lines.append(f"{len(result.get('positions') or [])} positions · "
@@ -309,7 +309,7 @@ def _cmd_session_close(args) -> int:
 def _run_verb(args) -> int:
     record = read_session(args.name)
     if not record:
-        _err(f"error: usage: no open session named {args.name!r} — run "
+        _err(f"error: usage: no open session named {args.name!r} - run "
              f"`linkedin-cli session open --session {args.name}`")
         return 2
 
@@ -325,7 +325,7 @@ def _run_verb(args) -> int:
         session.ensure_browser()
         _render(args.verb, _VERBS[args.verb](session, args), args.json)
         return 0
-    except Exception as exc:  # noqa: BLE001 — map known errors, re-raise the rest
+    except Exception as exc:  # noqa: BLE001 - map known errors, re-raise the rest
         error_type = _error_type(exc)
         if error_type is None:
             raise
@@ -364,7 +364,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("login", parents=[common],
                    help="Log the session in (fill the form, clear a checkpoint) and report the logged-in member")
     sub.add_parser("whoami", parents=[common],
-                   help="Report who the session is logged in as — no login, no checkpoint")
+                   help="Report who the session is logged in as - no login, no checkpoint")
 
     p_profile = sub.add_parser("profile", parents=[common],
                                help="Scrape a member's full profile: headline, positions, education, location")

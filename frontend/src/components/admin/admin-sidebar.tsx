@@ -60,7 +60,7 @@ export default function AdminSidebar() {
 
       {/* Footer */}
       <div className="border-t p-3 space-y-0.5">
-        {/* Back to app — ghost with muted tint */}
+        {/* Back to app - ghost with muted tint */}
         <Link href="/dashboard">
           <Button
             variant="ghost"

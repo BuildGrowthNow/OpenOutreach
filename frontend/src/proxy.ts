@@ -34,7 +34,7 @@ const BILLING_EXEMPT_PATHS = [
   '/settings/account',
 ];
 
-// Subscription statuses considered active — access permitted
+// Subscription statuses considered active - access permitted
 const ACTIVE_STATUSES = new Set(['active', 'trialing']);
 
 export function proxy(request: NextRequest) {
@@ -78,7 +78,7 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // Billing enforcement — only on dashboard routes (not settings/plan itself)
+  // Billing enforcement - only on dashboard routes (not settings/plan itself)
   // billing_status is a readable (non-HTTP-only) cookie set by the backend on
   // login and token refresh. It mirrors user.subscription_status.
   if (isProtectedRoute && token) {
@@ -86,7 +86,7 @@ export function proxy(request: NextRequest) {
     const isBillingExempt = BILLING_EXEMPT_PATHS.some(p => pathname.startsWith(p));
 
     // Only redirect when we have a definitive inactive status.
-    // Missing cookie (e.g. existing sessions before this deploy) — let through;
+    // Missing cookie (e.g. existing sessions before this deploy) - let through;
     // the billing overlay in the app will handle it at render time.
     if (
       billingStatus &&

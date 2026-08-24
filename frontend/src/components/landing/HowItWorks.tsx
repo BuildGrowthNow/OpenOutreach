@@ -13,7 +13,7 @@ const steps = [
     label: 'Define',
     title: 'Describe your ideal customer.',
     description:
-      "Tell Lengrowth who you're after — job title, industry, company size, geography. Reach them on LinkedIn or via WhatsApp from Google Maps leads. No CSV imports, no manual scraping.",
+      "Tell Lengrowth who you're after - job title, industry, company size, geography. Reach them on LinkedIn or via WhatsApp from Google Maps leads. No CSV imports, no manual scraping.",
     time: '5 minutes to configure',
   },
   {
@@ -22,7 +22,7 @@ const steps = [
     label: 'Automate',
     title: 'Personalized messages go out automatically.',
     description:
-      "For each prospect, the AI reads their profile and writes a short, specific message. LinkedIn connection requests or WhatsApp direct messages — sent on human-like timing. No batches, no blasts.",
+      "For each prospect, the AI reads their profile and writes a short, specific message. LinkedIn connection requests or WhatsApp direct messages - sent on human-like timing. No batches, no blasts.",
     time: 'Runs 24/7 in the background',
   },
   {

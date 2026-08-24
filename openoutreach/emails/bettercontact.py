@@ -1,5 +1,5 @@
 # openoutreach/emails/bettercontact.py
-"""BetterContact email lookup — a single-key managed waterfall over an async
+"""BetterContact email lookup - a single-key managed waterfall over an async
 submit→poll HTTP contract. `find_email` is the only public function."""
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ _BROWSER_UA = (
 
 
 def find_email(api_key: str, query: FinderQuery) -> FinderResult | None:
-    """Submit one lead, poll until done, return its email — None on a genuine
+    """Submit one lead, poll until done, return its email - None on a genuine
     miss (finder ran, found nothing). Raises FinderUnavailable on a transport
     failure (HTTP error, network drop, poll timeout) or an empty submit."""
     with _session(api_key) as session:

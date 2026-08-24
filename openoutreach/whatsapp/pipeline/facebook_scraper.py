@@ -81,7 +81,7 @@ def _scrape_facebook_pages(
 
     # Redirect to login wall → abort
     if "/login" in page.url or "login_form" in page.url:
-        logger.warning("facebook: login wall hit — skipping")
+        logger.warning("facebook: login wall hit - skipping")
         return []
 
     try:

@@ -49,7 +49,7 @@ Structured LLM output defined in `linkedin/agents/follow_up.py`:
 Outcome values: `converted`, `not_interested`, `wrong_fit`, `no_budget`,
 `has_solution`, `bad_timing`, `unresponsive`.
 
-Validated by a Pydantic `model_validator` — the LLM call fails if required
+Validated by a Pydantic `model_validator` - the LLM call fails if required
 fields are missing for the chosen action.
 
 ## Agent Context
@@ -84,7 +84,7 @@ All LLM calls go through `linkedin/db/summaries.py`.
 3. Extracts facts via LLM, conditioned on the campaign objective and product docs
 4. Persists on `Deal.profile_summary`
 
-Runs **once** per `(lead, campaign)` lifetime — the first time a follow-up
+Runs **once** per `(lead, campaign)` lifetime - the first time a follow-up
 touches the deal.
 
 ### Chat Summary
@@ -93,10 +93,10 @@ touches the deal.
 
 1. Called by `sync_conversation()` after upserting new `ChatMessage` rows
 2. Formats new messages as a labeled transcript (`[Me]` / `[Lead]`)
-3. Short-circuits if there are no incoming (lead) messages — a burst of outgoing
+3. Short-circuits if there are no incoming (lead) messages - a burst of outgoing
    messages alone doesn't trigger an LLM call
 4. Extracts new facts via LLM (`extract_facts`)
-5. Reconciles against existing facts via `reconcile_facts()` — mem0-style
+5. Reconciles against existing facts via `reconcile_facts()` - mem0-style
    ADD/UPDATE/DELETE/NONE events, not naive append-and-dedup
 6. Persists updated list on `Deal.chat_summary`
 
@@ -136,7 +136,7 @@ Each strategy uses the lead's URN (stored on `Lead.urn`). If all three fail,
 
 - Creates a PENDING `Task` with `scheduled_at = now + delay_seconds`
 - **Dedup**: only one FOLLOW_UP task per `(campaign_id, public_id)` exists at a
-  time — if one already exists and is pending, it's left untouched
+  time - if one already exists and is pending, it's left untouched
 
 Called from three places:
 
@@ -167,13 +167,13 @@ Called from three places:
 
 The system prompt (`follow_up_agent.j2`) follows the Mom Test method:
 
-- **Discovery first**: open with questions about the lead's work and problems — no product mention until real signal emerges
+- **Discovery first**: open with questions about the lead's work and problems - no product mention until real signal emerges
 - **Pitching on signal**: transition when the lead describes a concrete problem we solve, expresses frustration with their current approach, or asks what we do
 - **Keep learning while pitching**: weave discovery questions into the conversation even after introducing the product
 - **Language**: infer from profile facts (name origin, location, languages); default to English
-- **Tone**: short, casual, warm — like real LinkedIn DMs (1-3 sentences max)
+- **Tone**: short, casual, warm - like real LinkedIn DMs (1-3 sentences max)
 - **No boilerplate**: no placeholders, no signatures, no corporate speak
-- **Timing**: agent decides — active reply → 2-8h; async → 24h; no reply → 24-48h; 3+ unanswered → consider `mark_completed`
+- **Timing**: agent decides - active reply → 2-8h; async → 24h; no reply → 24-48h; 3+ unanswered → consider `mark_completed`
 - **Booking link**: include naturally when suggesting a call, not as a standalone line
 
 ## CLI Debugging

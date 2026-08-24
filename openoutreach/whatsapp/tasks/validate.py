@@ -108,7 +108,7 @@ def validate_wa_phones(wa_session) -> int:
             deal.reason = "phone_not_on_whatsapp"
             deal.save(update_fields=["state", "reason"])
             logger.info(
-                "validate_wa_phones: %s not on WhatsApp — deal %s FAILED",
+                "validate_wa_phones: %s not on WhatsApp - deal %s FAILED",
                 lead.phone, deal._id,
             )
 

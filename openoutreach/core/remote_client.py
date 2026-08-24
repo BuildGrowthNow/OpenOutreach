@@ -139,7 +139,7 @@ class RemoteClient:
     async def bootstrap(self, linkedin_profile_id: str) -> dict:
         """Fetch one-time bootstrap secrets (secret_key + MongoDB URI).
 
-        Called once at daemon startup — not on the periodic config-refresh path.
+        Called once at daemon startup - not on the periodic config-refresh path.
         Returns dict with secret_key, mongodb_uri, mongodb_name.
         """
         response = await self._request_with_retry(
@@ -305,7 +305,7 @@ class RemoteClient:
             return None
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 401:
-                raise SessionExpiredError("Refresh token expired — re-login required") from e
+                raise SessionExpiredError("Refresh token expired - re-login required") from e
             logger.error("Token refresh failed: %s", e)
             return None
         except Exception as e:

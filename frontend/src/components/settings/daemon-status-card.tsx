@@ -152,7 +152,7 @@ export function DaemonStatusCard() {
           <Alert className="border-zinc-700 bg-zinc-900/50">
             <Download className="h-4 w-4 text-blue-400" />
             <AlertDescription className="text-zinc-300">
-              Lengrowth desktop app not detected. Download it to run outreach from your own computer — no extra costs required.
+              Lengrowth desktop app not detected. Download it to run outreach from your own computer - no extra costs required.
             </AlertDescription>
           </Alert>
           <Button variant="outline" asChild>

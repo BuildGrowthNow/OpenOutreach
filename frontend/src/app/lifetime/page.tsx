@@ -19,17 +19,17 @@ const features = [
   'Unified conversation inbox',
   'Analytics & performance dashboard',
   'All future Pro plan updates',
-  'Forever — no recurring charges',
+  'Forever - no recurring charges',
 ];
 
 const faqs = [
   {
     q: 'Is this actually limited to 100 buyers?',
-    a: "Yes. Once the 100th purchase goes through, the page closes. The 30-day window is also a hard deadline — whichever comes first ends the offer.",
+    a: "Yes. Once the 100th purchase goes through, the page closes. The 30-day window is also a hard deadline - whichever comes first ends the offer.",
   },
   {
     q: 'What do I need to supply myself?',
-    a: "An LLM API key for AI messaging — OpenAI, Anthropic, or similar. Costs typically a few dollars a month based on usage. The automation itself, all features, and all updates are included in the $149.",
+    a: "An LLM API key for AI messaging - OpenAI, Anthropic, or similar. Costs typically a few dollars a month based on usage. The automation itself, all features, and all updates are included in the $149.",
   },
   {
     q: "What if I'm already on a monthly plan?",
@@ -101,7 +101,7 @@ export default function LifetimeDealPage() {
           <div className="container relative mx-auto px-4 sm:px-6 lg:px-8 max-w-3xl text-center">
             <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/25 bg-emerald-500/[0.08] px-4 py-1.5 text-sm font-semibold text-emerald-400 mb-8">
               <Zap className="h-3.5 w-3.5" />
-              Limited Time — {spotsTaken} of {TOTAL_SPOTS} spots taken
+              Limited Time - {spotsTaken} of {TOTAL_SPOTS} spots taken
             </div>
 
             <h1
@@ -118,7 +118,7 @@ export default function LifetimeDealPage() {
 
             <p className="text-lg sm:text-xl text-zinc-400 mb-10 max-w-xl mx-auto leading-relaxed">
               Lock in unlimited campaigns, AI outreach, and every future Pro
-              update — with a single payment. No subscriptions, ever.
+              update - with a single payment. No subscriptions, ever.
             </p>
 
             {/* Spots progress */}
@@ -134,7 +134,7 @@ export default function LifetimeDealPage() {
                 />
               </div>
               <p className="text-xs text-zinc-600 mt-2 text-center">
-                Capped at 100 buyers — first come, first served
+                Capped at 100 buyers - first come, first served
               </p>
             </div>
 
@@ -174,7 +174,7 @@ export default function LifetimeDealPage() {
             {!expired && (
               <Link href="/signup">
                 <Button className="h-14 px-10 text-lg font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-2xl shadow-emerald-600/30 group">
-                  Claim My Spot — $149 Once
+                  Claim My Spot - $149 Once
                   <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-0.5" />
                 </Button>
               </Link>
@@ -233,7 +233,7 @@ export default function LifetimeDealPage() {
                   <p className="text-sm text-zinc-400 text-center">
                     Breaks even vs annual billing in{' '}
                     <span className="font-bold text-white">4 months.</span>{' '}
-                    After that — you&apos;re saving{' '}
+                    After that - you&apos;re saving{' '}
                     <span className="text-emerald-400 font-bold">$492 every year</span>.
                   </p>
                 </div>
@@ -279,7 +279,7 @@ export default function LifetimeDealPage() {
                 You own the stack.
               </h3>
               <p className="text-zinc-400 mb-6">
-                The lifetime deal runs on your own machine — automation uses your
+                The lifetime deal runs on your own machine - automation uses your
                 own internet connection. That means your account activity looks
                 exactly like you manually browsing LinkedIn and WhatsApp. You also bring your
                 own LLM API key, which keeps costs predictable and puts you in
@@ -289,7 +289,7 @@ export default function LifetimeDealPage() {
                 {[
                   { label: 'Your machine, your IP', sub: 'Looks like normal browsing on both channels' },
                   { label: 'Your AI key', sub: 'Full control, typically a few $/mo' },
-                  { label: 'No ongoing fees', sub: '$149 and done — forever' },
+                  { label: 'No ongoing fees', sub: '$149 and done - forever' },
                 ].map((item, i) => (
                   <div key={i} className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
                     <p className="font-semibold text-white text-sm mb-1">{item.label}</p>
@@ -327,7 +327,7 @@ export default function LifetimeDealPage() {
               <ul className="space-y-1.5 text-xs text-zinc-500">
                 <li>Non-transferable and non-refundable (14-day unused exception applies)</li>
                 <li>Includes Pro plan features; 1 LinkedIn + 1 WhatsApp account limit</li>
-                <li>Desktop execution only — runs on your machine</li>
+                <li>Desktop execution only - runs on your machine</li>
                 <li>Requires your own LLM API key for AI features</li>
                 <li>Cloud tier ($299/mo managed) not included</li>
                 <li>Capped at 100 buyers, valid through September 30, 2026</li>
@@ -350,7 +350,7 @@ export default function LifetimeDealPage() {
               </p>
               <Link href="/signup">
                 <Button className="h-14 px-10 text-lg font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-2xl shadow-emerald-600/30 group">
-                  Claim My Spot — $149 Once
+                  Claim My Spot - $149 Once
                   <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-0.5" />
                 </Button>
               </Link>

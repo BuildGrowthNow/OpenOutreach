@@ -9,13 +9,13 @@ const features = [
   {
     icon: Target,
     headline: 'Your pipeline, built automatically.',
-    body: "Describe your ideal customer — industry, role, company size — and Lengrowth builds a prospect list and starts reaching out via LinkedIn or WhatsApp. No manual searching, no spreadsheets.",
+    body: "Describe your ideal customer - industry, role, company size - and Lengrowth builds a prospect list and starts reaching out via LinkedIn or WhatsApp. No manual searching, no spreadsheets.",
     accent: 'from-emerald-400 to-teal-400',
   },
   {
     icon: Brain,
     headline: "A message they'll actually read.",
-    body: "The AI reads each prospect's profile and writes a short, specific message — not a template blast. Replies come in because the outreach doesn't feel like outreach.",
+    body: "The AI reads each prospect's profile and writes a short, specific message - not a template blast. Replies come in because the outreach doesn't feel like outreach.",
     accent: 'from-teal-400 to-cyan-400',
   },
   {
@@ -27,7 +27,7 @@ const features = [
   {
     icon: Clock,
     headline: 'Runs while you focus on selling.',
-    body: "Lengrowth operates in the background — LinkedIn connections, WhatsApp messages, follow-ups, inbox replies — all within safe daily limits. Check in on your dashboard whenever you want.",
+    body: "Lengrowth operates in the background - LinkedIn connections, WhatsApp messages, follow-ups, inbox replies - all within safe daily limits. Check in on your dashboard whenever you want.",
     accent: 'from-emerald-400 to-green-400',
   },
   {
@@ -95,11 +95,11 @@ export function Features() {
             className="text-lg text-zinc-400 leading-relaxed"
           >
             Everything from finding prospects to closing conversations runs inside one platform.
-            You define the outcome — Lengrowth handles the repetition.
+            You define the outcome - Lengrowth handles the repetition.
           </motion.p>
         </div>
 
-        {/* Feature grid — bento style with tilt */}
+        {/* Feature grid - bento style with tilt */}
         <motion.div
           variants={containerVariants}
           initial="hidden"

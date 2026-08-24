@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 def promote_to_ready(session, qualifier: BayesianQualifier, threshold: float) -> int:
     """Promote QUALIFIED profiles above GP confidence threshold to READY_TO_CONNECT.
 
-    When the GP model is not yet fitted (cold start — no labelled examples),
+    When the GP model is not yet fitted (cold start - no labelled examples),
     all QUALIFIED leads are promoted directly so the campaign can start sending
     connections immediately rather than stalling forever waiting for training data.
 
@@ -33,19 +33,19 @@ def promote_to_ready(session, qualifier: BayesianQualifier, threshold: float) ->
     if not profiles:
         return 0
 
-    # Degree-1 leads are already connected — skip READY_TO_CONNECT entirely so
+    # Degree-1 leads are already connected - skip READY_TO_CONNECT entirely so
     # they don't burn a connect slot and go straight to the follow-up queue.
     first_degree = [p for p in profiles if p.get("connection_degree") == 1]
     for p in first_degree:
         pid = p.get("public_identifier", "?")
-        logger.info("%s already 1st-degree — CONNECTED (no connect slot needed)", pid)
+        logger.info("%s already 1st-degree - CONNECTED (no connect slot needed)", pid)
         set_profile_state(session, pid, DealState.CONNECTED.value)
     profiles = [p for p in profiles if p.get("connection_degree") != 1]
 
     if not profiles:
         return len(first_degree)
 
-    # Cold-start: model has no labels yet — promote everything so connections start
+    # Cold-start: model has no labels yet - promote everything so connections start
     if not qualifier.is_fitted:
         promoted = len(first_degree)
         for p in profiles:
@@ -72,7 +72,7 @@ def promote_to_ready(session, qualifier: BayesianQualifier, threshold: float) ->
     X = np.array(embeddings, dtype=np.float64)
     probs = qualifier.predict_probs(X)
     if probs is None:
-        # predict_probs can still return None if fit failed — fall back to promote all
+        # predict_probs can still return None if fit failed - fall back to promote all
         promoted = len(first_degree)
         for p in profiles:
             pid = p.get("public_identifier", "?")

@@ -148,7 +148,7 @@ async def list_leads(
         for cdoc in campaigns_collection.find({"_id": {"$in": campaign_ids}}, {"_id": 1, "name": 1}):
             campaign_names[str(cdoc["_id"])] = cdoc.get("name", "")
 
-    # Build response — flat Lead shape matching frontend Lead interface
+    # Build response - flat Lead shape matching frontend Lead interface
     data = []
     for deal in deals:
         lead_data = leads_data.get(str(deal["lead_id"]))
@@ -614,7 +614,7 @@ async def send_message_to_lead(
     """
     Send a message to a lead.
     Creates a Message record and enqueues a send_manual_message task for the daemon.
-    The message is not sent synchronously — the daemon picks it up and sends via Playwright.
+    The message is not sent synchronously - the daemon picks it up and sends via Playwright.
     """
     deals_collection = get_mongodb_collection("deals")
     if deals_collection is None:
@@ -663,7 +663,7 @@ async def send_message_to_lead(
     if not linkedin_profile_id:
         raise HTTPException(
             status_code=400,
-            detail="Campaign has no linked LinkedIn profile — cannot send messages"
+            detail="Campaign has no linked LinkedIn profile - cannot send messages"
         )
 
     # Enqueue a send_manual_message task for the daemon

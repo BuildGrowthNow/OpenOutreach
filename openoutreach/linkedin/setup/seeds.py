@@ -32,7 +32,7 @@ def parse_seed_urls(text: str) -> list[str]:
 def create_seed_leads(campaign, public_ids: list[str]) -> int:
     """Create url-only Leads + QUALIFIED Deals for seed profiles.
 
-    Works without a browser session — leads will be lazily enriched
+    Works without a browser session - leads will be lazily enriched
     and embedded when the daemon processes them.
 
     Returns the number of new seeds created.

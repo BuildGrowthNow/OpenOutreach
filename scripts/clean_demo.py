@@ -42,7 +42,7 @@ def main() -> None:
 
     user_doc = users_col.find_one({"email": TARGET_EMAIL})
     if not user_doc:
-        print(f"No user found with email {TARGET_EMAIL!r} — nothing to clean.")
+        print(f"No user found with email {TARGET_EMAIL!r} - nothing to clean.")
         sys.exit(0)
     user_id = str(user_doc["_id"])
 
@@ -50,7 +50,7 @@ def main() -> None:
     assert campaigns_col is not None
     campaign_doc = campaigns_col.find_one({"name": DEMO_CAMPAIGN_NAME, "user_id": user_id})
     if not campaign_doc:
-        print("Demo campaign not found — nothing to clean.")
+        print("Demo campaign not found - nothing to clean.")
         sys.exit(0)
 
     campaign_id = str(campaign_doc["_id"])

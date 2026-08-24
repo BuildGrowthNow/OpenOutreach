@@ -1,9 +1,9 @@
 # openoutreach/linkedin/tasks/connect.py
-"""Connect task — resolves one candidate from the campaign pool and acts.
+"""Connect task - resolves one candidate from the campaign pool and acts.
 
 Lazy: the task payload carries only ``campaign_id``. The handler picks
 its candidate at execution time via the campaign's ``ConnectStrategy``.
-No self-rescheduling — pacing is owned by ``tasks/scheduler.py``.
+No self-rescheduling - pacing is owned by ``tasks/scheduler.py``.
 """
 
 from __future__ import annotations
@@ -84,7 +84,7 @@ def handle_connect(task, session, qualifiers):
             session.linkedin_profile, ActionLog.ActionType.CONNECT, campaign
         )
         logger.info(
-            "[%s] connect: smart rate limit reached (remaining: %d) — slot skipped",
+            "[%s] connect: smart rate limit reached (remaining: %d) - slot skipped",
             campaign,
             remaining,
         )
@@ -94,11 +94,11 @@ def handle_connect(task, session, qualifiers):
         candidate = strategy.find_candidate(session)
     except Exception as e:
         if "Failed to fetch" in str(e) or "Page.evaluate" in str(e):
-            logger.warning("[%s] connect: Voyager API unavailable during candidate search — slot skipped (%s)", campaign, e)
+            logger.warning("[%s] connect: Voyager API unavailable during candidate search - slot skipped (%s)", campaign, e)
             return
         raise
     if candidate is None:
-        logger.info("[%s] connect: no candidate available — slot skipped", campaign)
+        logger.info("[%s] connect: no candidate available - slot skipped", campaign)
         return
 
     public_id = candidate["public_identifier"]
@@ -114,13 +114,13 @@ def handle_connect(task, session, qualifiers):
     if lead:
         deal = Deal.get_by_lead_and_campaign(lead._id, session.campaign._id if hasattr(session.campaign, '_id') else str(session.campaign))
 
-    # Check target_degrees filter — skip leads whose degree doesn't match
+    # Check target_degrees filter - skip leads whose degree doesn't match
     target_degrees = getattr(campaign, "target_degrees", None) or [1, 2, 3]
     if lead and lead.connection_degree is not None:
         if lead.connection_degree not in target_degrees:
             degree_val = lead.connection_degree
             logger.info(
-                "[%s] connect: %s degree %d not in target_degrees %s — skipped",
+                "[%s] connect: %s degree %d not in target_degrees %s - skipped",
                 campaign, public_id, degree_val, target_degrees,
             )
             from openoutreach.mongodb.models_extended import ActionLog as ActionLogExt
@@ -155,7 +155,7 @@ def handle_connect(task, session, qualifiers):
         # Re-check degree filter after fresh API call
         if degree is not None and degree not in target_degrees:
             logger.info(
-                "[%s] connect: %s fresh degree %d not in target_degrees %s — skipped",
+                "[%s] connect: %s fresh degree %d not in target_degrees %s - skipped",
                 campaign, public_id, degree, target_degrees,
             )
             from openoutreach.mongodb.models_extended import ActionLog as ActionLogExt
@@ -175,7 +175,7 @@ def handle_connect(task, session, qualifiers):
         if degree == 1 or status == DealState.CONNECTED:
             set_profile_state(session, public_id, DealState.CONNECTED.value)
             if degree == 1:
-                logger.info("[%s] %s already 1st-degree — auto-CONNECTED", campaign, public_id)
+                logger.info("[%s] %s already 1st-degree - auto-CONNECTED", campaign, public_id)
             return
 
         if status == DealState.PENDING:
@@ -188,7 +188,7 @@ def handle_connect(task, session, qualifiers):
         )
 
         if new_state == DealState.QUALIFIED:
-            # No Connect button found — track attempt, disqualify after MAX_CONNECT_ATTEMPTS
+            # No Connect button found - track attempt, disqualify after MAX_CONNECT_ATTEMPTS
             attempts = increment_connect_attempts(session, public_id)
             if attempts >= MAX_CONNECT_ATTEMPTS:
                 reason = f"Unreachable: no Connect button after {attempts} attempts"
@@ -196,11 +196,11 @@ def handle_connect(task, session, qualifiers):
                 set_profile_state(
                     session, public_id, DealState.FAILED.value, reason=reason
                 )
-                logger.warning("Disqualified %s — %s", public_id, reason)
+                logger.warning("Disqualified %s - %s", public_id, reason)
             else:
                 set_profile_state(session, public_id, new_state.value)
                 logger.debug(
-                    "%s: connect attempt %d/%d — no button found",
+                    "%s: connect attempt %d/%d - no button found",
                     public_id,
                     attempts,
                     MAX_CONNECT_ATTEMPTS,
@@ -237,7 +237,7 @@ def handle_connect(task, session, qualifiers):
         logger.warning("Rate limited: %s", e)
         session.linkedin_profile.mark_exhausted(ActionLog.ActionType.CONNECT)
     except ProfileInaccessibleError as e:
-        logger.warning("Profile inaccessible — marking FAILED: %s", e)
+        logger.warning("Profile inaccessible - marking FAILED: %s", e)
         set_profile_state(
             session,
             public_id,
@@ -249,6 +249,6 @@ def handle_connect(task, session, qualifiers):
         set_profile_state(session, public_id, DealState.FAILED.value)
     except Exception as e:
         if "Failed to fetch" in str(e) or "Page.evaluate" in str(e):
-            logger.warning("[%s] connect: Voyager API unavailable during connect attempt — slot skipped (%s)", campaign, e)
+            logger.warning("[%s] connect: Voyager API unavailable during connect attempt - slot skipped (%s)", campaign, e)
             return
         raise

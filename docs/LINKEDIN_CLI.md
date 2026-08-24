@@ -1,6 +1,6 @@
-# linkedin_cli — Vendored Module Reference
+# linkedin_cli - Vendored Module Reference
 
-> **Status**: Previously published as `linkedin-agent-cli` on PyPI (yanked). Now vendored at project root as `linkedin_cli/`. This is the authoritative copy — maintain it here.
+> **Status**: Previously published as `linkedin-agent-cli` on PyPI (yanked). Now vendored at project root as `linkedin_cli/`. This is the authoritative copy - maintain it here.
 
 ---
 
@@ -20,41 +20,41 @@ It owns **no database, no campaign/CRM logic, no scheduling**. OpenOutreach's `o
 
 ```
 linkedin_cli/
-├── __init__.py          — version string ("0.1.0")
-├── cli.py               — CLI entry point + composition root (verb dispatch, output contract)
-├── conf.py              — Browser timing/proxy constants (no CRM config)
-├── enums.py             — ProfileState StrEnum
-├── exceptions.py        — All custom exceptions
-├── session.py           — LinkedInSession protocol + PlaywrightCliSession
-├── page_state.py        — PageState enum, classify_page(), @transition decorator, PageFlow
-├── auth.py              — authenticate() — declared @auth_flow transitions
-├── launcher.py          — open_bound_session() — browser.bind() owner
-├── url_utils.py         — url_to_public_id(), public_id_to_url()
+├── __init__.py          - version string ("0.1.0")
+├── cli.py               - CLI entry point + composition root (verb dispatch, output contract)
+├── conf.py              - Browser timing/proxy constants (no CRM config)
+├── enums.py             - ProfileState StrEnum
+├── exceptions.py        - All custom exceptions
+├── session.py           - LinkedInSession protocol + PlaywrightCliSession
+├── page_state.py        - PageState enum, classify_page(), @transition decorator, PageFlow
+├── auth.py              - authenticate() - declared @auth_flow transitions
+├── launcher.py          - open_bound_session() - browser.bind() owner
+├── url_utils.py         - url_to_public_id(), public_id_to_url()
 │
 ├── api/
-│   ├── client.py        — PlaywrightLinkedinAPI (Voyager GET/POST + retries)
-│   ├── voyager.py       — Voyager JSON parsers, LinkedInProfile dataclass
-│   ├── sdui.py          — parse_contact_info() — RSC/React flight parser
+│   ├── client.py        - PlaywrightLinkedinAPI (Voyager GET/POST + retries)
+│   ├── voyager.py       - Voyager JSON parsers, LinkedInProfile dataclass
+│   ├── sdui.py          - parse_contact_info() - RSC/React flight parser
 │   └── messaging/
-│       ├── conversations.py  — fetch_conversations(), fetch_messages(), get_conversation()
-│       ├── send.py           — send_message() via Voyager Messaging API
-│       └── utils.py          — encode_urn(), check_response()
+│       ├── conversations.py  - fetch_conversations(), fetch_messages(), get_conversation()
+│       ├── send.py           - send_message() via Voyager Messaging API
+│       └── utils.py          - encode_urn(), check_response()
 │
 ├── actions/
-│   ├── connect.py       — send_connection_request()
-│   ├── contact_info.py  — get_contact_info()
-│   ├── conversations.py — get_conversation(), find_conversation_urn(), parse_messages()
-│   ├── message.py       — send_raw_message() — UI first, API fallback
-│   ├── profile.py       — scrape_profile()
-│   ├── search.py        — search_people(), visit_profile()
-│   └── status.py        — get_connection_status() — API first, UI fallback
+│   ├── connect.py       - send_connection_request()
+│   ├── contact_info.py  - get_contact_info()
+│   ├── conversations.py - get_conversation(), find_conversation_urn(), parse_messages()
+│   ├── message.py       - send_raw_message() - UI first, API fallback
+│   ├── profile.py       - scrape_profile()
+│   ├── search.py        - search_people(), visit_profile()
+│   └── status.py        - get_connection_status() - API first, UI fallback
 │
 ├── browser/
-│   ├── login.py         — launch_browser(), submit_login_form(), await_checkpoint_clear()
-│   └── nav.py           — goto_page(), find_top_card(), human_type(), dump_page_html()
+│   ├── login.py         - launch_browser(), submit_login_form(), await_checkpoint_clear()
+│   └── nav.py           - goto_page(), find_top_card(), human_type(), dump_page_html()
 │
 └── setup/
-    └── self_profile.py  — discover_self_profile()
+    └── self_profile.py  - discover_self_profile()
 ```
 
 ---
@@ -81,7 +81,7 @@ linkedin_cli/
 `page_state.py` is the core safety mechanism for auth navigation:
 
 - `PageState` enum: `CHECKPOINT`, `LOGIN`, `AUTHWALL`, `FEED`, `PROFILE`, `MESSAGING`, `NOT_FOUND`, `UNKNOWN`
-- `classify_page(page)` reads the URL **path only** (never query string or title) — deterministic and fast
+- `classify_page(page)` reads the URL **path only** (never query string or title) - deterministic and fast
 - `@transition(when=..., then=...)` decorator: asserts page state before and after the decorated function. Raises `IllegalPageTransition` if the contract is violated.
 - `PageFlow(goal, transitions)` + `PageFlow.run()`: generic observe→act loop, drives the page to a goal state in max 8 hops.
 
@@ -97,7 +97,7 @@ CHECKPOINT   → await human intervention (up to 30 min via noVNC)
 FEED         → done
 ```
 
-Raises `AuthenticationError` on `IllegalPageTransition`. The daemon must **not** call `authenticate()` again when it sees `CheckpointChallengeError` — re-auth hardens the block.
+Raises `AuthenticationError` on `IllegalPageTransition`. The daemon must **not** call `authenticate()` again when it sees `CheckpointChallengeError` - re-auth hardens the block.
 
 ### Voyager API Client
 
@@ -174,7 +174,7 @@ After clicking, immediately clicks "Send now" / "Send without a note". Raises `R
 | Exception | When raised |
 |---|---|
 | `AuthenticationError` | 401 from API, or `IllegalPageTransition` during auth |
-| `CheckpointChallengeError(url)` | LinkedIn flagged account with security checkpoint — carries URL, do NOT re-auth |
+| `CheckpointChallengeError(url)` | LinkedIn flagged account with security checkpoint - carries URL, do NOT re-auth |
 | `IllegalPageTransition` | `@transition` pre/post state violated |
 | `ProfileInaccessibleError` | HTTP 403/404 on profile (private, deleted, restricted) |
 | `ReachedConnectionLimit` | Weekly connection limit alert detected |
@@ -203,7 +203,7 @@ After clicking, immediately clicks "Send now" / "Send without a note". Raises `R
 | `core/db/deals.py` | `exceptions.ProfileInaccessibleError` |
 | `api_v2/routers/linkedin_credentials.py` | `auth.authenticate`, `browser.login.*`, `page_state.IllegalPageTransition` |
 
-**Not imported**: `linkedin_cli.enums.ProfileState` — OpenOutreach uses its own `DealState` and lifts values via `DealState(value)` at the task-handler boundary.
+**Not imported**: `linkedin_cli.enums.ProfileState` - OpenOutreach uses its own `DealState` and lifts values via `DealState(value)` at the task-handler boundary.
 
 ---
 
@@ -211,17 +211,17 @@ After clicking, immediately clicks "Send now" / "Send without a note". Raises `R
 
 These are the places most likely to break when LinkedIn changes their UI or API:
 
-1. **CSS selectors in `actions/connect.py` and `actions/status.py`** — The `aria-label`, `role`, and text-based selectors for Connect/Pending/More buttons. LinkedIn's frontend changes regularly. When these break, the daemon silently falls back to `QUALIFIED` and dumps HTML (if `DUMP_PAGES=True`).
+1. **CSS selectors in `actions/connect.py` and `actions/status.py`** - The `aria-label`, `role`, and text-based selectors for Connect/Pending/More buttons. LinkedIn's frontend changes regularly. When these break, the daemon silently falls back to `QUALIFIED` and dumps HTML (if `DUMP_PAGES=True`).
 
-2. **Voyager API decoration IDs** — `FullProfileWithEntities-91` and `TopCardSupplementary-120` in `api/client.py`. The numeric suffix changes on LinkedIn backend updates. Symptom: `get_profile()` returns `(None, None)` or raises `IOError`.
+2. **Voyager API decoration IDs** - `FullProfileWithEntities-91` and `TopCardSupplementary-120` in `api/client.py`. The numeric suffix changes on LinkedIn backend updates. Symptom: `get_profile()` returns `(None, None)` or raises `IOError`.
 
-3. **SDUI contact info RSC parsing** (`api/sdui.py`) — The RSC stream format (`mailto:` / `tel:` regex extraction) is fragile. LinkedIn could change this with any frontend deploy.
+3. **SDUI contact info RSC parsing** (`api/sdui.py`) - The RSC stream format (`mailto:` / `tel:` regex extraction) is fragile. LinkedIn could change this with any frontend deploy.
 
-4. **Messaging API** (`api/messaging/`) — Uses `messengerConversations` / `messengerMessages` GraphQL query IDs that are hard-coded. LinkedIn occasionally rotates these.
+4. **Messaging API** (`api/messaging/`) - Uses `messengerConversations` / `messengerMessages` GraphQL query IDs that are hard-coded. LinkedIn occasionally rotates these.
 
-5. **Login form selectors** (`browser/login.py`) — The email/password/submit locator chains use fallback strategies, but new LinkedIn security flows (slider CAPTCHA, email OTP, etc.) are not handled.
+5. **Login form selectors** (`browser/login.py`) - The email/password/submit locator chains use fallback strategies, but new LinkedIn security flows (slider CAPTCHA, email OTP, etc.) are not handled.
 
-6. **Connection degree from FullProfileWithEntities** — `connection_degree` sometimes comes back `None` from the full profile decoration. The `TopCardSupplementary` fallback catches most cases, but degree may still be `None` for very new connections or restricted accounts.
+6. **Connection degree from FullProfileWithEntities** - `connection_degree` sometimes comes back `None` from the full profile decoration. The `TopCardSupplementary` fallback catches most cases, but degree may still be `None` for very new connections or restricted accounts.
 
 ---
 

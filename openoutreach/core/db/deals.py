@@ -71,7 +71,7 @@ def _deals_at_state(session, state: DealState) -> list:
 def _existing_deal_or_lead(public_id: str, campaign):
     """Check for an existing Deal in campaign; if none, look up the Lead.
 
-    Returns (lead, existing_deal) — exactly one will be non-None,
+    Returns (lead, existing_deal) - exactly one will be non-None,
     or both None if no Lead exists at all.
     """
     from openoutreach.mongodb.models import Deal, Lead
@@ -89,7 +89,7 @@ def _existing_deal_or_lead(public_id: str, campaign):
 def _capture_contact_info(lead, session) -> None:
     """Best-effort LinkedIn contact-info capture when a lead first connects.
 
-    Fired on the CONNECTED transition — the moment LinkedIn exposes a 1st-degree
+    Fired on the CONNECTED transition - the moment LinkedIn exposes a 1st-degree
     connection's email/phone. A failure here must never roll back the transition
     or fail the task, so expected scrape/network errors are swallowed with a log;
     ``AuthenticationError`` still propagates (the daemon's reauth handler owns it,
@@ -108,7 +108,7 @@ def _capture_contact_info(lead, session) -> None:
 def _maybe_bridge_to_whatsapp(deal, session) -> bool:
     """Route a newly-CONNECTED deal to WhatsApp if the lead has a phone and campaign has WA.
 
-    Returns True when bridged — caller should skip LinkedIn follow-up enqueue.
+    Returns True when bridged - caller should skip LinkedIn follow-up enqueue.
     """
     from openoutreach.mongodb.connection import get_mongodb_collection
     from openoutreach.mongodb.models import Campaign, Task
@@ -154,7 +154,7 @@ def _maybe_bridge_to_whatsapp(deal, session) -> bool:
     )
     task.save()
     logger.info(
-        "WA bridge: deal %s routed to whatsapp (phone=%s) — immediate follow_up enqueued",
+        "WA bridge: deal %s routed to whatsapp (phone=%s) - immediate follow_up enqueued",
         deal._id, lead.phone,
     )
     return True
@@ -188,7 +188,7 @@ def _enqueue_immediate_follow_up(deal, session) -> None:
         })
         if existing:
             logger.debug(
-                "Skipping immediate follow_up enqueue for deal %s — already pending",
+                "Skipping immediate follow_up enqueue for deal %s - already pending",
                 deal_id,
             )
             return
@@ -216,7 +216,7 @@ def set_profile_state(
     Raises ValueError if no Deal exists.
 
     Task creation for state-driven transitions (CONNECTED → follow_up,
-    PENDING → check_pending) happens here via the scheduler hook — callers
+    PENDING → check_pending) happens here via the scheduler hook - callers
     do not enqueue directly.
     """
     from openoutreach.mongodb.models import Deal, Lead
@@ -225,7 +225,7 @@ def set_profile_state(
     deal = Deal.get_by_lead_and_campaign(public_identifier, session.campaign.pk)
     if not deal:
         raise ValueError(
-            f"No Deal for {public_identifier} — cannot set state {new_state}"
+            f"No Deal for {public_identifier} - cannot set state {new_state}"
         )
 
     # Load lead if not already loaded

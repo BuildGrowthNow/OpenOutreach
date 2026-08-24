@@ -164,13 +164,13 @@ jobs:
             3. **First launch only:** Right-click Lengrowth in Applications → **"Open"** → **"Open"** again
             4. Log in with your Lengrowth account
 
-            **Windows — Installer (recommended):**
+            **Windows - Installer (recommended):**
             1. Download `Lengrowth-Windows-Setup.exe`
             2. Run the installer and follow the wizard
             3. If SmartScreen appears, click **"More info" → "Run anyway"**
             4. Log in with your Lengrowth account
 
-            **Windows — Standalone (no install):**
+            **Windows - Standalone (no install):**
             1. Download `Lengrowth.exe`
             2. Run directly from any folder
             3. If SmartScreen appears, click **"More info" → "Run anyway"**

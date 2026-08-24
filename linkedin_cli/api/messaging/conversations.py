@@ -8,7 +8,7 @@ LinkedIn periodically rotates the opaque hash in GraphQL query IDs like
 happens every request using the stale ID returns HTTP 400, breaking message
 sync silently.
 
-Mitigation — two-layer approach:
+Mitigation - two-layer approach:
 
 1. **Passive capture**: ``install_query_id_listener(session)`` attaches a
    context-level request listener that watches *every* outgoing
@@ -59,7 +59,7 @@ _instrumented: weakref.WeakSet = weakref.WeakSet()
 # ── Passive query-ID capture ───────────────────────────────────────────────────
 
 def _on_graphql_request(request) -> None:
-    """Request event handler — extracts query IDs from messengerGraphQL URLs.
+    """Request event handler - extracts query IDs from messengerGraphQL URLs.
 
     Runs in the Playwright event loop for every browser request; must not block.
     """
@@ -79,7 +79,7 @@ def _on_graphql_request(request) -> None:
 def install_query_id_listener(session) -> None:
     """Attach a request listener on *session.context* to capture live query IDs.
 
-    Idempotent — safe to call on every messaging operation; the listener is
+    Idempotent - safe to call on every messaging operation; the listener is
     installed at most once per browser context (tracked via WeakSet so closed
     contexts are cleaned up automatically).
     """
@@ -127,13 +127,13 @@ def _handle_graphql_400(res, cache_key: str, query_id: str, context: str) -> Non
     body_snippet = res.text()[:300]
     if was_cached:
         logger.warning(
-            "%s: queryId '%s' returned HTTP 400 — cached ID invalidated, "
+            "%s: queryId '%s' returned HTTP 400 - cached ID invalidated, "
             "next retry will use fallback. Response body: %s",
             context, query_id, body_snippet,
         )
     else:
         logger.warning(
-            "%s: fallback queryId '%s' also returned HTTP 400 — "
+            "%s: fallback queryId '%s' also returned HTTP 400 - "
             "LinkedIn may have rotated all known IDs. "
             "The passive listener will capture a fresh ID on the next "
             "LinkedIn messaging page load. Response body: %s",

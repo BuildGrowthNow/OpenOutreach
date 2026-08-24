@@ -1,4 +1,4 @@
-# Admin Panel — Implementation Plan
+# Admin Panel - Implementation Plan
 
 Full-stack admin panel for OpenOutreach. Covers user management (view, edit, block, delete, impersonate,
 extend trial, force-cancel), LinkedIn account inspection, execution mode visibility (desktop vs. cloud),
@@ -29,7 +29,7 @@ an admin sidebar.
 
 ---
 
-## Phase 1 — Backend foundations ✅
+## Phase 1 - Backend foundations ✅
 
 > Extend existing models, fix the auth/me gap, add login-IP capture, and flesh out the existing
 > admin response schemas so Phase 2 and later phases have solid data contracts.
@@ -95,7 +95,7 @@ user.last_login = datetime.now(timezone.utc)
 user.save()
 ```
 
-Do the same for the signup handler — set `signup_ip`.
+Do the same for the signup handler - set `signup_ip`.
 
 ### 1.3 Extend `UserDetailResponse` in the admin router ✅
 
@@ -161,7 +161,7 @@ class LinkedInProfileInfoResponse(BaseModel):
     verification_type: Optional[str]
     connect_daily_limit: int
     follow_up_daily_limit: int
-    proxy_server: Optional[str]       # redacted for display — show host only, not credentials
+    proxy_server: Optional[str]       # redacted for display - show host only, not credentials
 ```
 
 ### 1.5 Add `GET /api/admin/audit-logs` ✅
@@ -357,13 +357,13 @@ async def get_platform_metrics() -> dict:
 
 ---
 
-## Phase 2 — User management write endpoints ✅
+## Phase 2 - User management write endpoints ✅
 
 > All mutating operations on users: soft-delete, trial extension, plan/billing override, force
 > subscription cancel, impersonation token, email verification override, password reset.
 > Every write goes through `AdminSecurityPolicy.log_admin_action`.
 
-### 2.1 `DELETE /api/admin/users/{user_id}` — soft delete ✅
+### 2.1 `DELETE /api/admin/users/{user_id}` - soft delete ✅
 
 ```python
 @router.delete("/users/{user_id}", dependencies=[Depends(get_admin_user)])
@@ -398,7 +398,7 @@ async def delete_user(
     return {"ok": True, "deletion_scheduled_at": user.deletion_scheduled_at.isoformat()}
 ```
 
-### 2.2 `POST /api/admin/users/{user_id}/restore` — undo soft delete ✅
+### 2.2 `POST /api/admin/users/{user_id}/restore` - undo soft delete ✅
 
 ```python
 @router.post("/users/{user_id}/restore", dependencies=[Depends(get_admin_user)])
@@ -622,7 +622,7 @@ app.include_router(admin.router)
 
 ---
 
-## Phase 3 — Frontend: guard, layout, and dashboard page ✅
+## Phase 3 - Frontend: guard, layout, and dashboard page ✅
 
 ### 3.1 Admin route guard ✅
 
@@ -804,7 +804,7 @@ Also define corresponding TypeScript interfaces mirroring the Pydantic response 
 
 Layout: two rows of stat cards (use shadcn `Card`) followed by a quick-view table of recent users.
 
-**Stat cards — row 1** (user metrics):
+**Stat cards - row 1** (user metrics):
 - Total users
 - Active users
 - Blocked users
@@ -812,13 +812,13 @@ Layout: two rows of stat cards (use shadcn `Card`) followed by a quick-view tabl
 - Active subscriptions
 - Expired trials
 
-**Stat cards — row 2** (finance KPIs, from `/api/admin/finance`):
+**Stat cards - row 2** (finance KPIs, from `/api/admin/finance`):
 - MRR
 - ARR
 - Trial conversion rate
 - Churn rate
 
-**Stat cards — row 3** (platform metrics, from `/api/admin/platform`):
+**Stat cards - row 3** (platform metrics, from `/api/admin/platform`):
 - Online daemons (desktop + cloud badge)
 - Running tasks
 - Pending tasks
@@ -833,14 +833,14 @@ project. Show shadcn `Skeleton` components while loading.
 
 ---
 
-## Phase 4 — Frontend: users list and user detail ✅
+## Phase 4 - Frontend: users list and user detail ✅
 
 ### 4.1 Users list page ✅
 
 **New file**: `frontend/src/app/(admin)/admin/users/page.tsx`
 
 #### Filters bar (top of page)
-- Text search input (debounced 300 ms) — searches email and full_name
+- Text search input (debounced 300 ms) - searches email and full_name
 - Plan select: All / Starter / Pro / Business / Agency / Cloud / Lifetime
 - Status select: All / Active / Blocked / Inactive
 - Subscription status select: All / Active / Trialing / Canceled / None
@@ -886,13 +886,13 @@ Page layout: header row (email, plan badge, status badge, action buttons) follow
 
 #### Tabs
 
-**Tab 1 — Profile**
+**Tab 1 - Profile**
 
 Two-column layout: left column = read/edit fields; right column = admin notes.
 
 Editable fields (inline edit on click or via a modal):
 - Full name
-- Email (display only — email changes require re-verification; note this in the UI)
+- Email (display only - email changes require re-verification; note this in the UI)
 - Status: active / blocked / inactive (Select)
 - Admin role: none / support / finance / superadmin (Select, optional)
 - `is_admin` toggle (shadcn `Switch`)
@@ -910,10 +910,10 @@ Read-only fields:
 
 Admin notes textarea (auto-saves on blur via POST `/api/admin/users/{id}/notes`).
 
-**Tab 2 — Billing**
+**Tab 2 - Billing**
 
-Left column — current billing state:
-- Plan (Select — all plan names), Billing period (Select — monthly/annual/lifetime)
+Left column - current billing state:
+- Plan (Select - all plan names), Billing period (Select - monthly/annual/lifetime)
 - Subscription status (badge)
 - Trial ends at (datetime display + **Extend Trial** button → dialog to enter days)
 - Current period end
@@ -924,18 +924,18 @@ Left column — current billing state:
 - Stripe subscription ID (masked)
 
 Actions:
-- **Save plan changes** — calls POST `/api/admin/users/{id}/set-plan`
-- **Cancel subscription** — AlertDialog → POST `/api/admin/users/{id}/cancel-subscription`
+- **Save plan changes** - calls POST `/api/admin/users/{id}/set-plan`
+- **Cancel subscription** - AlertDialog → POST `/api/admin/users/{id}/cancel-subscription`
 - **Extend trial** → inline dialog: number input (days) → POST `/api/admin/users/{id}/extend-trial`
 
-Right column — Invoice list (from `/api/admin/finance/invoices` filtered by the user's
+Right column - Invoice list (from `/api/admin/finance/invoices` filtered by the user's
 `stripe_customer_id`). Since the current `/api/admin/finance/invoices` endpoint lists all invoices
 (not filtered by user), add a `user_id` query parameter in Phase 2 (the endpoint filters by
 matching `customer_email_map`).
 
 Each invoice row: date, amount, status, PDF link.
 
-**Tab 3 — LinkedIn & Execution**
+**Tab 3 - LinkedIn & Execution**
 
 For each `LinkedInProfile` returned by `/api/admin/users/{id}/linkedin-profiles`:
 
@@ -956,7 +956,7 @@ Card per profile showing:
 Active tasks for this profile: fetch from `/api/admin/users/{id}/tasks` and filter by
 `linkedin_profile_id`. Show a compact list: task type, status badge, scheduled at, last error.
 
-**Tab 4 — Campaigns**
+**Tab 4 - Campaigns**
 
 Table from `/api/admin/users/{id}/campaigns`:
 - Name
@@ -967,7 +967,7 @@ Table from `/api/admin/users/{id}/campaigns`:
 Each row links to the campaign detail page at `/campaigns/{id}` (the existing user-facing page —
 admins can navigate there directly).
 
-**Tab 5 — Activity**
+**Tab 5 - Activity**
 
 Two sub-sections:
 
@@ -977,20 +977,20 @@ Two sub-sections:
 *Recent tasks* (from `/api/admin/users/{id}/tasks`):
 - Table: task type, status, scheduled at, started at, completed at, campaign ID, last error
 
-**Tab 6 — Audit trail**
+**Tab 6 - Audit trail**
 
 Audit log entries where `target_user_id = {id}` (from `/api/admin/audit-logs?target_user_id={id}`):
 - admin_user_id, action, details (expandable JSON), created at
 
 ---
 
-## Phase 5 — Finance, audit log, and platform pages ✅
+## Phase 5 - Finance, audit log, and platform pages ✅
 
 ### 5.1 Finance page ✅
 
 **New file**: `frontend/src/app/(admin)/admin/finance/page.tsx`
 
-**Section 1 — KPI cards**
+**Section 1 - KPI cards**
 - MRR (formatted as currency)
 - ARR
 - Active subscriptions
@@ -998,7 +998,7 @@ Audit log entries where `target_user_id = {id}` (from `/api/admin/audit-logs?tar
 - Trial conversion rate (%)
 - Churn rate (%)
 
-**Section 2 — Revenue by plan**
+**Section 2 - Revenue by plan**
 
 A bar chart (use existing Recharts, following the dark-theme fixes in the project). X-axis: plan
 names. Y-axis: contribution to MRR. Backend: extend `GET /api/admin/finance` to return a
@@ -1019,7 +1019,7 @@ for plan_name, plan_data in PLANS.items():
     revenue_by_plan.append({"plan": plan_name, "count": count, "mrr": monthly_revenue})
 ```
 
-**Section 3 — User funnel**
+**Section 3 - User funnel**
 
 Horizontal funnel (or stacked bar) showing counts at each stage:
 - Total signups
@@ -1039,7 +1039,7 @@ funnel = {
 }
 ```
 
-**Section 4 — Invoices table**
+**Section 4 - Invoices table**
 
 Full-page data table from `/api/admin/finance/invoices`:
 - Invoice ID
@@ -1082,7 +1082,7 @@ Pagination: skip/limit. Sort: newest first.
 
 **New file**: `frontend/src/app/(admin)/admin/platform/page.tsx`
 
-**Section 1 — Live status cards** (from `/api/admin/platform`, auto-refresh every 30 seconds)
+**Section 1 - Live status cards** (from `/api/admin/platform`, auto-refresh every 30 seconds)
 - Online daemons: N total (desktop: X, cloud: Y)
 - Running tasks
 - Pending tasks
@@ -1091,7 +1091,7 @@ Pagination: skip/limit. Sort: newest first.
 - Connects (24h)
 - Follow-ups (24h)
 
-**Section 2 — Daemon map**
+**Section 2 - Daemon map**
 
 Table of all `LinkedInProfile` records with their daemon status. Fetched via a new endpoint:
 
@@ -1150,7 +1150,7 @@ Table columns: User email (link to user detail), LinkedIn username, Mode (Deskto
 
 ## Navigation integration ✅
 
-**File**: `frontend/src/app/(dashboard)/layout.tsx` — added conditional `Admin` nav item via `isAdmin()` selector from `useAuthStore`. Uses the existing `Shield` icon from the Icons map.
+**File**: `frontend/src/app/(dashboard)/layout.tsx` - added conditional `Admin` nav item via `isAdmin()` selector from `useAuthStore`. Uses the existing `Shield` icon from the Icons map.
 
 Add an "Admin" item that only renders when `user.is_admin === true`:
 
@@ -1173,13 +1173,13 @@ Every item in this list must be true before shipping Phase 5.
 
 - [ ] All `/api/admin/*` routes have `dependencies=[Depends(get_admin_user)]`.
 - [ ] `get_admin_user` re-checks the User doc from MongoDB on every request (it already does via
-      `User.get(user_id)`) — no stale JWT claims bypass the check.
+      `User.get(user_id)`) - no stale JWT claims bypass the check.
 - [ ] `UserDetailResponse` never returns `hashed_password`. Stripe IDs are returned only on the
       admin detail endpoint (never on public `/api/auth/me`).
 - [ ] Impersonation tokens carry `impersonated_by` claim; the main app banner reads this claim to
       display a visible warning. Impersonation tokens must be short-lived (15 min max).
 - [ ] Every write action calls `AdminSecurityPolicy.log_admin_action` before returning.
-- [ ] Soft delete does not immediately purge data — sets `is_deleted=True` and schedules wipe.
+- [ ] Soft delete does not immediately purge data - sets `is_deleted=True` and schedules wipe.
 - [ ] The frontend admin layout redirects non-admin users to `/dashboard` before rendering any
       admin content (server-side protection via the backend is the real gate; frontend redirect is
       UX-only).
@@ -1191,7 +1191,7 @@ Every item in this list must be true before shipping Phase 5.
 
 ## Dependency and file inventory
 
-### Backend — files to create or modify
+### Backend - files to create or modify
 
 | File | Change |
 |---|---|
@@ -1201,7 +1201,7 @@ Every item in this list must be true before shipping Phase 5.
 | `openoutreach/api_v2/routers/admin.py` | Extend response models; add all new endpoints; add `_build_user_detail_response` helper |
 | `openoutreach/api_v2/main.py` | Verify `admin.router` is included |
 
-### Frontend — files to create
+### Frontend - files to create
 
 | File | Purpose |
 |---|---|
@@ -1216,7 +1216,7 @@ Every item in this list must be true before shipping Phase 5.
 | `frontend/src/app/(admin)/admin/audit/page.tsx` | Audit log ✅ |
 | `frontend/src/app/(admin)/admin/platform/page.tsx` | Platform health ✅ |
 
-### Frontend — files to modify
+### Frontend - files to modify
 
 | File | Change |
 |---|---|
@@ -1234,6 +1234,6 @@ foundations  write ops    layout +     users        finance +
                           dashboard    list + detail audit + platform
 ```
 
-Phases 1 and 2 can be committed and deployed without any visible frontend change — the new endpoints
+Phases 1 and 2 can be committed and deployed without any visible frontend change - the new endpoints
 are inert until Phase 3 ships the UI. This allows backend work to land on `main` continuously while
 frontend work lands in a feature branch (or in the same branch in weekly slices).

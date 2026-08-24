@@ -8,7 +8,7 @@ target (lead/deal) at execution time via a single eligibility query.
 This module is the only place that creates ``Task`` rows. The pipeline
 moves forward in three layers:
 
-1. **Per-type planner** — ``plan_connect_window``,
+1. **Per-type planner** - ``plan_connect_window``,
    ``plan_follow_up_window``, ``plan_check_pending_window``. Each one,
    when no PENDING task of its type exists for a campaign, computes the
    right slot count ``n`` for the next 24h and spaces tasks according
@@ -16,12 +16,12 @@ moves forward in three layers:
    (aggressive mode), tasks cluster into bursts; when low, they spread
    uniformly via Poisson spacing.
 
-2. **State-transition hook** — ``on_deal_state_entered(deal)`` only
+2. **State-transition hook** - ``on_deal_state_entered(deal)`` only
    updates ``deal.next_check_pending_at`` for PENDING transitions. It
    does **not** insert any Task row. CONNECTED and other transitions
    are no-ops.
 
-3. **Reconcile** — ``reconcile(session)``. Recovers stale RUNNING tasks
+3. **Reconcile** - ``reconcile(session)``. Recovers stale RUNNING tasks
    and calls each planner per campaign. The daemon invokes it on startup
    and whenever the queue has no ready task.
 """
@@ -284,7 +284,7 @@ def velocity_slot_times(now, n: int, velocity: int, horizon_hours: float = 24, u
 
     # If effective spacing is still aggressive, use deterministic spacing
     if effective_spacing < poisson_mean_spacing * 0.5:
-        # Linear spacing with jitter — first slot is now, rest follow
+        # Linear spacing with jitter - first slot is now, rest follow
         times = [first_slot]
         cursor_seconds = 0.0
         for _ in range(n - 1):
@@ -409,7 +409,7 @@ def plan_connect_window(session, campaign, *, connect_cap: int | None = None) ->
     """Plan the next 24h of connect slots for *campaign*. No-op when a
     PENDING connect task already exists for the campaign.
 
-    Only the daily limit is consulted — LinkedIn's own weekly ceiling
+    Only the daily limit is consulted - LinkedIn's own weekly ceiling
     surfaces at the handler boundary via ``ReachedConnectionLimit``.
 
     ``connect_cap``: when multiple campaigns are active, reconcile() passes
@@ -501,7 +501,7 @@ def plan_follow_up_window(session, campaign, *, follow_up_cap: int | None = None
     n = max(0, profile.follow_up_daily_limit - profile._daily_count("follow_up"))
     if follow_up_cap is not None:
         n = min(n, follow_up_cap)
-    # Never create more slots than CONNECTED deals — each slot resolves lazily
+    # Never create more slots than CONNECTED deals - each slot resolves lazily
     # but there's no point queuing 50 slots when only 5 leads need follow-up.
     if connected_count > 0:
         n = min(n, connected_count)
@@ -618,7 +618,7 @@ def plan_check_pending_window(session, campaign) -> int:
 
 
 def seconds_until_tomorrow() -> float:
-    """Seconds until 00:00 local time — used for daily rate-limit waits."""
+    """Seconds until 00:00 local time - used for daily rate-limit waits."""
     now = Datetime.now(tz.utc)
     tomorrow = (now + datetime.timedelta(days=1)).replace(
         hour=0,
@@ -664,7 +664,7 @@ def _recover_stale_running_tasks(linkedin_profile_id: str | None = None) -> int:
     stale (daemon crash or laptop lid close). Fresh RUNNING tasks are left alone.
 
     When ``linkedin_profile_id`` is provided only that profile's tasks are
-    considered — used by the desktop daemon's API reconcile path so each user's
+    considered - used by the desktop daemon's API reconcile path so each user's
     reconnect cleans up their own stale tasks without touching others.
     """
     if linkedin_profile_id:
@@ -687,7 +687,7 @@ def _recover_stale_running_tasks(linkedin_profile_id: str | None = None) -> int:
         if started and started.tzinfo is None:
             started = started.replace(tzinfo=tz.utc)
         if started and started > threshold:
-            continue  # Still fresh — do not reset
+            continue  # Still fresh - do not reset
 
         task.status = Task.Status.PENDING
         task.save()
@@ -710,7 +710,7 @@ def _auto_qualify_wa_leads(campaign) -> None:
 
     LinkedIn campaigns use the ML+LLM qualify pipeline. For non-linkedin-search
     campaigns (maps, classified, etc.) the leads are phone-only and have no
-    LinkedIn profile to score — auto-qualify any DISCOVERED deal where the
+    LinkedIn profile to score - auto-qualify any DISCOVERED deal where the
     lead.phone is populated.
     """
     lead_source = getattr(campaign, "lead_source", "linkedin_search") or "linkedin_search"
@@ -847,12 +847,12 @@ def reconcile(session) -> None:
         _retry_no_email_deals(campaign)
         _maybe_trigger_lead_scrape(campaign, profile.user_id)
 
-        # WhatsApp channel planners — only when campaign has WA configured
+        # WhatsApp channel planners - only when campaign has WA configured
         wa_profile_id = getattr(campaign, "whatsapp_profile_id", None)
         channel_seq = getattr(campaign, "channel_sequence", None) or []
         if not wa_profile_id and "whatsapp" in channel_seq:
             logger.debug(
-                "Campaign %s has 'whatsapp' in channel_sequence but no whatsapp_profile_id — "
+                "Campaign %s has 'whatsapp' in channel_sequence but no whatsapp_profile_id - "
                 "skipping WA planners (connect a WhatsApp profile in campaign settings)",
                 campaign.pk,
             )
@@ -995,7 +995,7 @@ def _retry_no_email_deals(campaign) -> None:
     """Re-run the email finder on NO_EMAIL deals and promote to QUALIFIED on a hit.
 
     BetterContact charges only on usable hits so retrying misses is free.
-    Runs once per reconcile cycle — the tri-state return means:
+    Runs once per reconcile cycle - the tri-state return means:
       True  → hit; deal promoted back to QUALIFIED and enters connect pool
       False → still no email; deal stays NO_EMAIL
       None  → finder unavailable (no key / unreachable); skip silently
@@ -1030,7 +1030,7 @@ def _retry_no_email_deals(campaign) -> None:
                 deal.state = DealState.QUALIFIED
                 deal.save()
                 logger.info(
-                    "[%s] NO_EMAIL retry: email found for %s — promoted to QUALIFIED",
+                    "[%s] NO_EMAIL retry: email found for %s - promoted to QUALIFIED",
                     campaign, lead.public_identifier,
                 )
         except Exception as exc:
@@ -1166,7 +1166,7 @@ def _maybe_trigger_lead_scrape(campaign, user_id: str) -> None:
     if run_fn is None:
         _maps_scraping.discard(campaign_id)
         logger.warning(
-            "Unknown lead_source %r for campaign %s — no scraper triggered",
+            "Unknown lead_source %r for campaign %s - no scraper triggered",
             lead_source, campaign_id,
         )
         return

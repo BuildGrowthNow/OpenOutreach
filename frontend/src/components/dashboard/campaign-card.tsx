@@ -192,7 +192,7 @@ const CampaignCard = ({
           )}
           {(stats.noEmailCount ?? 0) > 0 && (
             <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>Blocked — no email</span>
+              <span>Blocked - no email</span>
               <span className="font-medium text-amber-500">{stats.noEmailCount}</span>
             </div>
           )}

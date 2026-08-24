@@ -31,7 +31,7 @@ def open_bound_session(name: str, *, profile_dir: str,
     browser. The websocket endpoint is also printed to stdout for convenience.
     Browser-launch knobs (headed/slow-mo/timeouts) come from ``conf``; ``host``/
     ``port`` default to a localhost OS-picked port (right for many sessions in
-    one container — no cross-container exposure needed).
+    one container - no cross-container exposure needed).
     """
     os.makedirs(profile_dir, exist_ok=True)
     with sync_playwright() as pw:

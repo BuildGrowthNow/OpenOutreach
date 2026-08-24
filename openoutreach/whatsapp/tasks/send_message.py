@@ -67,7 +67,7 @@ def handle_whatsapp_message(task, wa_session, qualifiers):  # noqa: ARG001
     wa_profile = wa_session.wa_profile
     config = SiteConfig.load(user_id=wa_profile.user_id)
     if not _wa_is_active_now(config):
-        logger.debug("WA send_message: outside WA active hours — skipping")
+        logger.debug("WA send_message: outside WA active hours - skipping")
         return
 
     campaign_id = task.payload["campaign_id"]
@@ -116,7 +116,7 @@ def handle_whatsapp_message(task, wa_session, qualifiers):  # noqa: ARG001
         # Cross-campaign dedup: skip if this lead is already being worked in another WA campaign.
         if _lead_active_in_other_campaign(str(lead._id), campaign_id):
             logger.debug(
-                "WA send_message [%s]: lead %s active in another WA campaign — skipping",
+                "WA send_message [%s]: lead %s active in another WA campaign - skipping",
                 campaign, lead._id,
             )
             continue
@@ -127,7 +127,7 @@ def handle_whatsapp_message(task, wa_session, qualifiers):  # noqa: ARG001
             deal.state = Deal.DealState.FAILED
             deal.reason = "phone_not_on_whatsapp"
             deal.save(update_fields=["state", "reason"])
-            logger.info("WA send_message [%s]: %s not on WA — skipping", campaign, lead.phone)
+            logger.info("WA send_message [%s]: %s not on WA - skipping", campaign, lead.phone)
             continue
 
         message_template = (
@@ -150,14 +150,14 @@ def handle_whatsapp_message(task, wa_session, qualifiers):  # noqa: ARG001
                 wa_session.wa_profile.status = STATUS_BANNED
                 wa_session.wa_profile.save(update_fields=["status"])
                 logger.error(
-                    "WA send_message: profile %s appears BANNED — marking and halting",
+                    "WA send_message: profile %s appears BANNED - marking and halting",
                     wa_session.wa_profile,
                 )
                 return
             _handle_send_failure(deal, banned=False)
             if deal.state == Deal.DealState.FAILED:
                 logger.warning(
-                    "WA send_message [%s]: deal %s exhausted after %d attempts — marking FAILED",
+                    "WA send_message [%s]: deal %s exhausted after %d attempts - marking FAILED",
                     campaign, deal._id, deal.connect_attempts,
                 )
             return

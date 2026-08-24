@@ -13,7 +13,7 @@ Three generators chain via next(upstream, None):
                   search_source  <- yields keywords (never truly exhausts)
 
 Each qualify_source iteration produces exactly one label, which shifts the GP
-model — preventing the infinite-search-without-qualifying bug.
+model - preventing the infinite-search-without-qualifying bug.
 """
 
 from __future__ import annotations
@@ -43,7 +43,7 @@ def _needs_search(qualifier: BayesianQualifier, candidates) -> bool:
 
     Effective threshold = max(0, base - 1/sqrt(n_obs)).
     Stays at zero until ~1/base² observations, then gradually rises
-    toward base — favoring qualification over search early on.
+    toward base - favoring qualification over search early on.
 
     Returns False on cold start, explore mode, or empty candidates.
     """
@@ -52,7 +52,7 @@ def _needs_search(qualifier: BayesianQualifier, candidates) -> bool:
 
     n_neg, n_pos = qualifier.class_counts
     if n_neg <= n_pos:
-        # explore mode — no need to search for high-P profiles
+        # explore mode - no need to search for high-P profiles
         return False
 
     embeddings = np.array([c.embedding_array for c in candidates], dtype=np.float32)
@@ -62,10 +62,10 @@ def _needs_search(qualifier: BayesianQualifier, candidates) -> bool:
         return False
 
     # If the GP can't differentiate profiles (all predictions identical),
-    # searching won't help — qualify from existing pool to build up labels.
+    # searching won't help - qualify from existing pool to build up labels.
     if len(probs) > 1 and np.ptp(probs) < 1e-6:
         logger.debug(
-            "GP predictions degenerate (all ~%.3f) with %d obs — "
+            "GP predictions degenerate (all ~%.3f) with %d obs - "
             "skipping search, qualifying from existing pool",
             float(probs[0]),
             qualifier.n_obs,
@@ -163,7 +163,7 @@ def ready_source(
         if promoted > 0:
             continue
 
-        # Pull one qualification from upstream — may shift the GP model
+        # Pull one qualification from upstream - may shift the GP model
         if next(qualify, None) is not None:
             # Re-check promote after new label
             promote_to_ready(session, qualifier, threshold)

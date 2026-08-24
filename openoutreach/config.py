@@ -196,7 +196,7 @@ class Settings(BaseSettings):
     )
 
 
-# Global settings instance — SECRET_KEY loaded from env/.env at runtime
+# Global settings instance - SECRET_KEY loaded from env/.env at runtime
 settings = Settings()  # type: ignore[call-arg]
 
 

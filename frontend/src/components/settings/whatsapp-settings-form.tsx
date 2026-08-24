@@ -71,7 +71,7 @@ function WarmupCard({ data }: { data: WarmupStatus & { dailyLimit?: number } }) 
       <p className="text-xs text-muted-foreground">
         {done
           ? `Sending at full ceiling of ${data.dailyLimit ?? effectiveLimit} messages/day.`
-          : `Sending ${effectiveLimit} messages/day today — ceiling reached on day ${totalDays}.`
+          : `Sending ${effectiveLimit} messages/day today - ceiling reached on day ${totalDays}.`
         }
       </p>
     </div>
@@ -173,7 +173,7 @@ export default function WhatsappSettingsForm({ initialData, onSuccess }: Props) 
                   </FormControl>
                   <FormDescription>
                     Maximum messages/day once warmup completes (day 30+). During warmup the actual
-                    limit ramps up automatically — this field is the post-warmup ceiling.
+                    limit ramps up automatically - this field is the post-warmup ceiling.
                   </FormDescription>
                   <FormMessage />
                 </FormItem>

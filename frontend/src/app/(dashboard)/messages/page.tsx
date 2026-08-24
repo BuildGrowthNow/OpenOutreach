@@ -295,7 +295,7 @@ function ThreadModal({
           </div>
           {!message.leadId && (
             <p className="text-xs text-zinc-500 mt-1">
-              No lead linked — replies unavailable
+              No lead linked - replies unavailable
             </p>
           )}
         </div>

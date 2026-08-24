@@ -1,4 +1,4 @@
-"""WASession — thin Playwright wrapper for a WhatsApp Web session."""
+"""WASession - thin Playwright wrapper for a WhatsApp Web session."""
 from __future__ import annotations
 
 import logging
@@ -120,8 +120,8 @@ class WASession:
                 timeout=12000,
             )
         except Exception:
-            # Can't determine — assume registered to avoid losing real leads
-            logger.warning("is_registered: timed out for %s — assuming registered", phone)
+            # Can't determine - assume registered to avoid losing real leads
+            logger.warning("is_registered: timed out for %s - assuming registered", phone)
             return True
 
         try:
@@ -137,7 +137,7 @@ class WASession:
                 logger.info("is_registered: %s is NOT on WhatsApp", phone)
                 return False
         except Exception as e:
-            logger.warning("is_registered: evaluation failed for %s: %s — assuming registered", phone, e)
+            logger.warning("is_registered: evaluation failed for %s: %s - assuming registered", phone, e)
 
         return True
 

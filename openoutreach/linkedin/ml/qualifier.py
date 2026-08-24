@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Qualifier protocol — shared interface for BayesianQualifier & KitQualifier
+# Qualifier protocol - shared interface for BayesianQualifier & KitQualifier
 # ---------------------------------------------------------------------------
 
 
@@ -150,7 +150,7 @@ def _rank_by_score(
 ) -> list:
     """Rank profiles by raw pipeline.predict() score (descending).
 
-    Works with any sklearn-compatible pipeline — no GPR-specific logic.
+    Works with any sklearn-compatible pipeline - no GPR-specific logic.
     """
     scored = _load_profile_embeddings(profiles, session, skip_missing=skip_missing)
     if not scored:
@@ -230,7 +230,7 @@ class BayesianQualifier:
 
     @property
     def pipeline(self):
-        """The fitted sklearn Pipeline — serializable via joblib."""
+        """The fitted sklearn Pipeline - serializable via joblib."""
         self._fit_if_needed()
         return self._pipeline
 
@@ -348,7 +348,7 @@ class BayesianQualifier:
         logger.debug("Pipeline saved to DB for campaign %s", self._campaign)
 
     # ------------------------------------------------------------------
-    # Prediction  (needs posterior std — uses _gpr_predict)
+    # Prediction  (needs posterior std - uses _gpr_predict)
     # ------------------------------------------------------------------
 
     def predict(self, embedding: np.ndarray) -> tuple[float, float, float] | None:
@@ -435,7 +435,7 @@ class BayesianQualifier:
         """Check if the unlabeled pool has any promising candidates (P > 0.5).
 
         Returns None on cold start (model not fitted), True/False otherwise.
-        Only checks for positive-looking profiles — searching for low-P
+        Only checks for positive-looking profiles - searching for low-P
         profiles (explore mode) would be wasteful since you can just qualify
         from the existing pool.
         """
@@ -445,7 +445,7 @@ class BayesianQualifier:
         return bool(np.any(probs > 0.5))
 
     # ------------------------------------------------------------------
-    # Ranking & explain  (raw GP mean — no _prob_above_half)
+    # Ranking & explain  (raw GP mean - no _prob_above_half)
     # ------------------------------------------------------------------
 
     def rank_profiles(self, profiles: list, session) -> list:
@@ -457,7 +457,7 @@ class BayesianQualifier:
             return []
         if not self._fit_if_needed():
             logger.debug(
-                "rank_profiles: GPR not fitted (%d obs) — returning empty", self.n_obs
+                "rank_profiles: GPR not fitted (%d obs) - returning empty", self.n_obs
             )
             return []
         return _rank_by_score(profiles, self._pipeline, session)

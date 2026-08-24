@@ -94,7 +94,7 @@ class RemoteDaemon:
         # WhatsApp session pool: keyed by whatsapp_profile_id
         self._whatsapp_sessions: dict[str, Any] = {}
 
-        # Reconnect attempt counter per WA profile — reset on success, capped at _WA_MAX_RECONNECT_ATTEMPTS
+        # Reconnect attempt counter per WA profile - reset on success, capped at _WA_MAX_RECONNECT_ATTEMPTS
         self._wa_reconnect_attempts: dict[str, int] = {}
 
         # user_id resolved from the /api/daemon/profile endpoint after startup
@@ -126,7 +126,7 @@ class RemoteDaemon:
         def _worker():
             while True:
                 item = self._pw_queue.get()
-                if item is None:  # sentinel — shut down
+                if item is None:  # sentinel - shut down
                     break
                 fn, fut, loop = item
                 try:
@@ -200,7 +200,7 @@ class RemoteDaemon:
                     if elapsed >= max_wait:
                         raise
                     logger.warning(
-                        "%s: server returned %d (deploy in progress?) — retrying in %ds",
+                        "%s: server returned %d (deploy in progress?) - retrying in %ds",
                         label, code, delay,
                     )
                 elif code == 401 and self.client._refresh_token:
@@ -208,14 +208,14 @@ class RemoteDaemon:
                     new_token = await self.client.refresh_access_token()
                     if not new_token:
                         raise
-                    # retry once after refresh — fall through to next loop iteration
+                    # retry once after refresh - fall through to next loop iteration
                 else:
                     raise
             except (httpx.ConnectError, httpx.RemoteProtocolError, httpx.ReadError) as e:
                 if elapsed >= max_wait:
                     raise
                 logger.warning(
-                    "%s: connection error (%s) — retrying in %ds", label, e, delay,
+                    "%s: connection error (%s) - retrying in %ds", label, e, delay,
                 )
             await asyncio.sleep(delay)
             elapsed += delay
@@ -229,7 +229,7 @@ class RemoteDaemon:
         self._start_pw_thread()
         self._start_wa_pw_thread()
 
-        # Check subscription status — retry through deploys (502/503) for up to 5 min
+        # Check subscription status - retry through deploys (502/503) for up to 5 min
         try:
             sub_status = await self._startup_request(
                 "subscription check", self.client.check_subscription_status
@@ -242,7 +242,7 @@ class RemoteDaemon:
         if not self._check_subscription_status(sub_status):
             return
 
-        # Notify the tray now that we've passed auth — running=True was set at the
+        # Notify the tray now that we've passed auth - running=True was set at the
         # top of start(), but the tray menu was built before that so it showed Stopped.
         if self.on_started:
             try:
@@ -258,7 +258,7 @@ class RemoteDaemon:
             )
         logger.info("Using browser: %s", self.browser.name)
 
-        # Fetch config — retry through deploys for up to 5 min
+        # Fetch config - retry through deploys for up to 5 min
         try:
             self.config = await self._startup_request(
                 "get config",
@@ -297,9 +297,9 @@ class RemoteDaemon:
             if ok:
                 logger.info("MongoDB Atlas connected (db: %s)", mongodb_name)
             else:
-                logger.warning("MongoDB Atlas connection failed — task execution may be degraded")
+                logger.warning("MongoDB Atlas connection failed - task execution may be degraded")
         else:
-            logger.warning("No MongoDB URI in bootstrap — task execution will fail")
+            logger.warning("No MongoDB URI in bootstrap - task execution will fail")
 
         # Schedule tasks for active campaigns
         try:
@@ -312,7 +312,7 @@ class RemoteDaemon:
         # Start browser session
         await self._start_session()
 
-        # Start WhatsApp sessions (non-blocking — WA is optional)
+        # Start WhatsApp sessions (non-blocking - WA is optional)
         try:
             await self._start_wa_sessions()
         except Exception as e:
@@ -365,7 +365,7 @@ class RemoteDaemon:
             "MONGODB_NAME": bootstrap.get("mongodb_name", "openoutreach"),
             "MONGODB_ENABLED": "true",
         }
-        # Populate os.environ BEFORE importing config — config.py instantiates
+        # Populate os.environ BEFORE importing config - config.py instantiates
         # Settings() at module level and requires SECRET_KEY to be present.
         for env_key, value in mapping.items():
             if value:
@@ -414,7 +414,7 @@ class RemoteDaemon:
 
         creds = await self.client.get_credentials(self.linkedin_profile_id)
 
-        # Fetch proxy config from backend — no local MongoDB required
+        # Fetch proxy config from backend - no local MongoDB required
         profile_details = await self.client.get_profile_details(self.linkedin_profile_id)
 
         # Cache user_id so _start_wa_sessions can use it before any task runs
@@ -425,7 +425,7 @@ class RemoteDaemon:
         connect_daily_limit = self.config.daily_connect_limit if self.config else 50
         follow_up_daily_limit = self.config.daily_message_limit if self.config else 30
 
-        # Create self-contained mock profile — no local DB delegation
+        # Create self-contained mock profile - no local DB delegation
         class MockLinkedInProfile:
             def __init__(self, profile_id: str, _connect_limit: int, _follow_up_limit: int):
                 self._id = profile_id
@@ -548,7 +548,7 @@ class RemoteDaemon:
         if not self.browser:
             raise BrowserNotFoundError("Browser not detected")
 
-        # Decrypt proxy credentials — server sends Fernet-encrypted values
+        # Decrypt proxy credentials - server sends Fernet-encrypted values
         from openoutreach.mongodb.crypto import safe_decrypt
 
         proxy_server = profile_details.get("proxy_server")
@@ -557,7 +557,7 @@ class RemoteDaemon:
 
         logger.info("Launching %s (channel: %s)", self.browser.name, self.browser.channel)
 
-        # sync_playwright() cannot run inside an asyncio event loop — run in a thread
+        # sync_playwright() cannot run inside an asyncio event loop - run in a thread
         # Local aliases avoid Optional-type false positives inside the nested function.
         session = self.session
         browser_info = self.browser  # already asserted non-None above
@@ -595,7 +595,7 @@ class RemoteDaemon:
                 authenticate(session, username=creds["email"], password=password)
                 # Return fresh cookies so the async caller can sync them to the backend
                 return context.storage_state()
-            # No fresh auth — ensure the page is on linkedin.com so that
+            # No fresh auth - ensure the page is on linkedin.com so that
             # page.evaluate(fetch(...)) runs from a linkedin.com origin.
             # Persistent Chrome may reopen on chrome://newtab or any other URL
             # which causes "TypeError: Failed to fetch" for all Voyager API calls.
@@ -610,18 +610,18 @@ class RemoteDaemon:
             from linkedin_cli.exceptions import CheckpointChallengeError, AuthenticationError
             from playwright._impl._errors import TargetClosedError
             if isinstance(e, TargetClosedError) and not is_new_profile:
-                # Browser crashed on launch — likely corrupted profile from prior unclean shutdown.
+                # Browser crashed on launch - likely corrupted profile from prior unclean shutdown.
                 # Wipe the profile dir and retry with a fresh one.
                 import shutil
-                logger.warning("Browser died on launch (corrupted profile?) — wiping %s and retrying", profile_dir)
+                logger.warning("Browser died on launch (corrupted profile?) - wiping %s and retrying", profile_dir)
                 shutil.rmtree(profile_dir, ignore_errors=True)
                 profile_dir.mkdir(parents=True, exist_ok=True)
                 is_new_profile = True
                 fresh_state = await self._run_on_pw_thread(lambda: _launch_and_auth(True))
             elif isinstance(e, CheckpointChallengeError):
-                # Challenge detected in headless mode — close and relaunch headed
+                # Challenge detected in headless mode - close and relaunch headed
                 # so the user can interact with the verification in a visible window.
-                logger.warning("LinkedIn challenge detected — relaunching browser headed for user interaction")
+                logger.warning("LinkedIn challenge detected - relaunching browser headed for user interaction")
                 await self._run_on_pw_thread(session.close)
                 try:
                     fresh_state = await self._run_on_pw_thread(lambda: _launch_and_auth(False))
@@ -636,9 +636,9 @@ class RemoteDaemon:
                     self._show_verification_notification(is_desktop=True)
                     raise
             elif isinstance(e, AuthenticationError) and is_new_profile:
-                # Fresh profile login failed in headless — relaunch headed so
+                # Fresh profile login failed in headless - relaunch headed so
                 # the user can see what LinkedIn is showing (CAPTCHA, error, etc.)
-                logger.warning("Login failed headless on fresh profile — relaunching headed: %s", e)
+                logger.warning("Login failed headless on fresh profile - relaunching headed: %s", e)
                 await self._run_on_pw_thread(session.close)
                 fresh_state = await self._run_on_pw_thread(lambda: _launch_and_auth(False))
             else:
@@ -686,7 +686,7 @@ class RemoteDaemon:
 
         user_id = self._user_id
         if not user_id:
-            logger.warning("user_id not resolved — skipping WA session start (profile_details missing user_id)")
+            logger.warning("user_id not resolved - skipping WA session start (profile_details missing user_id)")
             return
 
         profiles = WhatsAppProfile.find_by_user_id(user_id)
@@ -803,7 +803,7 @@ class RemoteDaemon:
                     banned = await self._run_on_wa_pw_thread(wa_session.detect_ban)
                     new_status = "banned" if banned else "disconnected"
                     logger.warning(
-                        "WA health check: session %s is %s — marking profile",
+                        "WA health check: session %s is %s - marking profile",
                         wa_session, new_status,
                     )
                     wa_session.wa_profile.status = new_status
@@ -812,7 +812,7 @@ class RemoteDaemon:
 
                     if banned:
                         logger.error(
-                            "WA health check: profile %s is BANNED — manual review required",
+                            "WA health check: profile %s is BANNED - manual review required",
                             wa_session.wa_profile,
                         )
                         self._wa_reconnect_attempts.pop(profile_id, None)
@@ -822,7 +822,7 @@ class RemoteDaemon:
                     attempts = self._wa_reconnect_attempts.get(profile_id, 0)
                     if attempts >= _WA_MAX_RECONNECT_ATTEMPTS:
                         logger.warning(
-                            "WA health check: profile %s exhausted %d reconnect attempts — "
+                            "WA health check: profile %s exhausted %d reconnect attempts - "
                             "waiting for user to re-scan QR",
                             profile_id, _WA_MAX_RECONNECT_ATTEMPTS,
                         )
@@ -859,7 +859,7 @@ class RemoteDaemon:
                     browser=self.browser.name,
                 )
             except SessionExpiredError:
-                logger.error("Session expired (refresh token invalid) — stopping daemon. Please re-login.")
+                logger.error("Session expired (refresh token invalid) - stopping daemon. Please re-login.")
                 await self.stop()
                 return
             except Exception as e:
@@ -875,14 +875,14 @@ class RemoteDaemon:
         while self.running:
             try:
                 if not self._is_active_time():
-                    logger.info("Outside active hours — sleeping 60s")
+                    logger.info("Outside active hours - sleeping 60s")
                     await asyncio.sleep(60)
                     continue
 
                 task = await self.client.claim_task(self.linkedin_profile_id)
 
                 if not task:
-                    logger.debug("No tasks ready — polling again in %ds", self.config.poll_interval_seconds)
+                    logger.debug("No tasks ready - polling again in %ds", self.config.poll_interval_seconds)
                     await asyncio.sleep(self.config.poll_interval_seconds)
                     continue
 
@@ -932,7 +932,7 @@ class RemoteDaemon:
                             self.on_token_refresh(self.client._token)
 
             except SessionExpiredError:
-                logger.error("Session expired (refresh token invalid) — stopping daemon. Please re-login.")
+                logger.error("Session expired (refresh token invalid) - stopping daemon. Please re-login.")
                 await self.stop()
                 return
             except Exception as e:
@@ -979,7 +979,7 @@ class RemoteDaemon:
             "send_manual_message": handle_send_manual_message,
         }
 
-        # WhatsApp task handlers — looked up by whatsapp_profile_id (stored in linkedin_profile_id)
+        # WhatsApp task handlers - looked up by whatsapp_profile_id (stored in linkedin_profile_id)
         task_type = task["task_type"]
         if task_type in ("whatsapp_message", "whatsapp_follow_up", "whatsapp_sync"):
             from openoutreach.whatsapp.tasks.send_message import handle_whatsapp_message
@@ -990,7 +990,7 @@ class RemoteDaemon:
             wa_session = self._whatsapp_sessions.get(wa_profile_id) if wa_profile_id else None
             if wa_session is None:
                 raise ValueError(
-                    f"No WA session for profile_id={wa_profile_id} — is the WA profile connected?"
+                    f"No WA session for profile_id={wa_profile_id} - is the WA profile connected?"
                 )
 
             wa_handlers = {
@@ -1007,10 +1007,10 @@ class RemoteDaemon:
             campaign = Campaign.get(campaign_id)
             if not campaign or campaign.status != Campaign.Status.ACTIVE:
                 logger.info(
-                    "Skipping WA task — campaign %s not active (status=%s)",
+                    "Skipping WA task - campaign %s not active (status=%s)",
                     campaign_id, campaign.status if campaign else "not found",
                 )
-                raise ValueError(f"Campaign {campaign_id} not active — task skipped")
+                raise ValueError(f"Campaign {campaign_id} not active - task skipped")
 
             task_obj = type("Task", (), {
                 "task_type": task_type,
@@ -1032,7 +1032,7 @@ class RemoteDaemon:
 
         campaign = Campaign.get(campaign_id)
         if not campaign or campaign.status != Campaign.Status.ACTIVE:
-            logger.info("Skipping task — campaign %s is not active (status=%s)",
+            logger.info("Skipping task - campaign %s is not active (status=%s)",
                         campaign_id, campaign.status if campaign else "not found")
             return None
 
@@ -1067,7 +1067,7 @@ class RemoteDaemon:
         # Execute handler synchronously (handlers are not async)
         result = handler(task=task_obj, session=self.session, qualifiers=qualifiers)
 
-        # Snapshot cookies here — we're already on the Playwright thread so
+        # Snapshot cookies here - we're already on the Playwright thread so
         # storage_state() won't raise the greenlet cross-thread error.
         try:
             self._pending_cookie_state = self.session.context.storage_state()
@@ -1139,7 +1139,7 @@ class RemoteDaemon:
         greenlet/thread where the browser was created.  _execute_task() already
         runs there (via asyncio.to_thread), so it snapshots the state into
         self._pending_cookie_state at the end of each task.  This coroutine just
-        ships that snapshot over HTTP — no thread crossing required.
+        ships that snapshot over HTTP - no thread crossing required.
         """
         state = self._pending_cookie_state
         if not state:
@@ -1325,7 +1325,7 @@ class RemoteDaemon:
                     "::GetTemplateContent(0)",
                     # $xml is a .NET XmlDocument (editable); $x is the WinRT type
                     # required by ToastNotification. Edit $xml first, then reload
-                    # into $x — do NOT reassign $xml before loading into $x.
+                    # into $x - do NOT reassign $xml before loading into $x.
                     "$xml = [xml]$t.GetXml()",
                     f'$xml.toast.visual.binding.text[0].InnerText = "{title_ps}"',
                     f'$xml.toast.visual.binding.text[1].InnerText = "{body_ps}"',
@@ -1370,7 +1370,7 @@ class RemoteDaemon:
         """Return a stable per-LinkedIn-profile browser data directory.
 
         A persistent user data dir means Chrome reuses the same device fingerprint,
-        localStorage, and cookies across daemon restarts — LinkedIn sees the same
+        localStorage, and cookies across daemon restarts - LinkedIn sees the same
         device every time, preventing "Remember me on new device" emails.
         """
         profile_dir = Path.home() / ".lengrowth" / "browser_profiles" / str(self.linkedin_profile_id)
@@ -1469,7 +1469,7 @@ class RemoteDaemon:
             page = context.new_page()
             return page, context, browser, playwright
 
-        # Chrome and Edge support launch_persistent_context — same user data dir
+        # Chrome and Edge support launch_persistent_context - same user data dir
         # across restarts gives a stable device fingerprint, stopping new-device emails.
         if channel == "msedge":
             context = playwright.chromium.launch_persistent_context(
@@ -1493,7 +1493,7 @@ class RemoteDaemon:
         Stealth().apply_stealth_sync(context)
         # Persistent context may already have pages open; reuse the first one
         page = context.pages[0] if context.pages else context.new_page()
-        # No separate browser object with persistent context — close via context
+        # No separate browser object with persistent context - close via context
         return page, context, None, playwright
 
 

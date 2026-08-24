@@ -45,7 +45,7 @@ class TestSecondsUntilActive:
     @patch("openoutreach.core.daemon.ACTIVE_END_HOUR", 17)
     @patch("openoutreach.core.daemon.ACTIVE_TIMEZONE", "UTC")
     def test_saturday_is_active(self):
-        # Sat Mar 21 2026 noon — weekends are no longer skipped.
+        # Sat Mar 21 2026 noon - weekends are no longer skipped.
         with patch("openoutreach.core.daemon.timezone.localtime", return_value=_mock_now(2026, 3, 21, 12)):
             assert seconds_until_active() == 0.0
 
