@@ -11,6 +11,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu'
+import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/lib/authStoreV2'
 import { useRouter } from 'next/navigation'
