@@ -192,3 +192,11 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_R2_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Purge CDN cache for download URL
+        if: hashFiles('./release/windows/Lengrowth-Windows-Setup.exe') != ''
+        run: |
+          curl -s -X POST "https://api.cloudflare.com/client/v4/zones/${{ secrets.CLOUDFLARE_ZONE_ID }}/purge_cache" \
+            -H "Authorization: Bearer ${{ secrets.CLOUDFLARE_R2_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            --data '{"files":["https://dl.lengrowth.com/Lengrowth-Windows-Setup.exe","https://dl.lengrowth.com/Lengrowth-macOS.dmg"]}'
