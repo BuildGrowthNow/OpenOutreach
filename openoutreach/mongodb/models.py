@@ -2541,7 +2541,7 @@ class TrackedLink:
 
     def get_short_url(self, base_url: Optional[str] = None) -> str:
         """Get the short tracked URL."""
-        base = base_url or "https://linkedin.lengrowth.com"
+        base = base_url or "https://outreach.lengrowth.com"
         return f"{base}/l/{self.short_code}"
 
     def __str__(self) -> str:

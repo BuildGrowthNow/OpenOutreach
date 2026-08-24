@@ -1,6 +1,6 @@
 """Desktop tray + webview application.
 
-Opens linkedin.lengrowth.com in a native window (pywebview) on launch.
+Opens outreach.lengrowth.com in a native window (pywebview) on launch.
 Tray icon controls the automation daemon and lets the user show/hide the window.
 """
 
@@ -312,6 +312,8 @@ class TrayApp:
 
     def _platform_url(self) -> str:
         url = self.config.api_url
+        if "outreach-api." in url:
+            return url.replace("outreach-api.", "outreach.")
         if "linkedin-api." in url:
             return url.replace("linkedin-api.", "linkedin.")
         return url

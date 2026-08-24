@@ -6,7 +6,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 
-_DEFAULT_API_URL = "https://linkedin-api.lengrowth.com"
+_DEFAULT_API_URL = "https://outreach-api.lengrowth.com"
 
 
 @dataclass
@@ -38,7 +38,7 @@ class AppConfig:
                 data = json.loads(path.read_text())
                 cfg = cls(**data)
                 # Migrate any stale openoutreach.io URL to the correct domain
-                if "openoutreach.io" in cfg.api_url:
+                if "openoutreach.io" in cfg.api_url or "linkedin-api." in cfg.api_url:
                     cfg.api_url = _DEFAULT_API_URL
                     cfg.save()
                 return cfg

@@ -257,7 +257,7 @@ def create_portal_session(customer_id: str, return_url: str = "") -> Optional[st
     try:
         session = stripe.billing_portal.Session.create(
             customer=customer_id,
-            return_url=return_url or "https://linkedin.lengrowth.com/settings/billing",
+            return_url=return_url or "https://outreach.lengrowth.com/settings/billing",
         )
         logger.info(f"Created portal session for {customer_id}")
         return session.url

@@ -6,8 +6,8 @@ services:
       dockerfile: Dockerfile
       args:
         - BUILD_ENV=production
-        - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-https://linkedin.lengrowth.com}
-        - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-https://linkedin.lengrowth.com}
+        - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-https://outreach.lengrowth.com}
+        - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-https://outreach.lengrowth.com}
     restart: unless-stopped
     stdin_open: true
     tty: true
@@ -20,8 +20,8 @@ services:
       - SKIP_DAEMON=${SKIP_DAEMON:-false}
 
       # API URLs
-      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-https://linkedin.lengrowth.com}
-      - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-https://linkedin.lengrowth.com}
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-https://outreach.lengrowth.com}
+      - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-https://outreach.lengrowth.com}
 
       # MongoDB
       - MONGODB_ENABLED=true
@@ -67,7 +67,7 @@ services:
       - EMAIL_FROM_NAME=${EMAIL_FROM_NAME:-}
 
       # CORS
-      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-https://linkedin.lengrowth.com,https://linkedin-api.lengrowth.com,http://localhost:3000,http://127.0.0.1:3000}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-https://outreach.lengrowth.com,https://outreach-api.lengrowth.com,https://linkedin.lengrowth.com,https://linkedin-api.lengrowth.com,http://localhost:3000,http://127.0.0.1:3000}
 
       # Stripe
       - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-}
