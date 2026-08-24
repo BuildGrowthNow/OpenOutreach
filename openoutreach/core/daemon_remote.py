@@ -720,35 +720,33 @@ class RemoteDaemon:
 
         _STALE_RECOVERY_INTERVAL = 1800  # 30 minutes
         _last_stale_recovery = 0.0
-        _NEW_PROFILE_CHECK_INTERVAL = 15  # seconds - pick up profiles created after daemon start
-        _last_new_profile_check = 0.0
 
         while self.running:
             now_mono = _time.monotonic()
 
-            # Pick up WhatsApp profiles created after daemon startup (e.g. user clicks "Connect new number")
-            if now_mono - _last_new_profile_check >= _NEW_PROFILE_CHECK_INTERVAL:
-                _last_new_profile_check = now_mono
-                if self._user_id:
-                    try:
-                        from openoutreach.whatsapp.browser.launch import start_whatsapp_session
-                        from openoutreach.whatsapp.browser.session import WASession
-                        from openoutreach.whatsapp.models.profile import WhatsAppProfile
-                        for profile in WhatsAppProfile.find_by_user_id(self._user_id):
-                            if profile._id not in self._whatsapp_sessions:
-                                wa_session = WASession(profile)
-                                self._whatsapp_sessions[profile._id] = wa_session
-                                logger.info("WA task loop: new profile detected, starting session %s", wa_session)
-                                try:
-                                    await self._run_on_wa_pw_thread(lambda s=wa_session: start_whatsapp_session(s))
-                                    logger.info("WA task loop: session started for new profile %s", wa_session)
-                                except Exception as e:
-                                    logger.warning("WA task loop: session start failed for new profile %s: %s", profile, e)
-                    except Exception as e:
-                        logger.debug("WA task loop: new-profile scan error: %s", e)
+            # Pick up WhatsApp profiles created after daemon startup (e.g. user clicks "Connect new number").
+            # Runs every cycle with no extra gate so new profiles are detected within one poll interval.
+            if self._user_id:
+                try:
+                    from openoutreach.whatsapp.browser.launch import start_whatsapp_session
+                    from openoutreach.whatsapp.browser.session import WASession
+                    from openoutreach.whatsapp.models.profile import WhatsAppProfile
+                    for profile in WhatsAppProfile.find_by_user_id(self._user_id):
+                        if profile._id not in self._whatsapp_sessions:
+                            wa_session = WASession(profile)
+                            self._whatsapp_sessions[profile._id] = wa_session
+                            logger.info("WA task loop: new profile detected, starting session %s", wa_session)
+                            try:
+                                await self._run_on_wa_pw_thread(lambda s=wa_session: start_whatsapp_session(s))
+                                logger.info("WA task loop: session started for new profile %s", wa_session)
+                            except Exception as e:
+                                logger.warning("WA task loop: session start failed for new profile %s: %s", profile, e)
+                except Exception as e:
+                    logger.debug("WA task loop: new-profile scan error: %s", e)
 
             if not self._is_active_time() or not self._whatsapp_sessions:
-                await asyncio.sleep(self.config.poll_interval_seconds if self.config else 10)
+                # Sleep briefly so new-profile detection stays responsive even with no active sessions
+                await asyncio.sleep(2)
                 continue
 
             now_mono = _time.monotonic()
