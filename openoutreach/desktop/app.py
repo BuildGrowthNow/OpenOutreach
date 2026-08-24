@@ -434,6 +434,12 @@ class TrayApp:
                 self._window.evaluate_js(_INJECT_JS)
             except Exception as e:
                 logger.debug("JS inject failed: %s", e)
+        # Reliable daemon start fallback: pywebviewready does not fire for remote
+        # HTTPS URLs in Edge WebView2, so confirm_auth() from the JS bridge is
+        # unreliable. Start the daemon on first page load when user is authenticated.
+        if not self._is_running() and self.auth.is_logged_in() and self._token_valid is not False:
+            logger.info("_on_loaded: authenticated, starting daemon")
+            threading.Thread(target=self._start_daemon, daemon=True, name="daemon-start").start()
 
     def _on_window_closed(self):
         """Called when the user closes the window - hide it, don't quit."""
