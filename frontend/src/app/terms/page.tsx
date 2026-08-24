@@ -7,7 +7,7 @@ import { Navbar } from '@/components/landing/Navbar';
 import { Footer } from '@/components/landing/Footer';
 
 export default function TermsPage() {
-  const lastUpdated = '2026-07-19';
+  const lastUpdated = '2026-08-24';
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-50">
@@ -33,10 +33,11 @@ export default function TermsPage() {
             <section>
               <h2 className="text-2xl font-bold text-white mb-4">2. Service Description</h2>
               <p>
-                Lengrowth Outreach is a LinkedIn automation platform that enables users to manage LinkedIn profiles, create campaigns, automate messaging, and generate analytics. The Service includes:
+                Lengrowth Outreach is a multi-channel outreach platform (LinkedIn and WhatsApp) that enables users to manage outreach accounts, create campaigns, automate messaging, and generate analytics. The Service includes:
               </p>
               <ul className="list-disc list-inside space-y-2 ml-2">
                 <li>LinkedIn account connectivity and management</li>
+                <li>WhatsApp account connectivity and management</li>
                 <li>Campaign creation and automation</li>
                 <li>AI-powered message composition and follow-ups</li>
                 <li>Analytics and reporting</li>
@@ -54,8 +55,9 @@ export default function TermsPage() {
               <p>You agree to use the Service in compliance with all applicable laws and regulations. Specifically, you agree NOT to:</p>
               <ul className="list-disc list-inside space-y-2 ml-2">
                 <li>Violate LinkedIn's Terms of Service or User Agreement</li>
+                <li>Violate WhatsApp's Terms of Service or Business Policy</li>
                 <li>Use the Service to send spam, harassment, or unwanted bulk messages</li>
-                <li>Create fake or fraudulent LinkedIn accounts or profiles</li>
+                <li>Create fake or fraudulent LinkedIn or WhatsApp accounts or profiles</li>
                 <li>Impersonate another person or entity</li>
                 <li>Attempt to gain unauthorized access to the Service or linked accounts</li>
                 <li>Reverse engineer, decompile, or attempt to extract the source code</li>
@@ -65,7 +67,7 @@ export default function TermsPage() {
                 <li>Interfere with the operation or security of the Service</li>
               </ul>
               <p className="mt-4">
-                You are solely responsible for maintaining the confidentiality of your LinkedIn credentials and for all activities that occur under your account. You agree to notify us immediately of any unauthorized use of your account.
+                You are solely responsible for maintaining the confidentiality of your LinkedIn and WhatsApp credentials and for all activities that occur under your connected accounts. You agree to notify us immediately of any unauthorized use of your account.
               </p>
             </section>
 
@@ -110,7 +112,7 @@ export default function TermsPage() {
             <section>
               <h2 className="text-2xl font-bold text-white mb-4">6. Limitation of Liability</h2>
               <p>
-                <strong>LinkedIn Account Restrictions:</strong> LinkedIn maintains strict policies against automation and may restrict, suspend, or ban accounts that use automation tools. By using Lengrowth Outreach, you assume all risk of LinkedIn account restrictions, suspensions, or permanent bans. We are not responsible for any such actions taken by LinkedIn. You are solely responsible for your compliance with LinkedIn's Terms of Service.
+                <strong>Platform Account Restrictions:</strong> LinkedIn and WhatsApp both maintain policies against certain types of automation and may restrict, suspend, or ban accounts that use automation tools. By using Lengrowth Outreach, you assume all risk of LinkedIn or WhatsApp account restrictions, suspensions, or permanent bans. We are not responsible for any such actions taken by LinkedIn or WhatsApp. You are solely responsible for your compliance with each platform's Terms of Service.
               </p>
               <p className="mt-4">
                 <strong>Disclaimer:</strong> TO THE FULLEST EXTENT PERMITTED BY LAW, LENGROWTH SHALL NOT BE LIABLE FOR:
@@ -120,7 +122,7 @@ export default function TermsPage() {
                 <li>Loss of profits, revenue, data, or business opportunities</li>
                 <li>Loss of use or interruption of service</li>
                 <li>Any damages arising from unauthorized access to or alteration of your account</li>
-                <li>Any damages arising from third-party actions, including LinkedIn's actions</li>
+                <li>Any damages arising from third-party actions, including LinkedIn's or WhatsApp's actions</li>
               </ul>
               <p className="mt-4">
                 THE TOTAL LIABILITY OF LENGROWTH, WHETHER IN CONTRACT, TORT, OR OTHERWISE, SHALL NOT EXCEED THE AMOUNT YOU PAID FOR THE SERVICE IN THE TWELVE MONTHS PRECEDING THE EVENT GIVING RISE TO LIABILITY.
@@ -134,10 +136,10 @@ export default function TermsPage() {
                 Your use of the Service is subject to our Privacy Policy, which is incorporated by reference into these Terms. Please review our Privacy Policy to understand our practices regarding data collection and usage.
               </p>
               <p className="mt-4">
-                <strong>LinkedIn Credentials:</strong> Your LinkedIn credentials are encrypted and stored securely. We will never share your credentials with third parties without your explicit consent, except as necessary to provide the Service.
+                <strong>Platform Credentials:</strong> Your LinkedIn and WhatsApp credentials and session data are encrypted and stored securely. We will never share your credentials with third parties without your explicit consent, except as necessary to provide the Service.
               </p>
               <p className="mt-4">
-                <strong>Data Retention:</strong> Upon account deletion, we will delete your personal data within 30 days. LinkedIn profile data, messages, and campaign data will be deleted immediately. However, aggregated and anonymized data may be retained for analytics purposes.
+                <strong>Data Retention:</strong> Upon account deletion, we will delete your personal data within 30 days. LinkedIn and WhatsApp profile data, messages, and campaign data will be deleted immediately. However, aggregated and anonymized data may be retained for analytics purposes.
               </p>
             </section>
 
@@ -149,7 +151,7 @@ export default function TermsPage() {
               </p>
               <ul className="list-disc list-inside space-y-2 ml-2">
                 <li>Violation of these Terms of Service</li>
-                <li>Violation of LinkedIn's Terms of Service</li>
+                <li>Violation of LinkedIn's or WhatsApp's Terms of Service</li>
                 <li>Use of the Service for illegal purposes or to facilitate harm</li>
                 <li>Non-payment of subscription fees</li>
                 <li>Abuse or harassment of other users or support staff</li>
@@ -167,7 +169,8 @@ export default function TermsPage() {
               </p>
               <ul className="list-disc list-inside space-y-2 ml-2">
                 <li><strong>Stripe:</strong> Payment processing and billing management</li>
-                <li><strong>LinkedIn:</strong> Account connectivity and data access</li>
+                <li><strong>LinkedIn:</strong> Account connectivity and automation</li>
+                <li><strong>WhatsApp:</strong> Account connectivity and messaging automation via WhatsApp Web</li>
                 <li><strong>LLM Providers:</strong> AI message generation (OpenAI, Anthropic, Google, others)</li>
               </ul>
               <p className="mt-4">
@@ -183,7 +186,7 @@ export default function TermsPage() {
               </p>
               <ul className="list-disc list-inside space-y-2 ml-2">
                 <li>You have the legal capacity to enter into this agreement</li>
-                <li>You own or control all LinkedIn accounts connected to your Lengrowth account</li>
+                <li>You own or control all LinkedIn and WhatsApp accounts connected to your Lengrowth account</li>
                 <li>You have obtained all necessary permissions to use those accounts with automation tools</li>
                 <li>Your use of the Service complies with all applicable laws and regulations</li>
                 <li>You will not use the Service to infringe on the rights of any third party</li>

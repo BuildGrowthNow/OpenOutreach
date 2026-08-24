@@ -7,7 +7,7 @@ import { Navbar } from '@/components/landing/Navbar';
 import { Footer } from '@/components/landing/Footer';
 
 export default function PrivacyPage() {
-  const lastUpdated = '2026-07-19';
+  const lastUpdated = '2026-08-24';
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-50">
@@ -60,7 +60,18 @@ export default function PrivacyPage() {
                 <li><strong>Search Activity:</strong> Saved searches and filters you create within the Service</li>
               </ul>
 
-              <h3 className="text-lg font-semibold text-white mt-6 mb-3">2.3 Campaign Data</h3>
+              <h3 className="text-lg font-semibold text-white mt-6 mb-3">2.3 WhatsApp Data</h3>
+              <p>
+                When you connect a WhatsApp account, we collect and store:
+              </p>
+              <ul className="list-disc list-inside space-y-2 ml-2">
+                <li><strong>Session Data:</strong> WhatsApp Web authentication tokens and localStorage (encrypted at rest using AES-256)</li>
+                <li><strong>Phone Number:</strong> The phone number associated with your WhatsApp account, extracted after authentication</li>
+                <li><strong>Display Name:</strong> Your WhatsApp display name</li>
+                <li><strong>Conversation Data:</strong> Messages sent and received via WhatsApp through the Service</li>
+              </ul>
+
+              <h3 className="text-lg font-semibold text-white mt-6 mb-3">2.4 Campaign Data</h3>
               <p>
                 We collect:
               </p>
@@ -72,7 +83,7 @@ export default function PrivacyPage() {
                 <li>Deal states and qualification status</li>
               </ul>
 
-              <h3 className="text-lg font-semibold text-white mt-6 mb-3">2.4 Communication Data</h3>
+              <h3 className="text-lg font-semibold text-white mt-6 mb-3">2.5 Communication Data</h3>
               <p>
                 We store:
               </p>
@@ -82,7 +93,7 @@ export default function PrivacyPage() {
                 <li>Voice note recordings (if you use this feature)</li>
               </ul>
 
-              <h3 className="text-lg font-semibold text-white mt-6 mb-3">2.5 Analytics and Usage Data</h3>
+              <h3 className="text-lg font-semibold text-white mt-6 mb-3">2.6 Analytics and Usage Data</h3>
               <p>
                 We automatically collect:
               </p>
@@ -94,7 +105,7 @@ export default function PrivacyPage() {
                 <li>Performance metrics and error logs</li>
               </ul>
 
-              <h3 className="text-lg font-semibold text-white mt-6 mb-3">2.6 Payment Information</h3>
+              <h3 className="text-lg font-semibold text-white mt-6 mb-3">2.7 Payment Information</h3>
               <p>
                 We collect payment details through our payment processor Stripe:
               </p>
@@ -117,7 +128,7 @@ export default function PrivacyPage() {
               <ul className="list-disc list-inside space-y-2 ml-2">
                 <li>To provide, maintain, and improve the Service</li>
                 <li>To process your account registration and authentication</li>
-                <li>To execute automation tasks on your LinkedIn accounts</li>
+                <li>To execute automation tasks on your LinkedIn and WhatsApp accounts</li>
                 <li>To store and retrieve your campaigns, leads, and messages</li>
                 <li>To generate analytics reports and insights</li>
               </ul>
@@ -164,7 +175,7 @@ export default function PrivacyPage() {
 
               <h3 className="text-lg font-semibold text-white mt-6 mb-3">Encryption</h3>
               <ul className="list-disc list-inside space-y-2 ml-2">
-                <li><strong>At Rest:</strong> LinkedIn credentials and sensitive data encrypted with AES-256</li>
+                <li><strong>At Rest:</strong> LinkedIn and WhatsApp credentials and sensitive data encrypted with AES-256</li>
                 <li><strong>In Transit:</strong> All communications protected with TLS 1.3 or higher</li>
                 <li><strong>Password:</strong> Your password is hashed using bcrypt with salt</li>
               </ul>
@@ -194,7 +205,8 @@ export default function PrivacyPage() {
 
               <h3 className="text-lg font-semibold text-white mt-6 mb-3">Required Sharing</h3>
               <ul className="list-disc list-inside space-y-2 ml-2">
-                <li><strong>LinkedIn:</strong> We send automation commands via LinkedIn's API (you control what data we access via OAuth scopes)</li>
+                <li><strong>LinkedIn:</strong> We send automation commands via LinkedIn's web interface (you control which LinkedIn account is connected)</li>
+                <li><strong>WhatsApp:</strong> We send messages via WhatsApp Web on your behalf (you control which WhatsApp account is connected via QR scan)</li>
                 <li><strong>Stripe:</strong> Payment information for billing (Stripe is PCI DSS compliant)</li>
                 <li><strong>LLM Providers:</strong> Message content sent to OpenAI, Anthropic, Google, or other AI providers for message generation (depends on your AI model choice)</li>
               </ul>
@@ -232,8 +244,8 @@ export default function PrivacyPage() {
               <ul className="list-disc list-inside space-y-2 ml-2">
                 <li>Cancel your subscription immediately</li>
                 <li>Delete all personal data within 30 days</li>
-                <li>Remove all LinkedIn credentials and campaign data</li>
-                <li>Release any LinkedIn accounts from our system</li>
+                <li>Remove all LinkedIn and WhatsApp credentials and campaign data</li>
+                <li>Release any LinkedIn and WhatsApp accounts from our system</li>
               </ul>
               <p className="mt-4">
                 Note: Aggregated and anonymized data may be retained for analytics and product improvement.
@@ -296,7 +308,7 @@ export default function PrivacyPage() {
               </p>
               <ul className="list-disc list-inside space-y-2 ml-2">
                 <li>Personal data (email, name, etc.) deleted within 30 days</li>
-                <li>LinkedIn credentials and campaign data deleted immediately</li>
+                <li>LinkedIn and WhatsApp credentials and campaign data deleted immediately</li>
                 <li>Chat history and messages deleted within 7 days</li>
                 <li>Backups containing your data retained for 90 days (for disaster recovery)</li>
               </ul>

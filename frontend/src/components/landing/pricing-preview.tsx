@@ -11,7 +11,7 @@ const plans = [
     name: 'Starter',
     price: '$19',
     tagline: 'For solo founders getting started',
-    features: ['1 LinkedIn account', '3 campaigns', 'AI messages', 'Automated follow-ups'],
+    features: ['1 LinkedIn account', 'WhatsApp outreach', '3 campaigns', 'AI messages', 'Automated follow-ups'],
     highlighted: false,
   },
   {

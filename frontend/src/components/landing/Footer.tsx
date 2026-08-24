@@ -19,7 +19,7 @@ export function Footer() {
               <Logo variant="dark" iconSize={28} className="text-sm text-white" />
             </Link>
             <p className="text-zinc-500 text-sm leading-relaxed mb-6">
-              AI-powered LinkedIn outreach. Run it on your own machine or let us manage it fully in the cloud.
+              AI-powered LinkedIn and WhatsApp outreach. Run it on your own machine or let us manage it fully in the cloud.
             </p>
             <a
               href="mailto:support@lengrowth.com"
