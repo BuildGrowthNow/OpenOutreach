@@ -265,6 +265,12 @@ class DesktopAPI:
             if self._app.auth.is_logged_in():
                 self._app._start_daemon()
 
+    def confirm_auth(self, user_id: str) -> None:
+        """Called by the frontend after successful initialize() to signal the daemon can start."""
+        logger.info("Frontend confirmed auth for user: %s", user_id)
+        if not self._app._is_running():
+            self._app._start_daemon()
+
     def get_keychain_refresh_token(self) -> Optional[str]:
         """Return the stored refresh token so the frontend can re-authenticate after restart."""
         return self._app.auth.get_refresh_token()
@@ -377,7 +383,8 @@ class TrayApp:
     def _start_window(self):
         """Create and show the pywebview window. Blocks until the window closes."""
         if self.auth.is_logged_in() and self._token_valid is not False:
-            url = self._app_url("dashboard")
+            token = self.auth.get_token()
+            url = (self._app_url("dashboard") + f"?desktop_token={token}") if token else self._app_url("dashboard")
         else:
             url = self._app_url("login") + "?desktop=true&callback=lengrowth%3A%2F%2Fauth"
         logger.info("Opening window: %s", url)
@@ -525,8 +532,9 @@ class TrayApp:
             self._pending_login_notification = False
             icon.notify("Login successful", "Lengrowth is ready")
 
-        if self.auth.is_logged_in() and self._token_valid is not False:
-            self._start_daemon()
+        # Daemon start is deferred until the frontend calls confirm_auth() after
+        # successful login/initialize — avoids starting with stale credentials if
+        # the user switches accounts.
 
         if self.config.autostart:
             _register_autostart()

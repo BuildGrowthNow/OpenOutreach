@@ -48,6 +48,14 @@ interface AuthState {
 // (avoids CORS issues when the backend is on a different domain)
 const API_BASE = '/api'
 
+function notifyDesktopAuth(userId: string) {
+  if (typeof window === 'undefined') return
+  const pywebview = (window as unknown as { pywebview?: { api?: { confirm_auth?: (id: string) => void } } }).pywebview
+  if (pywebview?.api?.confirm_auth) {
+    pywebview.api.confirm_auth(userId)
+  }
+}
+
 export const useAuthStore = create<AuthState>((set, get) => ({
   // Initial state
   isLoading: true,
@@ -66,6 +74,38 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   initialize: async () => {
     try {
       set({ isLoading: true, error: null })
+
+      // Desktop restart: the exe passes a fresh access token in the URL so we
+      // don't need to race the pywebview bridge for the keychain refresh token.
+      if (typeof window !== 'undefined') {
+        const params = new URLSearchParams(window.location.search)
+        const desktopToken = params.get('desktop_token')
+        if (desktopToken) {
+          set({ accessToken: desktopToken })
+          const url = new URL(window.location.href)
+          url.searchParams.delete('desktop_token')
+          window.history.replaceState({}, '', url.pathname + url.search)
+        }
+      }
+
+      // If we already have an access token (from desktop_token or prior session),
+      // validate it directly before falling through to the refresh flow.
+      const existingToken = get().accessToken
+      if (existingToken) {
+        const response = await fetch(`${API_BASE}/auth/me/`, {
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${existingToken}`,
+          },
+        })
+        if (response.ok) {
+          const user = await response.json()
+          set({ isAuthenticated: true, user, isLoading: false, isInitialized: true, error: null })
+          notifyDesktopAuth(user.id)
+          return
+        }
+      }
 
       // Step 1: try to get a fresh access token via the refresh cookie
       const refreshed = await get().refreshToken()
@@ -87,6 +127,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (response.ok) {
         const user = await response.json()
         set({ isAuthenticated: true, user, isLoading: false, isInitialized: true, error: null })
+        notifyDesktopAuth(user.id)
       } else {
         set({ isAuthenticated: false, user: null, accessToken: null, isLoading: false, isInitialized: true, error: null })
       }
