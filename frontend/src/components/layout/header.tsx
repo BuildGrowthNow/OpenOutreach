@@ -19,7 +19,7 @@ import { useEffect, useState } from 'react'
 import { getLinkedInProfileHealth } from '@/lib/api/dashboard'
 import { LinkedInProfileHealthResponse } from '@/lib/types/components'
 import { listWhatsAppProfiles, type WhatsAppProfile } from '@/lib/api/whatsapp'
-import { getNotificationSummary, markNotificationAsRead, Notification } from '@/lib/api/notifications'
+import { getNotificationSummary, markNotificationAsRead, markAllNotificationsAsRead, Notification } from '@/lib/api/notifications'
 
 interface HeaderProps {
   onMenuClick: () => void
@@ -194,18 +194,29 @@ const Header = ({ onMenuClick, className }: HeaderProps) => {
     return () => clearInterval(interval)
   }, [isAuthenticated])
 
-  // Handle clicking a notification to mark as read
+  const refreshNotifications = async () => {
+    const response = await getNotificationSummary()
+    if (response.data) {
+      setNotifications(response.data.recent_notifications || [])
+      setUnreadCount(response.data.unread_count || 0)
+    }
+  }
+
   const handleNotificationClick = async (notificationId: number) => {
     try {
       await markNotificationAsRead(notificationId)
-      // Refresh notifications
-      const response = await getNotificationSummary()
-      if (response.data) {
-        setNotifications(response.data.recent_notifications || [])
-        setUnreadCount(response.data.unread_count || 0)
-      }
+      await refreshNotifications()
     } catch (error) {
       console.error('Failed to mark notification as read:', error)
+    }
+  }
+
+  const handleMarkAllRead = async () => {
+    try {
+      await markAllNotificationsAsRead()
+      await refreshNotifications()
+    } catch (error) {
+      console.error('Failed to mark all notifications as read:', error)
     }
   }
 
@@ -330,11 +341,21 @@ const Header = ({ onMenuClick, className }: HeaderProps) => {
           <DropdownMenuContent align="end" className="w-96 bg-zinc-900 border-zinc-700">
             <div className="px-4 py-3 border-b border-zinc-700">
               <div className="flex items-center justify-between">
-                <h3 className="font-semibold text-zinc-100">Notifications</h3>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-semibold text-zinc-100">Notifications</h3>
+                  {unreadCount > 0 && (
+                    <Badge variant="secondary" className="text-xs">
+                      {unreadCount} unread
+                    </Badge>
+                  )}
+                </div>
                 {unreadCount > 0 && (
-                  <Badge variant="secondary" className="text-xs">
-                    {unreadCount} unread
-                  </Badge>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); void handleMarkAllRead() }}
+                    className="text-xs text-zinc-400 hover:text-zinc-100 transition-colors"
+                  >
+                    Mark all as read
+                  </button>
                 )}
               </div>
             </div>
@@ -355,10 +376,14 @@ const Header = ({ onMenuClick, className }: HeaderProps) => {
                   {notifications.map((notification) => (
                     <DropdownMenuItem
                       key={notification.id}
-                      className={`flex gap-3 p-3 border-b border-zinc-700 last:border-0 hover:bg-zinc-800 ${!notification.is_read ? 'bg-zinc-800/50' : ''}`}
-                      onClick={() => handleNotificationClick(notification.id)}
+                      className={cn(
+                        'flex gap-3 p-3 border-b border-zinc-700 last:border-0 cursor-pointer',
+                        'hover:bg-zinc-800 focus:bg-zinc-800 data-[highlighted]:bg-zinc-800',
+                        !notification.is_read ? 'bg-zinc-800/50' : 'bg-transparent',
+                      )}
+                      onClick={() => void handleNotificationClick(notification.id)}
                     >
-                      <div className="flex-shrink-0">
+                      <div className="flex-shrink-0 mt-0.5">
                         {notification.is_read ? (
                           <Icons.Bell className="h-4 w-4 text-muted-foreground" />
                         ) : (
@@ -366,27 +391,37 @@ const Header = ({ onMenuClick, className }: HeaderProps) => {
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className={`text-sm ${!notification.is_read ? 'font-semibold' : 'font-medium'}`}>
+                        <p className={`text-sm ${!notification.is_read ? 'font-semibold text-zinc-100' : 'font-medium text-zinc-300'}`}>
                           {notification.title}
                         </p>
-                        <p className="text-xs text-muted-foreground truncate mt-0.5">
+                        <p className="text-xs text-zinc-400 truncate mt-0.5">
                           {notification.message}
                         </p>
-                        <p className="text-[10px] text-muted-foreground mt-1">
+                        <p className="text-[10px] text-zinc-500 mt-1">
                           {getTimeAgo(notification.created_at)}
                         </p>
                       </div>
-                      {!notification.is_read && (
-                        <div className="h-2 w-2 rounded-full bg-blue-500 flex-shrink-0" />
-                      )}
+                      <div className="flex items-start gap-2 flex-shrink-0">
+                        {!notification.is_read && (
+                          <>
+                            <div className="h-2 w-2 rounded-full bg-blue-500 mt-1.5" />
+                            <button
+                              onClick={(e) => { e.stopPropagation(); void handleNotificationClick(notification.id) }}
+                              className="text-[10px] text-zinc-500 hover:text-zinc-300 transition-colors whitespace-nowrap"
+                            >
+                              Mark read
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </DropdownMenuItem>
                   ))}
                 </>
               )}
             </div>
             {notifications.length > 0 && (
-              <div className="border-t p-2">
-                <div className="text-xs text-center text-muted-foreground">
+              <div className="border-t border-zinc-700 p-2">
+                <div className="text-xs text-center text-zinc-500">
                   Showing latest {notifications.length} notifications
                 </div>
               </div>
