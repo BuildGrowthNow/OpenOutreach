@@ -608,7 +608,17 @@ class RemoteDaemon:
             fresh_state = await self._run_on_pw_thread(lambda: _launch_and_auth(True))
         except Exception as e:
             from linkedin_cli.exceptions import CheckpointChallengeError
-            if isinstance(e, CheckpointChallengeError):
+            from playwright._impl._errors import TargetClosedError
+            if isinstance(e, TargetClosedError) and not is_new_profile:
+                # Browser crashed on launch — likely corrupted profile from prior unclean shutdown.
+                # Wipe the profile dir and retry with a fresh one.
+                import shutil
+                logger.warning("Browser died on launch (corrupted profile?) — wiping %s and retrying", profile_dir)
+                shutil.rmtree(profile_dir, ignore_errors=True)
+                profile_dir.mkdir(parents=True, exist_ok=True)
+                is_new_profile = True
+                fresh_state = await self._run_on_pw_thread(lambda: _launch_and_auth(True))
+            elif isinstance(e, CheckpointChallengeError):
                 # Challenge detected in headless mode — close and relaunch headed
                 # so the user can interact with the verification in a visible window.
                 logger.warning("LinkedIn challenge detected — relaunching browser headed for user interaction")
@@ -1393,7 +1403,7 @@ class RemoteDaemon:
         # Remove stale Chrome singleton lock files left behind by a prior crash.
         # When these exist Chrome detects "another instance is running" and exits
         # immediately with code 0, causing Playwright's TargetClosedError.
-        for lock_name in ("SingletonLock", "SingletonCookie", "SingletonSocket"):
+        for lock_name in ("SingletonLock", "SingletonCookie", "SingletonSocket", "lockfile"):
             lock_path = profile_dir / lock_name
             try:
                 if lock_path.exists() or lock_path.is_symlink():
