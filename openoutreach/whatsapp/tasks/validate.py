@@ -49,26 +49,49 @@ def validate_wa_phones(wa_session) -> int:
     if not campaign_ids:
         return 0
 
-    # QUALIFIED WA deals where phone registration is unknown, oldest first.
+    # Step 1: collect lead_id→deal_id from QUALIFIED WA deals (projection only,
+    # larger window so the phone filter in step 2 can fill _MAX_PER_RUN slots
+    # even when many leads already have phone_on_whatsapp set).
     deal_docs = list(deals_col.find(
         {
             "campaign_id": {"$in": campaign_ids},
             "state": Deal.DealState.QUALIFIED,
             "active_channel": "whatsapp",
         },
+        {"_id": 1, "lead_id": 1},
         sort=[("creation_date", 1)],
+        limit=200,
+    ))
+    if not deal_docs:
+        return 0
+
+    lead_to_deal: dict[str, str] = {d["lead_id"]: str(d["_id"]) for d in deal_docs}
+
+    # Step 2: find leads where phone_on_whatsapp is unknown.
+    # MongoDB: {field: None} matches both null-valued and absent fields.
+    unknown_lead_docs = list(leads_col.find(
+        {
+            "_id": {"$in": list(lead_to_deal.keys())},
+            "phone": {"$exists": True, "$ne": None},
+            "phone_on_whatsapp": None,
+        },
         limit=_MAX_PER_RUN,
     ))
 
+    if not unknown_lead_docs:
+        return 0
+
     validated = 0
-    for deal_doc in deal_docs:
-        deal = Deal.from_dict(deal_doc)
-        lead = Lead.get(deal.lead_id)
-        if not lead or not lead.phone:
+    for lead_doc in unknown_lead_docs:
+        lead = Lead.from_dict(lead_doc)
+        deal_id = lead_to_deal.get(str(lead._id))
+        if not deal_id:
             continue
 
-        if lead.phone_on_whatsapp is not None:
-            continue  # already known — skip
+        deal_doc = deals_col.find_one({"_id": deal_id})
+        if not deal_doc:
+            continue
+        deal = Deal.from_dict(deal_doc)
 
         try:
             registered = wa_session.is_registered(lead.phone)

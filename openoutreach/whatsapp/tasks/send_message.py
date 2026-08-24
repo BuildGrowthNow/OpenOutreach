@@ -191,6 +191,7 @@ def handle_whatsapp_message(task, wa_session, qualifiers):  # noqa: ARG001
                 "lead_id": str(lead._id),
                 "phone": lead.phone,
                 "message_preview": message[:100],
+                "wa_profile_id": wa_session.wa_profile._id,
             },
         ).save()
 

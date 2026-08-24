@@ -20,8 +20,8 @@ interface LinkedInProfile {
 
 interface WhatsAppProfile {
   id: string;
-  phone_number?: string;
-  display_name?: string;
+  phoneNumber?: string | null;
+  displayName?: string | null;
   status: string;
 }
 
@@ -483,7 +483,7 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
                           <SelectContent>
                             {waProfiles.map((p) => (
                               <SelectItem key={p.id} value={p.id}>
-                                {p.display_name || p.phone_number || p.id}
+                                {p.displayName || p.phoneNumber || p.id}
                               </SelectItem>
                             ))}
                           </SelectContent>

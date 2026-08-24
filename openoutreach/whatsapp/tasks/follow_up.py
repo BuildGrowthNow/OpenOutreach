@@ -172,6 +172,7 @@ def handle_whatsapp_follow_up(task, wa_session, qualifiers):  # noqa: ARG001
                 "deal_id": str(deal._id),
                 "phone": lead.phone,
                 "message_preview": message[:100],
+                "wa_profile_id": wa_profile._id,
             },
         ).save()
 

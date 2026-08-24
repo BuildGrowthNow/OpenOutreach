@@ -32,8 +32,9 @@ _HANDLERS: dict = {}
 _WA_PW_QUEUE: queue.Queue = queue.Queue()
 _WA_PW_THREAD: Optional[threading.Thread] = None
 _WA_SESSIONS: dict[str, Any] = {}
-_WA_HEALTH_INTERVAL = 300  # 5 minutes
+_WA_HEALTH_INTERVAL = 300       # 5 minutes
 _WA_SESSION_REFRESH_INTERVAL = 300  # 5 minutes
+_WA_VALIDATION_INTERVAL = 1800  # 30 minutes
 
 
 def _start_wa_pw_thread() -> None:
@@ -139,6 +140,28 @@ def _wa_health_check() -> None:
                     logger.warning("WA health: reconnect failed: %s", reconnect_err)
         except Exception as e:
             logger.debug("WA health check error %s: %s", profile_id, e)
+
+
+def _run_wa_preflight_validation() -> None:
+    """Run validate_wa_phones for every live WA session on the Playwright thread.
+
+    Mirrors the desktop daemon's _run_wa_preflight_validation so unregistered
+    phones are FAILED before plan_whatsapp_window creates MESSAGE tasks for them.
+    """
+    try:
+        from openoutreach.whatsapp.tasks.validate import validate_wa_phones
+    except ImportError:
+        return
+
+    for profile_id, wa_session in list(_WA_SESSIONS.items()):
+        try:
+            validated = _run_on_wa_thread(
+                lambda s=wa_session: validate_wa_phones(s), timeout=300
+            )
+            if validated:
+                logger.info("WA preflight: %d phones validated for profile %s", validated, profile_id)
+        except Exception as e:
+            logger.warning("WA preflight validation error for %s: %s", profile_id, e)
 
 
 def _execute_wa_task(task, wa_session) -> None:
@@ -535,6 +558,7 @@ def run_daemon():
     last_stale_recovery: float = 0.0
     last_wa_refresh: float = 0.0
     last_wa_health: float = 0.0
+    last_wa_validation: float = 0.0
 
     def refresh_pool():
         nonlocal last_profile_refresh
@@ -714,7 +738,7 @@ def run_daemon():
             rhythm.maybe_break()
             break  # After executing one task, restart the round-robin
 
-        # Periodic WA session refresh and health check
+        # Periodic WA session refresh, health check, and phone pre-flight validation
         now_mono = time.monotonic()
         if now_mono - last_wa_refresh >= _WA_SESSION_REFRESH_INTERVAL:
             last_wa_refresh = now_mono
@@ -722,6 +746,9 @@ def run_daemon():
         if now_mono - last_wa_health >= _WA_HEALTH_INTERVAL:
             last_wa_health = now_mono
             _wa_health_check()
+        if now_mono - last_wa_validation >= _WA_VALIDATION_INTERVAL and _WA_SESSIONS:
+            last_wa_validation = now_mono
+            _run_wa_preflight_validation()
 
         # WA task claiming — one task per cycle, round-robins across WA sessions
         if not task_executed and _WA_SESSIONS:
