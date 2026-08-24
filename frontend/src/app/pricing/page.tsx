@@ -110,6 +110,7 @@ const plans: Plan[] = [
 ];
 
 const comparisonFeatures: ComparisonFeature[] = [
+  { name: 'LinkedIn + WhatsApp Outreach', starter: true, pro: true, business: true, agency: true, cloud: true },
   { name: 'LinkedIn Accounts', starter: true, pro: true, business: true, agency: true, cloud: true },
   { name: 'Active Campaigns', starter: true, pro: true, business: true, agency: true, cloud: true },
   { name: 'AI-Written Messages', starter: true, pro: true, business: true, agency: true, cloud: true },
@@ -130,9 +131,14 @@ const faqs = [
       "Full Starter plan access for 7 days. No credit card required to start.",
   },
   {
-    question: "Can my LinkedIn account get restricted?",
+    question: "Can my LinkedIn or WhatsApp account get restricted?",
     answer:
-      "Lengrowth is designed specifically to avoid this. Actions are spread across the day, volumes stay within normal usage ranges, and timing varies to mimic human behaviour. Thousands of accounts run without issue. That said, no tool can guarantee LinkedIn won't change its policies — you take that risk knowingly.",
+      "Lengrowth is designed specifically to avoid this. Actions are spread across the day, volumes stay within normal usage ranges, and timing varies to mimic human behaviour on both channels. Thousands of accounts run without issue. That said, no tool can guarantee LinkedIn or WhatsApp won't change their policies — you take that risk knowingly.",
+  },
+  {
+    question: "How does WhatsApp outreach work?",
+    answer:
+      "Lengrowth finds leads with phone numbers from Google Maps, Facebook, classified listings, and other sources — then messages them directly on WhatsApp using the same AI personalization and follow-up sequences as LinkedIn. You scan a QR code once to connect your WhatsApp, and the desktop app handles the rest. All conversations appear in the same unified inbox.",
   },
   {
     question: "What's the difference between the desktop plans and Cloud?",

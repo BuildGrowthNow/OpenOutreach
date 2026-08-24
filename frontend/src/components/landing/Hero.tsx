@@ -33,7 +33,7 @@ export function Hero() {
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
               </span>
-              AI-Powered LinkedIn Outreach
+              LinkedIn + WhatsApp Outreach
             </span>
           </motion.div>
 
@@ -60,8 +60,8 @@ export function Hero() {
             transition={{ duration: 0.6, delay: 0.2 }}
             className="mx-auto mb-10 max-w-2xl text-lg text-zinc-400 leading-relaxed sm:text-xl"
           >
-            Define your ideal customer once. Lengrowth finds them on LinkedIn,
-            writes a unique message for each, and follows up until
+            Define your ideal customer once. Lengrowth finds them on LinkedIn
+            or WhatsApp, writes a unique message for each, and follows up until
             they&apos;re ready to talk — completely hands-off.
           </motion.p>
 

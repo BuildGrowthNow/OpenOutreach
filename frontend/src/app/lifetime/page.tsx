@@ -14,6 +14,7 @@ const BASELINE_SPOTS = 23; // pre-launch buyers shown for social proof
 
 const features = [
   'Unlimited campaigns',
+  'LinkedIn & WhatsApp outreach channels',
   'AI-written messages per prospect',
   'Automated follow-up sequences',
   'Unified conversation inbox',
@@ -281,13 +282,13 @@ export default function LifetimeDealPage() {
               <p className="text-zinc-400 mb-6">
                 The lifetime deal runs on your own machine — automation uses your
                 own internet connection. That means your account activity looks
-                exactly like you manually browsing LinkedIn. You also bring your
+                exactly like you manually browsing LinkedIn and WhatsApp. You also bring your
                 own LLM API key, which keeps costs predictable and puts you in
                 full control of how AI messaging is used.
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 {[
-                  { label: 'Your machine, your IP', sub: 'Looks like normal LinkedIn usage' },
+                  { label: 'Your machine, your IP', sub: 'Looks like normal browsing on both channels' },
                   { label: 'Your AI key', sub: 'Full control, typically a few $/mo' },
                   { label: 'No ongoing fees', sub: '$149 and done — forever' },
                 ].map((item, i) => (

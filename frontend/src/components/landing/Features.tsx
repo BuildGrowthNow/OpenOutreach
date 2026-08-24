@@ -9,7 +9,7 @@ const features = [
   {
     icon: Target,
     headline: 'Your pipeline, built automatically.',
-    body: "Describe your ideal customer — industry, role, company size — and Lengrowth builds a prospect list and starts reaching out. No manual searching, no spreadsheets.",
+    body: "Describe your ideal customer — industry, role, company size — and Lengrowth builds a prospect list and starts reaching out via LinkedIn or WhatsApp. No manual searching, no spreadsheets.",
     accent: 'from-emerald-400 to-teal-400',
   },
   {
@@ -27,7 +27,7 @@ const features = [
   {
     icon: Clock,
     headline: 'Runs while you focus on selling.',
-    body: "Lengrowth operates in the background — connection requests, follow-ups, inbox replies — all within safe daily limits. Check in on your dashboard whenever you want.",
+    body: "Lengrowth operates in the background — LinkedIn connections, WhatsApp messages, follow-ups, inbox replies — all within safe daily limits. Check in on your dashboard whenever you want.",
     accent: 'from-emerald-400 to-green-400',
   },
   {
@@ -38,8 +38,8 @@ const features = [
   },
   {
     icon: Shield,
-    headline: 'Built to protect your account.',
-    body: "Human-like send timing, daily limits that mirror real usage patterns, and activity spread across the day. Your LinkedIn account stays healthy and undetected.",
+    headline: 'Built to protect your accounts.',
+    body: "Human-like send timing, daily limits that mirror real usage, and activity spread across the day. Both your LinkedIn and WhatsApp accounts stay healthy and undetected.",
     accent: 'from-emerald-400 to-lime-400',
   },
 ];

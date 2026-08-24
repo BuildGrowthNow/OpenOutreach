@@ -17,6 +17,8 @@ const activities = [
   'Sequence completed',
   'New conversation started',
   'Pipeline updated',
+  'WhatsApp reply received',
+  'WhatsApp message delivered',
 ];
 
 const duplicated = [...activities, ...activities];

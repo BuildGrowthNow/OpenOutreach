@@ -7,12 +7,16 @@ import { TextReveal } from './text-reveal';
 
 const faqs = [
   {
-    question: "Will my LinkedIn account get banned?",
-    answer: "Lengrowth mimics human timing — random delays, daily limits, activity spread across hours. On desktop plans, it uses your own machine and IP, making activity indistinguishable from manual browsing. On the Cloud plan, we handle everything on managed infrastructure. Most users run it for months without any issues.",
+    question: "Will my LinkedIn or WhatsApp account get restricted?",
+    answer: "Lengrowth mimics human timing on both channels — random delays, daily limits, activity spread across hours. On desktop plans, it uses your own machine and IP, making activity indistinguishable from normal browsing. On the Cloud plan, we handle everything on managed infrastructure. Most users run both channels for months without any issues.",
   },
   {
-    question: "How is this different from other LinkedIn tools?",
-    answer: "Most tools run in the cloud on shared IPs that LinkedIn already flags. With Lengrowth, desktop plans use your own machine and IP — no proxy costs, no shared infrastructure, no red flags. If you prefer fully managed, our Cloud plan handles it all for you. Plus the AI writes genuinely personalized messages, not template swaps.",
+    question: "How does WhatsApp outreach work?",
+    answer: "Lengrowth finds leads with phone numbers from Google Maps, Facebook, classified listings, and other sources — then messages them directly on WhatsApp. Same AI personalization, same follow-up sequences, same unified inbox as LinkedIn. You scan a QR code once to connect your WhatsApp account, and the desktop app handles the rest.",
+  },
+  {
+    question: "How is this different from other outreach tools?",
+    answer: "Most tools are LinkedIn-only and run on shared cloud IPs that platforms already flag. Lengrowth runs two independent channels — LinkedIn and WhatsApp — on your own machine and IP, so activity looks exactly like normal browsing. No proxy costs, no shared infrastructure. Plus the AI writes genuinely personalized messages, not template swaps.",
   },
   {
     question: "Do the AI messages actually sound good?",
