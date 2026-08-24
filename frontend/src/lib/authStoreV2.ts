@@ -50,9 +50,14 @@ const API_BASE = '/api'
 
 function notifyDesktopAuth(userId: string) {
   if (typeof window === 'undefined') return
-  const pywebview = (window as unknown as { pywebview?: { api?: { confirm_auth?: (id: string) => void } } }).pywebview
-  if (pywebview?.api?.confirm_auth) {
-    pywebview.api.confirm_auth(userId)
+  const w = window as unknown as { pywebview?: { api?: { confirm_auth?: (id: string) => void } } }
+  if (w.pywebview?.api?.confirm_auth) {
+    w.pywebview.api.confirm_auth(userId)
+  } else {
+    // Bridge loads async — wait for pywebviewready then call
+    window.addEventListener('pywebviewready', () => {
+      w.pywebview?.api?.confirm_auth?.(userId)
+    }, { once: true })
   }
 }
 
