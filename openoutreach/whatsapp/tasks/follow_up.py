@@ -38,6 +38,93 @@ def _wa_is_active_now(config) -> bool:
     return start <= now.hour < end
 
 
+# Minimum days between consecutive unanswered follow-ups (mirrors LinkedIn's MIN_DAYS_PER_UNANSWERED)
+_WA_MIN_DAYS_PER_NUDGE = 2
+_WA_STALE_CONVERSATION_DAYS = 30
+
+
+def _next_wa_followup_deal(campaign_id: str, deals_col):
+    """Find the next CONNECTED WA deal that is past its nudge cooldown.
+
+    Mirrors LinkedIn's _next_followup_deal + _too_soon_to_nudge logic:
+    - Skip if last_outgoing_at is within (nudge_count * _WA_MIN_DAYS_PER_NUDGE) days
+    - Skip if conversation is stale (>30 days since any message)
+    - Allow immediate follow-up if last message is inbound (lead replied)
+    """
+    from openoutreach.mongodb.models import Deal
+    from openoutreach.mongodb.connection import get_mongodb_collection
+
+    messages_col = get_mongodb_collection("chat_messages")
+
+    deal_docs = list(deals_col.find(
+        {
+            "campaign_id": campaign_id,
+            "state": Deal.DealState.CONNECTED,
+            "active_channel": "whatsapp",
+            "outcome": {"$in": ["", None]},
+        },
+        sort=[("last_outgoing_at", 1), ("follow_up_cycled_at", 1)],
+        limit=50,
+    ))
+
+    now = datetime.now(timezone.utc)
+
+    for deal_doc in deal_docs:
+        deal_id = str(deal_doc["_id"])
+        last_out = deal_doc.get("last_outgoing_at")
+        if last_out and last_out.tzinfo is None:
+            last_out = last_out.replace(tzinfo=timezone.utc)
+
+        if messages_col is None:
+            if last_out and (now - last_out).days < _WA_MIN_DAYS_PER_NUDGE:
+                continue
+            return deal_doc
+
+        last_msg = messages_col.find_one(
+            {"deal_id": deal_id, "channel": "whatsapp"},
+            sort=[("creation_date", -1)],
+        )
+
+        if not last_msg:
+            if last_out and (now - last_out).total_seconds() < 86400 * _WA_MIN_DAYS_PER_NUDGE:
+                continue
+            return deal_doc
+
+        last_date = last_msg.get("creation_date")
+        if last_date and last_date.tzinfo is None:
+            last_date = last_date.replace(tzinfo=timezone.utc)
+
+        if last_date:
+            age_days = (now - last_date).days
+            if age_days >= _WA_STALE_CONVERSATION_DAYS:
+                continue
+
+        if not last_msg.get("is_outgoing", False):
+            return deal_doc
+
+        # Last message is outgoing — count unanswered nudges since last inbound reply
+        last_inbound = messages_col.find_one(
+            {"deal_id": deal_id, "channel": "whatsapp", "is_outgoing": False},
+            sort=[("creation_date", -1)],
+        )
+        since_filter = last_inbound["creation_date"] if last_inbound else datetime.min.replace(tzinfo=timezone.utc)
+        nudge_count = messages_col.count_documents({
+            "deal_id": deal_id,
+            "channel": "whatsapp",
+            "is_outgoing": True,
+            "creation_date": {"$gt": since_filter},
+        })
+        nudge_count = max(1, nudge_count)
+        required_days = nudge_count * _WA_MIN_DAYS_PER_NUDGE
+
+        if last_out and (now - last_out).days < required_days:
+            continue
+
+        return deal_doc
+
+    return None
+
+
 def handle_whatsapp_follow_up(task, wa_session, qualifiers):  # noqa: ARG001
     """Run AI follow-up for one eligible CONNECTED WhatsApp deal.
 
@@ -72,15 +159,7 @@ def handle_whatsapp_follow_up(task, wa_session, qualifiers):  # noqa: ARG001
     if deals_col is None:
         return
 
-    deal_doc = deals_col.find_one(
-        {
-            "campaign_id": campaign_id,
-            "state": Deal.DealState.CONNECTED,
-            "active_channel": "whatsapp",
-            "outcome": {"$in": ["", None]},
-        },
-        sort=[("last_outgoing_at", 1), ("follow_up_cycled_at", 1)],
-    )
+    deal_doc = _next_wa_followup_deal(campaign_id, deals_col)
     if not deal_doc:
         logger.info("WA follow_up [%s]: no eligible CONNECTED WA deals", campaign)
         return

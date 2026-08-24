@@ -373,6 +373,7 @@ async def reconcile_tasks(
     from openoutreach.mongodb.connection import get_mongodb_collection
     from openoutreach.core.scheduler import (
         _auto_qualify_wa_leads,
+        _maybe_trigger_lead_scrape,
         _recover_stale_running_tasks,
         _route_deal_channels,
         plan_check_pending_window,
@@ -432,6 +433,7 @@ async def reconcile_tasks(
         if wa_profile_id and "whatsapp" in channel_seq:
             _auto_qualify_wa_leads(campaign)
             _route_deal_channels(campaign)
+            _maybe_trigger_lead_scrape(campaign, user_id)
             tasks_created += plan_whatsapp_window(campaign, wa_profile_id, user_id)
             tasks_created += plan_whatsapp_follow_up_window(campaign, wa_profile_id, user_id)
             tasks_created += plan_whatsapp_sync_window(campaign, wa_profile_id, user_id)
@@ -451,6 +453,7 @@ async def reconcile_tasks(
         if wa_profile_id and "whatsapp" in channel_seq:
             _auto_qualify_wa_leads(campaign)
             _route_deal_channels(campaign)
+            _maybe_trigger_lead_scrape(campaign, user_id)
             tasks_created += plan_whatsapp_window(campaign, wa_profile_id, user_id)
             tasks_created += plan_whatsapp_follow_up_window(campaign, wa_profile_id, user_id)
             tasks_created += plan_whatsapp_sync_window(campaign, wa_profile_id, user_id)
