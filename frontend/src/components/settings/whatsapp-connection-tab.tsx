@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useAuthStore } from "@/lib/authStoreV2";
+import { useAuthStore } from "@/lib/authStoreV2"; // getState() used directly — not a React hook
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -40,7 +40,9 @@ function QrPoller({ profileId, onConnected }: { profileId: string; onConnected: 
   const [resetting, setResetting] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const deadlineRef = useRef(Date.now() + 120_000);
-  const token = useAuthStore((state) => state.accessToken);
+  // Read token from Zustand state on each poll — avoids hook/closure timing
+  // issues where accessToken might be null on the first render cycle.
+  const getToken = () => useAuthStore.getState().accessToken;
 
   const stopPolling = () => {
     if (intervalRef.current) {
@@ -63,6 +65,7 @@ function QrPoller({ profileId, onConnected }: { profileId: string; onConnected: 
       }
       try {
         const url = getQrUrl(profileId);
+        const token = getToken();
         const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
         const res = await fetch(`${url}?t=${Date.now()}`, { headers });
         if (res.status === 202) {
@@ -87,7 +90,7 @@ function QrPoller({ profileId, onConnected }: { profileId: string; onConnected: 
 
     void doPoll();
     intervalRef.current = setInterval(doPoll, 2000);
-  }, [profileId, onConnected, token]);
+  }, [profileId, onConnected]);
 
   useEffect(() => {
     startPolling();
