@@ -89,21 +89,31 @@ def start_whatsapp_session(wa_session: "WASession") -> None:
     deadline = time.monotonic() + _QR_TIMEOUT_S
     last_qr_bytes: bytes | None = None
 
-    while time.monotonic() < deadline:
-        if is_authenticated(page):
-            break
+    try:
+        while time.monotonic() < deadline:
+            if is_authenticated(page):
+                break
 
-        png = capture_qr_png(page)
-        if png and png != last_qr_bytes:
-            _write_qr_to_db(profile, png)
-            last_qr_bytes = png
-            logger.info("QR code written to DB for %s - ready to scan", profile)
+            png = capture_qr_png(page)
+            if png and png != last_qr_bytes:
+                _write_qr_to_db(profile, png)
+                last_qr_bytes = png
+                logger.info("QR code written to DB for %s - ready to scan", profile)
 
-        time.sleep(_QR_POLL_INTERVAL_S)
-    else:
-        logger.warning("QR scan timed out for %s", profile)
+            time.sleep(_QR_POLL_INTERVAL_S)
+        else:
+            logger.warning("QR scan timed out for %s", profile)
+            _clear_qr_from_db(profile)
+            # pw.stop() was never called on this path — close everything now so the
+            # next reconnect attempt starts with a clean Playwright context (leaving
+            # it open keeps the internal event loop "running" and causes
+            # "Playwright Sync API inside asyncio loop" on the second call).
+            close_whatsapp_session(wa_session)
+            return
+    except Exception:
         _clear_qr_from_db(profile)
-        return
+        close_whatsapp_session(wa_session)
+        raise
 
     _clear_qr_from_db(profile)
     _save_session(wa_session)
