@@ -71,7 +71,11 @@ export function proxy(request: NextRequest) {
 
   const isProtectedRoute = protectedPaths.some(path => pathname.startsWith(path));
 
-  if (isProtectedRoute && !token && !authHeader) {
+  // desktop_token is passed by the Python desktop app on startup — let the page
+  // handle auth itself (it validates via /api/auth/me/ and bootstraps cookies).
+  const desktopToken = request.nextUrl.searchParams.get('desktop_token');
+
+  if (isProtectedRoute && !token && !authHeader && !desktopToken) {
     // Redirect to login with return URL
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('returnUrl', pathname);

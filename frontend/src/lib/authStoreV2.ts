@@ -108,6 +108,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           const user = await response.json()
           set({ isAuthenticated: true, user, isLoading: false, isInitialized: true, error: null })
           notifyDesktopAuth(user.id)
+          // Bootstrap the refresh_token cookie so subsequent page navigations
+          // are not blocked by the Next.js middleware cookie check.
+          void get().refreshToken()
           return
         }
       }
@@ -283,10 +286,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       // On desktop, try to get the refresh token from the system keychain if the
       // HTTP-only cookie is gone (i.e. after the webview is restarted).
-      // Poll briefly for pywebview.api - it's injected by pywebview's bridge but
-      // may not be fully registered when the first useEffect fires.
+      // Use __LENGROWTH_DESKTOP__ (set by Python-injected JS) as the desktop
+      // signal — it's more reliable than checking window.pywebview directly
+      // because pywebview's bridge loads asynchronously after the page renders.
       let body: string | undefined
-      if (typeof window !== 'undefined' && typeof (window as unknown as { pywebview?: unknown }).pywebview !== 'undefined') {
+      const isDesktopEnv = typeof window !== 'undefined' && (
+        !!(window as unknown as { __LENGROWTH_DESKTOP__?: boolean }).__LENGROWTH_DESKTOP__ ||
+        typeof (window as unknown as { pywebview?: unknown }).pywebview !== 'undefined'
+      )
+      if (isDesktopEnv) {
         const keychainToken = await new Promise<string | null>((resolve) => {
           const poll = (tries: number) => {
             const api = (window as unknown as { pywebview?: { api?: { get_keychain_refresh_token?: () => string | null | Promise<string | null> } } }).pywebview?.api

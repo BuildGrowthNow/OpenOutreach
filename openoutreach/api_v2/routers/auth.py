@@ -298,14 +298,17 @@ async def refresh_token(request: Request, response: Response):
     Accepts refresh token from HTTP-only cookie (web) or JSON body (desktop daemon).
     """
     # Prefer cookie (web); fall back to JSON body (desktop)
-    refresh_token = request.cookies.get("refresh_token")
+    refresh_token_cookie = request.cookies.get("refresh_token")
+    refresh_token_body = None
 
-    if not refresh_token:
+    if not refresh_token_cookie:
         try:
             body = await request.json()
-            refresh_token = body.get("refresh_token")
+            refresh_token_body = body.get("refresh_token")
         except Exception:
             pass
+
+    refresh_token = refresh_token_cookie or refresh_token_body
 
     if not refresh_token:
         raise HTTPException(
@@ -345,6 +348,20 @@ async def refresh_token(request: Request, response: Response):
 
         # Create new access token
         access_token = create_access_token(user._id, user.email)
+
+        # Desktop path: request came with a body because the WebView2 starts with
+        # an empty cookie jar on each restart. Set the refresh_token cookie so all
+        # subsequent in-app page navigations pass the Next.js middleware check.
+        if refresh_token_body:
+            response.set_cookie(
+                key="refresh_token",
+                value=refresh_token_body,
+                httponly=True,
+                secure=not settings.DEBUG,
+                samesite="lax",
+                max_age=settings.JWT_REFRESH_TOKEN_LIFETIME_DAYS * 24 * 60 * 60,
+                path="/",
+            )
 
         # Keep billing_status cookie in sync with current subscription state
         response.set_cookie(
