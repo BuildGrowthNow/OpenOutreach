@@ -52,12 +52,14 @@ export default function CampaignLeadsPage() {
       }
 
       // Fetch campaign leads with server-side pagination
+      const isHoldFilter = statusFilter === 'NEEDS_REVIEW'
       const leadsResponse = await getCampaignLeads(
         campaignId,
-        statusFilter !== 'all' ? statusFilter : undefined,
+        isHoldFilter ? undefined : (statusFilter !== 'all' ? statusFilter : undefined),
         debouncedSearch || undefined,
         currentPage,
         itemsPerPage,
+        isHoldFilter ? true : undefined,
       )
       if (leadsResponse.data) {
         setLeads(leadsResponse.data.data || [])
@@ -228,6 +230,12 @@ export default function CampaignLeadsPage() {
               <div className="text-2xl font-bold">{pipelineCounts.qualified ?? 0}</div>
               <div className="text-sm text-muted-foreground">Qualified Leads</div>
             </div>
+            {(pipelineCounts.needsReview ?? 0) > 0 && (
+              <div className="text-center">
+                <div className="text-2xl font-bold text-yellow-600">{pipelineCounts.needsReview}</div>
+                <div className="text-sm text-muted-foreground">Needs Review</div>
+              </div>
+            )}
             <div className="text-center">
               <div className="text-2xl font-bold">{pipelineCounts.completed ?? 0}</div>
               <div className="text-sm text-muted-foreground">Done</div>
@@ -264,6 +272,7 @@ export default function CampaignLeadsPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Statuses</SelectItem>
+                  <SelectItem value="NEEDS_REVIEW">Needs Review</SelectItem>
                   <SelectItem value="DISCOVERED">Discovered</SelectItem>
                   <SelectItem value="QUALIFIED">Qualified</SelectItem>
                   <SelectItem value="READY_TO_CONNECT">Ready to Connect</SelectItem>

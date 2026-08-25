@@ -1032,6 +1032,8 @@ class DealResponse(BaseModel):
     next_follow_up_at: Optional[str] = None
     unanswered_count: int = 0
     active_channel: str = "linkedin"
+    qualification_hold: bool = False
+    qualification_reason: Optional[str] = None
 
 
 @router.get("/{campaign_id}/leads")
@@ -1040,6 +1042,7 @@ async def get_campaign_leads(
     user_id: str = Depends(get_current_user),
     state: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
+    qualification_hold: Optional[bool] = Query(None),
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
 ):
@@ -1077,9 +1080,14 @@ async def get_campaign_leads(
         )
 
     # Build query
-    query = {"campaign_id": campaign_id}
+    query: Dict[str, Any] = {"campaign_id": campaign_id}
     if state:
         query["state"] = state
+    if qualification_hold is True:
+        query["state"] = "Discovered"
+        query["qualification_hold"] = True
+    elif qualification_hold is False:
+        query["qualification_hold"] = {"$ne": True}
 
     if search:
         # Join with leads to filter by name/identifier - fetch all deals first then filter
@@ -1208,6 +1216,8 @@ async def get_campaign_leads(
                     next_follow_up_at=nudge.get("next_follow_up_at"),
                     unanswered_count=nudge.get("unanswered_count", 0),
                     active_channel=deal.get("active_channel", "linkedin"),
+                    qualification_hold=bool(deal.get("qualification_hold", False)),
+                    qualification_reason=deal.get("qualification_reason"),
                 )
             })
 
@@ -1219,6 +1229,13 @@ async def get_campaign_leads(
     state_counts: Dict[str, int] = {}
     for row in collection.aggregate(pipeline_agg):
         state_counts[row["_id"]] = row["count"]
+
+    # Count "Needs Review" leads: DISCOVERED deals with qualification_hold=True
+    needs_review_count = collection.count_documents({
+        "campaign_id": campaign_id,
+        "state": "Discovered",
+        "qualification_hold": True,
+    })
 
     return {
         "total": total,
@@ -1234,8 +1251,98 @@ async def get_campaign_leads(
             "discovered": state_counts.get("Discovered", 0),
             "readyToConnect": state_counts.get("ReadyToConnect", 0),
             "noEmail": state_counts.get("No Email", 0),
+            "needsReview": needs_review_count,
         },
     }
+
+
+class ManualQualifyRequest(BaseModel):
+    decision: str  # "qualify" | "reject" | "retry"
+    reason: Optional[str] = None
+
+
+@router.post("/{campaign_id}/leads/{lead_id}/qualify-manual")
+async def manual_qualify_lead(
+    campaign_id: str,
+    lead_id: str,
+    body: ManualQualifyRequest,
+    user_id: str = Depends(get_current_user),
+):
+    """Manually qualify, reject, or retry AI qualification for a held lead.
+
+    decision:
+      "qualify" — promote DISCOVERED deal to QUALIFIED (skip AI, run enrichment)
+      "reject"  — mark deal FAILED, disqualify lead
+      "retry"   — clear qualification_hold so the daemon re-evaluates with AI
+    """
+    campaign = models.Campaign.get(campaign_id)
+    if not campaign or not campaign.has_access(user_id):
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    deals_col = get_mongodb_collection("deals")
+    leads_col = get_mongodb_collection("leads")
+    if deals_col is None or leads_col is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+
+    deal_doc = deals_col.find_one({
+        "lead_id": lead_id,
+        "campaign_id": campaign_id,
+    })
+    if not deal_doc:
+        raise HTTPException(status_code=404, detail="Deal not found")
+
+    reason = body.reason or "Manual override"
+    decision = body.decision
+
+    if decision == "qualify":
+        deals_col.update_one(
+            {"_id": deal_doc["_id"]},
+            {"$set": {
+                "state": "Qualified",
+                "qualification_hold": False,
+                "qualification_reason": reason,
+            }},
+        )
+        # Trigger email enrichment if finder key is configured
+        try:
+            from openoutreach.mongodb.models import Lead as LeadModel, SiteConfig
+            lead = LeadModel.get(lead_id)
+            site_config = SiteConfig.load(user_id=user_id)
+            if lead and site_config and site_config.finder_api_key:
+                result = lead.resolve_api_email()
+                if result is False:
+                    deals_col.update_one(
+                        {"_id": deal_doc["_id"]},
+                        {"$set": {"state": "No Email"}},
+                    )
+        except Exception:
+            pass
+        return {"success": True, "decision": "qualify", "message": "Lead manually qualified"}
+
+    elif decision == "reject":
+        deals_col.update_one(
+            {"_id": deal_doc["_id"]},
+            {"$set": {
+                "state": "Failed",
+                "outcome": "wrong_fit",
+                "qualification_hold": False,
+                "qualification_reason": reason,
+            }},
+        )
+        leads_col.update_one(
+            {"_id": lead_id},
+            {"$set": {"disqualified": True}},
+        )
+        return {"success": True, "decision": "reject", "message": "Lead rejected"}
+
+    elif decision == "retry":
+        deals_col.update_one(
+            {"_id": deal_doc["_id"]},
+            {"$unset": {"qualification_hold": "", "qualification_reason": ""}},
+        )
+        return {"success": True, "decision": "retry", "message": "Re-queued for AI qualification"}
+
+    raise HTTPException(status_code=400, detail=f"Unknown decision: {decision!r}")
 
 
 @router.get("/{campaign_id}/status")

@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { updateDealState } from '@/lib/api/dashboard'
+import { updateDealState, manualQualifyLead } from '@/lib/api/dashboard'
 import { useToast } from '@/components/ui/use-toast'
 import {
   Table,
@@ -160,6 +160,29 @@ export function CampaignList({ leads, campaignId, className, onLeadsUpdated }: C
       toast({
         title: 'Error',
         description: error instanceof Error ? error.message : 'Failed to disqualify lead',
+        variant: 'destructive',
+      })
+    } finally {
+      setUpdatingLeadId(null)
+    }
+  }
+
+  const handleRetryAI = async (leadId: string, decision: 'qualify' | 'reject' | 'retry', e: React.MouseEvent) => {
+    e.stopPropagation()
+    setUpdatingLeadId(leadId)
+    try {
+      const response = await manualQualifyLead(campaignId, leadId, decision)
+      if (response.data?.success) {
+        const labels = { qualify: 'Qualified', reject: 'Rejected', retry: 'Re-queued for AI' }
+        toast({ title: labels[decision], description: response.data.message })
+        onLeadsUpdated?.()
+      } else {
+        throw new Error(response.error || 'Action failed')
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Action failed',
         variant: 'destructive',
       })
     } finally {
@@ -377,7 +400,41 @@ export function CampaignList({ leads, campaignId, className, onLeadsUpdated }: C
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-2" onClick={e => e.stopPropagation()}>
-                      {lead.state === 'DISCOVERED' && (
+                      {lead.state === 'DISCOVERED' && lead.qualificationHold && (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={(e) => handleRetryAI(lead.id, 'qualify', e)}
+                            disabled={updatingLeadId === lead.id}
+                            className="border-emerald-500/20 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10"
+                            title="Manually qualify this lead"
+                          >
+                            {updatingLeadId === lead.id ? <Icons.RefreshCw className="h-4 w-4 animate-spin" /> : <><Icons.CheckCircle2 className="h-4 w-4 mr-1" />Qualify</>}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={(e) => handleRetryAI(lead.id, 'retry', e)}
+                            disabled={updatingLeadId === lead.id}
+                            className="border-blue-500/20 text-blue-600 dark:text-blue-400 hover:bg-blue-500/10"
+                            title="Re-queue for AI qualification"
+                          >
+                            {updatingLeadId === lead.id ? <Icons.RefreshCw className="h-4 w-4 animate-spin" /> : <><Icons.RefreshCw className="h-4 w-4 mr-1" />Retry AI</>}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={(e) => handleRetryAI(lead.id, 'reject', e)}
+                            disabled={updatingLeadId === lead.id}
+                            className="border-red-500/20 text-red-600 dark:text-red-400 hover:bg-red-500/10"
+                            title="Reject this lead"
+                          >
+                            {updatingLeadId === lead.id ? <Icons.RefreshCw className="h-4 w-4 animate-spin" /> : <><Icons.XCircle className="h-4 w-4 mr-1" />Reject</>}
+                          </Button>
+                        </>
+                      )}
+                      {lead.state === 'DISCOVERED' && !lead.qualificationHold && (
                         <Button
                           size="sm"
                           variant="outline"

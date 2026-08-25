@@ -361,12 +361,14 @@ export async function getCampaignLeads(
   search?: string,
   page?: number,
   limit?: number,
+  qualificationHold?: boolean,
 ): Promise<
   ApiResponse<{ data: Lead[]; pagination: Pagination; filters: LeadFilters; pipelineCounts: Record<string, number> }>
 > {
   const params: Record<string, string> = {};
   if (status) params.status = status;
   if (search) params.search = search;
+  if (qualificationHold !== undefined) params.qualification_hold = String(qualificationHold);
   const resolvedLimit = limit ?? 50;
   if (page && page > 1) params.offset = ((page - 1) * resolvedLimit).toString();
   if (limit) params.limit = limit.toString();
@@ -374,7 +376,7 @@ export async function getCampaignLeads(
   // API returns { total, limit, offset, results: [{lead, deal}] }
   type RawLeadDeal = {
     lead: { id: string; public_identifier: string; url: string; full_name?: string; company?: string; headline?: string; location?: string; disqualified?: boolean; created_at?: string };
-    deal: { id: string; lead_id: string; campaign_id: string; state: string; outcome?: string; reason?: string; creation_date?: string; last_outgoing_at?: string; next_follow_up_at?: string; unanswered_count?: number };
+    deal: { id: string; lead_id: string; campaign_id: string; state: string; outcome?: string; reason?: string; creation_date?: string; last_outgoing_at?: string; next_follow_up_at?: string; unanswered_count?: number; qualification_hold?: boolean; qualification_reason?: string };
   };
   type RawResponse = { total: number; limit: number; offset: number; results: RawLeadDeal[]; pipelineCounts?: Record<string, number> };
 
@@ -400,6 +402,8 @@ export async function getCampaignLeads(
       title: headline,
       company,
       disqualified: lead.disqualified || false,
+      qualificationHold: deal.qualification_hold || false,
+      qualificationReason: deal.qualification_reason || undefined,
       state: (normalizeState(deal.state) || 'DISCOVERED') as Lead["state"],
       outcome: normalizeOutcome(deal.outcome) as Lead["outcome"] | undefined,
       creationDate: deal.creation_date || lead.created_at || new Date().toISOString(),
@@ -1575,4 +1579,13 @@ export async function updateDealState(
   state: string
 ): Promise<ApiResponse<{ success: boolean; message: string }>> {
   return patch(`/api/leads/${leadId}/campaigns/${campaignId}/state`, { state });
+}
+
+export async function manualQualifyLead(
+  campaignId: string,
+  leadId: string,
+  decision: 'qualify' | 'reject' | 'retry',
+  reason?: string,
+): Promise<ApiResponse<{ success: boolean; decision: string; message: string }>> {
+  return post(`/api/campaigns/${campaignId}/leads/${leadId}/qualify-manual`, { decision, reason });
 }

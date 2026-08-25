@@ -122,15 +122,40 @@ def _too_soon_to_nudge(deal) -> bool:
     now = datetime.now(timezone.utc)
     deal_id = str(deal._id)
 
-    # Guard 0: LLM-requested timing - respect next_follow_up_at stamped after last send
+    # Guard 0: LLM-requested timing - respect next_follow_up_at stamped after last send.
+    # EXCEPTION: if the lead replied after our last send, bypass the window so we
+    # respond promptly instead of waiting for the scheduled slot.
     if deal.next_follow_up_at is not None:
         nfa = _aware(deal.next_follow_up_at)
         if nfa > now:
-            logger.debug(
-                "deal %s: next_follow_up_at in %.1fh - skip",
-                deal_id, (nfa - now).total_seconds() / 3600,
-            )
-            return True
+            # Cheap peek: is the latest DB message incoming and newer than last send?
+            msg_col = get_mongodb_collection("chat_messages")
+            has_unread_reply = False
+            if msg_col is not None:
+                latest = msg_col.find_one(
+                    {"deal_id": deal._id},
+                    sort=[("creation_date", -1)],
+                    projection={"is_outgoing": 1, "creation_date": 1},
+                )
+                if latest and not latest.get("is_outgoing", True):
+                    last_out = deal.last_outgoing_at
+                    if last_out is None:
+                        has_unread_reply = True
+                    else:
+                        last_out_aware = _aware(last_out)
+                        latest_date = _aware(latest.get("creation_date"))
+                        has_unread_reply = latest_date > last_out_aware
+            if has_unread_reply:
+                logger.debug(
+                    "deal %s: next_follow_up_at in %.1fh but lead replied — bypassing",
+                    deal_id, (nfa - now).total_seconds() / 3600,
+                )
+            else:
+                logger.debug(
+                    "deal %s: next_follow_up_at in %.1fh - skip",
+                    deal_id, (nfa - now).total_seconds() / 3600,
+                )
+                return True
 
     # Guard 1: persistent field - survives restarts, set before sync_conversation
     last_out = _aware(deal.last_outgoing_at) if deal.last_outgoing_at else None

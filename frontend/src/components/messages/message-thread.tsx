@@ -34,6 +34,9 @@ const INTENT_STYLES: Record<string, { label: string; cls: string }> = {
   referral:       { label: 'Referral',       cls: 'bg-purple-500/20 text-purple-400 border-purple-500/30'  },
   confused:       { label: 'Confused',       cls: 'bg-orange-500/20 text-orange-400 border-orange-500/30'  },
   unknown:        { label: 'Unknown',        cls: 'bg-slate-500/20  text-slate-400  border-slate-500/30'   },
+  // backward compat for old reply_intent values
+  objection:      { label: 'Objection',      cls: 'bg-amber-500/20  text-amber-400  border-amber-500/30'   },
+  not_now:        { label: 'Not now',        cls: 'bg-blue-500/20   text-blue-400   border-blue-500/30'    },
 }
 
 function IntentBadge({ intent }: { intent: string }) {

@@ -37,6 +37,26 @@ def sync_conversation(session, public_identifier: str) -> list[dict]:
     new_messages = _sync_from_api(session, public_identifier, deal)
     _update_deal_chat_summary(session, deal, new_messages)
 
+    # If a new incoming message arrived and next_follow_up_at is still far out,
+    # pull it forward to ~30 min so the follow-up agent responds promptly.
+    has_inbound_new = any(not m.is_outgoing for m in new_messages)
+    if has_inbound_new:
+        from datetime import datetime, timedelta, timezone as _tz
+        from openoutreach.mongodb.connection import get_mongodb_collection
+        now = datetime.now(_tz.utc)
+        immediate = now + timedelta(minutes=30)
+        nfa = deal.next_follow_up_at
+        if nfa is None or (nfa.replace(tzinfo=_tz.utc) if nfa.tzinfo is None else nfa) > immediate:
+            deals_col = get_mongodb_collection("deals")
+            if deals_col is not None:
+                deals_col.update_one(
+                    {"_id": deal._id},
+                    {"$set": {"next_follow_up_at": immediate}},
+                )
+                logger.debug(
+                    "sync: new reply for deal %s — next_follow_up_at pulled to ~30 min", deal._id
+                )
+
     return _read_from_db(deal)
 
 

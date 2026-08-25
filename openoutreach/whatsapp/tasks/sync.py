@@ -320,6 +320,24 @@ def handle_whatsapp_sync(task, wa_session, qualifiers):  # noqa: ARG001
             deal.save()
             logger.info("WA sync [%s]: deal %s → CONNECTED (reply received)", campaign, deal._id)
 
+        # When a reply arrives, pull next_follow_up_at forward to ~30 min so the
+        # follow-up agent responds promptly instead of waiting for the original window.
+        if has_inbound:
+            from datetime import timedelta
+            now = datetime.now(timezone.utc)
+            immediate_window = now + timedelta(minutes=30)
+            nfa = deal.next_follow_up_at
+            if nfa is None or nfa > immediate_window:
+                deal.next_follow_up_at = immediate_window
+                deals_col.update_one(
+                    {"_id": deal._id},
+                    {"$set": {"next_follow_up_at": immediate_window}},
+                )
+                logger.debug(
+                    "WA sync [%s]: deal %s reply received — follow-up rescheduled to ~30 min",
+                    campaign, deal._id,
+                )
+
         inbound_only = [m for m in new_messages if not m.is_outgoing]
         if inbound_only:
             wa_profile = wa_session.wa_profile
