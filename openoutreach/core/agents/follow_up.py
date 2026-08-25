@@ -47,9 +47,24 @@ class FollowUpDecision(BaseModel):
         default=None,
         description="Why the conversation ended. Required when action='mark_completed'.",
     )
-    follow_up_hours: float = Field(
-        description="Hours until next follow-up. Always required - you decide the pace.",
+    timing_class: Literal[
+        "immediate", "same_day", "next_day", "2_3_days", "5_7_days"
+    ] = Field(
+        description=(
+            "When to next check this conversation. "
+            "immediate=~3h, same_day=~8h, next_day=~24h, 2_3_days=~60h, 5_7_days=~144h. "
+            "Always required."
+        ),
     )
+
+    def to_hours(self) -> float:
+        return {
+            "immediate": 3.0,
+            "same_day": 8.0,
+            "next_day": 24.0,
+            "2_3_days": 60.0,
+            "5_7_days": 144.0,
+        }[self.timing_class]
 
     @model_validator(mode="after")
     def _check_required_fields(self):
@@ -237,7 +252,7 @@ def _render_system_prompt(session, deal, recent_messages: list, channel: str = "
     )
 
 
-def run_follow_up_agent(session, deal) -> FollowUpDecision:
+def run_follow_up_agent(session, deal, channel: str = "linkedin") -> FollowUpDecision:
     """Read conversation and return a structured follow-up decision.
 
     Sync chat first (which folds new messages into ``deal.chat_summary``),
@@ -256,7 +271,7 @@ def run_follow_up_agent(session, deal) -> FollowUpDecision:
     _log_chat_facts(public_id, deal)
 
     recent = _load_recent_messages(deal)
-    system_prompt = _render_system_prompt(session, deal, recent)
+    system_prompt = _render_system_prompt(session, deal, recent, channel=channel)
 
     agent = Agent(
         get_llm_model(user_id=session.user_id),
@@ -322,4 +337,4 @@ if __name__ == "__main__":
         logger.info("Message: %s", decision.message)
     if decision.outcome:
         logger.info("Outcome: %s", decision.outcome)
-    logger.info("Follow-up in: %sh", decision.follow_up_hours)
+    logger.info("Timing: %s (~%.0fh)", decision.timing_class, decision.to_hours())
