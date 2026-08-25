@@ -265,7 +265,8 @@ async def get_current_usage(
             })
 
         if wa_profiles_coll is not None:
-            whatsapp_accounts_used = wa_profiles_coll.count_documents({"user_id": user_id})
+            # Only count connected profiles - pending QR-scan profiles don't consume a slot
+            whatsapp_accounts_used = wa_profiles_coll.count_documents({"user_id": user_id, "status": "connected"})
 
         return {
             "linkedin_accounts_used": linkedin_accounts_used,

@@ -59,7 +59,8 @@ async def create_profile(
     user = User.get(user_id)
     if user:
         coll = get_mongodb_collection("whatsapp_profiles")
-        current_count = coll.count_documents({"user_id": user_id}) if coll is not None else 0
+        # Only connected profiles count against the limit; pending QR-scan ones don't
+        current_count = coll.count_documents({"user_id": user_id, "status": "connected"}) if coll is not None else 0
         if current_count >= user.whatsapp_account_limit:
             raise HTTPException(
                 status_code=403,
