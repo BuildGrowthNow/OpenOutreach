@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 class FollowUpDecision(BaseModel):
     """Structured output from the follow-up agent."""
 
-    action: Literal["send_message", "mark_completed", "wait"] = Field(
+    action: Literal["send_message", "mark_completed", "wait", "flag_human"] = Field(
         description="What to do next for this lead.",
     )
     message: str | None = Field(

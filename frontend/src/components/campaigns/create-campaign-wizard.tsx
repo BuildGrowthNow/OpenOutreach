@@ -12,6 +12,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2, ArrowRight, ArrowLeft, Sparkles, X, Plus } from 'lucide-react';
 import { apiClient } from '@/lib/apiClientV2';
+import { WA_MESSAGE_TEMPLATES } from '@/lib/campaign-templates';
 
 interface LinkedInProfile {
   id: string;
@@ -496,16 +497,29 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
                     )}
 
                     <div className="space-y-2">
-                      <Label className="text-sm">Initial Message Template</Label>
+                      <Label className="text-sm">Initial Message</Label>
+                      <div className="flex flex-wrap gap-1.5 pb-1">
+                        {WA_MESSAGE_TEMPLATES.map((t) => (
+                          <button
+                            key={t.id}
+                            type="button"
+                            title={t.description}
+                            onClick={() => setWaMessageTemplate(t.message)}
+                            className="text-xs px-2 py-0.5 rounded-full border border-zinc-300 dark:border-zinc-600 text-zinc-600 dark:text-zinc-300 hover:border-emerald-500 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors"
+                          >
+                            {t.label}
+                          </button>
+                        ))}
+                      </div>
                       <Textarea
                         value={waMessageTemplate}
                         onChange={(e) => setWaMessageTemplate(e.target.value)}
-                        placeholder="Hi {first_name}, I came across your profile and wanted to reach out about..."
-                        rows={4}
+                        placeholder="You run {company}, right?"
+                        rows={3}
                         className="resize-none text-sm"
                       />
                       <p className="text-xs text-muted-foreground">
-                        Sent as the first WhatsApp message to each lead
+                        Sent as Beat 1 to each lead. Supports <code className="font-mono">{'{first_name}'}</code> and <code className="font-mono">{'{company}'}</code>. Replace <code className="font-mono">[brackets]</code> before launching.
                       </p>
                     </div>
                   </>

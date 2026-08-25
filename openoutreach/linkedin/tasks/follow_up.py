@@ -498,6 +498,25 @@ def handle_follow_up(task, session, qualifiers):
             "[%s] follow_up completed for %s: outcome=%s", campaign, public_id, outcome
         )
 
+    elif decision.action == "flag_human":
+        deal.follow_up_cycled_at = datetime.now(timezone.utc)
+        deal.save(update_fields=["follow_up_cycled_at"])
+        try:
+            from openoutreach.mongodb.models_extended import Notification
+            Notification(
+                recipient_id=str(session.user_id) if hasattr(session, "user_id") else "",
+                notification_type="action_required",
+                title="Lead needs your attention",
+                message=(
+                    f"{public_id} sent something that needs a human response "
+                    f"in campaign \"{campaign}\". Check the conversation."
+                ),
+                data={"public_identifier": public_id, "campaign_id": str(campaign.pk)},
+            ).save()
+        except Exception as exc:
+            logger.debug("Could not create flag_human notification: %s", exc)
+        logger.info("[%s] follow_up flag_human for %s", campaign, public_id)
+
     elif decision.action == "wait":
         # Bump follow_up_cycled_at so the eligibility query cycles to a different deal next time.
         deal.follow_up_cycled_at = datetime.now(timezone.utc)

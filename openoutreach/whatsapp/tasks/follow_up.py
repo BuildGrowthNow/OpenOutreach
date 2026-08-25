@@ -312,6 +312,25 @@ def handle_whatsapp_follow_up(task, wa_session, qualifiers):  # noqa: ARG001
         deal.save()
         logger.info("WA follow_up [%s]: completed deal %s outcome=%s", campaign, deal._id, outcome)
 
+    elif decision.action == "flag_human":
+        deal.follow_up_cycled_at = datetime.now(timezone.utc)
+        deal.save(update_fields=["follow_up_cycled_at"])
+        try:
+            from openoutreach.mongodb.models_extended import Notification
+            Notification(
+                recipient_id=str(deal.user_id),
+                notification_type="action_required",
+                title="WhatsApp lead needs your attention",
+                message=(
+                    f"{lead.phone} sent something that needs a human response "
+                    f"in campaign \"{campaign}\". Check the conversation."
+                ),
+                data={"deal_id": str(deal._id), "phone": lead.phone, "campaign_id": str(campaign_id)},
+            ).save()
+        except Exception as exc:
+            logger.debug("Could not create flag_human notification: %s", exc)
+        logger.info("WA follow_up [%s]: flag_human for deal %s", campaign, deal._id)
+
     elif decision.action == "wait":
         deal.follow_up_cycled_at = datetime.now(timezone.utc)
         deal.save(update_fields=["follow_up_cycled_at"])
