@@ -19,7 +19,6 @@ import {
   type WhatsAppProfile,
 } from "@/lib/api/whatsapp";
 import { MessageCircle, Phone, Trash2, RefreshCw } from "lucide-react";
-import { LimitCheckWrapper } from "@/components/billing/limit-check-wrapper";
 
 const STATUS_LABELS: Record<string, string> = {
   connected: "Connected",
@@ -235,8 +234,8 @@ export function WhatsappConnectionTab() {
     try {
       const profile = await createWhatsAppProfile();
       setProfiles((prev) => [...prev, profile]);
-    } catch {
-      setError("Failed to create WhatsApp connection.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to create WhatsApp connection.");
     } finally {
       setAdding(false);
     }
@@ -260,21 +259,19 @@ export function WhatsappConnectionTab() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <LimitCheckWrapper limitType="whatsapp_accounts">
-            <Button onClick={handleAdd} disabled={adding} size="sm">
-              {adding ? (
-                <>
-                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                  Creating…
-                </>
-              ) : (
-                <>
-                  <Phone className="mr-2 h-4 w-4" />
-                  Connect new number
-                </>
-              )}
-            </Button>
-          </LimitCheckWrapper>
+          <Button onClick={handleAdd} disabled={adding} size="sm">
+            {adding ? (
+              <>
+                <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                Creating…
+              </>
+            ) : (
+              <>
+                <Phone className="mr-2 h-4 w-4" />
+                Connect new number
+              </>
+            )}
+          </Button>
         </CardContent>
       </Card>
 
