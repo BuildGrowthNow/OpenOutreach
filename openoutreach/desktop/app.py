@@ -291,6 +291,7 @@ class TrayApp:
         self._window: Optional[webview.Window] = None
         self._window_thread: Optional[threading.Thread] = None
         self._token_valid: Optional[bool] = None  # None = not yet checked
+        self._daemon_start_lock = threading.Lock()
 
     # ------------------------------------------------------------------
     # Icon helpers
@@ -561,80 +562,87 @@ class TrayApp:
         )
 
     def _start_daemon(self):
-        if self._is_running():
+        # Non-blocking acquire prevents double-start race when _on_loaded and
+        # confirm_auth() both fire within milliseconds of each other.
+        if not self._daemon_start_lock.acquire(blocking=False):
             return
-        if not self.auth.is_logged_in():
-            return
+        try:
+            if self._is_running():
+                return
+            if not self.auth.is_logged_in():
+                return
 
-        token = self.auth.get_token()
-        refresh_token = self.auth.get_refresh_token()
+            token = self.auth.get_token()
+            refresh_token = self.auth.get_refresh_token()
 
-        if not token:
-            return
+            if not token:
+                return
 
-        # Always resolve fresh profile_id so a credential delete+recreate doesn't
-        # leave a stale ID in the keychain causing 404s on every daemon start.
-        # _resolve_profile_id may refresh the token internally on 401 - re-read
-        # token afterwards so the daemon gets the latest one.
-        resolved = self._resolve_profile_id(token)
-        token = self.auth.get_token() or token  # pick up refreshed token if any
-        if resolved:
-            cached = self.auth.get_profile_id()
-            if resolved != cached:
-                logger.info("Profile ID changed (%s → %s), updating keychain", cached, resolved)
-                self.auth.login(token, resolved, refresh_token=refresh_token)
-            profile_id = resolved
-        else:
-            # API unreachable - fall back to keychain so we can still start offline
-            profile_id = self.auth.get_profile_id()
+            # Always resolve fresh profile_id so a credential delete+recreate doesn't
+            # leave a stale ID in the keychain causing 404s on every daemon start.
+            # _resolve_profile_id may refresh the token internally on 401 - re-read
+            # token afterwards so the daemon gets the latest one.
+            resolved = self._resolve_profile_id(token)
+            token = self.auth.get_token() or token  # pick up refreshed token if any
+            if resolved:
+                cached = self.auth.get_profile_id()
+                if resolved != cached:
+                    logger.info("Profile ID changed (%s → %s), updating keychain", cached, resolved)
+                    self.auth.login(token, resolved, refresh_token=refresh_token)
+                profile_id = resolved
+            else:
+                # API unreachable - fall back to keychain so we can still start offline
+                profile_id = self.auth.get_profile_id()
 
-        if not profile_id:
-            logger.error("No outreach profile found")
-            if self.icon:
-                self.icon.notify("No Profile Found", "Add a LinkedIn or WhatsApp profile in the dashboard first.")
-            return
-
-        def on_token_refresh(new_token: str):
-            self.auth.update_token(new_token)
-
-        def run_daemon():
-            self._loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(self._loop)
-
-            def on_started():
-                # Fires from inside the async start() after subscription check passes
-                self._update_menu()
-
-            self.daemon = RemoteDaemon(
-                api_url=self.config.api_url,
-                token=token,
-                linkedin_profile_id=profile_id,
-                refresh_token=refresh_token,
-                on_token_refresh=on_token_refresh,
-                on_started=on_started,
-            )
-            try:
-                self._loop.run_until_complete(self.daemon.start())
-            except KeyboardInterrupt:
-                pass
-            except Exception as e:
-                from openoutreach.core.daemon_remote import BrowserNotFoundError
-                logger.exception("Daemon error: %s", e)
-                msg = "No supported browser found." if isinstance(e, BrowserNotFoundError) else "Daemon error - check logs."
+            if not profile_id:
+                logger.error("No outreach profile found")
                 if self.icon:
-                    self.icon.notify("Daemon Error", msg)
-            finally:
-                self._loop.close()
-                self._loop = None
-                # Clear daemon reference so _is_running() returns False and any
-                # held browser/session resources are released for GC.
-                self.daemon = None
-                self.daemon_thread = None
-                # Update menu so tray shows "Stopped"
-                self._update_menu()
+                    self.icon.notify("No Profile Found", "Add a LinkedIn or WhatsApp profile in the dashboard first.")
+                return
 
-        self.daemon_thread = threading.Thread(target=run_daemon, daemon=True)
-        self.daemon_thread.start()
+            def on_token_refresh(new_token: str):
+                self.auth.update_token(new_token)
+
+            def run_daemon():
+                self._loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(self._loop)
+
+                def on_started():
+                    # Fires from inside the async start() after subscription check passes
+                    self._update_menu()
+
+                self.daemon = RemoteDaemon(
+                    api_url=self.config.api_url,
+                    token=token,
+                    linkedin_profile_id=profile_id,
+                    refresh_token=refresh_token,
+                    on_token_refresh=on_token_refresh,
+                    on_started=on_started,
+                )
+                try:
+                    self._loop.run_until_complete(self.daemon.start())
+                except KeyboardInterrupt:
+                    pass
+                except Exception as e:
+                    from openoutreach.core.daemon_remote import BrowserNotFoundError
+                    logger.exception("Daemon error: %s", e)
+                    msg = "No supported browser found." if isinstance(e, BrowserNotFoundError) else "Daemon error - check logs."
+                    if self.icon:
+                        self.icon.notify("Daemon Error", msg)
+                finally:
+                    self._loop.close()
+                    self._loop = None
+                    # Clear daemon reference so _is_running() returns False and any
+                    # held browser/session resources are released for GC.
+                    self.daemon = None
+                    self.daemon_thread = None
+                    # Update menu so tray shows "Stopped"
+                    self._update_menu()
+
+            self.daemon_thread = threading.Thread(target=run_daemon, daemon=True)
+            self.daemon_thread.start()
+        finally:
+            self._daemon_start_lock.release()
 
     def _try_refresh_token(self, refresh_token: str) -> Optional[str]:
         """Exchange a refresh token for a new access token. Returns new token or None."""

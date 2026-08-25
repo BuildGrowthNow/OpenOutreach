@@ -129,11 +129,17 @@ class RemoteDaemon:
                 if item is None:  # sentinel - shut down
                     break
                 fn, fut, loop = item
+                # sync_playwright() internally calls asyncio.set_event_loop(new_loop)
+                # and leaves it set; a browser-crash retry would find a "running" loop
+                # and raise "Playwright Sync API inside asyncio loop". Clear it first.
+                asyncio.set_event_loop(None)
                 try:
                     result = fn()
                     loop.call_soon_threadsafe(fut.set_result, result)
                 except Exception as exc:
                     loop.call_soon_threadsafe(fut.set_exception, exc)
+                finally:
+                    asyncio.set_event_loop(None)
 
         self._pw_thread = threading.Thread(target=_worker, daemon=True, name="pw-worker")
         self._pw_thread.start()
