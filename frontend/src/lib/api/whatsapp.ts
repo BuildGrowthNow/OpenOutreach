@@ -10,6 +10,7 @@ export interface WhatsAppProfile {
   status: "connected" | "disconnected" | "banned";
   lastSeen: string | null;
   createdAt: string;
+  qrDataUrl: string | null;
 }
 
 export async function listWhatsAppProfiles(): Promise<WhatsAppProfile[]> {
@@ -23,6 +24,11 @@ export async function createWhatsAppProfile(displayName?: string): Promise<Whats
   });
   if (!res.data) throw new Error(res.error ?? "Failed to create profile");
   return res.data;
+}
+
+export async function getWhatsAppProfile(profileId: string): Promise<WhatsAppProfile | null> {
+  const res = await apiClient.get<WhatsAppProfile>(`/whatsapp/profiles/${profileId}`);
+  return res.data ?? null;
 }
 
 export async function deleteWhatsAppProfile(profileId: string): Promise<void> {

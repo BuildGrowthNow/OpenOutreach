@@ -29,6 +29,9 @@ class WhatsAppProfileUpdate(BaseModel):
 
 
 def _serialize(profile: WhatsAppProfile) -> Dict[str, Any]:
+    qr_data_url = None
+    if profile.qr_png_b64 and profile.status == STATUS_DISCONNECTED:
+        qr_data_url = f"data:image/png;base64,{profile.qr_png_b64}"
     return {
         "id": profile._id,
         "userId": profile.user_id,
@@ -37,6 +40,7 @@ def _serialize(profile: WhatsAppProfile) -> Dict[str, Any]:
         "status": profile.status,
         "lastSeen": profile.last_seen.isoformat() if profile.last_seen else None,
         "createdAt": profile.created_at.isoformat() if profile.created_at else None,
+        "qrDataUrl": qr_data_url,
     }
 
 

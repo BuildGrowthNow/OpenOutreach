@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useAuthStore } from "@/lib/authStoreV2"; // getState() used directly — not a React hook
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,7 +14,7 @@ import {
   listWhatsAppProfiles,
   createWhatsAppProfile,
   deleteWhatsAppProfile,
-  getQrUrl,
+  getWhatsAppProfile,
   resetQr,
   type WhatsAppProfile,
 } from "@/lib/api/whatsapp";
@@ -40,9 +39,6 @@ function QrPoller({ profileId, onConnected }: { profileId: string; onConnected: 
   const [resetting, setResetting] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const deadlineRef = useRef(Date.now() + 120_000);
-  // Read token from Zustand state on each poll — avoids hook/closure timing
-  // issues where accessToken might be null on the first render cycle.
-  const getToken = () => useAuthStore.getState().accessToken;
 
   const stopPolling = () => {
     if (intervalRef.current) {
@@ -64,25 +60,19 @@ function QrPoller({ profileId, onConnected }: { profileId: string; onConnected: 
         return;
       }
       try {
-        const url = getQrUrl(profileId);
-        const token = getToken();
-        const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
-        const res = await fetch(`${url}?t=${Date.now()}`, { headers });
-        if (res.status === 202) {
-          deadlineRef.current = Math.max(deadlineRef.current, Date.now() + 30_000);
+        const profile = await getWhatsAppProfile(profileId);
+        if (!profile) return; // 404 or auth error — keep polling
+        if (profile.status === "connected") {
+          onConnected();
+          stopPolling();
           return;
         }
-        if (res.ok) {
-          const contentType = res.headers.get("content-type") ?? "";
-          if (contentType.includes("image")) {
-            const blob = await res.blob();
-            setQrSrc(URL.createObjectURL(blob));
-          } else {
-            onConnected();
-            stopPolling();
-          }
+        if (profile.qrDataUrl) {
+          setQrSrc(profile.qrDataUrl);
+        } else {
+          // QR not ready yet — extend deadline so we keep waiting
+          deadlineRef.current = Math.max(deadlineRef.current, Date.now() + 30_000);
         }
-        if (res.status === 404) stopPolling();
       } catch {
         // transient error - keep polling
       }
