@@ -198,6 +198,8 @@ async def list_leads(
                 "creationDate": created.isoformat() if hasattr(created, "isoformat") else (created or ""),
                 "updateDate": updated.isoformat() if hasattr(updated, "isoformat") else (updated or ""),
                 "disqualified": lead_data.get("disqualified", False),
+                "qualificationHold": bool(deal.get("qualification_hold", False)),
+                "qualificationReason": deal.get("qualification_reason"),
                 "phone": lead_data.get("phone"),
                 "activeChannel": deal.get("active_channel", "linkedin"),
                 "contactInfo": {

@@ -1253,8 +1253,19 @@ class Deal:
 
     @classmethod
     def find_unevaluated(cls, campaign_id: str) -> List["Deal"]:
-        """Find deals in DISCOVERED state for a campaign (not yet evaluated)."""
-        return cls.find_by_state_and_campaign(cls.DealState.DISCOVERED, campaign_id)
+        """Find deals in DISCOVERED state for a campaign (not yet evaluated).
+
+        Excludes deals where qualification_hold=True (ambiguous leads held for manual review).
+        """
+        from openoutreach.mongodb.connection import get_mongodb_collection
+        collection = get_mongodb_collection("deals")
+        if collection is None:
+            return []
+        return [cls.from_dict(d) for d in collection.find({
+            "state": cls.DealState.DISCOVERED,
+            "campaign_id": campaign_id,
+            "qualification_hold": {"$ne": True},
+        })]
 
     @classmethod
     def find_by_lead_id(cls, lead_id: str) -> List["Deal"]:

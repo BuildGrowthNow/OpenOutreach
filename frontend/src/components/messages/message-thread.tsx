@@ -23,10 +23,17 @@ function LinkedinIcon({ className }: { className?: string }) {
 }
 
 const INTENT_STYLES: Record<string, { label: string; cls: string }> = {
-  interested:   { label: 'Interested',    cls: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
-  objection:    { label: 'Objection',     cls: 'bg-amber-500/20  text-amber-400  border-amber-500/30'  },
-  wrong_person: { label: 'Wrong person',  cls: 'bg-zinc-500/20   text-zinc-400   border-zinc-500/30'   },
-  not_now:      { label: 'Not now',       cls: 'bg-blue-500/20   text-blue-400   border-blue-500/30'   },
+  intent:         { label: 'High intent',    cls: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
+  interested:     { label: 'Interested',     cls: 'bg-teal-500/20   text-teal-400   border-teal-500/30'    },
+  evaluating:     { label: 'Evaluating',     cls: 'bg-cyan-500/20   text-cyan-400   border-cyan-500/30'    },
+  curious:        { label: 'Curious',        cls: 'bg-sky-500/20    text-sky-400    border-sky-500/30'     },
+  objecting:      { label: 'Objection',      cls: 'bg-amber-500/20  text-amber-400  border-amber-500/30'   },
+  not_interested: { label: 'Not interested', cls: 'bg-red-500/20    text-red-400    border-red-500/30'     },
+  busy:           { label: 'Busy',           cls: 'bg-blue-500/20   text-blue-400   border-blue-500/30'    },
+  wrong_person:   { label: 'Wrong person',   cls: 'bg-zinc-500/20   text-zinc-400   border-zinc-500/30'    },
+  referral:       { label: 'Referral',       cls: 'bg-purple-500/20 text-purple-400 border-purple-500/30'  },
+  confused:       { label: 'Confused',       cls: 'bg-orange-500/20 text-orange-400 border-orange-500/30'  },
+  unknown:        { label: 'Unknown',        cls: 'bg-slate-500/20  text-slate-400  border-slate-500/30'   },
 }
 
 function IntentBadge({ intent }: { intent: string }) {

@@ -49,16 +49,34 @@ class FollowUpDecision(BaseModel):
     )
     conversation_stage: (
         Literal[
-            "opening", "discovery", "pain_detected", "solution_fit",
-            "cta_sent", "objection", "not_interested", "completed",
+            "opening",
+            "discovery",
+            "pain_detected",
+            "fit_validated",
+            "solution_interest",
+            "evaluation",
+            "objection",
+            "purchase_intent",
+            "referral",
+            "not_interested",
+            "completed",
         ]
         | None
     ) = Field(default=None, description="Current stage of the conversation.")
 
     lead_intent: (
         Literal[
-            "unknown", "curious", "interested", "evaluating",
-            "intent", "objecting", "not_interested",
+            "unknown",
+            "curious",
+            "interested",
+            "evaluating",
+            "intent",
+            "objecting",
+            "not_interested",
+            "busy",
+            "wrong_person",
+            "referral",
+            "confused",
         ]
         | None
     ) = Field(default=None, description="Lead's apparent intent.")
@@ -68,15 +86,24 @@ class FollowUpDecision(BaseModel):
     ] = Field(
         description=(
             "When to next check this conversation. "
-            "immediate=~3h, same_day=~8h, next_day=~24h, 2_3_days=~60h, 5_7_days=~144h. "
-            "Always required."
+            "immediate=~30min (lead actively replying), same_day=~4h, "
+            "next_day=~24h, 2_3_days=~60h, 5_7_days=~144h. Always required."
+        ),
+    )
+
+    explicit_follow_up_date: str | None = Field(
+        default=None,
+        description=(
+            "ISO date (YYYY-MM-DD) when the lead explicitly asked to be contacted "
+            "(e.g. 'ping me Tuesday', 'check back next month'). "
+            "When set, overrides timing_class for scheduling next_follow_up_at."
         ),
     )
 
     def to_hours(self) -> float:
         return {
-            "immediate": 3.0,
-            "same_day": 8.0,
+            "immediate": 0.5,
+            "same_day": 4.0,
             "next_day": 24.0,
             "2_3_days": 60.0,
             "5_7_days": 144.0,

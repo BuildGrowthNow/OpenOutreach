@@ -238,7 +238,7 @@ export function LeadTable({
                     )}
                   </TableCell>
                   <TableCell>
-                    <LeadStatusBadge state={lead.state} outcome={lead.outcome} />
+                    <LeadStatusBadge state={lead.state} outcome={lead.outcome} qualificationHold={lead.qualificationHold} qualificationReason={lead.qualificationReason} />
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-col">

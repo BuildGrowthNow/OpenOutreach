@@ -10,6 +10,8 @@ interface LeadStatusBadgeProps {
   state: DealState
   outcome?: DealOutcome
   connectAttempts?: number
+  qualificationHold?: boolean
+  qualificationReason?: string
   className?: string
 }
 
@@ -78,33 +80,41 @@ const defaultStateConfig = {
 }
 
 const outcomeConfig: Record<DealOutcome, { label: string; color: string }> = {
+  converted: {
+    label: 'Converted',
+    color: 'text-emerald-600'
+  },
   not_interested: {
     label: 'Not Interested',
     color: 'text-amber-600'
   },
-  interested: {
-    label: 'Interested',
-    color: 'text-emerald-600'
-  },
-  scheduled: {
-    label: 'Scheduled',
-    color: 'text-blue-600'
-  },
-  wrong_person: {
-    label: 'Wrong Person',
+  wrong_fit: {
+    label: 'Wrong Fit',
     color: 'text-red-600'
   },
-  no_response: {
-    label: 'No Response',
-    color: 'text-gray-600'
+  no_budget: {
+    label: 'No Budget',
+    color: 'text-orange-600'
   },
-  other: {
-    label: 'Other',
+  has_solution: {
+    label: 'Has Solution',
     color: 'text-slate-600'
+  },
+  bad_timing: {
+    label: 'Bad Timing',
+    color: 'text-blue-600'
+  },
+  unresponsive: {
+    label: 'Unresponsive',
+    color: 'text-gray-500'
+  },
+  unknown: {
+    label: 'Unknown',
+    color: 'text-gray-400'
   }
 }
 
-export function LeadStatusBadge({ state, outcome, connectAttempts, className }: LeadStatusBadgeProps) {
+export function LeadStatusBadge({ state, outcome, connectAttempts, qualificationHold, qualificationReason, className }: LeadStatusBadgeProps) {
   // Normalize state value from backend format to frontend format
   const normalizedState = normalizeState(state as string)
   const stateInfo = stateConfig[normalizedState] || defaultStateConfig
@@ -112,6 +122,8 @@ export function LeadStatusBadge({ state, outcome, connectAttempts, className }: 
 
   // Show retry attempts for QUALIFIED leads that are being retried
   const showRetry = normalizedState === 'QUALIFIED' && connectAttempts && connectAttempts > 0;
+  // Show "Needs Review" for DISCOVERED leads held by AI qualification
+  const showHold = normalizedState === 'DISCOVERED' && qualificationHold === true;
 
   // NO_EMAIL state needs explanation
   if (normalizedState === 'NO_EMAIL') {
@@ -141,6 +153,25 @@ export function LeadStatusBadge({ state, outcome, connectAttempts, className }: 
       <Badge variant={stateInfo.variant} className={cn('w-fit text-xs', stateInfo.color)}>
         {stateInfo.label}
       </Badge>
+      {showHold && (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Badge variant="outline" className="w-fit text-xs gap-1 text-yellow-600 border-yellow-600">
+                <AlertCircle className="h-3 w-3" />
+                Needs Review
+              </Badge>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="max-w-xs">
+              <p className="text-sm">
+                {qualificationReason
+                  ? `AI held for review: ${qualificationReason}`
+                  : 'AI could not confidently qualify or reject this lead. Manual review required.'}
+              </p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )}
       {showRetry && (
         <TooltipProvider>
           <Tooltip>

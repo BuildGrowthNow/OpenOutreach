@@ -451,7 +451,14 @@ def handle_follow_up(task, session, qualifiers):
         now = datetime.now(timezone.utc)
         deal.last_outgoing_at = now
         deal.follow_up_cycled_at = now
-        deal.next_follow_up_at = now + timedelta(hours=decision.to_hours())
+        if decision.explicit_follow_up_date:
+            try:
+                target = datetime.strptime(decision.explicit_follow_up_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+                deal.next_follow_up_at = target
+            except ValueError:
+                deal.next_follow_up_at = now + timedelta(hours=decision.to_hours())
+        else:
+            deal.next_follow_up_at = now + timedelta(hours=decision.to_hours())
         deal.save(update_fields=["last_outgoing_at", "follow_up_cycled_at", "next_follow_up_at"])
         _last_send_times[str(deal._id)] = now
 

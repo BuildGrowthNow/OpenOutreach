@@ -375,7 +375,7 @@ const LeadDetailsPage = () => {
                   <div className="grid grid-cols-2 gap-6">
                     <div>
                       <div className="text-sm text-muted-foreground mb-2">Current State</div>
-                      <LeadStatusBadge state={lead.state} outcome={lead.outcome} />
+                      <LeadStatusBadge state={lead.state} outcome={lead.outcome} qualificationHold={lead.qualificationHold} qualificationReason={lead.qualificationReason} />
                     </div>
                     <div>
                       <div className="text-sm text-muted-foreground mb-2">Deal Information</div>

@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Protocol, runtime_checkable
+from typing import Literal, Protocol, runtime_checkable
 
 import jinja2
 import numpy as np
@@ -43,10 +43,14 @@ def format_prediction(prob: float, entropy: float, std: float, n_obs: int) -> st
 class QualificationDecision(BaseModel):
     """Structured LLM output for lead qualification."""
 
-    qualified: bool = Field(
-        description="True if the profile is a good prospect, False otherwise"
+    decision: Literal["qualify", "hold", "reject"] = Field(
+        description=(
+            "qualify = clear ICP fit, proceed to outreach. "
+            "hold = ambiguous (insufficient profile info, borderline fit) - needs review. "
+            "reject = clear mismatch with ICP or hard company-size filter."
+        )
     )
-    reason: str = Field(description="Brief explanation for the decision")
+    reason: str = Field(description="Brief explanation in 1-3 sentences")
 
 
 def qualify_with_llm(
@@ -56,10 +60,10 @@ def qualify_with_llm(
     icp_titles: list[str] | None = None,
     target_company_size: str | None = None,
     user_id: str | None = None,
-) -> tuple[int, str]:
-    """Call LLM to qualify a profile. Returns (label, reason).
+) -> tuple[str, str]:
+    """Call LLM to qualify a profile. Returns (decision, reason).
 
-    label: 1 = accept, 0 = reject.
+    decision: "qualify" | "hold" | "reject"
     """
     from pydantic_ai import Agent
 
@@ -83,8 +87,7 @@ def qualify_with_llm(
     )
     decision = run_agent_sync(agent.run(prompt)).output
 
-    label = 1 if decision.qualified else 0
-    return (label, decision.reason)
+    return (decision.decision, decision.reason)
 
 
 # ---------------------------------------------------------------------------

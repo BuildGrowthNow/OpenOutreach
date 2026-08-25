@@ -44,7 +44,11 @@ _WA_STALE_CONVERSATION_DAYS = 30
 
 
 def _next_wa_followup_deal(campaign_id: str, deals_col):
-    """Find the next CONNECTED WA deal that is past its nudge cooldown.
+    """Find the next WA deal (CONNECTED or PENDING with first message sent) past its nudge cooldown.
+
+    CONNECTED deals: lead replied - respond or continue conversation.
+    PENDING deals where last_outgoing_at is set: first message sent, no reply yet -
+      apply nudge sequence (new angle, yes/no, close-loop) before giving up.
 
     Mirrors LinkedIn's _next_followup_deal + _too_soon_to_nudge logic:
     - Skip if last_outgoing_at is within (nudge_count * _WA_MIN_DAYS_PER_NUDGE) days
@@ -59,9 +63,13 @@ def _next_wa_followup_deal(campaign_id: str, deals_col):
     deal_docs = list(deals_col.find(
         {
             "campaign_id": campaign_id,
-            "state": Deal.DealState.CONNECTED,
             "active_channel": "whatsapp",
             "outcome": {"$in": ["", None]},
+            "$or": [
+                {"state": Deal.DealState.CONNECTED},
+                # PENDING with first message already sent (last_outgoing_at set)
+                {"state": Deal.DealState.PENDING, "last_outgoing_at": {"$ne": None}},
+            ],
         },
         sort=[("last_outgoing_at", 1), ("follow_up_cycled_at", 1)],
         limit=50,
@@ -271,7 +279,14 @@ def handle_whatsapp_follow_up(task, wa_session, qualifiers):  # noqa: ARG001
         now = datetime.now(timezone.utc)
         deal.last_outgoing_at = now
         deal.follow_up_cycled_at = now
-        deal.next_follow_up_at = now + timedelta(hours=decision.to_hours())
+        if decision.explicit_follow_up_date:
+            try:
+                target = datetime.strptime(decision.explicit_follow_up_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+                deal.next_follow_up_at = target
+            except ValueError:
+                deal.next_follow_up_at = now + timedelta(hours=decision.to_hours())
+        else:
+            deal.next_follow_up_at = now + timedelta(hours=decision.to_hours())
         deal.save(update_fields=["last_outgoing_at", "follow_up_cycled_at", "next_follow_up_at"])
 
         success = wa_session.send_message(lead.phone, message)

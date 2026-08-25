@@ -196,12 +196,14 @@ export type DealState =
 
 // Deal outcome variants
 export type DealOutcome =
+  | "converted"
   | "not_interested"
-  | "interested"
-  | "scheduled"
-  | "wrong_person"
-  | "no_response"
-  | "other";
+  | "wrong_fit"
+  | "no_budget"
+  | "has_solution"
+  | "bad_timing"
+  | "unresponsive"
+  | "unknown";
 
 // API response types
 export interface Pagination {
@@ -264,6 +266,8 @@ export interface Lead {
   campaignId?: string;
   campaignName?: string;
   disqualified?: boolean;
+  qualificationHold?: boolean;
+  qualificationReason?: string;
   connectAttempts?: number;
   profile?: {
     firstName?: string;

@@ -152,13 +152,13 @@ def run_qualification(session, qualifier: BayesianQualifier) -> str | None:
             lead_id,
             public_id,
             embedding,
-            0,
+            "reject",
             "no profile text available",
         )
         return public_id
 
     campaign = session.campaign
-    label, reason = qualify_with_llm(
+    decision, reason = qualify_with_llm(
         profile_text,
         product_pitch=campaign.product_pitch,
         campaign_objective=campaign.campaign_objective,
@@ -167,9 +167,35 @@ def run_qualification(session, qualifier: BayesianQualifier) -> str | None:
         user_id=session.user_id,
     )
     _save_qualification_result(
-        session, qualifier, lead_id, public_id, embedding, label, reason
+        session, qualifier, lead_id, public_id, embedding, decision, reason
     )
     return public_id
+
+
+def _mark_qualification_hold(session, public_id: str, reason: str) -> None:
+    """Mark the DISCOVERED deal for this lead as qualification_hold=True.
+
+    This excludes the lead from the re-qualification queue so the daemon
+    doesn't immediately retry it. The deal stays DISCOVERED and is visible
+    in the UI as needing manual review.
+    """
+    from openoutreach.mongodb.connection import get_mongodb_collection
+    from openoutreach.mongodb.models import Lead
+
+    lead = Lead.find_by_public_identifier(public_id)
+    if not lead:
+        return
+    campaign_id = session.campaign.pk if hasattr(session.campaign, "pk") else str(session.campaign)
+    deals_col = get_mongodb_collection("deals")
+    if deals_col is None:
+        return
+    deals_col.update_one(
+        {
+            "lead_id": str(lead._id),
+            "campaign_id": campaign_id,
+        },
+        {"$set": {"qualification_hold": True, "qualification_reason": reason}},
+    )
 
 
 def _save_qualification_result(
@@ -178,17 +204,21 @@ def _save_qualification_result(
     lead_id: str,
     public_id: str,
     embedding: np.ndarray,
-    label: int,
+    label: str,
     reason: str,
 ):
-    # LLM rejections are tracked as FAILED Deals with "Disqualified" closing reason
-    # (campaign-scoped), not as Lead.disqualified (permanent account-level exclusion).
+    """Handle 3-way qualification decision: qualify / hold / reject.
+
+    qualify \u2192 promote to QUALIFIED, run email enrichment, train GP positive.
+    hold    \u2192 mark deal as qualification_hold=True (stays DISCOVERED, excluded
+              from re-qualification queue). Does NOT train the GP.
+    reject  \u2192 create disqualified deal, train GP negative.
+    """
     from openoutreach.core.db.deals import create_disqualified_deal
     from openoutreach.linkedin.db.leads import promote_lead_to_deal
 
-    qualifier.update(embedding, label)
-
-    if label == 1:
+    if label == "qualify":
+        qualifier.update(embedding, 1)
         try:
             deal = promote_lead_to_deal(session, public_id, reason=reason)
         except ValueError as e:
@@ -219,7 +249,21 @@ def _save_qualification_result(
                 DealState.NO_EMAIL.value,
                 reason="No email found by finder",
             )
-    else:
+
+    elif label == "hold":
+        # Ambiguous lead - stay DISCOVERED, mark held to exclude from re-qualification.
+        # Does not train the GP (insufficient signal).
+        _mark_qualification_hold(session, public_id, reason)
+        logger.info(
+            "%s %s: %s",
+            public_id,
+            colored("HOLD", "yellow", attrs=["bold"]),
+            reason,
+        )
+        _log_qualification_action(session, lead_id, public_id, False, f"[hold] {reason}")
+
+    else:  # reject
+        qualifier.update(embedding, 0)
         create_disqualified_deal(session, public_id, reason=reason)
         _log_qualification_action(session, lead_id, public_id, False, reason)
 
