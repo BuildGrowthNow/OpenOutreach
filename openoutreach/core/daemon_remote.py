@@ -147,6 +147,10 @@ class RemoteDaemon:
     def _start_wa_pw_thread(self) -> None:
         """Start the dedicated Playwright thread for WhatsApp sessions."""
         def _worker():
+            # Clear any inherited asyncio event loop so sync_playwright()'s
+            # is_running() check doesn't falsely detect the main thread's running
+            # loop (Windows frozen exes can inherit it on non-main threads).
+            asyncio.set_event_loop(None)
             while True:
                 item = self._wa_pw_queue.get()
                 if item is None:

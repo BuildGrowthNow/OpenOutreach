@@ -55,7 +55,19 @@ def start_whatsapp_session(wa_session: "WASession") -> None:
     pw = sync_playwright().start()
     wa_session.playwright = pw
 
-    browser = pw.chromium.launch(headless=True, args=["--no-sandbox", "--disable-setuid-sandbox"])
+    # Prefer the user's installed Chrome/Edge so the frozen desktop exe doesn't
+    # need Playwright's bundled chromium_headless_shell (not included in the build).
+    try:
+        from openoutreach.core.browser_detect import get_preferred_browser
+        _detected = get_preferred_browser()
+        _channel = _detected.channel if _detected else None
+    except Exception:
+        _channel = None
+
+    if _channel:
+        browser = pw.chromium.launch(channel=_channel, headless=True, args=["--no-sandbox", "--disable-setuid-sandbox"])
+    else:
+        browser = pw.chromium.launch(headless=True, args=["--no-sandbox", "--disable-setuid-sandbox"])
     wa_session.browser = browser
 
     stored: Any = profile.session_data
