@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from openoutreach.mongodb.connection import get_mongodb_collection
 
@@ -74,6 +74,14 @@ def _next_wa_followup_deal(campaign_id: str, deals_col):
         last_out = deal_doc.get("last_outgoing_at")
         if last_out and last_out.tzinfo is None:
             last_out = last_out.replace(tzinfo=timezone.utc)
+
+        # Respect LLM-requested timing
+        nfa = deal_doc.get("next_follow_up_at")
+        if nfa is not None:
+            if nfa.tzinfo is None:
+                nfa = nfa.replace(tzinfo=timezone.utc)
+            if nfa > now:
+                continue
 
         if messages_col is None:
             if last_out and (now - last_out).days < _WA_MIN_DAYS_PER_NUDGE:
@@ -263,7 +271,8 @@ def handle_whatsapp_follow_up(task, wa_session, qualifiers):  # noqa: ARG001
         now = datetime.now(timezone.utc)
         deal.last_outgoing_at = now
         deal.follow_up_cycled_at = now
-        deal.save(update_fields=["last_outgoing_at", "follow_up_cycled_at"])
+        deal.next_follow_up_at = now + timedelta(hours=decision.to_hours())
+        deal.save(update_fields=["last_outgoing_at", "follow_up_cycled_at", "next_follow_up_at"])
 
         success = wa_session.send_message(lead.phone, message)
         if not success:
@@ -279,7 +288,8 @@ def handle_whatsapp_follow_up(task, wa_session, qualifiers):  # noqa: ARG001
                 )
                 return
             deal.last_outgoing_at = None
-            deal.save(update_fields=["last_outgoing_at"])
+            deal.next_follow_up_at = None
+            deal.save(update_fields=["last_outgoing_at", "next_follow_up_at"])
             return
 
         ChatMessage(

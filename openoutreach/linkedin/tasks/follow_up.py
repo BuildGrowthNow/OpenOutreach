@@ -122,6 +122,16 @@ def _too_soon_to_nudge(deal) -> bool:
     now = datetime.now(timezone.utc)
     deal_id = str(deal._id)
 
+    # Guard 0: LLM-requested timing - respect next_follow_up_at stamped after last send
+    if deal.next_follow_up_at is not None:
+        nfa = _aware(deal.next_follow_up_at)
+        if nfa > now:
+            logger.debug(
+                "deal %s: next_follow_up_at in %.1fh - skip",
+                deal_id, (nfa - now).total_seconds() / 3600,
+            )
+            return True
+
     # Guard 1: persistent field - survives restarts, set before sync_conversation
     last_out = _aware(deal.last_outgoing_at) if deal.last_outgoing_at else None
     if last_out is not None and last_out > datetime.min.replace(tzinfo=timezone.utc):
@@ -375,11 +385,7 @@ def handle_follow_up(task, session, qualifiers):
             return
 
     public_id = lead.public_identifier
-    logger.info(
-        "[%s] follow_up %s",
-        campaign,
-        public_id,
-    )
+    logger.info("[%s] follow_up %s", campaign, public_id)
 
     materialize_profile_summary_if_missing(deal, session)
 
@@ -445,7 +451,8 @@ def handle_follow_up(task, session, qualifiers):
         now = datetime.now(timezone.utc)
         deal.last_outgoing_at = now
         deal.follow_up_cycled_at = now
-        deal.save(update_fields=["last_outgoing_at", "follow_up_cycled_at"])
+        deal.next_follow_up_at = now + timedelta(hours=decision.to_hours())
+        deal.save(update_fields=["last_outgoing_at", "follow_up_cycled_at", "next_follow_up_at"])
         _last_send_times[str(deal._id)] = now
 
         sent = send_raw_message(session, profile, message)
@@ -456,7 +463,8 @@ def handle_follow_up(task, session, qualifiers):
             )
             # Clear pre-stamp so the next cycle retries instead of waiting MIN_DAYS
             deal.last_outgoing_at = None
-            deal.save(update_fields=["last_outgoing_at"])
+            deal.next_follow_up_at = None
+            deal.save(update_fields=["last_outgoing_at", "next_follow_up_at"])
             _last_send_times.pop(str(deal._id), None)
             return
         # Record action with smart rate limiter

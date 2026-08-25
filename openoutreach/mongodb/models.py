@@ -1069,6 +1069,7 @@ class Deal:
         creation_date: Optional[datetime] = None,
         last_outgoing_at: Optional[datetime] = None,
         follow_up_cycled_at: Optional[datetime] = None,
+        next_follow_up_at: Optional[datetime] = None,
         active_channel: str = "linkedin",
     ):
         self._id = _id or str(uuid4())
@@ -1087,6 +1088,7 @@ class Deal:
         self.creation_date = creation_date or datetime.now(tz.utc)
         self.last_outgoing_at = last_outgoing_at
         self.follow_up_cycled_at = follow_up_cycled_at
+        self.next_follow_up_at = next_follow_up_at
         self.active_channel = active_channel
         self._lead: Optional["Lead"] = None
         self.campaign: Optional["Campaign"] = None
@@ -1141,6 +1143,8 @@ class Deal:
             data["last_outgoing_at"] = self.last_outgoing_at
         if self.follow_up_cycled_at:
             data["follow_up_cycled_at"] = self.follow_up_cycled_at
+        if self.next_follow_up_at:
+            data["next_follow_up_at"] = self.next_follow_up_at
         data["active_channel"] = self.active_channel
         return data
 
@@ -1164,6 +1168,7 @@ class Deal:
             creation_date=data.get("creation_date"),
             last_outgoing_at=data.get("last_outgoing_at"),
             follow_up_cycled_at=data.get("follow_up_cycled_at"),
+            next_follow_up_at=data.get("next_follow_up_at"),
             active_channel=data.get("active_channel", "linkedin"),
         )
 

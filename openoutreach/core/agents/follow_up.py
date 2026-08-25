@@ -47,6 +47,22 @@ class FollowUpDecision(BaseModel):
         default=None,
         description="Why the conversation ended. Required when action='mark_completed'.",
     )
+    conversation_stage: (
+        Literal[
+            "opening", "discovery", "pain_detected", "solution_fit",
+            "cta_sent", "objection", "not_interested", "completed",
+        ]
+        | None
+    ) = Field(default=None, description="Current stage of the conversation.")
+
+    lead_intent: (
+        Literal[
+            "unknown", "curious", "interested", "evaluating",
+            "intent", "objecting", "not_interested",
+        ]
+        | None
+    ) = Field(default=None, description="Lead's apparent intent.")
+
     timing_class: Literal[
         "immediate", "same_day", "next_day", "2_3_days", "5_7_days"
     ] = Field(
@@ -284,7 +300,11 @@ def run_follow_up_agent(session, deal, channel: str = "linkedin") -> FollowUpDec
             f"LLM returned unparseable response for follow-up of {public_id}"
         )
 
-    logger.info("follow_up agent for %s: %s", public_id, decision.action)
+    logger.info(
+        "follow_up agent for %s: action=%s stage=%s intent=%s timing=%s",
+        public_id, decision.action, decision.conversation_stage,
+        decision.lead_intent, decision.timing_class,
+    )
     return decision
 
 
