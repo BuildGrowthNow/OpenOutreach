@@ -433,5 +433,30 @@ def create_leads_from_wa_links(
         fire_scrape_zero_results(campaign_id, user_id, "wa_groups", query)
         return 0
 
+    # Skip phones already in DB — saves detail visits + ICP tokens on re-runs
+    already_known: frozenset = frozenset()
+    try:
+        from openoutreach.mongodb.connection import get_mongodb_collection
+        leads_col = get_mongodb_collection("leads")
+        if leads_col is not None:
+            already_known = frozenset(
+                d["phone"] for d in leads_col.find(
+                    {"user_id": user_id, "phone": {"$ne": None}},
+                    {"phone": 1},
+                ) if d.get("phone")
+            )
+    except Exception as exc:
+        logger.warning("wa_groups: dedup pre-fetch failed: %s", exc)
+
+    if already_known:
+        before = len(all_listings)
+        all_listings = [
+            lst for lst in all_listings
+            if not lst.phone or lst.phone not in already_known
+        ]
+        skipped = before - len(all_listings)
+        if skipped:
+            logger.info("wa_groups: dedup removed %d already-known phones", skipped)
+
     all_listings = _apply_icp_filter(all_listings, campaign_id, user_id, label="wa_groups")
     return upsert_listings_as_leads(all_listings, campaign_id, user_id)

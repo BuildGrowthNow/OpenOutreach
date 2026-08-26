@@ -337,6 +337,11 @@ _YP_BASES = {
     "CA": ("https://www.yellowpages.ca", "search?what={q}&where=Canada"),
     "AU": ("https://www.yellowpages.com.au", "search?name={q}"),
     "GB": ("https://www.yell.com", "find/{q}/in/uk"),
+    "DE": ("https://www.gelbeseiten.de", "suche?was={q}&wo=bundesweit"),
+    "FR": ("https://www.pagesjaunes.fr", "pros/{q}"),
+    "ES": ("https://www.paginasamarillas.es", "buscar/{q}"),
+    "NL": ("https://www.detelefoongids.nl", "bedrijven/{q}"),
+    "PT": ("https://www.pai.pt", "pesquisa/{q}"),
 }
 
 
@@ -523,30 +528,50 @@ _BACKEND_FN = {
 
 
 def _run_backend_in_isolation(
-    backend_name: str, query: str, country_code: str
-) -> List[BusinessListing]:
-    """Launch a dedicated browser for one backend; safe to call from a thread."""
+    backend_name: str,
+    query: str,
+    country_code: str,
+    session_state: Optional[dict] = None,
+) -> tuple:
+    """Launch a dedicated browser for one backend; safe to call from a thread.
+
+    Returns (listings, new_session_state). new_session_state is non-None only for
+    google_maps — callers should persist it back to Campaign.maps_session_state.
+    """
     from playwright.sync_api import sync_playwright
     from playwright_stealth import Stealth
 
+    captured_state = None
+
     def _attempt() -> List[BusinessListing]:
+        nonlocal captured_state
         with sync_playwright() as pw:
             browser = pw.chromium.launch(headless=True)
             try:
-                context = browser.new_context(
-                    user_agent=_random_user_agent(),
-                    locale="en-US",
-                    viewport={"width": 1280, "height": 800},
-                )
+                ctx_kwargs: dict = {
+                    "user_agent": _random_user_agent(),
+                    "locale": "en-US",
+                    "viewport": {"width": 1280, "height": 800},
+                }
+                if backend_name == "google_maps" and session_state:
+                    ctx_kwargs["storage_state"] = session_state
+                context = browser.new_context(**ctx_kwargs)
                 Stealth().apply_stealth_sync(context)
                 page = context.new_page()
                 _apply_resource_block(page)
                 page.set_extra_http_headers({"Accept-Language": "en-US,en;q=0.9"})
-                return _BACKEND_FN[backend_name](page, query, country_code)
+                result = _BACKEND_FN[backend_name](page, query, country_code)
+                if backend_name == "google_maps":
+                    try:
+                        captured_state = context.storage_state()
+                    except Exception:
+                        pass
+                return result
             finally:
                 browser.close()
 
-    return _scrape_retry(_attempt, max_attempts=2, base_delay=3.0, label=f"maps:{backend_name}")
+    listings = _scrape_retry(_attempt, max_attempts=2, base_delay=3.0, label=f"maps:{backend_name}")
+    return listings, captured_state
 
 
 def create_leads_from_maps(
@@ -571,19 +596,51 @@ def create_leads_from_maps(
         logger.warning("maps_scraper: no valid backends in %s", backends)
         return 0
 
+    # Load persisted Google Maps session cookies to reduce CAPTCHA frequency
+    google_session_state: Optional[dict] = None
+    if "google_maps" in active_backends:
+        try:
+            from openoutreach.mongodb.connection import get_mongodb_collection
+            campaigns_col = get_mongodb_collection("campaigns")
+            if campaigns_col is not None:
+                doc = campaigns_col.find_one({"_id": campaign_id}, {"maps_session_state": 1})
+                if doc and doc.get("maps_session_state"):
+                    google_session_state = doc["maps_session_state"]
+                    logger.debug("maps_scraper: loaded persisted session state for google_maps")
+        except Exception as exc:
+            logger.debug("maps_scraper: failed to load session state: %s", exc)
+
     all_listings: List[BusinessListing] = []
 
     with ThreadPoolExecutor(max_workers=len(active_backends)) as pool:
         futures = {
-            pool.submit(_run_backend_in_isolation, backend, query, country_code): backend
+            pool.submit(
+                _run_backend_in_isolation,
+                backend,
+                query,
+                country_code,
+                google_session_state if backend == "google_maps" else None,
+            ): backend
             for backend in active_backends
         }
         for future in as_completed(futures):
             backend = futures[future]
             try:
-                results = future.result()
+                results, new_state = future.result()
                 logger.info("maps_scraper: %s returned %d listings", backend, len(results))
                 all_listings.extend(results)
+                if backend == "google_maps" and new_state:
+                    try:
+                        from openoutreach.mongodb.connection import get_mongodb_collection
+                        campaigns_col = get_mongodb_collection("campaigns")
+                        if campaigns_col is not None:
+                            campaigns_col.update_one(
+                                {"_id": campaign_id},
+                                {"$set": {"maps_session_state": new_state}},
+                            )
+                            logger.debug("maps_scraper: persisted google_maps session state")
+                    except Exception as exc:
+                        logger.debug("maps_scraper: failed to save session state: %s", exc)
             except Exception as exc:
                 logger.warning("maps_scraper: backend %s failed: %s", backend, exc)
 
