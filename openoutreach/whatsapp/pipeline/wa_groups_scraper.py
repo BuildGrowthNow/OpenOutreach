@@ -33,7 +33,8 @@ logger = logging.getLogger(__name__)
 
 _MAX_SEARCH_RESULTS = 100
 _MAX_DETAIL_PAGES = 50
-_MAX_DETAIL_WORKERS = 10
+_MAX_DETAIL_WORKERS = 6
+_DDG_PAGE2_THRESHOLD = 20
 _WA_ME_RE = re.compile(r"wa\.me/(\+?[\d]{7,15})")
 
 # Result container selectors — DDG rotates these; first match wins
@@ -68,35 +69,27 @@ def _clean_title(raw: str) -> str:
     return raw
 
 
-def _ddg_search_and_collect(
-    page, query: str, country_code: str
+def _collect_from_ddg_page(
+    page,
+    country_code: str,
+    seen_phones: set,
+    seen_urls: set,
+    max_phones: int,
+    scroll_passes: int = 6,
 ) -> Tuple[List[Tuple[str, str]], List[Tuple[str, str]]]:
-    """Single DDG search that returns both SERP phones and result URLs.
+    """Extract wa.me phones and result URLs from the currently loaded DDG SERP page.
 
-    Returns:
-        phones_with_names: [(phone_e164, name), ...] — wa.me phones found in SERP
-        result_urls:       [(url, title), ...] — result page URLs to visit for more phones
+    Mutates seen_phones and seen_urls so callers share dedup state across page loads.
     """
-    search_query = f'{query} "wa.me/"'
-    url = f"https://duckduckgo.com/?q={urllib.parse.quote(search_query)}&ia=web"
-    page.goto(url, wait_until="domcontentloaded", timeout=30000)
-    try:
-        page.wait_for_selector(", ".join(_DDG_RESULT_SELS), timeout=15000)
-    except Exception:
-        logger.warning("wa_groups: DDG returned no results for %r", query)
-        return [], []
-
-    for _ in range(6):
+    for _ in range(scroll_passes):
         try:
             page.evaluate("window.scrollBy(0, window.innerHeight)")
             page.wait_for_timeout(700)
         except Exception:
             break
 
-    phones_with_names: List[Tuple[str, str]] = []
-    result_urls: List[Tuple[str, str]] = []
-    seen_phones: set = set()
-    seen_urls: set = set()
+    phones: List[Tuple[str, str]] = []
+    urls: List[Tuple[str, str]] = []
 
     result_els = []
     for sel in _DDG_RESULT_SELS:
@@ -118,7 +111,7 @@ def _ddg_search_and_collect(
                     title = _clean_title(title_el.inner_text().strip())
                     if href.startswith("http") and href not in seen_urls:
                         seen_urls.add(href)
-                        result_urls.append((href, title))
+                        urls.append((href, title))
                     break
             except Exception:
                 continue
@@ -147,13 +140,13 @@ def _ddg_search_and_collect(
                 except Exception:
                     continue
             for phone in phones_in_result:
-                phones_with_names.append((phone, name))
+                phones.append((phone, name))
 
-        if len(phones_with_names) >= _MAX_SEARCH_RESULTS:
+        if len(phones) >= max_phones:
             break
 
     # Fallback: full-page HTML scan for phones the DOM pass may have missed
-    if len(phones_with_names) < _MAX_SEARCH_RESULTS:
+    if len(phones) < max_phones:
         try:
             full_html = page.content()
         except Exception:
@@ -163,11 +156,59 @@ def _ddg_search_and_collect(
                 phone = _phone_from_wa_me(raw, country_code)
                 if phone and phone not in seen_phones:
                     seen_phones.add(phone)
-                    phones_with_names.append((phone, ""))
-            if len(phones_with_names) >= _MAX_SEARCH_RESULTS:
+                    phones.append((phone, ""))
+            if len(phones) >= max_phones:
                 break
 
-    return phones_with_names[:_MAX_SEARCH_RESULTS], result_urls
+    return phones, urls
+
+
+def _ddg_search_and_collect(
+    page, query: str, country_code: str
+) -> Tuple[List[Tuple[str, str]], List[Tuple[str, str]]]:
+    """DDG search for wa.me links. Tries page 2 (s=30 offset) when page 1 is sparse.
+
+    Returns:
+        phones_with_names: [(phone_e164, name), ...] — wa.me phones found in SERP
+        result_urls:       [(url, title), ...] — result page URLs to visit for more phones
+    """
+    search_query = f'{query} "wa.me/"'
+    url = f"https://duckduckgo.com/?q={urllib.parse.quote(search_query)}&ia=web"
+    page.goto(url, wait_until="domcontentloaded", timeout=30000)
+    try:
+        page.wait_for_selector(", ".join(_DDG_RESULT_SELS), timeout=15000)
+    except Exception:
+        logger.warning("wa_groups: DDG returned no results for %r", query)
+        return [], []
+
+    seen_phones: set = set()
+    seen_urls: set = set()
+
+    phones, urls = _collect_from_ddg_page(
+        page, country_code, seen_phones, seen_urls, _MAX_SEARCH_RESULTS
+    )
+    logger.info("wa_groups: %d phones from DDG page 1 for %r", len(phones), query)
+
+    # Page 2 via s=30 offset when first pass is sparse
+    if len(phones) < _DDG_PAGE2_THRESHOLD:
+        url_p2 = f"https://duckduckgo.com/?q={urllib.parse.quote(search_query)}&ia=web&s=30"
+        try:
+            page.goto(url_p2, wait_until="domcontentloaded", timeout=25000)
+            page.wait_for_selector(", ".join(_DDG_RESULT_SELS), timeout=10000)
+            extra_phones, extra_urls = _collect_from_ddg_page(
+                page, country_code, seen_phones, seen_urls,
+                _MAX_SEARCH_RESULTS - len(phones), scroll_passes=4,
+            )
+            phones.extend(extra_phones)
+            urls.extend(extra_urls)
+            if extra_phones:
+                logger.info(
+                    "wa_groups: DDG page 2 added %d phones for %r", len(extra_phones), query
+                )
+        except Exception as exc:
+            logger.debug("wa_groups: DDG page 2 failed for %r: %s", query, exc)
+
+    return phones[:_MAX_SEARCH_RESULTS], urls
 
 
 def _listings_from_site_page(

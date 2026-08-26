@@ -23,7 +23,7 @@ from openoutreach.whatsapp.pipeline.utils import (
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_BACKENDS = ["google_maps", "bing_maps", "duckduckgo_maps"]
+_DEFAULT_BACKENDS = ["google_maps", "bing_maps"]
 _MAX_LISTINGS = 100
 _SCROLL_PAUSE_MS = 1200
 _MAX_SCROLL_ROUNDS = 20
@@ -120,6 +120,16 @@ def _scrape_google_maps(page, query: str, country_code: str) -> List[BusinessLis
     for place_url in place_urls:
         try:
             page.goto(place_url, wait_until="domcontentloaded", timeout=20000)
+
+            # CAPTCHA check: Google redirects blocked requests to /sorry or reCAPTCHA
+            current_url = page.url
+            if "/sorry" in current_url or "recaptcha" in current_url.lower():
+                logger.warning(
+                    "google_maps: CAPTCHA detected at %s — stopping detail visits early",
+                    current_url,
+                )
+                break
+
             # Random human-like pause — reduces bot-detection fingerprint
             page.wait_for_timeout(random.randint(900, 2800))
 

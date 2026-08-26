@@ -1047,10 +1047,9 @@ def _maybe_trigger_lead_scrape(campaign, user_id: str) -> None:
     """Trigger a lead-scraping background thread when active WA leads fall below threshold.
 
     Dispatches to the correct scraper based on campaign.lead_source:
-    - google_maps / bing_maps / duckduckgo_maps → maps_scraper
-    - classified_ads                             → classified_scraper
-    - facebook_pages                             → facebook_scraper
-    - wa_groups                                  → wa_groups_scraper
+    - google_maps / bing_maps → maps_scraper
+    - classified_ads          → classified_scraper
+    - wa_groups               → wa_groups_scraper
 
     No-op when:
     - lead_source is linkedin_search
