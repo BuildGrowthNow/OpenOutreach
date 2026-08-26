@@ -12,6 +12,7 @@ from pymongo.collection import Collection
 
 from openoutreach.core.conf import DEFAULT_EMAIL_DAILY_LIMIT
 from openoutreach.mongodb.connection import get_mongodb_collection
+from openoutreach.mongodb.crypto import safe_decrypt, safe_encrypt
 
 logger = logging.getLogger(__name__)
 
@@ -27,46 +28,41 @@ class MailboxManager:
             self.collection = get_mongodb_collection("mailboxes")
         return self.collection
 
-    def all(self) -> List["Mailbox"]:
-        """Get all mailboxes."""
+    def all(self, user_id: str = "") -> List["Mailbox"]:
+        """Get all mailboxes, optionally filtered by user_id."""
         collection = self._get_collection()
         if collection is None:
             return []
-
         try:
-            mailboxes = []
-            for data in collection.find():
-                mailboxes.append(Mailbox.from_dict(data))
-            return mailboxes
+            query: dict = {"user_id": user_id} if user_id else {}
+            return [Mailbox.from_dict(data) for data in collection.find(query)]
         except Exception as e:
             logger.error(f"Failed to get all mailboxes: {e}")
             return []
 
-    def remaining_today(self) -> int:
-        """Total sends left across the pool today (Σ per-box headroom).
+    def remaining_today(self, user_id: str = "") -> int:
+        """Total sends left across the pool today (Σ per-box headroom)."""
+        return sum(box.headroom_today() for box in self.all(user_id=user_id))
 
-        0 when no boxes exist or every box is at its cap.
-        """
-        return sum(box.headroom_today() for box in self.all())
-
-    def least_loaded_under_cap(self) -> Optional["Mailbox"]:
+    def least_loaded_under_cap(self, user_id: str = "") -> Optional["Mailbox"]:
         """The under-cap box with the most headroom today, or None if all are capped."""
         ranked = [
             (box, sent)
-            for box in self.all()
+            for box in self.all(user_id=user_id)
             if (sent := box.sent_today()) < box.daily_limit
         ]
         if not ranked:
             return None
         return min(ranked, key=lambda pair: pair[1])[0]
 
-    def exists(self) -> bool:
-        """Check if any mailboxes exist."""
+    def exists(self, user_id: str = "") -> bool:
+        """True when ≥1 mailbox is configured for this user (or any user if user_id blank)."""
         collection = self._get_collection()
         if collection is None:
             return False
         try:
-            return collection.count_documents({}) > 0
+            query: dict = {"user_id": user_id} if user_id else {}
+            return collection.count_documents(query) > 0
         except Exception as e:
             logger.error(f"Failed to check mailbox existence: {e}")
             return False
@@ -133,17 +129,34 @@ class Mailbox:
         username: str = "",
         password: str = "",
         from_address: str = "",
+        from_name: str = "",
         daily_limit: int = DEFAULT_EMAIL_DAILY_LIMIT,
+        user_id: str = "",
+        imap_host: str = "",
+        imap_port: int = 993,
         created_at: Optional[datetime] = None,
     ):
         self._id = _id or str(uuid4())
         self.host = host
         self.port = port
         self.username = username
-        self.password = password
+        self._password_encrypted: str = safe_encrypt(password) if password else ""
         self.from_address = from_address
+        self.from_name = from_name
         self.daily_limit = daily_limit
+        self.user_id = user_id
+        self.imap_host = imap_host
+        self.imap_port = imap_port
         self.created_at = created_at or datetime.now(timezone.utc)
+
+    @property
+    def password(self) -> str:
+        """Return decrypted SMTP password."""
+        return safe_decrypt(self._password_encrypted) if self._password_encrypted else ""
+
+    @password.setter
+    def password(self, value: str) -> None:
+        self._password_encrypted = safe_encrypt(value) if value else ""
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert model instance to dictionary for MongoDB storage."""
@@ -152,25 +165,34 @@ class Mailbox:
             "host": self.host,
             "port": self.port,
             "username": self.username,
-            "password": self.password,
+            "password": self._password_encrypted,  # always store encrypted
             "from_address": self.from_address,
+            "from_name": self.from_name,
             "daily_limit": self.daily_limit,
+            "user_id": self.user_id,
+            "imap_host": self.imap_host,
+            "imap_port": self.imap_port,
             "created_at": self.created_at,
         }
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "Mailbox":
         """Create Mailbox instance from MongoDB document."""
-        return cls(
-            _id=str(data.get("_id")),
-            host=data.get("host", "smtp.gmail.com"),
-            port=data.get("port", 587),
-            username=data.get("username", ""),
-            password=data.get("password", ""),
-            from_address=data.get("from_address", ""),
-            daily_limit=data.get("daily_limit", DEFAULT_EMAIL_DAILY_LIMIT),
-            created_at=data.get("created_at"),
-        )
+        obj = cls.__new__(cls)
+        obj._id = str(data.get("_id") or str(uuid4()))
+        obj.host = data.get("host", "smtp.gmail.com")
+        obj.port = data.get("port", 587)
+        obj.username = data.get("username", "")
+        # Load raw value — may be plaintext (legacy) or encrypted; property decrypts on read
+        obj._password_encrypted = data.get("password", "")
+        obj.from_address = data.get("from_address", "")
+        obj.from_name = data.get("from_name", "")
+        obj.daily_limit = data.get("daily_limit", DEFAULT_EMAIL_DAILY_LIMIT)
+        obj.user_id = data.get("user_id", "")
+        obj.imap_host = data.get("imap_host", "")
+        obj.imap_port = data.get("imap_port", 993)
+        obj.created_at = data.get("created_at") or datetime.now(timezone.utc)
+        return obj
 
     def save(self) -> str:
         """Save the mailbox to MongoDB."""

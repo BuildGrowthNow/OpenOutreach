@@ -26,6 +26,7 @@ import LlmSettingsForm from "@/components/settings/llm-settings-form";
 import ActiveHoursForm from "@/components/settings/active-hours-form";
 import { WhatsappConnectionTab } from "@/components/settings/whatsapp-connection-tab";
 import WhatsappSettingsForm from "@/components/settings/whatsapp-settings-form";
+import { EmailTab } from "@/components/settings/email-tab";
 
 function SettingsLoadingSkeleton() {
   return (
@@ -140,7 +141,7 @@ export default function SettingsPage() {
       </div>
 
       <Tabs defaultValue="linkedin" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2 gap-2 rounded-xl bg-muted p-1 sm:grid-cols-5">
+        <TabsList className="grid w-full grid-cols-3 gap-2 rounded-xl bg-muted p-1 sm:grid-cols-6">
           <TabsTrigger value="linkedin" className="flex items-center gap-2 py-2">
             <Icons.Link className="h-4 w-4 shrink-0" />
             LinkedIn
@@ -148,6 +149,10 @@ export default function SettingsPage() {
           <TabsTrigger value="whatsapp" className="flex items-center gap-2 py-2">
             <Icons.MessageCircle className="h-4 w-4 shrink-0" />
             WhatsApp
+          </TabsTrigger>
+          <TabsTrigger value="email" className="flex items-center gap-2 py-2">
+            <Icons.Mail className="h-4 w-4 shrink-0" />
+            Email
           </TabsTrigger>
           <TabsTrigger value="rate-limits" className="flex items-center gap-2 py-2">
             <Icons.Shield className="h-4 w-4 shrink-0" />
@@ -175,6 +180,10 @@ export default function SettingsPage() {
               onSuccess={handleSettingsUpdate}
             />
           )}
+        </TabsContent>
+
+        <TabsContent value="email" className="space-y-6">
+          <EmailTab />
         </TabsContent>
 
         <TabsContent value="rate-limits" className="space-y-6">

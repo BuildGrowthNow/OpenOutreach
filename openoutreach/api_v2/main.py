@@ -105,6 +105,9 @@ from openoutreach.api_v2.routers import rate_limits, campaign_health
 # Import desktop daemon router
 from openoutreach.api_v2.routers import desktop_daemon as desktop_daemon_router
 
+# Email channel
+from openoutreach.api_v2.routers import mailboxes as mailboxes_router
+
 # Health check (no auth required)
 app.include_router(health.router, prefix="/api", tags=["health"])
 
@@ -113,6 +116,7 @@ app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 
 # Settings
 app.include_router(settings.router, prefix="/api/settings", tags=["settings"])
+app.include_router(mailboxes_router.router, prefix="/api/mailboxes", tags=["email"])
 
 # LinkedIn setup
 app.include_router(linkedin_credentials.router, prefix="/api/linkedin-credentials", tags=["linkedin"])

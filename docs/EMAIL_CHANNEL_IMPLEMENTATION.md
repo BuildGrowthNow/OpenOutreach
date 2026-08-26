@@ -15,6 +15,19 @@ tracking and unsubscribe at the edge.
 | `openoutreach/emails/nudge.py` | Setup nudge (BetterContact + IceMail onboarding) |
 | `openoutreach/emails/finder.py` | BetterContact email enrichment (already called at qualification) |
 
+## Reference: eracle/OpenOutSend
+
+Audited https://github.com/eracle/OpenOutSend — incomplete orchestration (no daemon driver),
+but 4 lower-level modules are worth porting as pure-Python utilities. Django models/migrations
+are incompatible with MongoDB; ignore them.
+
+| Source file | Port to | When | What to take |
+|---|---|---|---|
+| `emails/delivery_policy.py` | `openoutreach/emails/delivery_policy.py` | Phase 2 | 6 SMTP outcome classes (deferred/quota/blocked/refused/auth-fail/transport-fail) + per-class retry/pause/ignore policy. Replaces our bare 550-only error handling. |
+| `emails/threads.py` | `openoutreach/emails/threads.py` | Phase 5 | Union-find thread grouping — handles out-of-order IMAP delivery, merges split threads, idempotent re-processing. Much more robust than basic `Message-ID` matching. |
+| `emails/sync.py` | `openoutreach/emails/sync.py` | Phase 5 | IMAP mirror with UID cursor + 4-criteria reply detection (threading headers, from-address, `+unsub` alias, bounce classification). Saves 1–2 days vs rolling our own. |
+| `emails/warmth.py` | `openoutreach/emails/warmth.py` | v2 | IMAP Sent-folder scan → 75th-percentile daily volume → auto-reduce on bounce rate. Replaces static `daily_limit` with a dynamic ceiling. |
+
 **Gaps before email can run end-to-end:**
 - No generic SMTP import UI (currently IceMail-specific paste format)
 - No `email_follow_up` task type or handler
@@ -419,7 +432,7 @@ Add sequence configuration section:
 
 ## Implementation progress
 
-- [ ] Phase 1 — Generic mailbox management + FastAPI endpoints + Settings UI
+- [x] Phase 1 — Generic mailbox management + FastAPI endpoints + Settings UI
 - [ ] Phase 2 — Deal states + email task handler + scheduler integration
 - [ ] Phase 3 — LLM email writer (`email_agent.py` + `email_agent.j2`)
 - [ ] Phase 4 — Cloudflare Worker (tracking pixel, click redirect, unsubscribe, backend webhook)
