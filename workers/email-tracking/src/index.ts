@@ -93,15 +93,22 @@ async function postWebhook(
   payload: { deal_id: string; campaign_id: string; event: string; ts: number }
 ): Promise<void> {
   const url = `${env.BACKEND_URL}/api/email-tracking/event`;
-  await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Webhook-Secret": env.WORKER_WEBHOOK_SECRET,
-    },
-    body: JSON.stringify(payload),
-  });
-  // fire-and-forget — never block user's browser on backend latency
+  const body = JSON.stringify(payload);
+  const headers = {
+    "Content-Type": "application/json",
+    "X-Webhook-Secret": env.WORKER_WEBHOOK_SECRET,
+  };
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const res = await fetch(url, { method: "POST", headers, body });
+      if (res.ok) return;
+    } catch {
+      // network error — retry
+    }
+    if (attempt < 2) {
+      await new Promise((r) => setTimeout(r, 200 * 2 ** attempt));
+    }
+  }
 }
 
 // ── Route handlers ────────────────────────────────────────────────

@@ -45,11 +45,11 @@ class MailboxManager:
         return sum(box.headroom_today() for box in self.all(user_id=user_id))
 
     def least_loaded_under_cap(self, user_id: str = "") -> Optional["Mailbox"]:
-        """The under-cap box with the most headroom today, or None if all are capped."""
+        """The under-cap, non-paused box with the most headroom today, or None."""
         ranked = [
             (box, sent)
             for box in self.all(user_id=user_id)
-            if (sent := box.sent_today()) < box.daily_limit
+            if not box.paused and (sent := box.sent_today()) < box.daily_limit
         ]
         if not ranked:
             return None
@@ -135,6 +135,7 @@ class Mailbox:
         imap_host: str = "",
         imap_port: int = 993,
         created_at: Optional[datetime] = None,
+        paused: bool = False,
     ):
         self._id = _id or str(uuid4())
         self.host = host
@@ -148,6 +149,7 @@ class Mailbox:
         self.imap_host = imap_host
         self.imap_port = imap_port
         self.created_at = created_at or datetime.now(timezone.utc)
+        self.paused = paused
 
     @property
     def password(self) -> str:
@@ -173,6 +175,7 @@ class Mailbox:
             "imap_host": self.imap_host,
             "imap_port": self.imap_port,
             "created_at": self.created_at,
+            "paused": self.paused,
         }
 
     @classmethod
@@ -192,6 +195,7 @@ class Mailbox:
         obj.imap_host = data.get("imap_host", "")
         obj.imap_port = data.get("imap_port", 993)
         obj.created_at = data.get("created_at") or datetime.now(timezone.utc)
+        obj.paused = data.get("paused", False)
         return obj
 
     def save(self) -> str:

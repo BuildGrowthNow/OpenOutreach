@@ -40,8 +40,10 @@ async def tracking_event(request: Request, body: TrackingEvent) -> None:
         logger.warning("email_tracking webhook: MongoDB not available")
         return
 
-    if body.event in ("open", "click"):
-        _handle_open_or_click(body, deals_col)
+    if body.event == "open":
+        _handle_open(body, deals_col)
+    elif body.event == "click":
+        _handle_click(body, deals_col)
     elif body.event == "unsub":
         _handle_unsub(body, deals_col, leads_col)
     else:
@@ -58,9 +60,9 @@ def _verify_webhook_secret(request: Request) -> None:
         raise HTTPException(status_code=401, detail="Invalid webhook secret")
 
 
-def _handle_open_or_click(body: TrackingEvent, deals_col) -> None:
+def _handle_open(body: TrackingEvent, deals_col) -> None:
     if not body.deal_id:
-        logger.warning("email_tracking: missing deal_id in event")
+        logger.warning("email_tracking: missing deal_id in open event")
         return
 
     result = deals_col.update_one(
@@ -69,6 +71,21 @@ def _handle_open_or_click(body: TrackingEvent, deals_col) -> None:
     )
     if result.modified_count:
         logger.info("email_tracking: deal %s promoted to EMAIL_OPENED", body.deal_id)
+
+
+def _handle_click(body: TrackingEvent, deals_col) -> None:
+    if not body.deal_id:
+        logger.warning("email_tracking: missing deal_id in click event")
+        return
+
+    from datetime import datetime, timezone
+
+    clicked_at = datetime.fromtimestamp(body.ts, tz=timezone.utc) if body.ts else datetime.now(timezone.utc)
+    deals_col.update_one(
+        {"_id": body.deal_id},
+        {"$set": {"email_clicked_at": clicked_at}},
+    )
+    logger.info("email_tracking: deal %s click recorded at %s", body.deal_id, clicked_at)
 
 
 def _handle_unsub(body: TrackingEvent, deals_col, leads_col) -> None:

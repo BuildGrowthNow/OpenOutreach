@@ -1112,6 +1112,7 @@ class Deal:
         mailbox_id: Optional[str] = None,
         email_sent_at: Optional[datetime] = None,
         email_message_id: Optional[str] = None,
+        email_first_message_id: Optional[str] = None,
         email_sequence_step: int = 0,
     ):
         self._id = _id or str(uuid4())
@@ -1135,6 +1136,7 @@ class Deal:
         self.mailbox_id = mailbox_id
         self.email_sent_at = email_sent_at
         self.email_message_id = email_message_id
+        self.email_first_message_id = email_first_message_id
         self.email_sequence_step = email_sequence_step
         self._lead: Optional["Lead"] = None
         self.campaign: Optional["Campaign"] = None
@@ -1198,6 +1200,8 @@ class Deal:
             data["email_sent_at"] = self.email_sent_at
         if self.email_message_id is not None:
             data["email_message_id"] = self.email_message_id
+        if self.email_first_message_id is not None:
+            data["email_first_message_id"] = self.email_first_message_id
         if self.email_sequence_step:
             data["email_sequence_step"] = self.email_sequence_step
         return data
@@ -1227,6 +1231,7 @@ class Deal:
             mailbox_id=data.get("mailbox_id"),
             email_sent_at=data.get("email_sent_at"),
             email_message_id=data.get("email_message_id"),
+            email_first_message_id=data.get("email_first_message_id"),
             email_sequence_step=data.get("email_sequence_step", 0),
         )
 

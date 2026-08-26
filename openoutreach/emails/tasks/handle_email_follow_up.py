@@ -11,7 +11,7 @@ Stops sending when deal enters EMAIL_REPLIED, EMAIL_BOUNCED, or sequence_step >=
 SMTP failure handling is policy-driven via delivery_policy.classify():
   - Hard bounce (550-554) → EMAIL_BOUNCED + suppress lead email permanently
   - Transient (4xx, connection, timeout) → return silently; scheduler replans
-  - Auth failure (534/535) → log ERROR; return silently (needs operator fix)
+  - Auth failure (534/535) → pause mailbox; log ERROR; return (needs operator fix)
   - Unexpected → re-raise for daemon to mark task FAILED
 """
 
@@ -27,8 +27,10 @@ logger = logging.getLogger(__name__)
 MAX_SEQUENCE_STEPS = 3
 
 
-def _write_chat_message(deal, user_id: str, subject: str, body: str, sent_at: datetime) -> None:
-    """Persist the sent email as a ChatMessage so it appears in the Messages view."""
+def _write_chat_message(
+    deal, user_id: str, subject: str, body: str, sent_at: datetime, *, is_outgoing: bool = True
+) -> None:
+    """Persist an email as a ChatMessage so it appears in the Messages view."""
     try:
         from openoutreach.mongodb.models_extended import ChatMessage
 
@@ -36,7 +38,7 @@ def _write_chat_message(deal, user_id: str, subject: str, body: str, sent_at: da
         msg = ChatMessage(
             deal_id=str(deal._id),
             content=content,
-            is_outgoing=True,
+            is_outgoing=is_outgoing,
             channel="email",
             user_id=user_id,
             creation_date=sent_at,
@@ -46,7 +48,7 @@ def _write_chat_message(deal, user_id: str, subject: str, body: str, sent_at: da
         logger.warning("email_follow_up: failed to write ChatMessage for deal %s: %s", deal._id, exc)
 
 
-def handle_email_follow_up(task, user_id: str, campaign) -> None:
+def handle_email_follow_up(_task, user_id: str, campaign) -> None:
     """Send one email for the next eligible deal in *campaign*.
 
     Args:
@@ -124,6 +126,20 @@ def handle_email_follow_up(task, user_id: str, campaign) -> None:
         logger.info("email_follow_up: lead %s is unsubscribed — skipping", lead._id)
         return
 
+    # For follow-up steps, check IMAP for a reply before sending another email.
+    # Uses the mailbox that sent the previous message (deal.mailbox_id).
+    if deal.email_sequence_step >= 1 and deal.mailbox_id and deal.email_message_id:
+        prev_mailbox = Mailbox.get(deal.mailbox_id)
+        if prev_mailbox:
+            from openoutreach.emails.imap_checker import find_reply
+            reply_text = find_reply(prev_mailbox, deal.email_message_id)
+            if reply_text is not None:
+                _mark_replied(deal, user_id, reply_text, deals_col)
+                logger.info(
+                    "email_follow_up: IMAP reply detected for deal %s — EMAIL_REPLIED", deal._id
+                )
+                return
+
     mailbox = Mailbox.objects.least_loaded_under_cap(user_id=user_id)
     if mailbox is None:
         logger.info(
@@ -134,13 +150,25 @@ def handle_email_follow_up(task, user_id: str, campaign) -> None:
     from openoutreach.emails.email_agent import generate_email
     subject, body = generate_email(deal, user_id, campaign, deal.email_sequence_step)
 
+    # Build threading headers.
+    # step 0: no in_reply_to
+    # step 1: in_reply_to = cold email ID; references = same
+    # step 2: in_reply_to = step-1 ID; references = "cold_id step1_id"
+    in_reply_to = deal.email_message_id if deal.email_sequence_step >= 1 else None
+    if deal.email_sequence_step >= 2:
+        refs_parts = [p for p in (deal.email_first_message_id, deal.email_message_id) if p]
+        references = " ".join(refs_parts) or in_reply_to
+    else:
+        references = in_reply_to
+
     try:
         message_id = send_email(
             mailbox,
             lead.api_email,
             subject,
             body,
-            in_reply_to=deal.email_message_id,
+            in_reply_to=in_reply_to,
+            references=references,
             deal_id=str(deal._id),
             campaign_id=str(campaign.pk),
         )
@@ -163,9 +191,11 @@ def handle_email_follow_up(task, user_id: str, campaign) -> None:
             return
 
         if outcome == SmtpOutcome.PAUSE_MAILBOX:
+            mailbox.paused = True
+            mailbox.save()
             logger.error(
-                "email_follow_up: auth/credentials failure on mailbox %s (%s) — "
-                "check SMTP password; no further sends attempted until fixed",
+                "email_follow_up: auth failure on mailbox %s (%s) — paused; fix credentials "
+                "and un-pause in Settings to resume sends",
                 mailbox.from_address, exc,
             )
             return
@@ -173,18 +203,18 @@ def handle_email_follow_up(task, user_id: str, campaign) -> None:
         raise  # SmtpOutcome.RAISE — daemon marks task FAILED
 
     now = datetime.now(timezone.utc)
-    deals_col.update_one(
-        {"_id": deal._id},
-        {
-            "$set": {
-                "state": "email_sent",
-                "mailbox_id": mailbox.pk,
-                "email_sent_at": now,
-                "email_message_id": message_id,
-                "email_sequence_step": deal.email_sequence_step + 1,
-            }
-        },
-    )
+    db_update: dict = {
+        "state": "email_sent",
+        "mailbox_id": mailbox.pk,
+        "email_sent_at": now,
+        "email_message_id": message_id,
+        "email_sequence_step": deal.email_sequence_step + 1,
+    }
+    # Persist the cold-email ID once so step-2 References chain is complete.
+    if deal.email_sequence_step == 0:
+        db_update["email_first_message_id"] = message_id
+
+    deals_col.update_one({"_id": deal._id}, {"$set": db_update})
 
     _write_chat_message(deal, user_id, subject, body, now)
 
@@ -202,4 +232,18 @@ def _mark_bounced(deal, lead, deals_col, leads_col) -> None:
     leads_col.update_one(
         {"_id": lead._id},
         {"$set": {"email_unsubscribed": True}},
+    )
+
+
+def _mark_replied(deal, user_id: str, reply_text: str, deals_col) -> None:
+    deals_col.update_one(
+        {"_id": deal._id},
+        {"$set": {"state": "email_replied"}},
+    )
+    _write_chat_message(
+        deal, user_id,
+        subject="",
+        body=reply_text,
+        sent_at=datetime.now(timezone.utc),
+        is_outgoing=False,
     )

@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 
 # When SMTP is indeterminate return the top pattern candidate unverified.
 # Set False to skip low-confidence hits entirely.
-RETURN_UNVERIFIED = True
+RETURN_UNVERIFIED = False
 
 
 def find_free(query: FinderQuery, user_id: str | None = None) -> FinderResult | None:

@@ -10,14 +10,23 @@ import smtplib
 
 
 def verify_auth(host: str, port: int, username: str, password: str) -> tuple[bool, str]:
-    """Connect, STARTTLS, log in, quit. Return ``(ok, message)``.
+    """Connect, log in, quit. Return ``(ok, message)``.
+
+    Port 465 uses implicit SSL (SMTP_SSL); all other ports use STARTTLS.
+    Mirrors the branch used by sender.py._deliver so import and send use
+    the same transport logic.
 
     A Google/IceMail box rejects its login password with 534/535 - the message
     surfaces the "use the app password" hint for that case.
     """
     try:
-        with smtplib.SMTP(host, port, timeout=20) as smtp:
-            smtp.starttls()
+        if port == 465:
+            ctx: smtplib.SMTP = smtplib.SMTP_SSL(host, port, timeout=20)
+        else:
+            ctx = smtplib.SMTP(host, port, timeout=20)
+        with ctx as smtp:
+            if port != 465:
+                smtp.starttls()
             smtp.login(username, password)
         return True, "ok"
     except smtplib.SMTPAuthenticationError as e:
