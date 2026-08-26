@@ -165,6 +165,7 @@ async def get_settings(
             "followupDay1": getattr(config, "email_followup_day1", 3),
             "followupDay2": getattr(config, "email_followup_day2", 7),
             "velocity": getattr(config, "email_velocity", 10),
+            "acceptUnverified": getattr(config, "email_accept_unverified", False),
         },
     }
 

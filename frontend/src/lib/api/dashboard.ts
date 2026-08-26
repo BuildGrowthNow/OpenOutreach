@@ -749,6 +749,7 @@ export interface Settings {
     followupDay1: number;
     followupDay2: number;
     velocity: number;
+    acceptUnverified: boolean;
   };
 }
 

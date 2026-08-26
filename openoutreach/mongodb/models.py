@@ -1114,6 +1114,7 @@ class Deal:
         email_message_id: Optional[str] = None,
         email_first_message_id: Optional[str] = None,
         email_sequence_step: int = 0,
+        email_clicked_at: Optional[datetime] = None,
     ):
         self._id = _id or str(uuid4())
         self.lead_id = lead_id
@@ -1138,6 +1139,7 @@ class Deal:
         self.email_message_id = email_message_id
         self.email_first_message_id = email_first_message_id
         self.email_sequence_step = email_sequence_step
+        self.email_clicked_at = email_clicked_at
         self._lead: Optional["Lead"] = None
         self.campaign: Optional["Campaign"] = None
 
@@ -1204,6 +1206,8 @@ class Deal:
             data["email_first_message_id"] = self.email_first_message_id
         if self.email_sequence_step:
             data["email_sequence_step"] = self.email_sequence_step
+        if self.email_clicked_at is not None:
+            data["email_clicked_at"] = self.email_clicked_at
         return data
 
     @classmethod
@@ -1233,6 +1237,7 @@ class Deal:
             email_message_id=data.get("email_message_id"),
             email_first_message_id=data.get("email_first_message_id"),
             email_sequence_step=data.get("email_sequence_step", 0),
+            email_clicked_at=data.get("email_clicked_at"),
         )
 
     def save(self, update_fields: Optional[List[str]] = None) -> str:
@@ -4124,6 +4129,7 @@ class SiteConfig:
         email_followup_day1: int = 3,
         email_followup_day2: int = 7,
         email_velocity: int = 10,
+        email_accept_unverified: bool = False,
     ):
         self._id = _id or str(uuid4())
         self.user_id = user_id
@@ -4159,6 +4165,7 @@ class SiteConfig:
         self.email_followup_day1 = email_followup_day1
         self.email_followup_day2 = email_followup_day2
         self.email_velocity = email_velocity
+        self.email_accept_unverified = email_accept_unverified
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert model instance to dictionary for MongoDB storage."""
@@ -4197,6 +4204,7 @@ class SiteConfig:
             "email_followup_day1": self.email_followup_day1,
             "email_followup_day2": self.email_followup_day2,
             "email_velocity": self.email_velocity,
+            "email_accept_unverified": self.email_accept_unverified,
         }
         return data
 
@@ -4238,6 +4246,7 @@ class SiteConfig:
             email_followup_day1=data.get("email_followup_day1", 3),
             email_followup_day2=data.get("email_followup_day2", 7),
             email_velocity=data.get("email_velocity", 10),
+            email_accept_unverified=data.get("email_accept_unverified", False),
         )
 
     def save(self) -> str:

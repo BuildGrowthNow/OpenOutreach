@@ -1480,6 +1480,13 @@ async def get_campaign_analytics(
             "created_at": {"$gte": since},
         })
 
+    email_messages_sent = 0
+    email_messages_replied = 0
+    email_distinct_messaged = 0
+    email_opens = 0
+    email_clicks = 0
+    email_bounces = 0
+
     if messages_collection is not None:
         try:
             def _agg_count(match_extra: Dict[str, Any]) -> int:
@@ -1502,6 +1509,26 @@ async def get_campaign_analytics(
             li_distinct_messaged = _agg_count({"is_outgoing": True, "channel": "linkedin"})
             wa_messages_replied = _agg_count({"is_outgoing": False, "channel": "whatsapp"})
             wa_distinct_messaged = _agg_count({"is_outgoing": True, "channel": "whatsapp"})
+            email_messages_replied = _agg_count({"is_outgoing": False, "channel": "email"})
+            email_distinct_messaged = _agg_count({"is_outgoing": True, "channel": "email"})
+            email_messages_sent = email_distinct_messaged
+        except Exception:
+            pass
+
+    if deals_collection is not None:
+        try:
+            email_opens = deals_collection.count_documents({
+                "campaign_id": campaign_id,
+                "state": {"$in": ["email_opened", "email_replied"]},
+            })
+            email_clicks = deals_collection.count_documents({
+                "campaign_id": campaign_id,
+                "email_clicked_at": {"$exists": True, "$ne": None},
+            })
+            email_bounces = deals_collection.count_documents({
+                "campaign_id": campaign_id,
+                "state": "email_bounced",
+            })
         except Exception:
             pass
 
@@ -1510,6 +1537,9 @@ async def get_campaign_analytics(
     conversion_rate = round((conversions / connections_accepted * 100), 2) if connections_accepted else 0.0
     li_response_rate = round((li_messages_replied / li_distinct_messaged * 100), 2) if li_distinct_messaged else 0.0
     wa_response_rate = round((wa_messages_replied / wa_distinct_messaged * 100), 2) if wa_distinct_messaged else 0.0
+    email_open_rate = round((email_opens / email_messages_sent * 100), 2) if email_messages_sent else 0.0
+    email_reply_rate = round((email_messages_replied / email_messages_sent * 100), 2) if email_messages_sent else 0.0
+    email_click_rate = round((email_clicks / email_messages_sent * 100), 2) if email_messages_sent else 0.0
 
     # Pipeline counts
     pipeline_stats: Dict[str, int] = {}
@@ -1549,6 +1579,16 @@ async def get_campaign_analytics(
                 "messages_sent": wa_messages_sent,
                 "messages_replied": wa_messages_replied,
                 "response_rate": wa_response_rate,
+            },
+            "email": {
+                "emails_sent": email_messages_sent,
+                "emails_opened": email_opens,
+                "emails_clicked": email_clicks,
+                "emails_replied": email_messages_replied,
+                "emails_bounced": email_bounces,
+                "open_rate": email_open_rate,
+                "click_rate": email_click_rate,
+                "reply_rate": email_reply_rate,
             },
         },
         "daily_breakdown": [],

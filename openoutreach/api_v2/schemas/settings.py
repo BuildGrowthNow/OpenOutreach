@@ -108,6 +108,7 @@ class SiteConfigUpdate(BaseModel):
     email_followup_day1: Optional[int] = Field(None, ge=1, description="Days after step 0 to send follow-up 1")
     email_followup_day2: Optional[int] = Field(None, ge=1, description="Days after step 0 to send follow-up 2")
     email_velocity: Optional[int] = Field(None, ge=1, le=200, description="Email sends per hour (pacing rate)")
+    email_accept_unverified: Optional[bool] = Field(None, description="Send to pattern-only addresses when SMTP probe is indeterminate")
 
     @model_validator(mode="before")
     @classmethod
@@ -194,6 +195,8 @@ class SiteConfigUpdate(BaseModel):
             data.setdefault("email_followup_day2", em["followupDay2"])
         if em.get("velocity") is not None:
             data.setdefault("email_velocity", em["velocity"])
+        if em.get("acceptUnverified") is not None:
+            data.setdefault("email_accept_unverified", em["acceptUnverified"])
 
         return data
 

@@ -71,6 +71,26 @@ export async function createMailbox(data: MailboxCreate): Promise<Mailbox> {
   return res.data;
 }
 
+export interface MailboxUpdate {
+  fromName?: string;
+  dailyLimit?: number;
+  imapHost?: string;
+  imapPort?: number;
+  password?: string;
+}
+
+export async function updateMailbox(mailboxId: string, data: MailboxUpdate): Promise<Mailbox> {
+  const payload: Record<string, unknown> = {};
+  if (data.fromName !== undefined) payload.from_name = data.fromName;
+  if (data.dailyLimit !== undefined) payload.daily_limit = data.dailyLimit;
+  if (data.imapHost !== undefined) payload.imap_host = data.imapHost;
+  if (data.imapPort !== undefined) payload.imap_port = data.imapPort;
+  if (data.password !== undefined) payload.password = data.password;
+  const res = await apiClient.patch<Mailbox>(`/mailboxes/${mailboxId}`, payload);
+  if (!res.data) throw new Error(res.error ?? "Failed to update mailbox");
+  return res.data;
+}
+
 export async function deleteMailbox(mailboxId: string): Promise<void> {
   await apiClient.delete(`/mailboxes/${mailboxId}`);
 }

@@ -31,9 +31,15 @@ from openoutreach.emails.finder import FinderQuery, FinderResult
 
 logger = logging.getLogger(__name__)
 
-# When SMTP is indeterminate return the top pattern candidate unverified.
-# Set False to skip low-confidence hits entirely.
-RETURN_UNVERIFIED = False
+def _return_unverified(user_id: str | None) -> bool:
+    """Read email_accept_unverified from SiteConfig; default False."""
+    if not user_id:
+        return False
+    try:
+        from openoutreach.mongodb.models import SiteConfig
+        return SiteConfig.load(user_id=user_id).email_accept_unverified
+    except Exception:
+        return False
 
 
 def find_free(query: FinderQuery, user_id: str | None = None) -> FinderResult | None:
@@ -102,8 +108,8 @@ def find_free(query: FinderQuery, user_id: str | None = None) -> FinderResult | 
         update_pattern_from_confirmed(domain, query.first_name, query.last_name, found)
         return FinderResult(email=found, status="web_found")
 
-    # Fallback: top pattern candidate unverified
-    if RETURN_UNVERIFIED and candidates:
+    # Fallback: top pattern candidate unverified (opt-in via SiteConfig.email_accept_unverified)
+    if _return_unverified(user_id) and candidates:
         logger.debug("waterfall: pattern_only %s", candidates[0])
         return FinderResult(email=candidates[0], status="pattern_only")
 

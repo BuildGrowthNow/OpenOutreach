@@ -103,6 +103,7 @@ def scan_imap_replies(user_id: str) -> int:
     # message ID and a mailbox we can check.
     cursor = deals_col.find(
         {
+            "user_id": user_id,
             "state": {"$in": ["email_sent", "email_opened"]},
             "email_message_id": {"$exists": True, "$nin": [None, ""]},
             "mailbox_id": {"$exists": True, "$nin": [None, ""]},
@@ -121,8 +122,8 @@ def scan_imap_replies(user_id: str) -> int:
         mailbox = Mailbox.get(mailbox_id)
         if mailbox is None or not mailbox.imap_host:
             continue
-        # Verify the mailbox belongs to this user (security: multi-tenant).
         if mailbox.user_id != user_id:
+            # Defensive: skip if mailbox ownership doesn't match (data integrity guard).
             continue
 
         imap_port = mailbox.imap_port or 993

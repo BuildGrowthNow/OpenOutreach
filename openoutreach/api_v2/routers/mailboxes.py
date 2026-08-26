@@ -32,6 +32,14 @@ class MailboxCreate(BaseModel):
     imap_port: int = 993
 
 
+class MailboxUpdate(BaseModel):
+    from_name: str | None = None
+    daily_limit: int | None = None
+    imap_host: str | None = None
+    imap_port: int | None = None
+    password: str | None = None
+
+
 class MailboxTestRequest(BaseModel):
     host: str = "smtp.gmail.com"
     port: int = 587
@@ -96,6 +104,13 @@ async def create_mailbox(data: MailboxCreate, user_id: str = Depends(get_current
     if not ok:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
 
+    existing = Mailbox.find_by_username(data.username)
+    if existing and existing.user_id == user_id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Mailbox for {data.username} already exists",
+        )
+
     from_address = data.from_address or data.username
     box = Mailbox(
         host=data.host,
@@ -111,6 +126,32 @@ async def create_mailbox(data: MailboxCreate, user_id: str = Depends(get_current
     )
     box.save()
     logger.info("mailboxes: created %s for user %s", from_address, user_id)
+    return _to_response(box)
+
+
+@router.patch("/{mailbox_id}", response_model=MailboxResponse)
+async def update_mailbox(mailbox_id: str, data: MailboxUpdate, user_id: str = Depends(get_current_user)):
+    box = Mailbox.get(mailbox_id)
+    if not box:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Mailbox not found")
+    if box.user_id != user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+    if data.from_name is not None:
+        box.from_name = data.from_name
+    if data.daily_limit is not None:
+        box.daily_limit = data.daily_limit
+    if data.imap_host is not None:
+        box.imap_host = data.imap_host
+    if data.imap_port is not None:
+        box.imap_port = data.imap_port
+    if data.password is not None:
+        if data.password:
+            ok, message = verify_auth(box.host, box.port, box.username, data.password)
+            if not ok:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
+        box.password = data.password
+    box.save()
+    logger.info("mailboxes: updated %s for user %s", box.from_address, user_id)
     return _to_response(box)
 
 
