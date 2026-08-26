@@ -30,6 +30,7 @@ import {
   type Mailbox,
   type MailboxCreate,
 } from "@/lib/api/mailboxes";
+import { getSettings, updateSettings } from "@/lib/api/dashboard";
 
 const GMAIL_APP_PASSWORD_URL =
   "https://support.google.com/accounts/answer/185833";
@@ -388,6 +389,83 @@ function AddMailboxModal({ onAdded }: { onAdded: (box: Mailbox) => void }) {
   );
 }
 
+function SequenceConfigForm() {
+  const [day1, setDay1] = useState(3);
+  const [day2, setDay2] = useState(7);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    void (async () => {
+      const res = await getSettings();
+      if (res.data?.email) {
+        setDay1(res.data.email.followupDay1);
+        setDay2(res.data.email.followupDay2);
+      }
+    })();
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true);
+    setSaved(false);
+    try {
+      await updateSettings({ email: { followupDay1: day1, followupDay2: day2 } });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Icons.Clock className="h-5 w-5" />
+          Sequence timing
+        </CardTitle>
+        <CardDescription>
+          Days between each email in the 3-step sequence. Measured from the first send date.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-1">
+            <Label htmlFor="seq-day1">Follow-up 1 (days after step 0)</Label>
+            <Input
+              id="seq-day1"
+              type="number"
+              min={1}
+              max={30}
+              value={day1}
+              onChange={(e) => setDay1(Math.max(1, parseInt(e.target.value) || 1))}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="seq-day2">Follow-up 2 (days after step 0)</Label>
+            <Input
+              id="seq-day2"
+              type="number"
+              min={1}
+              max={60}
+              value={day2}
+              onChange={(e) => setDay2(Math.max(1, parseInt(e.target.value) || 1))}
+            />
+          </div>
+        </div>
+        <Button onClick={handleSave} disabled={saving} size="sm">
+          {saving ? (
+            <Icons.RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+          ) : saved ? (
+            <Icons.Check className="mr-2 h-4 w-4" />
+          ) : null}
+          {saved ? "Saved" : "Save"}
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
 export function EmailTab() {
   const [mailboxes, setMailboxes] = useState<Mailbox[]>([]);
   const [loading, setLoading] = useState(true);
@@ -413,6 +491,7 @@ export function EmailTab() {
     setMailboxes((prev) => prev.filter((b) => b.id !== id));
 
   return (
+    <div className="space-y-6">
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
@@ -456,5 +535,7 @@ export function EmailTab() {
         )}
       </CardContent>
     </Card>
+    <SequenceConfigForm />
+    </div>
   );
 }

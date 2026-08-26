@@ -69,6 +69,31 @@ const stateConfig: Record<DealState, { label: string; variant: 'default' | 'seco
     label: 'No Email',
     variant: 'secondary',
     color: 'text-gray-600 border-gray-600'
+  },
+  EMAIL_QUEUED: {
+    label: 'Email Queued',
+    variant: 'outline',
+    color: 'text-sky-600 border-sky-600'
+  },
+  EMAIL_SENT: {
+    label: 'Email Sent',
+    variant: 'outline',
+    color: 'text-blue-600 border-blue-600'
+  },
+  EMAIL_OPENED: {
+    label: 'Email Opened',
+    variant: 'outline',
+    color: 'text-violet-600 border-violet-600'
+  },
+  EMAIL_REPLIED: {
+    label: 'Email Replied',
+    variant: 'outline',
+    color: 'text-emerald-600 border-emerald-600'
+  },
+  EMAIL_BOUNCED: {
+    label: 'Email Bounced',
+    variant: 'destructive',
+    color: 'text-red-600 border-red-600'
   }
 }
 

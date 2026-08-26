@@ -105,6 +105,8 @@ class SiteConfigUpdate(BaseModel):
     wa_active_start_hour: Optional[int] = Field(None, ge=0, le=23, description="Update WhatsApp active hours start")
     wa_active_end_hour: Optional[int] = Field(None, ge=0, le=23, description="Update WhatsApp active hours end")
     wa_active_days: Optional[str] = Field(None, description="Update WhatsApp active days (comma-separated)")
+    email_followup_day1: Optional[int] = Field(None, ge=1, description="Days after step 0 to send follow-up 1")
+    email_followup_day2: Optional[int] = Field(None, ge=1, description="Days after step 0 to send follow-up 2")
 
     @model_validator(mode="before")
     @classmethod
@@ -182,6 +184,13 @@ class SiteConfigUpdate(BaseModel):
             data.setdefault("wa_active_end_hour", wa["activeEndHour"])
         if wa.get("activeDays") is not None:
             data.setdefault("wa_active_days", wa["activeDays"])
+
+        # email sub-object
+        em = data.pop("email", None) or {}
+        if em.get("followupDay1") is not None:
+            data.setdefault("email_followup_day1", em["followupDay1"])
+        if em.get("followupDay2") is not None:
+            data.setdefault("email_followup_day2", em["followupDay2"])
 
         return data
 

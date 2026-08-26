@@ -153,6 +153,16 @@ export default function CampaignLeadsPage() {
         return 'border-red-500/20 text-red-600 dark:text-red-400 bg-red-500/10'
       case 'NO_EMAIL':
         return 'border-gray-500/20 text-gray-500 dark:text-gray-400 bg-gray-500/10'
+      case 'EMAIL_QUEUED':
+        return 'border-sky-500/20 text-sky-600 dark:text-sky-400 bg-sky-500/10'
+      case 'EMAIL_SENT':
+        return 'border-blue-500/20 text-blue-600 dark:text-blue-400 bg-blue-500/10'
+      case 'EMAIL_OPENED':
+        return 'border-violet-500/20 text-violet-600 dark:text-violet-400 bg-violet-500/10'
+      case 'EMAIL_REPLIED':
+        return 'border-emerald-500/20 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10'
+      case 'EMAIL_BOUNCED':
+        return 'border-red-500/20 text-red-600 dark:text-red-400 bg-red-500/10'
       default:
         return 'border-gray-500/20 text-gray-600 dark:text-gray-400 bg-gray-500/10'
     }
@@ -281,6 +291,11 @@ export default function CampaignLeadsPage() {
                   <SelectItem value="COMPLETED">Done</SelectItem>
                   <SelectItem value="FAILED">Failed</SelectItem>
                   <SelectItem value="NO_EMAIL">No Email</SelectItem>
+                  <SelectItem value="EMAIL_QUEUED">Email Queued</SelectItem>
+                  <SelectItem value="EMAIL_SENT">Email Sent</SelectItem>
+                  <SelectItem value="EMAIL_OPENED">Email Opened</SelectItem>
+                  <SelectItem value="EMAIL_REPLIED">Email Replied</SelectItem>
+                  <SelectItem value="EMAIL_BOUNCED">Email Bounced</SelectItem>
                 </SelectContent>
               </Select>
             </div>

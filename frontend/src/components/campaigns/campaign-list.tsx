@@ -30,7 +30,7 @@ import {
 } from '@/components/ui/tooltip'
 import { Icons } from '@/lib/types/components'
 import { Lead, DealState } from '@/lib/types/components'
-import { Smartphone } from 'lucide-react'
+import { Smartphone, Mail, MailOpen, Clock, Reply, MailX } from 'lucide-react'
 import { stateColorMapping } from '@/components/dashboard/campaign-card'
 import { cn } from '@/lib/utils'
 
@@ -218,6 +218,11 @@ export function CampaignList({ leads, campaignId, className, onLeadsUpdated }: C
               <SelectItem value="COMPLETED">Completed</SelectItem>
               <SelectItem value="FAILED">Failed</SelectItem>
               <SelectItem value="NO_EMAIL">No Email</SelectItem>
+              <SelectItem value="EMAIL_QUEUED">Email Queued</SelectItem>
+              <SelectItem value="EMAIL_SENT">Email Sent</SelectItem>
+              <SelectItem value="EMAIL_OPENED">Email Opened</SelectItem>
+              <SelectItem value="EMAIL_REPLIED">Email Replied</SelectItem>
+              <SelectItem value="EMAIL_BOUNCED">Email Bounced</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -395,6 +400,60 @@ export function CampaignList({ leads, campaignId, className, onLeadsUpdated }: C
                         <Badge variant="outline" className="text-xs border-emerald-500/20 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10">
                           WA
                         </Badge>
+                      )}
+                      {lead.state === 'EMAIL_QUEUED' && (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="text-sky-500"><Clock className="h-3.5 w-3.5" /></span>
+                            </TooltipTrigger>
+                            <TooltipContent><p>Email queued</p></TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
+                      {lead.state === 'EMAIL_SENT' && (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="text-blue-500"><Mail className="h-3.5 w-3.5" /></span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Step {(lead.emailSequenceStep ?? 0) + 1} of 3 · Sent{lead.emailSentAt ? ` ${new Date(lead.emailSentAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : ''}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
+                      {lead.state === 'EMAIL_OPENED' && (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="text-violet-500"><MailOpen className="h-3.5 w-3.5" /></span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Step {(lead.emailSequenceStep ?? 0) + 1} of 3 · Opened{lead.emailSentAt ? ` ${new Date(lead.emailSentAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : ''}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
+                      {lead.state === 'EMAIL_REPLIED' && (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="text-emerald-500"><Reply className="h-3.5 w-3.5" /></span>
+                            </TooltipTrigger>
+                            <TooltipContent><p>Replied to email</p></TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
+                      {lead.state === 'EMAIL_BOUNCED' && (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="text-red-500"><MailX className="h-3.5 w-3.5" /></span>
+                            </TooltipTrigger>
+                            <TooltipContent><p>Email bounced</p></TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                       )}
                     </div>
                   </TableCell>

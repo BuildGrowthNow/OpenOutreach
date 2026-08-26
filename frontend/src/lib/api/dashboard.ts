@@ -376,7 +376,7 @@ export async function getCampaignLeads(
   // API returns { total, limit, offset, results: [{lead, deal}] }
   type RawLeadDeal = {
     lead: { id: string; public_identifier: string; url: string; full_name?: string; company?: string; headline?: string; location?: string; disqualified?: boolean; created_at?: string };
-    deal: { id: string; lead_id: string; campaign_id: string; state: string; outcome?: string; reason?: string; creation_date?: string; last_outgoing_at?: string; next_follow_up_at?: string; unanswered_count?: number; qualification_hold?: boolean; qualification_reason?: string };
+    deal: { id: string; lead_id: string; campaign_id: string; state: string; outcome?: string; reason?: string; creation_date?: string; last_outgoing_at?: string; next_follow_up_at?: string; unanswered_count?: number; qualification_hold?: boolean; qualification_reason?: string; active_channel?: string; email_sequence_step?: number; email_sent_at?: string };
   };
   type RawResponse = { total: number; limit: number; offset: number; results: RawLeadDeal[]; pipelineCounts?: Record<string, number> };
 
@@ -411,6 +411,9 @@ export async function getCampaignLeads(
       lastOutgoingAt: deal.last_outgoing_at || undefined,
       nextFollowUpAt: deal.next_follow_up_at || undefined,
       unansweredCount: deal.unanswered_count ?? 0,
+      activeChannel: deal.active_channel || undefined,
+      emailSequenceStep: deal.email_sequence_step ?? 0,
+      emailSentAt: deal.email_sent_at || undefined,
     };
   });
 
@@ -742,6 +745,10 @@ export interface Settings {
     activeEndHour: number;
     activeDays: string;
   };
+  email?: {
+    followupDay1: number;
+    followupDay2: number;
+  };
 }
 
 export async function getSettings(): Promise<ApiResponse<Settings>> {
@@ -755,6 +762,7 @@ export async function updateSettings(
     activeHours?: Partial<Settings["activeHours"]>;
     linkedinProfile?: Partial<Settings["linkedinProfile"]>;
     whatsapp?: Partial<NonNullable<Settings["whatsapp"]>>;
+    email?: Partial<NonNullable<Settings["email"]>>;
   }>,
 ): Promise<ApiResponse<Settings>> {
   return patch("/api/settings", data);

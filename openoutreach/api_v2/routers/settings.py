@@ -161,6 +161,10 @@ async def get_settings(
         "whatsapp": {
             **_wa_settings_with_warmup(user_id, config),
         },
+        "email": {
+            "followupDay1": getattr(config, "email_followup_day1", 3),
+            "followupDay2": getattr(config, "email_followup_day2", 7),
+        },
     }
 
 

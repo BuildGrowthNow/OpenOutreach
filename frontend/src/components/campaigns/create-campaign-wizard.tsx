@@ -54,6 +54,8 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
   const [waProfileId, setWaProfileId] = useState('');
   const [waMessageTemplate, setWaMessageTemplate] = useState('');
   const [waProfiles, setWaProfiles] = useState<WhatsAppProfile[]>([]);
+  const [enableEmail, setEnableEmail] = useState(false);
+  const [hasMailboxes, setHasMailboxes] = useState(false);
 
   // Step 3 fields - Lead Source
   const [leadSource, setLeadSource] = useState('linkedin_search');
@@ -85,6 +87,14 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
       const connected = all.filter(p => p.status === 'connected')
       setWaProfiles(connected)
       if (connected.length) setWaProfileId(connected[0].id)
+    }
+    void load()
+  }, [])
+
+  useEffect(() => {
+    const load = async () => {
+      const res = await apiClient.get<{ id: string }[]>('/mailboxes')
+      setHasMailboxes((res.data ?? []).length > 0)
     }
     void load()
   }, [])
@@ -168,7 +178,8 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
       return;
     }
 
-    const channelSequence = enableWhatsApp ? ['whatsapp', 'linkedin'] : ['linkedin'];
+    const channelSequence: string[] = enableWhatsApp ? ['whatsapp', 'linkedin'] : ['linkedin'];
+    if (enableEmail) channelSequence.push('email');
     const channelSettings: Record<string, unknown> = {
       linkedin: { max_attempts: 5 },
     };
@@ -177,6 +188,9 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
         max_attempts: 3,
         message_template: waMessageTemplate.trim(),
       };
+    }
+    if (enableEmail) {
+      channelSettings.email = { max_attempts: 3 };
     }
 
     try {
@@ -536,6 +550,23 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
                 )}
               </div>
             </div>
+
+            {hasMailboxes && (
+              <div className="flex items-start gap-3 p-3 rounded-lg border">
+                <Checkbox
+                  id="ch-email"
+                  checked={enableEmail}
+                  onCheckedChange={(checked) => setEnableEmail(Boolean(checked))}
+                  className="mt-0.5"
+                />
+                <div>
+                  <Label htmlFor="ch-email" className="text-base font-medium cursor-pointer">Email</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Send personalised cold emails via your connected mailboxes after LinkedIn outreach
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Lead Source */}
@@ -551,6 +582,7 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
               <div className="space-y-3 pt-2">
                 <Label className="text-base">Lead Source</Label>
                 <Select value={leadSource} onValueChange={(v) => {
+                  if (!v) return;
                   setLeadSource(v);
                   if (QUERY_SOURCES.includes(v) && waProfiles.length > 0) {
                     setEnableWhatsApp(true);

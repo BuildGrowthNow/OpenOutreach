@@ -1034,6 +1034,8 @@ class DealResponse(BaseModel):
     active_channel: str = "linkedin"
     qualification_hold: bool = False
     qualification_reason: Optional[str] = None
+    email_sequence_step: int = 0
+    email_sent_at: Optional[str] = None
 
 
 @router.get("/{campaign_id}/leads")
@@ -1218,6 +1220,8 @@ async def get_campaign_leads(
                     active_channel=deal.get("active_channel", "linkedin"),
                     qualification_hold=bool(deal.get("qualification_hold", False)),
                     qualification_reason=deal.get("qualification_reason"),
+                    email_sequence_step=deal.get("email_sequence_step", 0),
+                    email_sent_at=deal.get("email_sent_at").isoformat() if deal.get("email_sent_at") else None,
                 )
             })
 

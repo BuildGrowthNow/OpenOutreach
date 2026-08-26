@@ -15,6 +15,11 @@ export function normalizeState(state: string | null | undefined): string | null 
     'Completed': 'COMPLETED',
     'Failed': 'FAILED',
     'No Email': 'NO_EMAIL',
+    'email_queued': 'EMAIL_QUEUED',
+    'email_sent': 'EMAIL_SENT',
+    'email_opened': 'EMAIL_OPENED',
+    'email_replied': 'EMAIL_REPLIED',
+    'email_bounced': 'EMAIL_BOUNCED',
   };
   
   return stateMap[state] || state;

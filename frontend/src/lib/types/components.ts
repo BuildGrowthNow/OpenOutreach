@@ -192,7 +192,12 @@ export type DealState =
   | "CONNECTED"
   | "COMPLETED"
   | "FAILED"
-  | "NO_EMAIL";
+  | "NO_EMAIL"
+  | "EMAIL_QUEUED"
+  | "EMAIL_SENT"
+  | "EMAIL_OPENED"
+  | "EMAIL_REPLIED"
+  | "EMAIL_BOUNCED";
 
 // Deal outcome variants
 export type DealOutcome =
@@ -269,6 +274,8 @@ export interface Lead {
   qualificationHold?: boolean;
   qualificationReason?: string;
   connectAttempts?: number;
+  emailSequenceStep?: number;
+  emailSentAt?: string;
   profile?: {
     firstName?: string;
     lastName?: string;

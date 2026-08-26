@@ -42,6 +42,11 @@ const stateColorMapping: Record<DealState, string> = {
   COMPLETED: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
   FAILED: 'bg-red-500/10 text-red-600 dark:text-red-400',
   NO_EMAIL: 'bg-gray-500/10 text-gray-600 dark:text-gray-400',
+  EMAIL_QUEUED: 'bg-sky-500/10 text-sky-600 dark:text-sky-400',
+  EMAIL_SENT: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
+  EMAIL_OPENED: 'bg-violet-500/10 text-violet-600 dark:text-violet-400',
+  EMAIL_REPLIED: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+  EMAIL_BOUNCED: 'bg-red-500/10 text-red-600 dark:text-red-400',
 }
 
 function getCreatedDate(campaign: Campaign): string {
