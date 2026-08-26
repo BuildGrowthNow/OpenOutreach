@@ -29,6 +29,15 @@ _MAX_PLACE_VISITS = 25     # Google Maps detail pages per run — caps CAPTCHA e
 _SCROLL_PAUSE_MS = 1200
 _MAX_SCROLL_ROUNDS = 20
 
+_COUNTRY_NAMES = {
+    "US": "United States", "GB": "United Kingdom", "CA": "Canada",
+    "AU": "Australia", "DE": "Germany", "FR": "France", "ES": "Spain",
+    "IT": "Italy", "BR": "Brazil", "MX": "Mexico", "NL": "Netherlands",
+    "SE": "Sweden", "PL": "Poland", "PT": "Portugal", "AR": "Argentina",
+    "CO": "Colombia", "CL": "Chile", "NZ": "New Zealand", "ZA": "South Africa",
+    "IE": "Ireland",
+}
+
 
 def _scroll_until_stable(page, selector: str) -> None:
     """Scroll until two consecutive rounds produce no new children."""
@@ -420,7 +429,8 @@ _YELP_MAX_BIZ_VISITS = 15
 def _scrape_yelp(page, query: str, country_code: str) -> List[BusinessListing]:
     import json as _json
 
-    url = f"https://www.yelp.com/search?find_desc={urllib.parse.quote(query)}&find_loc={country_code}"
+    location = _COUNTRY_NAMES.get(country_code.upper(), country_code)
+    url = f"https://www.yelp.com/search?find_desc={urllib.parse.quote(query)}&find_loc={urllib.parse.quote(location)}"
     page.goto(url, wait_until="domcontentloaded", timeout=30000)
     try:
         page.wait_for_selector("a[href*='/biz/'], h3 a", timeout=15000)
@@ -587,6 +597,31 @@ def create_leads_from_maps(
             "maps_scraper: min_rating=%.1f kept %d/%d listings",
             min_rating, len(all_listings), before,
         )
+
+    # Skip phones already in DB — saves spider pass + ICP tokens on re-runs
+    already_known: frozenset = frozenset()
+    try:
+        from openoutreach.mongodb.connection import get_mongodb_collection
+        leads_col = get_mongodb_collection("leads")
+        if leads_col is not None:
+            already_known = frozenset(
+                d["phone"] for d in leads_col.find(
+                    {"user_id": user_id, "phone": {"$ne": None}},
+                    {"phone": 1},
+                ) if d.get("phone")
+            )
+    except Exception as exc:
+        logger.warning("maps_scraper: dedup pre-fetch failed: %s", exc)
+
+    if already_known:
+        before = len(all_listings)
+        all_listings = [
+            lst for lst in all_listings
+            if not lst.phone or lst.phone not in already_known
+        ]
+        skipped = before - len(all_listings)
+        if skipped:
+            logger.info("maps_scraper: dedup removed %d already-known phones", skipped)
 
     # Partition into phone-ready listings and website-only partials
     ready = [lst for lst in all_listings if lst.phone]

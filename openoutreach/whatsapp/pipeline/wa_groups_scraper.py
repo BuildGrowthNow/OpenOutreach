@@ -385,7 +385,6 @@ def _scrape_wa_links(page, query: str, country_code: str) -> List[BusinessListin
             name=phone_name.get(phone, ""),
             source="wa_groups",
             phone=phone,
-            category=query,
         )
         for phone in all_phones
     ]
