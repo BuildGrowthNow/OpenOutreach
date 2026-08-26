@@ -751,24 +751,51 @@ def _route_deal_channels(campaign) -> None:
     """Set Deal.active_channel based on campaign.channel_sequence and lead availability.
 
     Called on every reconcile pass before task planning.
-    - QUALIFIED deals at default channel: if whatsapp precedes linkedin in sequence
-      and lead.phone is set → set active_channel = "whatsapp"
-    - FAILED deals with active_channel = "whatsapp": if linkedin is in sequence
-      and lead has linkedin_url → reset to QUALIFIED + active_channel = "linkedin"
+    - Email: QUALIFIED deals with api_email → state=email_queued, active_channel=email
+    - WhatsApp: QUALIFIED deals (linkedin/null) where WA precedes linkedin
+      and lead.phone is set → active_channel=whatsapp
+    - WA→LinkedIn fallback: FAILED WA deals with linkedin_url → QUALIFIED + linkedin
     """
     from openoutreach.mongodb.connection import get_mongodb_collection
 
     channel_sequence = getattr(campaign, "channel_sequence", None) or ["linkedin"]
-    if len(channel_sequence) <= 1:
-        return
 
     deals_col = get_mongodb_collection("deals")
     leads_col = get_mongodb_collection("leads")
     if deals_col is None or leads_col is None:
         return
 
+    has_email = "email" in channel_sequence
     has_wa = "whatsapp" in channel_sequence
     has_li = "linkedin" in channel_sequence
+
+    # Email routing — works for single-channel ["email"] and multi-channel campaigns.
+    if has_email:
+        routed = 0
+        for deal_doc in deals_col.find(
+            {
+                "campaign_id": campaign.pk,
+                "state": "Qualified",
+                "active_channel": {"$in": ["linkedin", None]},
+            },
+            {"_id": 1, "lead_id": 1},
+        ):
+            if leads_col.find_one(
+                {"_id": deal_doc["lead_id"], "api_email": {"$nin": [None, ""]}},
+                {"_id": 1},
+            ):
+                deals_col.update_one(
+                    {"_id": deal_doc["_id"]},
+                    {"$set": {"state": "email_queued", "active_channel": "email"}},
+                )
+                routed += 1
+        if routed:
+            logger.info("Channel route [%s]: %d deals → email_queued", campaign.pk, routed)
+
+    # WhatsApp routing (unchanged)
+    if len(channel_sequence) <= 1:
+        return
+
     wa_before_li = (
         has_wa and has_li
         and channel_sequence.index("whatsapp") < channel_sequence.index("linkedin")

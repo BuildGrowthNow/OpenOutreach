@@ -378,6 +378,7 @@ async def reconcile_tasks(
         _route_deal_channels,
         plan_check_pending_window,
         plan_connect_window,
+        plan_email_follow_up_window,
         plan_follow_up_window,
         plan_whatsapp_window,
         plan_whatsapp_follow_up_window,
@@ -427,9 +428,16 @@ async def reconcile_tasks(
         tasks_created += plan_follow_up_window(session, campaign)
         tasks_created += plan_check_pending_window(session, campaign)
 
+        # Email task planning
+        channel_seq = getattr(campaign, "channel_sequence", None) or []
+        if "email" in channel_seq:
+            _route_deal_channels(campaign)
+            tasks_created += plan_email_follow_up_window(
+                campaign, user_id=user_id, linkedin_profile_id=linkedin_profile_id
+            )
+
         # WhatsApp task planning - only when campaign has WA configured
         wa_profile_id = getattr(campaign, "whatsapp_profile_id", None)
-        channel_seq = getattr(campaign, "channel_sequence", None) or []
         if wa_profile_id and "whatsapp" in channel_seq:
             _auto_qualify_wa_leads(campaign)
             _route_deal_channels(campaign)

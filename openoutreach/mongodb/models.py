@@ -382,8 +382,26 @@ class Lead:
             resolve_email,
         )
 
+        profile = self.cached_profile or {}
+        first_name = profile.get("firstName", "")
+        last_name = profile.get("lastName", "")
+
+        company = self.company or ""
+        experience = profile.get("experience") or []
+        if experience and isinstance(experience, list) and isinstance(experience[0], dict):
+            company = experience[0].get("companyName", "") or company
+
         try:
-            result = resolve_email(FinderQuery(linkedin_url=self.linkedin_url), user_id=self.user_id)
+            result = resolve_email(
+                FinderQuery(
+                    linkedin_url=self.linkedin_url or "",
+                    first_name=first_name,
+                    last_name=last_name,
+                    company=company,
+                    cached_profile=profile,
+                ),
+                user_id=self.user_id,
+            )
         except FinderUnavailable:
             return None
         if result:

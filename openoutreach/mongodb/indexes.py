@@ -243,6 +243,12 @@ def ensure_all_indexes():
             ({'from_address': 1}, {'name': 'mailbox_from_idx'}),
         ]),
 
+        # Email domain pattern cache (free enrichment waterfall)
+        ('email_domain_patterns', [
+            ({'company_name': 1}, {'name': 'email_domain_company_idx'}),
+            ({'updated_at': 1}, {'name': 'email_domain_updated_idx'}),
+        ]),
+
         # Campaign Templates
         ('campaign_templates', [
             ({'created_by_id': 1}, {'name': 'template_creator_idx'}),
