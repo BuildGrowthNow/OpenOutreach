@@ -35,10 +35,13 @@ def find_reply(mailbox, original_message_id: str) -> tuple[str, datetime] | None
         return None
 
     imap_port = mailbox.imap_port or 993
+    # Use dedicated IMAP credentials when configured; fall back to SMTP credentials.
+    imap_user = mailbox.imap_username or mailbox.username
+    imap_pass = mailbox.imap_password  # property already falls back to SMTP password
 
     try:
         with imaplib.IMAP4_SSL(mailbox.imap_host, imap_port) as imap:
-            imap.login(mailbox.username, mailbox.password)
+            imap.login(imap_user, imap_pass)
             imap.select("INBOX", readonly=True)
             return _search_inbox(imap, original_message_id)
 
@@ -146,9 +149,11 @@ def scan_imap_replies(user_id: str) -> int:
             continue
 
         imap_port = mailbox.imap_port or 993
+        imap_user = mailbox.imap_username or mailbox.username
+        imap_pass = mailbox.imap_password  # property falls back to SMTP password
         try:
             with imaplib.IMAP4_SSL(mailbox.imap_host, imap_port) as imap:
-                imap.login(mailbox.username, mailbox.password)
+                imap.login(imap_user, imap_pass)
                 imap.select("INBOX", readonly=True)
 
                 for deal_doc in deal_docs:
@@ -161,11 +166,19 @@ def scan_imap_replies(user_id: str) -> int:
                         continue
 
                     reply_text, received_at = result
-                    deals_col.update_one(
-                        {"_id": deal_doc["_id"]},
+                    # Conditional update: only advance deals still in email_sent/email_opened.
+                    # modified_count == 0 means another cycle already advanced this deal;
+                    # skip the ChatMessage write to avoid duplicates.
+                    update_result = deals_col.update_one(
+                        {
+                            "_id": deal_doc["_id"],
+                            "state": {"$in": ["email_sent", "email_opened"]},
+                        },
                         {"$set": {"state": "email_replied"}},
                     )
-                    # Write reply as inbound ChatMessage with actual email timestamp.
+                    if update_result.modified_count == 0:
+                        continue
+
                     try:
                         from openoutreach.mongodb.models_extended import ChatMessage
                         msg = ChatMessage(

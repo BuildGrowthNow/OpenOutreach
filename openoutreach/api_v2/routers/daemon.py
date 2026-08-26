@@ -466,6 +466,20 @@ async def reconcile_tasks(
             tasks_created += plan_whatsapp_follow_up_window(campaign, wa_profile_id, user_id)
             tasks_created += plan_whatsapp_sync_window(campaign, wa_profile_id, user_id)
 
+    # Proactive IMAP reply scan — advance EMAIL_SENT/EMAIL_OPENED deals to EMAIL_REPLIED
+    # without waiting for the next follow-up task to fire. Runs once per reconcile cycle.
+    # Only triggered when at least one active campaign uses the email channel.
+    any_email_campaign = any(
+        "email" in (getattr(Campaign.from_dict(doc), "channel_sequence", None) or [])
+        for doc in campaigns_data
+    )
+    if any_email_campaign:
+        try:
+            from openoutreach.core.scheduler import _scan_email_replies_once
+            _scan_email_replies_once(user_id)
+        except Exception as _imap_exc:
+            logger.debug("Reconcile: IMAP scan error for user %s: %s", user_id, _imap_exc)
+
     total_campaigns = len(campaigns_data) + len(wa_campaigns_data)
     logger.info("Reconcile for profile %s: %d tasks created across %d campaigns",
                 linkedin_profile_id, tasks_created, total_campaigns)

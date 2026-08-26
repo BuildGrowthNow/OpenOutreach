@@ -14,6 +14,7 @@ export interface Mailbox {
   sentToday: number;
   imapHost: string;
   imapPort: number;
+  imapUsername: string;
   paused: boolean;
 }
 
@@ -27,6 +28,8 @@ export interface MailboxCreate {
   dailyLimit?: number;
   imapHost?: string;
   imapPort?: number;
+  imapUsername?: string;
+  imapPassword?: string;
 }
 
 export interface MailboxTestResult {
@@ -66,6 +69,8 @@ export async function createMailbox(data: MailboxCreate): Promise<Mailbox> {
     daily_limit: data.dailyLimit ?? 40,
     imap_host: data.imapHost || "",
     imap_port: data.imapPort ?? 993,
+    imap_username: data.imapUsername || "",
+    imap_password: data.imapPassword || "",
   });
   if (!res.data) throw new Error(res.error ?? "Failed to create mailbox");
   return res.data;
@@ -76,6 +81,8 @@ export interface MailboxUpdate {
   dailyLimit?: number;
   imapHost?: string;
   imapPort?: number;
+  imapUsername?: string;
+  imapPassword?: string;
   password?: string;
 }
 
@@ -85,6 +92,8 @@ export async function updateMailbox(mailboxId: string, data: MailboxUpdate): Pro
   if (data.dailyLimit !== undefined) payload.daily_limit = data.dailyLimit;
   if (data.imapHost !== undefined) payload.imap_host = data.imapHost;
   if (data.imapPort !== undefined) payload.imap_port = data.imapPort;
+  if (data.imapUsername !== undefined) payload.imap_username = data.imapUsername;
+  if (data.imapPassword !== undefined) payload.imap_password = data.imapPassword;
   if (data.password !== undefined) payload.password = data.password;
   const res = await apiClient.patch<Mailbox>(`/mailboxes/${mailboxId}`, payload);
   if (!res.data) throw new Error(res.error ?? "Failed to update mailbox");

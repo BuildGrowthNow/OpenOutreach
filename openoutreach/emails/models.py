@@ -134,6 +134,8 @@ class Mailbox:
         user_id: str = "",
         imap_host: str = "",
         imap_port: int = 993,
+        imap_username: str = "",
+        imap_password: str = "",
         created_at: Optional[datetime] = None,
         paused: bool = False,
     ):
@@ -148,6 +150,8 @@ class Mailbox:
         self.user_id = user_id
         self.imap_host = imap_host
         self.imap_port = imap_port
+        self.imap_username = imap_username
+        self._imap_password_encrypted: str = safe_encrypt(imap_password) if imap_password else ""
         self.created_at = created_at or datetime.now(timezone.utc)
         self.paused = paused
 
@@ -159,6 +163,17 @@ class Mailbox:
     @password.setter
     def password(self, value: str) -> None:
         self._password_encrypted = safe_encrypt(value) if value else ""
+
+    @property
+    def imap_password(self) -> str:
+        """Return decrypted IMAP password (falls back to SMTP password when not set)."""
+        if self._imap_password_encrypted:
+            return safe_decrypt(self._imap_password_encrypted)
+        return self.password
+
+    @imap_password.setter
+    def imap_password(self, value: str) -> None:
+        self._imap_password_encrypted = safe_encrypt(value) if value else ""
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert model instance to dictionary for MongoDB storage."""
@@ -174,6 +189,8 @@ class Mailbox:
             "user_id": self.user_id,
             "imap_host": self.imap_host,
             "imap_port": self.imap_port,
+            "imap_username": self.imap_username,
+            "imap_password": self._imap_password_encrypted,  # always store encrypted
             "created_at": self.created_at,
             "paused": self.paused,
         }
@@ -194,6 +211,8 @@ class Mailbox:
         obj.user_id = data.get("user_id", "")
         obj.imap_host = data.get("imap_host", "")
         obj.imap_port = data.get("imap_port", 993)
+        obj.imap_username = data.get("imap_username", "")
+        obj._imap_password_encrypted = data.get("imap_password", "")
         obj.created_at = data.get("created_at") or datetime.now(timezone.utc)
         obj.paused = data.get("paused", False)
         return obj

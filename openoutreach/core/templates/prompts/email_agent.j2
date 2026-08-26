@@ -62,7 +62,4 @@ Write email step {{ sequence_step }} (0 = cold outreach, 1 = first follow-up, 2 
 
 ## Output Format
 
-Return ONLY valid JSON with exactly two keys:
-{"subject": "<email subject line>", "body": "<email body, plain text, newlines as \\n>"}
-
-No markdown fences. No explanation. JSON only.
+Return a subject line and a plain-text body. No markdown. No explanations outside the email itself.

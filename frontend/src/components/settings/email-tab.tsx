@@ -50,6 +50,8 @@ function EditMailboxModal({
   const [dailyLimit, setDailyLimit] = useState(String(box.dailyLimit));
   const [imapHost, setImapHost] = useState(box.imapHost);
   const [imapPort, setImapPort] = useState(String(box.imapPort));
+  const [imapUsername, setImapUsername] = useState(box.imapUsername);
+  const [imapPassword, setImapPassword] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -62,6 +64,8 @@ function EditMailboxModal({
         dailyLimit: parseInt(dailyLimit) || 40,
         imapHost,
         imapPort: parseInt(imapPort) || 993,
+        imapUsername,
+        ...(imapPassword ? { imapPassword } : {}),
       });
       onUpdated(updated);
       setOpen(false);
@@ -106,24 +110,50 @@ function EditMailboxModal({
                 />
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-2 rounded-md border p-3">
-              <div className="col-span-2 space-y-1">
-                <Label htmlFor="edit-imap-host">IMAP host</Label>
-                <Input
-                  id="edit-imap-host"
-                  value={imapHost}
-                  onChange={(e) => setImapHost(e.target.value)}
-                  placeholder="imap.gmail.com"
-                />
+            <div className="space-y-2 rounded-md border p-3">
+              <div className="grid grid-cols-3 gap-2">
+                <div className="col-span-2 space-y-1">
+                  <Label htmlFor="edit-imap-host">IMAP host</Label>
+                  <Input
+                    id="edit-imap-host"
+                    value={imapHost}
+                    onChange={(e) => setImapHost(e.target.value)}
+                    placeholder="imap.gmail.com"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="edit-imap-port">Port</Label>
+                  <Input
+                    id="edit-imap-port"
+                    value={imapPort}
+                    onChange={(e) => setImapPort(e.target.value)}
+                    placeholder="993"
+                  />
+                </div>
               </div>
-              <div className="space-y-1">
-                <Label htmlFor="edit-imap-port">Port</Label>
-                <Input
-                  id="edit-imap-port"
-                  value={imapPort}
-                  onChange={(e) => setImapPort(e.target.value)}
-                  placeholder="993"
-                />
+              <p className="text-xs text-muted-foreground">
+                Optional: only fill if IMAP uses different credentials than SMTP.
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label htmlFor="edit-imap-username">IMAP username</Label>
+                  <Input
+                    id="edit-imap-username"
+                    value={imapUsername}
+                    onChange={(e) => setImapUsername(e.target.value)}
+                    placeholder="same as SMTP"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="edit-imap-password">IMAP password</Label>
+                  <Input
+                    id="edit-imap-password"
+                    type="password"
+                    value={imapPassword}
+                    onChange={(e) => setImapPassword(e.target.value)}
+                    placeholder="leave blank to keep current"
+                  />
+                </div>
               </div>
             </div>
             {error && (
@@ -266,6 +296,8 @@ interface FormState {
   dailyLimit: string;
   imapHost: string;
   imapPort: string;
+  imapUsername: string;
+  imapPassword: string;
 }
 
 const DEFAULT_FORM: FormState = {
@@ -277,6 +309,8 @@ const DEFAULT_FORM: FormState = {
   dailyLimit: "40",
   imapHost: "",
   imapPort: "993",
+  imapUsername: "",
+  imapPassword: "",
 };
 
 function AddMailboxModal({ onAdded }: { onAdded: (box: Mailbox) => void }) {
@@ -334,6 +368,8 @@ function AddMailboxModal({ onAdded }: { onAdded: (box: Mailbox) => void }) {
         dailyLimit: parseInt(form.dailyLimit) || 40,
         imapHost: showImap ? form.imapHost : "",
         imapPort: showImap ? parseInt(form.imapPort) || 993 : 993,
+        imapUsername: showImap ? form.imapUsername : "",
+        imapPassword: showImap ? form.imapPassword : "",
       };
       const box = await createMailbox(data);
       onAdded(box);
@@ -468,24 +504,50 @@ function AddMailboxModal({ onAdded }: { onAdded: (box: Mailbox) => void }) {
           </button>
 
           {showImap && (
-            <div className="grid grid-cols-3 gap-2 rounded-md border p-3">
-              <div className="col-span-2 space-y-1">
-                <Label htmlFor="mb-imap-host">IMAP host</Label>
-                <Input
-                  id="mb-imap-host"
-                  value={form.imapHost}
-                  onChange={set("imapHost")}
-                  placeholder="imap.gmail.com"
-                />
+            <div className="space-y-2 rounded-md border p-3">
+              <div className="grid grid-cols-3 gap-2">
+                <div className="col-span-2 space-y-1">
+                  <Label htmlFor="mb-imap-host">IMAP host</Label>
+                  <Input
+                    id="mb-imap-host"
+                    value={form.imapHost}
+                    onChange={set("imapHost")}
+                    placeholder="imap.gmail.com"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="mb-imap-port">Port</Label>
+                  <Input
+                    id="mb-imap-port"
+                    value={form.imapPort}
+                    onChange={set("imapPort")}
+                    placeholder="993"
+                  />
+                </div>
               </div>
-              <div className="space-y-1">
-                <Label htmlFor="mb-imap-port">Port</Label>
-                <Input
-                  id="mb-imap-port"
-                  value={form.imapPort}
-                  onChange={set("imapPort")}
-                  placeholder="993"
-                />
+              <p className="text-xs text-muted-foreground">
+                Optional: only fill if IMAP uses different credentials than SMTP.
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label htmlFor="mb-imap-username">IMAP username</Label>
+                  <Input
+                    id="mb-imap-username"
+                    value={form.imapUsername}
+                    onChange={set("imapUsername")}
+                    placeholder="same as SMTP"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="mb-imap-password">IMAP password</Label>
+                  <Input
+                    id="mb-imap-password"
+                    type="password"
+                    value={form.imapPassword}
+                    onChange={set("imapPassword")}
+                    placeholder="same as SMTP"
+                  />
+                </div>
               </div>
             </div>
           )}
