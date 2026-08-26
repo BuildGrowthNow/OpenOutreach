@@ -50,6 +50,8 @@ def _scroll_results(page, selector: str) -> None:
 
 
 def _scrape_google_maps(page, query: str, country_code: str) -> List[BusinessListing]:
+    import re as _re
+
     url = f"https://www.google.com/maps/search/{urllib.parse.quote(query)}"
     page.goto(url, wait_until="domcontentloaded", timeout=30000)
     try:
@@ -60,32 +62,48 @@ def _scrape_google_maps(page, query: str, country_code: str) -> List[BusinessLis
 
     _scroll_results(page, '[role="feed"]')
 
+    # Collect place links directly — stable across Google Maps DOM updates
+    seen_hrefs: set = set()
+    place_urls: list = []
+    for el in page.query_selector_all('[role="feed"] a[href*="/maps/place/"]'):
+        href = el.get_attribute("href") or ""
+        if not href:
+            continue
+        if href.startswith("/"):
+            href = "https://www.google.com" + href
+        base_href = href.split("?")[0]
+        if base_href not in seen_hrefs:
+            seen_hrefs.add(base_href)
+            place_urls.append(href)
+        if len(place_urls) >= _MAX_LISTINGS:
+            break
+
+    if not place_urls:
+        logger.warning("google_maps: no place links found for query %r", query)
+        return []
+
     listings: List[BusinessListing] = []
-    cards = page.query_selector_all(
-        '[role="feed"] > div[data-result-index], [role="feed"] > div[jsaction]'
-    )
-    if not cards:
-        cards = page.query_selector_all('[role="feed"] > div')
-
-    for card in cards[:_MAX_LISTINGS]:
+    for place_url in place_urls:
         try:
-            card.click()
-            page.wait_for_timeout(1500)
+            page.goto(place_url, wait_until="domcontentloaded", timeout=20000)
+            page.wait_for_timeout(1200)
 
-            name_el = page.query_selector(
-                "h1.DUwDvf, .fontHeadlineLarge, .fontHeadlineSmall"
-            )
-            name = name_el.inner_text().strip() if name_el else ""
-            if not name:
-                aria = card.get_attribute("aria-label") or ""
-                name = aria.strip()
+            # Name: multiple fallbacks as Google rotates class names
+            name = ""
+            for name_sel in ["h1.DUwDvf", "h1[data-attrid='title']", "h1"]:
+                name_el = page.query_selector(name_sel)
+                if name_el:
+                    name = name_el.inner_text().strip()
+                    if name:
+                        break
 
-            phone_el = page.query_selector('[data-item-id^="phone:"]')
+            # Phone: data-item-id prefix has been stable for years
             raw_phone = ""
+            phone_el = page.query_selector('[data-item-id^="phone:"]')
             if phone_el:
                 raw_phone = (
-                    phone_el.get_attribute("aria-label") or ""
-                ).replace("Phone:", "").strip()
+                    phone_el.get_attribute("aria-label") or phone_el.inner_text() or ""
+                ).replace("Phone:", "").replace("Telefone:", "").replace("Teléfono:", "").strip()
 
             if not raw_phone:
                 continue
@@ -100,34 +118,25 @@ def _scrape_google_maps(page, query: str, country_code: str) -> List[BusinessLis
             website_el = page.query_selector('[data-item-id^="authority"]')
             website = None
             if website_el:
-                website = (
-                    website_el.get_attribute("href")
-                    or website_el.inner_text().strip()
-                    or None
-                )
+                website = website_el.get_attribute("href") or website_el.inner_text().strip() or None
 
-            category_el = page.query_selector(
-                'button[jsaction*="category"], .DkEaL, [data-section-id="speciality"] .mgr77e'
-            )
+            category_el = page.query_selector('button[jsaction*="category"], .DkEaL')
             category = category_el.inner_text().strip() if category_el else None
 
             rating: Optional[float] = None
             review_count: Optional[int] = None
-            rating_el = page.query_selector('[data-value="Rating"], .MW4etd')
+            rating_el = page.query_selector(".MW4etd, [data-value='Rating']")
             if rating_el:
                 try:
-                    rating = float(rating_el.inner_text().strip())
+                    rating = float(rating_el.inner_text().strip().replace(",", "."))
                 except (ValueError, AttributeError):
                     pass
-            reviews_el = page.query_selector('.UY7F9, [aria-label*="reviews"]')
+            reviews_el = page.query_selector(
+                '.UY7F9, [aria-label*="reviews"], [aria-label*="avaliações"], [aria-label*="reseñas"]'
+            )
             if reviews_el:
-                raw_rc = (
-                    reviews_el.get_attribute("aria-label")
-                    or reviews_el.inner_text()
-                    or ""
-                )
-                import re as _re
-                m = _re.search(r"\d+", raw_rc.replace(",", ""))
+                raw_rc = reviews_el.get_attribute("aria-label") or reviews_el.inner_text() or ""
+                m = _re.search(r"[\d]+", raw_rc.replace(",", "").replace(".", ""))
                 if m:
                     try:
                         review_count = int(m.group())
@@ -147,7 +156,7 @@ def _scrape_google_maps(page, query: str, country_code: str) -> List[BusinessLis
                 )
             )
         except Exception as exc:
-            logger.debug("google_maps: error parsing card: %s", exc)
+            logger.debug("google_maps: error parsing place %s: %s", place_url, exc)
 
     return listings
 
