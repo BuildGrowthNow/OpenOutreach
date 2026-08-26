@@ -1,10 +1,8 @@
 """Facebook Business pages scraper.
 
-Searches Facebook for business pages matching `query`, opens each page's
-About section, and extracts phone numbers via tel: links or body text regex.
-
-Note: Facebook heavily throttles unauthenticated browsing. This scraper runs
-      in headed mode and gracefully skips pages that require login.
+Searches DuckDuckGo for Facebook business page URLs (site:facebook.com), then
+visits each page's About section directly. This bypasses Facebook's login wall
+on the FB search endpoint while still reaching publicly-accessible business pages.
 
 Entry point: create_leads_from_facebook(...)
 """
@@ -13,7 +11,7 @@ from __future__ import annotations
 import logging
 import re
 import urllib.parse
-from typing import List
+from typing import List, Tuple
 
 from openoutreach.whatsapp.pipeline.upsert import BusinessListing, upsert_listings_as_leads
 from openoutreach.whatsapp.pipeline.utils import normalize_phone as _normalize_phone
@@ -23,8 +21,28 @@ logger = logging.getLogger(__name__)
 _MAX_PAGES = 20
 _PHONE_RE = re.compile(r"(\+?[\d][\d\s\-\.\(\)]{5,18}[\d])")
 
+# DDG redirect marker — same pattern as wa_groups_scraper
+_DDG_REDIRECT_MARKER = "/l/?uddg="
+
+# Facebook path prefixes to skip when filtering search results
+_FB_SKIP_PREFIXES = (
+    "search", "login", "groups", "events", "watch",
+    "marketplace", "gaming", "help", "policies",
+)
+
+
+def _decode_ddg_href(href: str) -> str:
+    """Unwrap DDG redirect URL (/l/?uddg=...) if present."""
+    if _DDG_REDIRECT_MARKER in href:
+        try:
+            return urllib.parse.unquote(href.split("uddg=")[-1].split("&")[0])
+        except Exception:
+            pass
+    return href
+
 
 def _phone_from_page(page) -> str:
+    """Best-effort phone extraction: tel: link first, then body text regex."""
     tel_el = page.query_selector("a[href^='tel:']")
     if tel_el:
         raw = (tel_el.get_attribute("href") or "").replace("tel:", "").strip()
@@ -41,76 +59,77 @@ def _phone_from_page(page) -> str:
     return ""
 
 
+def _is_fb_business_page(url: str) -> bool:
+    """Return True if url looks like a navigable Facebook business page."""
+    if "facebook.com/" not in url:
+        return False
+    try:
+        path = url.split("facebook.com/", 1)[1].rstrip("/")
+    except IndexError:
+        return False
+    if not path:
+        return False
+    first_segment = path.split("/")[0].split("?")[0].lower()
+    return first_segment not in _FB_SKIP_PREFIXES
+
+
 def _scrape_facebook_pages(
     page, query: str, country_code: str
 ) -> List[BusinessListing]:
-    search_url = (
-        f"https://www.facebook.com/search/pages/?q={urllib.parse.quote(query)}"
-    )
-    page.goto(search_url, wait_until="domcontentloaded", timeout=30000)
+    """Find Facebook business pages via DDG, then visit each /about page directly.
 
-    # Dismiss cookie banner if present
+    Facebook's own /search/pages endpoint requires login; DDG site:facebook.com
+    queries surface public business pages without touching the login wall.
+    """
+    # site:facebook.com/pages narrows to dedicated business page URLs
+    search_query = f"site:facebook.com/pages {query}"
+    url = f"https://duckduckgo.com/?q={urllib.parse.quote(search_query)}&ia=web"
+    page.goto(url, wait_until="domcontentloaded", timeout=30000)
     try:
         page.wait_for_selector(
-            "[data-testid='cookie-policy-dialog-accept-button'], "
-            "button[title='Allow all cookies'], "
-            "button:has-text('Accept all')",
-            timeout=5000,
-        )
-        page.click(
-            "[data-testid='cookie-policy-dialog-accept-button'], "
-            "button[title='Allow all cookies'], "
-            "button:has-text('Accept all')",
-            timeout=3000,
-        )
-    except Exception:
-        pass
-
-    # Redirect to login wall → abort
-    if "/login" in page.url or "login_form" in page.url:
-        logger.warning("facebook: login wall hit - skipping")
-        return []
-
-    try:
-        page.wait_for_selector(
-            "[data-testid='search-result'], div[role='article'], a[href*='/pages/']",
+            ".result__a, [data-testid='result-title-a'], article a",
             timeout=15000,
         )
     except Exception:
-        logger.warning("facebook: no page results for %r", query)
+        logger.warning("facebook: DDG found no results for %r", query)
         return []
 
-    # Collect page profile URLs from search results
-    page_links: List[str] = []
+    fb_urls: List[Tuple[str, str]] = []  # (url, ddg_title)
     seen: set = set()
     for el in page.query_selector_all(
-        "a[href*='/pages/'], a[href*='facebook.com/'], [data-testid='search-result'] a"
+        "[data-testid='result-title-a'][href], "
+        "[data-testid='result-title'][href], "
+        ".result__a[href], "
+        "article a[href]"
     ):
-        href = (el.get_attribute("href") or "").split("?")[0]
-        if (
-            "facebook.com/" in href
-            and "/search" not in href
-            and "/events" not in href
-            and "/groups" not in href
-            and href not in seen
-        ):
+        raw_href = el.get_attribute("href") or ""
+        href = _decode_ddg_href(raw_href).split("?")[0].rstrip("/")
+        ddg_title = el.inner_text().strip()
+        if href not in seen and _is_fb_business_page(href):
             seen.add(href)
-            page_links.append(href)
-        if len(page_links) >= _MAX_PAGES * 2:
+            fb_urls.append((href, ddg_title))
+        if len(fb_urls) >= _MAX_PAGES * 2:
             break
 
+    if not fb_urls:
+        logger.warning("facebook: no usable FB page URLs from DDG for %r", query)
+        return []
+
     listings: List[BusinessListing] = []
-    for link in page_links[:_MAX_PAGES]:
+    for fb_url, ddg_title in fb_urls[:_MAX_PAGES]:
         try:
-            about_url = link.rstrip("/") + "/about"
+            about_url = fb_url + "/about"
             page.goto(about_url, wait_until="domcontentloaded", timeout=20000)
             page.wait_for_timeout(1200)
 
-            if "/login" in page.url:
+            # Skip if Facebook redirected to login or checkpoint
+            current = page.url
+            if "/login" in current or "checkpoint" in current or "login_form" in current:
+                logger.debug("facebook: login wall on %s — skipping", fb_url)
                 continue
 
             name_el = page.query_selector("h1, [data-testid='profile-name']")
-            name = name_el.inner_text().strip() if name_el else ""
+            name = (name_el.inner_text().strip() if name_el else "") or ddg_title
 
             raw_phone = _phone_from_page(page)
             if not raw_phone:
@@ -136,14 +155,14 @@ def _scrape_facebook_pages(
             listings.append(
                 BusinessListing(
                     name=name or "Facebook Page",
-                    phone=phone,
                     source="facebook_pages",
+                    phone=phone,
                     website=website,
                     category=category,
                 )
             )
         except Exception as exc:
-            logger.debug("facebook: error on %s: %s", link, exc)
+            logger.debug("facebook: error on %s: %s", fb_url, exc)
 
     return listings
 

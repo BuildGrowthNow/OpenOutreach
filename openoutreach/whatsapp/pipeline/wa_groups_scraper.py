@@ -15,7 +15,7 @@ from __future__ import annotations
 import logging
 import re
 import urllib.parse
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from openoutreach.whatsapp.pipeline.upsert import BusinessListing, upsert_listings_as_leads
 from openoutreach.whatsapp.pipeline.utils import normalize_phone as _normalize_phone
@@ -26,18 +26,68 @@ _MAX_SEARCH_RESULTS = 60
 _MAX_DETAIL_PAGES = 30
 _WA_ME_RE = re.compile(r"wa\.me/(\+?[\d]{7,15})")
 
+# DDG wraps some result URLs in redirect hrefs — must decode to get real targets
+_DDG_REDIRECT_MARKER = "/l/?uddg="
+
+# Result container selectors — DDG rotates these; first match wins
+_DDG_RESULT_SELS = [
+    "article",
+    "[data-testid='result']",
+    ".result",
+    "li[data-nr]",
+]
+
+# Title link selectors within a result element
+_DDG_TITLE_SELS = [
+    "[data-testid='result-title-a']",
+    "h2 a",
+    "h3 a",
+    ".result__title a",
+    ".result__a",
+]
+
+
+def _decode_ddg_href(href: str) -> str:
+    """Unwrap DDG redirect URL (/l/?uddg=...) if present; return href unchanged otherwise."""
+    if _DDG_REDIRECT_MARKER in href:
+        try:
+            return urllib.parse.unquote(href.split("uddg=")[-1].split("&")[0])
+        except Exception:
+            pass
+    return href
+
 
 def _phone_from_wa_me(raw: str, country_code: str) -> Optional[str]:
     digits = raw.replace("+", "").replace(" ", "")
     return _normalize_phone(f"+{digits}", country_code)
 
 
-def _ddg_search_wa_links(page, query: str, country_code: str) -> List[str]:
-    search_query = f"{query} wa.me site:*.com OR site:*.net OR site:*.org"
+def _clean_title(raw: str) -> str:
+    """Strip common domain-suffix noise like ' | Company' or ' - Site'."""
+    for sep in [" | ", " - ", " — ", " :: ", " · "]:
+        if sep in raw:
+            raw = raw.split(sep)[0].strip()
+            break
+    return raw
+
+
+def _ddg_search_wa_links(page, query: str, country_code: str) -> List[Tuple[str, str]]:
+    """Return [(phone_e164, name), ...] from DDG SERP results that contain wa.me links.
+
+    Uses DOM-based per-result extraction so each phone is correlated with its
+    result title. Falls back to full-page HTML scan for any phones missed by the
+    DOM pass (DDG sometimes embeds wa.me in JavaScript-only nodes).
+    """
+    # Plain query — DDG silently ignores wildcard site: operators (site:*.com) so
+    # they add noise without restricting results; omit them entirely.
+    search_query = f"{query} wa.me"
     url = f"https://duckduckgo.com/?q={urllib.parse.quote(search_query)}&ia=web"
     page.goto(url, wait_until="domcontentloaded", timeout=30000)
     try:
-        page.wait_for_selector(".result, [data-testid='result']", timeout=15000)
+        page.wait_for_selector(
+            ", ".join(_DDG_RESULT_SELS),
+            timeout=15000,
+        )
     except Exception:
         logger.warning("wa_groups: DDG returned no results for %r", query)
         return []
@@ -49,47 +99,101 @@ def _ddg_search_wa_links(page, query: str, country_code: str) -> List[str]:
         except Exception:
             break
 
-    try:
-        html = page.content()
-    except Exception:
-        html = ""
-
-    # DDG wraps result URLs in redirect hrefs (e.g. /l/?uddg=https%3A%2F%2F...wa.me%2F...)
-    # so the wa.me phone appears URL-encoded. Search both raw and decoded HTML.
-    phones: List[str] = []
+    results: List[Tuple[str, str]] = []
     seen: set = set()
-    for source_html in (html, urllib.parse.unquote(html)):
-        for raw in _WA_ME_RE.findall(source_html):
-            phone = _phone_from_wa_me(raw, country_code)
-            if phone and phone not in seen:
-                seen.add(phone)
-                phones.append(phone)
-        if len(phones) >= _MAX_SEARCH_RESULTS:
+
+    # DOM-based pass: correlate each phone with its result article title
+    result_els = []
+    for sel in _DDG_RESULT_SELS:
+        try:
+            els = page.query_selector_all(sel)
+            if els:
+                result_els = els
+                break
+        except Exception:
+            continue
+
+    for el in result_els:
+        try:
+            inner_html = el.inner_html() or ""
+        except Exception:
+            inner_html = ""
+
+        # Scan both raw and URL-decoded HTML — DDG embeds wa.me in /l/?uddg= redirect hrefs
+        phones_in_result: List[str] = []
+        for source in (inner_html, urllib.parse.unquote(inner_html)):
+            for raw in _WA_ME_RE.findall(source):
+                phone = _phone_from_wa_me(raw, country_code)
+                if phone and phone not in seen:
+                    seen.add(phone)
+                    phones_in_result.append(phone)
+
+        if not phones_in_result:
+            continue
+
+        # Get title from the same result element
+        name = ""
+        for title_sel in _DDG_TITLE_SELS:
+            try:
+                title_el = el.query_selector(title_sel)
+                if title_el:
+                    raw_title = title_el.inner_text().strip()
+                    if raw_title:
+                        name = _clean_title(raw_title)
+                        break
+            except Exception:
+                continue
+
+        for phone in phones_in_result:
+            results.append((phone, name))
+
+        if len(results) >= _MAX_SEARCH_RESULTS:
             break
 
-    return phones[:_MAX_SEARCH_RESULTS]
+    # Fallback: full-page HTML scan for phones the DOM pass may have missed
+    if len(results) < _MAX_SEARCH_RESULTS:
+        try:
+            full_html = page.content()
+        except Exception:
+            full_html = ""
+        for source in (full_html, urllib.parse.unquote(full_html)):
+            for raw in _WA_ME_RE.findall(source):
+                phone = _phone_from_wa_me(raw, country_code)
+                if phone and phone not in seen:
+                    seen.add(phone)
+                    results.append((phone, ""))
+            if len(results) >= _MAX_SEARCH_RESULTS:
+                break
+
+    return results[:_MAX_SEARCH_RESULTS]
 
 
-def _ddg_result_urls_with_titles(page, query: str) -> List[tuple]:
-    """Return [(url, ddg_title), ...] for DDG web results."""
+def _ddg_result_urls_with_titles(page, query: str) -> List[Tuple[str, str]]:
+    """Return [(url, ddg_title), ...] for DDG web results.
+
+    Decodes DDG redirect hrefs (/l/?uddg=...) so the list contains real target URLs.
+    """
     url = f"https://duckduckgo.com/?q={urllib.parse.quote(query)}&ia=web"
     page.goto(url, wait_until="domcontentloaded", timeout=30000)
     try:
         page.wait_for_selector(
-            ".result__url, [data-testid='result-extras-url-link'], "
-            "[data-testid='result-url'], .result__a",
+            ", ".join(_DDG_TITLE_SELS),
             timeout=15000,
         )
     except Exception:
         return []
 
-    results: List[tuple] = []
+    results: List[Tuple[str, str]] = []
     seen: set = set()
     for el in page.query_selector_all(
-        ".result__a[href], [data-testid='result-title-a'][href], "
-        "[data-testid='result-title'][href], article a[href], .result a[href]"
+        "[data-testid='result-title-a'][href], "
+        "[data-testid='result-title'][href], "
+        ".result__a[href], "
+        "article a[href], "
+        ".result a[href]"
     ):
-        href = (el.get_attribute("href") or "").split("?")[0]
+        raw_href = el.get_attribute("href") or ""
+        href = _decode_ddg_href(raw_href).split("?")[0]
         title = el.inner_text().strip()
         if href.startswith("http") and href not in seen:
             seen.add(href)
@@ -101,8 +205,8 @@ def _ddg_result_urls_with_titles(page, query: str) -> List[tuple]:
 
 def _listings_from_site_page(
     page, site_url: str, country_code: str, fallback_name: str = ""
-) -> List[tuple]:
-    """Return [(phone, name), ...] extracted from page.
+) -> List[Tuple[str, str]]:
+    """Return [(phone, name), ...] extracted from a business website page.
 
     Name priority: og:site_name > og:title > <title> > fallback_name.
     """
@@ -124,7 +228,7 @@ def _listings_from_site_page(
             if el:
                 val = el.get_attribute(attr) or ""
                 if val.strip():
-                    name = val.strip()
+                    name = _clean_title(val.strip())
                     break
         except Exception:
             pass
@@ -132,69 +236,67 @@ def _listings_from_site_page(
         try:
             title_el = page.query_selector("title")
             if title_el:
-                name = title_el.inner_text().strip()
+                name = _clean_title(title_el.inner_text().strip())
         except Exception:
             pass
     if not name:
-        name = fallback_name
-    # Strip common suffix noise like " | Company" or " - Site"
-    for sep in [" | ", " - ", " — ", " :: "]:
-        if sep in name:
-            name = name.split(sep)[0].strip()
-            break
+        name = _clean_title(fallback_name)
 
-    results: List[tuple] = []
+    page_results: List[Tuple[str, str]] = []
     seen: set = set()
 
     for raw in _WA_ME_RE.findall(html):
         phone = _phone_from_wa_me(raw, country_code)
         if phone and phone not in seen:
             seen.add(phone)
-            results.append((phone, name))
+            page_results.append((phone, name))
 
     for el in page.query_selector_all("a[href^='tel:']"):
         raw = (el.get_attribute("href") or "").replace("tel:", "").strip()
         phone = _normalize_phone(raw, country_code)
         if phone and phone not in seen:
             seen.add(phone)
-            results.append((phone, name))
+            page_results.append((phone, name))
 
-    return results
+    return page_results
 
 
 def _scrape_wa_links(page, query: str, country_code: str) -> List[BusinessListing]:
-    direct_phones = _ddg_search_wa_links(page, query, country_code)
-    logger.info("wa_groups: %d phones from DDG SERP for %r", len(direct_phones), query)
+    # Phase 1: scan DDG SERP for wa.me links — each phone paired with its result title
+    direct_results = _ddg_search_wa_links(page, query, country_code)
+    logger.info("wa_groups: %d phones from DDG SERP for %r", len(direct_results), query)
 
+    # phone → best name known so far (from SERP title)
+    phone_name: dict = {phone: name for phone, name in direct_results}
+    direct_phones: set = set(phone_name.keys())
+
+    # Phase 2: visit top result pages to discover more phones and upgrade empty names
     site_results = _ddg_result_urls_with_titles(page, f"{query} whatsapp contact phone")
-    phone_name_map: dict = {}
     seen_extra: set = set(direct_phones)
+
     for site_url, ddg_title in site_results[:_MAX_DETAIL_PAGES]:
-        for phone, name in _listings_from_site_page(page, site_url, country_code, fallback_name=ddg_title):
+        for phone, page_name in _listings_from_site_page(
+            page, site_url, country_code, fallback_name=ddg_title
+        ):
             if phone not in seen_extra:
                 seen_extra.add(phone)
-                phone_name_map[phone] = name
+                phone_name[phone] = page_name
+            elif phone in direct_phones and not phone_name.get(phone) and page_name:
+                # Upgrade: replace empty SERP name with a real page-visit name
+                phone_name[phone] = page_name
 
-    all_phones = direct_phones + list(phone_name_map.keys())
+    all_phones = list(phone_name.keys())
     logger.info("wa_groups: %d total unique phones for %r", len(all_phones), query)
 
-    listings: List[BusinessListing] = []
-    seen_listings: set = set()
-    for phone in all_phones:
-        if phone not in seen_listings:
-            seen_listings.add(phone)
-            listings.append(
-                BusinessListing(
-                    # Direct DDG SERP hits carry no name context; leave blank rather
-                    # than storing the search query string as the company name
-                    name=phone_name_map.get(phone, ""),
-                    phone=phone,
-                    source="wa_groups",
-                    category=query,
-                )
-            )
-
-    return listings
+    return [
+        BusinessListing(
+            name=phone_name.get(phone, ""),
+            source="wa_groups",
+            phone=phone,
+            category=query,
+        )
+        for phone in all_phones
+    ]
 
 
 def create_leads_from_wa_links(

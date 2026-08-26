@@ -7,6 +7,7 @@ Entry point: create_leads_from_maps(...)
 from __future__ import annotations
 
 import logging
+import random
 import urllib.parse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Optional
@@ -113,7 +114,8 @@ def _scrape_google_maps(page, query: str, country_code: str) -> List[BusinessLis
     for place_url in place_urls:
         try:
             page.goto(place_url, wait_until="domcontentloaded", timeout=20000)
-            page.wait_for_timeout(1500)
+            # Random human-like pause — reduces bot-detection fingerprint
+            page.wait_for_timeout(random.randint(900, 2800))
 
             # Name: multiple fallbacks as Google rotates class names
             name = ""
@@ -127,6 +129,8 @@ def _scrape_google_maps(page, query: str, country_code: str) -> List[BusinessLis
             if not name:
                 continue
 
+            # Extract all fields before deciding how to categorise this listing.
+
             # Phone: data-item-id prefix has been stable for years
             raw_phone = ""
             phone_el = page.query_selector('[data-item-id^="phone:"]')
@@ -134,13 +138,6 @@ def _scrape_google_maps(page, query: str, country_code: str) -> List[BusinessLis
                 raw_phone = (
                     phone_el.get_attribute("aria-label") or phone_el.inner_text() or ""
                 ).replace("Phone:", "").replace("Telefone:", "").replace("Teléfono:", "").strip()
-
-            if not raw_phone:
-                continue
-
-            normalized = _normalize_phone(raw_phone, country_code)
-            if not normalized:
-                continue
 
             addr_el = page.query_selector('[data-item-id="address"]')
             address = addr_el.inner_text().strip() if addr_el else None
@@ -173,14 +170,36 @@ def _scrape_google_maps(page, query: str, country_code: str) -> List[BusinessLis
                     except ValueError:
                         pass
 
+            if not raw_phone:
+                # No phone on Maps — keep as partial when there's a website so the
+                # spider pass in create_leads_from_maps can attempt to recover one.
+                if website:
+                    listings.append(
+                        BusinessListing(
+                            name=name,
+                            source="google_maps",
+                            phone=None,
+                            website=website,
+                            address=address,
+                            category=category,
+                            rating=rating,
+                            review_count=review_count,
+                        )
+                    )
+                continue
+
+            normalized = _normalize_phone(raw_phone, country_code)
+            if not normalized:
+                continue
+
             listings.append(
                 BusinessListing(
                     name=name,
+                    source="google_maps",
                     phone=normalized,
                     website=website,
                     address=address,
                     category=category,
-                    source="google_maps",
                     rating=rating,
                     review_count=review_count,
                 )
@@ -265,11 +284,10 @@ def _scrape_bing_maps(page, query: str, country_code: str) -> List[BusinessListi
             listings.append(
                 BusinessListing(
                     name=name,
+                    source="bing_maps",
                     phone=normalized,
                     website=website,
                     address=address,
-                    category=None,
-                    source="bing_maps",
                 )
             )
         except Exception as exc:
@@ -340,11 +358,9 @@ def _scrape_duckduckgo_maps(page, query: str, country_code: str) -> List[Busines
             listings.append(
                 BusinessListing(
                     name=name,
-                    phone=normalized,
-                    website=None,
-                    address=address,
-                    category=None,
                     source="duckduckgo_maps",
+                    phone=normalized,
+                    address=address,
                 )
             )
         except Exception as exc:
@@ -395,7 +411,11 @@ def create_leads_from_maps(
     backends: Optional[List[str]] = None,
     min_rating: Optional[float] = None,
 ) -> int:
-    """Scrape maps backends with a single shared browser, dedup by phone, upsert Leads + Deals.
+    """Scrape maps backends with concurrent isolated browsers, dedup by phone, upsert Leads + Deals.
+
+    Google Maps results that have a website but no visible phone number are kept
+    as partial listings and fed through a concurrent HTTP spider pass
+    (contact_spider.extract_phone_from_domain) to recover additional phone numbers.
 
     min_rating: if set, only listings with rating >= min_rating (or no rating data) are kept.
     Returns count of new leads created.
@@ -432,4 +452,48 @@ def create_leads_from_maps(
             min_rating, len(all_listings), before,
         )
 
-    return upsert_listings_as_leads(all_listings, campaign_id, user_id)
+    # Partition into phone-ready listings and website-only partials
+    ready = [lst for lst in all_listings if lst.phone]
+    partial = [lst for lst in all_listings if not lst.phone and lst.website]
+
+    if partial:
+        logger.info(
+            "maps_scraper: spidering %d website-only listings for phones",
+            len(partial),
+        )
+        from openoutreach.whatsapp.pipeline.contact_spider import extract_phone_from_domain
+
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            futures_spider = {
+                pool.submit(extract_phone_from_domain, lst.website, country_code): lst
+                for lst in partial
+                if lst.website  # website is Optional[str]; guard satisfies type checker
+            }
+            for future in as_completed(futures_spider):
+                lst = futures_spider[future]
+                try:
+                    phone = future.result()
+                    if phone:
+                        ready.append(
+                            BusinessListing(
+                                name=lst.name,
+                                source=f"{lst.source}_spider",
+                                phone=phone,
+                                website=lst.website,
+                                address=lst.address,
+                                category=lst.category,
+                                rating=lst.rating,
+                                review_count=lst.review_count,
+                            )
+                        )
+                except Exception as exc:
+                    logger.debug("maps_scraper: spider failed for %s: %s", lst.website, exc)
+
+        recovered = len(ready) - len([lst for lst in all_listings if lst.phone])
+        logger.info(
+            "maps_scraper: spider recovered %d phones from %d partials",
+            recovered,
+            len(partial),
+        )
+
+    return upsert_listings_as_leads(ready, campaign_id, user_id)

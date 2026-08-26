@@ -14,12 +14,12 @@ logger = logging.getLogger(__name__)
 class BusinessListing:
     """Normalised business lead from any scraper backend."""
 
-    name: str           # business / company name → stored as Lead.company
-    phone: str          # E.164, e.g. "+15551234567"
-    source: str         # scraper identifier
+    name: str                        # business / company name → stored as Lead.company
+    source: str                      # scraper identifier
+    phone: Optional[str] = None      # E.164, e.g. "+15551234567"; None = partial (website spider pending)
     website: Optional[str] = None
     address: Optional[str] = None
-    category: Optional[str] = None  # → stored as Lead.headline
+    category: Optional[str] = None   # → stored as Lead.headline
     rating: Optional[float] = None
     review_count: Optional[int] = None
 
@@ -37,6 +37,8 @@ def upsert_listings_as_leads(
     seen_phones: set = set()
     unique: List[BusinessListing] = []
     for lst in listings:
+        if not lst.phone:
+            continue
         if lst.phone not in seen_phones:
             seen_phones.add(lst.phone)
             unique.append(lst)

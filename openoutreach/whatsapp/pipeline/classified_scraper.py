@@ -1,4 +1,4 @@
-"""Classified ads scraper - Craigslist, OLX, MercadoLibre, Gumtree.
+"""Classified ads scraper - OLX, MercadoLibre, Gumtree.
 
 Each backend searches the site for `query`, opens listing detail pages, and
 extracts phone numbers from tel: links or visible body text.
@@ -39,60 +39,6 @@ def _phone_from_page(page) -> str:
         if sum(c.isdigit() for c in candidate) >= 7:
             return candidate
     return ""
-
-
-# ---------------------------------------------------------------------------
-# Craigslist
-# ---------------------------------------------------------------------------
-
-def _scrape_craigslist(page, query: str, country_code: str) -> List[BusinessListing]:
-    url = f"https://www.craigslist.org/search/sss?query={urllib.parse.quote(query)}&sort=date"
-    page.goto(url, wait_until="domcontentloaded", timeout=30000)
-    try:
-        page.wait_for_selector(".cl-search-result, .result-row", timeout=15000)
-    except Exception:
-        logger.warning("craigslist: no results for %r", query)
-        return []
-
-    links = []
-    seen: set = set()
-    for el in page.query_selector_all("a.cl-app-anchor, a.result-title"):
-        href = el.get_attribute("href") or ""
-        if "/d/" in href and href not in seen:
-            seen.add(href)
-            links.append(href)
-        if len(links) >= _MAX_LISTINGS:
-            break
-
-    listings: List[BusinessListing] = []
-    for link in links[:_MAX_DETAIL_PAGES]:
-        try:
-            page.goto(link, wait_until="domcontentloaded", timeout=20000)
-            page.wait_for_timeout(700)
-
-            title_el = page.query_selector("#titletextonly, .postingtitletext h1, h1")
-            title = title_el.inner_text().strip() if title_el else ""
-
-            raw_phone = _phone_from_page(page)
-            if not raw_phone:
-                continue
-            phone = _normalize_phone(raw_phone, country_code)
-            if not phone:
-                continue
-
-            addr_el = page.query_selector(".mapaddress")
-            address = addr_el.inner_text().strip() if addr_el else None
-
-            listings.append(BusinessListing(
-                name=title or "Craigslist Listing",
-                phone=phone,
-                source="craigslist",
-                address=address,
-            ))
-        except Exception as exc:
-            logger.debug("craigslist: error on %s: %s", link, exc)
-
-    return listings
 
 
 # ---------------------------------------------------------------------------
@@ -328,7 +274,6 @@ def _scrape_gumtree(page, query: str, country_code: str) -> List[BusinessListing
 # ---------------------------------------------------------------------------
 
 _BACKEND_FN = {
-    "craigslist": _scrape_craigslist,
     "olx": _scrape_olx,
     "mercadolibre": _scrape_mercadolibre,
     "gumtree": _scrape_gumtree,
