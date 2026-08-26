@@ -96,6 +96,11 @@ class CampaignStats(BaseModel):
     messagesReplied: int = 0
     noEmailCount: int = 0
     todayConnectBudget: Optional[int] = None
+    emailQueued: int = 0
+    emailSent: int = 0
+    emailOpened: int = 0
+    emailReplied: int = 0
+    emailBounced: int = 0
 
 
 class CampaignResponse(BaseModel):
@@ -228,6 +233,11 @@ async def list_campaigns(
                     "totalLeads": {"$sum": 1},
                     "completed": {"$sum": {"$cond": [{"$eq": ["$state", "Completed"]}, 1, 0]}},
                     "noEmailCount": {"$sum": {"$cond": [{"$eq": ["$state", "No Email"]}, 1, 0]}},
+                    "emailQueued": {"$sum": {"$cond": [{"$eq": ["$state", "email_queued"]}, 1, 0]}},
+                    "emailSent": {"$sum": {"$cond": [{"$eq": ["$state", "email_sent"]}, 1, 0]}},
+                    "emailOpened": {"$sum": {"$cond": [{"$eq": ["$state", "email_opened"]}, 1, 0]}},
+                    "emailReplied": {"$sum": {"$cond": [{"$eq": ["$state", "email_replied"]}, 1, 0]}},
+                    "emailBounced": {"$sum": {"$cond": [{"$eq": ["$state", "email_bounced"]}, 1, 0]}},
                 }},
             ]
             for row in deals_collection.aggregate(pipeline):
@@ -236,6 +246,11 @@ async def list_campaigns(
                     "connected": 0,
                     "completed": row.get("completed", 0),
                     "noEmailCount": row.get("noEmailCount", 0),
+                    "emailQueued": row.get("emailQueued", 0),
+                    "emailSent": row.get("emailSent", 0),
+                    "emailOpened": row.get("emailOpened", 0),
+                    "emailReplied": row.get("emailReplied", 0),
+                    "emailBounced": row.get("emailBounced", 0),
                 }
 
         # Compute today's remaining connect budget per campaign.
@@ -325,6 +340,11 @@ async def list_campaigns(
                     completed=s.get("completed", 0),
                     noEmailCount=s.get("noEmailCount", 0),
                     todayConnectBudget=profile_budget.get(str(doc.get("linkedin_profile_id", ""))) if doc.get("status") == "active" else None,
+                    emailQueued=s.get("emailQueued", 0),
+                    emailSent=s.get("emailSent", 0),
+                    emailOpened=s.get("emailOpened", 0),
+                    emailReplied=s.get("emailReplied", 0),
+                    emailBounced=s.get("emailBounced", 0),
                 ),
             ))
 

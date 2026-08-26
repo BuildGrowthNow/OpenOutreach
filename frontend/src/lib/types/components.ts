@@ -238,6 +238,11 @@ export interface CampaignStats {
   conversionRate: number;
   noEmailCount?: number;
   todayConnectBudget?: number | null;
+  emailQueued?: number;
+  emailSent?: number;
+  emailOpened?: number;
+  emailReplied?: number;
+  emailBounced?: number;
 }
 
 export interface Lead {

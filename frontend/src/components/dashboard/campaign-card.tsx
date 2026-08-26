@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Icons } from '@/lib/types/components'
 import { Campaign, DealState, CampaignStatus } from '@/lib/types/components'
-import { MessageCircle } from 'lucide-react'
+import { MessageCircle, Mail } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
 import { formatDistanceToNow } from 'date-fns'
@@ -73,6 +73,11 @@ const CampaignCard = ({
     messagesReplied: 0,
     noEmailCount: 0,
     todayConnectBudget: null,
+    emailQueued: 0,
+    emailSent: 0,
+    emailOpened: 0,
+    emailReplied: 0,
+    emailBounced: 0,
   }
 
   const isActive = campaign.status === 'active'
@@ -93,6 +98,9 @@ const CampaignCard = ({
             <CardTitle className="text-base leading-tight">{campaign.name}</CardTitle>
             {(campaign.channelSequence || []).includes('whatsapp') && (
               <MessageCircle className="h-3 w-3 text-emerald-500 shrink-0" aria-label="WhatsApp enabled" />
+            )}
+            {(campaign.channelSequence || []).includes('email') && (
+              <Mail className="h-3 w-3 text-sky-500 shrink-0" aria-label="Email enabled" />
             )}
           </div>
           <div className="flex items-center gap-2 shrink-0">
@@ -201,6 +209,21 @@ const CampaignCard = ({
               <span className="font-medium text-amber-500">{stats.noEmailCount}</span>
             </div>
           )}
+          {(stats.emailSent ?? 0) > 0 && (() => {
+            const sent = stats.emailSent ?? 0
+            const opened = (stats.emailOpened ?? 0) + (stats.emailReplied ?? 0)
+            return (
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <div className="flex items-center gap-1">
+                  <Mail className="h-3 w-3" />
+                  <span>{sent} sent</span>
+                </div>
+                <span className="font-medium">
+                  {sent > 0 ? (opened / sent * 100).toFixed(0) : '0'}% opened
+                </span>
+              </div>
+            )
+          })()}
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Icons.Clock className="h-3 w-3" />
             Created {getCreatedDate(campaign)}
