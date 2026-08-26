@@ -10,10 +10,14 @@ from __future__ import annotations
 import logging
 import re
 import urllib.parse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Optional
 
 from openoutreach.whatsapp.pipeline.upsert import BusinessListing, upsert_listings_as_leads
-from openoutreach.whatsapp.pipeline.utils import normalize_phone as _normalize_phone
+from openoutreach.whatsapp.pipeline.utils import (
+    normalize_phone as _normalize_phone,
+    random_user_agent as _random_user_agent,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -280,6 +284,29 @@ _BACKEND_FN = {
 }
 
 
+def _run_classified_in_isolation(
+    site_name: str, query: str, country_code: str
+) -> List[BusinessListing]:
+    """Launch a dedicated browser for one classified site; safe to call from a thread."""
+    from playwright.sync_api import sync_playwright
+    from playwright_stealth import Stealth
+
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            context = browser.new_context(
+                user_agent=_random_user_agent(),
+                locale="en-US",
+                viewport={"width": 1280, "height": 800},
+            )
+            Stealth().apply_stealth_sync(context)
+            page = context.new_page()
+            page.set_extra_http_headers({"Accept-Language": "en-US,en;q=0.9"})
+            return _BACKEND_FN[site_name](page, query, country_code)
+        finally:
+            browser.close()
+
+
 def create_leads_from_classified(
     query: str,
     country_code: str,
@@ -287,12 +314,12 @@ def create_leads_from_classified(
     user_id: str,
     sites: Optional[List[str]] = None,
 ) -> int:
-    """Scrape classified sites, dedup by phone, upsert leads + deals.
+    """Scrape classified sites with concurrent isolated browsers, dedup by phone, upsert leads + deals.
 
+    Each site runs in its own browser process so a hang on one site never
+    blocks the others (mirrors the maps_scraper concurrency pattern).
     Returns count of new leads created.
     """
-    from playwright.sync_api import sync_playwright
-
     active_sites = [s for s in (sites or _DEFAULT_SITES) if s in _BACKEND_FN]
     if not active_sites:
         logger.warning("classified: no valid sites in %s", sites)
@@ -300,32 +327,18 @@ def create_leads_from_classified(
 
     all_listings: List[BusinessListing] = []
 
-    with sync_playwright() as pw:
-        from playwright_stealth import Stealth
-        browser = pw.chromium.launch(headless=True)
-        try:
-            context = browser.new_context(
-                user_agent=(
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/124.0.0.0 Safari/537.36"
-                ),
-                locale="en-US",
-                viewport={"width": 1280, "height": 800},
-            )
-            Stealth().apply_stealth_sync(context)
-            page = context.new_page()
-            page.set_extra_http_headers({"Accept-Language": "en-US,en;q=0.9"})
-            for site in active_sites:
-                try:
-                    results = _BACKEND_FN[site](page, query, country_code)
-                    logger.info(
-                        "classified: %s returned %d listings", site, len(results)
-                    )
-                    all_listings.extend(results)
-                except Exception as exc:
-                    logger.warning("classified: site %s failed: %s", site, exc)
-        finally:
-            browser.close()
+    with ThreadPoolExecutor(max_workers=len(active_sites)) as pool:
+        futures = {
+            pool.submit(_run_classified_in_isolation, site, query, country_code): site
+            for site in active_sites
+        }
+        for future in as_completed(futures):
+            site = futures[future]
+            try:
+                results = future.result()
+                logger.info("classified: %s returned %d listings", site, len(results))
+                all_listings.extend(results)
+            except Exception as exc:
+                logger.warning("classified: site %s failed: %s", site, exc)
 
     return upsert_listings_as_leads(all_listings, campaign_id, user_id)

@@ -8,13 +8,17 @@ from __future__ import annotations
 
 import logging
 import re
+import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Optional
+from typing import List, Optional
 from urllib.parse import urlparse
 
 import requests
 
-from openoutreach.whatsapp.pipeline.utils import normalize_phone as _normalize_phone
+from openoutreach.whatsapp.pipeline.utils import (
+    normalize_phone as _normalize_phone,
+    random_user_agent as _random_user_agent,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -29,17 +33,34 @@ _CONTACT_PATHS = [
     "/sobre",
     "/sobre-nos",
     "/kontakt",
+    "/en/contact",
+    "/en/about",
 ]
 _TIMEOUT_S = 8
-_HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/120.0.0.0 Safari/537.36"
-    ),
-    "Accept-Language": "en-US,en;q=0.9",
-}
-_PHONE_RE = re.compile(r"(\+?[\d][\d\s\-\.\(\)]{5,18}[\d])")
+_SITEMAP_CONTACT_RE = re.compile(
+    r"contact|about|sobre|contato|kontakt|kontakti",
+    re.IGNORECASE,
+)
+
+# Contextual regex: only match phone patterns that appear near phone-related words.
+# Prevents false positives from order numbers, zip codes, and other digit sequences.
+_PHONE_CONTEXT_RE = re.compile(
+    r"(?:phones?|tel(?:efon[eo]?)?|fone|call|whatsapp|cell|mobile"
+    r"|celular|m[oó]vil|handy|contact|hotline|helpline)"
+    r"[\s\S]{0,80}"
+    r"(\+?[\d][\d\s\-\.\(\)]{5,18}[\d])",
+    re.IGNORECASE,
+)
+
+
+def _make_session() -> requests.Session:
+    """Create a requests session with a randomised user-agent."""
+    session = requests.Session()
+    session.headers.update({
+        "User-Agent": _random_user_agent(),
+        "Accept-Language": "en-US,en;q=0.9",
+    })
+    return session
 
 
 def _extract_from_html(html: str, country_code: str) -> Optional[str]:
@@ -48,10 +69,10 @@ def _extract_from_html(html: str, country_code: str) -> Optional[str]:
         phone = _normalize_phone(raw.strip(), country_code)
         if phone:
             return phone
-    # Fall back to generic number regex over visible text
+    # Contextual body scan: only match numbers near phone-related keywords
     clean = re.sub(r"<[^>]+>", " ", html)
-    for raw in _PHONE_RE.findall(clean):
-        candidate = raw.strip()
+    for m in _PHONE_CONTEXT_RE.finditer(clean):
+        candidate = m.group(1).strip()
         if sum(c.isdigit() for c in candidate) >= 7:
             phone = _normalize_phone(candidate, country_code)
             if phone:
@@ -59,16 +80,47 @@ def _extract_from_html(html: str, country_code: str) -> Optional[str]:
     return None
 
 
+def _fetch_sitemap_contact_urls(base: str, session: requests.Session) -> List[str]:
+    """Fetch /sitemap.xml and return URLs matching contact/about patterns (up to 5)."""
+    try:
+        resp = session.get(f"{base}/sitemap.xml", timeout=_TIMEOUT_S)
+        if resp.status_code != 200:
+            return []
+        root = ET.fromstring(resp.text)
+        ns = {"sm": "http://www.sitemaps.org/schemas/sitemap/0.9"}
+        urls: List[str] = []
+        for loc in root.findall(".//sm:loc", ns):
+            if loc.text and _SITEMAP_CONTACT_RE.search(loc.text):
+                urls.append(loc.text)
+                if len(urls) >= 5:
+                    break
+        return urls
+    except Exception:
+        return []
+
+
 def extract_phone_from_domain(domain_url: str, country_code: str) -> Optional[str]:
-    """Try root URL then common contact paths; return first valid E.164 number."""
+    """Try sitemap-discovered contact pages then common paths; return first valid E.164 number."""
     parsed = urlparse(domain_url)
     scheme = parsed.scheme or "https"
     host = parsed.netloc or parsed.path.rstrip("/")
     base = f"{scheme}://{host}"
 
-    session = requests.Session()
-    session.headers.update(_HEADERS)
+    session = _make_session()
 
+    # Sitemap pass: often finds contact pages faster than blindly trying all hardcoded paths
+    sitemap_urls = _fetch_sitemap_contact_urls(base, session)
+    for url in sitemap_urls:
+        try:
+            resp = session.get(url, timeout=_TIMEOUT_S, allow_redirects=True)
+            if resp.status_code == 200:
+                phone = _extract_from_html(resp.text, country_code)
+                if phone:
+                    return phone
+        except Exception:
+            continue
+
+    # Fallback: hardcoded contact/about paths
     for path in _CONTACT_PATHS:
         url = base + path
         try:

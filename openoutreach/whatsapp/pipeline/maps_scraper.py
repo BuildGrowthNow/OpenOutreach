@@ -13,7 +13,10 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Optional
 
 from openoutreach.whatsapp.pipeline.upsert import BusinessListing, upsert_listings_as_leads
-from openoutreach.whatsapp.pipeline.utils import normalize_phone as _normalize_phone
+from openoutreach.whatsapp.pipeline.utils import (
+    normalize_phone as _normalize_phone,
+    random_user_agent as _random_user_agent,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -387,11 +390,7 @@ def _run_backend_in_isolation(
         browser = pw.chromium.launch(headless=True)
         try:
             context = browser.new_context(
-                user_agent=(
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/124.0.0.0 Safari/537.36"
-                ),
+                user_agent=_random_user_agent(),
                 locale="en-US",
                 viewport={"width": 1280, "height": 800},
             )
