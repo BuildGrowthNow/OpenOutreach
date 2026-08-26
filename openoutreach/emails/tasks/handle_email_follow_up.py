@@ -1,24 +1,29 @@
 # openoutreach/emails/tasks/handle_email_follow_up.py
 """Email follow-up task handler.
 
-Picks the next EMAIL_QUEUED deal for a campaign, selects a mailbox,
-sends the email, and advances Deal state to EMAIL_SENT.
+Handles all three sequence steps (0=cold, 1=follow-up 1, 2=follow-up 2) in
+a single task type. Step timing is enforced here:
+  - Step 0: any EMAIL_QUEUED deal with api_email set
+  - Step 1: EMAIL_SENT/EMAIL_OPENED, sequence_step==1, sent_at + day1 days ago
+  - Step 2: EMAIL_SENT/EMAIL_OPENED, sequence_step==2, sent_at + day2 days ago
 
-Hard bounces (SMTP 550) permanently suppress the lead's email address
-and set Deal state to EMAIL_BOUNCED.
+Stops sending when deal enters EMAIL_REPLIED, EMAIL_BOUNCED, or sequence_step >= 3.
+Hard bounces (SMTP 550) permanently suppress the lead's email address.
 """
 
 from __future__ import annotations
 
 import logging
 import smtplib
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 logger = logging.getLogger(__name__)
 
+MAX_SEQUENCE_STEPS = 3
+
 
 def handle_email_follow_up(task, user_id: str, campaign) -> None:
-    """Send one email for the next eligible EMAIL_QUEUED deal in *campaign*.
+    """Send one email for the next eligible deal in *campaign*.
 
     Args:
         task:      Task object (has .payload with campaign_id)
@@ -26,7 +31,7 @@ def handle_email_follow_up(task, user_id: str, campaign) -> None:
         campaign:  Campaign model instance (already validated as ACTIVE)
     """
     from openoutreach.mongodb.connection import get_mongodb_collection
-    from openoutreach.mongodb.models import Deal, Lead
+    from openoutreach.mongodb.models import Deal, Lead, SiteConfig
     from openoutreach.emails.models import Mailbox
     from openoutreach.emails.sender import send_email
 
@@ -36,20 +41,52 @@ def handle_email_follow_up(task, user_id: str, campaign) -> None:
         logger.warning("email_follow_up: MongoDB collections not available")
         return
 
-    # Find next EMAIL_QUEUED deal that has an api_email
+    config = SiteConfig.load(user_id=user_id)
+    now = datetime.now(timezone.utc)
+    day1_cutoff = now - timedelta(days=config.email_followup_day1)
+    day2_cutoff = now - timedelta(days=config.email_followup_day2)
+
+    # Find the earliest-created eligible deal across all steps
     deal_doc = deals_col.find_one(
         {
             "campaign_id": campaign.pk,
-            "state": "email_queued",
-            "active_channel": "email",
+            "$or": [
+                {"state": "email_queued", "active_channel": "email"},
+                {
+                    "state": {"$in": ["email_sent", "email_opened"]},
+                    "email_sequence_step": 1,
+                    "email_sent_at": {"$lte": day1_cutoff},
+                },
+                {
+                    "state": {"$in": ["email_sent", "email_opened"]},
+                    "email_sequence_step": 2,
+                    "email_sent_at": {"$lte": day2_cutoff},
+                },
+            ],
         },
         sort=[("creation_date", 1)],
     )
     if deal_doc is None:
-        logger.debug("email_follow_up [%s]: no EMAIL_QUEUED deals", campaign.pk)
+        logger.debug("email_follow_up [%s]: no eligible deals", campaign.pk)
         return
 
     deal = Deal.from_dict(deal_doc)
+
+    # Skip silently if deal advanced past expected state since task was created
+    if deal.email_sequence_step >= MAX_SEQUENCE_STEPS:
+        logger.debug(
+            "email_follow_up: deal %s already at step %d — skipping",
+            deal._id, deal.email_sequence_step,
+        )
+        return
+
+    if deal.state in ("email_replied", "email_bounced"):
+        logger.info(
+            "email_follow_up: deal %s in terminal email state %r — skipping",
+            deal._id, deal.state,
+        )
+        return
+
     lead = Lead.get(deal.lead_id)
     if not lead:
         logger.warning("email_follow_up: lead %s not found for deal %s", deal.lead_id, deal._id)
@@ -63,7 +100,6 @@ def handle_email_follow_up(task, user_id: str, campaign) -> None:
         logger.info("email_follow_up: lead %s is unsubscribed — skipping", lead._id)
         return
 
-    # Pick the least-loaded mailbox that still has daily headroom
     mailbox = Mailbox.objects.least_loaded_under_cap(user_id=user_id)
     if mailbox is None:
         logger.info(
@@ -81,9 +117,10 @@ def handle_email_follow_up(task, user_id: str, campaign) -> None:
             subject,
             body,
             in_reply_to=deal.email_message_id,
+            deal_id=str(deal._id),
+            campaign_id=str(campaign.pk),
         )
     except smtplib.SMTPRecipientsRefused as exc:
-        # Hard bounce (550) — suppress email permanently
         code = _extract_smtp_code(exc)
         if code == 550:
             _mark_bounced(deal, lead, deals_col, leads_col)
@@ -94,7 +131,6 @@ def handle_email_follow_up(task, user_id: str, campaign) -> None:
             return
         raise
 
-    # Success — advance deal state
     now = datetime.now(timezone.utc)
     deals_col.update_one(
         {"_id": deal._id},
@@ -115,7 +151,6 @@ def handle_email_follow_up(task, user_id: str, campaign) -> None:
 
 
 def _extract_smtp_code(exc: smtplib.SMTPRecipientsRefused) -> int:
-    """Return the SMTP status code from a SMTPRecipientsRefused exception."""
     for _addr, (code, _msg) in exc.recipients.items():
         return code
     return 0

@@ -4098,6 +4098,8 @@ class SiteConfig:
         wa_active_start_hour: int = 8,
         wa_active_end_hour: int = 21,
         wa_active_days: Optional[List[int]] = None,
+        email_followup_day1: int = 3,
+        email_followup_day2: int = 7,
     ):
         self._id = _id or str(uuid4())
         self.user_id = user_id
@@ -4130,6 +4132,8 @@ class SiteConfig:
         self.wa_active_start_hour = wa_active_start_hour
         self.wa_active_end_hour = wa_active_end_hour
         self.wa_active_days = wa_active_days if wa_active_days is not None else [1, 2, 3, 4, 5, 6, 7]
+        self.email_followup_day1 = email_followup_day1
+        self.email_followup_day2 = email_followup_day2
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert model instance to dictionary for MongoDB storage."""
@@ -4165,6 +4169,8 @@ class SiteConfig:
             "wa_active_start_hour": self.wa_active_start_hour,
             "wa_active_end_hour": self.wa_active_end_hour,
             "wa_active_days": self.wa_active_days,
+            "email_followup_day1": self.email_followup_day1,
+            "email_followup_day2": self.email_followup_day2,
         }
         return data
 
@@ -4203,6 +4209,8 @@ class SiteConfig:
             wa_active_start_hour=data.get("wa_active_start_hour", 8),
             wa_active_end_hour=data.get("wa_active_end_hour", 21),
             wa_active_days=data.get("wa_active_days"),
+            email_followup_day1=data.get("email_followup_day1", 3),
+            email_followup_day2=data.get("email_followup_day2", 7),
         )
 
     def save(self) -> str:

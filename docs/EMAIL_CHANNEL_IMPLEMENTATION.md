@@ -436,5 +436,5 @@ Add sequence configuration section:
 - [x] Phase 2 — Deal states + email task handler + scheduler integration
 - [x] Phase 3 — LLM email writer (`email_agent.py` + `email_agent.j2`)
 - [x] Phase 4 — Cloudflare Worker (tracking pixel, click redirect, unsubscribe, backend webhook)
-- [ ] Phase 5 — Multi-step sequence + IMAP reply detection (v2)
+- [x] Phase 5 — Multi-step sequence (3-touch, day1/day2 configurable via SiteConfig); IMAP reply detection deferred to v2
 - [ ] Phase 6 — Frontend: campaign wizard, leads list email column, Settings email tab

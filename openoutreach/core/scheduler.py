@@ -1015,14 +1015,31 @@ def plan_email_follow_up_window(campaign, user_id: str, linkedin_profile_id: str
         return 0
 
     from openoutreach.mongodb.connection import get_mongodb_collection
+    from openoutreach.mongodb.models import SiteConfig
     deals_col = get_mongodb_collection("deals")
     if deals_col is None:
         return 0
 
+    config = SiteConfig.load(user_id=user_id)
+    now = Datetime.now(tz.utc)
+    day1_cutoff = now - timedelta(days=config.email_followup_day1)
+    day2_cutoff = now - timedelta(days=config.email_followup_day2)
+
     eligible = deals_col.count_documents({
         "campaign_id": campaign.pk,
-        "state": "email_queued",
-        "active_channel": "email",
+        "$or": [
+            {"state": "email_queued", "active_channel": "email"},
+            {
+                "state": {"$in": ["email_sent", "email_opened"]},
+                "email_sequence_step": 1,
+                "email_sent_at": {"$lte": day1_cutoff},
+            },
+            {
+                "state": {"$in": ["email_sent", "email_opened"]},
+                "email_sequence_step": 2,
+                "email_sent_at": {"$lte": day2_cutoff},
+            },
+        ],
     })
     if eligible == 0:
         return 0
