@@ -31,9 +31,9 @@ from openoutreach.whatsapp.pipeline.utils import (
 
 logger = logging.getLogger(__name__)
 
-_MAX_SEARCH_RESULTS = 60
-_MAX_DETAIL_PAGES = 30
-_MAX_DETAIL_WORKERS = 8
+_MAX_SEARCH_RESULTS = 100
+_MAX_DETAIL_PAGES = 50
+_MAX_DETAIL_WORKERS = 10
 _WA_ME_RE = re.compile(r"wa\.me/(\+?[\d]{7,15})")
 
 # Result container selectors — DDG rotates these; first match wins
@@ -77,7 +77,7 @@ def _ddg_search_and_collect(
         phones_with_names: [(phone_e164, name), ...] — wa.me phones found in SERP
         result_urls:       [(url, title), ...] — result page URLs to visit for more phones
     """
-    search_query = f"{query} wa.me"
+    search_query = f'{query} "wa.me/"'
     url = f"https://duckduckgo.com/?q={urllib.parse.quote(search_query)}&ia=web"
     page.goto(url, wait_until="domcontentloaded", timeout=30000)
     try:
@@ -86,10 +86,10 @@ def _ddg_search_and_collect(
         logger.warning("wa_groups: DDG returned no results for %r", query)
         return [], []
 
-    for _ in range(3):
+    for _ in range(6):
         try:
             page.evaluate("window.scrollBy(0, window.innerHeight)")
-            page.wait_for_timeout(800)
+            page.wait_for_timeout(700)
         except Exception:
             break
 
@@ -260,7 +260,7 @@ def _bing_search_and_collect(
     page, query: str, country_code: str
 ) -> Tuple[List[Tuple[str, str]], List[Tuple[str, str]]]:
     """Bing fallback used when DDG yields 0 phones and 0 URLs."""
-    search_query = f"{query} wa.me"
+    search_query = f'{query} "wa.me/"'
     url = f"https://www.bing.com/search?q={urllib.parse.quote(search_query)}"
     page.goto(url, wait_until="domcontentloaded", timeout=30000)
     try:

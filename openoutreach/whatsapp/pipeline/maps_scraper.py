@@ -24,9 +24,9 @@ from openoutreach.whatsapp.pipeline.utils import (
 logger = logging.getLogger(__name__)
 
 _DEFAULT_BACKENDS = ["google_maps", "bing_maps", "duckduckgo_maps"]
-_MAX_LISTINGS = 50
+_MAX_LISTINGS = 100
 _SCROLL_PAUSE_MS = 1200
-_MAX_SCROLL_ROUNDS = 12
+_MAX_SCROLL_ROUNDS = 20
 
 
 def _scroll_until_stable(page, selector: str) -> None:

@@ -32,6 +32,7 @@ def _domain(url: str) -> str:
         return url
 
 _BATCH_SIZE = 15
+_CLASSIFIED_SOURCES = frozenset({"olx", "mercadolibre", "gumtree"})
 
 
 class _IcpDecision(BaseModel):
@@ -87,11 +88,14 @@ def filter_by_icp(
         batch = listings[batch_start: batch_start + _BATCH_SIZE]
 
         lines = "\n".join(
-            "{i}. {name}{cat}{site}".format(
+            "{i}. {name}{cat}{site}{src}".format(
                 i=i,
                 name=lst.name or "(unnamed business)",
                 cat=f" [{lst.category}]" if lst.category else "",
                 site=f" ({_domain(lst.website)})" if lst.website else "",
+                src=" [classified listing — may be individual seller]"
+                if lst.source in _CLASSIFIED_SOURCES
+                else "",
             )
             for i, lst in enumerate(batch)
         )

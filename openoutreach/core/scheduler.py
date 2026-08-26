@@ -1125,21 +1125,6 @@ def _maybe_trigger_lead_scrape(campaign, user_id: str) -> None:
         finally:
             _maps_scraping.discard(campaign_id)
 
-    def _run_facebook() -> None:
-        try:
-            from openoutreach.whatsapp.pipeline.facebook_scraper import create_leads_from_facebook
-            created = create_leads_from_facebook(
-                query=maps_query,
-                country_code=country_code,
-                campaign_id=campaign_id,
-                user_id=user_id,
-            )
-            logger.info("Facebook scrape [%s]: created %d new leads", campaign_id, created)
-        except Exception as exc:
-            logger.error("Facebook scrape [%s] failed: %s", campaign_id, exc)
-        finally:
-            _maps_scraping.discard(campaign_id)
-
     def _run_wa_groups() -> None:
         try:
             from openoutreach.whatsapp.pipeline.wa_groups_scraper import create_leads_from_wa_links
@@ -1160,7 +1145,6 @@ def _maybe_trigger_lead_scrape(campaign, user_id: str) -> None:
         "bing_maps": _run_maps,
         "duckduckgo_maps": _run_maps,
         "classified_ads": _run_classified,
-        "facebook_pages": _run_facebook,
         "wa_groups": _run_wa_groups,
     }
     run_fn = _run_map.get(lead_source)

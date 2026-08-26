@@ -24,8 +24,8 @@ from openoutreach.whatsapp.pipeline.utils import (
 
 logger = logging.getLogger(__name__)
 
-_MAX_LISTINGS = 40      # cards to collect from search page
-_MAX_DETAIL_PAGES = 20  # listing detail pages to visit per backend
+_MAX_LISTINGS = 60      # cards to collect from search page
+_MAX_DETAIL_PAGES = 30  # listing detail pages to visit per backend
 _DEFAULT_SITES = ["olx", "mercadolibre"]
 
 
