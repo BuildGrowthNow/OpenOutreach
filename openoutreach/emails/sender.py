@@ -19,10 +19,11 @@ import smtplib
 from email.message import EmailMessage
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from email.utils import make_msgid
+from email.utils import formataddr, make_msgid
 
 SMTP_TIMEOUT_SECONDS = 30
 
+# Match URLs in the raw (un-escaped) plain-text body before html.escape mangles `&`.
 _URL_RE = re.compile(r"https://[^\s\"'<>]+")
 
 
@@ -61,7 +62,7 @@ def _build_plain_message(
 ) -> EmailMessage:
     message = EmailMessage()
     message["Message-ID"] = _mint_message_id(mailbox.from_address)
-    message["From"] = mailbox.from_address
+    message["From"] = _from_header(mailbox)
     message["To"] = to_address
     message["Subject"] = subject
     if in_reply_to:
@@ -85,7 +86,7 @@ def _build_tracked_message(
 
     message = MIMEMultipart("alternative")
     message["Message-ID"] = msg_id
-    message["From"] = mailbox.from_address
+    message["From"] = _from_header(mailbox)
     message["To"] = to_address
     message["Subject"] = subject
     message["List-Unsubscribe"] = f"<{unsub_link}>"
@@ -108,14 +109,24 @@ def _build_html(
     open_pixel_url_fn,
     click_redirect_url_fn,
 ) -> str:
-    escaped = html.escape(body)
+    # Rewrite URLs BEFORE html.escape so that `&` in query params is still matchable.
+    # We collect (start, end, replacement) tuples, then rebuild the string with the
+    # surrounding plain text escaped and the rewritten links inserted verbatim.
+    segments: list[str] = []
+    last = 0
+    for m in _URL_RE.finditer(body):
+        # Escape the plain text between the previous match and this one
+        segments.append(html.escape(body[last:m.start()]))
+        orig_url = m.group(0)
+        tracking_url = click_redirect_url_fn(deal_id, orig_url, campaign_id)
+        segments.append(
+            f'<a href="{html.escape(tracking_url)}">{html.escape(orig_url)}</a>'
+        )
+        last = m.end()
+    # Escape any trailing plain text after the last URL
+    segments.append(html.escape(body[last:]))
 
-    def _rewrite(m: re.Match) -> str:
-        orig = m.group(0)
-        tracking = click_redirect_url_fn(deal_id, orig, campaign_id)
-        return f'<a href="{html.escape(tracking)}">{html.escape(orig)}</a>'
-
-    linked = _URL_RE.sub(_rewrite, escaped)
+    linked = "".join(segments)
     pixel = open_pixel_url_fn(deal_id, campaign_id)
     return (
         f'<html><body><pre style="font-family:inherit;white-space:pre-wrap">'
@@ -124,6 +135,16 @@ def _build_html(
         f'<img src="{html.escape(pixel)}" width="1" height="1" style="display:none" alt="" />'
         f"</body></html>"
     )
+
+
+# ── From header ───────────────────────────────────────────────────
+
+
+def _from_header(mailbox) -> str:
+    """Return a properly formatted From header, including display name if set."""
+    name = (mailbox.from_name or "").strip()
+    address = mailbox.from_address or mailbox.username
+    return formataddr((name, address)) if name else address
 
 
 # ── Message-ID ────────────────────────────────────────────────────
@@ -138,7 +159,13 @@ def _mint_message_id(from_address: str) -> str:
 
 
 def _deliver(mailbox, message) -> None:
-    with smtplib.SMTP(mailbox.host, mailbox.port, timeout=SMTP_TIMEOUT_SECONDS) as smtp:
-        smtp.starttls()
-        smtp.login(mailbox.username, mailbox.password)
-        smtp.send_message(message)
+    # Port 465 uses implicit SSL (SMTP_SSL); all other ports use STARTTLS.
+    if mailbox.port == 465:
+        with smtplib.SMTP_SSL(mailbox.host, mailbox.port, timeout=SMTP_TIMEOUT_SECONDS) as smtp:
+            smtp.login(mailbox.username, mailbox.password)
+            smtp.send_message(message)
+    else:
+        with smtplib.SMTP(mailbox.host, mailbox.port, timeout=SMTP_TIMEOUT_SECONDS) as smtp:
+            smtp.starttls()
+            smtp.login(mailbox.username, mailbox.password)
+            smtp.send_message(message)

@@ -121,12 +121,23 @@ def handle_email_follow_up(task, user_id: str, campaign) -> None:
             campaign_id=str(campaign.pk),
         )
     except smtplib.SMTPRecipientsRefused as exc:
+        # Hard bounce: one or more recipients permanently rejected.
         code = _extract_smtp_code(exc)
-        if code == 550:
+        if _is_hard_bounce(code):
             _mark_bounced(deal, lead, deals_col, leads_col)
             logger.warning(
-                "email_follow_up: hard bounce 550 for %s — EMAIL_BOUNCED + unsubscribed",
-                lead.api_email,
+                "email_follow_up: hard bounce %d for %s — EMAIL_BOUNCED + suppressed",
+                code, lead.api_email,
+            )
+            return
+        raise
+    except smtplib.SMTPResponseException as exc:
+        # Covers 550/551/552/553/554 returned as SMTPResponseException (some providers).
+        if _is_hard_bounce(exc.smtp_code):
+            _mark_bounced(deal, lead, deals_col, leads_col)
+            logger.warning(
+                "email_follow_up: hard bounce %d for %s — EMAIL_BOUNCED + suppressed",
+                exc.smtp_code, lead.api_email,
             )
             return
         raise
@@ -148,6 +159,16 @@ def handle_email_follow_up(task, user_id: str, campaign) -> None:
         "email_follow_up [%s]: sent step %d to %s via %s",
         campaign.pk, deal.email_sequence_step, lead.api_email, mailbox.from_address,
     )
+
+
+# SMTP 5xx codes that indicate a permanent address failure (hard bounce).
+# 550=mailbox unavailable, 551=user not local, 552=storage exceeded,
+# 553=mailbox name not allowed, 554=transaction failed/spam rejection.
+_HARD_BOUNCE_CODES = frozenset({550, 551, 552, 553, 554})
+
+
+def _is_hard_bounce(code: int) -> bool:
+    return code in _HARD_BOUNCE_CODES
 
 
 def _extract_smtp_code(exc: smtplib.SMTPRecipientsRefused) -> int:

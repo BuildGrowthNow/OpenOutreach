@@ -29,7 +29,7 @@ def generate_email(deal, user_id: str, campaign, sequence_step: int) -> tuple[st
     Raises:
         RuntimeError: LLM returned unparseable response
     """
-    from openoutreach.mongodb.models import SiteConfig, Lead
+    from openoutreach.mongodb.models import SiteConfig
     from pydantic_ai import Agent
     from pydantic import BaseModel
 
@@ -38,7 +38,6 @@ def generate_email(deal, user_id: str, campaign, sequence_step: int) -> tuple[st
         body: str
 
     config = SiteConfig.load(user_id=user_id)
-    lead = Lead.get(deal.lead_id)
 
     system_prompt = _render_prompt(
         deal=deal,
@@ -60,10 +59,10 @@ def generate_email(deal, user_id: str, campaign, sequence_step: int) -> tuple[st
         )
 
     logger.info(
-        "email_agent: generated step=%d subject=%r lead=%s",
+        "email_agent: generated step=%d subject=%r deal=%s",
         sequence_step,
         result.subject,
-        getattr(lead, "public_identifier", deal.lead_id) if lead else deal.lead_id,
+        deal._id,
     )
     return result.subject, result.body
 

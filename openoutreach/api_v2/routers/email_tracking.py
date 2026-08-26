@@ -59,16 +59,12 @@ def _verify_webhook_secret(request: Request) -> None:
 
 
 def _handle_open_or_click(body: TrackingEvent, deals_col) -> None:
-    from bson import ObjectId
-
-    try:
-        oid = ObjectId(body.deal_id)
-    except Exception:
-        logger.warning("email_tracking: invalid deal_id %r", body.deal_id)
+    if not body.deal_id:
+        logger.warning("email_tracking: missing deal_id in event")
         return
 
     result = deals_col.update_one(
-        {"_id": oid, "state": "email_sent"},
+        {"_id": body.deal_id, "state": "email_sent"},
         {"$set": {"state": "email_opened"}},
     )
     if result.modified_count:
@@ -76,22 +72,18 @@ def _handle_open_or_click(body: TrackingEvent, deals_col) -> None:
 
 
 def _handle_unsub(body: TrackingEvent, deals_col, leads_col) -> None:
-    from bson import ObjectId
-
-    try:
-        oid = ObjectId(body.deal_id)
-    except Exception:
-        logger.warning("email_tracking: invalid deal_id %r", body.deal_id)
+    if not body.deal_id:
+        logger.warning("email_tracking: missing deal_id in unsub event")
         return
 
-    deal_doc = deals_col.find_one({"_id": oid}, {"lead_id": 1})
+    deal_doc = deals_col.find_one({"_id": body.deal_id}, {"lead_id": 1})
     if not deal_doc:
         return
 
     lead_id = deal_doc.get("lead_id")
     if lead_id:
         leads_col.update_one(
-            {"_id": ObjectId(lead_id)},
+            {"_id": lead_id},
             {"$set": {"email_unsubscribed": True}},
         )
 

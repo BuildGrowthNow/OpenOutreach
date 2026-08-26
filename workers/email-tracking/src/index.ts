@@ -193,7 +193,14 @@ p{color:#16a34a;font-size:18px}</style>
   });
 }
 
-async function handleUnsubGet(_request: Request, _env: Env, token: string): Promise<Response> {
+async function handleUnsubGet(_request: Request, env: Env, token: string): Promise<Response> {
+  const payload = await verifyToken(token, env.SECRET_KEY);
+  if (!payload || payload.event !== "unsub") {
+    return new Response("Invalid or expired unsubscribe link.", {
+      status: 400,
+      headers: { "Content-Type": "text/plain" },
+    });
+  }
   return unsubscribePage(token);
 }
 
