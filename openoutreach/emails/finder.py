@@ -4,7 +4,7 @@
 `resolve_email` is the public entry point.
 
 Priority:
-  1. Free 4-layer waterfall (domain → patterns → SMTP → web search) — always tried
+  1. Free 6-layer waterfall (domain → website scrape → WHOIS → patterns → SMTP → web search) — always tried
   2. BetterContact paid API  — only if SiteConfig.finder_api_key is set AND free missed
 
 `FinderUnavailable` is raised only on BetterContact transport errors (network
@@ -43,7 +43,7 @@ class FinderQuery:
 @dataclass(frozen=True)
 class FinderResult:
     email: str
-    status: str  # "smtp_verified" | "web_found" | "pattern_only" | "bettercontact"
+    status: str  # "smtp_verified" | "site_found" | "whois_found" | "web_found" | "pattern_only" | "bettercontact"
 
 
 def resolve_email(query: FinderQuery, user_id: str | None = None) -> FinderResult | None:
