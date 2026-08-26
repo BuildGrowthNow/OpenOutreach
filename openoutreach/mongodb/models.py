@@ -54,6 +54,7 @@ class Lead:
         full_name: Optional[str] = None,
         company: Optional[str] = None,
         headline: Optional[str] = None,
+        email_unsubscribed: bool = False,
     ):
         self._id = _id or str(uuid4())
         self.linkedin_url = linkedin_url
@@ -75,6 +76,7 @@ class Lead:
         self.full_name = full_name
         self.company = company
         self.headline = headline
+        self.email_unsubscribed = email_unsubscribed
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert model instance to dictionary for MongoDB storage."""
@@ -114,6 +116,8 @@ class Lead:
             data["company"] = self.company
         if self.headline is not None:
             data["headline"] = self.headline
+        if self.email_unsubscribed:
+            data["email_unsubscribed"] = self.email_unsubscribed
         return data
 
     @classmethod
@@ -140,6 +144,7 @@ class Lead:
             full_name=data.get("full_name"),
             company=data.get("company"),
             headline=data.get("headline"),
+            email_unsubscribed=data.get("email_unsubscribed", False),
         )
 
     def save(self, update_fields: Optional[List[str]] = None) -> str:
@@ -1050,6 +1055,11 @@ class Deal:
         COMPLETED = "Completed"
         FAILED = "Failed"
         NO_EMAIL = "No Email"
+        EMAIL_QUEUED = "email_queued"
+        EMAIL_SENT = "email_sent"
+        EMAIL_OPENED = "email_opened"
+        EMAIL_REPLIED = "email_replied"
+        EMAIL_BOUNCED = "email_bounced"
 
     class Outcome:
         CONVERTED = "converted"
@@ -1081,6 +1091,10 @@ class Deal:
         follow_up_cycled_at: Optional[datetime] = None,
         next_follow_up_at: Optional[datetime] = None,
         active_channel: str = "linkedin",
+        mailbox_id: Optional[str] = None,
+        email_sent_at: Optional[datetime] = None,
+        email_message_id: Optional[str] = None,
+        email_sequence_step: int = 0,
     ):
         self._id = _id or str(uuid4())
         self.lead_id = lead_id
@@ -1100,6 +1114,10 @@ class Deal:
         self.follow_up_cycled_at = follow_up_cycled_at
         self.next_follow_up_at = next_follow_up_at
         self.active_channel = active_channel
+        self.mailbox_id = mailbox_id
+        self.email_sent_at = email_sent_at
+        self.email_message_id = email_message_id
+        self.email_sequence_step = email_sequence_step
         self._lead: Optional["Lead"] = None
         self.campaign: Optional["Campaign"] = None
 
@@ -1156,6 +1174,14 @@ class Deal:
         if self.next_follow_up_at:
             data["next_follow_up_at"] = self.next_follow_up_at
         data["active_channel"] = self.active_channel
+        if self.mailbox_id is not None:
+            data["mailbox_id"] = self.mailbox_id
+        if self.email_sent_at is not None:
+            data["email_sent_at"] = self.email_sent_at
+        if self.email_message_id is not None:
+            data["email_message_id"] = self.email_message_id
+        if self.email_sequence_step:
+            data["email_sequence_step"] = self.email_sequence_step
         return data
 
     @classmethod
@@ -1180,6 +1206,10 @@ class Deal:
             follow_up_cycled_at=data.get("follow_up_cycled_at"),
             next_follow_up_at=data.get("next_follow_up_at"),
             active_channel=data.get("active_channel", "linkedin"),
+            mailbox_id=data.get("mailbox_id"),
+            email_sent_at=data.get("email_sent_at"),
+            email_message_id=data.get("email_message_id"),
+            email_sequence_step=data.get("email_sequence_step", 0),
         )
 
     def save(self, update_fields: Optional[List[str]] = None) -> str:
@@ -4413,6 +4443,7 @@ class Task:
         WHATSAPP_MESSAGE = "whatsapp_message"
         WHATSAPP_FOLLOW_UP = "whatsapp_follow_up"
         WHATSAPP_SYNC = "whatsapp_sync"
+        EMAIL_FOLLOW_UP = "email_follow_up"
 
     class Status:
         PENDING = "pending"

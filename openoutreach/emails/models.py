@@ -296,8 +296,10 @@ class Mailbox:
 Mailbox.objects = MailboxManager()
 
 
-def has_mailbox() -> bool:
-    """True when ≥1 mailbox is configured - i.e. email is a viable channel to
-    send from. Gates email enrichment: with no mailbox there's nothing to send,
-    so resolving an address is pointless and the deal should take the connect leg."""
-    return Mailbox.objects.exists()
+def has_mailbox(user_id: str = "") -> bool:
+    """True when ≥1 mailbox is configured for this user (or any user if blank).
+
+    Gates email enrichment: with no mailbox there's nothing to send,
+    so resolving an address is pointless and the deal should take the connect leg.
+    """
+    return Mailbox.objects.exists(user_id=user_id)

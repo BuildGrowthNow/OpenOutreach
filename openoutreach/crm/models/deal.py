@@ -30,6 +30,11 @@ class DealState(str, Enum):
     COMPLETED = "Completed"
     FAILED = "Failed"
     NO_EMAIL = "No Email"
+    EMAIL_QUEUED = "email_queued"
+    EMAIL_SENT = "email_sent"
+    EMAIL_OPENED = "email_opened"
+    EMAIL_REPLIED = "email_replied"
+    EMAIL_BOUNCED = "email_bounced"
 
 
 class Outcome(str, Enum):

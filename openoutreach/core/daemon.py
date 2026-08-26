@@ -793,6 +793,47 @@ def run_daemon():
                     )
                 break
 
+        # Email task claiming — no browser session needed; runs per LinkedIn profile (user-scoped)
+        if not task_executed:
+            for ps in profile_sessions:
+                email_task = Task.objects.claim_next(
+                    linkedin_profile_id=ps.profile_id, channel="email"
+                )
+                if email_task is None:
+                    continue
+
+                campaign_id = email_task.payload.get("campaign_id")
+                if not campaign_id:
+                    email_task.mark_failed()
+                    continue
+
+                campaign = Campaign.get(campaign_id)
+                if not campaign or campaign.status != Campaign.Status.ACTIVE:
+                    email_task.mark_failed()
+                    continue
+
+                email_task.mark_running()
+                try:
+                    from openoutreach.emails.tasks.handle_email_follow_up import handle_email_follow_up
+                    handle_email_follow_up(email_task, user_id=ps.user_id, campaign=campaign)
+                    email_task.mark_completed()
+                    logger.info(
+                        colored("[email_follow_up] COMPLETED", "green", attrs=["bold"])
+                        + " (profile=%s, campaign=%s)",
+                        ps.profile_id, campaign_id,
+                    )
+                    task_executed = True
+                except Exception:
+                    import traceback
+                    email_task.mark_failed()
+                    logger.error(
+                        colored("[email_follow_up] Task FAILED", "red", attrs=["bold"])
+                        + " (profile=%s, campaign=%s)\n%s",
+                        ps.profile_id, campaign_id,
+                        traceback.format_exc()[-2000:],
+                    )
+                break
+
         if not task_executed:
             _reconcile_all(pool)
 

@@ -846,6 +846,7 @@ def reconcile(session) -> None:
         plan_check_pending_window(session, campaign)
         _retry_no_email_deals(campaign)
         _maybe_trigger_lead_scrape(campaign, profile.user_id)
+        plan_email_follow_up_window(campaign, user_id=profile.user_id, linkedin_profile_id=profile.pk)
 
         # WhatsApp channel planners - only when campaign has WA configured
         wa_profile_id = getattr(campaign, "whatsapp_profile_id", None)
@@ -988,6 +989,61 @@ def plan_whatsapp_sync_window(campaign, whatsapp_profile_id: str, user_id: str) 
     )
     if created:
         logger.info("[%s] planned %d whatsapp_sync slots", campaign, created)
+    return created
+
+
+def plan_email_follow_up_window(campaign, user_id: str, linkedin_profile_id: str | None = None) -> int:
+    """Plan the next 24h of email_follow_up slots for *campaign*.
+
+    No-op when:
+    - No mailboxes configured for this user
+    - Campaign does not have 'email' in channel_sequence
+    - A PENDING email_follow_up task already exists for this campaign
+    - No EMAIL_QUEUED deals with api_email set
+    - All mailboxes at daily cap (remaining_today == 0)
+    """
+    from openoutreach.emails.models import has_mailbox, Mailbox
+
+    channel_sequence = getattr(campaign, "channel_sequence", None) or []
+    if "email" not in channel_sequence:
+        return 0
+
+    if not has_mailbox(user_id=user_id):
+        return 0
+
+    if _has_pending(Task.TaskType.EMAIL_FOLLOW_UP, campaign.pk, linkedin_profile_id=linkedin_profile_id, channel="email"):
+        return 0
+
+    from openoutreach.mongodb.connection import get_mongodb_collection
+    deals_col = get_mongodb_collection("deals")
+    if deals_col is None:
+        return 0
+
+    eligible = deals_col.count_documents({
+        "campaign_id": campaign.pk,
+        "state": "email_queued",
+        "active_channel": "email",
+    })
+    if eligible == 0:
+        return 0
+
+    remaining = Mailbox.objects.remaining_today(user_id=user_id)
+    if remaining == 0:
+        return 0
+
+    n = min(eligible, remaining)
+    # Email tasks have no per-profile velocity limit; use a flat 10/hr rate
+    velocity = 10
+
+    created = _plan_slots(
+        Task.TaskType.EMAIL_FOLLOW_UP, campaign.pk, n, velocity,
+        linkedin_profile_id=linkedin_profile_id,
+        user_id=user_id,
+        channel="email",
+    )
+    if created:
+        logger.info("[%s] planned %d email_follow_up slots (eligible=%d, remaining=%d)",
+                    campaign, created, eligible, remaining)
     return created
 
 

@@ -1061,6 +1061,31 @@ class RemoteDaemon:
             qualifiers = self._build_qualifiers_for_campaign(campaign)
             return wa_handler(task=task_obj, wa_session=wa_session, qualifiers=qualifiers)
 
+        # Email tasks — no LinkedIn session needed; resolved via user_id on session
+        if task_type == "email_follow_up":
+            from openoutreach.emails.tasks.handle_email_follow_up import handle_email_follow_up
+            campaign_id = task.get("payload", {}).get("campaign_id")
+            if not campaign_id:
+                raise ValueError("email_follow_up task missing campaign_id in payload")
+            campaign = Campaign.get(campaign_id)
+            if not campaign or campaign.status != Campaign.Status.ACTIVE:
+                logger.info(
+                    "Skipping email_follow_up - campaign %s not active (status=%s)",
+                    campaign_id, campaign.status if campaign else "not found",
+                )
+                return None
+            user_id: str = (
+                (self.session.user_id or "")
+                if self.session and hasattr(self.session, "user_id")
+                else (campaign.user_id or "")
+            )
+            task_obj = type("Task", (), {
+                "task_type": task_type,
+                "payload": task.get("payload", {}),
+            })()
+            handle_email_follow_up(task_obj, user_id=user_id, campaign=campaign)
+            return None
+
         handler = handlers.get(task["task_type"])
         if not handler:
             raise ValueError(f"Unknown task type: {task['task_type']}")
