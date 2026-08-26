@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import urllib.parse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Optional
 
 from openoutreach.whatsapp.pipeline.upsert import BusinessListing, upsert_listings_as_leads
@@ -359,6 +360,33 @@ _BACKEND_FN = {
 }
 
 
+def _run_backend_in_isolation(
+    backend_name: str, query: str, country_code: str
+) -> List[BusinessListing]:
+    """Launch a dedicated browser for one backend; safe to call from a thread."""
+    from playwright.sync_api import sync_playwright
+    from playwright_stealth import Stealth
+
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            context = browser.new_context(
+                user_agent=(
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/124.0.0.0 Safari/537.36"
+                ),
+                locale="en-US",
+                viewport={"width": 1280, "height": 800},
+            )
+            Stealth().apply_stealth_sync(context)
+            page = context.new_page()
+            page.set_extra_http_headers({"Accept-Language": "en-US,en;q=0.9"})
+            return _BACKEND_FN[backend_name](page, query, country_code)
+        finally:
+            browser.close()
+
+
 def create_leads_from_maps(
     query: str,
     country_code: str,
@@ -372,8 +400,6 @@ def create_leads_from_maps(
     min_rating: if set, only listings with rating >= min_rating (or no rating data) are kept.
     Returns count of new leads created.
     """
-    from playwright.sync_api import sync_playwright
-
     active_backends = [b for b in (backends or _DEFAULT_BACKENDS) if b in _BACKEND_FN]
     if not active_backends:
         logger.warning("maps_scraper: no valid backends in %s", backends)
@@ -381,31 +407,19 @@ def create_leads_from_maps(
 
     all_listings: List[BusinessListing] = []
 
-    with sync_playwright() as pw:
-        browser = pw.chromium.launch(headless=True)
-        try:
-            from playwright_stealth import Stealth
-            context = browser.new_context(
-                user_agent=(
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/124.0.0.0 Safari/537.36"
-                ),
-                locale="en-US",
-                viewport={"width": 1280, "height": 800},
-            )
-            Stealth().apply_stealth_sync(context)
-            page = context.new_page()
-            page.set_extra_http_headers({"Accept-Language": "en-US,en;q=0.9"})
-            for backend in active_backends:
-                try:
-                    results = _BACKEND_FN[backend](page, query, country_code)
-                    logger.info("maps_scraper: %s returned %d listings", backend, len(results))
-                    all_listings.extend(results)
-                except Exception as exc:
-                    logger.warning("maps_scraper: backend %s failed: %s", backend, exc)
-        finally:
-            browser.close()
+    with ThreadPoolExecutor(max_workers=len(active_backends)) as pool:
+        futures = {
+            pool.submit(_run_backend_in_isolation, backend, query, country_code): backend
+            for backend in active_backends
+        }
+        for future in as_completed(futures):
+            backend = futures[future]
+            try:
+                results = future.result()
+                logger.info("maps_scraper: %s returned %d listings", backend, len(results))
+                all_listings.extend(results)
+            except Exception as exc:
+                logger.warning("maps_scraper: backend %s failed: %s", backend, exc)
 
     if min_rating is not None:
         before = len(all_listings)

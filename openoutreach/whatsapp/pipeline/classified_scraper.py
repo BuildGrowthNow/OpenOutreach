@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 _MAX_LISTINGS = 40      # cards to collect from search page
 _MAX_DETAIL_PAGES = 20  # listing detail pages to visit per backend
 _PHONE_RE = re.compile(r"(\+?[\d][\d\s\-\.\(\)]{5,18}[\d])")
-_DEFAULT_SITES = ["craigslist", "olx", "mercadolibre"]
+_DEFAULT_SITES = ["olx", "mercadolibre"]
 
 
 def _phone_from_page(page) -> str:
@@ -356,9 +356,20 @@ def create_leads_from_classified(
     all_listings: List[BusinessListing] = []
 
     with sync_playwright() as pw:
+        from playwright_stealth import Stealth
         browser = pw.chromium.launch(headless=True)
         try:
-            page = browser.new_page()
+            context = browser.new_context(
+                user_agent=(
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/124.0.0.0 Safari/537.36"
+                ),
+                locale="en-US",
+                viewport={"width": 1280, "height": 800},
+            )
+            Stealth().apply_stealth_sync(context)
+            page = context.new_page()
             page.set_extra_http_headers({"Accept-Language": "en-US,en;q=0.9"})
             for site in active_sites:
                 try:

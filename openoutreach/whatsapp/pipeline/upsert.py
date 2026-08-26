@@ -55,7 +55,7 @@ def upsert_listings_as_leads(
             "_id": lead_id,
             "phone": lst.phone,
             "phone_source": lst.source,
-            "company": lst.name,
+            "company": lst.name or None,
             "linkedin_url": None,
             "public_identifier": "",
             "user_id": user_id,
@@ -103,7 +103,10 @@ def upsert_listings_as_leads(
             if fill:
                 leads_col.update_one(
                     {"_id": actual_lead_id},
-                    [{"$set": {k: {"$ifNull": [f"${k}", v]} for k, v in fill.items()}}],
+                    [{"$set": {
+                        **{k: {"$ifNull": [f"${k}", v]} for k, v in fill.items()},
+                        "update_date": now,
+                    }}],
                 )
 
         if not deals_col.find_one({"lead_id": actual_lead_id, "campaign_id": campaign_id}):

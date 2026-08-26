@@ -54,17 +54,20 @@ def _ddg_search_wa_links(page, query: str, country_code: str) -> List[str]:
     except Exception:
         html = ""
 
+    # DDG wraps result URLs in redirect hrefs (e.g. /l/?uddg=https%3A%2F%2F...wa.me%2F...)
+    # so the wa.me phone appears URL-encoded. Search both raw and decoded HTML.
     phones: List[str] = []
     seen: set = set()
-    for raw in _WA_ME_RE.findall(html):
-        phone = _phone_from_wa_me(raw, country_code)
-        if phone and phone not in seen:
-            seen.add(phone)
-            phones.append(phone)
+    for source_html in (html, urllib.parse.unquote(html)):
+        for raw in _WA_ME_RE.findall(source_html):
+            phone = _phone_from_wa_me(raw, country_code)
+            if phone and phone not in seen:
+                seen.add(phone)
+                phones.append(phone)
         if len(phones) >= _MAX_SEARCH_RESULTS:
             break
 
-    return phones
+    return phones[:_MAX_SEARCH_RESULTS]
 
 
 def _ddg_result_urls_with_titles(page, query: str) -> List[tuple]:
@@ -73,7 +76,9 @@ def _ddg_result_urls_with_titles(page, query: str) -> List[tuple]:
     page.goto(url, wait_until="domcontentloaded", timeout=30000)
     try:
         page.wait_for_selector(
-            ".result__url, [data-testid='result-extras-url-link']", timeout=15000
+            ".result__url, [data-testid='result-extras-url-link'], "
+            "[data-testid='result-url'], .result__a",
+            timeout=15000,
         )
     except Exception:
         return []
@@ -81,7 +86,8 @@ def _ddg_result_urls_with_titles(page, query: str) -> List[tuple]:
     results: List[tuple] = []
     seen: set = set()
     for el in page.query_selector_all(
-        ".result__a[href], [data-testid='result-title-a'][href]"
+        ".result__a[href], [data-testid='result-title-a'][href], "
+        "[data-testid='result-title'][href], article a[href], .result a[href]"
     ):
         href = (el.get_attribute("href") or "").split("?")[0]
         title = el.inner_text().strip()
@@ -206,9 +212,20 @@ def create_leads_from_wa_links(
     all_listings: List[BusinessListing] = []
 
     with sync_playwright() as pw:
+        from playwright_stealth import Stealth
         browser = pw.chromium.launch(headless=True)
         try:
-            page = browser.new_page()
+            context = browser.new_context(
+                user_agent=(
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/124.0.0.0 Safari/537.36"
+                ),
+                locale="en-US",
+                viewport={"width": 1280, "height": 800},
+            )
+            Stealth().apply_stealth_sync(context)
+            page = context.new_page()
             page.set_extra_http_headers({"Accept-Language": "en-US,en;q=0.9"})
             listings = _scrape_wa_links(page, query, country_code)
             all_listings.extend(listings)
