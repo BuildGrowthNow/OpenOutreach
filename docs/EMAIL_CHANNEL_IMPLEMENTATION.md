@@ -434,7 +434,7 @@ Add sequence configuration section:
 
 - [x] Phase 1 — Generic mailbox management + FastAPI endpoints + Settings UI
 - [x] Phase 2 — Deal states + email task handler + scheduler integration
-- [ ] Phase 3 — LLM email writer (`email_agent.py` + `email_agent.j2`)
+- [x] Phase 3 — LLM email writer (`email_agent.py` + `email_agent.j2`)
 - [ ] Phase 4 — Cloudflare Worker (tracking pixel, click redirect, unsubscribe, backend webhook)
 - [ ] Phase 5 — Multi-step sequence + IMAP reply detection (v2)
 - [ ] Phase 6 — Frontend: campaign wizard, leads list email column, Settings email tab

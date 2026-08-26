@@ -71,7 +71,8 @@ def handle_email_follow_up(task, user_id: str, campaign) -> None:
         )
         return
 
-    subject, body = _generate_email_stub(deal, lead, deal.email_sequence_step)
+    from openoutreach.emails.email_agent import generate_email
+    subject, body = generate_email(deal, user_id, campaign, deal.email_sequence_step)
 
     try:
         message_id = send_email(
@@ -111,28 +112,6 @@ def handle_email_follow_up(task, user_id: str, campaign) -> None:
         "email_follow_up [%s]: sent step %d to %s via %s",
         campaign.pk, deal.email_sequence_step, lead.api_email, mailbox.from_address,
     )
-
-
-def _generate_email_stub(deal, lead, step: int) -> tuple[str, str]:
-    """Phase 2 placeholder — Phase 3 wires LLM here."""
-    name = lead.full_name or lead.public_identifier or "there"
-    if step == 0:
-        subject = f"Quick question, {name}"
-        body = (
-            f"Hi {name},\n\n"
-            "I came across your profile and wanted to reach out briefly.\n\n"
-            "Would you be open to a quick chat?\n\n"
-            "Best regards"
-        )
-    else:
-        subject = f"Following up, {name}"
-        body = (
-            f"Hi {name},\n\n"
-            "Just following up on my previous message.\n\n"
-            "Happy to connect if you have a moment.\n\n"
-            "Best regards"
-        )
-    return subject, body
 
 
 def _extract_smtp_code(exc: smtplib.SMTPRecipientsRefused) -> int:
