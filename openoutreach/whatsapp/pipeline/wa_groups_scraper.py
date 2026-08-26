@@ -24,6 +24,7 @@ from openoutreach.whatsapp.pipeline.upsert import BusinessListing, upsert_listin
 from openoutreach.whatsapp.pipeline.utils import (
     apply_resource_block as _apply_resource_block,
     decode_ddg_href as _decode_ddg_href,
+    is_likely_whatsapp_number as _is_likely_whatsapp_number,
     normalize_phone as _normalize_phone,
     random_user_agent as _random_user_agent,
     scrape_retry as _scrape_retry,
@@ -32,6 +33,15 @@ from openoutreach.whatsapp.pipeline.utils import (
 logger = logging.getLogger(__name__)
 
 _MAX_SEARCH_RESULTS = 100
+
+# Country names appended to DDG query for geographic targeting on non-English markets
+_DDG_COUNTRY_CONTEXT = {
+    "DE": "Germany", "FR": "France", "ES": "Spain", "IT": "Italy",
+    "NL": "Netherlands", "SE": "Sweden", "PL": "Poland", "PT": "Portugal",
+    "BR": "Brazil", "MX": "Mexico", "AR": "Argentina", "CO": "Colombia",
+    "CL": "Chile", "ZA": "South Africa", "TR": "Turkey", "RO": "Romania",
+    "CZ": "Czech Republic", "HU": "Hungary", "AT": "Austria", "CH": "Switzerland",
+}
 _MAX_DETAIL_PAGES = 50
 _MAX_DETAIL_WORKERS = 6
 _DDG_PAGE2_THRESHOLD = 20
@@ -172,7 +182,10 @@ def _ddg_search_and_collect(
         phones_with_names: [(phone_e164, name), ...] — wa.me phones found in SERP
         result_urls:       [(url, title), ...] — result page URLs to visit for more phones
     """
-    search_query = f'{query} "wa.me/"'
+    location_term = _DDG_COUNTRY_CONTEXT.get(country_code.upper(), "")
+    search_query = (
+        f'{query} "wa.me/" {location_term}'.strip() if location_term else f'{query} "wa.me/"'
+    )
     url = f"https://duckduckgo.com/?q={urllib.parse.quote(search_query)}&ia=web"
     page.goto(url, wait_until="domcontentloaded", timeout=30000)
     try:
@@ -191,7 +204,7 @@ def _ddg_search_and_collect(
 
     # Page 2 via s=30 offset when first pass is sparse
     if len(phones) < _DDG_PAGE2_THRESHOLD:
-        url_p2 = f"https://duckduckgo.com/?q={urllib.parse.quote(search_query)}&ia=web&s=30"
+        url_p2 = f"https://duckduckgo.com/?q={urllib.parse.quote(search_query)}&ia=web&s=30"  # noqa: E501
         try:
             page.goto(url_p2, wait_until="domcontentloaded", timeout=25000)
             page.wait_for_selector(", ".join(_DDG_RESULT_SELS), timeout=10000)
@@ -457,6 +470,16 @@ def create_leads_from_wa_links(
         skipped = before - len(all_listings)
         if skipped:
             logger.info("wa_groups: dedup removed %d already-known phones", skipped)
+
+    # Drop definitive landlines — they can't receive WhatsApp messages
+    before_mobile = len(all_listings)
+    all_listings = [
+        lst for lst in all_listings
+        if not lst.phone or _is_likely_whatsapp_number(lst.phone)
+    ]
+    dropped_landlines = before_mobile - len(all_listings)
+    if dropped_landlines:
+        logger.info("wa_groups: filtered %d landline numbers", dropped_landlines)
 
     all_listings = _apply_icp_filter(all_listings, campaign_id, user_id, label="wa_groups")
     return upsert_listings_as_leads(all_listings, campaign_id, user_id)

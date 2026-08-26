@@ -16,6 +16,7 @@ from openoutreach.whatsapp.pipeline.icp_filter import apply_icp_filter as _apply
 from openoutreach.whatsapp.pipeline.upsert import BusinessListing, upsert_listings_as_leads
 from openoutreach.whatsapp.pipeline.utils import (
     apply_resource_block as _apply_resource_block,
+    is_likely_whatsapp_number as _is_likely_whatsapp_number,
     normalize_phone as _normalize_phone,
     random_user_agent as _random_user_agent,
     scrape_retry as _scrape_retry,
@@ -248,6 +249,11 @@ _BING_CONTAINER_SELS = [
     "#panelContent",
     "[data-testid='listCard']",
     ".panelEntityCard",
+    ".businessListings",
+    ".b-entityCard",
+    ".entityList",
+    "[aria-label*='businesses']",
+    "[aria-label*='results']",
 ]
 
 _BING_CARD_SELS = [
@@ -257,6 +263,10 @@ _BING_CARD_SELS = [
     "[data-testid='listCard']",
     ".panelEntityCard",
     ".b-list li",
+    ".b-entityCard",
+    ".taskCard",
+    ".businessCard",
+    "[role='listitem']",
 ]
 
 
@@ -283,20 +293,24 @@ def _scrape_bing_maps(page, query: str, country_code: str) -> List[BusinessListi
     for card in cards[:_MAX_LISTINGS]:
         try:
             name_el = card.query_selector(
-                ".b-title, .listing-title, [class*='title'], h2, h3"
+                ".b-title, .listing-title, [class*='title'], h2, h3, "
+                ".b-entityTitle, .businessTitle, strong, [class*='name']"
             )
             name = name_el.inner_text().strip() if name_el else ""
             if not name:
                 continue
 
             phone_el = card.query_selector(
-                ".b-phone, [data-phone], a[href^='tel:'], [aria-label*='phone'], [aria-label*='Phone']"
+                ".b-phone, [data-phone], a[href^='tel:'], [aria-label*='phone'], "
+                "[aria-label*='Phone'], .phone, .phoneNumber, span[class*='phone'], "
+                "[class*='phone'], [itemprop='telephone']"
             )
             raw_phone = ""
             if phone_el:
                 raw_phone = (
                     phone_el.get_attribute("data-phone")
                     or (phone_el.get_attribute("href") or "").replace("tel:", "")
+                    or phone_el.get_attribute("content")
                     or phone_el.inner_text().strip()
                 )
 
@@ -561,7 +575,7 @@ def _run_backend_in_isolation(
                 _apply_resource_block(page)
                 page.set_extra_http_headers({"Accept-Language": "en-US,en;q=0.9"})
                 result = _BACKEND_FN[backend_name](page, query, country_code)
-                if backend_name == "google_maps":
+                if backend_name in ("google_maps", "yelp"):
                     try:
                         captured_state = context.storage_state()
                     except Exception:
@@ -596,19 +610,26 @@ def create_leads_from_maps(
         logger.warning("maps_scraper: no valid backends in %s", backends)
         return 0
 
-    # Load persisted Google Maps session cookies to reduce CAPTCHA frequency
-    google_session_state: Optional[dict] = None
-    if "google_maps" in active_backends:
+    # Load persisted session cookies per backend to reduce CAPTCHA/bot detection
+    _session_states: dict = {}
+    _stateful_backends = {"google_maps", "yelp"}
+    if _stateful_backends & set(active_backends):
         try:
             from openoutreach.mongodb.connection import get_mongodb_collection
             campaigns_col = get_mongodb_collection("campaigns")
             if campaigns_col is not None:
                 doc = campaigns_col.find_one({"_id": campaign_id}, {"maps_session_state": 1})
-                if doc and doc.get("maps_session_state"):
-                    google_session_state = doc["maps_session_state"]
-                    logger.debug("maps_scraper: loaded persisted session state for google_maps")
+                if doc and isinstance(doc.get("maps_session_state"), dict):
+                    for _b in _stateful_backends:
+                        if _b in doc["maps_session_state"]:
+                            _session_states[_b] = doc["maps_session_state"][_b]
+                    if _session_states:
+                        logger.debug(
+                            "maps_scraper: loaded session states for %s",
+                            list(_session_states.keys()),
+                        )
         except Exception as exc:
-            logger.debug("maps_scraper: failed to load session state: %s", exc)
+            logger.debug("maps_scraper: failed to load session states: %s", exc)
 
     all_listings: List[BusinessListing] = []
 
@@ -619,7 +640,7 @@ def create_leads_from_maps(
                 backend,
                 query,
                 country_code,
-                google_session_state if backend == "google_maps" else None,
+                _session_states.get(backend),
             ): backend
             for backend in active_backends
         }
@@ -629,18 +650,20 @@ def create_leads_from_maps(
                 results, new_state = future.result()
                 logger.info("maps_scraper: %s returned %d listings", backend, len(results))
                 all_listings.extend(results)
-                if backend == "google_maps" and new_state:
+                if backend in _stateful_backends and new_state:
                     try:
                         from openoutreach.mongodb.connection import get_mongodb_collection
                         campaigns_col = get_mongodb_collection("campaigns")
                         if campaigns_col is not None:
                             campaigns_col.update_one(
                                 {"_id": campaign_id},
-                                {"$set": {"maps_session_state": new_state}},
+                                {"$set": {f"maps_session_state.{backend}": new_state}},
                             )
-                            logger.debug("maps_scraper: persisted google_maps session state")
+                            logger.debug("maps_scraper: persisted session state for %s", backend)
                     except Exception as exc:
-                        logger.debug("maps_scraper: failed to save session state: %s", exc)
+                        logger.debug(
+                            "maps_scraper: failed to save session state for %s: %s", backend, exc
+                        )
             except Exception as exc:
                 logger.warning("maps_scraper: backend %s failed: %s", backend, exc)
 
@@ -723,6 +746,13 @@ def create_leads_from_maps(
             recovered,
             len(partial),
         )
+
+    # Drop definitive landlines — they can't receive WhatsApp messages
+    before_mobile = len(ready)
+    ready = [lst for lst in ready if not lst.phone or _is_likely_whatsapp_number(lst.phone)]
+    dropped_landlines = before_mobile - len(ready)
+    if dropped_landlines:
+        logger.info("maps_scraper: filtered %d landline numbers", dropped_landlines)
 
     if not ready:
         from openoutreach.whatsapp.pipeline.alerts import fire_scrape_zero_results

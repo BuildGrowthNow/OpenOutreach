@@ -16,6 +16,7 @@ from openoutreach.whatsapp.pipeline.icp_filter import apply_icp_filter as _apply
 from openoutreach.whatsapp.pipeline.upsert import BusinessListing, upsert_listings_as_leads
 from openoutreach.whatsapp.pipeline.utils import (
     apply_resource_block as _apply_resource_block,
+    is_likely_whatsapp_number as _is_likely_whatsapp_number,
     phone_from_page as _phone_from_page,
     random_user_agent as _random_user_agent,
     scrape_retry as _scrape_retry,
@@ -181,6 +182,16 @@ def create_leads_from_classified(
         skipped = before - len(all_listings)
         if skipped:
             logger.info("classified: dedup removed %d already-known phones", skipped)
+
+    # Drop definitive landlines — they can't receive WhatsApp messages
+    before_mobile = len(all_listings)
+    all_listings = [
+        lst for lst in all_listings
+        if not lst.phone or _is_likely_whatsapp_number(lst.phone)
+    ]
+    dropped_landlines = before_mobile - len(all_listings)
+    if dropped_landlines:
+        logger.info("classified: filtered %d landline numbers", dropped_landlines)
 
     all_listings = _apply_icp_filter(all_listings, campaign_id, user_id, label="classified")
     return upsert_listings_as_leads(all_listings, campaign_id, user_id)
