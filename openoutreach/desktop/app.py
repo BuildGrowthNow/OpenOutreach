@@ -49,6 +49,32 @@ _WINDOW_H = 1020
 # 1. Sets window.__LENGROWTH_DESKTOP__ so the frontend badge persists across navigation
 # 2. Intercepts window.location.href = 'lengrowth://...' so the auth callback is
 #    handled by Python instead of causing a failed navigation inside the webview
+_UPDATE_BANNER_JS = """
+(function() {
+    if (document.getElementById('__lg_update_banner__')) return;
+    var ver = '{version}';
+    var d = document.createElement('div');
+    d.id = '__lg_update_banner__';
+    d.style.cssText = 'position:fixed;bottom:20px;right:20px;z-index:999999;background:#18181b;border:1px solid #3f3f46;border-radius:8px;padding:12px 16px;display:flex;align-items:center;gap:12px;box-shadow:0 4px 24px rgba(0,0,0,0.5);font-family:system-ui,sans-serif;font-size:13px;color:#a1a1aa;';
+    var txt = document.createElement('span');
+    txt.textContent = 'v' + ver + ' available';
+    var btn = document.createElement('button');
+    btn.textContent = 'Restart to update';
+    btn.style.cssText = 'background:#22c55e;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:13px;cursor:pointer;font-weight:500;';
+    btn.onclick = function() {
+        btn.disabled = true;
+        btn.textContent = 'Restarting…';
+        if (window.pywebview && window.pywebview.api) window.pywebview.api.apply_update();
+    };
+    var x = document.createElement('button');
+    x.textContent = '×';
+    x.style.cssText = 'background:transparent;border:none;color:#71717a;cursor:pointer;font-size:18px;padding:0 4px;line-height:1;';
+    x.onclick = function() { d.remove(); };
+    d.appendChild(txt); d.appendChild(btn); d.appendChild(x);
+    document.body.appendChild(d);
+})();
+"""
+
 _INJECT_JS = """
 (function() {
     window.__LENGROWTH_DESKTOP__ = true;
@@ -265,6 +291,10 @@ class DesktopAPI:
             if self._app.auth.is_logged_in():
                 self._app._start_daemon()
 
+    def apply_update(self) -> None:
+        """Called by the in-app update banner 'Restart to update' button."""
+        threading.Thread(target=self._app._on_apply_update, daemon=True, name="apply-update").start()
+
     def confirm_auth(self, user_id: str) -> None:
         """Called by the frontend after successful initialize() to signal the daemon can start."""
         logger.info("Frontend confirmed auth for user: %s", user_id)
@@ -441,6 +471,10 @@ class TrayApp:
         if not self._is_running() and self.auth.is_logged_in() and self._token_valid is not False:
             logger.info("_on_loaded: authenticated, starting daemon")
             threading.Thread(target=self._start_daemon, daemon=True, name="daemon-start").start()
+        if self._pending_update:
+            ver = self._pending_update.get("version", "")
+            if ver:
+                self._inject_update_banner(ver)
 
     def _on_window_closed(self):
         """Called when the user closes the window - hide it, don't quit."""
@@ -738,6 +772,14 @@ class TrayApp:
     # Update checker
     # ------------------------------------------------------------------
 
+    def _inject_update_banner(self, ver: str) -> None:
+        if not self._window:
+            return
+        try:
+            self._window.evaluate_js(_UPDATE_BANNER_JS.format(version=ver))
+        except Exception as e:
+            logger.debug("Update banner inject failed: %s", e)
+
     def _run_startup_update_check(self) -> None:
         """Force-apply a pending update if one was downloaded during a previous session.
 
@@ -789,6 +831,7 @@ class TrayApp:
                         save_pending_update(info, path)
                         self._pending_update = info
                         self._update_menu()
+                        self._inject_update_banner(ver)
                         if self.icon:
                             self.icon.notify(
                                 f"Lengrowth v{ver} ready to install",
@@ -821,7 +864,7 @@ class TrayApp:
 
         async def periodic_loop():
             while not self._stopping:
-                await asyncio.sleep(3600 * 6)
+                await asyncio.sleep(1800)  # 30 min
                 if self._stopping:
                     break
                 try:
@@ -835,6 +878,7 @@ class TrayApp:
                                 save_pending_update(info, path)
                                 self._pending_update = info
                                 self._update_menu()
+                                self._inject_update_banner(ver)
                                 if self.icon:
                                     self.icon.notify(
                                         f"Lengrowth v{ver} ready to install",
