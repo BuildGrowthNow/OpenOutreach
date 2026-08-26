@@ -42,7 +42,7 @@ CONFIGURED = "configured"
 
 def email_state() -> str:
     """Which setup step is next: NO_BETTERCONTACT, NO_MAILBOX, or CONFIGURED."""
-    if not SiteConfig.load().bettercontact_api_key:
+    if not SiteConfig.load().finder_api_key:
         return NO_BETTERCONTACT
 
     # Check if any mailbox exists
@@ -266,7 +266,7 @@ def _collect_bettercontact_key() -> None:
     if not key or key == _BACK:
         return
     cfg = SiteConfig.load()
-    cfg.bettercontact_api_key = str(key)
+    cfg.finder_api_key = str(key)
     cfg.save()
     logger.info(
         "BetterContact key saved - enrichment is on; emails resolve as leads qualify."
