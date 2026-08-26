@@ -179,8 +179,9 @@ def _scrape_wa_links(page, query: str, country_code: str) -> List[BusinessListin
             seen_listings.add(phone)
             listings.append(
                 BusinessListing(
-                    # Direct DDG SERP hits have no name context; use query as fallback
-                    name=phone_name_map.get(phone, query),
+                    # Direct DDG SERP hits carry no name context; leave blank rather
+                    # than storing the search query string as the company name
+                    name=phone_name_map.get(phone, ""),
                     phone=phone,
                     source="wa_groups",
                     category=query,

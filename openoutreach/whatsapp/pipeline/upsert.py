@@ -86,6 +86,25 @@ def upsert_listings_as_leads(
         else:
             doc = leads_col.find_one({"phone": lst.phone, "user_id": user_id}, {"_id": 1})
             actual_lead_id = str(doc["_id"]) if doc else lead_id
+            # fill any fields that are currently null/absent on the existing lead
+            fill: dict = {}
+            if lst.name:
+                fill["company"] = lst.name
+            if lst.category:
+                fill["headline"] = lst.category
+            if lst.website:
+                fill["website"] = lst.website
+            if lst.address:
+                fill["address"] = lst.address
+            if lst.rating is not None:
+                fill["rating"] = lst.rating
+            if lst.review_count is not None:
+                fill["review_count"] = lst.review_count
+            if fill:
+                leads_col.update_one(
+                    {"_id": actual_lead_id},
+                    [{"$set": {k: {"$ifNull": [f"${k}", v]} for k, v in fill.items()}}],
+                )
 
         if not deals_col.find_one({"lead_id": actual_lead_id, "campaign_id": campaign_id}):
             deals_col.insert_one({

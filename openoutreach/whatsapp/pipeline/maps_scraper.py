@@ -17,22 +17,62 @@ logger = logging.getLogger(__name__)
 
 _DEFAULT_BACKENDS = ["google_maps", "bing_maps", "duckduckgo_maps"]
 _MAX_LISTINGS = 50
-_SCROLL_REPEATS = 3
-_SCROLL_PAUSE_MS = 1000
+_SCROLL_PAUSE_MS = 1200
+_MAX_SCROLL_ROUNDS = 12
 
 
-def _scroll_results(page, selector: str) -> None:
-    """Scroll a results container to load more items."""
-    for _ in range(_SCROLL_REPEATS):
+def _scroll_until_stable(page, selector: str) -> None:
+    """Scroll until two consecutive rounds produce no new children."""
+    stale = 0
+    prev_count = 0
+    for _ in range(_MAX_SCROLL_ROUNDS):
         try:
-            container = page.query_selector(selector)
-            if container:
-                container.evaluate("el => el.scrollBy(0, el.scrollHeight)")
+            current_count = len(page.query_selector_all(f"{selector} > *"))
+        except Exception:
+            current_count = prev_count
+        try:
+            el = page.query_selector(selector)
+            if el:
+                el.evaluate("el => el.scrollBy(0, el.scrollHeight)")
             else:
                 page.evaluate("window.scrollBy(0, document.body.scrollHeight)")
         except Exception:
             page.evaluate("window.scrollBy(0, document.body.scrollHeight)")
         page.wait_for_timeout(_SCROLL_PAUSE_MS)
+        try:
+            new_count = len(page.query_selector_all(f"{selector} > *"))
+        except Exception:
+            new_count = current_count
+        if new_count <= prev_count:
+            stale += 1
+            if stale >= 2:
+                break
+        else:
+            stale = 0
+        prev_count = new_count
+
+
+def _find_first_present(page, selectors: list) -> Optional[str]:
+    """Return first selector that has a matching element on the page."""
+    for sel in selectors:
+        try:
+            if page.query_selector(sel):
+                return sel
+        except Exception:
+            continue
+    return None
+
+
+def _try_selector_all(page, selectors: list):
+    """Return elements from first selector that yields non-empty results."""
+    for sel in selectors:
+        try:
+            els = page.query_selector_all(sel)
+            if els:
+                return els
+        except Exception:
+            continue
+    return []
 
 
 def _scrape_google_maps(page, query: str, country_code: str) -> List[BusinessListing]:
@@ -46,7 +86,7 @@ def _scrape_google_maps(page, query: str, country_code: str) -> List[BusinessLis
         logger.warning("google_maps: feed not found for query %r", query)
         return []
 
-    _scroll_results(page, '[role="feed"]')
+    _scroll_until_stable(page, '[role="feed"]')
 
     # Collect place links directly — stable across Google Maps DOM updates
     seen_hrefs: set = set()
@@ -72,7 +112,7 @@ def _scrape_google_maps(page, query: str, country_code: str) -> List[BusinessLis
     for place_url in place_urls:
         try:
             page.goto(place_url, wait_until="domcontentloaded", timeout=20000)
-            page.wait_for_timeout(1200)
+            page.wait_for_timeout(1500)
 
             # Name: multiple fallbacks as Google rotates class names
             name = ""
@@ -82,6 +122,9 @@ def _scrape_google_maps(page, query: str, country_code: str) -> List[BusinessLis
                     name = name_el.inner_text().strip()
                     if name:
                         break
+
+            if not name:
+                continue
 
             # Phone: data-item-id prefix has been stable for years
             raw_phone = ""
@@ -131,7 +174,7 @@ def _scrape_google_maps(page, query: str, country_code: str) -> List[BusinessLis
 
             listings.append(
                 BusinessListing(
-                    name=name or "Unknown",
+                    name=name,
                     phone=normalized,
                     website=website,
                     address=address,
@@ -147,49 +190,80 @@ def _scrape_google_maps(page, query: str, country_code: str) -> List[BusinessLis
     return listings
 
 
+_BING_CONTAINER_SELS = [
+    ".listings-container",
+    ".b-list",
+    "#panelContent",
+    "[data-testid='listCard']",
+    ".panelEntityCard",
+]
+
+_BING_CARD_SELS = [
+    ".listings-container .listing",
+    ".b-listingCard",
+    ".listing-card",
+    "[data-testid='listCard']",
+    ".panelEntityCard",
+    ".b-list li",
+]
+
+
 def _scrape_bing_maps(page, query: str, country_code: str) -> List[BusinessListing]:
     url = f"https://www.bing.com/maps?q={urllib.parse.quote(query)}"
     page.goto(url, wait_until="domcontentloaded", timeout=30000)
+
+    container_sel = None
     try:
-        page.wait_for_selector(".listings-container", timeout=15000)
+        page.wait_for_selector(", ".join(_BING_CONTAINER_SELS), timeout=15000)
+        container_sel = _find_first_present(page, _BING_CONTAINER_SELS)
     except Exception:
-        logger.warning("bing_maps: listings-container not found for query %r", query)
+        pass
+
+    if not container_sel:
+        logger.warning("bing_maps: no result container found for query %r", query)
         return []
 
-    _scroll_results(page, ".listings-container")
+    _scroll_until_stable(page, container_sel)
+
+    cards = _try_selector_all(page, _BING_CARD_SELS)
 
     listings: List[BusinessListing] = []
-    cards = page.query_selector_all(".listings-container .listing")
-
     for card in cards[:_MAX_LISTINGS]:
         try:
-            name_el = card.query_selector(".b-title, .listing-title")
+            name_el = card.query_selector(
+                ".b-title, .listing-title, [class*='title'], h2, h3"
+            )
             name = name_el.inner_text().strip() if name_el else ""
+            if not name:
+                continue
 
-            phone_el = card.query_selector(".b-phone, [data-phone]")
+            phone_el = card.query_selector(
+                ".b-phone, [data-phone], a[href^='tel:'], [aria-label*='phone'], [aria-label*='Phone']"
+            )
             raw_phone = ""
             if phone_el:
                 raw_phone = (
                     phone_el.get_attribute("data-phone")
+                    or (phone_el.get_attribute("href") or "").replace("tel:", "")
                     or phone_el.inner_text().strip()
                 )
 
             if not raw_phone:
                 continue
 
-            normalized = _normalize_phone(raw_phone, country_code)
+            normalized = _normalize_phone(raw_phone.strip(), country_code)
             if not normalized:
                 continue
 
-            addr_el = card.query_selector(".b-address, .listing-address")
+            addr_el = card.query_selector(".b-address, .listing-address, [class*='address']")
             address = addr_el.inner_text().strip() if addr_el else None
 
-            website_el = card.query_selector("a.b-website, a[href^='http']")
+            website_el = card.query_selector("a.b-website, a[href^='http']:not([href*='bing'])")
             website = website_el.get_attribute("href") if website_el else None
 
             listings.append(
                 BusinessListing(
-                    name=name or "Unknown",
+                    name=name,
                     phone=normalized,
                     website=website,
                     address=address,
@@ -203,45 +277,68 @@ def _scrape_bing_maps(page, query: str, country_code: str) -> List[BusinessListi
     return listings
 
 
-def _scrape_duckduckgo_maps(
-    page, query: str, country_code: str
-) -> List[BusinessListing]:
-    url = (
-        f"https://duckduckgo.com/?q={urllib.parse.quote(query)}&ia=maps&iaxm=maps"
-    )
+_DDG_CARD_SELS = [
+    ".map-result",
+    "[class*='mapResult']",
+    "[data-testid='mapResult']",
+    "[class*='result--map']",
+    ".ddg-map-result",
+    "li[class*='map']",
+]
+
+
+def _scrape_duckduckgo_maps(page, query: str, country_code: str) -> List[BusinessListing]:
+    url = f"https://duckduckgo.com/?q={urllib.parse.quote(query)}&ia=maps&iaxm=maps"
     page.goto(url, wait_until="domcontentloaded", timeout=30000)
+
+    container_sel = None
     try:
-        page.wait_for_selector(".map-result", timeout=15000)
+        page.wait_for_selector(", ".join(_DDG_CARD_SELS), timeout=15000)
+        container_sel = _find_first_present(page, _DDG_CARD_SELS)
     except Exception:
-        logger.warning("duckduckgo_maps: .map-result not found for query %r", query)
+        pass
+
+    if not container_sel:
+        logger.warning("duckduckgo_maps: no map results found for query %r", query)
         return []
 
-    _scroll_results(page, "body")
+    _scroll_until_stable(page, "body")
+
+    cards = _try_selector_all(page, _DDG_CARD_SELS)
 
     listings: List[BusinessListing] = []
-    cards = page.query_selector_all(".map-result")
-
     for card in cards[:_MAX_LISTINGS]:
         try:
-            name_el = card.query_selector(".map-result__title, .result__title")
+            name_el = card.query_selector(
+                ".map-result__title, .result__title, [class*='title']"
+            )
             name = name_el.inner_text().strip() if name_el else ""
+            if not name:
+                continue
 
-            phone_el = card.query_selector(".map-result__phone")
-            raw_phone = phone_el.inner_text().strip() if phone_el else ""
+            phone_el = card.query_selector(
+                ".map-result__phone, [class*='phone'], a[href^='tel:']"
+            )
+            raw_phone = ""
+            if phone_el:
+                raw_phone = (
+                    (phone_el.get_attribute("href") or "").replace("tel:", "")
+                    or phone_el.inner_text().strip()
+                )
 
             if not raw_phone:
                 continue
 
-            normalized = _normalize_phone(raw_phone, country_code)
+            normalized = _normalize_phone(raw_phone.strip(), country_code)
             if not normalized:
                 continue
 
-            addr_el = card.query_selector(".map-result__address")
+            addr_el = card.query_selector(".map-result__address, [class*='address']")
             address = addr_el.inner_text().strip() if addr_el else None
 
             listings.append(
                 BusinessListing(
-                    name=name or "Unknown",
+                    name=name,
                     phone=normalized,
                     website=None,
                     address=address,
@@ -287,7 +384,18 @@ def create_leads_from_maps(
     with sync_playwright() as pw:
         browser = pw.chromium.launch(headless=True)
         try:
-            page = browser.new_page()
+            from playwright_stealth import Stealth
+            context = browser.new_context(
+                user_agent=(
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/124.0.0.0 Safari/537.36"
+                ),
+                locale="en-US",
+                viewport={"width": 1280, "height": 800},
+            )
+            Stealth().apply_stealth_sync(context)
+            page = context.new_page()
             page.set_extra_http_headers({"Accept-Language": "en-US,en;q=0.9"})
             for backend in active_backends:
                 try:

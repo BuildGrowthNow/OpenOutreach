@@ -163,16 +163,19 @@ def create_leads_from_facebook(
     all_listings: List[BusinessListing] = []
 
     with sync_playwright() as pw:
-        # Non-headless reduces bot-detection rate; no --no-sandbox flag needed
-        browser = pw.chromium.launch(headless=False)
+        from playwright_stealth import Stealth
+        browser = pw.chromium.launch(headless=True)
         try:
             context = browser.new_context(
                 user_agent=(
                     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                     "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/120.0.0.0 Safari/537.36"
-                )
+                    "Chrome/124.0.0.0 Safari/537.36"
+                ),
+                locale="en-US",
+                viewport={"width": 1280, "height": 800},
             )
+            Stealth().apply_stealth_sync(context)
             page = context.new_page()
             page.set_extra_http_headers({"Accept-Language": "en-US,en;q=0.9"})
             listings = _scrape_facebook_pages(page, query, country_code)

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional
 from urllib.parse import urlparse
 
@@ -87,8 +88,9 @@ def enrich_leads_with_contact_phones(
     user_id: str,
     country_code: str = "US",
     limit: int = 50,
+    max_workers: int = 8,
 ) -> int:
-    """Find leads in campaign with website but no phone; spider contact pages.
+    """Find leads in campaign with website but no phone; spider contact pages in parallel.
 
     Returns count of leads enriched with a phone number.
     """
@@ -116,27 +118,38 @@ def enrich_leads_with_contact_phones(
         ).limit(limit)
     )
 
-    enriched = 0
-    for doc in candidates:
+    if not candidates:
+        return 0
+
+    def _enrich_one(doc: dict) -> Optional[tuple]:
         website = doc.get("website")
         if not website:
-            continue
+            return None
         phone = extract_phone_from_domain(website, country_code)
         if not phone:
             logger.debug("contact_spider: no phone at %s", website)
-            continue
-        leads_col.update_one(
-            {"_id": doc["_id"]},
-            {"$set": {"phone": phone, "phone_source": "contact_spider"}},
-        )
-        enriched += 1
-        logger.info("contact_spider: enriched lead %s → %s", doc["_id"], phone)
+            return None
+        return (doc["_id"], phone)
 
-    if candidates:
-        logger.info(
-            "contact_spider: enriched %d/%d leads for campaign %s",
-            enriched,
-            len(candidates),
-            campaign_id,
-        )
+    enriched = 0
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        futures = {pool.submit(_enrich_one, doc): doc for doc in candidates}
+        for future in as_completed(futures):
+            result = future.result()
+            if result is None:
+                continue
+            lead_id, phone = result
+            leads_col.update_one(
+                {"_id": lead_id},
+                {"$set": {"phone": phone, "phone_source": "contact_spider"}},
+            )
+            enriched += 1
+            logger.info("contact_spider: enriched lead %s → %s", lead_id, phone)
+
+    logger.info(
+        "contact_spider: enriched %d/%d leads for campaign %s",
+        enriched,
+        len(candidates),
+        campaign_id,
+    )
     return enriched
