@@ -12,8 +12,10 @@ import urllib.parse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Optional
 
+from openoutreach.whatsapp.pipeline.icp_filter import apply_icp_filter as _apply_icp_filter
 from openoutreach.whatsapp.pipeline.upsert import BusinessListing, upsert_listings_as_leads
 from openoutreach.whatsapp.pipeline.utils import (
+    apply_resource_block as _apply_resource_block,
     normalize_phone as _normalize_phone,
     phone_from_page as _phone_from_page,
     random_user_agent as _random_user_agent,
@@ -278,6 +280,7 @@ def _run_classified_in_isolation(
                 )
                 Stealth().apply_stealth_sync(context)
                 page = context.new_page()
+                _apply_resource_block(page)
                 page.set_extra_http_headers({"Accept-Language": "en-US,en;q=0.9"})
                 return _BACKEND_FN[site_name](page, query, country_code)
             finally:
@@ -325,20 +328,5 @@ def create_leads_from_classified(
         fire_scrape_zero_results(campaign_id, user_id, "classified", query)
         return 0
 
-    all_listings = _apply_icp_filter(all_listings, campaign_id, user_id)
+    all_listings = _apply_icp_filter(all_listings, campaign_id, user_id, label="classified")
     return upsert_listings_as_leads(all_listings, campaign_id, user_id)
-
-
-def _apply_icp_filter(
-    listings: List[BusinessListing], campaign_id: str, user_id: str
-) -> List[BusinessListing]:
-    """Load campaign and run ICP filter. Returns listings unchanged on any error."""
-    try:
-        from openoutreach.mongodb.models import Campaign
-        from openoutreach.whatsapp.pipeline.icp_filter import filter_by_icp
-        campaign = Campaign.get(campaign_id)
-        if campaign:
-            return filter_by_icp(listings, campaign, user_id)
-    except Exception as exc:
-        logger.warning("classified: icp_filter error: %s - keeping all listings", exc)
-    return listings

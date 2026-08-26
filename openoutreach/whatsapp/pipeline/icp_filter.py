@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 from typing import List, TYPE_CHECKING
+from urllib.parse import urlparse
 
 from pydantic import BaseModel, Field
 
@@ -21,6 +22,14 @@ if TYPE_CHECKING:
     from openoutreach.mongodb.models import Campaign
 
 logger = logging.getLogger(__name__)
+
+
+def _domain(url: str) -> str:
+    """Extract bare hostname from a URL for ICP prompt readability."""
+    try:
+        return urlparse(url).netloc or url
+    except Exception:
+        return url
 
 _BATCH_SIZE = 15
 
@@ -78,10 +87,11 @@ def filter_by_icp(
         batch = listings[batch_start: batch_start + _BATCH_SIZE]
 
         lines = "\n".join(
-            "{i}. {name}{cat}".format(
+            "{i}. {name}{cat}{site}".format(
                 i=i,
                 name=lst.name or "(unnamed business)",
                 cat=f" [{lst.category}]" if lst.category else "",
+                site=f" ({_domain(lst.website)})" if lst.website else "",
             )
             for i, lst in enumerate(batch)
         )
@@ -132,3 +142,28 @@ def filter_by_icp(
         getattr(campaign, "_id", "?"),
     )
     return kept
+
+
+def apply_icp_filter(
+    listings: List[BusinessListing],
+    campaign_id: str,
+    user_id: str,
+    label: str = "",
+) -> List[BusinessListing]:
+    """Load campaign and run ICP filter. Returns listings unchanged on any error.
+
+    Shared wrapper used by all WA pipeline scrapers — avoids copy-pasting this
+    try/except boilerplate in each scraper module.
+    """
+    try:
+        from openoutreach.mongodb.models import Campaign
+        campaign = Campaign.get(campaign_id)
+        if campaign:
+            return filter_by_icp(listings, campaign, user_id)
+    except Exception as exc:
+        logger.warning(
+            "icp_filter%s: error: %s - keeping all listings",
+            f"[{label}]" if label else "",
+            exc,
+        )
+    return listings

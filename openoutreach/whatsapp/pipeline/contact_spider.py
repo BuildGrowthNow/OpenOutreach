@@ -107,10 +107,12 @@ def extract_phone_from_domain(domain_url: str, country_code: str) -> Optional[st
     base = f"{scheme}://{host}"
 
     session = _make_session()
+    tried_urls: set = set()
 
     # Sitemap pass: often finds contact pages faster than blindly trying all hardcoded paths
     sitemap_urls = _fetch_sitemap_contact_urls(base, session)
     for url in sitemap_urls:
+        tried_urls.add(url)
         try:
             resp = session.get(url, timeout=_TIMEOUT_S, allow_redirects=True)
             if resp.status_code == 200:
@@ -120,9 +122,12 @@ def extract_phone_from_domain(domain_url: str, country_code: str) -> Optional[st
         except Exception:
             continue
 
-    # Fallback: hardcoded contact/about paths
+    # Fallback: hardcoded contact/about paths — skip any already visited via sitemap
     for path in _CONTACT_PATHS:
         url = base + path
+        if url in tried_urls:
+            continue
+        tried_urls.add(url)
         try:
             resp = session.get(url, timeout=_TIMEOUT_S, allow_redirects=True)
             if resp.status_code == 200:
