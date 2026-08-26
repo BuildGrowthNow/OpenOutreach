@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Icons } from '@/lib/types/components'
-import { Phone, Smartphone, Upload } from 'lucide-react'
+import { Phone, Smartphone, Upload, Mail } from 'lucide-react'
 import { getCampaignLeads, getCampaign, exportLeads, importCsvLeads } from '@/lib/api/dashboard'
 import { cn } from '@/lib/utils'
 import { CampaignList } from '@/components/campaigns/campaign-list'
@@ -35,7 +35,7 @@ export default function CampaignLeadsPage() {
   const [exporting, setExporting] = useState(false)
   const [importing, setImporting] = useState(false)
   const [importResult, setImportResult] = useState<{ added: number; skipped: number; errors: string[] } | null>(null)
-  const [channelFilter, setChannelFilter] = useState<'all' | 'linkedin' | 'whatsapp'>('all')
+  const [channelFilter, setChannelFilter] = useState<'all' | 'linkedin' | 'whatsapp' | 'email'>('all')
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const fetchCampaignData = useCallback(async () => {
@@ -130,10 +130,17 @@ export default function CampaignLeadsPage() {
     }
   }
 
-  // Server handles status/search filtering; channel filter is client-side
+  // Server handles status/search filtering; channel filter is client-side.
+  // Email leads have activeChannel === 'email'; LinkedIn leads have 'linkedin' or null.
   const filteredLeads = channelFilter === 'all'
     ? leads
-    : leads.filter(l => (l.activeChannel || 'linkedin') === channelFilter)
+    : leads.filter(l => {
+        const ch = l.activeChannel || 'linkedin'
+        if (channelFilter === 'email') return ch === 'email'
+        if (channelFilter === 'linkedin') return ch === 'linkedin'
+        if (channelFilter === 'whatsapp') return ch === 'whatsapp'
+        return true
+      })
 
   const getStatusBadge = (status: string) => {
     switch (status?.toUpperCase()) {
@@ -301,7 +308,7 @@ export default function CampaignLeadsPage() {
             </div>
             {/* Channel filter pills */}
             <div className="flex gap-1.5 shrink-0">
-              {(['all', 'linkedin', 'whatsapp'] as const).map((ch) => (
+              {(['all', 'linkedin', 'whatsapp', 'email'] as const).map((ch) => (
                 <button
                   key={ch}
                   onClick={() => setChannelFilter(ch)}
@@ -314,7 +321,8 @@ export default function CampaignLeadsPage() {
                 >
                   {ch === 'linkedin' && <Phone className="h-3 w-3" />}
                   {ch === 'whatsapp' && <Smartphone className="h-3 w-3" />}
-                  {ch === 'all' ? 'All' : ch === 'linkedin' ? 'LinkedIn' : 'WhatsApp'}
+                  {ch === 'email' && <Mail className="h-3 w-3" />}
+                  {ch === 'all' ? 'All' : ch === 'linkedin' ? 'LinkedIn' : ch === 'whatsapp' ? 'WhatsApp' : 'Email'}
                 </button>
               ))}
             </div>

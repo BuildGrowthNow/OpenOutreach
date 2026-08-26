@@ -748,6 +748,7 @@ export interface Settings {
   email?: {
     followupDay1: number;
     followupDay2: number;
+    velocity: number;
   };
 }
 

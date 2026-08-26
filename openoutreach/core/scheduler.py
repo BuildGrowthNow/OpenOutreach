@@ -836,6 +836,21 @@ def _route_deal_channels(campaign) -> None:
                 logger.info("Channel switch: deal %s WA exhausted → linkedin", deal_doc["_id"])
 
 
+def _scan_email_replies_once(user_id: str) -> None:
+    """Proactively check IMAP inboxes for replies to outstanding email deals.
+
+    Delegates to imap_checker.scan_imap_replies. Never raises — errors are
+    swallowed so a broken IMAP config can't stall the reconcile loop.
+    """
+    try:
+        from openoutreach.emails.imap_checker import scan_imap_replies
+        count = scan_imap_replies(user_id)
+        if count:
+            logger.info("IMAP scan: advanced %d deal(s) to EMAIL_REPLIED", count)
+    except Exception as exc:
+        logger.debug("IMAP scan error for user %s: %s", user_id, exc)
+
+
 def reconcile(session) -> None:
     """Recover stale RUNNING tasks, then ensure every (campaign, task_type)
     whose pending queue is empty gets a fresh 24h plan. Runs on daemon
@@ -864,6 +879,11 @@ def reconcile(session) -> None:
             "Budget split across %d campaigns: connect %d/ea (total %d), follow_up %d/ea (total %d)",
             n_campaigns, connect_cap, connect_remaining, follow_up_cap, follow_up_remaining,
         )
+
+    # Run IMAP reply scan once per reconcile cycle (not per campaign).
+    # Advances EMAIL_SENT/EMAIL_OPENED deals to EMAIL_REPLIED proactively so
+    # operators see the reply status before the next follow-up task fires.
+    _scan_email_replies_once(profile.user_id)
 
     for campaign in campaigns:
         _auto_qualify_wa_leads(campaign)
@@ -1076,8 +1096,7 @@ def plan_email_follow_up_window(campaign, user_id: str, linkedin_profile_id: str
         return 0
 
     n = min(eligible, remaining)
-    # Email tasks have no per-profile velocity limit; use a flat 10/hr rate
-    velocity = 10
+    velocity = config.email_velocity  # actions/hr, configurable via Settings → Email
 
     created = _plan_slots(
         Task.TaskType.EMAIL_FOLLOW_UP, campaign.pk, n, velocity,

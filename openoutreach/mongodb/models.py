@@ -4123,6 +4123,7 @@ class SiteConfig:
         wa_active_days: Optional[List[int]] = None,
         email_followup_day1: int = 3,
         email_followup_day2: int = 7,
+        email_velocity: int = 10,
     ):
         self._id = _id or str(uuid4())
         self.user_id = user_id
@@ -4157,6 +4158,7 @@ class SiteConfig:
         self.wa_active_days = wa_active_days if wa_active_days is not None else [1, 2, 3, 4, 5, 6, 7]
         self.email_followup_day1 = email_followup_day1
         self.email_followup_day2 = email_followup_day2
+        self.email_velocity = email_velocity
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert model instance to dictionary for MongoDB storage."""
@@ -4194,6 +4196,7 @@ class SiteConfig:
             "wa_active_days": self.wa_active_days,
             "email_followup_day1": self.email_followup_day1,
             "email_followup_day2": self.email_followup_day2,
+            "email_velocity": self.email_velocity,
         }
         return data
 
@@ -4234,6 +4237,7 @@ class SiteConfig:
             wa_active_days=data.get("wa_active_days"),
             email_followup_day1=data.get("email_followup_day1", 3),
             email_followup_day2=data.get("email_followup_day2", 7),
+            email_velocity=data.get("email_velocity", 10),
         )
 
     def save(self) -> str:

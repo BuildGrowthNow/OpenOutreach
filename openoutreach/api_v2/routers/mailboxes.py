@@ -51,6 +51,7 @@ class MailboxResponse(BaseModel):
     sent_today: int
     imap_host: str
     imap_port: int
+    paused: bool
 
 
 class MailboxTestResponse(BaseModel):
@@ -71,6 +72,7 @@ def _to_response(box: Mailbox) -> MailboxResponse:
         sent_today=box.sent_today(),
         imap_host=box.imap_host,
         imap_port=box.imap_port,
+        paused=box.paused,
     )
 
 
@@ -109,6 +111,20 @@ async def create_mailbox(data: MailboxCreate, user_id: str = Depends(get_current
     )
     box.save()
     logger.info("mailboxes: created %s for user %s", from_address, user_id)
+    return _to_response(box)
+
+
+@router.patch("/{mailbox_id}/unpause", response_model=MailboxResponse)
+async def unpause_mailbox(mailbox_id: str, user_id: str = Depends(get_current_user)):
+    """Clear the paused flag set by auth-failure error handling."""
+    box = Mailbox.get(mailbox_id)
+    if not box:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Mailbox not found")
+    if box.user_id != user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+    box.paused = False
+    box.save()
+    logger.info("mailboxes: unpaused %s for user %s", box.from_address, user_id)
     return _to_response(box)
 
 

@@ -107,6 +107,7 @@ class SiteConfigUpdate(BaseModel):
     wa_active_days: Optional[str] = Field(None, description="Update WhatsApp active days (comma-separated)")
     email_followup_day1: Optional[int] = Field(None, ge=1, description="Days after step 0 to send follow-up 1")
     email_followup_day2: Optional[int] = Field(None, ge=1, description="Days after step 0 to send follow-up 2")
+    email_velocity: Optional[int] = Field(None, ge=1, le=200, description="Email sends per hour (pacing rate)")
 
     @model_validator(mode="before")
     @classmethod
@@ -191,6 +192,8 @@ class SiteConfigUpdate(BaseModel):
             data.setdefault("email_followup_day1", em["followupDay1"])
         if em.get("followupDay2") is not None:
             data.setdefault("email_followup_day2", em["followupDay2"])
+        if em.get("velocity") is not None:
+            data.setdefault("email_velocity", em["velocity"])
 
         return data
 

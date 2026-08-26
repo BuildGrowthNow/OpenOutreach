@@ -27,6 +27,7 @@ import {
   deleteMailbox,
   listMailboxes,
   testMailbox,
+  unpauseMailbox,
   type Mailbox,
   type MailboxCreate,
 } from "@/lib/api/mailboxes";
@@ -38,11 +39,14 @@ const GMAIL_APP_PASSWORD_URL =
 function MailboxRow({
   box,
   onDelete,
+  onUnpause,
 }: {
   box: Mailbox;
   onDelete: (id: string) => void;
+  onUnpause: (updated: Mailbox) => void;
 }) {
   const [confirming, setConfirming] = useState(false);
+  const [unpausing, setUnpausing] = useState(false);
 
   const handleDelete = async () => {
     if (!confirming) {
@@ -53,8 +57,18 @@ function MailboxRow({
     onDelete(box.id);
   };
 
+  const handleUnpause = async () => {
+    setUnpausing(true);
+    try {
+      const updated = await unpauseMailbox(box.id);
+      onUnpause(updated);
+    } finally {
+      setUnpausing(false);
+    }
+  };
+
   return (
-    <div className="flex items-center justify-between rounded-lg border p-4">
+    <div className={`flex items-center justify-between rounded-lg border p-4 ${box.paused ? "border-destructive/40 bg-destructive/5" : ""}`}>
       <div className="space-y-1">
         <div className="flex items-center gap-2">
           <span className="font-medium">{box.fromAddress || box.username}</span>
@@ -62,6 +76,11 @@ function MailboxRow({
             <span className="text-sm text-muted-foreground">
               ({box.fromName})
             </span>
+          )}
+          {box.paused && (
+            <Badge variant="destructive" className="text-xs">
+              Paused
+            </Badge>
           )}
         </div>
         <div className="flex items-center gap-3 text-sm text-muted-foreground">
@@ -72,12 +91,14 @@ function MailboxRow({
           <span>
             {box.sentToday}/{box.dailyLimit} sent today
           </span>
-          <Badge
-            variant={box.headroomToday > 0 ? "default" : "secondary"}
-            className="text-xs"
-          >
-            {box.headroomToday > 0 ? `${box.headroomToday} left` : "Capped"}
-          </Badge>
+          {!box.paused && (
+            <Badge
+              variant={box.headroomToday > 0 ? "default" : "secondary"}
+              className="text-xs"
+            >
+              {box.headroomToday > 0 ? `${box.headroomToday} left` : "Capped"}
+            </Badge>
+          )}
           {box.imapHost && (
             <>
               <span>·</span>
@@ -88,16 +109,38 @@ function MailboxRow({
             </>
           )}
         </div>
+        {box.paused && (
+          <p className="text-xs text-destructive">
+            Auth failure detected. Fix credentials and unpause to resume sends.
+          </p>
+        )}
       </div>
-      <Button
-        variant={confirming ? "destructive" : "ghost"}
-        size="sm"
-        onClick={handleDelete}
-        onBlur={() => setConfirming(false)}
-      >
-        <Icons.Trash2 className="h-4 w-4" />
-        {confirming ? "Confirm" : ""}
-      </Button>
+      <div className="flex items-center gap-2">
+        {box.paused && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleUnpause}
+            disabled={unpausing}
+          >
+            {unpausing ? (
+              <Icons.RefreshCw className="h-4 w-4 animate-spin" />
+            ) : (
+              <Icons.Play className="h-4 w-4" />
+            )}
+            Unpause
+          </Button>
+        )}
+        <Button
+          variant={confirming ? "destructive" : "ghost"}
+          size="sm"
+          onClick={handleDelete}
+          onBlur={() => setConfirming(false)}
+        >
+          <Icons.Trash2 className="h-4 w-4" />
+          {confirming ? "Confirm" : ""}
+        </Button>
+      </div>
     </div>
   );
 }
@@ -392,6 +435,7 @@ function AddMailboxModal({ onAdded }: { onAdded: (box: Mailbox) => void }) {
 function SequenceConfigForm() {
   const [day1, setDay1] = useState(3);
   const [day2, setDay2] = useState(7);
+  const [velocity, setVelocity] = useState(10);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -401,6 +445,7 @@ function SequenceConfigForm() {
       if (res.data?.email) {
         setDay1(res.data.email.followupDay1);
         setDay2(res.data.email.followupDay2);
+        if (res.data.email.velocity != null) setVelocity(res.data.email.velocity);
       }
     })();
   }, []);
@@ -409,7 +454,7 @@ function SequenceConfigForm() {
     setSaving(true);
     setSaved(false);
     try {
-      await updateSettings({ email: { followupDay1: day1, followupDay2: day2 } });
+      await updateSettings({ email: { followupDay1: day1, followupDay2: day2, velocity } });
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } finally {
@@ -422,14 +467,14 @@ function SequenceConfigForm() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Icons.Clock className="h-5 w-5" />
-          Sequence timing
+          Sequence timing &amp; pacing
         </CardTitle>
         <CardDescription>
-          Days between each email in the 3-step sequence. Measured from the first send date.
+          Days between each email in the 3-step sequence, and send rate (emails per hour).
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-3 gap-4">
           <div className="space-y-1">
             <Label htmlFor="seq-day1">Follow-up 1 (days after step 0)</Label>
             <Input
@@ -450,6 +495,17 @@ function SequenceConfigForm() {
               max={60}
               value={day2}
               onChange={(e) => setDay2(Math.max(1, parseInt(e.target.value) || 1))}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="seq-velocity">Send rate (emails / hour)</Label>
+            <Input
+              id="seq-velocity"
+              type="number"
+              min={1}
+              max={200}
+              value={velocity}
+              onChange={(e) => setVelocity(Math.max(1, parseInt(e.target.value) || 1))}
             />
           </div>
         </div>
@@ -489,6 +545,8 @@ export function EmailTab() {
   const handleAdded = (box: Mailbox) => setMailboxes((prev) => [...prev, box]);
   const handleDeleted = (id: string) =>
     setMailboxes((prev) => prev.filter((b) => b.id !== id));
+  const handleUnpaused = (updated: Mailbox) =>
+    setMailboxes((prev) => prev.map((b) => (b.id === updated.id ? updated : b)));
 
   return (
     <div className="space-y-6">
@@ -529,7 +587,7 @@ export function EmailTab() {
         ) : (
           <div className="space-y-2">
             {mailboxes.map((box) => (
-              <MailboxRow key={box.id} box={box} onDelete={handleDeleted} />
+              <MailboxRow key={box.id} box={box} onDelete={handleDeleted} onUnpause={handleUnpaused} />
             ))}
           </div>
         )}

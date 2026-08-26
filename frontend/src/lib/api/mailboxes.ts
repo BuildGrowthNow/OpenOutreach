@@ -14,6 +14,7 @@ export interface Mailbox {
   sentToday: number;
   imapHost: string;
   imapPort: number;
+  paused: boolean;
 }
 
 export interface MailboxCreate {
@@ -72,4 +73,10 @@ export async function createMailbox(data: MailboxCreate): Promise<Mailbox> {
 
 export async function deleteMailbox(mailboxId: string): Promise<void> {
   await apiClient.delete(`/mailboxes/${mailboxId}`);
+}
+
+export async function unpauseMailbox(mailboxId: string): Promise<Mailbox> {
+  const res = await apiClient.patch<Mailbox>(`/mailboxes/${mailboxId}/unpause`);
+  if (!res.data) throw new Error(res.error ?? "Failed to unpause mailbox");
+  return res.data;
 }
