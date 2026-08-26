@@ -1,14 +1,13 @@
 """Classified ads scraper - OLX, MercadoLibre, Gumtree.
 
 Each backend searches the site for `query`, opens listing detail pages, and
-extracts phone numbers from tel: links or visible body text.
+extracts phone numbers from tel: links or contextual body text.
 
 Entry point: create_leads_from_classified(...)
 """
 from __future__ import annotations
 
 import logging
-import re
 import urllib.parse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Optional
@@ -16,33 +15,16 @@ from typing import List, Optional
 from openoutreach.whatsapp.pipeline.upsert import BusinessListing, upsert_listings_as_leads
 from openoutreach.whatsapp.pipeline.utils import (
     normalize_phone as _normalize_phone,
+    phone_from_page as _phone_from_page,
     random_user_agent as _random_user_agent,
+    scrape_retry as _scrape_retry,
 )
 
 logger = logging.getLogger(__name__)
 
 _MAX_LISTINGS = 40      # cards to collect from search page
 _MAX_DETAIL_PAGES = 20  # listing detail pages to visit per backend
-_PHONE_RE = re.compile(r"(\+?[\d][\d\s\-\.\(\)]{5,18}[\d])")
 _DEFAULT_SITES = ["olx", "mercadolibre"]
-
-
-def _phone_from_page(page) -> str:
-    """Best-effort phone extraction from the current Playwright page."""
-    tel_el = page.query_selector("a[href^='tel:']")
-    if tel_el:
-        raw = (tel_el.get_attribute("href") or "").replace("tel:", "").strip()
-        if raw:
-            return raw
-    try:
-        body = page.inner_text("body")
-    except Exception:
-        body = ""
-    for raw in _PHONE_RE.findall(body):
-        candidate = raw.strip()
-        if sum(c.isdigit() for c in candidate) >= 7:
-            return candidate
-    return ""
 
 
 # ---------------------------------------------------------------------------
@@ -120,11 +102,11 @@ def _scrape_olx(page, query: str, country_code: str) -> List[BusinessListing]:
             except Exception:
                 pass
 
-            if not raw_phone:
-                raw_phone = _phone_from_page(page)
-            if not raw_phone:
-                continue
-            phone = _normalize_phone(raw_phone, country_code)
+            if raw_phone:
+                phone = _normalize_phone(raw_phone, country_code)
+            else:
+                phone = _phone_from_page(page, country_code) or None
+
             if not phone:
                 continue
 
@@ -195,10 +177,7 @@ def _scrape_mercadolibre(page, query: str, country_code: str) -> List[BusinessLi
             title_el = page.query_selector("h1.ui-pdp-title, h1")
             title = title_el.inner_text().strip() if title_el else ""
 
-            raw_phone = _phone_from_page(page)
-            if not raw_phone:
-                continue
-            phone = _normalize_phone(raw_phone, country_code)
+            phone = _phone_from_page(page, country_code) or None
             if not phone:
                 continue
 
@@ -255,10 +234,7 @@ def _scrape_gumtree(page, query: str, country_code: str) -> List[BusinessListing
             title_el = page.query_selector("h1.listing-title, h1")
             title = title_el.inner_text().strip() if title_el else ""
 
-            raw_phone = _phone_from_page(page)
-            if not raw_phone:
-                continue
-            phone = _normalize_phone(raw_phone, country_code)
+            phone = _phone_from_page(page, country_code) or None
             if not phone:
                 continue
 
@@ -291,20 +267,23 @@ def _run_classified_in_isolation(
     from playwright.sync_api import sync_playwright
     from playwright_stealth import Stealth
 
-    with sync_playwright() as pw:
-        browser = pw.chromium.launch(headless=True)
-        try:
-            context = browser.new_context(
-                user_agent=_random_user_agent(),
-                locale="en-US",
-                viewport={"width": 1280, "height": 800},
-            )
-            Stealth().apply_stealth_sync(context)
-            page = context.new_page()
-            page.set_extra_http_headers({"Accept-Language": "en-US,en;q=0.9"})
-            return _BACKEND_FN[site_name](page, query, country_code)
-        finally:
-            browser.close()
+    def _attempt() -> List[BusinessListing]:
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch(headless=True)
+            try:
+                context = browser.new_context(
+                    user_agent=_random_user_agent(),
+                    locale="en-US",
+                    viewport={"width": 1280, "height": 800},
+                )
+                Stealth().apply_stealth_sync(context)
+                page = context.new_page()
+                page.set_extra_http_headers({"Accept-Language": "en-US,en;q=0.9"})
+                return _BACKEND_FN[site_name](page, query, country_code)
+            finally:
+                browser.close()
+
+    return _scrape_retry(_attempt, max_attempts=2, base_delay=3.0, label=f"classified:{site_name}")
 
 
 def create_leads_from_classified(
@@ -317,7 +296,7 @@ def create_leads_from_classified(
     """Scrape classified sites with concurrent isolated browsers, dedup by phone, upsert leads + deals.
 
     Each site runs in its own browser process so a hang on one site never
-    blocks the others (mirrors the maps_scraper concurrency pattern).
+    blocks the others. Applies ICP filter before upsert when campaign has criteria.
     Returns count of new leads created.
     """
     active_sites = [s for s in (sites or _DEFAULT_SITES) if s in _BACKEND_FN]
@@ -341,4 +320,23 @@ def create_leads_from_classified(
             except Exception as exc:
                 logger.warning("classified: site %s failed: %s", site, exc)
 
+    if not all_listings:
+        return 0
+
+    all_listings = _apply_icp_filter(all_listings, campaign_id, user_id)
     return upsert_listings_as_leads(all_listings, campaign_id, user_id)
+
+
+def _apply_icp_filter(
+    listings: List[BusinessListing], campaign_id: str, user_id: str
+) -> List[BusinessListing]:
+    """Load campaign and run ICP filter. Returns listings unchanged on any error."""
+    try:
+        from openoutreach.mongodb.models import Campaign
+        from openoutreach.whatsapp.pipeline.icp_filter import filter_by_icp
+        campaign = Campaign.get(campaign_id)
+        if campaign:
+            return filter_by_icp(listings, campaign, user_id)
+    except Exception as exc:
+        logger.warning("classified: icp_filter error: %s - keeping all listings", exc)
+    return listings

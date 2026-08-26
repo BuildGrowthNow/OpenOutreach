@@ -16,6 +16,7 @@ from openoutreach.whatsapp.pipeline.upsert import BusinessListing, upsert_listin
 from openoutreach.whatsapp.pipeline.utils import (
     normalize_phone as _normalize_phone,
     random_user_agent as _random_user_agent,
+    scrape_retry as _scrape_retry,
 )
 
 logger = logging.getLogger(__name__)
@@ -386,20 +387,23 @@ def _run_backend_in_isolation(
     from playwright.sync_api import sync_playwright
     from playwright_stealth import Stealth
 
-    with sync_playwright() as pw:
-        browser = pw.chromium.launch(headless=True)
-        try:
-            context = browser.new_context(
-                user_agent=_random_user_agent(),
-                locale="en-US",
-                viewport={"width": 1280, "height": 800},
-            )
-            Stealth().apply_stealth_sync(context)
-            page = context.new_page()
-            page.set_extra_http_headers({"Accept-Language": "en-US,en;q=0.9"})
-            return _BACKEND_FN[backend_name](page, query, country_code)
-        finally:
-            browser.close()
+    def _attempt() -> List[BusinessListing]:
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch(headless=True)
+            try:
+                context = browser.new_context(
+                    user_agent=_random_user_agent(),
+                    locale="en-US",
+                    viewport={"width": 1280, "height": 800},
+                )
+                Stealth().apply_stealth_sync(context)
+                page = context.new_page()
+                page.set_extra_http_headers({"Accept-Language": "en-US,en;q=0.9"})
+                return _BACKEND_FN[backend_name](page, query, country_code)
+            finally:
+                browser.close()
+
+    return _scrape_retry(_attempt, max_attempts=2, base_delay=3.0, label=f"maps:{backend_name}")
 
 
 def create_leads_from_maps(
@@ -495,4 +499,23 @@ def create_leads_from_maps(
             len(partial),
         )
 
+    if not ready:
+        return 0
+
+    ready = _apply_icp_filter(ready, campaign_id, user_id)
     return upsert_listings_as_leads(ready, campaign_id, user_id)
+
+
+def _apply_icp_filter(
+    listings: List[BusinessListing], campaign_id: str, user_id: str
+) -> List[BusinessListing]:
+    """Load campaign and run ICP filter. Returns listings unchanged on any error."""
+    try:
+        from openoutreach.mongodb.models import Campaign
+        from openoutreach.whatsapp.pipeline.icp_filter import filter_by_icp
+        campaign = Campaign.get(campaign_id)
+        if campaign:
+            return filter_by_icp(listings, campaign, user_id)
+    except Exception as exc:
+        logger.warning("maps_scraper: icp_filter error: %s - keeping all listings", exc)
+    return listings

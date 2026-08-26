@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from dataclasses import dataclass
 from datetime import datetime, timezone as tz
 from typing import List, Optional
@@ -75,6 +76,13 @@ def upsert_listings_as_leads(
             set_on_insert["rating"] = lst.rating
         if lst.review_count is not None:
             set_on_insert["review_count"] = lst.review_count
+        if lst.rating is not None and lst.rating > 0:
+            # 0-1 score: balances star rating with review volume (log10 curve caps at ~300 reviews)
+            count = lst.review_count or 1
+            set_on_insert["quality_score"] = round(
+                min(1.0, (lst.rating / 5.0) * min(1.0, math.log10(max(1, count)) / 2.5)),
+                3,
+            )
 
         result = leads_col.update_one(
             {"phone": lst.phone, "user_id": user_id},

@@ -5,8 +5,9 @@ websites. Each `wa.me/<phone>` link is a direct contact link published by a
 business - higher-intent than classified listings because the business itself
 placed it on their site.
 
-Also visits top SERP result pages to harvest additional wa.me / tel links
-and build a richer lead set without requiring a WhatsApp session.
+Phase 1: One DDG request - collect direct wa.me phones from SERP + result URLs.
+Phase 2: Visit result pages concurrently via isolated browsers to harvest
+additional wa.me / tel links and build a richer name-enriched lead set.
 
 Entry point: create_leads_from_wa_links(...)
 """
@@ -15,22 +16,23 @@ from __future__ import annotations
 import logging
 import re
 import urllib.parse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Optional, Tuple
 
 from openoutreach.whatsapp.pipeline.upsert import BusinessListing, upsert_listings_as_leads
 from openoutreach.whatsapp.pipeline.utils import (
+    decode_ddg_href as _decode_ddg_href,
     normalize_phone as _normalize_phone,
     random_user_agent as _random_user_agent,
+    scrape_retry as _scrape_retry,
 )
 
 logger = logging.getLogger(__name__)
 
 _MAX_SEARCH_RESULTS = 60
 _MAX_DETAIL_PAGES = 30
+_MAX_DETAIL_WORKERS = 8
 _WA_ME_RE = re.compile(r"wa\.me/(\+?[\d]{7,15})")
-
-# DDG wraps some result URLs in redirect hrefs — must decode to get real targets
-_DDG_REDIRECT_MARKER = "/l/?uddg="
 
 # Result container selectors — DDG rotates these; first match wins
 _DDG_RESULT_SELS = [
@@ -48,16 +50,6 @@ _DDG_TITLE_SELS = [
     ".result__title a",
     ".result__a",
 ]
-
-
-def _decode_ddg_href(href: str) -> str:
-    """Unwrap DDG redirect URL (/l/?uddg=...) if present; return href unchanged otherwise."""
-    if _DDG_REDIRECT_MARKER in href:
-        try:
-            return urllib.parse.unquote(href.split("uddg=")[-1].split("&")[0])
-        except Exception:
-            pass
-    return href
 
 
 def _phone_from_wa_me(raw: str, country_code: str) -> Optional[str]:
@@ -79,13 +71,10 @@ def _ddg_search_and_collect(
 ) -> Tuple[List[Tuple[str, str]], List[Tuple[str, str]]]:
     """Single DDG search that returns both SERP phones and result URLs.
 
-    Eliminates the second DDG request that the old split design required.
-
     Returns:
         phones_with_names: [(phone_e164, name), ...] — wa.me phones found in SERP
         result_urls:       [(url, title), ...] — result page URLs to visit for more phones
     """
-    # Plain query — DDG silently ignores wildcard site: operators so omit them
     search_query = f"{query} wa.me"
     url = f"https://duckduckgo.com/?q={urllib.parse.quote(search_query)}&ia=web"
     page.goto(url, wait_until="domcontentloaded", timeout=30000)
@@ -107,7 +96,6 @@ def _ddg_search_and_collect(
     seen_phones: set = set()
     seen_urls: set = set()
 
-    # Collect all result elements from the first selector that yields any
     result_els = []
     for sel in _DDG_RESULT_SELS:
         try:
@@ -119,7 +107,6 @@ def _ddg_search_and_collect(
             continue
 
     for el in result_els:
-        # Extract result URL + title
         for title_sel in _DDG_TITLE_SELS:
             try:
                 title_el = el.query_selector(title_sel)
@@ -134,7 +121,6 @@ def _ddg_search_and_collect(
             except Exception:
                 continue
 
-        # Extract wa.me phones from this result (raw + URL-decoded HTML)
         try:
             inner_html = el.inner_html() or ""
         except Exception:
@@ -149,7 +135,6 @@ def _ddg_search_and_collect(
                     phones_in_result.append(phone)
 
         if phones_in_result:
-            # Get title for name context
             name = ""
             for title_sel in _DDG_TITLE_SELS:
                 try:
@@ -241,27 +226,62 @@ def _listings_from_site_page(
     return page_results
 
 
+def _visit_site_in_isolation(
+    site_url: str, country_code: str, fallback_name: str
+) -> List[Tuple[str, str]]:
+    """Dedicated isolated browser for one detail page; safe to call from a thread."""
+    from playwright.sync_api import sync_playwright
+    from playwright_stealth import Stealth
+
+    try:
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch(headless=True)
+            try:
+                context = browser.new_context(
+                    user_agent=_random_user_agent(),
+                    locale="en-US",
+                    viewport={"width": 1280, "height": 800},
+                )
+                Stealth().apply_stealth_sync(context)
+                page = context.new_page()
+                page.set_extra_http_headers({"Accept-Language": "en-US,en;q=0.9"})
+                return _listings_from_site_page(page, site_url, country_code, fallback_name)
+            finally:
+                browser.close()
+    except Exception as exc:
+        logger.debug("wa_groups: isolated visit failed for %s: %s", site_url, exc)
+        return []
+
+
 def _scrape_wa_links(page, query: str, country_code: str) -> List[BusinessListing]:
-    # Single DDG request: extract both SERP phones and result URLs to visit
+    # Phase 1: single DDG request — direct phones + URLs to visit
     direct_results, site_urls = _ddg_search_and_collect(page, query, country_code)
     logger.info("wa_groups: %d phones from DDG SERP for %r", len(direct_results), query)
 
-    # phone → best name known so far (from SERP title)
     phone_name: dict = {phone: name for phone, name in direct_results}
     direct_phones: set = set(phone_name.keys())
     seen_extra: set = set(direct_phones)
 
-    # Phase 2: visit the same result pages for more phones + better name data
-    for site_url, ddg_title in site_urls[:_MAX_DETAIL_PAGES]:
-        for phone, page_name in _listings_from_site_page(
-            page, site_url, country_code, fallback_name=ddg_title
-        ):
-            if phone not in seen_extra:
-                seen_extra.add(phone)
-                phone_name[phone] = page_name
-            elif phone in direct_phones and not phone_name.get(phone) and page_name:
-                # Upgrade: replace empty SERP name with a real page-visit name
-                phone_name[phone] = page_name
+    # Phase 2: visit result pages concurrently via isolated browsers
+    targets = site_urls[:_MAX_DETAIL_PAGES]
+    if targets:
+        with ThreadPoolExecutor(max_workers=_MAX_DETAIL_WORKERS) as pool:
+            futures = {
+                pool.submit(_visit_site_in_isolation, site_url, country_code, ddg_title): (site_url, ddg_title)
+                for site_url, ddg_title in targets
+            }
+            for future in as_completed(futures):
+                site_url, _ = futures[future]
+                try:
+                    results = future.result()
+                    for phone, page_name in results:
+                        if phone not in seen_extra:
+                            seen_extra.add(phone)
+                            phone_name[phone] = page_name
+                        elif phone in direct_phones and not phone_name.get(phone) and page_name:
+                            phone_name[phone] = page_name
+                except Exception as exc:
+                    logger.debug("wa_groups: detail visit %s failed: %s", site_url, exc)
 
     all_phones = list(phone_name.keys())
     logger.info("wa_groups: %d total unique phones for %r", len(all_phones), query)
@@ -285,27 +305,52 @@ def create_leads_from_wa_links(
 ) -> int:
     """Discover WhatsApp leads via public wa.me links on business websites.
 
+    Uses concurrent isolated browsers for detail page visits. Applies ICP filter before upsert.
     Returns count of new leads created.
     """
     from playwright.sync_api import sync_playwright
+    from playwright_stealth import Stealth
+
+    def _run_ddg_search() -> List[BusinessListing]:
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch(headless=True)
+            try:
+                context = browser.new_context(
+                    user_agent=_random_user_agent(),
+                    locale="en-US",
+                    viewport={"width": 1280, "height": 800},
+                )
+                Stealth().apply_stealth_sync(context)
+                page = context.new_page()
+                page.set_extra_http_headers({"Accept-Language": "en-US,en;q=0.9"})
+                return _scrape_wa_links(page, query, country_code)
+            finally:
+                browser.close()
 
     all_listings: List[BusinessListing] = []
+    try:
+        all_listings = _scrape_retry(_run_ddg_search, max_attempts=2, base_delay=4.0, label="wa_groups:ddg")
+    except Exception as exc:
+        logger.error("wa_groups: scrape failed after retries: %s", exc)
+        return 0
 
-    with sync_playwright() as pw:
-        from playwright_stealth import Stealth
-        browser = pw.chromium.launch(headless=True)
-        try:
-            context = browser.new_context(
-                user_agent=_random_user_agent(),
-                locale="en-US",
-                viewport={"width": 1280, "height": 800},
-            )
-            Stealth().apply_stealth_sync(context)
-            page = context.new_page()
-            page.set_extra_http_headers({"Accept-Language": "en-US,en;q=0.9"})
-            listings = _scrape_wa_links(page, query, country_code)
-            all_listings.extend(listings)
-        finally:
-            browser.close()
+    if not all_listings:
+        return 0
 
+    all_listings = _apply_icp_filter(all_listings, campaign_id, user_id)
     return upsert_listings_as_leads(all_listings, campaign_id, user_id)
+
+
+def _apply_icp_filter(
+    listings: List[BusinessListing], campaign_id: str, user_id: str
+) -> List[BusinessListing]:
+    """Load campaign and run ICP filter. Returns listings unchanged on any error."""
+    try:
+        from openoutreach.mongodb.models import Campaign
+        from openoutreach.whatsapp.pipeline.icp_filter import filter_by_icp
+        campaign = Campaign.get(campaign_id)
+        if campaign:
+            return filter_by_icp(listings, campaign, user_id)
+    except Exception as exc:
+        logger.warning("wa_groups: icp_filter error: %s - keeping all listings", exc)
+    return listings
