@@ -160,7 +160,7 @@ The following features are **hidden from navigation** and **not supported**:
 - **Links**: Link tracking is deferred; stub API returns 501 if called. Users track engagement via UTM parameters.
 - **Campaign Templates**: Template CRUD is deferred; users create campaigns from scratch or duplicate manually.
 - **Ghost Mode**: Hidden from UI; daemon runs full connect→message flow only. `ghost_mode_enabled` field removed from Campaign schema.
-- **Email Channel**: Hidden from campaign UI; no EMAIL task type is executed. Settings do not expose email credentials.
+- **Email Channel**: **Fully implemented**. SMTP outreach with 3-step LLM-generated sequences, IMAP reply detection, open/click/unsubscribe tracking via Cloudflare Worker at `track.lengrowth.com`, 6-layer free email enrichment waterfall + BetterContact paid fallback. Settings → Email tab exposes mailbox CRUD. Campaign wizard has email toggle (shown only when ≥1 mailbox configured). Deal states: `email_queued → email_sent → email_opened → email_replied` / `email_bounced`. Both cloud and desktop daemons execute `email_follow_up` tasks. Requires: `TRACKING_BASE_URL`, `WORKER_WEBHOOK_SECRET` env vars on server; CF Worker secrets `SECRET_KEY`, `WORKER_WEBHOOK_SECRET`, `BACKEND_URL`.
 - **State Machine UI**: Gated behind `NEXT_PUBLIC_ENABLE_STATE_MACHINE=false` (default OFF). Daemon uses fixed DealState machine, ignores state graphs.
 
 See `docs/PLATFORM_REMEDIATION_PLAN.md` for full rationale and re-enablement strategy.

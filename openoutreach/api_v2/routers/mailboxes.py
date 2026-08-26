@@ -7,7 +7,7 @@ import logging
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from openoutreach.api_v2.dependencies_v2 import get_current_user
 from openoutreach.emails.models import Mailbox
@@ -22,21 +22,21 @@ router = APIRouter()
 
 class MailboxCreate(BaseModel):
     host: str = "smtp.gmail.com"
-    port: int = 587
+    port: int = Field(default=587, ge=1, le=65535)
     username: str
     password: str
     from_address: str = ""
     from_name: str = ""
-    daily_limit: int = 40
+    daily_limit: int = Field(default=40, ge=1, le=2000)
     imap_host: str = ""
-    imap_port: int = 993
+    imap_port: int = Field(default=993, ge=1, le=65535)
 
 
 class MailboxUpdate(BaseModel):
     from_name: str | None = None
-    daily_limit: int | None = None
+    daily_limit: int | None = Field(default=None, ge=1, le=2000)
     imap_host: str | None = None
-    imap_port: int | None = None
+    imap_port: int | None = Field(default=None, ge=1, le=65535)
     password: str | None = None
 
 

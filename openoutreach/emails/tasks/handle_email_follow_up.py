@@ -123,7 +123,11 @@ def handle_email_follow_up(_task, user_id: str, campaign) -> None:
         return
 
     if lead.email_unsubscribed:
-        logger.info("email_follow_up: lead %s is unsubscribed — skipping", lead._id)
+        logger.info("email_follow_up: lead %s unsubscribed — skipping", lead._id)
+        return
+
+    if lead.email_bounced:
+        logger.info("email_follow_up: lead %s has a hard bounce — skipping", lead._id)
         return
 
     # For follow-up steps, check IMAP for a reply before sending another email.
@@ -132,9 +136,10 @@ def handle_email_follow_up(_task, user_id: str, campaign) -> None:
         prev_mailbox = Mailbox.get(deal.mailbox_id)
         if prev_mailbox:
             from openoutreach.emails.imap_checker import find_reply
-            reply_text = find_reply(prev_mailbox, deal.email_message_id)
-            if reply_text is not None:
-                _mark_replied(deal, user_id, reply_text, deals_col)
+            result = find_reply(prev_mailbox, deal.email_message_id)
+            if result is not None:
+                reply_text, received_at = result
+                _mark_replied(deal, user_id, reply_text, received_at, deals_col)
                 logger.info(
                     "email_follow_up: IMAP reply detected for deal %s — EMAIL_REPLIED", deal._id
                 )
@@ -231,11 +236,11 @@ def _mark_bounced(deal, lead, deals_col, leads_col) -> None:
     )
     leads_col.update_one(
         {"_id": lead._id},
-        {"$set": {"email_unsubscribed": True}},
+        {"$set": {"email_bounced": True}},
     )
 
 
-def _mark_replied(deal, user_id: str, reply_text: str, deals_col) -> None:
+def _mark_replied(deal, user_id: str, reply_text: str, received_at: datetime, deals_col) -> None:
     deals_col.update_one(
         {"_id": deal._id},
         {"$set": {"state": "email_replied"}},
@@ -244,6 +249,6 @@ def _mark_replied(deal, user_id: str, reply_text: str, deals_col) -> None:
         deal, user_id,
         subject="",
         body=reply_text,
-        sent_at=datetime.now(timezone.utc),
+        sent_at=received_at,
         is_outgoing=False,
     )

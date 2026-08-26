@@ -120,17 +120,20 @@ async function handleOpen(request: Request, env: Env, tokenRaw: string): Promise
     return new Response(null, { status: 400 });
   }
 
-  const key = `${payload.deal_id}:open:${Date.now()}`;
-  await env.EMAIL_EVENTS.put(key, JSON.stringify({ ...payload, ts: Date.now() }), {
-    expirationTtl: 60 * 60 * 24 * 90, // 90 days
-  });
-
-  void postWebhook(env, {
-    deal_id: payload.deal_id,
-    campaign_id: payload.campaign_id,
-    event: "open",
-    ts: Math.floor(Date.now() / 1000),
-  });
+  // Always return the pixel — suppress tracking only if already unsubscribed.
+  const suppressed = await env.EMAIL_SUPPRESSED.get(payload.deal_id);
+  if (!suppressed) {
+    const key = `${payload.deal_id}:open:${Date.now()}`;
+    await env.EMAIL_EVENTS.put(key, JSON.stringify({ ...payload, ts: Date.now() }), {
+      expirationTtl: 60 * 60 * 24 * 90, // 90 days
+    });
+    void postWebhook(env, {
+      deal_id: payload.deal_id,
+      campaign_id: payload.campaign_id,
+      event: "open",
+      ts: Math.floor(Date.now() / 1000),
+    });
+  }
 
   return new Response(PIXEL_GIF, {
     headers: {
@@ -147,17 +150,20 @@ async function handleClick(request: Request, env: Env, token: string): Promise<R
     return new Response(null, { status: 400 });
   }
 
-  const key = `${payload.deal_id}:click:${Date.now()}`;
-  await env.EMAIL_EVENTS.put(key, JSON.stringify({ ...payload, ts: Date.now() }), {
-    expirationTtl: 60 * 60 * 24 * 90,
-  });
-
-  void postWebhook(env, {
-    deal_id: payload.deal_id,
-    campaign_id: payload.campaign_id,
-    event: "click",
-    ts: Math.floor(Date.now() / 1000),
-  });
+  // Suppress tracking if already unsubscribed — still redirect the user.
+  const suppressed = await env.EMAIL_SUPPRESSED.get(payload.deal_id);
+  if (!suppressed) {
+    const key = `${payload.deal_id}:click:${Date.now()}`;
+    await env.EMAIL_EVENTS.put(key, JSON.stringify({ ...payload, ts: Date.now() }), {
+      expirationTtl: 60 * 60 * 24 * 90,
+    });
+    void postWebhook(env, {
+      deal_id: payload.deal_id,
+      campaign_id: payload.campaign_id,
+      event: "click",
+      ts: Math.floor(Date.now() / 1000),
+    });
+  }
 
   return Response.redirect(payload.dest_url, 302);
 }

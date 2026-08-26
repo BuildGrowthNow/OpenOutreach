@@ -1141,15 +1141,20 @@ function CampaignSettingsForm({
     return String(waSettings?.["message_template"] || "");
   });
   const [waProfiles, setWaProfiles] = useState<WAProfileOption[]>([]);
+  const [hasMailboxes, setHasMailboxes] = useState(false);
 
   useEffect(() => {
     const load = async () => {
       try {
         const { apiClient } = await import("@/lib/apiClientV2");
-        const res = await apiClient.get<WAProfileOption[]>("/whatsapp/profiles");
-        const all = res.data ?? [];
+        const [waRes, mbRes] = await Promise.all([
+          apiClient.get<WAProfileOption[]>("/whatsapp/profiles").catch(() => ({ data: [] as WAProfileOption[] })),
+          apiClient.get<unknown[]>("/mailboxes").catch(() => ({ data: [] as unknown[] })),
+        ]);
+        const all = waRes.data ?? [];
         setWaProfiles(all.filter((p: WAProfileOption) => p.status === "connected"));
-      } catch { /* WA not configured */ }
+        setHasMailboxes((mbRes.data ?? []).length > 0);
+      } catch { /* channels not configured */ }
     };
     void load();
   }, []);
@@ -1179,6 +1184,13 @@ function CampaignSettingsForm({
     if (!on) setWaProfileId("");
   };
 
+  const enableEmail = channelSequence.includes("email");
+  const toggleEmail = (on: boolean) => {
+    setChannelSequence((prev) =>
+      on ? [...prev.filter((c) => c !== "email"), "email"] : prev.filter((c) => c !== "email")
+    );
+  };
+
   const handleAddTitle = () => {
     const title = icpInput.trim();
     if (title && !icpTitles.includes(title)) {
@@ -1194,6 +1206,9 @@ function CampaignSettingsForm({
         max_attempts: 3,
         message_template: waMessageTemplate.trim(),
       };
+    }
+    if (enableEmail) {
+      channelSettings.email = { max_attempts: 3 };
     }
     // API expects snake_case field names
     await onSave({
@@ -1424,6 +1439,29 @@ function CampaignSettingsForm({
                 Connect one in Settings
               </a>{" "}
               to enable WhatsApp outreach.
+            </p>
+          )}
+
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label htmlFor="email-toggle">Email</Label>
+              <p className="text-xs text-muted-foreground">Send cold emails to leads who have a work email address</p>
+            </div>
+            <Switch
+              id="email-toggle"
+              checked={enableEmail}
+              onCheckedChange={toggleEmail}
+              disabled={!hasMailboxes}
+            />
+          </div>
+
+          {!hasMailboxes && !enableEmail && (
+            <p className="text-xs text-muted-foreground">
+              No mailboxes configured.{" "}
+              <a href="/settings?tab=email" className="underline text-blue-400 hover:text-blue-300">
+                Add one in Settings
+              </a>{" "}
+              to enable email outreach.
             </p>
           )}
         </CardContent>

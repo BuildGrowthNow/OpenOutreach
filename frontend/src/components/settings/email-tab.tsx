@@ -19,6 +19,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Icons } from "@/lib/types/components";
@@ -589,7 +590,7 @@ function SequenceConfigForm() {
       <CardContent className="space-y-4">
         <div className="grid grid-cols-3 gap-4">
           <div className="space-y-1">
-            <Label htmlFor="seq-day1">Follow-up 1 (days after step 0)</Label>
+            <Label htmlFor="seq-day1">Days before follow-up 1</Label>
             <Input
               id="seq-day1"
               type="number"
@@ -600,7 +601,7 @@ function SequenceConfigForm() {
             />
           </div>
           <div className="space-y-1">
-            <Label htmlFor="seq-day2">Follow-up 2 (days after step 0)</Label>
+            <Label htmlFor="seq-day2">Days before follow-up 2</Label>
             <Input
               id="seq-day2"
               type="number"
@@ -623,12 +624,11 @@ function SequenceConfigForm() {
           </div>
         </div>
         <div className="flex items-start gap-3 rounded-md border p-3">
-          <input
+          <Checkbox
             id="accept-unverified"
-            type="checkbox"
             checked={acceptUnverified}
-            onChange={(e) => setAcceptUnverified(e.target.checked)}
-            className="mt-0.5 h-4 w-4 cursor-pointer"
+            onCheckedChange={(checked) => setAcceptUnverified(Boolean(checked))}
+            className="mt-0.5"
           />
           <div className="space-y-0.5">
             <Label htmlFor="accept-unverified" className="cursor-pointer">

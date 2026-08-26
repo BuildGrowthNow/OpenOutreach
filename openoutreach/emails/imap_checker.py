@@ -17,17 +17,19 @@ from __future__ import annotations
 import email as email_lib
 import imaplib
 import logging
-from email import policy
+from datetime import datetime, timezone
+from email import policy, utils as email_utils
 
 logger = logging.getLogger(__name__)
 
 
-def find_reply(mailbox, original_message_id: str) -> str | None:
-    """Return text body of first reply to *original_message_id*, or None.
+def find_reply(mailbox, original_message_id: str) -> tuple[str, datetime] | None:
+    """Return (text, received_at) of first reply to *original_message_id*, or None.
 
     Searches the mailbox INBOX for messages whose In-Reply-To header matches
     the given message ID. Returns None when IMAP is not configured on the
     mailbox, when the connection fails, or when no matching reply exists.
+    received_at is the email's Date header parsed to UTC; falls back to now().
     """
     if not mailbox.imap_host or not original_message_id:
         return None
@@ -49,20 +51,38 @@ def find_reply(mailbox, original_message_id: str) -> str | None:
     return None
 
 
-def _fetch_text(imap: imaplib.IMAP4_SSL, uid: bytes) -> str:
-    """Fetch the RFC822 body of *uid* and return its text/plain part."""
+def _fetch_text(imap: imaplib.IMAP4_SSL, uid: bytes) -> tuple[str, datetime]:
+    """Fetch the RFC822 body of *uid*; return (text, received_at).
+
+    received_at is parsed from the email's Date header (UTC).
+    Falls back to now() when the header is absent or unparseable.
+    """
+    fallback_dt = datetime.now(timezone.utc)
     try:
         status, msg_data = imap.fetch(uid.decode(), "(RFC822)")
         if status != "OK" or not msg_data or not msg_data[0]:
-            return "replied"
+            return "replied", fallback_dt
         raw = msg_data[0][1]
         if not isinstance(raw, bytes):
-            return "replied"
+            return "replied", fallback_dt
         msg = email_lib.message_from_bytes(raw, policy=policy.default)
+        received_at = _parse_date_header(msg) or fallback_dt
         text = _extract_plain(msg)
-        return text or "replied"
+        return (text or "replied"), received_at
     except Exception:
-        return "replied"
+        return "replied", fallback_dt
+
+
+def _parse_date_header(msg) -> datetime | None:
+    """Parse the Date header into a UTC-aware datetime, or return None."""
+    date_str = msg.get("Date", "")
+    if not date_str:
+        return None
+    try:
+        ts = email_utils.parsedate_to_datetime(date_str)
+        return ts.astimezone(timezone.utc)
+    except Exception:
+        return None
 
 
 def _extract_plain(msg) -> str:
@@ -91,7 +111,6 @@ def scan_imap_replies(user_id: str) -> int:
 
     Returns the number of deals advanced to EMAIL_REPLIED.
     """
-    from datetime import datetime, timezone
     from openoutreach.mongodb.connection import get_mongodb_collection
     from openoutreach.emails.models import Mailbox
 
@@ -137,26 +156,25 @@ def scan_imap_replies(user_id: str) -> int:
                     if not original_msg_id:
                         continue
 
-                    reply_text = _search_inbox(imap, original_msg_id)
-                    if reply_text is None:
+                    result = _search_inbox(imap, original_msg_id)
+                    if result is None:
                         continue
 
-                    now = datetime.now(timezone.utc)
+                    reply_text, received_at = result
                     deals_col.update_one(
                         {"_id": deal_doc["_id"]},
                         {"$set": {"state": "email_replied"}},
                     )
-                    # Write reply as inbound ChatMessage.
+                    # Write reply as inbound ChatMessage with actual email timestamp.
                     try:
                         from openoutreach.mongodb.models_extended import ChatMessage
-                        content = reply_text
                         msg = ChatMessage(
                             deal_id=str(deal_doc["_id"]),
-                            content=content,
+                            content=reply_text,
                             is_outgoing=False,
                             channel="email",
                             user_id=user_id,
-                            creation_date=now,
+                            creation_date=received_at,
                         )
                         msg.save()
                     except Exception as exc:
@@ -177,8 +195,8 @@ def scan_imap_replies(user_id: str) -> int:
     return replied_count
 
 
-def _search_inbox(imap: imaplib.IMAP4_SSL, original_message_id: str) -> str | None:
-    """Return reply text for *original_message_id* using an already-open IMAP connection.
+def _search_inbox(imap: imaplib.IMAP4_SSL, original_message_id: str) -> tuple[str, datetime] | None:
+    """Return (reply_text, received_at) for *original_message_id* using an already-open IMAP connection.
 
     Searches In-Reply-To then References with/without angle brackets.
     Returns None when no reply is found.
