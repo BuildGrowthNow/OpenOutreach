@@ -8,14 +8,19 @@ a single task type. Step timing is enforced here:
   - Step 2: EMAIL_SENT/EMAIL_OPENED, sequence_step==2, sent_at + day2 days ago
 
 Stops sending when deal enters EMAIL_REPLIED, EMAIL_BOUNCED, or sequence_step >= 3.
-Hard bounces (SMTP 550) permanently suppress the lead's email address.
+SMTP failure handling is policy-driven via delivery_policy.classify():
+  - Hard bounce (550-554) → EMAIL_BOUNCED + suppress lead email permanently
+  - Transient (4xx, connection, timeout) → return silently; scheduler replans
+  - Auth failure (534/535) → log ERROR; return silently (needs operator fix)
+  - Unexpected → re-raise for daemon to mark task FAILED
 """
 
 from __future__ import annotations
 
 import logging
-import smtplib
 from datetime import datetime, timedelta, timezone
+
+from openoutreach.emails.delivery_policy import SmtpOutcome, classify
 
 logger = logging.getLogger(__name__)
 
@@ -120,27 +125,33 @@ def handle_email_follow_up(task, user_id: str, campaign) -> None:
             deal_id=str(deal._id),
             campaign_id=str(campaign.pk),
         )
-    except smtplib.SMTPRecipientsRefused as exc:
-        # Hard bounce: one or more recipients permanently rejected.
-        code = _extract_smtp_code(exc)
-        if _is_hard_bounce(code):
+    except Exception as exc:
+        outcome = classify(exc)
+
+        if outcome == SmtpOutcome.BOUNCE_DEAL:
             _mark_bounced(deal, lead, deals_col, leads_col)
             logger.warning(
-                "email_follow_up: hard bounce %d for %s — EMAIL_BOUNCED + suppressed",
-                code, lead.api_email,
+                "email_follow_up: hard bounce for %s (%s) — EMAIL_BOUNCED + suppressed",
+                lead.api_email, exc,
             )
             return
-        raise
-    except smtplib.SMTPResponseException as exc:
-        # Covers 550/551/552/553/554 returned as SMTPResponseException (some providers).
-        if _is_hard_bounce(exc.smtp_code):
-            _mark_bounced(deal, lead, deals_col, leads_col)
-            logger.warning(
-                "email_follow_up: hard bounce %d for %s — EMAIL_BOUNCED + suppressed",
-                exc.smtp_code, lead.api_email,
+
+        if outcome == SmtpOutcome.RETRY_LATER:
+            logger.info(
+                "email_follow_up: transient failure for %s (%s) — will retry next cycle",
+                lead.api_email, exc,
             )
             return
-        raise
+
+        if outcome == SmtpOutcome.PAUSE_MAILBOX:
+            logger.error(
+                "email_follow_up: auth/credentials failure on mailbox %s (%s) — "
+                "check SMTP password; no further sends attempted until fixed",
+                mailbox.from_address, exc,
+            )
+            return
+
+        raise  # SmtpOutcome.RAISE — daemon marks task FAILED
 
     now = datetime.now(timezone.utc)
     deals_col.update_one(
@@ -159,22 +170,6 @@ def handle_email_follow_up(task, user_id: str, campaign) -> None:
         "email_follow_up [%s]: sent step %d to %s via %s",
         campaign.pk, deal.email_sequence_step, lead.api_email, mailbox.from_address,
     )
-
-
-# SMTP 5xx codes that indicate a permanent address failure (hard bounce).
-# 550=mailbox unavailable, 551=user not local, 552=storage exceeded,
-# 553=mailbox name not allowed, 554=transaction failed/spam rejection.
-_HARD_BOUNCE_CODES = frozenset({550, 551, 552, 553, 554})
-
-
-def _is_hard_bounce(code: int) -> bool:
-    return code in _HARD_BOUNCE_CODES
-
-
-def _extract_smtp_code(exc: smtplib.SMTPRecipientsRefused) -> int:
-    for _addr, (code, _msg) in exc.recipients.items():
-        return code
-    return 0
 
 
 def _mark_bounced(deal, lead, deals_col, leads_col) -> None:
