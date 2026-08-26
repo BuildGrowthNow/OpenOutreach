@@ -8,6 +8,8 @@ from datetime import datetime, timezone as tz
 from typing import List, Optional
 from uuid import uuid4
 
+from openoutreach.whatsapp.pipeline.utils import is_likely_whatsapp_number as _is_likely_wa
+
 logger = logging.getLogger(__name__)
 
 
@@ -37,12 +39,18 @@ def upsert_listings_as_leads(
 
     seen_phones: set = set()
     unique: List[BusinessListing] = []
+    landline_count = 0
     for lst in listings:
         if not lst.phone:
+            continue
+        if not _is_likely_wa(lst.phone):
+            landline_count += 1
             continue
         if lst.phone not in seen_phones:
             seen_phones.add(lst.phone)
             unique.append(lst)
+    if landline_count:
+        logger.info("upsert: dropped %d likely-landline numbers", landline_count)
 
     leads_col = get_mongodb_collection("leads")
     deals_col = get_mongodb_collection("deals")

@@ -321,6 +321,8 @@ def create_leads_from_classified(
                 logger.warning("classified: site %s failed: %s", site, exc)
 
     if not all_listings:
+        from openoutreach.whatsapp.pipeline.alerts import fire_scrape_zero_results
+        fire_scrape_zero_results(campaign_id, user_id, "classified", query)
         return 0
 
     all_listings = _apply_icp_filter(all_listings, campaign_id, user_id)

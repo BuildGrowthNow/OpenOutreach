@@ -94,6 +94,32 @@ def phone_from_page(page, country_code: str) -> str:
     return phone_from_html_text(body, country_code) or ""
 
 
+def is_likely_whatsapp_number(phone_e164: str) -> bool:
+    """Return True if the E.164 number is likely capable of receiving WhatsApp messages.
+
+    Rejects definitive landlines, toll-free, VOIP, pager, and UAN numbers.
+    Accepts MOBILE, FIXED_LINE_OR_MOBILE (common in LatAm), PERSONAL_NUMBER, and UNKNOWN
+    (don't reject what we can't determine).
+    """
+    try:
+        import phonenumbers
+        parsed = phonenumbers.parse(phone_e164)
+        number_type = phonenumbers.number_type(parsed)
+        PhoneNumberType = phonenumbers.PhoneNumberType
+        _REJECT = {
+            PhoneNumberType.FIXED_LINE,
+            PhoneNumberType.TOLL_FREE,
+            PhoneNumberType.PREMIUM_RATE,
+            PhoneNumberType.SHARED_COST,
+            PhoneNumberType.VOIP,
+            PhoneNumberType.PAGER,
+            PhoneNumberType.UAN,
+        }
+        return number_type not in _REJECT
+    except Exception:
+        return True  # parse failed — don't reject
+
+
 def normalize_phone(raw: str, country_code: str) -> Optional[str]:
     """Parse raw phone string and return E.164 format, or None if invalid."""
     try:

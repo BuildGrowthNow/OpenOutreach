@@ -500,6 +500,8 @@ def create_leads_from_maps(
         )
 
     if not ready:
+        from openoutreach.whatsapp.pipeline.alerts import fire_scrape_zero_results
+        fire_scrape_zero_results(campaign_id, user_id, "maps", query)
         return 0
 
     ready = _apply_icp_filter(ready, campaign_id, user_id)

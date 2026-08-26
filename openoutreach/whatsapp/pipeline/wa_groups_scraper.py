@@ -253,10 +253,60 @@ def _visit_site_in_isolation(
         return []
 
 
+def _bing_search_and_collect(
+    page, query: str, country_code: str
+) -> Tuple[List[Tuple[str, str]], List[Tuple[str, str]]]:
+    """Bing fallback used when DDG yields 0 phones and 0 URLs."""
+    search_query = f"{query} wa.me"
+    url = f"https://www.bing.com/search?q={urllib.parse.quote(search_query)}"
+    page.goto(url, wait_until="domcontentloaded", timeout=30000)
+    try:
+        page.wait_for_selector("#b_results .b_algo, #b_results li", timeout=15000)
+    except Exception:
+        logger.warning("wa_groups: Bing fallback found no results for %r", query)
+        return [], []
+
+    phones_with_names: List[Tuple[str, str]] = []
+    result_urls: List[Tuple[str, str]] = []
+    seen_phones: set = set()
+    seen_urls: set = set()
+
+    for el in page.query_selector_all("#b_results .b_algo h2 a"):
+        raw_href = el.get_attribute("href") or ""
+        if not raw_href.startswith("http"):
+            continue
+        href = raw_href.split("?")[0].rstrip("/")
+        title = _clean_title(el.inner_text().strip())
+        if href not in seen_urls:
+            seen_urls.add(href)
+            result_urls.append((href, title))
+
+    try:
+        full_html = page.content()
+    except Exception:
+        full_html = ""
+    for source in (full_html, urllib.parse.unquote(full_html)):
+        for raw in _WA_ME_RE.findall(source):
+            phone = _phone_from_wa_me(raw, country_code)
+            if phone and phone not in seen_phones:
+                seen_phones.add(phone)
+                phones_with_names.append((phone, ""))
+        if len(phones_with_names) >= _MAX_SEARCH_RESULTS:
+            break
+
+    return phones_with_names[:_MAX_SEARCH_RESULTS], result_urls
+
+
 def _scrape_wa_links(page, query: str, country_code: str) -> List[BusinessListing]:
     # Phase 1: single DDG request — direct phones + URLs to visit
     direct_results, site_urls = _ddg_search_and_collect(page, query, country_code)
     logger.info("wa_groups: %d phones from DDG SERP for %r", len(direct_results), query)
+
+    # Bing fallback when DDG yields nothing
+    if not direct_results and not site_urls:
+        logger.info("wa_groups: DDG empty — trying Bing fallback for %r", query)
+        direct_results, site_urls = _bing_search_and_collect(page, query, country_code)
+        logger.info("wa_groups: Bing returned %d phones for %r", len(direct_results), query)
 
     phone_name: dict = {phone: name for phone, name in direct_results}
     direct_phones: set = set(phone_name.keys())
@@ -335,6 +385,8 @@ def create_leads_from_wa_links(
         return 0
 
     if not all_listings:
+        from openoutreach.whatsapp.pipeline.alerts import fire_scrape_zero_results
+        fire_scrape_zero_results(campaign_id, user_id, "wa_groups", query)
         return 0
 
     all_listings = _apply_icp_filter(all_listings, campaign_id, user_id)

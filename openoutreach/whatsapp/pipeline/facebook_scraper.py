@@ -160,6 +160,34 @@ def _visit_fb_page_in_isolation(
         return None
 
 
+def _bing_search_for_fb_urls(page, query: str) -> List[Tuple[str, str]]:
+    """Bing fallback: same as DDG search but via Bing. Used when DDG returns 0 FB URLs."""
+    search_query = f"site:facebook.com/pages {query}"
+    url = f"https://www.bing.com/search?q={urllib.parse.quote(search_query)}"
+    page.goto(url, wait_until="domcontentloaded", timeout=30000)
+    try:
+        page.wait_for_selector("#b_results .b_algo, #b_results li", timeout=15000)
+    except Exception:
+        logger.warning("facebook: Bing fallback found no results for %r", query)
+        return []
+
+    fb_urls: List[Tuple[str, str]] = []
+    seen: set = set()
+    for el in page.query_selector_all("#b_results .b_algo h2 a"):
+        raw_href = el.get_attribute("href") or ""
+        if not raw_href.startswith("http"):
+            continue
+        href = raw_href.split("?")[0].rstrip("/")
+        ddg_title = el.inner_text().strip()
+        if href not in seen and _is_fb_business_page(href):
+            seen.add(href)
+            fb_urls.append((href, ddg_title))
+        if len(fb_urls) >= _MAX_PAGES * 2:
+            break
+
+    return fb_urls
+
+
 def _scrape_facebook_pages(
     page, query: str, country_code: str
 ) -> List[BusinessListing]:
@@ -167,6 +195,9 @@ def _scrape_facebook_pages(
     Phase 2: Visit each /about page concurrently via isolated browsers.
     """
     fb_urls = _search_ddg_for_fb_urls(page, query)
+    if not fb_urls:
+        logger.info("facebook: DDG empty — trying Bing fallback for %r", query)
+        fb_urls = _bing_search_for_fb_urls(page, query)
     if not fb_urls:
         return []
 
@@ -237,6 +268,8 @@ def create_leads_from_facebook(
     logger.info("facebook: returned %d listings", len(all_listings))
 
     if not all_listings:
+        from openoutreach.whatsapp.pipeline.alerts import fire_scrape_zero_results
+        fire_scrape_zero_results(campaign_id, user_id, "facebook_pages", query)
         return 0
 
     all_listings = _apply_icp_filter(all_listings, campaign_id, user_id)
