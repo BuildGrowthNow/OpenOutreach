@@ -116,19 +116,24 @@ def _scrape_google_maps(page, query: str, country_code: str) -> List[BusinessLis
         logger.warning("google_maps: no place links found for query %r", query)
         return []
 
+    def _is_captcha_url(url: str) -> bool:
+        return "/sorry" in url or "recaptcha" in url.lower()
+
     listings: List[BusinessListing] = []
     for place_url in place_urls:
         try:
             page.goto(place_url, wait_until="domcontentloaded", timeout=20000)
 
             # CAPTCHA check: Google redirects blocked requests to /sorry or reCAPTCHA
-            current_url = page.url
-            if "/sorry" in current_url or "recaptcha" in current_url.lower():
-                logger.warning(
-                    "google_maps: CAPTCHA detected at %s — stopping detail visits early",
-                    current_url,
-                )
-                break
+            if _is_captcha_url(page.url):
+                logger.warning("google_maps: CAPTCHA detected — waiting 45s then retrying")
+                page.wait_for_timeout(random.randint(40000, 50000))
+                page.goto(place_url, wait_until="domcontentloaded", timeout=20000)
+                if _is_captcha_url(page.url):
+                    logger.warning(
+                        "google_maps: CAPTCHA persists after retry — stopping detail visits"
+                    )
+                    break
 
             # Random human-like pause — reduces bot-detection fingerprint
             page.wait_for_timeout(random.randint(900, 2800))
