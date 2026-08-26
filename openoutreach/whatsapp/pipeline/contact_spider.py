@@ -13,6 +13,8 @@ from urllib.parse import urlparse
 
 import requests
 
+from openoutreach.whatsapp.pipeline.utils import normalize_phone as _normalize_phone
+
 logger = logging.getLogger(__name__)
 
 _CONTACT_PATHS = [
@@ -37,20 +39,6 @@ _HEADERS = {
     "Accept-Language": "en-US,en;q=0.9",
 }
 _PHONE_RE = re.compile(r"(\+?[\d][\d\s\-\.\(\)]{5,18}[\d])")
-
-
-def _normalize_phone(raw: str, country_code: str) -> Optional[str]:
-    try:
-        import phonenumbers
-
-        parsed = phonenumbers.parse(raw, country_code.upper())
-        if phonenumbers.is_valid_number(parsed):
-            return phonenumbers.format_number(
-                parsed, phonenumbers.PhoneNumberFormat.E164
-            )
-    except Exception:
-        pass
-    return None
 
 
 def _extract_from_html(html: str, country_code: str) -> Optional[str]:

@@ -1100,6 +1100,7 @@ def _maybe_trigger_lead_scrape(campaign, user_id: str) -> None:
                 campaign_id=campaign_id,
                 user_id=user_id,
                 backends=backends,
+                min_rating=getattr(campaign, "maps_min_rating", None),
             )
             logger.info("Maps scrape [%s]: created %d new leads", campaign_id, created)
         except Exception as exc:

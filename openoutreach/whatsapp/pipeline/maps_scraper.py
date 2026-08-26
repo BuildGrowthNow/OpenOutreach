@@ -11,6 +11,7 @@ import urllib.parse
 from typing import List, Optional
 
 from openoutreach.whatsapp.pipeline.upsert import BusinessListing, upsert_listings_as_leads
+from openoutreach.whatsapp.pipeline.utils import normalize_phone as _normalize_phone
 
 logger = logging.getLogger(__name__)
 
@@ -18,21 +19,6 @@ _DEFAULT_BACKENDS = ["google_maps", "bing_maps", "duckduckgo_maps"]
 _MAX_LISTINGS = 50
 _SCROLL_REPEATS = 3
 _SCROLL_PAUSE_MS = 1000
-
-
-def _normalize_phone(raw: str, country_code: str) -> Optional[str]:
-    """Return E.164 string or None if unparseable."""
-    try:
-        import phonenumbers
-
-        parsed = phonenumbers.parse(raw, country_code.upper())
-        if phonenumbers.is_valid_number(parsed):
-            return phonenumbers.format_number(
-                parsed, phonenumbers.PhoneNumberFormat.E164
-            )
-    except Exception:
-        pass
-    return None
 
 
 def _scroll_results(page, selector: str) -> None:
@@ -276,43 +262,52 @@ _BACKEND_FN = {
 }
 
 
-def scrape(query: str, country_code: str, backend: str) -> List[BusinessListing]:
-    """Open headless Chromium, navigate to backend, extract listings with phones."""
-    if backend not in _BACKEND_FN:
-        raise ValueError(f"Unknown backend: {backend!r}")
-
-    from playwright.sync_api import sync_playwright
-
-    with sync_playwright() as pw:
-        browser = pw.chromium.launch(headless=True)
-        try:
-            page = browser.new_page()
-            page.set_extra_http_headers({"Accept-Language": "en-US,en;q=0.9"})
-            return _BACKEND_FN[backend](page, query, country_code)
-        finally:
-            browser.close()
-
-
 def create_leads_from_maps(
     query: str,
     country_code: str,
     campaign_id: str,
     user_id: str,
     backends: Optional[List[str]] = None,
+    min_rating: Optional[float] = None,
 ) -> int:
-    """Scrape maps backends, dedup by phone, upsert Leads + Deals.
+    """Scrape maps backends with a single shared browser, dedup by phone, upsert Leads + Deals.
 
+    min_rating: if set, only listings with rating >= min_rating (or no rating data) are kept.
     Returns count of new leads created.
     """
-    active_backends = backends if backends is not None else _DEFAULT_BACKENDS
+    from playwright.sync_api import sync_playwright
+
+    active_backends = [b for b in (backends or _DEFAULT_BACKENDS) if b in _BACKEND_FN]
+    if not active_backends:
+        logger.warning("maps_scraper: no valid backends in %s", backends)
+        return 0
 
     all_listings: List[BusinessListing] = []
-    for backend in active_backends:
+
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
         try:
-            results = scrape(query, country_code, backend)
-            logger.info("maps_scraper: %s returned %d listings", backend, len(results))
-            all_listings.extend(results)
-        except Exception as exc:
-            logger.warning("maps_scraper: backend %s failed: %s", backend, exc)
+            page = browser.new_page()
+            page.set_extra_http_headers({"Accept-Language": "en-US,en;q=0.9"})
+            for backend in active_backends:
+                try:
+                    results = _BACKEND_FN[backend](page, query, country_code)
+                    logger.info("maps_scraper: %s returned %d listings", backend, len(results))
+                    all_listings.extend(results)
+                except Exception as exc:
+                    logger.warning("maps_scraper: backend %s failed: %s", backend, exc)
+        finally:
+            browser.close()
+
+    if min_rating is not None:
+        before = len(all_listings)
+        all_listings = [
+            lst for lst in all_listings
+            if lst.rating is None or lst.rating >= min_rating
+        ]
+        logger.info(
+            "maps_scraper: min_rating=%.1f kept %d/%d listings",
+            min_rating, len(all_listings), before,
+        )
 
     return upsert_listings_as_leads(all_listings, campaign_id, user_id)

@@ -13,6 +13,7 @@ import urllib.parse
 from typing import List, Optional
 
 from openoutreach.whatsapp.pipeline.upsert import BusinessListing, upsert_listings_as_leads
+from openoutreach.whatsapp.pipeline.utils import normalize_phone as _normalize_phone
 
 logger = logging.getLogger(__name__)
 
@@ -20,20 +21,6 @@ _MAX_LISTINGS = 40      # cards to collect from search page
 _MAX_DETAIL_PAGES = 20  # listing detail pages to visit per backend
 _PHONE_RE = re.compile(r"(\+?[\d][\d\s\-\.\(\)]{5,18}[\d])")
 _DEFAULT_SITES = ["craigslist", "olx", "mercadolibre"]
-
-
-def _normalize_phone(raw: str, country_code: str) -> Optional[str]:
-    try:
-        import phonenumbers
-
-        parsed = phonenumbers.parse(raw, country_code.upper())
-        if phonenumbers.is_valid_number(parsed):
-            return phonenumbers.format_number(
-                parsed, phonenumbers.PhoneNumberFormat.E164
-            )
-    except Exception:
-        pass
-    return None
 
 
 def _phone_from_page(page) -> str:
