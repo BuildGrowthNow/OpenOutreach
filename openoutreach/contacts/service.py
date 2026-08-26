@@ -1,10 +1,10 @@
 # openoutreach/contacts/service.py
-"""The central contacts store (the hub) - ask the hub before paying BetterContact,
+"""The central contacts store (the hub) - check the hub before running enrichment,
 give back what we find.
 
 Two best-effort calls; a missing token or an outage degrades to a no-op and never
-breaks outreach. The store caches ``public_identifier -> email`` so the network's
-paid + harvested resolutions lower everyone's BetterContact spend as coverage grows.
+breaks outreach. The store caches ``public_identifier -> email`` so harvested
+resolutions lower enrichment costs as coverage grows.
 
 The geo-gate that keeps EEA/UK/CH out of the store is enforced **server-side** (the
 only trusted boundary). The cheap ``is_eea_located`` check here just avoids a
@@ -28,13 +28,12 @@ _TIMEOUT_S = 30
 
 # Where a contributed address came from - the wire values the hub maps to its
 # Contribution.Origin (an unrecognized value degrades to "unknown" server-side).
-ORIGIN_BETTERCONTACT = "bettercontact"  # paid BetterContact hit
+ORIGIN_ENRICHMENT = "enrichment"  # free waterfall hit
 ORIGIN_PROFILE_INFO = "profile_info"  # 1st-degree contact-info overlay
 
 
 def resolve(lead) -> str | None:
-    """A stored email for *lead*, or ``None`` - a miss, no token yet, or an
-    outage all return ``None``, so the caller falls back to BetterContact."""
+    """A stored email for *lead*, or ``None`` - a miss, no token, or outage."""
     config = SiteConfig.load(user_id=getattr(lead, "user_id", None))
     if not config.contacts_api_token:
         return None
@@ -49,7 +48,7 @@ def resolve(lead) -> str | None:
         logger.info("hub: resolve unavailable for %s: %s", lead.public_identifier, exc)
         return None
     if resp.status_code not in (200, 404):
-        return None  # unexpected → fall back to BetterContact, stay quiet
+        return None  # unexpected → fall back to enrichment waterfall, stay quiet
     # Both hit (200) and miss (404) carry the post-read credit balance; a hit
     # also carries the profile's address(es) as a list (one today, the full
     # dbt-prepared set later), and we send to one, so take the first.
@@ -66,7 +65,7 @@ def resolve(lead) -> str | None:
         )
     else:
         logger.info(
-            "hub: no stored email for %s - falling back to BetterContact (store balance: %s credits)",
+            "hub: no stored email for %s - falling back to enrichment waterfall (store balance: %s credits)",
             lead.public_identifier,
             credits,
         )
@@ -76,7 +75,7 @@ def resolve(lead) -> str | None:
 def contribute(session, lead, emails: list[str], origin: str) -> None:
     """Give *lead*'s email(s) to the store - best-effort, non-EU only.
 
-    ``origin`` records where the address came from (``ORIGIN_BETTERCONTACT`` /
+    ``origin`` records where the address came from (``ORIGIN_ENRICHMENT`` /
     ``ORIGIN_PROFILE_INFO``). The first contribution registers and mints the
     operator's token (kept in the instance's own config, never the repo); later
     ones reuse it.

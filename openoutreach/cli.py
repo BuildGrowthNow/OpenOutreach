@@ -253,7 +253,7 @@ def _get_safe_config(settings):
     sensitive_keys = {
         'SECRET_KEY', 'JWT_SECRET_KEY', 'COOKIE_ENCRYPTION_KEY',
         'LLM_API_KEY', 'LINKEDIN_PASSWORD',
-        'FINDER_API_KEY', 'STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET'
+        'STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET'
     }
 
     for key in dir(settings):

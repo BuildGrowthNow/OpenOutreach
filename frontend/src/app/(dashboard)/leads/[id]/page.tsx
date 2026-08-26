@@ -442,7 +442,7 @@ const LeadDetailsPage = () => {
                     <div className="space-y-1">
                       <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
                         <Icons.Mail className="h-3.5 w-3.5" />
-                        BetterContact (enrichment)
+                        Email enrichment
                       </div>
                       <a
                         href={`mailto:${lead.contactInfo.apiEmail}`}

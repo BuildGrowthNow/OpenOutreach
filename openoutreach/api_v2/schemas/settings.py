@@ -24,7 +24,6 @@ class SiteConfigResponse(BaseModel):
     ai_writing_style: str = Field(default="", description="AI writing style guidelines")
     ai_say_rules: str = Field(default="", description="Phrases the AI should emphasize")
     ai_avoid_rules: str = Field(default="", description="Phrases/promises the AI should avoid")
-    finder_api_key: str = Field(default="", description="Email finder API key (BetterContact)")
     linkedin_username: str = Field(default="", description="LinkedIn username")
     linkedin_campaign: str = Field(default="", description="Default LinkedIn campaign")
     enable_smart_rate_limiting: bool = Field(default=False, description="Enable smart rate limiting")
@@ -38,7 +37,6 @@ class SiteConfigResponse(BaseModel):
     active_end_hour: int = Field(default=18, ge=0, le=23, description="Active hours end (0-23)")
     active_timezone: str = Field(default="UTC", description="Timezone for active hours")
     active_days: str = Field(default="1,2,3,4,5", description="Comma-separated day numbers (1=Monday, 7=Sunday)")
-    bettercontact_api_key: str = Field(default="", description="BetterContact API key")
     contacts_api_token: str = Field(default="", description="Contacts API token")
     contacts_api_url: str = Field(default="", description="Contacts API URL")
     wa_daily_limit: int = Field(default=20, ge=0, description="WhatsApp daily message limit")
@@ -55,14 +53,12 @@ class SiteConfigResponse(BaseModel):
                 "llm_api_key": "sk-***",
                 "ai_model": "gpt-4",
                 "llm_api_base": "",
-                "finder_api_key": "finder-***",
                 "linkedin_username": "john.doe",
                 "linkedin_campaign": "outreach_2026",
                 "daily_connection_limit": 20,
                 "daily_follow_up_limit": 25,
                 "velocity": 20,
                 "cooldown_minutes": 0,
-                "bettercontact_api_key": "bc-***",
                 "contacts_api_token": "ct-***",
                 "contacts_api_url": "https://contacts.api.example.com"
             }
@@ -83,7 +79,6 @@ class SiteConfigUpdate(BaseModel):
     ai_writing_style: Optional[str] = Field(None, description="Update AI writing style guidelines")
     ai_say_rules: Optional[str] = Field(None, description="Update phrases the AI should emphasize")
     ai_avoid_rules: Optional[str] = Field(None, description="Update phrases/promises the AI should avoid")
-    finder_api_key: Optional[str] = Field(None, description="Update email finder API key")
     linkedin_username: Optional[str] = Field(None, description="Update LinkedIn username")
     linkedin_campaign: Optional[str] = Field(None, description="Update default LinkedIn campaign")
     enable_smart_rate_limiting: Optional[bool] = Field(None, description="Update smart rate limiting toggle")
@@ -97,7 +92,6 @@ class SiteConfigUpdate(BaseModel):
     active_end_hour: Optional[int] = Field(None, ge=0, le=23, description="Update active hours end")
     active_timezone: Optional[str] = Field(None, description="Update timezone for active hours")
     active_days: Optional[str] = Field(None, description="Update comma-separated day numbers")
-    bettercontact_api_key: Optional[str] = Field(None, description="Update BetterContact API key")
     contacts_api_token: Optional[str] = Field(None, description="Update Contacts API token")
     contacts_api_url: Optional[str] = Field(None, description="Update Contacts API URL")
     wa_daily_limit: Optional[int] = Field(None, ge=0, description="Update WhatsApp daily message limit")

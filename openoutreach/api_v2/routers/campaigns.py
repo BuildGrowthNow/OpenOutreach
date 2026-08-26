@@ -1327,12 +1327,11 @@ async def manual_qualify_lead(
                 "qualification_reason": reason,
             }},
         )
-        # Trigger email enrichment if finder key is configured
+        # Trigger email enrichment via free waterfall
         try:
-            from openoutreach.mongodb.models import Lead as LeadModel, SiteConfig
+            from openoutreach.mongodb.models import Lead as LeadModel
             lead = LeadModel.get(lead_id)
-            site_config = SiteConfig.load(user_id=user_id)
-            if lead and site_config and site_config.finder_api_key:
+            if lead:
                 result = lead.resolve_api_email()
                 if result is False:
                     deals_col.update_one(

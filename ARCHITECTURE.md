@@ -44,7 +44,7 @@ openoutreach/
 ├── crm/             # Lead and Deal models (MongoDB)
 ├── chat/            # ChatMessage model (MongoDB)
 ├── linkedin/        # Browser, discovery pipeline, ML qualifier, task handlers
-├── emails/          # Email enrichment (BetterContact finder)
+├── emails/          # Email enrichment (free waterfall finder)
 ├── desktop/         # System tray app, auto-updater, protocol handler, keychain auth
 └── mongodb/         # Models base class, connection, DAL helpers
 
@@ -115,13 +115,13 @@ Routers live in `openoutreach/api_v2/routers/`. All routes are registered in `ap
 
 All models extend the base `MongoModel` class from `openoutreach/mongodb/models/base.py`. Document IDs are stored as `_id` (ObjectId) and serialized to strings.
 
-**SiteConfig** (`core/models/site_config.py`) - singleton per user (`pk=user_id`). Fields: `llm_provider` (openai/anthropic/google/groq/mistral/cohere/openai_compatible), `llm_api_key`, `ai_model`, `llm_api_base`, `finder_api_key` (BetterContact - blank disables enrichment), `ai_writing_style`, `ai_say_rules`, `ai_avoid_rules` (follow-up guardrails), `enable_active_hours`, `active_start_hour`, `active_end_hour`, `active_timezone`, `active_days`, `enable_smart_rate_limiting`, `aggressiveness_preset`, `velocity`. Loaded via `SiteConfig.load(user_id=...)`.
+**SiteConfig** (`core/models/site_config.py`) - singleton per user (`pk=user_id`). Fields: `llm_provider` (openai/anthropic/google/groq/mistral/cohere/openai_compatible), `llm_api_key`, `ai_model`, `llm_api_base`, `ai_writing_style`, `ai_say_rules`, `ai_avoid_rules` (follow-up guardrails), `enable_active_hours`, `active_start_hour`, `active_end_hour`, `active_timezone`, `active_days`, `enable_smart_rate_limiting`, `aggressiveness_preset`, `velocity`. Loaded via `SiteConfig.load(user_id=...)`.
 
 **Campaign** (`core/models/campaign.py`) - `name`, `user_id`, `linkedin_profile_id`, `team_member_ids`, `product_pitch`, `campaign_objective`, `booking_link`, `icp_titles`, `follow_up_strategy`, `target_degrees` (default `[2, 3]`), `is_freemium`, `action_fraction`, `seed_public_ids`, `model_blob` (per-campaign GP model, joblib-compressed bytes), `is_paused`.
 
 **LinkedInProfile** (`linkedin/models/profile.py`) - `user_id`, `linkedin_username`, `linkedin_password` (synced from credential), `cookie_data_encrypted`, `connect_daily_limit`, `follow_up_daily_limit`, `self_lead_id`, `execution_mode` (desktop/cloud), `last_heartbeat`, `daemon_status`.
 
-**Lead** (`crm/models/lead.py`) - one per LinkedIn URL. `linkedin_url` (unique), `public_identifier`, `urn` (cached after first scrape), `embedding` (384-dim float32 bytes), `connection_degree` (1/2/3), `disqualified` (permanent exclusion), `contact_info` (nullable JSON - LinkedIn overlay), `api_email` (nullable - BetterContact result), `cached_profile` (nullable JSON - Voyager-parsed profile), `user_id`.
+**Lead** (`crm/models/lead.py`) - one per LinkedIn URL. `linkedin_url` (unique), `public_identifier`, `urn` (cached after first scrape), `embedding` (384-dim float32 bytes), `connection_degree` (1/2/3), `disqualified` (permanent exclusion), `contact_info` (nullable JSON - LinkedIn overlay), `api_email` (nullable - enrichment waterfall result), `cached_profile` (nullable JSON - Voyager-parsed profile), `user_id`.
 
 **Deal** (`crm/models/deal.py`) - per campaign (FK to Campaign + FK to Lead). `state` (`DealState` - see funnel below), `outcome` (converted/not_interested/wrong_fit/no_budget/has_solution/bad_timing/unresponsive/unknown), `reason`, `connect_attempts`, `backoff_hours`, `next_check_pending_at`, `profile_summary` (JSON fact list), `chat_summary` (JSON fact list).
 

@@ -172,14 +172,14 @@ Each layer pulls from the one below only when empty. Each `qualify_source` itera
 
 - **Qualified (label=1):**
   - Calls `promote_lead_to_deal`: updates the existing DISCOVERED Deal to `state=QUALIFIED` with the LLM's reason.
-  - Runs `lead.resolve_api_email()` - if the BetterContact email finder returns `False` (no email found), calls `set_profile_state(NO_EMAIL)` to park the deal out of the connect pool.
+  - Runs `lead.resolve_api_email()` - if the free enrichment waterfall returns `False` (no email found), calls `set_profile_state(NO_EMAIL)` to park the deal out of the connect pool.
   - Updates the GP model with the positive label.
 - **Rejected (label=0):**
   - Calls `create_disqualified_deal`: sets `Deal.state=FAILED`, `outcome=wrong_fit`, records the LLM reason.
   - This is **campaign-scoped** - the same lead can be FAILED in campaign A and QUALIFIED in campaign B.
   - Updates the GP model with the negative label.
 
-**NO_EMAIL retry:** `_retry_no_email_deals` (called from `reconcile`) re-runs `lead.resolve_api_email()` on every NO_EMAIL deal each reconcile cycle. On a hit (`True`), the deal is promoted back to QUALIFIED and re-enters the connect pool. BetterContact bills only on usable hits, so retrying misses is free. Deals stay in NO_EMAIL until a hit lands or are manually overridden via the UI.
+**NO_EMAIL retry:** `_retry_no_email_deals` (called from `reconcile`) re-runs `lead.resolve_api_email()` on every NO_EMAIL deal each reconcile cycle. On a hit (`True`), the deal is promoted back to QUALIFIED and re-enters the connect pool. The free waterfall has no per-hit cost, so retrying misses is free. Deals stay in NO_EMAIL until a hit lands or are manually overridden via the UI.
 
 ---
 

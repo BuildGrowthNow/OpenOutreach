@@ -169,7 +169,7 @@ Columns:
 | State badge | `deal.state` | Color-coded by DealState |
 | Outcome | `deal.outcome` | Shown when present: `converted`, `not_interested`, `wrong_fit`, etc. |
 | Campaign | `campaign_names[deal.campaign_id]` | Batch-fetched campaign name lookup |
-| Email | `lead.api_email` (BetterContact) or `lead.contact_info.email` (LinkedIn overlay) | Prefers api_email |
+| Email | `lead.api_email` (enrichment waterfall) or `lead.contact_info.email` (LinkedIn overlay) | Prefers api_email |
 | Disqualified | `lead.disqualified` | Boolean flag - shown as badge when true |
 | Created | `lead.creation_date` | |
 
@@ -198,7 +198,7 @@ Opens on row click. Additional fields exposed:
 `GET /api/leads/export?campaign_id={id}&state={filter}`
 
 Columns: Name, Email, Phone Numbers, LinkedIn URL, Company, Title, State, Outcome, Campaign, Created Date, Disqualified.
-Email resolution: `api_email` (BetterContact) falling back to `contact_info.email` (LinkedIn overlay).
+Email resolution: `api_email` (enrichment waterfall) falling back to `contact_info.email` (LinkedIn overlay).
 
 ---
 
@@ -442,7 +442,7 @@ Full page with 4 tabs (Overview / Profile / Messages / Campaigns) plus right sid
 
 | Field | Source | Notes |
 |---|---|---|
-| BetterContact email | `lead.contactInfo.apiEmail` | `lead.api_email` from BetterContact enrichment |
+| Enrichment email | `lead.contactInfo.apiEmail` | `lead.api_email` from enrichment waterfall |
 | LinkedIn overlay email | `lead.contactInfo.overlayEmail` | `lead.contact_info.email` from 1st-degree contact-info scrape |
 | Phone numbers | `lead.contactInfo.phoneNumbers[]` | `lead.contact_info.phone_numbers` array |
 

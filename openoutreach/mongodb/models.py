@@ -4106,14 +4106,12 @@ class SiteConfig:
         llm_api_key: str = "",
         ai_model: str = "",
         llm_api_base: str = "",
-        finder_api_key: str = "",
         linkedin_username: str = "",
         linkedin_campaign: str = "",
         daily_connection_limit: int = 20,
         daily_follow_up_limit: int = 40,
         velocity: int = 20,
         cooldown_minutes: int = 0,
-        bettercontact_api_key: str = "",
         contacts_api_token: str = "",
         contacts_api_url: str = "",
         enable_active_hours: bool = False,
@@ -4142,14 +4140,12 @@ class SiteConfig:
         self.llm_api_key = llm_api_key
         self.ai_model = ai_model
         self.llm_api_base = llm_api_base
-        self.finder_api_key = finder_api_key
         self.linkedin_username = linkedin_username
         self.linkedin_campaign = linkedin_campaign
         self.daily_connection_limit = daily_connection_limit
         self.daily_follow_up_limit = daily_follow_up_limit
         self.velocity = velocity
         self.cooldown_minutes = cooldown_minutes
-        self.bettercontact_api_key = bettercontact_api_key
         self.contacts_api_token = contacts_api_token
         self.contacts_api_url = contacts_api_url
         self.enable_active_hours = enable_active_hours
@@ -4181,14 +4177,12 @@ class SiteConfig:
             "llm_api_key": self.llm_api_key,
             "ai_model": self.ai_model,
             "llm_api_base": self.llm_api_base,
-            "finder_api_key": self.finder_api_key,
             "linkedin_username": self.linkedin_username,
             "linkedin_campaign": self.linkedin_campaign,
             "daily_connection_limit": self.daily_connection_limit,
             "daily_follow_up_limit": self.daily_follow_up_limit,
             "velocity": self.velocity,
             "cooldown_minutes": self.cooldown_minutes,
-            "bettercontact_api_key": self.bettercontact_api_key,
             "contacts_api_token": self.contacts_api_token,
             "contacts_api_url": self.contacts_api_url,
             "enable_active_hours": self.enable_active_hours,
@@ -4223,14 +4217,12 @@ class SiteConfig:
             llm_api_key=data.get("llm_api_key", ""),
             ai_model=data.get("ai_model", ""),
             llm_api_base=data.get("llm_api_base", ""),
-            finder_api_key=data.get("finder_api_key", ""),
             linkedin_username=data.get("linkedin_username", ""),
             linkedin_campaign=data.get("linkedin_campaign", ""),
             daily_connection_limit=data.get("daily_connection_limit", 20),
             daily_follow_up_limit=data.get("daily_follow_up_limit", 40),
             velocity=data.get("velocity", 20),
             cooldown_minutes=data.get("cooldown_minutes", 0),
-            bettercontact_api_key=data.get("bettercontact_api_key", ""),
             contacts_api_token=data.get("contacts_api_token", ""),
             contacts_api_url=data.get("contacts_api_url", ""),
             enable_active_hours=data.get("enable_active_hours", False),

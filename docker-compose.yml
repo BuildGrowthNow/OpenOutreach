@@ -54,8 +54,6 @@ services:
       # Encryption
       - COOKIE_ENCRYPTION_KEY=${COOKIE_ENCRYPTION_KEY:-}
 
-      # Finder API
-      - FINDER_API_KEY=${FINDER_API_KEY:-}
 
       # App URL (used in email links)
       - APP_URL=${APP_URL:-http://localhost:3000}

@@ -42,7 +42,6 @@ class SiteConfig:
         ai_writing_style: str = "",
         ai_say_rules: str = "",
         ai_avoid_rules: str = "",
-        finder_api_key: str = "",
         linkedin_username: str = "",
         linkedin_campaign: str = "",
         enable_smart_rate_limiting: bool = False,
@@ -50,7 +49,6 @@ class SiteConfig:
         daily_connection_limit: int = 20,
         daily_follow_up_limit: int = 40,
         velocity: int = 20,
-        bettercontact_api_key: str = "",
         contacts_api_token: str = "",
         contacts_api_url: str = "",
         enable_active_hours: bool = False,
@@ -67,7 +65,6 @@ class SiteConfig:
         self.ai_writing_style = ai_writing_style
         self.ai_say_rules = ai_say_rules
         self.ai_avoid_rules = ai_avoid_rules
-        self.finder_api_key = finder_api_key
         self.linkedin_username = linkedin_username
         self.linkedin_campaign = linkedin_campaign
         self.enable_smart_rate_limiting = enable_smart_rate_limiting
@@ -75,7 +72,6 @@ class SiteConfig:
         self.daily_connection_limit = daily_connection_limit
         self.daily_follow_up_limit = daily_follow_up_limit
         self.velocity = velocity
-        self.bettercontact_api_key = bettercontact_api_key
         self.contacts_api_token = contacts_api_token
         self.contacts_api_url = contacts_api_url
         self.enable_active_hours = enable_active_hours
@@ -106,7 +102,6 @@ class SiteConfig:
             "ai_writing_style": self.ai_writing_style,
             "ai_say_rules": self.ai_say_rules,
             "ai_avoid_rules": self.ai_avoid_rules,
-            "finder_api_key": self.finder_api_key,
             "linkedin_username": self.linkedin_username,
             "linkedin_campaign": self.linkedin_campaign,
             "enable_smart_rate_limiting": self.enable_smart_rate_limiting,
@@ -114,7 +109,6 @@ class SiteConfig:
             "daily_connection_limit": self.daily_connection_limit,
             "daily_follow_up_limit": self.daily_follow_up_limit,
             "velocity": self.velocity,
-            "bettercontact_api_key": self.bettercontact_api_key,
             "contacts_api_token": self.contacts_api_token,
             "contacts_api_url": self.contacts_api_url,
             "enable_active_hours": self.enable_active_hours,
@@ -136,7 +130,6 @@ class SiteConfig:
             ai_writing_style=data.get("ai_writing_style", ""),
             ai_say_rules=data.get("ai_say_rules", ""),
             ai_avoid_rules=data.get("ai_avoid_rules", ""),
-            finder_api_key=data.get("finder_api_key", ""),
             linkedin_username=data.get("linkedin_username", ""),
             linkedin_campaign=data.get("linkedin_campaign", ""),
             enable_smart_rate_limiting=data.get("enable_smart_rate_limiting", False),
@@ -144,7 +137,6 @@ class SiteConfig:
             daily_connection_limit=data.get("daily_connection_limit", 20),
             daily_follow_up_limit=data.get("daily_follow_up_limit", 40),
             velocity=data.get("velocity", 20),
-            bettercontact_api_key=data.get("bettercontact_api_key", ""),
             contacts_api_token=data.get("contacts_api_token", ""),
             contacts_api_url=data.get("contacts_api_url", ""),
             enable_active_hours=data.get("enable_active_hours", False),

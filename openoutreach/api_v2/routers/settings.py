@@ -154,10 +154,7 @@ async def get_settings(
             "username": li_username,
             "campaign": li_campaign,
         },
-        "finder": {
-            "apiKey": config.finder_api_key or "",
-            "bettercontactApiKey": config.bettercontact_api_key or "",
-        },
+        "finder": {},
         "whatsapp": {
             **_wa_settings_with_warmup(user_id, config),
         },
@@ -232,7 +229,6 @@ async def update_settings(
             ai_writing_style=getattr(config, "ai_writing_style", "") or "",
             ai_say_rules=getattr(config, "ai_say_rules", "") or "",
             ai_avoid_rules=getattr(config, "ai_avoid_rules", "") or "",
-            finder_api_key=config.finder_api_key or "",
             linkedin_username=config.linkedin_username or "",
             linkedin_campaign=config.linkedin_campaign or "",
             enable_smart_rate_limiting=getattr(config, "enable_smart_rate_limiting", False),
@@ -246,7 +242,6 @@ async def update_settings(
             active_end_hour=getattr(config, "active_end_hour", 18),
             active_timezone=getattr(config, "active_timezone", "UTC") or "UTC",
             active_days=active_days_str or "1,2,3,4,5",
-            bettercontact_api_key=config.bettercontact_api_key or "",
             contacts_api_token=config.contacts_api_token or "",
             contacts_api_url=config.contacts_api_url or "",
         )

@@ -175,7 +175,7 @@ async def list_leads(
                 at_idx = headline.lower().find(" at ")
                 if at_idx > -1:
                     company = headline[at_idx + 4:].strip()
-            # Resolve best available email: api_email (BetterContact) > contact_info overlay
+            # Resolve best available email: api_email (enrichment) > contact_info overlay
             api_email = lead_data.get("api_email")
             contact_info_raw = lead_data.get("contact_info") or {}
             overlay_email = contact_info_raw.get("email") if isinstance(contact_info_raw, dict) else None

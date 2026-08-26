@@ -16,7 +16,7 @@ def verify_auth(host: str, port: int, username: str, password: str) -> tuple[boo
     Mirrors the branch used by sender.py._deliver so import and send use
     the same transport logic.
 
-    A Google/IceMail box rejects its login password with 534/535 - the message
+    A Google Workspace box rejects its login password with 534/535 - the message
     surfaces the "use the app password" hint for that case.
     """
     try:

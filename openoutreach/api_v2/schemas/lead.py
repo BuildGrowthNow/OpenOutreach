@@ -39,7 +39,7 @@ class LeadCreate(BaseModel):
     )
     api_email: Optional[str] = Field(
         None,
-        description="Work email resolved via enrichment API (e.g., BetterContact)"
+        description="Work email resolved via email enrichment waterfall"
     )
     disqualified: bool = Field(
         False,

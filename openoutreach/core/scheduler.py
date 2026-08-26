@@ -1113,7 +1113,7 @@ def plan_email_follow_up_window(campaign, user_id: str, linkedin_profile_id: str
 def _retry_no_email_deals(campaign) -> None:
     """Re-run the email finder on NO_EMAIL deals and promote to QUALIFIED on a hit.
 
-    BetterContact charges only on usable hits so retrying misses is free.
+    Free waterfall retries misses at no cost.
     Runs once per reconcile cycle - the tri-state return means:
       True  → hit; deal promoted back to QUALIFIED and enters connect pool
       False → still no email; deal stays NO_EMAIL

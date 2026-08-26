@@ -11,9 +11,9 @@ tracking and unsubscribe at the edge.
 | `openoutreach/emails/smtp.py` | SMTP auth-only verify (`verify_auth`) |
 | `openoutreach/emails/sender.py` | `send_email` — MIME, threading headers, STARTTLS, plaintext only |
 | `openoutreach/emails/models.py` | `Mailbox` model — host/port/creds/daily_limit, `sent_today`, `headroom_today`, `MailboxManager.least_loaded_under_cap` |
-| `openoutreach/emails/icemail.py` | IceMail App-Passwords CSV parser |
-| `openoutreach/emails/nudge.py` | Setup nudge (BetterContact + IceMail onboarding) |
-| `openoutreach/emails/finder.py` | BetterContact email enrichment (already called at qualification) |
+| ~~`openoutreach/emails/icemail.py`~~ | Removed (IceMail service no longer used) |
+| ~~`openoutreach/emails/nudge.py`~~ | Removed (no callers; onboarding handled via Settings UI) |
+| `openoutreach/emails/finder.py` | Free waterfall email enrichment (domain/WHOIS/SMTP/web) |
 
 ## Reference: eracle/OpenOutSend
 
@@ -29,7 +29,7 @@ are incompatible with MongoDB; ignore them.
 | `emails/warmth.py` | `openoutreach/emails/warmth.py` | v2 | IMAP Sent-folder scan → 75th-percentile daily volume → auto-reduce on bounce rate. Replaces static `daily_limit` with a dynamic ceiling. |
 
 **Gaps before email can run end-to-end:**
-- No generic SMTP import UI (currently IceMail-specific paste format)
+- No generic SMTP import UI (use Settings → Email tab to add mailboxes individually)
 - No `email_follow_up` task type or handler
 - No email scheduler (`plan_email_follow_up_window`)
 - No LLM email writer (subject + body)
@@ -87,11 +87,9 @@ Add "Email" tab (currently hidden behind no flag — just add the tab). Componen
   - Show Gmail app-password guide link when host contains `gmail`
 - Empty state: "No mailboxes — email outreach is disabled"
 
-### 1.4 Remove IceMail coupling from nudge
+### 1.4 ~~Remove IceMail coupling from nudge~~
 
-`nudge.py` hardcodes IceMail affiliate URL and its CSV paste format. Replace
-`_collect_mailboxes` with a note pointing to the Settings UI. Keep `icemail.py` for
-operators who still use IceMail boxes (the CSV parser is still useful).
+Done. `nudge.py`, `icemail.py`, and `bettercontact.py` removed. Mailboxes added via Settings UI only.
 
 ---
 
@@ -352,7 +350,7 @@ File: `frontend/src/components/campaigns/create-campaign-wizard.tsx`
 
 - Add "Email" channel option (shown only when `GET /api/mailboxes` returns ≥1 result)
 - When selected: add `"email"` to `channel_sequence` payload
-- No extra query field needed — email uses `Lead.api_email` resolved by BetterContact
+- No extra query field needed — email uses `Lead.api_email` resolved by the free enrichment waterfall
 
 ### 6.2 Leads list — email status column
 

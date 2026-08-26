@@ -111,7 +111,7 @@ class MailboxManager:
 
 
 class Mailbox:
-    """One SMTP inbox. host/port default to IceMail's Google Workspace boxes.
+    """One SMTP inbox. host/port default to Gmail/Google Workspace settings.
 
     A row exists only once its credentials pass the import auth-check - the
     provider has no health API, so the import is the gate. Send-time failures

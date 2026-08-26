@@ -213,7 +213,7 @@ export default function PrivacyPage() {
 
               <h3 className="text-lg font-semibold text-white mt-6 mb-3">Optional Sharing</h3>
               <ul className="list-disc list-inside space-y-2 ml-2">
-                <li><strong>Email Enrichment:</strong> If enabled, we share prospect emails with BetterContact for enrichment (they do not retain data)</li>
+                <li><strong>Email Enrichment:</strong> We use free third-party sources (WHOIS, website scraping, SMTP probing) to find prospect work emails</li>
                 <li><strong>Analytics:</strong> We may use aggregated, anonymized data with analytics services</li>
               </ul>
 
