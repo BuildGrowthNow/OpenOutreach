@@ -11,7 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Icons } from "@/lib/types/components";
-import { Send, ExternalLink, Phone, Smartphone } from "lucide-react";
+import { Send, ExternalLink, Phone, Smartphone, Mail } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -54,6 +54,9 @@ interface MessageRowProps {
 function ChannelIcon({ channel }: { channel?: string }) {
   if (channel === "whatsapp") {
     return <Smartphone className="h-3 w-3 text-green-500 shrink-0" />;
+  }
+  if (channel === "email") {
+    return <Mail className="h-3 w-3 text-amber-400 shrink-0" />;
   }
   return <Phone className="h-3 w-3 text-blue-400 shrink-0" />;
 }
@@ -237,6 +240,9 @@ function ThreadModal({
                         {msg.channel === "whatsapp" && (
                           <Smartphone className="h-3 w-3 text-green-400 shrink-0" />
                         )}
+                        {msg.channel === "email" && (
+                          <Mail className="h-3 w-3 text-amber-400 shrink-0" />
+                        )}
                       </p>
                     )}
                     <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
@@ -254,51 +260,60 @@ function ThreadModal({
         </div>
 
         {/* Compose */}
-        <div className="border-t border-zinc-800 px-6 py-4 sm:px-8">
-          <div className="flex gap-3 items-end">
-            <div className="flex-1">
-              <Textarea
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder={`Message ${message.recipientName || "lead"}…`}
-                className={`${zincTextareaClassName} min-h-[68px] resize-none`}
-                disabled={sending || !message.leadId}
-                maxLength={1000}
-              />
-              <div className="flex justify-between mt-1">
-                <span className="text-xs text-zinc-500">Enter to send · Shift+Enter for newline</span>
-                <span
-                  className={`text-xs ${
-                    draft.length >= 900
-                      ? "text-destructive"
-                      : draft.length >= 800
-                      ? "text-amber-500"
-                      : "text-zinc-500"
-                  }`}
-                >
-                  {draft.length}/1000
-                </span>
-              </div>
-            </div>
-            <Button
-              onClick={() => void handleSend()}
-              disabled={!draft.trim() || sending || !message.leadId}
-              className="mb-5"
-            >
-              {sending ? (
-                <Icons.RefreshCw className="h-4 w-4 animate-spin" />
-              ) : (
-                <Send className="h-4 w-4" />
-              )}
-            </Button>
-          </div>
-          {!message.leadId && (
-            <p className="text-xs text-zinc-500 mt-1">
-              No lead linked - replies unavailable
+        {message.channel === "email" ? (
+          <div className="border-t border-zinc-800 px-6 py-4 sm:px-8">
+            <p className="text-xs text-zinc-500 flex items-center gap-1.5">
+              <Mail className="h-3 w-3 text-amber-400" />
+              Email sequence — replies detected automatically via IMAP
             </p>
-          )}
-        </div>
+          </div>
+        ) : (
+          <div className="border-t border-zinc-800 px-6 py-4 sm:px-8">
+            <div className="flex gap-3 items-end">
+              <div className="flex-1">
+                <Textarea
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder={`Message ${message.recipientName || "lead"}…`}
+                  className={`${zincTextareaClassName} min-h-[68px] resize-none`}
+                  disabled={sending || !message.leadId}
+                  maxLength={1000}
+                />
+                <div className="flex justify-between mt-1">
+                  <span className="text-xs text-zinc-500">Enter to send · Shift+Enter for newline</span>
+                  <span
+                    className={`text-xs ${
+                      draft.length >= 900
+                        ? "text-destructive"
+                        : draft.length >= 800
+                        ? "text-amber-500"
+                        : "text-zinc-500"
+                    }`}
+                  >
+                    {draft.length}/1000
+                  </span>
+                </div>
+              </div>
+              <Button
+                onClick={() => void handleSend()}
+                disabled={!draft.trim() || sending || !message.leadId}
+                className="mb-5"
+              >
+                {sending ? (
+                  <Icons.RefreshCw className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
+            {!message.leadId && (
+              <p className="text-xs text-zinc-500 mt-1">
+                No lead linked - replies unavailable
+              </p>
+            )}
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -603,7 +618,7 @@ const MessagesPage = () => {
             </CardHeader>
             <CardContent>
               <div className="flex gap-2 mb-4 flex-wrap">
-                {(["all", "linkedin", "whatsapp"] as const).map((ch) => (
+                {(["all", "linkedin", "whatsapp", "email"] as const).map((ch) => (
                   <button
                     key={ch}
                     onClick={() => setChannelFilter(ch)}
@@ -615,7 +630,8 @@ const MessagesPage = () => {
                   >
                     {ch === "linkedin" && <Phone className="h-3 w-3" />}
                     {ch === "whatsapp" && <Smartphone className="h-3 w-3" />}
-                    {ch === "all" ? "All" : ch === "linkedin" ? "LinkedIn" : "WhatsApp"}
+                    {ch === "email" && <Mail className="h-3 w-3" />}
+                    {ch === "all" ? "All" : ch === "linkedin" ? "LinkedIn" : ch === "whatsapp" ? "WhatsApp" : "Email"}
                   </button>
                 ))}
               </div>

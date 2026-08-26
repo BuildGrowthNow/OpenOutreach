@@ -27,6 +27,25 @@ logger = logging.getLogger(__name__)
 MAX_SEQUENCE_STEPS = 3
 
 
+def _write_chat_message(deal, user_id: str, subject: str, body: str, sent_at: datetime) -> None:
+    """Persist the sent email as a ChatMessage so it appears in the Messages view."""
+    try:
+        from openoutreach.mongodb.models_extended import ChatMessage
+
+        content = f"Subject: {subject}\n\n{body}" if subject else body
+        msg = ChatMessage(
+            deal_id=str(deal._id),
+            content=content,
+            is_outgoing=True,
+            channel="email",
+            user_id=user_id,
+            creation_date=sent_at,
+        )
+        msg.save()
+    except Exception as exc:
+        logger.warning("email_follow_up: failed to write ChatMessage for deal %s: %s", deal._id, exc)
+
+
 def handle_email_follow_up(task, user_id: str, campaign) -> None:
     """Send one email for the next eligible deal in *campaign*.
 
@@ -166,6 +185,9 @@ def handle_email_follow_up(task, user_id: str, campaign) -> None:
             }
         },
     )
+
+    _write_chat_message(deal, user_id, subject, body, now)
+
     logger.info(
         "email_follow_up [%s]: sent step %d to %s via %s",
         campaign.pk, deal.email_sequence_step, lead.api_email, mailbox.from_address,

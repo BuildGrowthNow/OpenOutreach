@@ -9,10 +9,10 @@ import { Badge } from '@/components/ui/badge'
 import { Icons } from '@/lib/types/components'
 import { Message } from '@/lib/types/components'
 import { formatDistanceToNow } from 'date-fns'
-import { MessageCircle } from 'lucide-react'
+import { MessageCircle, Mail } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-type ChannelFilter = 'all' | 'linkedin' | 'whatsapp'
+type ChannelFilter = 'all' | 'linkedin' | 'whatsapp' | 'email'
 
 function LinkedinIcon({ className }: { className?: string }) {
   return (
@@ -82,6 +82,9 @@ function ChannelIcon({ channel }: { channel?: string }) {
   if (channel === 'whatsapp') {
     return <MessageCircle className="h-3 w-3 text-emerald-400 shrink-0" aria-label="WhatsApp" />
   }
+  if (channel === 'email') {
+    return <Mail className="h-3 w-3 text-amber-400 shrink-0" aria-label="Email" />
+  }
   return <LinkedinIcon className="h-3 w-3 text-blue-400 shrink-0" />
 }
 
@@ -106,11 +109,16 @@ export function MessageThread({
 
   const hasWA = messages.some(m => m.channel === 'whatsapp')
   const hasLI = messages.some(m => !m.channel || m.channel === 'linkedin')
-  const showChannelTabs = hasWA && hasLI
+  const hasEmail = messages.some(m => m.channel === 'email')
+  const showChannelTabs = [hasWA, hasLI, hasEmail].filter(Boolean).length > 1
 
   const filteredMessages = channelFilter === 'all'
     ? messages
-    : messages.filter(m => channelFilter === 'whatsapp' ? m.channel === 'whatsapp' : (!m.channel || m.channel === 'linkedin'))
+    : messages.filter(m => {
+        if (channelFilter === 'whatsapp') return m.channel === 'whatsapp'
+        if (channelFilter === 'email') return m.channel === 'email'
+        return !m.channel || m.channel === 'linkedin'
+      })
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -159,7 +167,7 @@ export function MessageThread({
           <div className="flex items-center gap-2">
             {showChannelTabs && (
               <div className="flex gap-1">
-                {(['all', 'linkedin', 'whatsapp'] as ChannelFilter[]).map((ch) => (
+                {(['all', 'linkedin', 'whatsapp', 'email'] as ChannelFilter[]).map((ch) => (
                   <button
                     key={ch}
                     onClick={() => setChannelFilter(ch)}
@@ -172,7 +180,8 @@ export function MessageThread({
                   >
                     {ch === 'linkedin' && <LinkedinIcon className="h-3 w-3" />}
                     {ch === 'whatsapp' && <MessageCircle className="h-3 w-3" />}
-                    {ch === 'all' ? 'All' : ch === 'linkedin' ? 'LinkedIn' : 'WhatsApp'}
+                    {ch === 'email' && <Mail className="h-3 w-3" />}
+                    {ch === 'all' ? 'All' : ch === 'linkedin' ? 'LinkedIn' : ch === 'whatsapp' ? 'WhatsApp' : 'Email'}
                   </button>
                 ))}
               </div>
