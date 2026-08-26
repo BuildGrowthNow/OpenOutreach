@@ -51,27 +51,34 @@ _WINDOW_H = 1020
 #    handled by Python instead of causing a failed navigation inside the webview
 _UPDATE_BANNER_JS = """
 (function() {
-    if (document.getElementById('__lg_update_banner__')) return;
-    var ver = '{version}';
-    var d = document.createElement('div');
-    d.id = '__lg_update_banner__';
-    d.style.cssText = 'position:fixed;bottom:20px;right:20px;z-index:999999;background:#18181b;border:1px solid #3f3f46;border-radius:8px;padding:12px 16px;display:flex;align-items:center;gap:12px;box-shadow:0 4px 24px rgba(0,0,0,0.5);font-family:system-ui,sans-serif;font-size:13px;color:#a1a1aa;';
-    var txt = document.createElement('span');
-    txt.textContent = 'v' + ver + ' available';
-    var btn = document.createElement('button');
-    btn.textContent = 'Restart to update';
-    btn.style.cssText = 'background:#22c55e;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:13px;cursor:pointer;font-weight:500;';
-    btn.onclick = function() {
-        btn.disabled = true;
-        btn.textContent = 'Restarting…';
-        if (window.pywebview && window.pywebview.api) window.pywebview.api.apply_update();
-    };
-    var x = document.createElement('button');
-    x.textContent = '×';
-    x.style.cssText = 'background:transparent;border:none;color:#71717a;cursor:pointer;font-size:18px;padding:0 4px;line-height:1;';
-    x.onclick = function() { d.remove(); };
-    d.appendChild(txt); d.appendChild(btn); d.appendChild(x);
-    document.body.appendChild(d);
+    function _inject() {
+        if (document.getElementById('__lg_update_banner__')) return;
+        var ver = '{version}';
+        var d = document.createElement('div');
+        d.id = '__lg_update_banner__';
+        d.style.cssText = 'position:fixed;bottom:20px;right:20px;z-index:999999;background:#18181b;border:1px solid #3f3f46;border-radius:8px;padding:12px 16px;display:flex;align-items:center;gap:12px;box-shadow:0 4px 24px rgba(0,0,0,0.5);font-family:system-ui,sans-serif;font-size:13px;color:#a1a1aa;';
+        var txt = document.createElement('span');
+        txt.textContent = 'v' + ver + ' available';
+        var btn = document.createElement('button');
+        btn.textContent = 'Restart to update';
+        btn.style.cssText = 'background:#22c55e;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:13px;cursor:pointer;font-weight:500;';
+        btn.onclick = function() {
+            btn.disabled = true;
+            btn.textContent = 'Restarting…';
+            if (window.pywebview && window.pywebview.api) window.pywebview.api.apply_update();
+        };
+        var x = document.createElement('button');
+        x.textContent = '×';
+        x.style.cssText = 'background:transparent;border:none;color:#71717a;cursor:pointer;font-size:18px;padding:0 4px;line-height:1;';
+        x.onclick = function() { d.remove(); };
+        d.appendChild(txt); d.appendChild(btn); d.appendChild(x);
+        document.body.appendChild(d);
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', _inject);
+    } else {
+        _inject();
+    }
 })();
 """
 
@@ -322,6 +329,7 @@ class TrayApp:
         self._window_thread: Optional[threading.Thread] = None
         self._token_valid: Optional[bool] = None  # None = not yet checked
         self._daemon_start_lock = threading.Lock()
+        self._update_check_lock = threading.Lock()
 
     # ------------------------------------------------------------------
     # Icon helpers
@@ -549,9 +557,13 @@ class TrayApp:
                 # apply_update_windows calls os._exit - never returns
                 apply_update_windows(exe_path, download_url=download_url)
                 return
-        # exe gone - fall back to browser download
-        if self._pending_update:
-            prompt_update(self._pending_update)
+        # exe gone - clear stale state then open browser for manual download
+        stale = self._pending_update
+        self._pending_update = None
+        clear_pending_update()
+        self._update_menu()
+        if stale:
+            prompt_update(stale)
 
     def _on_toggle_autostart(self):
         self.config.autostart = not self.config.autostart
@@ -817,15 +829,24 @@ class TrayApp:
 
         On Windows frozen exe: downloads silently, saves to disk, shows OS toast.
         On other platforms: just checks and stores info for the tray notification.
+        Concurrent calls are no-ops — only one download runs at a time.
         """
+        if not self._update_check_lock.acquire(blocking=False):
+            return
+
         async def _background():
             try:
                 info = await check_for_updates()
                 if not info:
                     return
                 ver = info["version"]
+                # Skip if already have this version downloaded
+                if self._pending_update and self._pending_update.get("version") == ver and load_pending_update():
+                    return
                 if can_auto_update():
                     logger.info("Update v%s available - downloading in background", ver)
+                    if self.icon:
+                        self.icon.notify(f"Downloading Lengrowth v{ver}…", "Will notify when ready to install.")
                     path = await download_update(info["download_url"], version=ver)
                     if path:
                         save_pending_update(info, path)
@@ -853,12 +874,13 @@ class TrayApp:
                 lp.run_until_complete(_background())
             finally:
                 lp.close()
+                self._update_check_lock.release()
 
         t = threading.Thread(target=run, daemon=True)
         t.start()
 
     def _start_periodic_update_checker(self):
-        """Start the background 6-hour update poll (called from tray setup)."""
+        """Start the background 30-minute update poll (called from tray setup)."""
         if self._update_check_thread and self._update_check_thread.is_alive():
             return
 
@@ -869,7 +891,10 @@ class TrayApp:
                     break
                 try:
                     info = await check_for_updates()
-                    if info and not self._pending_update:
+                    # Re-download if no pending update in memory OR disk file is missing
+                    # (covers the case where save_pending_update failed silently)
+                    have_pending = self._pending_update and load_pending_update()
+                    if info and not have_pending:
                         ver = info["version"]
                         if can_auto_update():
                             logger.info("Periodic check: update v%s available - downloading in background", ver)
