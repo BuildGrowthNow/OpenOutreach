@@ -100,7 +100,7 @@ Download the latest release from [GitHub Releases](https://github.com/Lengrowth/
 | **Voyager API scraping** | LinkedIn's internal API for accurate structured profile data |
 | **Smart rate limiting** | Time-of-day weighting, aggressiveness presets (very slow → very aggressive), and detectability-score adjustments |
 | **Active hours** | Per-user timezone, start/end hours, and active-days config so the daemon only runs when it looks natural |
-| **Email enrichment** | BetterContact integration - automatically finds work emails for qualified leads; billing is per-hit only |
+| **Email enrichment** | Free 6-layer waterfall (domain → website scrape → WHOIS/RDAP → pattern generation → SMTP probe → web search) - automatically finds work emails for qualified leads |
 | **Deal summaries** | mem0-style incremental JSON fact lists per lead - profile summary + chat summary consumed by the follow-up agent |
 | **Multi-tenant** | Multiple users, multiple LinkedIn profiles, per-user settings, full data isolation |
 | **VNC browser viewer** | Live noVNC iframe in Settings so you can solve LinkedIn CAPTCHAs or security checks from the web UI |
@@ -195,7 +195,7 @@ openoutreach/
 ├── crm/             # Lead and Deal models
 ├── chat/            # ChatMessage model
 ├── linkedin/        # Browser, discovery pipeline, ML qualifier, task handlers
-├── emails/          # Email enrichment (BetterContact)
+├── emails/          # Email enrichment (free waterfall finder)
 ├── desktop/         # System tray app, auto-updater, protocol handler, keychain auth
 └── mongodb/         # Models, connection, DAL
 
