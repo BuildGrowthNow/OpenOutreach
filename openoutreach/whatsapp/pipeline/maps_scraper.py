@@ -24,7 +24,8 @@ from openoutreach.whatsapp.pipeline.utils import (
 logger = logging.getLogger(__name__)
 
 _DEFAULT_BACKENDS = ["google_maps", "bing_maps"]
-_MAX_LISTINGS = 100
+_MAX_LISTINGS = 100        # feed cards to collect (cheap, no detail page)
+_MAX_PLACE_VISITS = 25     # Google Maps detail pages per run — caps CAPTCHA exposure
 _SCROLL_PAUSE_MS = 1200
 _MAX_SCROLL_ROUNDS = 20
 
@@ -120,7 +121,7 @@ def _scrape_google_maps(page, query: str, country_code: str) -> List[BusinessLis
         return "/sorry" in url or "recaptcha" in url.lower()
 
     listings: List[BusinessListing] = []
-    for place_url in place_urls:
+    for place_url in place_urls[:_MAX_PLACE_VISITS]:
         try:
             page.goto(place_url, wait_until="domcontentloaded", timeout=20000)
 
@@ -131,12 +132,13 @@ def _scrape_google_maps(page, query: str, country_code: str) -> List[BusinessLis
                 page.goto(place_url, wait_until="domcontentloaded", timeout=20000)
                 if _is_captcha_url(page.url):
                     logger.warning(
-                        "google_maps: CAPTCHA persists after retry — stopping detail visits"
+                        "google_maps: CAPTCHA persists after retry — returning %d listings collected so far",
+                        len(listings),
                     )
                     break
 
-            # Random human-like pause — reduces bot-detection fingerprint
-            page.wait_for_timeout(random.randint(900, 2800))
+            # Slower human-like pause — key CAPTCHA-avoidance lever
+            page.wait_for_timeout(random.randint(3000, 8000))
 
             # Name: multiple fallbacks as Google rotates class names
             name = ""
@@ -317,75 +319,187 @@ def _scrape_bing_maps(page, query: str, country_code: str) -> List[BusinessListi
     return listings
 
 
-_DDG_CARD_SELS = [
-    ".map-result",
-    "[class*='mapResult']",
-    "[data-testid='mapResult']",
-    "[class*='result--map']",
-    ".ddg-map-result",
-    "li[class*='map']",
-]
+# ---------------------------------------------------------------------------
+# Yellow Pages  (US / CA / AU — phones in search result cards, no detail pages)
+# ---------------------------------------------------------------------------
+
+_YP_BASES = {
+    "US": ("https://www.yellowpages.com", "search?search_terms={q}&geo_location_terms=United+States"),
+    "CA": ("https://www.yellowpages.ca", "search?what={q}&where=Canada"),
+    "AU": ("https://www.yellowpages.com.au", "search?name={q}"),
+    "GB": ("https://www.yell.com", "find/{q}/in/uk"),
+}
 
 
-def _scrape_duckduckgo_maps(page, query: str, country_code: str) -> List[BusinessListing]:
-    url = f"https://duckduckgo.com/?q={urllib.parse.quote(query)}&ia=maps&iaxm=maps"
-    page.goto(url, wait_until="domcontentloaded", timeout=30000)
-
-    container_sel = None
-    try:
-        page.wait_for_selector(", ".join(_DDG_CARD_SELS), timeout=15000)
-        container_sel = _find_first_present(page, _DDG_CARD_SELS)
-    except Exception:
-        pass
-
-    if not container_sel:
-        logger.warning("duckduckgo_maps: no map results found for query %r", query)
+def _scrape_yellow_pages(page, query: str, country_code: str) -> List[BusinessListing]:
+    entry = _YP_BASES.get(country_code.upper())
+    if not entry:
+        logger.debug("yellow_pages: no coverage for country=%s — skipping", country_code)
         return []
 
-    _scroll_until_stable(page, "body")
+    base, path_tmpl = entry
+    encoded = urllib.parse.quote(query)
+    url = f"{base}/{path_tmpl.replace('{q}', encoded)}"
+    page.goto(url, wait_until="domcontentloaded", timeout=30000)
+    try:
+        page.wait_for_selector(
+            ".result, .OrganicResult, .listing, .v-card, .business-card, li[class*='result']",
+            timeout=15000,
+        )
+    except Exception:
+        logger.warning("yellow_pages: no results for %r (%s)", query, country_code)
+        return []
 
-    cards = _try_selector_all(page, _DDG_CARD_SELS)
+    for _ in range(3):
+        page.evaluate("window.scrollBy(0, window.innerHeight * 2)")
+        page.wait_for_timeout(600)
 
+    cards = page.query_selector_all(
+        ".result, .OrganicResult, .listing, .v-card, .business-card, li[class*='result']"
+    )
     listings: List[BusinessListing] = []
+
     for card in cards[:_MAX_LISTINGS]:
         try:
             name_el = card.query_selector(
-                ".map-result__title, .result__title, [class*='title']"
+                ".business-name, .n, h2 a, h3 a, .listing-name, [class*='businessName']"
             )
             name = name_el.inner_text().strip() if name_el else ""
             if not name:
                 continue
 
-            phone_el = card.query_selector(
-                ".map-result__phone, [class*='phone'], a[href^='tel:']"
-            )
             raw_phone = ""
+            phone_el = card.query_selector(".phones, .phone, [class*='phone']")
             if phone_el:
-                raw_phone = (
-                    (phone_el.get_attribute("href") or "").replace("tel:", "")
-                    or phone_el.inner_text().strip()
-                )
-
+                raw_phone = phone_el.inner_text().strip()
+            if not raw_phone:
+                tel_el = card.query_selector("a[href^='tel:']")
+                if tel_el:
+                    raw_phone = (tel_el.get_attribute("href") or "").replace("tel:", "").strip()
             if not raw_phone:
                 continue
 
-            normalized = _normalize_phone(raw_phone.strip(), country_code)
+            normalized = _normalize_phone(raw_phone, country_code)
             if not normalized:
                 continue
 
-            addr_el = card.query_selector(".map-result__address, [class*='address']")
+            addr_el = card.query_selector(".adr, .address, [class*='address']")
             address = addr_el.inner_text().strip() if addr_el else None
+
+            website_el = card.query_selector(
+                "a.track-visit-website, a[class*='website'], a[data-analytics*='website']"
+            )
+            website = website_el.get_attribute("href") if website_el else None
+
+            cat_el = card.query_selector(".categories a, .category a, [class*='category'] a")
+            category = cat_el.inner_text().strip() if cat_el else None
 
             listings.append(
                 BusinessListing(
                     name=name,
-                    source="duckduckgo_maps",
+                    source="yellow_pages",
                     phone=normalized,
+                    website=website,
                     address=address,
+                    category=category,
                 )
             )
         except Exception as exc:
-            logger.debug("duckduckgo_maps: error parsing card: %s", exc)
+            logger.debug("yellow_pages: card parse error: %s", exc)
+
+    return listings
+
+
+# ---------------------------------------------------------------------------
+# Yelp  (US / CA / GB / AU / IE — detail pages for phones, JSON-LD first)
+# ---------------------------------------------------------------------------
+
+_YELP_MAX_BIZ_VISITS = 15
+
+
+def _scrape_yelp(page, query: str, country_code: str) -> List[BusinessListing]:
+    import json as _json
+
+    url = f"https://www.yelp.com/search?find_desc={urllib.parse.quote(query)}&find_loc={country_code}"
+    page.goto(url, wait_until="domcontentloaded", timeout=30000)
+    try:
+        page.wait_for_selector("a[href*='/biz/'], h3 a", timeout=15000)
+    except Exception:
+        logger.warning("yelp: no results for %r", query)
+        return []
+
+    biz_links: list = []
+    seen: set = set()
+    for el in page.query_selector_all("a[href*='/biz/']"):
+        href = el.get_attribute("href") or ""
+        if "/biz/" not in href:
+            continue
+        if href.startswith("/"):
+            href = "https://www.yelp.com" + href
+        href = href.split("?")[0]
+        name = el.inner_text().strip()
+        if href not in seen and "/biz/" in href:
+            seen.add(href)
+            biz_links.append((href, name))
+        if len(biz_links) >= _YELP_MAX_BIZ_VISITS * 2:
+            break
+
+    listings: List[BusinessListing] = []
+    for biz_url, fallback_name in biz_links[:_YELP_MAX_BIZ_VISITS]:
+        try:
+            page.goto(biz_url, wait_until="domcontentloaded", timeout=20000)
+            page.wait_for_timeout(random.randint(2000, 4000))
+
+            # JSON-LD is the most reliable signal — Yelp embeds it on every biz page
+            raw_phone = ""
+            for script_el in page.query_selector_all('script[type="application/ld+json"]'):
+                try:
+                    data = _json.loads(script_el.inner_text() or "{}")
+                    if isinstance(data, list):
+                        data = data[0] if data else {}
+                    raw_phone = data.get("telephone") or data.get("phone") or ""
+                    if raw_phone:
+                        break
+                except Exception:
+                    continue
+
+            if not raw_phone:
+                tel_el = page.query_selector("a[href^='tel:'], p[class*='phone']")
+                if tel_el:
+                    raw_phone = (
+                        (tel_el.get_attribute("href") or "").replace("tel:", "").strip()
+                        or tel_el.inner_text().strip()
+                    )
+
+            if not raw_phone:
+                continue
+
+            normalized = _normalize_phone(raw_phone, country_code)
+            if not normalized:
+                continue
+
+            name_el = page.query_selector("h1")
+            name = name_el.inner_text().strip() if name_el else fallback_name
+
+            addr_el = page.query_selector("address")
+            address = addr_el.inner_text().strip() if addr_el else None
+
+            cat_el = page.query_selector(
+                "span[class*='tag--'], a[class*='category'], [class*='categories'] a"
+            )
+            category = cat_el.inner_text().strip() if cat_el else None
+
+            listings.append(
+                BusinessListing(
+                    name=name or "Yelp Business",
+                    source="yelp",
+                    phone=normalized,
+                    address=address,
+                    category=category,
+                )
+            )
+        except Exception as exc:
+            logger.debug("yelp: error on %s: %s", biz_url, exc)
 
     return listings
 
@@ -393,7 +507,8 @@ def _scrape_duckduckgo_maps(page, query: str, country_code: str) -> List[Busines
 _BACKEND_FN = {
     "google_maps": _scrape_google_maps,
     "bing_maps": _scrape_bing_maps,
-    "duckduckgo_maps": _scrape_duckduckgo_maps,
+    "yellow_pages": _scrape_yellow_pages,
+    "yelp": _scrape_yelp,
 }
 
 

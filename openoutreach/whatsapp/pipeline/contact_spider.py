@@ -17,6 +17,7 @@ import requests
 
 from openoutreach.whatsapp.pipeline.utils import (
     normalize_phone as _normalize_phone,
+    phone_from_html_text as _phone_from_html_text,
     random_user_agent as _random_user_agent,
 )
 
@@ -42,16 +43,6 @@ _SITEMAP_CONTACT_RE = re.compile(
     re.IGNORECASE,
 )
 
-# Contextual regex: only match phone patterns that appear near phone-related words.
-# Prevents false positives from order numbers, zip codes, and other digit sequences.
-_PHONE_CONTEXT_RE = re.compile(
-    r"(?:phones?|tel(?:efon[eo]?)?|fone|call|whatsapp|cell|mobile"
-    r"|celular|m[oó]vil|handy|contact|hotline|helpline)"
-    r"[\s\S]{0,80}"
-    r"(\+?[\d][\d\s\-\.\(\)]{5,18}[\d])",
-    re.IGNORECASE,
-)
-
 
 def _make_session() -> requests.Session:
     """Create a requests session with a randomised user-agent."""
@@ -69,15 +60,9 @@ def _extract_from_html(html: str, country_code: str) -> Optional[str]:
         phone = _normalize_phone(raw.strip(), country_code)
         if phone:
             return phone
-    # Contextual body scan: only match numbers near phone-related keywords
+    # Contextual body scan: delegate to shared utils regex
     clean = re.sub(r"<[^>]+>", " ", html)
-    for m in _PHONE_CONTEXT_RE.finditer(clean):
-        candidate = m.group(1).strip()
-        if sum(c.isdigit() for c in candidate) >= 7:
-            phone = _normalize_phone(candidate, country_code)
-            if phone:
-                return phone
-    return None
+    return _phone_from_html_text(clean, country_code)
 
 
 def _fetch_sitemap_contact_urls(base: str, session: requests.Session) -> List[str]:
