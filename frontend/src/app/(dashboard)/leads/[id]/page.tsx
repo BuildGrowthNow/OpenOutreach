@@ -33,6 +33,7 @@ import {
   type Campaign
 } from '@/lib/api/dashboard'
 import { Lead, Message } from '@/lib/types/components'
+import { LeadSequenceTimeline } from '@/components/campaigns/lead-sequence-timeline'
 
 interface LeadDeal {
   dealId: string
@@ -608,6 +609,7 @@ const LeadDetailsPage = () => {
                             </div>
                             <Icons.ChevronRight className="h-4 w-4 text-muted-foreground" />
                           </div>
+                          <LeadSequenceTimeline campaignId={deal.campaignId} leadId={leadId} />
                         </div>
                       ))}
                     </div>

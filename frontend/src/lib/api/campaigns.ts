@@ -81,3 +81,27 @@ export async function getCampaignCoverage(campaignId: string) {
     `/campaigns/${campaignId}/coverage`,
   );
 }
+
+export interface SequenceTimelineEntry {
+  stepId: string;
+  type: string;
+  label: string;
+  channel: string | null;
+  action: string | null;
+  waitDays: number;
+  status: "completed" | "active" | "pending";
+  completedAt: string | null;
+}
+
+export interface SequenceTimeline {
+  sequenceActive: boolean;
+  sequenceDone: boolean;
+  currentPosition: string | null;
+  timeline: SequenceTimelineEntry[];
+}
+
+export async function getLeadSequenceTimeline(campaignId: string, leadId: string) {
+  return apiClient.get<SequenceTimeline>(
+    `/campaigns/${campaignId}/leads/${leadId}/sequence-timeline`,
+  );
+}

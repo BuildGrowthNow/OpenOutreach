@@ -198,6 +198,60 @@ function ConfigPanel({ step, onChange, onClose }: ConfigPanelProps) {
   );
 }
 
+type Template = { name: string; description: string; steps: SequenceStep[]; edges: SequenceEdge[] };
+
+function makeStep(id: string, type: SequenceStep["type"], action: SequenceStep["data"]["action"], channel: SequenceStep["data"]["channel"], label: string, waitDays = 0, requires: string[] = [], y = 0): SequenceStep {
+  return { id, type, data: { channel, action, label, wait_days: waitDays, condition: "always", requires }, position: { x: 200, y } };
+}
+function makeEdge(source: string, target: string): SequenceEdge {
+  return { id: `e_${source}_${target}`, source, target };
+}
+
+const TEMPLATES: Template[] = [
+  {
+    name: "LinkedIn Only",
+    description: "Connect → wait 3d → Follow-up → wait 7d → Follow-up → End",
+    steps: [
+      makeStep("t1", "action", "connect", "linkedin", "LinkedIn Connect", 0, [], 0),
+      makeStep("t2", "wait", null, null, "Wait 3 days", 3, [], 120),
+      makeStep("t3", "action", "follow_up", "linkedin", "LinkedIn Follow-up", 0, [], 240),
+      makeStep("t4", "wait", null, null, "Wait 7 days", 7, [], 360),
+      makeStep("t5", "action", "follow_up", "linkedin", "LinkedIn Follow-up #2", 0, [], 480),
+      makeStep("t6", "end", null, null, "End", 0, [], 600),
+    ],
+    edges: [makeEdge("t1","t2"), makeEdge("t2","t3"), makeEdge("t3","t4"), makeEdge("t4","t5"), makeEdge("t5","t6")],
+  },
+  {
+    name: "LinkedIn + Email",
+    description: "Connect → wait 3d → no reply → Email → wait 5d → Follow-up → End",
+    steps: [
+      makeStep("t1", "action", "connect", "linkedin", "LinkedIn Connect", 0, [], 0),
+      makeStep("t2", "wait", null, null, "Wait 3 days", 3, [], 120),
+      makeStep("t3", "condition", null, null, "No reply?", 0, [], 240),
+      makeStep("t4", "action", "send_email", "email", "Send Email", 0, ["api_email"], 360),
+      makeStep("t5", "wait", null, null, "Wait 5 days", 5, [], 480),
+      makeStep("t6", "action", "follow_up", "linkedin", "LinkedIn Follow-up", 0, [], 600),
+      makeStep("t7", "end", null, null, "End", 0, [], 720),
+    ],
+    edges: [makeEdge("t1","t2"), makeEdge("t2","t3"), makeEdge("t3","t4"), makeEdge("t4","t5"), makeEdge("t5","t6"), makeEdge("t6","t7")],
+  },
+  {
+    name: "Full Multichannel",
+    description: "Connect → Email → WhatsApp → Follow-up → End",
+    steps: [
+      makeStep("t1", "action", "connect", "linkedin", "LinkedIn Connect", 0, [], 0),
+      makeStep("t2", "wait", null, null, "Wait 3 days", 3, [], 120),
+      makeStep("t3", "action", "send_email", "email", "Send Email", 0, ["api_email"], 240),
+      makeStep("t4", "wait", null, null, "Wait 5 days", 5, [], 360),
+      makeStep("t5", "action", "send_whatsapp", "whatsapp", "Send WhatsApp", 0, ["phone"], 480),
+      makeStep("t6", "wait", null, null, "Wait 3 days", 3, [], 600),
+      makeStep("t7", "action", "follow_up", "linkedin", "LinkedIn Follow-up", 0, [], 720),
+      makeStep("t8", "end", null, null, "End", 0, [], 840),
+    ],
+    edges: [makeEdge("t1","t2"), makeEdge("t2","t3"), makeEdge("t3","t4"), makeEdge("t4","t5"), makeEdge("t5","t6"), makeEdge("t6","t7"), makeEdge("t7","t8")],
+  },
+];
+
 const ADD_STEP_OPTIONS = [
   { type: "action" as const, action: "connect" as const, channel: "linkedin" as const, label: "LinkedIn Connect", requires: [] as string[] },
   { type: "action" as const, action: "follow_up" as const, channel: "linkedin" as const, label: "LinkedIn Follow-up", requires: [] as string[] },
@@ -313,6 +367,12 @@ export function SequenceBuilder({ campaignId }: SequenceBuilderProps) {
     );
   }
 
+  const applyTemplate = (tpl: Template) => {
+    setSteps(tpl.steps);
+    setEdges(tpl.edges);
+    setShowCanvas(true);
+  };
+
   if (!showCanvas) {
     return (
       <Card className="border-zinc-800">
@@ -322,18 +382,32 @@ export function SequenceBuilder({ campaignId }: SequenceBuilderProps) {
             No sequence configured — campaign uses default single-channel behavior.
           </CardDescription>
         </CardHeader>
-        <CardContent className="py-8 text-center space-y-4">
-          <p className="text-sm text-zinc-400 max-w-md mx-auto">
-            Build a multi-step outreach sequence. Steps execute in order; deals
-            move through the sequence independently on their own timeline.
+        <CardContent className="py-6 space-y-6">
+          <p className="text-sm text-zinc-400">
+            Build a multi-step outreach sequence, or start from a template below.
           </p>
-          <Button
-            onClick={() => setShowCanvas(true)}
-            className="bg-blue-600 hover:bg-blue-700"
-          >
-            <Icons.Plus className="mr-2 h-4 w-4" />
-            Build Sequence
-          </Button>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {TEMPLATES.map((tpl) => (
+              <div
+                key={tpl.name}
+                className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4 cursor-pointer hover:border-blue-500/50 hover:bg-zinc-900 transition-all"
+                onClick={() => applyTemplate(tpl)}
+              >
+                <div className="font-medium text-sm text-zinc-200 mb-1">{tpl.name}</div>
+                <div className="text-xs text-zinc-500">{tpl.description}</div>
+              </div>
+            ))}
+          </div>
+          <div className="flex justify-center pt-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowCanvas(true)}
+              className="border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+            >
+              <Icons.Plus className="mr-2 h-4 w-4" />
+              Start from scratch
+            </Button>
+          </div>
         </CardContent>
       </Card>
     );

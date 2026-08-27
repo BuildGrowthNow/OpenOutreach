@@ -1368,6 +1368,93 @@ async def manual_qualify_lead(
     raise HTTPException(status_code=400, detail=f"Unknown decision: {decision!r}")
 
 
+@router.get("/{campaign_id}/leads/{lead_id}/sequence-timeline")
+async def get_lead_sequence_timeline(
+    campaign_id: str,
+    lead_id: str,
+    user_id: str = Depends(get_current_user),
+):
+    campaign = models.Campaign.get(campaign_id)
+    if not campaign or not campaign.has_access(user_id):
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    deals_col = get_mongodb_collection("deals")
+    messages_col = get_mongodb_collection("chat_messages")
+    if deals_col is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+
+    deal_doc = deals_col.find_one({"lead_id": lead_id, "campaign_id": campaign_id})
+    if not deal_doc:
+        raise HTTPException(status_code=404, detail="Deal not found")
+
+    steps = campaign.sequence_steps or []
+    edges = campaign.sequence_edges or []
+    current_position = deal_doc.get("sequence_position")
+    sequence_done = deal_doc.get("sequence_done", False)
+
+    # Build ordered step list following edge chain from root
+    edge_targets = {e["target"] for e in edges}
+    root_ids = [s["id"] for s in steps if s["id"] not in edge_targets]
+    root_id = root_ids[0] if root_ids else (steps[0]["id"] if steps else None)
+
+    ordered: List[str] = []
+    visited: set = set()
+    cursor = root_id
+    while cursor and cursor not in visited:
+        ordered.append(cursor)
+        visited.add(cursor)
+        outgoing = [e for e in edges if e["source"] == cursor]
+        cursor = outgoing[0]["target"] if outgoing else None
+
+    step_by_id = {s["id"]: s for s in steps}
+    completed_ids: set = set()
+    if current_position:
+        for sid in ordered:
+            if sid == current_position:
+                break
+            completed_ids.add(sid)
+    elif sequence_done:
+        completed_ids = set(s["id"] for s in steps)
+
+    timeline = []
+    for sid in ordered:
+        step = step_by_id.get(sid)
+        if not step:
+            continue
+        data = step.get("data") or {}
+        status = "completed" if sid in completed_ids else (
+            "active" if sid == current_position else "pending"
+        )
+        if sequence_done and not completed_ids:
+            status = "completed"
+        entry: Dict[str, Any] = {
+            "stepId": sid,
+            "type": step.get("type"),
+            "label": data.get("label") or step.get("type", ""),
+            "channel": data.get("channel"),
+            "action": data.get("action"),
+            "waitDays": data.get("wait_days", 0),
+            "status": status,
+            "completedAt": None,
+        }
+        # Attach last relevant message timestamp for completed action steps
+        if status == "completed" and step.get("type") == "action" and messages_col is not None:
+            last_msg = messages_col.find_one(
+                {"deal_id": str(deal_doc["_id"]), "is_outgoing": True},
+                sort=[("creation_date", -1)],
+            )
+            if last_msg:
+                entry["completedAt"] = last_msg.get("creation_date")
+        timeline.append(entry)
+
+    return {
+        "sequenceActive": campaign.sequence_active,
+        "sequenceDone": sequence_done,
+        "currentPosition": current_position,
+        "timeline": timeline,
+    }
+
+
 @router.get("/{campaign_id}/status")
 async def get_campaign_status(
     campaign_id: str,
@@ -2026,6 +2113,26 @@ async def patch_sequence(
     if body.edges is not None:
         update["sequence_edges"] = body.edges
     if body.active is not None:
+        if body.active:
+            # Validate before activating
+            steps_to_check = body.steps if body.steps is not None else campaign.sequence_steps
+            edges_to_check = body.edges if body.edges is not None else campaign.sequence_edges
+            action_steps = [s for s in steps_to_check if s.get("type") == "action"]
+            end_steps = [s for s in steps_to_check if s.get("type") == "end"]
+            connected = set()
+            for edge in edges_to_check:
+                connected.add(edge["source"])
+                connected.add(edge["target"])
+            disconnected = [s["id"] for s in steps_to_check if s["id"] not in connected and len(steps_to_check) > 1]
+            errors: List[str] = []
+            if not action_steps:
+                errors.append("Sequence must have at least one action step.")
+            if not end_steps:
+                errors.append("Sequence must have at least one end node.")
+            if disconnected:
+                errors.append(f"Disconnected nodes: {', '.join(disconnected)}.")
+            if errors:
+                raise HTTPException(status_code=400, detail={"errors": errors})
         update["sequence_active"] = body.active
 
     if update:
