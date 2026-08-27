@@ -1,6 +1,21 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+  arrayMove,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import {
   Card,
   CardContent,
@@ -37,7 +52,7 @@ import {
   SequenceEdge,
 } from "@/lib/api/campaigns";
 import { useToast } from "@/components/ui/use-toast";
-import { Network, Mail, Smartphone, Clock, GitBranch, Flag, ArrowDown } from "lucide-react";
+import { Network, Mail, Smartphone, Clock, GitBranch, Flag, ArrowDown, GripVertical } from "lucide-react";
 
 const STEP_LABELS: Record<string, string> = {
   connect: "LinkedIn Connect",
@@ -79,12 +94,14 @@ interface NodeCardProps {
   selected: boolean;
   onSelect: () => void;
   onDelete: () => void;
+  onUpdateWaitDays?: (days: number) => void;
 }
 
-function NodeCard({ step, coverage, selected, onSelect, onDelete }: NodeCardProps) {
+function NodeCard({ step, coverage, selected, onSelect, onDelete, onUpdateWaitDays }: NodeCardProps) {
   const key = stepKey(step);
   const colorClass = STEP_COLORS[key] || STEP_COLORS.wait;
   const label = step.data.label || STEP_LABELS[key] || key;
+  const isWait = step.type === "wait";
 
   return (
     <div
@@ -104,9 +121,6 @@ function NodeCard({ step, coverage, selected, onSelect, onDelete }: NodeCardProp
               needs {step.data.requires.join(", ")}
             </Badge>
           )}
-          {step.type === "wait" && step.data.wait_days > 0 && (
-            <span className="text-xs text-zinc-500">{step.data.wait_days}d</span>
-          )}
         </div>
         <button
           className="text-zinc-600 hover:text-red-400 transition-colors shrink-0"
@@ -116,6 +130,22 @@ function NodeCard({ step, coverage, selected, onSelect, onDelete }: NodeCardProp
           <Icons.Trash2 className="h-3.5 w-3.5" />
         </button>
       </div>
+      {isWait && (
+        <div className="mt-2 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+          <input
+            type="number"
+            min={1}
+            max={90}
+            value={step.data.wait_days > 0 ? step.data.wait_days : 1}
+            onChange={(e) => {
+              const v = Math.max(1, Math.min(90, Number(e.target.value)));
+              onUpdateWaitDays?.(v);
+            }}
+            className="w-14 bg-zinc-900 border border-zinc-700 rounded text-xs text-zinc-200 px-1.5 py-0.5 focus:outline-none focus:border-zinc-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+          />
+          <span className="text-xs text-zinc-500">days</span>
+        </div>
+      )}
       {coverage !== null && (
         <div className="mt-2">
           <Progress value={coverage} className="h-1 bg-zinc-800 [&>div]:bg-current" />
@@ -134,16 +164,17 @@ interface ConfigPanelProps {
 
 function ConfigPanel({ step, onChange, onClose }: ConfigPanelProps) {
   const [label, setLabel] = useState(step.data.label);
-  const [waitDays, setWaitDays] = useState(step.data.wait_days);
   const [condition, setCondition] = useState(step.data.condition);
 
   const save = () => {
     onChange({
       ...step,
-      data: { ...step.data, label, wait_days: waitDays, condition },
+      data: { ...step.data, label, condition },
     });
     onClose();
   };
+
+  const isAction = step.type === "action";
 
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
@@ -160,17 +191,13 @@ function ConfigPanel({ step, onChange, onClose }: ConfigPanelProps) {
               className="bg-zinc-900 border-zinc-700 text-zinc-100"
             />
           </div>
-          {step.type === "wait" && (
-            <div className="space-y-1.5">
-              <Label className="text-zinc-300">Wait days</Label>
-              <Input
-                type="number"
-                min={1}
-                value={waitDays}
-                onChange={(e) => setWaitDays(Number(e.target.value))}
-                className="bg-zinc-900 border-zinc-700 text-zinc-100"
-              />
-            </div>
+          {isAction && step.data.channel && (
+            <p className="text-xs text-zinc-500 leading-relaxed">
+              {step.data.action === "connect" && "Sends a LinkedIn connection request to the lead."}
+              {step.data.action === "follow_up" && "Sends a LinkedIn message using the campaign follow-up agent."}
+              {step.data.action === "send_email" && "Sends an email to the lead's work email address (api_email)."}
+              {step.data.action === "send_whatsapp" && "Sends a WhatsApp message to the lead's phone number."}
+            </p>
           )}
           {step.type === "condition" && (
             <div className="space-y-1.5">
@@ -180,12 +207,15 @@ function ConfigPanel({ step, onChange, onClose }: ConfigPanelProps) {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="bg-zinc-900 border-zinc-700">
-                  <SelectItem value="always">Always</SelectItem>
-                  <SelectItem value="no_reply">No reply</SelectItem>
-                  <SelectItem value="no_open">No open</SelectItem>
-                  <SelectItem value="replied">Replied</SelectItem>
+                  <SelectItem value="always">Always proceed</SelectItem>
+                  <SelectItem value="no_reply">Only if no reply received</SelectItem>
+                  <SelectItem value="no_open">Only if email not opened</SelectItem>
+                  <SelectItem value="replied">Only if reply received</SelectItem>
                 </SelectContent>
               </Select>
+              <p className="text-xs text-zinc-500">
+                Checked against messages received since the previous step ran.
+              </p>
             </div>
           )}
         </div>
@@ -262,6 +292,35 @@ const ADD_STEP_OPTIONS = [
   { type: "end" as const, action: null, channel: null, label: "End", requires: [] as string[] },
 ];
 
+interface SortableItemProps extends NodeCardProps {
+  id: string;
+}
+
+function SortableItem({ id, ...props }: SortableItemProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+  return (
+    <div ref={setNodeRef} style={style} className="flex items-center gap-2 w-full max-w-sm">
+      <button
+        {...attributes}
+        {...listeners}
+        className="text-zinc-700 hover:text-zinc-400 cursor-grab active:cursor-grabbing shrink-0 touch-none"
+        aria-label="Drag to reorder"
+        tabIndex={-1}
+      >
+        <GripVertical className="h-4 w-4" />
+      </button>
+      <div className="flex-1 min-w-0">
+        <NodeCard {...props} />
+      </div>
+    </div>
+  );
+}
+
 interface SequenceBuilderProps {
   campaignId: string;
 }
@@ -277,7 +336,10 @@ export function SequenceBuilder({ campaignId }: SequenceBuilderProps) {
   const [toggling, setToggling] = useState(false);
   const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
   const [showAddMenu, setShowAddMenu] = useState(false);
+  const [insertAfterIndex, setInsertAfterIndex] = useState<number | null>(null);
   const [showCanvas, setShowCanvas] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
+  const initialLoad = useRef(true);
 
   const fetchSequence = useCallback(async () => {
     setLoading(true);
@@ -290,9 +352,27 @@ export function SequenceBuilder({ campaignId }: SequenceBuilderProps) {
       if ((res.data.steps ?? []).length > 0) setShowCanvas(true);
     }
     setLoading(false);
+    setIsDirty(false);
+    initialLoad.current = false;
   }, [campaignId]);
 
   useEffect(() => { fetchSequence(); }, [fetchSequence]);
+
+  useEffect(() => {
+    if (initialLoad.current) return;
+    setIsDirty(true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [steps, edges]);
+
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (!isDirty) return;
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [isDirty]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -301,6 +381,7 @@ export function SequenceBuilder({ campaignId }: SequenceBuilderProps) {
     if (res.error) {
       toast({ title: "Save failed", description: res.error, variant: "destructive" });
     } else {
+      setIsDirty(false);
       toast({ title: "Sequence saved" });
     }
   };
@@ -322,7 +403,7 @@ export function SequenceBuilder({ campaignId }: SequenceBuilderProps) {
     toast({ title: nextActive ? "Sequence activated" : "Sequence deactivated" });
   };
 
-  const addStep = (opt: typeof ADD_STEP_OPTIONS[number]) => {
+  const addStep = (opt: typeof ADD_STEP_OPTIONS[number], afterIndex?: number) => {
     const id = `step_${Date.now()}`;
     const newStep: SequenceStep = {
       id,
@@ -335,17 +416,38 @@ export function SequenceBuilder({ campaignId }: SequenceBuilderProps) {
         condition: "always",
         requires: [...opt.requires],
       },
-      position: { x: 200, y: steps.length * 120 + 100 },
+      position: { x: 200, y: 0 },
     };
+
+    const insertIdx = afterIndex ?? steps.length - 1;
+
     setSteps((prev) => {
-      if (prev.length > 0) {
-        const prevId = prev[prev.length - 1].id;
-        const edgeId = `edge_${prevId}_${id}`;
-        setEdges((e) => [...e, { id: edgeId, source: prevId, target: id }]);
-      }
-      return [...prev, newStep];
+      const next = [...prev];
+      next.splice(insertIdx + 1, 0, newStep);
+      return next;
     });
+
+    setEdges((prev) => {
+      const prevStepId = steps[insertIdx]?.id;
+      const nextStepId = afterIndex !== undefined ? steps[insertIdx + 1]?.id : undefined;
+      let next = [...prev];
+      if (prevStepId && nextStepId) {
+        // Remove old direct edge, bridge through new step
+        next = next.filter((e) => !(e.source === prevStepId && e.target === nextStepId));
+        next.push({ id: `edge_${prevStepId}_${id}`, source: prevStepId, target: id });
+        next.push({ id: `edge_${id}_${nextStepId}`, source: id, target: nextStepId });
+      } else if (prevStepId) {
+        next.push({ id: `edge_${prevStepId}_${id}`, source: prevStepId, target: id });
+      }
+      return next;
+    });
+
     setShowAddMenu(false);
+    setInsertAfterIndex(null);
+    // Auto-open config dialog for condition steps (need to pick their condition immediately)
+    if (opt.type === "condition") {
+      setSelectedStepId(id);
+    }
   };
 
   const deleteStep = (stepId: string) => {
@@ -359,7 +461,40 @@ export function SequenceBuilder({ campaignId }: SequenceBuilderProps) {
     setSelectedStepId(null);
   };
 
+  const updateStepWaitDays = useCallback((stepId: string, days: number) => {
+    setSteps((prev) =>
+      prev.map((s) => s.id === stepId ? { ...s, data: { ...s.data, wait_days: days } } : s)
+    );
+  }, []);
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    setSteps((prev) => {
+      const oldIdx = prev.findIndex((s) => s.id === active.id);
+      const newIdx = prev.findIndex((s) => s.id === over.id);
+      const reordered = arrayMove(prev, oldIdx, newIdx);
+      // Rebuild linear edges from new order
+      const newEdges: SequenceEdge[] = reordered.slice(0, -1).map((s, i) => ({
+        id: `edge_${s.id}_${reordered[i + 1].id}`,
+        source: s.id,
+        target: reordered[i + 1].id,
+      }));
+      setEdges(newEdges);
+      return reordered;
+    });
+  }, []);
+
   const selectedStep = steps.find((s) => s.id === selectedStepId);
+
+  const sequenceSummary = (() => {
+    const actionCount = steps.filter((s) => s.type === "action").length;
+    const totalDays = steps.filter((s) => s.type === "wait").reduce((acc, s) => acc + (s.data.wait_days || 0), 0);
+    if (actionCount === 0) return null;
+    return `${actionCount} action${actionCount !== 1 ? "s" : ""} · ~${totalDays} day${totalDays !== 1 ? "s" : ""}`;
+  })();
 
   if (loading) {
     return (
@@ -437,6 +572,14 @@ export function SequenceBuilder({ campaignId }: SequenceBuilderProps) {
               >
                 {active ? "Active" : "Inactive"}
               </Badge>
+              {sequenceSummary && (
+                <span className="text-xs text-zinc-500">{sequenceSummary}</span>
+              )}
+              {isDirty && (
+                <Badge variant="outline" className="text-xs border-amber-500/30 bg-amber-500/10 text-amber-400">
+                  Unsaved changes
+                </Badge>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <div className="relative">
@@ -503,7 +646,7 @@ export function SequenceBuilder({ campaignId }: SequenceBuilderProps) {
         </CardContent>
       </Card>
 
-      {/* Steps Canvas — vertical flow */}
+      {/* Steps Canvas — vertical flow with drag-to-reorder */}
       <Card className="border-zinc-800">
         <CardContent className="py-6">
           {steps.length === 0 ? (
@@ -511,24 +654,78 @@ export function SequenceBuilder({ campaignId }: SequenceBuilderProps) {
               No steps yet. Click &ldquo;Add Step&rdquo; to begin.
             </div>
           ) : (
-            <div className="flex flex-col items-center gap-0">
-              {steps.map((step, idx) => (
-                <div key={step.id} className="flex flex-col items-center w-full max-w-sm">
-                  <NodeCard
-                    step={step}
-                    coverage={coverage[step.id] ?? null}
-                    selected={selectedStepId === step.id}
-                    onSelect={() => setSelectedStepId(step.id === selectedStepId ? null : step.id)}
-                    onDelete={() => deleteStep(step.id)}
-                  />
-                  {idx < steps.length - 1 && (
-                    <div className="flex flex-col items-center my-1 text-zinc-700">
-                      <ArrowDown className="h-5 w-5" />
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <SortableContext items={steps.map((s) => s.id)} strategy={verticalListSortingStrategy}>
+                <div className="flex flex-col items-center gap-0">
+                  {steps.map((step, idx) => (
+                    <div key={step.id} className="flex flex-col items-center w-full max-w-sm">
+                      <SortableItem
+                        id={step.id}
+                        step={step}
+                        coverage={coverage[step.id] ?? null}
+                        selected={selectedStepId === step.id}
+                        onSelect={() => {
+                          if (step.type === "wait") return;
+                          setSelectedStepId(step.id === selectedStepId ? null : step.id);
+                        }}
+                        onDelete={() => deleteStep(step.id)}
+                        onUpdateWaitDays={(days) => updateStepWaitDays(step.id, days)}
+                      />
+                      {idx < steps.length - 1 && (() => {
+                        const outEdge = edges.find((e) => e.source === step.id);
+                        const edgeCond = (outEdge?.data as { condition?: string } | undefined)?.condition;
+                        const edgeLabel = edgeCond && edgeCond !== "always"
+                          ? ({ no_reply: "no reply", replied: "replied", no_open: "not opened" } as Record<string, string>)[edgeCond]
+                          : null;
+                        return (
+                          <div className="flex flex-col items-center w-full max-w-sm relative group/connector">
+                            <div className="w-px h-3 bg-zinc-800" />
+                            {edgeLabel && (
+                              <span className="text-[10px] text-zinc-600 px-1.5 py-0.5 rounded border border-zinc-800 bg-zinc-950 mb-0.5 select-none">
+                                {edgeLabel}
+                              </span>
+                            )}
+                            <div className="relative flex items-center justify-center">
+                              <button
+                                className="opacity-0 group-hover/connector:opacity-100 transition-opacity w-5 h-5 rounded-full border border-zinc-700 bg-zinc-950 hover:bg-zinc-800 hover:border-zinc-500 flex items-center justify-center z-10"
+                                title="Insert step here"
+                                onClick={() => setInsertAfterIndex(insertAfterIndex === idx ? null : idx)}
+                              >
+                                <Icons.Plus className="h-3 w-3 text-zinc-400" />
+                              </button>
+                              {insertAfterIndex === idx && (
+                                <div className="absolute top-full mt-1 z-50 rounded-md border border-zinc-800 bg-zinc-950 shadow-xl py-1 min-w-[190px]">
+                                  <div className="px-3 py-1 text-xs text-zinc-600 font-medium uppercase tracking-wider">Insert step</div>
+                                  {ADD_STEP_OPTIONS.map((opt) => (
+                                    <button
+                                      key={`${opt.type}-${opt.action}`}
+                                      className="w-full text-left px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"
+                                      onClick={() => addStep(opt, idx)}
+                                    >
+                                      {opt.label}
+                                    </button>
+                                  ))}
+                                  <div className="border-t border-zinc-800 mt-1 pt-1">
+                                    <button
+                                      className="w-full text-left px-3 py-1 text-xs text-zinc-600 hover:bg-zinc-800"
+                                      onClick={() => setInsertAfterIndex(null)}
+                                    >
+                                      Cancel
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                            <div className="w-px h-3 bg-zinc-800" />
+                            <ArrowDown className="h-4 w-4 text-zinc-700" />
+                          </div>
+                        );
+                      })()}
                     </div>
-                  )}
+                  ))}
                 </div>
-              ))}
-            </div>
+              </SortableContext>
+            </DndContext>
           )}
         </CardContent>
       </Card>
