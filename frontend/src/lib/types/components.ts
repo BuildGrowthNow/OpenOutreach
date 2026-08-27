@@ -88,6 +88,7 @@ import {
   CreditCard,
   Loader,
   Upload,
+  RotateCcw,
 } from "lucide-react";
 
 export type Icon = React.FC<React.SVGProps<SVGSVGElement>>;
@@ -180,6 +181,7 @@ export const Icons = {
   CreditCard,
   Loader,
   Upload,
+  RotateCcw,
 };
 
 // Campaign status variants
