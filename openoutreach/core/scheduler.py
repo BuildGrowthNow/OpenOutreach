@@ -888,27 +888,36 @@ def reconcile(session) -> None:
     for campaign in campaigns:
         _auto_qualify_wa_leads(campaign)
         _route_deal_channels(campaign)
-        plan_connect_window(session, campaign, connect_cap=connect_cap)
-        plan_follow_up_window(session, campaign, follow_up_cap=follow_up_cap)
-        plan_check_pending_window(session, campaign)
-        _retry_no_email_deals(campaign)
-        _maybe_trigger_lead_scrape(campaign, profile.user_id)
-        plan_email_follow_up_window(campaign, user_id=profile.user_id, linkedin_profile_id=profile.pk)
 
-        # WhatsApp channel planners - only when campaign has WA configured
-        wa_profile_id = getattr(campaign, "whatsapp_profile_id", None)
-        channel_seq = getattr(campaign, "channel_sequence", None) or []
-        if not wa_profile_id and "whatsapp" in channel_seq:
-            logger.debug(
-                "Campaign %s has 'whatsapp' in channel_sequence but no whatsapp_profile_id - "
-                "skipping WA planners (connect a WhatsApp profile in campaign settings)",
-                campaign.pk,
-            )
-        if wa_profile_id and "whatsapp" in channel_seq:
-            _user_id = profile.user_id
-            plan_whatsapp_window(campaign, wa_profile_id, _user_id)
-            plan_whatsapp_follow_up_window(campaign, wa_profile_id, _user_id)
-            plan_whatsapp_sync_window(campaign, wa_profile_id, _user_id)
+        if getattr(campaign, "sequence_active", False):
+            from openoutreach.core.sequence_executor import resolve_sequence_tasks
+            created = resolve_sequence_tasks(campaign, profile.user_id)
+            if created:
+                logger.info("Sequence executor created %d tasks for campaign %s", created, campaign.pk)
+        else:
+            plan_connect_window(session, campaign, connect_cap=connect_cap)
+            plan_follow_up_window(session, campaign, follow_up_cap=follow_up_cap)
+            plan_check_pending_window(session, campaign)
+            _retry_no_email_deals(campaign)
+            plan_email_follow_up_window(campaign, user_id=profile.user_id, linkedin_profile_id=profile.pk)
+
+        _maybe_trigger_lead_scrape(campaign, profile.user_id)
+
+        # WhatsApp channel planners - only when campaign has WA configured and no sequence
+        if not getattr(campaign, "sequence_active", False):
+            wa_profile_id = getattr(campaign, "whatsapp_profile_id", None)
+            channel_seq = getattr(campaign, "channel_sequence", None) or []
+            if not wa_profile_id and "whatsapp" in channel_seq:
+                logger.debug(
+                    "Campaign %s has 'whatsapp' in channel_sequence but no whatsapp_profile_id - "
+                    "skipping WA planners (connect a WhatsApp profile in campaign settings)",
+                    campaign.pk,
+                )
+            if wa_profile_id and "whatsapp" in channel_seq:
+                _user_id = profile.user_id
+                plan_whatsapp_window(campaign, wa_profile_id, _user_id)
+                plan_whatsapp_follow_up_window(campaign, wa_profile_id, _user_id)
+                plan_whatsapp_sync_window(campaign, wa_profile_id, _user_id)
 
     pending_count = Task.objects.pending().count()
     logger.info("Task queue reconciled: %d pending tasks", pending_count)

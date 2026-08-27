@@ -417,6 +417,15 @@ async def reconcile_tasks(
     for doc in campaigns_data:
         campaign = Campaign.from_dict(doc)
 
+        # Sequence-active campaigns: let the sequence executor own task creation
+        if getattr(campaign, "sequence_active", False):
+            from openoutreach.core.sequence_executor import resolve_sequence_tasks
+            created = resolve_sequence_tasks(campaign, user_id)
+            tasks_created += created
+            if created:
+                logger.info("Reconcile: sequence executor created %d tasks for campaign %s", created, campaign._id)
+            continue
+
         class _FakeSession:
             def __init__(self, uid, prof):
                 self.user_id = uid

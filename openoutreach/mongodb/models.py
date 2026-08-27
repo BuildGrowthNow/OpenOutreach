@@ -1132,6 +1132,9 @@ class Deal:
         email_first_message_id: Optional[str] = None,
         email_sequence_step: int = 0,
         email_clicked_at: Optional[datetime] = None,
+        sequence_position: Optional[str] = None,
+        sequence_last_step_at: Optional[datetime] = None,
+        sequence_done: bool = False,
     ):
         self._id = _id or str(uuid4())
         self.lead_id = lead_id
@@ -1157,6 +1160,9 @@ class Deal:
         self.email_first_message_id = email_first_message_id
         self.email_sequence_step = email_sequence_step
         self.email_clicked_at = email_clicked_at
+        self.sequence_position: Optional[str] = sequence_position
+        self.sequence_last_step_at: Optional[datetime] = sequence_last_step_at
+        self.sequence_done: bool = sequence_done
         self._lead: Optional["Lead"] = None
         self.campaign: Optional["Campaign"] = None
 
@@ -1225,6 +1231,11 @@ class Deal:
             data["email_sequence_step"] = self.email_sequence_step
         if self.email_clicked_at is not None:
             data["email_clicked_at"] = self.email_clicked_at
+        if self.sequence_position is not None:
+            data["sequence_position"] = self.sequence_position
+        if self.sequence_last_step_at is not None:
+            data["sequence_last_step_at"] = self.sequence_last_step_at
+        data["sequence_done"] = self.sequence_done
         return data
 
     @classmethod
@@ -1255,6 +1266,9 @@ class Deal:
             email_first_message_id=data.get("email_first_message_id"),
             email_sequence_step=data.get("email_sequence_step", 0),
             email_clicked_at=data.get("email_clicked_at"),
+            sequence_position=data.get("sequence_position"),
+            sequence_last_step_at=data.get("sequence_last_step_at"),
+            sequence_done=data.get("sequence_done", False),
         )
 
     def save(self, update_fields: Optional[List[str]] = None) -> str:
