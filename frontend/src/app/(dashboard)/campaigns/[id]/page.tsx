@@ -56,6 +56,7 @@ import { CampaignActivity } from "@/components/campaigns/campaign-activity";
 import { DailyProgress } from "@/components/campaigns/daily-progress";
 import { CsvImportModal } from "@/components/campaigns/csv-import-modal";
 import { CoverageBars } from "@/components/campaigns/coverage-bars";
+import { SequenceBuilder } from "@/components/campaigns/sequence-builder";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
@@ -577,9 +578,10 @@ export default function CampaignDetailsPage() {
 
       {/* Tabs Navigation */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid grid-cols-4 w-full md:w-auto">
+        <TabsList className="grid grid-cols-5 w-full md:w-auto">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="leads">Leads</TabsTrigger>
+          <TabsTrigger value="sequence">Sequence</TabsTrigger>
           <TabsTrigger value="analytics">Analytics</TabsTrigger>
           <TabsTrigger value="settings">Settings</TabsTrigger>
         </TabsList>
@@ -734,19 +736,6 @@ export default function CampaignDetailsPage() {
                     <Icons.MessageSquare className="mr-2 h-4 w-4" />
                     View Campaign Messages
                   </Button>
-                  {/* State Machine temporarily hidden - incomplete feature */}
-                  {process.env.NEXT_PUBLIC_ENABLE_STATE_MACHINE === 'true' && (
-                    <Button
-                      variant="outline"
-                      className="w-full justify-start"
-                      onClick={() =>
-                        router.push(`/campaigns/${campaignId}/state-machine`)
-                      }
-                    >
-                      <Icons.ListTodo className="mr-2 h-4 w-4" />
-                      State Machine
-                    </Button>
-                  )}
                   {campaign.status !== "completed" && (
                     <>
                       <Button
@@ -902,6 +891,11 @@ export default function CampaignDetailsPage() {
           </Card>
         </TabsContent>
 
+
+        {/* Sequence Tab */}
+        <TabsContent value="sequence" className="space-y-6">
+          <SequenceBuilder campaignId={campaignId} />
+        </TabsContent>
 
         {/* Analytics Tab */}
         <TabsContent value="analytics" className="space-y-6">

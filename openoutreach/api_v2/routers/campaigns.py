@@ -1959,6 +1959,81 @@ async def get_campaign_coverage(
     }
 
 
+class SequencePatch(BaseModel):
+    steps: Optional[List[Dict[str, Any]]] = None
+    edges: Optional[List[Dict[str, Any]]] = None
+    active: Optional[bool] = None
+
+
+@router.get("/{campaign_id}/sequence")
+async def get_sequence(
+    campaign_id: str,
+    user_id: str = Depends(get_current_user),
+):
+    """Return the campaign's sequence steps, edges, active flag, and per-step coverage."""
+    campaign = models.Campaign.get(campaign_id)
+    if not campaign or not campaign.has_access(user_id):
+        raise HTTPException(status_code=404, detail="Campaign not found")
+
+    leads_col = get_mongodb_collection("leads")
+    deals_col = get_mongodb_collection("deals")
+
+    coverage_per_step: Dict[str, int] = {}
+    if leads_col is not None and deals_col is not None:
+        deal_docs = list(deals_col.find({"campaign_id": campaign_id}, {"lead_id": 1}))
+        lead_ids = [d["lead_id"] for d in deal_docs]
+        total = len(lead_ids)
+        if total > 0:
+            for step in campaign.sequence_steps:
+                requires: List[str] = step.get("data", {}).get("requires", [])
+                if not requires:
+                    coverage_per_step[step["id"]] = 100
+                    continue
+                query: Dict[str, Any] = {"_id": {"$in": lead_ids}}
+                if "api_email" in requires:
+                    query["api_email"] = {"$exists": True, "$nin": [None, ""]}
+                if "phone" in requires:
+                    query["phone"] = {"$exists": True, "$nin": [None, ""]}
+                count = leads_col.count_documents(query)
+                coverage_per_step[step["id"]] = round(count * 100 / total)
+
+    return {
+        "steps": campaign.sequence_steps,
+        "edges": campaign.sequence_edges,
+        "active": campaign.sequence_active,
+        "coverage_per_step": coverage_per_step,
+    }
+
+
+@router.patch("/{campaign_id}/sequence")
+async def patch_sequence(
+    campaign_id: str,
+    body: SequencePatch,
+    user_id: str = Depends(get_current_user),
+):
+    """Save sequence steps/edges and/or toggle the sequence active flag."""
+    campaign = models.Campaign.get(campaign_id)
+    if not campaign or not campaign.has_access(user_id):
+        raise HTTPException(status_code=404, detail="Campaign not found")
+
+    col = get_mongodb_collection("campaigns")
+    if col is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+
+    update: Dict[str, Any] = {}
+    if body.steps is not None:
+        update["sequence_steps"] = body.steps
+    if body.edges is not None:
+        update["sequence_edges"] = body.edges
+    if body.active is not None:
+        update["sequence_active"] = body.active
+
+    if update:
+        col.update_one({"_id": campaign_id}, {"$set": update})
+
+    return {"ok": True}
+
+
 @router.post("/{campaign_id}/import-csv")
 async def import_leads_csv(
     campaign_id: str,

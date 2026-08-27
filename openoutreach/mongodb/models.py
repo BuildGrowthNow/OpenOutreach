@@ -763,6 +763,9 @@ class Campaign:
         maps_location: Optional[str] = None,
         maps_min_rating: Optional[float] = None,
         maps_session_state: Optional[Dict[str, Any]] = None,
+        sequence_steps: Optional[List[Dict[str, Any]]] = None,
+        sequence_edges: Optional[List[Dict[str, Any]]] = None,
+        sequence_active: bool = False,
     ):
         self._id = _id or str(uuid4())
         self.name = name
@@ -796,6 +799,9 @@ class Campaign:
         self.maps_location = maps_location
         self.maps_min_rating = maps_min_rating
         self.maps_session_state = maps_session_state
+        self.sequence_steps: List[Dict[str, Any]] = sequence_steps if sequence_steps is not None else []
+        self.sequence_edges: List[Dict[str, Any]] = sequence_edges if sequence_edges is not None else []
+        self.sequence_active: bool = sequence_active
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert model instance to dictionary for MongoDB storage."""
@@ -842,6 +848,9 @@ class Campaign:
             data["maps_min_rating"] = self.maps_min_rating
         if self.maps_session_state is not None:
             data["maps_session_state"] = self.maps_session_state
+        data["sequence_steps"] = self.sequence_steps
+        data["sequence_edges"] = self.sequence_edges
+        data["sequence_active"] = self.sequence_active
         return data
 
     @classmethod
@@ -880,6 +889,9 @@ class Campaign:
             maps_location=data.get("maps_location"),
             maps_min_rating=data.get("maps_min_rating"),
             maps_session_state=data.get("maps_session_state"),
+            sequence_steps=data.get("sequence_steps"),
+            sequence_edges=data.get("sequence_edges"),
+            sequence_active=data.get("sequence_active", False),
         )
 
     def has_access(self, user_id: str) -> bool:
