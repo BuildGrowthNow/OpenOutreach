@@ -54,6 +54,8 @@ import { CampaignStats as CampaignStatsComponent } from "@/components/campaigns/
 import { CampaignList as CampaignListComponent } from "@/components/campaigns/campaign-list";
 import { CampaignActivity } from "@/components/campaigns/campaign-activity";
 import { DailyProgress } from "@/components/campaigns/daily-progress";
+import { CsvImportModal } from "@/components/campaigns/csv-import-modal";
+import { CoverageBars } from "@/components/campaigns/coverage-bars";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
@@ -110,6 +112,7 @@ export default function CampaignDetailsPage() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showCompletionModal, setShowCompletionModal] = useState(false);
   const [settingsSaving, setSettingsSaving] = useState(false);
+  const [showCsvImport, setShowCsvImport] = useState(false);
 
   const [dailyUsage, setDailyUsage] = useState<{
     dailyConnectionsSent: number;
@@ -845,6 +848,12 @@ export default function CampaignDetailsPage() {
 
         {/* Leads Tab */}
         <TabsContent value="leads" className="space-y-6">
+          <CsvImportModal
+            open={showCsvImport}
+            onOpenChange={setShowCsvImport}
+            campaignId={campaignId}
+            onImported={fetchLeadsSilent}
+          />
           <Card>
             <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-2 sm:space-y-0">
               <div>
@@ -853,8 +862,19 @@ export default function CampaignDetailsPage() {
                   All leads associated with this campaign
                 </CardDescription>
               </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowCsvImport(true)}
+              >
+                <Icons.Upload className="mr-2 h-4 w-4" />
+                Import CSV
+              </Button>
             </CardHeader>
             <CardContent>
+              {leads.length > 0 && (
+                <CoverageBars campaignId={campaignId} totalLeads={leads.length} />
+              )}
               {leads.length > 0 ? (
                 <CampaignListComponent leads={leads} campaignId={campaignId} onLeadsUpdated={fetchLeadsSilent} />
               ) : campaign?.status === "active" ? (

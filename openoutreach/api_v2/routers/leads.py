@@ -202,6 +202,14 @@ async def list_leads(
                 "qualificationReason": deal.get("qualification_reason"),
                 "phone": lead_data.get("phone"),
                 "activeChannel": deal.get("active_channel", "linkedin"),
+                "channelAvailability": {
+                    "linkedin": bool(lead_data.get("linkedin_url") or lead_data.get("url")),
+                    "email": bool(lead_data.get("api_email") or (
+                        isinstance(lead_data.get("contact_info"), dict)
+                        and lead_data["contact_info"].get("email")
+                    )),
+                    "whatsapp": bool(lead_data.get("phone") and lead_data.get("phone_on_whatsapp") is not False),
+                },
                 "contactInfo": {
                     "email": best_email,
                     "apiEmail": api_email,
@@ -510,6 +518,14 @@ async def get_lead(
         "disqualified": lead_data.get("disqualified", False),
         "phone": lead_data.get("phone"),
         "activeChannel": accessible_deal.get("active_channel", "linkedin"),
+        "channelAvailability": {
+            "linkedin": bool(lead_data.get("linkedin_url") or lead_data.get("url")),
+            "email": bool(lead_data.get("api_email") or (
+                isinstance(lead_data.get("contact_info"), dict)
+                and lead_data["contact_info"].get("email")
+            )),
+            "whatsapp": bool(lead_data.get("phone") and lead_data.get("phone_on_whatsapp") is not False),
+        },
         "notes": lead_data.get("notes"),
         "contactInfo": {
             "email": best_email,

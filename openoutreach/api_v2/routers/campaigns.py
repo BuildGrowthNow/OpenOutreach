@@ -1742,6 +1742,223 @@ class CsvImportResponse(BaseModel):
     errors: List[str]
 
 
+class LeadsImportResponse(BaseModel):
+    imported: int
+    updated: int
+    skipped: int
+    errors: List[str]
+
+
+@router.post("/{campaign_id}/leads/import", response_model=LeadsImportResponse)
+async def import_leads_with_column_map(
+    campaign_id: str,
+    file: bytes = __import__("fastapi").File(...),
+    column_map: str = __import__("fastapi").Form("{}"),
+    user_id: str = Depends(get_current_user),
+):
+    """Import leads from CSV with explicit column mapping.
+
+    Accepts multipart/form-data with:
+    - file: CSV file
+    - column_map: JSON string mapping field names to CSV column headers
+
+    Supported keys: linkedin_url, first_name, last_name, company, title,
+    email, phone, company_domain.
+    """
+    import csv as csv_mod
+    import io
+    import json
+    from datetime import datetime, timezone as _tz
+    from uuid import uuid4
+
+    campaign = models.Campaign.get(campaign_id)
+    if not campaign or not campaign.has_access(user_id):
+        raise HTTPException(status_code=404, detail="Campaign not found")
+
+    try:
+        col_map: Dict[str, str] = json.loads(column_map) if column_map else {}
+    except (json.JSONDecodeError, ValueError):
+        raise HTTPException(status_code=400, detail="column_map must be valid JSON")
+
+    try:
+        text = file.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        text = file.decode("latin-1")
+
+    reader = csv_mod.DictReader(io.StringIO(text))
+    if reader.fieldnames is None:
+        raise HTTPException(status_code=400, detail="CSV has no header row")
+
+    rows = list(reader)
+    if len(rows) > 5000:
+        raise HTTPException(status_code=400, detail="CSV exceeds 5000 row limit")
+
+    leads_col = get_mongodb_collection("leads")
+    deals_col = get_mongodb_collection("deals")
+    if leads_col is None or deals_col is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+
+    now = datetime.now(_tz.utc)
+    imported = 0
+    updated = 0
+    skipped = 0
+    errors: List[str] = []
+
+    def _get(row: Dict[str, Any], field: str) -> str:
+        col = col_map.get(field)
+        if not col:
+            return ""
+        return (row.get(col) or "").strip()
+
+    for i, row in enumerate(rows, start=2):
+        linkedin_url = _get(row, "linkedin_url")
+        email = _get(row, "email")
+
+        if not linkedin_url and not email:
+            errors.append(f"row {i}: no linkedin_url or email")
+            skipped += 1
+            continue
+
+        first_name = _get(row, "first_name")
+        last_name = _get(row, "last_name")
+        full_name = f"{first_name} {last_name}".strip() or None
+        company = _get(row, "company") or None
+        phone = _get(row, "phone") or None
+
+        public_identifier = ""
+        if linkedin_url:
+            parts = [p for p in linkedin_url.rstrip("/").split("/") if p]
+            public_identifier = parts[-1] if parts else ""
+
+        filter_q: dict = {}
+        if linkedin_url and public_identifier:
+            filter_q = {"public_identifier": public_identifier}
+        elif email:
+            filter_q = {"api_email": email}
+        else:
+            filter_q = {"linkedin_url": linkedin_url}
+
+        try:
+            existing_doc = leads_col.find_one(filter_q, {"_id": 1, "phone": 1, "api_email": 1})
+            if existing_doc:
+                actual_lead_id = str(existing_doc["_id"])
+                set_fields: dict = {}
+                if email and not existing_doc.get("api_email"):
+                    set_fields["api_email"] = email
+                    set_fields["email_source"] = "csv_import"
+                if phone and not existing_doc.get("phone"):
+                    set_fields["phone"] = phone
+                    set_fields["phone_source"] = "csv_import"
+                if set_fields:
+                    leads_col.update_one({"_id": actual_lead_id}, {"$set": set_fields})
+                    updated += 1
+                else:
+                    skipped += 1
+            else:
+                new_id = str(uuid4())
+                insert_doc: dict = {
+                    "_id": new_id,
+                    "linkedin_url": linkedin_url or None,
+                    "public_identifier": public_identifier,
+                    "full_name": full_name,
+                    "user_id": user_id,
+                    "disqualified": False,
+                    "creation_date": now,
+                }
+                if email:
+                    insert_doc["api_email"] = email
+                    insert_doc["email_source"] = "csv_import"
+                if phone:
+                    insert_doc["phone"] = phone
+                    insert_doc["phone_source"] = "csv_import"
+                if company:
+                    insert_doc["company"] = company
+                leads_col.insert_one(insert_doc)
+                actual_lead_id = new_id
+                imported += 1
+
+            existing_deal = deals_col.find_one(
+                {"lead_id": actual_lead_id, "campaign_id": campaign_id},
+                {"_id": 1},
+            )
+            if not existing_deal:
+                from openoutreach.crm.models.deal import DealState as DS
+                deals_col.insert_one({
+                    "_id": str(uuid4()),
+                    "lead_id": actual_lead_id,
+                    "campaign_id": campaign_id,
+                    "state": DS.DISCOVERED,
+                    "user_id": user_id,
+                    "creation_date": now,
+                })
+        except Exception as exc:
+            errors.append(f"row {i}: {exc}")
+
+    return LeadsImportResponse(
+        imported=imported,
+        updated=updated,
+        skipped=skipped,
+        errors=errors,
+    )
+
+
+@router.get("/{campaign_id}/coverage")
+async def get_campaign_coverage(
+    campaign_id: str,
+    user_id: str = Depends(get_current_user),
+):
+    """Return per-channel lead coverage counts for a campaign."""
+    campaign = models.Campaign.get(campaign_id)
+    if not campaign or not campaign.has_access(user_id):
+        raise HTTPException(status_code=404, detail="Campaign not found")
+
+    leads_col = get_mongodb_collection("leads")
+    deals_col = get_mongodb_collection("deals")
+    if leads_col is None or deals_col is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+
+    deal_docs = list(deals_col.find({"campaign_id": campaign_id}, {"lead_id": 1}))
+    lead_ids = [d["lead_id"] for d in deal_docs]
+    total = len(lead_ids)
+    if total == 0:
+        return {"total": 0, "channel_coverage": {
+            "linkedin": {"count": 0, "pct": 0},
+            "email": {"count": 0, "pct": 0},
+            "whatsapp": {"count": 0, "pct": 0},
+        }}
+
+    lead_docs = list(leads_col.find(
+        {"_id": {"$in": lead_ids}},
+        {"linkedin_url": 1, "url": 1, "api_email": 1, "contact_info": 1, "phone": 1, "phone_on_whatsapp": 1},
+    ))
+
+    li = 0
+    em = 0
+    wa = 0
+    for ld in lead_docs:
+        if ld.get("linkedin_url") or ld.get("url"):
+            li += 1
+        has_email = bool(ld.get("api_email") or (
+            isinstance(ld.get("contact_info"), dict) and ld["contact_info"].get("email")
+        ))
+        if has_email:
+            em += 1
+        if ld.get("phone") and ld.get("phone_on_whatsapp") is not False:
+            wa += 1
+
+    def pct(n: int) -> int:
+        return round(n * 100 / total) if total else 0
+
+    return {
+        "total": total,
+        "channel_coverage": {
+            "linkedin": {"count": li, "pct": pct(li)},
+            "email": {"count": em, "pct": pct(em)},
+            "whatsapp": {"count": wa, "pct": pct(wa)},
+        },
+    }
+
+
 @router.post("/{campaign_id}/import-csv")
 async def import_leads_csv(
     campaign_id: str,

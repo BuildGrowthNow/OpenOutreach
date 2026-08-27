@@ -30,7 +30,7 @@ import {
 } from '@/components/ui/tooltip'
 import { Icons } from '@/lib/types/components'
 import { Lead, DealState } from '@/lib/types/components'
-import { Smartphone, Mail, MailOpen, Clock, Reply, MailX } from 'lucide-react'
+import { Smartphone, Mail, MailOpen, Clock, Reply, MailX, Network } from 'lucide-react'
 import { stateColorMapping } from '@/components/dashboard/campaign-card'
 import { cn } from '@/lib/utils'
 
@@ -57,7 +57,11 @@ export function CampaignList({ leads, campaignId, className, onLeadsUpdated }: C
       lead.company?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       lead.title?.toLowerCase().includes(searchQuery.toLowerCase())
 
-    const matchesStatus = statusFilter === 'all' || lead.state === statusFilter
+    const matchesStatus =
+      statusFilter === 'all' ||
+      lead.state === statusFilter ||
+      (statusFilter === 'missing_email' && !lead.channelAvailability?.email) ||
+      (statusFilter === 'missing_phone' && !lead.channelAvailability?.whatsapp)
 
     return matchesSearch && matchesStatus
   })
@@ -223,6 +227,8 @@ export function CampaignList({ leads, campaignId, className, onLeadsUpdated }: C
               <SelectItem value="EMAIL_OPENED">Email Opened</SelectItem>
               <SelectItem value="EMAIL_REPLIED">Email Replied</SelectItem>
               <SelectItem value="EMAIL_BOUNCED">Email Bounced</SelectItem>
+              <SelectItem value="missing_email">Missing Email</SelectItem>
+              <SelectItem value="missing_phone">Missing Phone</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -384,7 +390,42 @@ export function CampaignList({ leads, campaignId, className, onLeadsUpdated }: C
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1.5">
-                      {lead.phone && (
+                      {lead.channelAvailability && (
+                        <>
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className={lead.channelAvailability.linkedin ? 'text-blue-500' : 'text-zinc-600 dark:text-zinc-700'}>
+                                  <Network className="h-3.5 w-3.5" />
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent><p>{lead.channelAvailability.linkedin ? 'LinkedIn available' : 'No LinkedIn URL'}</p></TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className={lead.channelAvailability.email ? 'text-amber-500' : 'text-zinc-600 dark:text-zinc-700'}>
+                                  <Mail className="h-3.5 w-3.5" />
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent><p>{lead.channelAvailability.email ? 'Email available' : 'No email'}</p></TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className={lead.channelAvailability.whatsapp ? 'text-emerald-500' : 'text-zinc-600 dark:text-zinc-700'}>
+                                  <Smartphone className="h-3.5 w-3.5" />
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent><p>{lead.channelAvailability.whatsapp ? 'WhatsApp available' : 'No phone'}</p></TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                          <span className="text-zinc-700 dark:text-zinc-600 mx-0.5">|</span>
+                        </>
+                      )}
+                      {!lead.channelAvailability && lead.phone && (
                         <TooltipProvider>
                           <Tooltip>
                             <TooltipTrigger asChild>

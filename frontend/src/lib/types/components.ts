@@ -87,6 +87,7 @@ import {
   InboxIcon,
   CreditCard,
   Loader,
+  Upload,
 } from "lucide-react";
 
 export type Icon = React.FC<React.SVGProps<SVGSVGElement>>;
@@ -178,6 +179,7 @@ export const Icons = {
   InboxIcon,
   CreditCard,
   Loader,
+  Upload,
 };
 
 // Campaign status variants
@@ -268,6 +270,11 @@ export interface Lead {
   };
   phone?: string;
   activeChannel?: string;
+  channelAvailability?: {
+    linkedin: boolean;
+    email: boolean;
+    whatsapp: boolean;
+  };
   messagesCount?: number;
   lastMessageAt?: string;
   notes?: string;

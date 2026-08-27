@@ -11,6 +11,13 @@ from typing import Any, Dict, Optional
 from pydantic import BaseModel, Field
 
 
+class ChannelAvailability(BaseModel):
+    """Per-lead channel availability flags."""
+    linkedin: bool
+    email: bool
+    whatsapp: bool
+
+
 class LeadCreate(BaseModel):
     """
     Schema for creating a new lead.
@@ -127,6 +134,14 @@ class LeadResponse(BaseModel):
     user_id: Optional[str] = Field(
         None,
         description="ID of the User who created/owns this lead"
+    )
+    phone: str = Field(
+        "",
+        description="Phone number of the lead"
+    )
+    channel_availability: Optional[ChannelAvailability] = Field(
+        None,
+        description="Per-channel availability flags based on lead data"
     )
     creation_date: datetime = Field(
         ...,
