@@ -120,13 +120,48 @@ export function CsvImportModal({
     const reader = new FileReader();
     reader.onload = (e) => {
       const text = e.target?.result as string;
+
+      // RFC 4180 CSV parser — handles quoted fields containing commas.
+      function parseCSVLine(line: string): string[] {
+        const fields: string[] = [];
+        let i = 0;
+        while (i < line.length) {
+          if (line[i] === '"') {
+            let field = "";
+            i++; // skip opening quote
+            while (i < line.length) {
+              if (line[i] === '"' && line[i + 1] === '"') {
+                field += '"';
+                i += 2;
+              } else if (line[i] === '"') {
+                i++; // skip closing quote
+                break;
+              } else {
+                field += line[i++];
+              }
+            }
+            fields.push(field.trim());
+            if (line[i] === ",") i++;
+          } else {
+            const end = line.indexOf(",", i);
+            if (end === -1) {
+              fields.push(line.slice(i).trim());
+              break;
+            }
+            fields.push(line.slice(i, end).trim());
+            i = end + 1;
+          }
+        }
+        return fields;
+      }
+
       const lines = text.split(/\r?\n/).filter(Boolean);
       if (lines.length === 0) return;
-      const cols = lines[0].split(",").map((c) => c.replace(/^"|"$/g, "").trim());
+      const cols = parseCSVLine(lines[0]);
       setHeaders(cols);
       const rows: Record<string, string>[] = [];
       for (let i = 1; i < Math.min(lines.length, 6); i++) {
-        const vals = lines[i].split(",").map((v) => v.replace(/^"|"$/g, "").trim());
+        const vals = parseCSVLine(lines[i]);
         const row: Record<string, string> = {};
         cols.forEach((col, idx) => { row[col] = vals[idx] ?? ""; });
         rows.push(row);

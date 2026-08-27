@@ -87,7 +87,15 @@ def _check_condition(deal: Deal, step: dict) -> bool:
     if condition == "replied":
         return has_reply
     if condition == "no_open":
-        return not has_reply
+        # Email open tracking: proceed if email was NOT opened.
+        # Deal.email_opened_at is stamped by the tracking worker when the pixel fires.
+        # Fall back to treating as not-opened if field absent (pre-tracking deals).
+        from openoutreach.mongodb.connection import get_mongodb_collection as _gcol
+        deals_col_inner = _gcol("deals")
+        if deals_col_inner is None:
+            return True
+        deal_doc = deals_col_inner.find_one({"_id": deal._id}, projection={"email_opened_at": 1})
+        return not (deal_doc or {}).get("email_opened_at")
     return True
 
 
@@ -129,11 +137,8 @@ def _task_type_for_step(step: dict) -> Optional[str]:
     return None
 
 
-def _create_task(campaign: Campaign, deal: Deal, task_type: str, user_id: str) -> None:
+def _create_task(campaign: Campaign, deal: Deal, task_type: str, step_id: str, user_id: str, tasks_col) -> None:
     """Insert a Task row for this sequence step."""
-    tasks_col = get_mongodb_collection("tasks")
-    if tasks_col is None:
-        return
     now = datetime.now(timezone.utc)
     if task_type in (Task.TaskType.CONNECT, Task.TaskType.FOLLOW_UP):
         channel = "linkedin"
@@ -146,7 +151,7 @@ def _create_task(campaign: Campaign, deal: Deal, task_type: str, user_id: str) -
         "task_type": task_type,
         "status": Task.STATUS_PENDING,
         "scheduled_at": now,
-        "payload": {"campaign_id": campaign._id, "deal_id": deal._id},
+        "payload": {"campaign_id": campaign._id, "deal_id": deal._id, "step_id": step_id},
         "user_id": user_id,
         "linkedin_profile_id": campaign.linkedin_profile_id,
         "channel": channel,
@@ -160,17 +165,20 @@ def resolve_sequence_tasks(campaign: Campaign, user_id: str) -> int:
     - Initialize deals with sequence_position=None at the first step
     - Stop-on-reply: mark sequence_done=True
     - Check wait/condition/requires for current step
-    - If ready: create Task row, advance sequence_position
-    - If wait not elapsed: leave deal for next reconcile cycle
-    - If requires not met: advance past step silently
-    Returns count of tasks created.
+    - First visit to an action step: create Task row, leave position at current step
+    - Pending/running task exists: wait for execution before advancing
+    - Completed/failed task exists: advance sequence_position to next step
+    - Wait not elapsed: leave deal for next reconcile cycle
+    - Requires not met: advance past step silently
+    Returns count of new tasks created.
     """
     if not campaign.sequence_active or not campaign.sequence_steps:
         return 0
 
     deals_col = get_mongodb_collection("deals")
     leads_col = get_mongodb_collection("leads")
-    if deals_col is None or leads_col is None:
+    tasks_col = get_mongodb_collection("tasks")
+    if deals_col is None or leads_col is None or tasks_col is None:
         return 0
 
     active_states = [
@@ -255,17 +263,39 @@ def resolve_sequence_tasks(campaign: Campaign, user_id: str) -> int:
             )
             continue
 
-        _create_task(campaign, deal, task_type, user_id)
-        next_id = _get_next_step_id(campaign, current_step_id, True)
-        now = datetime.now(timezone.utc)
-        deals_col.update_one(
-            {"_id": deal._id},
-            {"$set": {
-                "sequence_position": next_id,
-                "sequence_last_step_at": now,
-                "sequence_done": next_id is None,
-            }},
+        # Check if a task for this deal+step already exists.
+        # Pending/running: execution in progress — wait.
+        # Completed/failed: task ran — advance position now.
+        # No task: first visit — create task, stay at this step until it runs.
+        existing = tasks_col.find_one(
+            {"payload.deal_id": deal._id, "payload.step_id": current_step_id},
+            projection={"status": 1},
         )
+        if existing is not None:
+            status = existing.get("status")
+            if status in (Task.STATUS_PENDING, Task.STATUS_RUNNING):
+                continue  # wait for execution
+            # Completed or failed: advance to next step
+            if status == Task.STATUS_FAILED:
+                logger.warning(
+                    "sequence: task for deal %s step %s failed — advancing past step",
+                    deal._id, current_step_id,
+                )
+            next_id = _get_next_step_id(campaign, current_step_id, True)
+            now = datetime.now(timezone.utc)
+            deals_col.update_one(
+                {"_id": deal._id},
+                {"$set": {
+                    "sequence_position": next_id,
+                    "sequence_last_step_at": now,
+                    "sequence_done": next_id is None,
+                }},
+            )
+            continue
+
+        # No task exists yet for this step — create it. Position stays at current step
+        # until the task completes (checked above on the next reconcile cycle).
+        _create_task(campaign, deal, task_type, current_step_id, user_id, tasks_col)
         tasks_created += 1
 
     return tasks_created

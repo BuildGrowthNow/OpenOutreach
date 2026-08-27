@@ -306,15 +306,20 @@ export function SequenceBuilder({ campaignId }: SequenceBuilderProps) {
   };
 
   const handleToggleActive = async () => {
-    if (active) {
-      const confirmed = window.confirm("Deactivate sequence? Campaign will revert to default single-channel behavior.");
+    if (!active) {
+      const confirmed = window.confirm("Activate sequence? The daemon will start executing steps for all active deals in this campaign.");
       if (!confirmed) return;
     }
     setToggling(true);
-    await setSequenceActive(campaignId, !active);
-    setActive((v) => !v);
+    const nextActive = !active;
+    const res = await setSequenceActive(campaignId, nextActive);
     setToggling(false);
-    toast({ title: active ? "Sequence deactivated" : "Sequence activated" });
+    if (res.error) {
+      toast({ title: "Failed to update sequence", description: res.error, variant: "destructive" });
+      return;
+    }
+    setActive(nextActive);
+    toast({ title: nextActive ? "Sequence activated" : "Sequence deactivated" });
   };
 
   const addStep = (opt: typeof ADD_STEP_OPTIONS[number]) => {

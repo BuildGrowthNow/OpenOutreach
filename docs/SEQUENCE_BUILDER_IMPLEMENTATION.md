@@ -113,12 +113,13 @@ Response:
   - LinkedIn `Li` — always green for linked leads
   - Email envelope — green if `email: true`, grey outline if `false`
   - WhatsApp icon — green if `whatsapp: true`, grey if `false`
+- [x] `channel_availability` now returned by campaign leads endpoint (`GET /campaigns/{id}/leads`) — local `LeadResponse` was missing it (fixed).
 - [x] Leads list filter bar: add "Missing email" and "Missing phone" filter chips.
 - [ ] Lead detail page: show availability badges prominently in header.
 
 ### 2.4 Campaign overview coverage widget (frontend)
 
-- [x] Campaign overview / header section: horizontal coverage bars using `channel_coverage`:
+- [x] Campaign overview / right column: horizontal coverage bars using `channel_coverage` (moved from Leads tab to Overview tab — correct placement):
   ```
   LinkedIn  ████████████████ 100%
   Email     ████████░░░░░░░░  52%

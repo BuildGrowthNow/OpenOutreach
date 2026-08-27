@@ -1027,6 +1027,12 @@ async def resume_campaign(
         )
 
 
+class LeadChannelAvailability(BaseModel):
+    linkedin: bool
+    email: bool
+    whatsapp: bool
+
+
 class LeadResponse(BaseModel):
     id: str
     public_identifier: str
@@ -1038,6 +1044,7 @@ class LeadResponse(BaseModel):
     disqualified: bool = False
     created_at: Optional[str] = None
     phone: Optional[str] = None
+    channel_availability: Optional[LeadChannelAvailability] = None
 
 
 class DealResponse(BaseModel):
@@ -1213,6 +1220,12 @@ async def get_campaign_leads(
             deal_id_str = str(deal["_id"])
             nudge = deal_nudge_info.get(deal_id_str, {})
             last_outgoing_at = deal.get("last_outgoing_at")
+            has_email = bool(
+                lead_data.get("api_email")
+                or (lead_data.get("contact_info") or {}).get("email")
+            )
+            has_phone = bool(lead_data.get("phone"))
+            has_whatsapp = has_phone and lead_data.get("phone_on_whatsapp") is not False
             results.append({
                 "lead": LeadResponse(
                     id=str(lead_data["_id"]),
@@ -1225,6 +1238,11 @@ async def get_campaign_leads(
                     disqualified=lead_data.get("disqualified", False),
                     created_at=lead_data.get("creation_date").isoformat() if lead_data.get("creation_date") else None,
                     phone=lead_data.get("phone"),
+                    channel_availability=LeadChannelAvailability(
+                        linkedin=bool(lead_data.get("linkedin_url") or lead_data.get("url")),
+                        email=has_email,
+                        whatsapp=has_whatsapp,
+                    ),
                 ),
                 "deal": DealResponse(
                     id=deal_id_str,
@@ -1379,7 +1397,6 @@ async def get_lead_sequence_timeline(
         raise HTTPException(status_code=403, detail="Access denied")
 
     deals_col = get_mongodb_collection("deals")
-    messages_col = get_mongodb_collection("chat_messages")
     if deals_col is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
 
@@ -1392,21 +1409,71 @@ async def get_lead_sequence_timeline(
     current_position = deal_doc.get("sequence_position")
     sequence_done = deal_doc.get("sequence_done", False)
 
-    # Build ordered step list following edge chain from root
+    step_by_id = {s["id"]: s for s in steps}
     edge_targets = {e["target"] for e in edges}
     root_ids = [s["id"] for s in steps if s["id"] not in edge_targets]
     root_id = root_ids[0] if root_ids else (steps[0]["id"] if steps else None)
 
-    ordered: List[str] = []
-    visited: set = set()
-    cursor = root_id
-    while cursor and cursor not in visited:
-        ordered.append(cursor)
-        visited.add(cursor)
-        outgoing = [e for e in edges if e["source"] == cursor]
-        cursor = outgoing[0]["target"] if outgoing else None
+    # Find the path actually taken by this deal: BFS from root to current_position.
+    # This correctly handles branching — only the branch the deal traversed is shown.
+    def _find_path(from_id: str, to_id: Optional[str]) -> List[str]:
+        """BFS returning shortest path from from_id to to_id (inclusive)."""
+        if to_id is None:
+            # Deal not started yet — walk main path (first edge at each branch)
+            path: List[str] = []
+            cursor_inner = from_id
+            visited_inner: set = set()
+            while cursor_inner and cursor_inner not in visited_inner:
+                path.append(cursor_inner)
+                visited_inner.add(cursor_inner)
+                out = [e for e in edges if e["source"] == cursor_inner]
+                cursor_inner = out[0]["target"] if out else None
+            return path
+        if from_id == to_id:
+            return [from_id]
+        from collections import deque
+        queue: deque = deque([[from_id]])
+        visited_bfs: set = set()
+        while queue:
+            path = queue.popleft()
+            node = path[-1]
+            if node in visited_bfs:
+                continue
+            visited_bfs.add(node)
+            for e in edges:
+                if e["source"] == node:
+                    new_path = path + [e["target"]]
+                    if e["target"] == to_id:
+                        return new_path
+                    queue.append(new_path)
+        # target not reachable from root via any path — fall back to linear walk
+        fallback: List[str] = []
+        c = from_id
+        vis: set = set()
+        while c and c not in vis:
+            fallback.append(c)
+            vis.add(c)
+            if c == to_id:
+                break
+            out = [e for e in edges if e["source"] == c]
+            c = out[0]["target"] if out else None
+        return fallback
 
-    step_by_id = {s["id"]: s for s in steps}
+    ordered = _find_path(root_id, current_position) if root_id else []
+
+    # Append pending steps after current_position (follow first edge from here)
+    if current_position and not sequence_done:
+        cursor = current_position
+        visited_tail: set = set(ordered)
+        out = [e for e in edges if e["source"] == cursor]
+        nxt = out[0]["target"] if out else None
+        while nxt and nxt not in visited_tail:
+            ordered.append(nxt)
+            visited_tail.add(nxt)
+            cursor = nxt
+            out = [e for e in edges if e["source"] == cursor]
+            nxt = out[0]["target"] if out else None
+
     completed_ids: set = set()
     if current_position:
         for sid in ordered:
@@ -1414,7 +1481,23 @@ async def get_lead_sequence_timeline(
                 break
             completed_ids.add(sid)
     elif sequence_done:
-        completed_ids = set(s["id"] for s in steps)
+        completed_ids = {s["id"] for s in steps}
+
+    # Fetch per-step task completion timestamps (populated since Bug 10 fix stores step_id)
+    tasks_col = get_mongodb_collection("tasks")
+    step_completed_at: Dict[str, Any] = {}
+    if tasks_col is not None and completed_ids:
+        for task_doc in tasks_col.find(
+            {
+                "payload.deal_id": str(deal_doc["_id"]),
+                "payload.step_id": {"$in": list(completed_ids)},
+                "status": "completed",
+            },
+            projection={"payload.step_id": 1, "completed_at": 1},
+        ):
+            sid_key = (task_doc.get("payload") or {}).get("step_id")
+            if sid_key:
+                step_completed_at[sid_key] = task_doc.get("completed_at")
 
     timeline = []
     for sid in ordered:
@@ -1422,11 +1505,14 @@ async def get_lead_sequence_timeline(
         if not step:
             continue
         data = step.get("data") or {}
-        status = "completed" if sid in completed_ids else (
-            "active" if sid == current_position else "pending"
-        )
-        if sequence_done and not completed_ids:
-            status = "completed"
+        if sequence_done and not current_position:
+            status_val = "completed"
+        elif sid in completed_ids:
+            status_val = "completed"
+        elif sid == current_position:
+            status_val = "active"
+        else:
+            status_val = "pending"
         entry: Dict[str, Any] = {
             "stepId": sid,
             "type": step.get("type"),
@@ -1434,17 +1520,9 @@ async def get_lead_sequence_timeline(
             "channel": data.get("channel"),
             "action": data.get("action"),
             "waitDays": data.get("wait_days", 0),
-            "status": status,
-            "completedAt": None,
+            "status": status_val,
+            "completedAt": step_completed_at.get(sid),
         }
-        # Attach last relevant message timestamp for completed action steps
-        if status == "completed" and step.get("type") == "action" and messages_col is not None:
-            last_msg = messages_col.find_one(
-                {"deal_id": str(deal_doc["_id"]), "is_outgoing": True},
-                sort=[("creation_date", -1)],
-            )
-            if last_msg:
-                entry["completedAt"] = last_msg.get("creation_date")
         timeline.append(entry)
 
     return {
@@ -1938,9 +2016,9 @@ async def import_leads_with_column_map(
                     set_fields["phone_source"] = "csv_import"
                 if set_fields:
                     leads_col.update_one({"_id": actual_lead_id}, {"$set": set_fields})
-                    updated += 1
-                else:
-                    skipped += 1
+                # Count as updated regardless — even if no new data was written,
+                # the deal link below may still be created for this lead.
+                updated += 1
             else:
                 new_id = str(uuid4())
                 insert_doc: dict = {

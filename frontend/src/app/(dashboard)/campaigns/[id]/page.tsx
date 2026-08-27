@@ -666,6 +666,19 @@ export default function CampaignDetailsPage() {
                 </CardContent>
               </Card>
 
+              {/* Channel Coverage */}
+              {analytics && analytics.stats.totalLeads > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Channel Coverage</CardTitle>
+                    <CardDescription>Lead data availability per channel</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <CoverageBars campaignId={campaignId} totalLeads={analytics.stats.totalLeads} />
+                  </CardContent>
+                </Card>
+              )}
+
               {/* Campaign Details */}
               <Card>
                 <CardHeader>
@@ -861,9 +874,6 @@ export default function CampaignDetailsPage() {
               </Button>
             </CardHeader>
             <CardContent>
-              {leads.length > 0 && (
-                <CoverageBars campaignId={campaignId} totalLeads={leads.length} />
-              )}
               {leads.length > 0 ? (
                 <CampaignListComponent leads={leads} campaignId={campaignId} onLeadsUpdated={fetchLeadsSilent} />
               ) : campaign?.status === "active" ? (

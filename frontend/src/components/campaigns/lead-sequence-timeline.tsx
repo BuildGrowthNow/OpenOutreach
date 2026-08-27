@@ -30,18 +30,26 @@ export function LeadSequenceTimeline({ campaignId, leadId }: LeadSequenceTimelin
   const [active, setActive] = useState(false);
   const [done, setDone] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    setError(null);
     getLeadSequenceTimeline(campaignId, leadId)
       .then((res) => {
-        if (cancelled || !res.data) return;
+        if (cancelled) return;
+        if (res.error || !res.data) {
+          setError(res.error ?? "Failed to load sequence timeline");
+          return;
+        }
         setTimeline(res.data.timeline);
         setActive(res.data.sequenceActive);
         setDone(res.data.sequenceDone);
       })
-      .catch(() => {})
+      .catch((err: unknown) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load sequence timeline");
+      })
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
@@ -53,6 +61,14 @@ export function LeadSequenceTimeline({ campaignId, leadId }: LeadSequenceTimelin
       <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
         <Icons.RefreshCw className="h-3.5 w-3.5 animate-spin" />
         Loading sequence...
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="mt-3 pt-3 border-t">
+        <p className="text-xs text-destructive">Could not load sequence timeline: {error}</p>
       </div>
     );
   }

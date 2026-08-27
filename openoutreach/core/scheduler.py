@@ -894,6 +894,9 @@ def reconcile(session) -> None:
             created = resolve_sequence_tasks(campaign, profile.user_id)
             if created:
                 logger.info("Sequence executor created %d tasks for campaign %s", created, campaign.pk)
+            # Pending-check must run even for sequence campaigns so connections accepted
+            # on LinkedIn transition deals from PENDING → CONNECTED.
+            plan_check_pending_window(session, campaign)
         else:
             plan_connect_window(session, campaign, connect_cap=connect_cap)
             plan_follow_up_window(session, campaign, follow_up_cap=follow_up_cap)
