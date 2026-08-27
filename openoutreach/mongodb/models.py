@@ -56,6 +56,7 @@ class Lead:
         headline: Optional[str] = None,
         email_unsubscribed: bool = False,
         email_bounced: bool = False,
+        email_source: Optional[str] = None,
     ):
         self._id = _id or str(uuid4())
         self.linkedin_url = linkedin_url
@@ -79,6 +80,7 @@ class Lead:
         self.headline = headline
         self.email_unsubscribed = email_unsubscribed
         self.email_bounced = email_bounced
+        self.email_source = email_source
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert model instance to dictionary for MongoDB storage."""
@@ -122,6 +124,8 @@ class Lead:
             data["email_unsubscribed"] = self.email_unsubscribed
         if self.email_bounced:
             data["email_bounced"] = self.email_bounced
+        if self.email_source is not None:
+            data["email_source"] = self.email_source
         return data
 
     @classmethod
@@ -150,6 +154,7 @@ class Lead:
             headline=data.get("headline"),
             email_unsubscribed=data.get("email_unsubscribed", False),
             email_bounced=data.get("email_bounced", False),
+            email_source=data.get("email_source"),
         )
 
     def save(self, update_fields: Optional[List[str]] = None) -> str:

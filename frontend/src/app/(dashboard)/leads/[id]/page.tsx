@@ -15,6 +15,13 @@ import { LeadForm } from '@/components/leads/lead-form'
 import { AddToCampaignModal } from '@/components/modals/add-to-campaign-modal'
 import { useToast } from '@/components/ui/use-toast'
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
+import { Network, Mail, Smartphone } from 'lucide-react'
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -329,6 +336,43 @@ const LeadDetailsPage = () => {
           <p className="text-muted-foreground mt-1">
             Lead ID: {lead.id} • Added {formatDistanceToNow(new Date(lead.creationDate), { addSuffix: true })}
           </p>
+          {lead.channelAvailability && (
+            <div className="flex items-center gap-3 mt-2">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className={`flex items-center gap-1 text-sm font-medium ${lead.channelAvailability.linkedin ? 'text-blue-500' : 'text-zinc-400'}`}>
+                      <Network className="h-4 w-4" />
+                      LinkedIn
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent><p>{lead.channelAvailability.linkedin ? 'LinkedIn URL available' : 'No LinkedIn URL'}</p></TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className={`flex items-center gap-1 text-sm font-medium ${lead.channelAvailability.email ? 'text-amber-500' : 'text-zinc-400'}`}>
+                      <Mail className="h-4 w-4" />
+                      Email
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent><p>{lead.channelAvailability.email ? 'Email available' : 'No email address'}</p></TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className={`flex items-center gap-1 text-sm font-medium ${lead.channelAvailability.whatsapp ? 'text-emerald-500' : 'text-zinc-400'}`}>
+                      <Smartphone className="h-4 w-4" />
+                      WhatsApp
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent><p>{lead.channelAvailability.whatsapp ? 'Phone / WhatsApp available' : 'No phone number'}</p></TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-3">
           <Badge variant="outline" className="px-3 py-1">

@@ -115,7 +115,7 @@ Response:
   - WhatsApp icon — green if `whatsapp: true`, grey if `false`
 - [x] `channel_availability` now returned by campaign leads endpoint (`GET /campaigns/{id}/leads`) — local `LeadResponse` was missing it (fixed).
 - [x] Leads list filter bar: add "Missing email" and "Missing phone" filter chips.
-- [ ] Lead detail page: show availability badges prominently in header.
+- [x] Lead detail page: show availability badges prominently in header.
 
 ### 2.4 Campaign overview coverage widget (frontend)
 

@@ -34,7 +34,14 @@ def _get_first_step_id(campaign: Campaign) -> Optional[str]:
 
 
 def _get_next_step_id(campaign: Campaign, current_step_id: str, condition_met: bool) -> Optional[str]:
-    """Follow outgoing edge from current step. Prefers condition-matching edge."""
+    """Follow outgoing edge from current step. Prefers condition-matching edge.
+
+    condition_met=True  → condition satisfied (e.g. no reply exists for a no_reply step)
+    condition_met=False → condition not satisfied (e.g. reply exists for a no_reply step)
+
+    When condition_met=False and no replied edge exists, returns None so the caller
+    sets sequence_done=True rather than blindly advancing through an unmatched branch.
+    """
     outgoing = [e for e in campaign.sequence_edges if e["source"] == current_step_id]
     if not outgoing:
         return None
@@ -44,7 +51,13 @@ def _get_next_step_id(campaign: Campaign, current_step_id: str, condition_met: b
             return edge["target"]
         if not condition_met and edge_condition == "replied":
             return edge["target"]
-    return outgoing[0]["target"]
+    # No condition-specific match. When condition is met, fall back to first edge
+    # (simple linear sequence with unlabeled edges). When condition is NOT met and
+    # there is no "replied" branch, return None — the stop-on-reply guard will mark
+    # the deal done on the same or next reconcile cycle.
+    if condition_met:
+        return outgoing[0]["target"]
+    return None
 
 
 def _get_step(campaign: Campaign, step_id: str) -> Optional[dict]:
