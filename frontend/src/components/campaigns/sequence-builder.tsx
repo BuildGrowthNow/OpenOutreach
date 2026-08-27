@@ -225,6 +225,7 @@ interface NodeCardProps {
   onSelect: () => void;
   onDelete: () => void;
   onUpdateWaitDays?: (days: number) => void;
+  onWaitDaysFocus?: () => void;
 }
 
 function NodeCard({
@@ -234,6 +235,7 @@ function NodeCard({
   onSelect,
   onDelete,
   onUpdateWaitDays,
+  onWaitDaysFocus,
 }: NodeCardProps) {
   const key = stepKey(step);
   const colorClass = STEP_COLORS[key] || STEP_COLORS.wait;
@@ -296,6 +298,7 @@ function NodeCard({
             min={1}
             max={90}
             value={step.data.wait_days > 0 ? step.data.wait_days : 1}
+            onFocus={onWaitDaysFocus}
             onChange={(e) => {
               const v = Math.max(1, Math.min(90, Number(e.target.value)));
               onUpdateWaitDays?.(v);
@@ -340,9 +343,20 @@ interface ConfigPanelProps {
 function ConfigPanel({ step, onChange, onClose }: ConfigPanelProps) {
   const [label, setLabel] = useState(step.data.label);
   const [condition, setCondition] = useState(step.data.condition ?? "always");
+  const [waitDays, setWaitDays] = useState(
+    step.type === "wait" ? Math.max(1, step.data.wait_days || 1) : 1,
+  );
 
   const save = () => {
-    onChange({ ...step, data: { ...step.data, label, condition } });
+    onChange({
+      ...step,
+      data: {
+        ...step.data,
+        label,
+        condition,
+        ...(step.type === "wait" ? { wait_days: waitDays } : {}),
+      },
+    });
     onClose();
   };
 
@@ -360,6 +374,8 @@ function ConfigPanel({ step, onChange, onClose }: ConfigPanelProps) {
               "Sends an email to the lead's work email address."}
             {step.type === "action" && step.data.action === "send_whatsapp" &&
               "Sends a WhatsApp message to the lead's phone number."}
+            {step.type === "wait" &&
+              "Pauses the sequence for the given number of days before proceeding."}
             {step.type === "condition" &&
               "Checks a condition before proceeding. If not met, the sequence stops for that lead."}
             {step.type === "end" && "Marks the end of the sequence."}
@@ -375,6 +391,21 @@ function ConfigPanel({ step, onChange, onClose }: ConfigPanelProps) {
               onKeyDown={(e) => e.key === "Enter" && save()}
             />
           </div>
+          {step.type === "wait" && (
+            <div className="space-y-1.5">
+              <Label className="text-zinc-300">Wait Days</Label>
+              <Input
+                type="number"
+                min={1}
+                max={90}
+                value={waitDays}
+                onChange={(e) =>
+                  setWaitDays(Math.max(1, Math.min(90, Number(e.target.value))))
+                }
+                className="bg-zinc-900 border-zinc-700 text-zinc-100"
+              />
+            </div>
+          )}
           {step.type === "condition" && (
             <div className="space-y-1.5">
               <Label className="text-zinc-300">Condition</Label>
@@ -481,11 +512,12 @@ function makeStep(
   label: string,
   waitDays = 0,
   requires: string[] = [],
+  condition: SequenceStep["data"]["condition"] = "always",
 ): SequenceStep {
   return {
     id,
     type,
-    data: { channel, action, label, wait_days: waitDays, condition: "always", requires },
+    data: { channel, action, label, wait_days: waitDays, condition, requires },
     position: { x: 200, y: 0 },
   };
 }
@@ -517,7 +549,7 @@ const TEMPLATES: Template[] = [
     steps: [
       makeStep("t1", "action", "connect", "linkedin", "LinkedIn Connect"),
       makeStep("t2", "wait", null, null, "Wait 3 days", 3),
-      makeStep("t3", "condition", null, null, "No reply?"),
+      makeStep("t3", "condition", null, null, "No reply?", 0, [], "no_reply"),
       makeStep("t4", "action", "send_email", "email", "Send Email", 0, ["api_email"]),
       makeStep("t5", "wait", null, null, "Wait 5 days", 5),
       makeStep("t6", "action", "follow_up", "linkedin", "LinkedIn Follow-up"),
@@ -553,9 +585,11 @@ const TEMPLATES: Template[] = [
 
 interface SequenceBuilderProps {
   campaignId: string;
+  /** Set to true when the parent tab that hosts this component is currently visible */
+  isActive?: boolean;
 }
 
-export function SequenceBuilder({ campaignId }: SequenceBuilderProps) {
+export function SequenceBuilder({ campaignId, isActive }: SequenceBuilderProps) {
   const { toast } = useToast();
 
   const [steps, setSteps] = useState<SequenceStep[]>([]);
@@ -574,35 +608,48 @@ export function SequenceBuilder({ campaignId }: SequenceBuilderProps) {
   // Fix #8: proper dialogs replacing window.confirm
   const [showActivateDialog, setShowActivateDialog] = useState(false);
   const [showResetDialog, setShowResetDialog] = useState(false);
+  const [showSaveWhileActiveDialog, setShowSaveWhileActiveDialog] = useState(false);
   // Fix #12: undo history
   const [history, setHistory] = useState<Snapshot[]>([]);
 
   const initialLoad = useRef(true);
+  // Tracks the last-saved snapshot for accurate isDirty-after-undo detection
+  const savedSnapshotRef = useRef<string>("");
+  // Tracks previous isActive prop value for tab-switch refetch logic
+  const prevIsActiveRef = useRef<boolean | undefined>(undefined);
   // Fix #10: click-outside ref for toolbar add-step dropdown
   const addMenuRef = useRef<HTMLDivElement>(null);
 
   // ── fetch ───────────────────────────────────────────────────────────────────
 
   const fetchSequence = useCallback(async () => {
+    // Mark as initial load so the [steps, edges] dirty-effect skips this batch
+    initialLoad.current = true;
     setLoading(true);
     const res = await getSequence(campaignId);
     if (res.data) {
-      setSteps(res.data.steps ?? []);
-      setEdges(res.data.edges ?? []);
+      const loadedSteps = res.data.steps ?? [];
+      const loadedEdges = res.data.edges ?? [];
+      setSteps(loadedSteps);
+      setEdges(loadedEdges);
       setActive(res.data.active ?? false);
       setCoverage(res.data.coverage_per_step ?? {});
-      if ((res.data.steps ?? []).length > 0) setShowCanvas(true);
+      savedSnapshotRef.current = JSON.stringify({ steps: loadedSteps, edges: loadedEdges });
+      if (loadedSteps.length > 0) setShowCanvas(true);
     }
     setLoading(false);
     setIsDirty(false);
     setHistory([]);
-    initialLoad.current = false;
   }, [campaignId]);
 
   useEffect(() => { void fetchSequence(); }, [fetchSequence]);
 
   useEffect(() => {
-    if (initialLoad.current) return;
+    // First run after a fetch: clear the guard flag without marking dirty
+    if (initialLoad.current) {
+      initialLoad.current = false;
+      return;
+    }
     setIsDirty(true);
   }, [steps, edges]);
 
@@ -640,6 +687,14 @@ export function SequenceBuilder({ campaignId }: SequenceBuilderProps) {
     return () => document.removeEventListener("mousedown", handler);
   }, [insertAfterIndex]);
 
+  // Re-fetch when the parent tab becomes active, unless there are unsaved changes
+  useEffect(() => {
+    if (prevIsActiveRef.current === false && isActive === true && !isDirty && !loading) {
+      void fetchSequence();
+    }
+    prevIsActiveRef.current = isActive;
+  }, [isActive, isDirty, loading, fetchSequence]);
+
   // ── undo ────────────────────────────────────────────────────────────────────
 
   const pushSnapshot = useCallback(() => {
@@ -650,9 +705,15 @@ export function SequenceBuilder({ campaignId }: SequenceBuilderProps) {
     setHistory((prev) => {
       if (prev.length === 0) return prev;
       const snapshot = prev[prev.length - 1];
-      // setState calls inside setHistory updater run synchronously in the same batch
       setSteps(snapshot.steps);
       setEdges(snapshot.edges);
+      // If we've landed back on the saved state, clear the dirty flag
+      if (
+        JSON.stringify({ steps: snapshot.steps, edges: snapshot.edges }) ===
+        savedSnapshotRef.current
+      ) {
+        setIsDirty(false);
+      }
       return prev.slice(0, -1);
     });
   }, []);
@@ -767,9 +828,10 @@ export function SequenceBuilder({ campaignId }: SequenceBuilderProps) {
   );
 
   const updateStep = useCallback((updated: SequenceStep) => {
+    pushSnapshot();
     setSteps((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
     setSelectedStepId(null);
-  }, []);
+  }, [pushSnapshot]);
 
   const updateStepWaitDays = useCallback((stepId: string, days: number) => {
     setSteps((prev) =>
@@ -794,12 +856,20 @@ export function SequenceBuilder({ campaignId }: SequenceBuilderProps) {
         const oldIdx = prev.findIndex((s) => s.id === dragActive.id);
         const newIdx = prev.findIndex((s) => s.id === over.id);
         const reordered = arrayMove(prev, oldIdx, newIdx);
-        const newEdges: SequenceEdge[] = reordered.slice(0, -1).map((s, i) => ({
-          id: `edge_${s.id}_${reordered[i + 1].id}`,
-          source: s.id,
-          target: reordered[i + 1].id,
-        }));
-        setEdges(newEdges);
+        setEdges((prevEdges) => {
+          // Reuse existing edge objects where source→target still match (preserves edge data/labels)
+          const edgeMap = new Map(prevEdges.map((e) => [`${e.source}|${e.target}`, e]));
+          return reordered.slice(0, -1).map((s, i) => {
+            const next = reordered[i + 1];
+            return (
+              edgeMap.get(`${s.id}|${next.id}`) ?? {
+                id: `edge_${s.id}_${next.id}`,
+                source: s.id,
+                target: next.id,
+              }
+            );
+          });
+        });
         return reordered;
       });
     },
@@ -808,8 +878,8 @@ export function SequenceBuilder({ campaignId }: SequenceBuilderProps) {
 
   // ── save / activate ──────────────────────────────────────────────────────────
 
-  const handleSave = async (): Promise<boolean> => {
-    // Fix #6: client-side validation
+  // Core save logic — always runs, no active-sequence guard
+  const executeSave = async (): Promise<boolean> => {
     const warnings = validateSequence(steps, edges);
     setValidationWarnings(warnings);
     const hasDisconnected = warnings.some((w) =>
@@ -824,10 +894,25 @@ export function SequenceBuilder({ campaignId }: SequenceBuilderProps) {
       toast({ title: "Save failed", description: res.error, variant: "destructive" });
       return false;
     }
+    savedSnapshotRef.current = JSON.stringify({ steps, edges });
     setIsDirty(false);
     setValidationWarnings([]);
     toast({ title: "Sequence saved" });
     return true;
+  };
+
+  // Public save: warns when the sequence is already active (changes affect running deals)
+  const handleSave = async (): Promise<boolean> => {
+    if (active) {
+      setShowSaveWhileActiveDialog(true);
+      return false;
+    }
+    return executeSave();
+  };
+
+  const handleConfirmSaveWhileActive = async () => {
+    setShowSaveWhileActiveDialog(false);
+    await executeSave();
   };
 
   // Fix #2: open dialog instead of activating immediately
@@ -837,7 +922,9 @@ export function SequenceBuilder({ campaignId }: SequenceBuilderProps) {
   const handleConfirmActivate = async () => {
     setShowActivateDialog(false);
     if (isDirty) {
-      const saved = await handleSave();
+      // Use executeSave directly: active may be true (deactivate) or false (activate);
+      // in either case we skip the active-sequence warning since the intent is explicit.
+      const saved = await executeSave();
       if (!saved) return;
     }
     setToggling(true);
@@ -917,6 +1004,8 @@ export function SequenceBuilder({ campaignId }: SequenceBuilderProps) {
         <CardContent className="py-6 space-y-6">
           <p className="text-sm text-zinc-400">
             Build a multi-step outreach sequence, or start from a template.
+            Every sequence needs at least one action step and an{" "}
+            <span className="text-zinc-300 font-medium">End</span> step.
           </p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {TEMPLATES.map((tpl) => (
@@ -1107,8 +1196,11 @@ export function SequenceBuilder({ campaignId }: SequenceBuilderProps) {
         <Card className="border-zinc-800">
           <CardContent className="py-6">
             {steps.length === 0 ? (
-              <div className="text-center py-10 text-zinc-500 text-sm">
-                No steps yet. Click &ldquo;Add Step&rdquo; to begin.
+              <div className="text-center py-10 text-zinc-500 text-sm space-y-1">
+                <p>No steps yet — click &ldquo;Add Step&rdquo; to begin.</p>
+                <p className="text-xs text-zinc-600">
+                  Every sequence needs at least one action step and an End step.
+                </p>
               </div>
             ) : (
               <DndContext
@@ -1131,16 +1223,16 @@ export function SequenceBuilder({ campaignId }: SequenceBuilderProps) {
                           step={step}
                           coverage={coverage[step.id] ?? null}
                           selected={selectedStepId === step.id}
-                          onSelect={() => {
-                            if (step.type === "wait") return;
+                          onSelect={() =>
                             setSelectedStepId(
                               step.id === selectedStepId ? null : step.id,
-                            );
-                          }}
+                            )
+                          }
                           onDelete={() => deleteStep(step.id)}
                           onUpdateWaitDays={(days) =>
                             updateStepWaitDays(step.id, days)
                           }
+                          onWaitDaysFocus={pushSnapshot}
                         />
 
                         {idx < steps.length - 1 &&
@@ -1277,6 +1369,31 @@ export function SequenceBuilder({ campaignId }: SequenceBuilderProps) {
                 }
               >
                 {active ? "Deactivate" : isDirty ? "Save & Activate" : "Activate"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Save while sequence is active — warns that running deals will be affected */}
+        <AlertDialog open={showSaveWhileActiveDialog} onOpenChange={setShowSaveWhileActiveDialog}>
+          <AlertDialogContent className="bg-zinc-950 border-zinc-800 text-zinc-100">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Save while sequence is active?</AlertDialogTitle>
+              <AlertDialogDescription className="text-zinc-400">
+                This sequence is currently running. Saving will update what the daemon
+                executes for deals already in progress. Steps that have already completed
+                are unaffected; pending steps will use the new configuration immediately.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 bg-zinc-900">
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleConfirmSaveWhileActive}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                Save Anyway
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

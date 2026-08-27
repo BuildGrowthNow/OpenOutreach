@@ -904,7 +904,7 @@ export default function CampaignDetailsPage() {
 
         {/* Sequence Tab */}
         <TabsContent value="sequence" className="space-y-6">
-          <SequenceBuilder campaignId={campaignId} />
+          <SequenceBuilder campaignId={campaignId} isActive={activeTab === "sequence"} />
         </TabsContent>
 
         {/* Analytics Tab */}
