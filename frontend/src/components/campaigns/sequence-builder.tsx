@@ -242,6 +242,8 @@ function NodeCard({
   const label = step.data.label || STEP_LABELS[key] || key;
   const isWait = step.type === "wait";
   const isCondition = step.type === "condition";
+  // Guard: call onWaitDaysFocus once per focus event, reset on blur
+  const waitFocusGuard = useRef(false);
 
   return (
     <div
@@ -298,7 +300,13 @@ function NodeCard({
             min={1}
             max={90}
             value={step.data.wait_days > 0 ? step.data.wait_days : 1}
-            onFocus={onWaitDaysFocus}
+            onFocus={() => {
+              if (!waitFocusGuard.current) {
+                waitFocusGuard.current = true;
+                onWaitDaysFocus?.();
+              }
+            }}
+            onBlur={() => { waitFocusGuard.current = false; }}
             onChange={(e) => {
               const v = Math.max(1, Math.min(90, Number(e.target.value)));
               onUpdateWaitDays?.(v);
@@ -597,6 +605,7 @@ export function SequenceBuilder({ campaignId, isActive }: SequenceBuilderProps) 
   const [active, setActive] = useState(false);
   const [coverage, setCoverage] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [toggling, setToggling] = useState(false);
   const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
@@ -626,6 +635,7 @@ export function SequenceBuilder({ campaignId, isActive }: SequenceBuilderProps) 
     // Mark as initial load so the [steps, edges] dirty-effect skips this batch
     initialLoad.current = true;
     setLoading(true);
+    setFetchError(false);
     const res = await getSequence(campaignId);
     if (res.data) {
       const loadedSteps = res.data.steps ?? [];
@@ -636,6 +646,8 @@ export function SequenceBuilder({ campaignId, isActive }: SequenceBuilderProps) 
       setCoverage(res.data.coverage_per_step ?? {});
       savedSnapshotRef.current = JSON.stringify({ steps: loadedSteps, edges: loadedEdges });
       if (loadedSteps.length > 0) setShowCanvas(true);
+    } else {
+      setFetchError(true);
     }
     setLoading(false);
     setIsDirty(false);
@@ -718,13 +730,15 @@ export function SequenceBuilder({ campaignId, isActive }: SequenceBuilderProps) 
     });
   }, []);
 
-  // Fix #12: Ctrl+Z keyboard shortcut (placed after handleUndo is declared)
+  // Fix #12: Ctrl+Z keyboard shortcut — skip when focus is inside any text input
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
-        e.preventDefault();
-        handleUndo();
-      }
+      if (!(e.ctrlKey || e.metaKey) || e.key !== "z" || e.shiftKey) return;
+      const target = e.target as HTMLElement;
+      const tag = target.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || target.isContentEditable) return;
+      e.preventDefault();
+      handleUndo();
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
@@ -736,7 +750,7 @@ export function SequenceBuilder({ campaignId, isActive }: SequenceBuilderProps) 
   const addStep = useCallback(
     (opt: (typeof ADD_STEP_OPTIONS)[number], afterIndex?: number) => {
       pushSnapshot();
-      const id = `step_${Date.now()}`;
+      const id = crypto.randomUUID();
       const newStep: SequenceStep = {
         id,
         type: opt.type,
@@ -755,12 +769,14 @@ export function SequenceBuilder({ campaignId, isActive }: SequenceBuilderProps) 
       if (afterIndex !== undefined) {
         insertIdx = afterIndex;
       } else {
-        // Insert before the last End step, falling back to end-of-list
+        // Insert before the last End step, falling back to end-of-list.
+        // Use >= 0 so a lone End step (endIdx === 0) yields insertIdx = -1,
+        // which splice(0, 0, newStep) correctly handles as a prepend.
         const endIdx = steps.reduceRight(
           (acc, s, i) => (acc === -1 && s.type === "end" ? i : acc),
           -1,
         );
-        insertIdx = endIdx > 0 ? endIdx - 1 : steps.length - 1;
+        insertIdx = endIdx >= 0 ? endIdx - 1 : steps.length - 1;
       }
 
       // Capture edge neighbours from current closure before setState
@@ -784,6 +800,9 @@ export function SequenceBuilder({ campaignId, isActive }: SequenceBuilderProps) 
           next.push({ id: `edge_${id}_${nextStepId}`, source: id, target: nextStepId });
         } else if (prevStepId) {
           next.push({ id: `edge_${prevStepId}_${id}`, source: prevStepId, target: id });
+        } else if (nextStepId) {
+          // Inserting at the very beginning (e.g. before a lone End step)
+          next.push({ id: `edge_${id}_${nextStepId}`, source: id, target: nextStepId });
         }
         return next;
       });
@@ -959,8 +978,19 @@ export function SequenceBuilder({ campaignId, isActive }: SequenceBuilderProps) 
   };
 
   const applyTemplate = (tpl: Template) => {
-    setSteps(tpl.steps);
-    setEdges(tpl.edges);
+    // Remap template IDs to fresh UUIDs so applying the same template twice
+    // never produces duplicate step/edge IDs in MongoDB.
+    const idMap = new Map<string, string>();
+    tpl.steps.forEach((s) => idMap.set(s.id, crypto.randomUUID()));
+    const freshSteps = tpl.steps.map((s) => ({ ...s, id: idMap.get(s.id)! }));
+    const freshEdges = tpl.edges.map((e) => ({
+      ...e,
+      id: `edge_${idMap.get(e.source) ?? e.source}_${idMap.get(e.target) ?? e.target}`,
+      source: idMap.get(e.source) ?? e.source,
+      target: idMap.get(e.target) ?? e.target,
+    }));
+    setSteps(freshSteps);
+    setEdges(freshEdges);
     setShowCanvas(true);
   };
 
@@ -985,6 +1015,20 @@ export function SequenceBuilder({ campaignId, isActive }: SequenceBuilderProps) 
         <CardContent className="py-12 text-center text-zinc-500">
           <Icons.RefreshCw className="h-6 w-6 mx-auto animate-spin mb-2" />
           Loading sequence…
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (fetchError) {
+    return (
+      <Card className="border-zinc-800">
+        <CardContent className="py-12 text-center text-zinc-500">
+          <p className="mb-4">Failed to load sequence. Check your connection and try again.</p>
+          <Button variant="outline" onClick={() => void fetchSequence()}>
+            <Icons.RefreshCw className="h-4 w-4 mr-2" />
+            Retry
+          </Button>
         </CardContent>
       </Card>
     );
@@ -1157,7 +1201,7 @@ export function SequenceBuilder({ campaignId, isActive }: SequenceBuilderProps) 
                   size="sm"
                   className="border-zinc-700 text-zinc-300 hover:bg-zinc-800"
                   onClick={handleSave}
-                  disabled={saving}
+                  disabled={saving || toggling}
                 >
                   {saving ? (
                     <Icons.RefreshCw className="mr-1.5 h-3.5 w-3.5 animate-spin" />
@@ -1176,7 +1220,7 @@ export function SequenceBuilder({ campaignId, isActive }: SequenceBuilderProps) 
                       : "bg-blue-600 hover:bg-blue-700",
                   )}
                   onClick={handleActivateClick}
-                  disabled={toggling || (steps.length === 0 && !active)}
+                  disabled={toggling || saving || (steps.length === 0 && !active)}
                 >
                   {toggling ? (
                     <Icons.RefreshCw className="mr-1.5 h-3.5 w-3.5 animate-spin" />
