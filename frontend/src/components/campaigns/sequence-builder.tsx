@@ -75,6 +75,8 @@ import {
   getSequence,
   saveSequence,
   setSequenceActive,
+  getCampaignCoverage,
+  CampaignChannelCoverage,
   SequenceStep,
   SequenceEdge,
 } from "@/lib/api/campaigns";
@@ -143,6 +145,8 @@ function StepIcon({ step, className }: { step: SequenceStep; className?: string 
 interface SeqNodeData {
   step: SequenceStep;
   coverage: number | null;
+  totalLeads: number;
+  hasBypass: boolean;
   onDelete: (id: string) => void;
   onEdit: (id: string) => void;
   [key: string]: unknown;
@@ -214,18 +218,43 @@ function SeqNode({ id, data, selected }: NodeProps) {
         </div>
       </div>
 
-      {d.coverage !== null && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <div className="mt-2 cursor-default">
-              <Progress value={d.coverage} className="h-1 bg-zinc-800 [&>div]:bg-current" />
-              <span className="text-[10px] opacity-50 mt-0.5 inline-block">{d.coverage}% leads covered</span>
-            </div>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" className="max-w-[200px] text-xs">
-            Percentage of leads in this campaign that have the required data for this step.
-          </TooltipContent>
-        </Tooltip>
+      {step.data.requires && step.data.requires.length > 0 && (
+        <div className="mt-2">
+          {d.coverage === null ? (
+            <span className="text-[10px] text-zinc-600">Coverage shown after save</span>
+          ) : (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="cursor-default">
+                  <Progress
+                    value={d.coverage}
+                    className={cn("h-1.5 bg-zinc-800", coverageBarClass(d.coverage))}
+                  />
+                  <div className="flex items-center gap-1 mt-0.5">
+                    {d.coverage === 0 ? (
+                      <span className="text-[10px] text-red-400 font-medium">⚠ No leads have this data</span>
+                    ) : d.coverage < 30 ? (
+                      <span className="text-[10px] text-red-400">
+                        ⚠ {d.totalLeads > 0 ? `${Math.round(d.coverage * d.totalLeads / 100)} of ${d.totalLeads}` : `${d.coverage}%`} leads reachable
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-zinc-500">
+                        {d.totalLeads > 0 ? `${Math.round(d.coverage * d.totalLeads / 100)} of ${d.totalLeads}` : `${d.coverage}%`} leads reachable
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-[220px] text-xs">
+                {d.coverage < 100
+                  ? d.hasBypass
+                    ? "✓ Leads without the required data are routed around this step via a Branch node."
+                    : "Leads without the required data automatically skip this step and proceed to the next one."
+                  : "All leads in this campaign have the required data for this step."}
+              </TooltipContent>
+            </Tooltip>
+          )}
+        </div>
       )}
 
       {isCondition ? (
@@ -320,14 +349,28 @@ function autoLayout(steps: SequenceStep[]): SequenceStep[] {
 function stepsToNodes(
   steps: SequenceStep[],
   coverage: Record<string, number>,
+  edges: SequenceEdge[],
+  totalLeads: number,
   onDelete: (id: string) => void,
   onEdit: (id: string) => void,
 ): RFNode[] {
+  // Build minimal RFNode array for hasBypassPath (positions don't matter here)
+  const minNodes: RFNode[] = steps.map((s) => ({
+    id: s.id, type: "seq", position: s.position, data: { step: s } as SeqNodeData,
+  }));
+  const minEdges: RFEdge[] = edges.map((e) => ({ id: e.id, source: e.source, target: e.target }));
   return steps.map((step) => ({
     id: step.id,
     type: "seq",
     position: step.position,
-    data: { step, coverage: coverage[step.id] ?? null, onDelete, onEdit },
+    data: {
+      step,
+      coverage: coverage[step.id] ?? null,
+      totalLeads,
+      hasBypass: hasBypassPath(step.id, minNodes, minEdges),
+      onDelete,
+      onEdit,
+    },
   }));
 }
 
@@ -386,6 +429,33 @@ function validateSequence(steps: SequenceStep[], edges: SequenceEdge[]): string[
     );
   }
   return warnings;
+}
+
+// ─── coverage helpers ─────────────────────────────────────────────────────────
+
+function coverageBarClass(pct: number | null): string {
+  if (pct === null) return "[&>div]:bg-zinc-600";
+  if (pct === 0)    return "[&>div]:bg-red-500";
+  if (pct < 30)     return "[&>div]:bg-red-500";
+  if (pct < 70)     return "[&>div]:bg-amber-500";
+  return "[&>div]:bg-emerald-500";
+}
+
+function hasBypassPath(stepId: string, nodes: RFNode[], edges: RFEdge[]): boolean {
+  const visited = new Set<string>();
+  const queue = [stepId];
+  while (queue.length) {
+    const id = queue.shift()!;
+    if (visited.has(id)) continue;
+    visited.add(id);
+    for (const e of edges) {
+      if (e.target !== id) continue;
+      const parent = nodes.find((n) => n.id === e.source);
+      if (parent && (parent.data as SeqNodeData).step.type === "condition") return true;
+      queue.push(e.source);
+    }
+  }
+  return false;
 }
 
 // ─── templates ────────────────────────────────────────────────────────────────
@@ -582,6 +652,8 @@ function SequenceCanvas({ campaignId, isActive }: { campaignId: string; isActive
 
   const [seqSteps, setSeqSteps] = useState<SequenceStep[]>([]);
   const [coverage, setCoverage] = useState<Record<string, number>>({});
+  const [totalLeads, setTotalLeads] = useState(0);
+  const [channelCoverage, setChannelCoverage] = useState<CampaignChannelCoverage | null>(null);
   const [active, setActive] = useState(false);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState(false);
@@ -622,6 +694,7 @@ function SequenceCanvas({ campaignId, isActive }: { campaignId: string; isActive
     pushSnapshot();
     setNodes((prev) => prev.filter((n) => n.id !== id));
     setEdges((prev) => prev.filter((e) => e.source !== id && e.target !== id));
+    setEditingStepId((prev) => (prev === id ? null : prev));
     setIsDirty(true);
   }, [pushSnapshot, setNodes, setEdges]);
 
@@ -687,7 +760,15 @@ function SequenceCanvas({ campaignId, isActive }: { campaignId: string; isActive
     setLoading(true);
     setFetchError(false);
     setHistory([]);
-    const res = await getSequence(campaignId);
+    const [res, covRes] = await Promise.all([
+      getSequence(campaignId),
+      getCampaignCoverage(campaignId),
+    ]);
+    const total = covRes.data?.total ?? 0;
+    if (covRes.data) {
+      setTotalLeads(total);
+      setChannelCoverage(covRes.data.channel_coverage ?? null);
+    }
     if (res.data) {
       const loadedSteps = autoLayout(res.data.steps ?? []);
       const loadedEdges = res.data.edges ?? [];
@@ -698,7 +779,7 @@ function SequenceCanvas({ campaignId, isActive }: { campaignId: string; isActive
       savedSnapshotRef.current = JSON.stringify({ steps: loadedSteps, edges: loadedEdges });
       if (loadedSteps.length > 0) {
         setShowCanvas(true);
-        setNodes(stepsToNodes(loadedSteps, cov, handleDeleteNode, handleEditNode));
+        setNodes(stepsToNodes(loadedSteps, cov, loadedEdges, total, handleDeleteNode, handleEditNode));
         setEdges(edgesToRF(loadedEdges));
         // B1: suppressDirty cleared in onInit callback, not setTimeout
       } else {
@@ -752,7 +833,7 @@ function SequenceCanvas({ campaignId, isActive }: { campaignId: string; isActive
       };
       setNodes((prev) => [
         ...prev,
-        { id, type: "seq", position: newStep.position, data: { step: newStep, coverage: null, onDelete: handleDeleteNode, onEdit: handleEditNode } },
+        { id, type: "seq", position: newStep.position, data: { step: newStep, coverage: null, totalLeads, hasBypass: false, onDelete: handleDeleteNode, onEdit: handleEditNode } },
       ]);
       setShowAddMenu(false);
       setIsDirty(true);
@@ -817,12 +898,29 @@ function SequenceCanvas({ campaignId, isActive }: { campaignId: string; isActive
     savedSnapshotRef.current = JSON.stringify({ steps: currentSteps, edges: currentEdges });
     setIsDirty(false);
     setValidationWarnings([]);
-    // refresh coverage
-    const refreshed = await getSequence(campaignId);
+    // refresh coverage and channel totals
+    const [refreshed, covRefresh] = await Promise.all([
+      getSequence(campaignId),
+      getCampaignCoverage(campaignId),
+    ]);
+    const refreshedTotal = covRefresh.data?.total ?? totalLeads;
+    if (covRefresh.data?.channel_coverage) setChannelCoverage(covRefresh.data.channel_coverage);
+    if (refreshedTotal !== totalLeads) setTotalLeads(refreshedTotal);
     if (refreshed.data?.coverage_per_step) {
       const cov = refreshed.data.coverage_per_step;
       setCoverage(cov);
-      setNodes((prev) => prev.map((n) => ({ ...n, data: { ...(n.data as SeqNodeData), coverage: cov[n.id] ?? null } })));
+      setNodes((prev) => {
+        const currentEdges = edgesRef.current;
+        return prev.map((n) => ({
+          ...n,
+          data: {
+            ...(n.data as SeqNodeData),
+            coverage: cov[n.id] ?? null,
+            totalLeads: refreshedTotal,
+            hasBypass: hasBypassPath(n.id, prev, currentEdges),
+          },
+        }));
+      });
     }
     toast({ title: "Sequence saved" });
     return true;
@@ -868,11 +966,11 @@ function SequenceCanvas({ campaignId, isActive }: { campaignId: string; isActive
     }));
     suppressDirty.current = false;
     setSeqSteps(freshSteps);
-    setNodes(stepsToNodes(freshSteps, {}, handleDeleteNode, handleEditNode));
+    setNodes(stepsToNodes(freshSteps, {}, freshEdges, totalLeads, handleDeleteNode, handleEditNode));
     setEdges(edgesToRF(freshEdges));
     setShowCanvas(true);
     setIsDirty(true);
-    setTimeout(() => void fitView({ padding: 0.15 }), 50);
+    requestAnimationFrame(() => void fitView({ padding: 0.15 }));
   };
 
   // ── derived ───────────────────────────────────────────────────────────────────
@@ -981,6 +1079,38 @@ function SequenceCanvas({ campaignId, isActive }: { campaignId: string; isActive
                   {active ? "Active" : "Inactive"}
                 </Badge>
                 {sequenceSummary && <span className="text-xs text-zinc-500">{sequenceSummary}</span>}
+                {totalLeads > 0 && <span className="text-xs text-zinc-600">·</span>}
+                {totalLeads > 0 && channelCoverage && (
+                  <>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className={cn("text-xs flex items-center gap-1 cursor-default", channelCoverage.linkedin.pct >= 70 ? "text-blue-400" : channelCoverage.linkedin.pct >= 30 ? "text-amber-400" : "text-red-400")}>
+                          <Network className="h-3 w-3" />{channelCoverage.linkedin.pct}%
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent className="text-xs">{channelCoverage.linkedin.count} of {totalLeads} leads have LinkedIn</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className={cn("text-xs flex items-center gap-1 cursor-default", channelCoverage.email.pct >= 70 ? "text-amber-400" : channelCoverage.email.pct >= 30 ? "text-amber-300" : channelCoverage.email.pct === 0 ? "text-zinc-600" : "text-red-400")}>
+                          <Mail className="h-3 w-3" />{channelCoverage.email.pct}%
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent className="text-xs">{channelCoverage.email.count} of {totalLeads} leads have email</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className={cn("text-xs flex items-center gap-1 cursor-default", channelCoverage.whatsapp.pct >= 70 ? "text-emerald-400" : channelCoverage.whatsapp.pct >= 30 ? "text-emerald-300" : channelCoverage.whatsapp.pct === 0 ? "text-zinc-600" : "text-red-400")}>
+                          <Smartphone className="h-3 w-3" />{channelCoverage.whatsapp.pct}%
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent className="text-xs">{channelCoverage.whatsapp.count} of {totalLeads} leads have WhatsApp</TooltipContent>
+                    </Tooltip>
+                  </>
+                )}
+                {totalLeads === 0 && (
+                  <span className="text-xs text-zinc-600">Import leads to see channel coverage</span>
+                )}
                 {isDirty && (
                   <Badge variant="outline" className="text-xs border-amber-500/30 bg-amber-500/10 text-amber-400">
                     Unsaved

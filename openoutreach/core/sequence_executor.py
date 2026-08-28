@@ -116,7 +116,12 @@ def _check_requires(lead_data: dict, step: dict) -> bool:
     """True if all fields in step.requires are non-empty on lead."""
     requires = (step.get("data") or {}).get("requires", [])
     for field in requires:
-        if not lead_data.get(field):
+        if field == "api_email":
+            contact = lead_data.get("contact_info")
+            overlay_email = contact.get("email") if isinstance(contact, dict) else None
+            if not lead_data.get("api_email") and not overlay_email:
+                return False
+        elif not lead_data.get(field):
             return False
     return True
 

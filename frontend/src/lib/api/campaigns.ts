@@ -77,7 +77,7 @@ export interface CampaignChannelCoverage {
 }
 
 export async function getCampaignCoverage(campaignId: string) {
-  return apiClient.get<{ channel_coverage: CampaignChannelCoverage }>(
+  return apiClient.get<{ total: number; channel_coverage: CampaignChannelCoverage }>(
     `/campaigns/${campaignId}/coverage`,
   );
 }

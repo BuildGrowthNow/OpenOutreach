@@ -2150,7 +2150,10 @@ async def get_sequence(
                     continue
                 query: Dict[str, Any] = {"_id": {"$in": lead_ids}}
                 if "api_email" in requires:
-                    query["api_email"] = {"$exists": True, "$nin": [None, ""]}
+                    query["$or"] = [
+                        {"api_email": {"$exists": True, "$nin": [None, ""]}},
+                        {"contact_info.email": {"$exists": True, "$nin": [None, ""]}},
+                    ]
                 if "phone" in requires:
                     query["phone"] = {"$exists": True, "$nin": [None, ""]}
                 count = leads_col.count_documents(query)
@@ -2203,6 +2206,13 @@ async def patch_sequence(
                 errors.append("Sequence must have at least one end node.")
             if disconnected:
                 errors.append(f"Disconnected nodes: {', '.join(disconnected)}.")
+            # Each condition node must have at least one outgoing edge per handle
+            condition_steps = [s for s in steps_to_check if s.get("type") == "condition"]
+            for cs in condition_steps:
+                handles = {e.get("sourceHandle") for e in edges_to_check if e["source"] == cs["id"]}
+                if "yes" not in handles or "no" not in handles:
+                    label = (cs.get("data") or {}).get("label") or cs["id"]
+                    errors.append(f'Branch node "{label}" must have both Yes and No paths connected.')
             if errors:
                 raise HTTPException(status_code=400, detail={"errors": errors})
         update["sequence_active"] = body.active
