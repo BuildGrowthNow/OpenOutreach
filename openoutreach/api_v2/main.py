@@ -4,8 +4,10 @@ FastAPI Application Entry Point
 import logging
 import os
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +31,34 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+class DaemonSecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        if request.url.path.startswith("/api/daemon/") and not request.url.path.startswith("/api/daemon/v2/") and request.url.path != "/api/daemon/bootstrap":
+            from openoutreach.api_v2.daemon_security import require_secure_daemon
+
+            try:
+                require_secure_daemon(request)
+            except HTTPException as exc:
+                if exc.status_code != 426:
+                    raise
+                return JSONResponse(
+                    status_code=426,
+                    content={"detail": "Desktop security update required"},
+                    headers={"Cache-Control": "no-store", "Pragma": "no-cache"},
+                )
+        response = await call_next(request)
+        if request.url.path.startswith("/api/daemon/") or request.url.path == "/api/daemon":
+            response.headers["Cache-Control"] = "no-store"
+            response.headers["Pragma"] = "no-cache"
+        if request.url.path == "/api/auth/refresh/":
+            response.headers["Cache-Control"] = "no-store"
+            response.headers["Pragma"] = "no-cache"
+        return response
+
+
+app.add_middleware(DaemonSecurityHeadersMiddleware)
 
 
 @app.on_event("startup")
@@ -98,6 +128,7 @@ from openoutreach.api_v2.routers import (
     vnc,
     admin,
 )
+from openoutreach.api_v2.routers import daemon_v2
 
 # Import rate limiting and campaign health routers
 from openoutreach.api_v2.routers import rate_limits, campaign_health
@@ -164,6 +195,7 @@ app.include_router(websocket.router, tags=["websocket"])
 
 # Daemon communication
 app.include_router(daemon.router, prefix="/api", tags=["daemon"])
+app.include_router(daemon_v2.router, prefix="/api", tags=["daemon-v2"])
 
 # VNC session management
 app.include_router(vnc.router, prefix="/api", tags=["vnc"])

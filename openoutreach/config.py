@@ -34,6 +34,20 @@ class Settings(BaseSettings):
     JWT_ACCESS_TOKEN_LIFETIME_MINUTES: int = 60 * 24  # 24 hours
     JWT_REFRESH_TOKEN_LIFETIME_DAYS: int = 30
 
+    # Daemon v2 signing keys are backend-only PEM values supplied by the
+    # deployment secret manager. There is intentionally no desktop fallback.
+    DAEMON_JWT_PRIVATE_KEY: Optional[str] = None
+    DAEMON_JWT_PUBLIC_KEY: Optional[str] = None
+    DAEMON_JWT_KEY_ID: Optional[str] = None
+    # Security controls default closed for legacy/bootstrap behavior and
+    # require an explicit deployment decision for task execution.
+    DAEMON_BOOTSTRAP_ENABLED: bool = False
+    DAEMON_MIN_SECURE_VERSION: str = "2.0.0"
+    DAEMON_TASK_CLAIM_ENABLED: bool = False
+    DAEMON_V2_LINKEDIN_ENABLED: bool = True
+    DAEMON_V2_WHATSAPP_ENABLED: bool = False
+    DAEMON_V2_EMAIL_ENABLED: bool = False
+
     # =========================================================================
     # API Server
     # =========================================================================

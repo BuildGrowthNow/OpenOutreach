@@ -544,6 +544,11 @@ class ActionLog:
     objects: ClassVar[ActionLogManager]
 
     class ActionType:
+        # Legacy names retained for callers that consume the model directly.
+        CONNECTION_SENT = "connect"
+        CONNECTION_ACCEPTED = "connection_accepted"
+        MESSAGE_SENT = "message_sent"
+        MESSAGE_RECEIVED = "message_received"
         CONNECT = "connect"
         CHECK_PENDING = "check_pending"
         FOLLOW_UP = "follow_up"

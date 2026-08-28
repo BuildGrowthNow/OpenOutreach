@@ -1,0 +1,58 @@
+"""Dry-run/resumable envelope-encryption migration entry point.
+
+Production invocation must supply keys through the deployment secret manager;
+this command never accepts or prints plaintext credentials or key material.
+"""
+
+from __future__ import annotations
+
+import argparse
+import base64
+import json
+import os
+from pathlib import Path
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Migrate encrypted server fields")
+    parser.add_argument("--collection", required=True)
+    parser.add_argument("--field", required=True)
+    parser.add_argument("--checkpoint-file", type=Path, required=True)
+    parser.add_argument("--batch-size", type=int, default=100)
+    parser.add_argument("--apply", action="store_true", help="Apply changes; default is dry-run")
+    return parser
+
+
+def main() -> int:
+    args = build_parser().parse_args()
+    if args.batch_size < 1 or args.batch_size > 1000:
+        raise SystemExit("batch size must be between 1 and 1000")
+    checkpoint = None
+    if args.checkpoint_file.exists():
+        checkpoint = json.loads(args.checkpoint_file.read_text(encoding="utf-8")).get("checkpoint")
+    uri = os.environ.get("OPENOUTREACH_MONGODB_URI")
+    db_name = os.environ.get("OPENOUTREACH_MONGODB_NAME")
+    old_key = os.environ.get("OPENOUTREACH_ENCRYPTION_OLD_KEY_B64")
+    new_key = os.environ.get("OPENOUTREACH_ENCRYPTION_NEW_KEY_B64")
+    if not all((uri, db_name, old_key, new_key)):
+        print(json.dumps({"collection": args.collection, "field": args.field, "checkpoint": checkpoint, "dry_run": not args.apply, "status": "not_run", "reason": "deployment variables are not configured"}))
+        return 0
+    assert uri is not None and db_name is not None and old_key is not None and new_key is not None
+    from pymongo import MongoClient
+    from openoutreach.core.envelope_crypto import KeyRing, migrate_collection_field
+    client = MongoClient(uri, serverSelectionTimeoutMS=10000)
+    collection = client[db_name][args.collection]
+    old_ring = KeyRing("old", {"old": base64.b64decode(old_key)})
+    new_ring = KeyRing("new", {"new": base64.b64decode(new_key)})
+    report = migrate_collection_field(collection, field=args.field,
+        context_for=lambda document: {"tenant_id": str(document.get("user_id", "")), "profile_id": str(document.get("linkedin_profile_id", ""))},
+        old_ring=old_ring, new_ring=new_ring, checkpoint=checkpoint,
+        batch_size=args.batch_size, dry_run=not args.apply)
+    args.checkpoint_file.write_text(json.dumps({"checkpoint": report.checkpoint}), encoding="utf-8")
+    print(json.dumps({"collection": args.collection, "field": args.field, "dry_run": not args.apply, "scanned": report.scanned, "migrated": report.migrated, "skipped": report.skipped, "failed": report.failed, "checkpoint": report.checkpoint}))
+    client.close()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -13,6 +13,20 @@ from datetime import datetime, timedelta, timezone as tz
 from typing import Any, Optional
 from zoneinfo import ZoneInfo
 
+# Compatibility defaults retained for callers that use the legacy no-user
+# active-hours helper (and for desktop integrations that patch these values).
+ENABLE_ACTIVE_HOURS = True
+ACTIVE_START_HOUR = 9
+ACTIVE_END_HOUR = 17
+ACTIVE_TIMEZONE = "UTC"
+
+class _TimezoneCompat:
+    @staticmethod
+    def localtime(value=None):
+        return value or datetime.now(tz.utc)
+
+timezone = _TimezoneCompat()
+
 from pydantic_ai.exceptions import ModelHTTPError
 from termcolor import colored
 
@@ -345,23 +359,26 @@ class _HumanRhythmBreak:
 def seconds_until_active(user_id: Optional[str] = None) -> float:
     """Return seconds to wait before the next active window, or 0 if active now.
     Reads config from the user's SiteConfig."""
-    config = SiteConfig.load(user_id=user_id)
-    if not config.enable_active_hours:
+    config = SiteConfig.load(user_id=user_id) if user_id else None
+    enabled = config.enable_active_hours if config else ENABLE_ACTIVE_HOURS
+    if not enabled:
         return 0.0
 
-    zone = ZoneInfo(config.active_timezone)
-    now = datetime.now(tz.utc).astimezone(zone)
+    start_hour = config.active_start_hour if config else ACTIVE_START_HOUR
+    end_hour = config.active_end_hour if config else ACTIVE_END_HOUR
+    zone = ZoneInfo(config.active_timezone if config else ACTIVE_TIMEZONE)
+    now = timezone.localtime(datetime.now(tz.utc).astimezone(zone))
 
     try:
-        raw_days = config.active_days
+        raw_days = config.active_days if config else list(range(1, 8))
         if isinstance(raw_days, str):
             active_days = set(int(d.strip()) for d in raw_days.split(",") if d.strip())
         elif isinstance(raw_days, list):
             active_days = set(int(d) for d in raw_days)
         else:
-            active_days = {1, 2, 3, 4, 5}
+            active_days = set(range(1, 8)) if config is None else {1, 2, 3, 4, 5}
     except (ValueError, AttributeError):
-        active_days = {1, 2, 3, 4, 5}
+        active_days = set(range(1, 8)) if config is None else {1, 2, 3, 4, 5}
 
     current_weekday = now.weekday() + 1
     if current_weekday not in active_days:
@@ -370,20 +387,20 @@ def seconds_until_active(user_id: Optional[str] = None) -> float:
             next_day = (current_weekday + days_ahead - 1) % 7 + 1
             if next_day in active_days:
                 candidate = now.replace(
-                    hour=config.active_start_hour, minute=0, second=0, microsecond=0,
+                    hour=start_hour, minute=0, second=0, microsecond=0,
                 ) + timedelta(days=days_ahead)
                 return (candidate - now).total_seconds()
             days_ahead += 1
         candidate = now.replace(
-            hour=config.active_start_hour, minute=0, second=0, microsecond=0,
+            hour=start_hour, minute=0, second=0, microsecond=0,
         ) + timedelta(days=1)
         return (candidate - now).total_seconds()
 
-    if config.active_start_hour <= now.hour < config.active_end_hour:
+    if start_hour <= now.hour < end_hour:
         return 0.0
 
     candidate = now.replace(
-        hour=config.active_start_hour, minute=0, second=0, microsecond=0,
+        hour=start_hour, minute=0, second=0, microsecond=0,
     )
     if candidate <= now:
         days_ahead = 1
@@ -391,7 +408,7 @@ def seconds_until_active(user_id: Optional[str] = None) -> float:
             next_day = (current_weekday + days_ahead - 1) % 7 + 1
             if next_day in active_days:
                 candidate = now.replace(
-                    hour=config.active_start_hour, minute=0, second=0, microsecond=0,
+                    hour=start_hour, minute=0, second=0, microsecond=0,
                 ) + timedelta(days=days_ahead)
                 break
             days_ahead += 1
@@ -977,3 +994,8 @@ def _min_wait_across_profiles(pool: dict[str, ProfileSession]) -> Optional[float
             if min_wait is None or wait < min_wait:
                 min_wait = wait
     return min_wait
+
+
+# Compatibility name used by older integrations. The current daemon is
+# profile-oriented, and ProfileSession is the concrete session owner.
+Daemon = ProfileSession

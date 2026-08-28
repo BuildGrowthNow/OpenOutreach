@@ -1133,6 +1133,7 @@ class Deal:
         active_channel: str = "linkedin",
         mailbox_id: Optional[str] = None,
         email_sent_at: Optional[datetime] = None,
+        email_first_sent_at: Optional[datetime] = None,
         email_message_id: Optional[str] = None,
         email_first_message_id: Optional[str] = None,
         email_sequence_step: int = 0,
@@ -1162,6 +1163,7 @@ class Deal:
         self.active_channel = active_channel
         self.mailbox_id = mailbox_id
         self.email_sent_at = email_sent_at
+        self.email_first_sent_at = email_first_sent_at
         self.email_message_id = email_message_id
         self.email_first_message_id = email_first_message_id
         self.email_sequence_step = email_sequence_step
@@ -1230,6 +1232,8 @@ class Deal:
             data["mailbox_id"] = self.mailbox_id
         if self.email_sent_at is not None:
             data["email_sent_at"] = self.email_sent_at
+        if self.email_first_sent_at is not None:
+            data["email_first_sent_at"] = self.email_first_sent_at
         if self.email_message_id is not None:
             data["email_message_id"] = self.email_message_id
         if self.email_first_message_id is not None:
@@ -1271,6 +1275,7 @@ class Deal:
             active_channel=data.get("active_channel", "linkedin"),
             mailbox_id=data.get("mailbox_id"),
             email_sent_at=data.get("email_sent_at"),
+            email_first_sent_at=data.get("email_first_sent_at"),
             email_message_id=data.get("email_message_id"),
             email_first_message_id=data.get("email_first_message_id"),
             email_sequence_step=data.get("email_sequence_step", 0),
@@ -5135,3 +5140,14 @@ def ensure_mongodb_indexes():
                     )
         except Exception as e:
             logger.error(f"Failed to process indexes for '{collection_name}': {e}")
+
+
+# Backwards-compatible public import.  Older integration code imports User
+# from this aggregate module, while application code imports the canonical
+# implementation from models_user.
+from .models_user import User  # noqa: E402,F401
+from openoutreach.linkedin.models import (  # noqa: E402,F401
+    ActionLog, LinkedInProfile, SearchKeyword,
+)
+from openoutreach.emails.models import Mailbox  # noqa: E402,F401
+from openoutreach.mongodb.models_extended import ChatMessage  # noqa: E402,F401

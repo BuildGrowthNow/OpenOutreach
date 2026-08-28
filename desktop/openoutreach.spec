@@ -31,7 +31,6 @@ from PyInstaller.utils.hooks import collect_data_files, copy_metadata
 datas = [
     (str(ASSETS_DIR), "openoutreach/desktop/assets"),
     (str(PROJECT_ROOT / "linkedin_cli"), "linkedin_cli"),
-    (str(PROJECT_ROOT / "openoutreach"), "openoutreach"),
 ]
 # Include playwright_stealth JS files (read at runtime via pathlib)
 datas += collect_data_files("playwright_stealth")
@@ -66,11 +65,9 @@ hiddenimports = [
     "openoutreach.desktop.updater",
     "openoutreach.desktop.protocol_handler",
     # Daemon core
-    "openoutreach.core.daemon_remote",
+    "openoutreach.desktop.secure_daemon",
     "openoutreach.core.remote_client",
     "openoutreach.core.browser_detect",
-    "openoutreach.core.scheduler",
-    "openoutreach.core.models",
     "openoutreach.core.conf",
     # LinkedIn automation (runs locally on user's browser)
     "linkedin_cli",
@@ -84,31 +81,6 @@ hiddenimports = [
     "playwright",
     "playwright.sync_api",
     "playwright_stealth",
-    # MongoDB (task queue, rate limiting)
-    "pymongo",
-    "pymongo.errors",
-    "bson",
-    # OpenOutreach models
-    "openoutreach.mongodb",
-    "openoutreach.mongodb.connection",
-    "openoutreach.mongodb.models",
-    "openoutreach.mongodb.models_extended",
-    "openoutreach.linkedin.models",
-    "openoutreach.linkedin.tasks",
-    "openoutreach.linkedin.tasks.connect",
-    "openoutreach.linkedin.tasks.check_pending",
-    "openoutreach.linkedin.tasks.follow_up",
-    "openoutreach.linkedin.tasks.send_manual_message",
-    "openoutreach.linkedin.pipeline",
-    "openoutreach.linkedin.pipeline.search",
-    "openoutreach.linkedin.pipeline.search_keywords",
-    "openoutreach.linkedin.pipeline.qualify",
-    "openoutreach.linkedin.pipeline.pools",
-    "openoutreach.linkedin.db",
-    "openoutreach.linkedin.ml",
-    "openoutreach.crm",
-    "openoutreach.crm.models",
-    "openoutreach.crm.models.deal",
     # HTTP / networking
     "httpx",
     "httpx._transports",

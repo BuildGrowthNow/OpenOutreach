@@ -23,7 +23,7 @@ from email import policy, utils as email_utils
 logger = logging.getLogger(__name__)
 
 
-def find_reply(mailbox, original_message_id: str) -> tuple[str, datetime] | None:
+def find_reply(mailbox, original_message_id: str | list[str]) -> tuple[str, datetime] | None:
     """Return (text, received_at) of first reply to *original_message_id*, or None.
 
     Searches the mailbox INBOX for messages whose In-Reply-To header matches
@@ -130,7 +130,8 @@ def scan_imap_replies(user_id: str) -> int:
             "email_message_id": {"$exists": True, "$nin": [None, ""]},
             "mailbox_id": {"$exists": True, "$nin": [None, ""]},
         },
-        {"_id": 1, "mailbox_id": 1, "email_message_id": 1, "lead_id": 1},
+        {"_id": 1, "mailbox_id": 1, "email_message_id": 1,
+         "email_first_message_id": 1, "lead_id": 1},
     )
 
     replied_count = 0
@@ -157,8 +158,11 @@ def scan_imap_replies(user_id: str) -> int:
                 imap.select("INBOX", readonly=True)
 
                 for deal_doc in deal_docs:
-                    original_msg_id = deal_doc.get("email_message_id", "")
-                    if not original_msg_id:
+                    original_msg_id = [
+                        deal_doc.get("email_message_id", ""),
+                        deal_doc.get("email_first_message_id", ""),
+                    ]
+                    if not any(original_msg_id):
                         continue
 
                     result = _search_inbox(imap, original_msg_id)
@@ -208,19 +212,26 @@ def scan_imap_replies(user_id: str) -> int:
     return replied_count
 
 
-def _search_inbox(imap: imaplib.IMAP4_SSL, original_message_id: str) -> tuple[str, datetime] | None:
+def _search_inbox(
+    imap: imaplib.IMAP4_SSL, original_message_id: str | list[str]
+) -> tuple[str, datetime] | None:
     """Return (reply_text, received_at) for *original_message_id* using an already-open IMAP connection.
 
     Searches In-Reply-To then References with/without angle brackets.
     Returns None when no reply is found.
     """
-    clean_id = original_message_id.strip("<>")
-    search_variants = [
-        ("In-Reply-To", f"<{clean_id}>"),
-        ("In-Reply-To", clean_id),
-        ("References", f"<{clean_id}>"),
-        ("References", clean_id),
-    ]
+    ids = [original_message_id] if isinstance(original_message_id, str) else original_message_id
+    search_variants = []
+    for message_id in ids:
+        clean_id = message_id.strip("<>")
+        if not clean_id:
+            continue
+        search_variants.extend([
+            ("In-Reply-To", f"<{clean_id}>"),
+            ("In-Reply-To", clean_id),
+            ("References", f"<{clean_id}>"),
+            ("References", clean_id),
+        ])
     seen_uids: set[bytes] = set()
     for header, candidate in search_variants:
         try:

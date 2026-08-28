@@ -191,6 +191,7 @@ def handle_whatsapp_message(task, wa_session, qualifiers):  # noqa: ARG001
             creation_date=now,
             user_id=deal.user_id,
             channel="whatsapp",
+            wa_msg_hash=ChatMessage.compute_wa_hash(str(deal._id), True, message),
         ).save()
 
         # Create ActionLog

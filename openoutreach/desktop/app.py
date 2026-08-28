@@ -17,7 +17,8 @@ import webview
 from PIL import Image, ImageDraw
 from pystray import MenuItem as Item
 
-from openoutreach.core.daemon_remote import RemoteDaemon
+from openoutreach.desktop.secure_daemon import SecureRemoteDaemon as RemoteDaemon
+from openoutreach.desktop.device_identity import DeviceIdentity
 from openoutreach.desktop.__version__ import __version__
 from openoutreach.desktop.auth import AuthManager
 from openoutreach.desktop.config import AppConfig
@@ -298,6 +299,24 @@ class DesktopAPI:
             if self._app.auth.is_logged_in():
                 self._app._start_daemon()
 
+    def store_auth_tokens(self, access_token: str, refresh_token: Optional[str] = None) -> None:
+        """Store login tokens received over the in-process webview bridge.
+
+        Refresh tokens never need to cross the OS custom-URL protocol, where
+        command-line arguments and protocol handlers can expose them.
+        """
+        if not access_token:
+            return
+        self._app.auth.login(
+            access_token,
+            self._app.auth.get_profile_id() or "",
+            refresh_token=refresh_token,
+        )
+        self._app._token_valid = True
+        self._app._update_menu()
+        if self._app.auth.is_logged_in():
+            self._app._start_daemon()
+
     def apply_update(self) -> None:
         """Called by the in-app update banner 'Restart to update' button."""
         threading.Thread(target=self._app._on_apply_update, daemon=True, name="apply-update").start()
@@ -311,6 +330,10 @@ class DesktopAPI:
     def get_keychain_refresh_token(self) -> Optional[str]:
         """Return the stored refresh token so the frontend can re-authenticate after restart."""
         return self._app.auth.get_refresh_token()
+
+    def enroll_daemon(self, code: str) -> None:
+        """Redeem a short-lived code displayed by the authenticated web app."""
+        threading.Thread(target=self._app._enroll_daemon, args=(code,), daemon=True, name="daemon-enroll").start()
 
 
 class TrayApp:
@@ -618,23 +641,30 @@ class TrayApp:
             if not self.auth.is_logged_in():
                 return
 
-            token = self.auth.get_token()
-            refresh_token = self.auth.get_refresh_token()
+            if not self.auth.get_token():
+                return
 
-            if not token:
+            # Human web credentials are intentionally never passed to the
+            # daemon gateway. Enrollment is initiated from the authenticated
+            # webview through DesktopAPI.enroll_daemon().
+            token = ""
+            refresh_token = self.auth.get_daemon_refresh_token()
+            device_id = self.auth.get_daemon_device_id()
+            if not refresh_token or not device_id:
+                if self.icon:
+                    self.icon.notify("Connect this desktop", "Open Security settings and connect this device before starting automation.")
                 return
 
             # Always resolve fresh profile_id so a credential delete+recreate doesn't
             # leave a stale ID in the keychain causing 404s on every daemon start.
             # _resolve_profile_id may refresh the token internally on 401 - re-read
             # token afterwards so the daemon gets the latest one.
-            resolved = self._resolve_profile_id(token)
-            token = self.auth.get_token() or token  # pick up refreshed token if any
+            resolved = self.auth.get_profile_id()
             if resolved:
                 cached = self.auth.get_profile_id()
                 if resolved != cached:
                     logger.info("Profile ID changed (%s → %s), updating keychain", cached, resolved)
-                    self.auth.login(token, resolved, refresh_token=refresh_token)
+                    self.auth.login(self.auth.get_token() or "", resolved, refresh_token=self.auth.get_refresh_token())
                 profile_id = resolved
             else:
                 # API unreachable - fall back to keychain so we can still start offline
@@ -663,6 +693,8 @@ class TrayApp:
                     linkedin_profile_id=profile_id,
                     refresh_token=refresh_token,
                     on_token_refresh=on_token_refresh,
+                    identity=DeviceIdentity.load_or_create(),
+                    on_credentials_rotated=self.auth.save_daemon_credentials,
                     on_started=on_started,
                 )
                 try:
@@ -670,7 +702,7 @@ class TrayApp:
                 except KeyboardInterrupt:
                     pass
                 except Exception as e:
-                    from openoutreach.core.daemon_remote import BrowserNotFoundError
+                    from openoutreach.desktop.secure_daemon import BrowserNotFoundError
                     logger.exception("Daemon error: %s", e)
                     msg = "No supported browser found." if isinstance(e, BrowserNotFoundError) else "Daemon error - check logs."
                     if self.icon:
@@ -689,6 +721,29 @@ class TrayApp:
             self.daemon_thread.start()
         finally:
             self._daemon_start_lock.release()
+
+    def _enroll_daemon(self, code: str) -> None:
+        profile_id = self.auth.get_profile_id() or ""
+        if not profile_id or not code:
+            return
+        identity = DeviceIdentity.load_or_create()
+        daemon = RemoteDaemon(self.config.api_url, "", profile_id, identity=identity)
+        try:
+            loop = asyncio.new_event_loop()
+            result = loop.run_until_complete(daemon.enroll(code))
+            self.auth.save_daemon_credentials(result["device_id"], daemon.client._refresh_token or "")
+            if self.icon:
+                self.icon.notify("Desktop connected", "This device can now run scoped automation.")
+        except Exception as exc:
+            logger.warning("Desktop enrollment failed: %s", type(exc).__name__)
+            if self.icon:
+                self.icon.notify("Connection failed", "The enrollment code may be expired or already used.")
+        finally:
+            try:
+                loop.run_until_complete(daemon.client.close())
+                loop.close()
+            except Exception:
+                pass
 
     def _try_refresh_token(self, refresh_token: str) -> Optional[str]:
         """Exchange a refresh token for a new access token. Returns new token or None."""
@@ -847,7 +902,9 @@ class TrayApp:
                     logger.info("Update v%s available - downloading in background", ver)
                     if self.icon:
                         self.icon.notify(f"Downloading Lengrowth v{ver}…", "Will notify when ready to install.")
-                    path = await download_update(info["download_url"], version=ver)
+                    path = await download_update(
+                        info["download_url"], version=ver, expected_digest=info.get("digest")
+                    )
                     if path:
                         save_pending_update(info, path)
                         self._pending_update = info
@@ -898,7 +955,9 @@ class TrayApp:
                         ver = info["version"]
                         if can_auto_update():
                             logger.info("Periodic check: update v%s available - downloading in background", ver)
-                            path = await download_update(info["download_url"], version=ver)
+                            path = await download_update(
+                                info["download_url"], version=ver, expected_digest=info.get("digest")
+                            )
                             if path:
                                 save_pending_update(info, path)
                                 self._pending_update = info

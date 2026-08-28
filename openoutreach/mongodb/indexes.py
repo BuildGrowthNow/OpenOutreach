@@ -347,6 +347,39 @@ def ensure_all_indexes():
             ({'valid_from': 1, 'valid_until': 1}, {'name': 'coupon_valid_idx'}),
             ({'stripe_coupon_id': 1}, {'name': 'coupon_stripe_id_idx'}),
         ]),
+
+        # Daemon v2 identity, one-time enrollment, and refresh rotation.
+        ('daemon_enrollment_codes', [
+            ({'code_hash': 1}, {'name': 'daemon_enrollment_code_hash_unique', 'unique': True}),
+            ({'expires_at': 1}, {'name': 'daemon_enrollment_expiry_ttl', 'expireAfterSeconds': 0}),
+            ({'user_id': 1, 'used': 1}, {'name': 'daemon_enrollment_user_used_idx'}),
+        ]),
+        ('daemon_devices', [
+            ({'user_id': 1, 'revoked': 1}, {'name': 'daemon_device_user_status_idx'}),
+            ({'user_id': 1, 'last_seen_at': -1}, {'name': 'daemon_device_user_seen_idx'}),
+        ]),
+        ('daemon_refresh_families', [
+            ({'device_id': 1, 'token_hash': 1}, {'name': 'daemon_refresh_device_hash_unique', 'unique': True}),
+            ({'family_id': 1, 'used': 1, 'revoked': 1}, {'name': 'daemon_refresh_family_state_idx'}),
+            ({'expires_at': 1}, {'name': 'daemon_refresh_expiry_ttl', 'expireAfterSeconds': 0}),
+        ]),
+        ('daemon_nonces', [
+            ({'device_id': 1, 'nonce': 1}, {'name': 'daemon_nonce_unique', 'unique': True}),
+            ({'expires_at': 1}, {'name': 'daemon_nonce_expiry_ttl', 'expireAfterSeconds': 0}),
+        ]),
+        ('daemon_events', [
+            ({'user_id': 1, 'device_id': 1, 'event_id': 1}, {'name': 'daemon_event_dedupe_unique', 'unique': True}),
+            ({'user_id': 1, 'created_at': -1}, {'name': 'daemon_event_tenant_time_idx'}),
+        ]),
+        ('security_audit_events', [
+            ({'created_at': -1}, {'name': 'security_event_time_idx'}),
+            ({'event': 1, 'created_at': -1}, {'name': 'security_event_type_time_idx'}),
+            ({'tenant_id': 1, 'created_at': -1}, {'name': 'security_event_tenant_time_idx'}),
+        ]),
+        ('tasks', [
+            ({'user_id': 1, 'linkedin_profile_id': 1, 'channel': 1, 'status': 1, 'scheduled_at': 1}, {'name': 'daemon_v2_task_claim_idx'}),
+            ({'user_id': 1, 'leased_by_device_id': 1, 'lease_id': 1, 'status': 1}, {'name': 'daemon_v2_task_lease_idx'}),
+        ]),
     ]
 
     created_count = 0

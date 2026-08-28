@@ -113,7 +113,7 @@ async function postWebhook(
 
 // ── Route handlers ────────────────────────────────────────────────
 
-async function handleOpen(request: Request, env: Env, tokenRaw: string): Promise<Response> {
+async function handleOpen(request: Request, env: Env, ctx: ExecutionContext, tokenRaw: string): Promise<Response> {
   const token = tokenRaw.replace(/\.gif$/, "");
   const payload = await verifyToken(token, env.SECRET_KEY);
   if (!payload || payload.event !== "open") {
@@ -127,12 +127,12 @@ async function handleOpen(request: Request, env: Env, tokenRaw: string): Promise
     await env.EMAIL_EVENTS.put(key, JSON.stringify({ ...payload, ts: Date.now() }), {
       expirationTtl: 60 * 60 * 24 * 90, // 90 days
     });
-    void postWebhook(env, {
+    ctx.waitUntil(postWebhook(env, {
       deal_id: payload.deal_id,
       campaign_id: payload.campaign_id,
       event: "open",
       ts: Math.floor(Date.now() / 1000),
-    });
+    }));
   }
 
   return new Response(PIXEL_GIF, {
@@ -144,7 +144,7 @@ async function handleOpen(request: Request, env: Env, tokenRaw: string): Promise
   });
 }
 
-async function handleClick(request: Request, env: Env, token: string): Promise<Response> {
+async function handleClick(request: Request, env: Env, ctx: ExecutionContext, token: string): Promise<Response> {
   const payload = await verifyToken(token, env.SECRET_KEY);
   if (!payload || payload.event !== "click" || !payload.dest_url) {
     return new Response(null, { status: 400 });
@@ -157,12 +157,12 @@ async function handleClick(request: Request, env: Env, token: string): Promise<R
     await env.EMAIL_EVENTS.put(key, JSON.stringify({ ...payload, ts: Date.now() }), {
       expirationTtl: 60 * 60 * 24 * 90,
     });
-    void postWebhook(env, {
+    ctx.waitUntil(postWebhook(env, {
       deal_id: payload.deal_id,
       campaign_id: payload.campaign_id,
       event: "click",
       ts: Math.floor(Date.now() / 1000),
-    });
+    }));
   }
 
   return Response.redirect(payload.dest_url, 302);
@@ -217,7 +217,7 @@ async function handleUnsubGet(_request: Request, env: Env, token: string): Promi
   return unsubscribePage(token);
 }
 
-async function handleUnsubPost(request: Request, env: Env, token: string): Promise<Response> {
+async function handleUnsubPost(request: Request, env: Env, ctx: ExecutionContext, token: string): Promise<Response> {
   const payload = await verifyToken(token, env.SECRET_KEY);
   if (!payload || payload.event !== "unsub") {
     return new Response(null, { status: 400 });
@@ -225,12 +225,12 @@ async function handleUnsubPost(request: Request, env: Env, token: string): Promi
 
   await env.EMAIL_SUPPRESSED.put(payload.deal_id, "1");
 
-  void postWebhook(env, {
+  ctx.waitUntil(postWebhook(env, {
     deal_id: payload.deal_id,
     campaign_id: payload.campaign_id,
     event: "unsub",
     ts: Math.floor(Date.now() / 1000),
-  });
+  }));
 
   return unsubscribeDonePage();
 }
@@ -238,24 +238,24 @@ async function handleUnsubPost(request: Request, env: Env, token: string): Promi
 // ── Router ────────────────────────────────────────────────────────
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     const pathname = url.pathname;
 
     const openMatch = pathname.match(/^\/open\/(.+\.gif)$/);
     if (openMatch && request.method === "GET") {
-      return handleOpen(request, env, openMatch[1]);
+      return handleOpen(request, env, ctx, openMatch[1]);
     }
 
     const clickMatch = pathname.match(/^\/click\/(.+)$/);
     if (clickMatch && request.method === "GET") {
-      return handleClick(request, env, clickMatch[1]);
+      return handleClick(request, env, ctx, clickMatch[1]);
     }
 
     const unsubMatch = pathname.match(/^\/unsub\/(.+)$/);
     if (unsubMatch) {
       if (request.method === "GET") return handleUnsubGet(request, env, unsubMatch[1]);
-      if (request.method === "POST") return handleUnsubPost(request, env, unsubMatch[1]);
+      if (request.method === "POST") return handleUnsubPost(request, env, ctx, unsubMatch[1]);
     }
 
     return new Response("Not Found", { status: 404 });

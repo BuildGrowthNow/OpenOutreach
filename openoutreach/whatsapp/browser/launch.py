@@ -140,8 +140,13 @@ def _post_auth_update(wa_session: "WASession") -> None:
         logger.warning("Could not update WA profile after auth: %s", e)
 
 
-def close_whatsapp_session(wa_session: "WASession") -> None:
-    """Close browser and mark profile disconnected."""
+def close_whatsapp_session(wa_session: "WASession", mark_disconnected: bool = True) -> None:
+    """Close browser and optionally mark profile disconnected.
+
+    An intentional daemon stop preserves ``connected`` because the encrypted
+    storage state is still valid. Unexpected expiry/error paths keep the default
+    and surface ``disconnected`` to the user.
+    """
     try:
         if wa_session.context:
             _save_session(wa_session)
@@ -163,8 +168,9 @@ def close_whatsapp_session(wa_session: "WASession") -> None:
     wa_session.browser = None
     wa_session.playwright = None
 
-    try:
-        wa_session.wa_profile.status = STATUS_DISCONNECTED
-        wa_session.wa_profile.save(update_fields=["status"])
-    except Exception as e:
-        logger.debug("Profile status update error: %s", e)
+    if mark_disconnected:
+        try:
+            wa_session.wa_profile.status = STATUS_DISCONNECTED
+            wa_session.wa_profile.save(update_fields=["status"])
+        except Exception as e:
+            logger.debug("Profile status update error: %s", e)

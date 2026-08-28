@@ -76,3 +76,26 @@ class AuthManager:
                     pass
                 except Exception:
                     pass
+
+    def get_daemon_refresh_token(self) -> Optional[str]:
+        try:
+            return keyring.get_password(SERVICE_NAME, "daemon_refresh_token")
+        except Exception:
+            return None
+
+    def get_daemon_device_id(self) -> Optional[str]:
+        try:
+            return keyring.get_password(SERVICE_NAME, "daemon_device_id")
+        except Exception:
+            return None
+
+    def save_daemon_credentials(self, device_id: str, refresh_token: str) -> None:
+        keyring.set_password(SERVICE_NAME, "daemon_device_id", device_id)
+        keyring.set_password(SERVICE_NAME, "daemon_refresh_token", refresh_token)
+
+    def clear_daemon_credentials(self) -> None:
+        for key in ("daemon_device_id", "daemon_refresh_token"):
+            try:
+                keyring.delete_password(SERVICE_NAME, key)
+            except Exception:
+                pass

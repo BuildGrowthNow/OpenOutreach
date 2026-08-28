@@ -282,8 +282,19 @@ def handle_whatsapp_sync(task, wa_session, qualifiers):  # noqa: ARG001
             ts = _parse_wa_timestamp(raw.get("ts_text") or "")
             creation_date = ts if ts is not None else datetime.now(timezone.utc)
 
-            wa_hash = ChatMessage.compute_wa_hash(str(deal._id), is_outgoing, content)
-            if messages_col.find_one({"wa_msg_hash": wa_hash}):
+            # Include the source timestamp for inbound messages so repeated
+            # replies with identical text remain distinct. Outgoing hashes
+            # stay compatible with the delivery-status upgrader.
+            message_key = "" if is_outgoing else (raw.get("ts_text") or creation_date.isoformat())
+            wa_hash = ChatMessage.compute_wa_hash(
+                str(deal._id), is_outgoing, content, message_key
+            )
+            if messages_col.find_one({"wa_msg_hash": wa_hash}) or (
+                not is_outgoing
+                and messages_col.find_one({
+                    "wa_msg_hash": ChatMessage.compute_wa_hash(str(deal._id), False, content)
+                })
+            ):
                 continue
 
             delivery_status = raw.get("delivery_status") if is_outgoing else None

@@ -204,7 +204,14 @@ def _create_task(campaign: Campaign, deal: Deal, task_type: str, step_id: str, u
         "scheduled_at": now,
         "payload": {"campaign_id": campaign._id, "deal_id": deal._id, "step_id": step_id},
         "user_id": user_id,
-        "linkedin_profile_id": campaign.linkedin_profile_id,
+        # Task.claim_next uses this field as the session owner.  WhatsApp
+        # sessions are keyed by whatsapp_profile_id (not the LinkedIn profile
+        # attached to the campaign), so sequence WA tasks must carry that ID.
+        "linkedin_profile_id": (
+            campaign.whatsapp_profile_id
+            if channel == "whatsapp"
+            else campaign.linkedin_profile_id
+        ),
         "channel": channel,
         "created_at": now,
     }}, upsert=True)

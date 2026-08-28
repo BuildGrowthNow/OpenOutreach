@@ -11,15 +11,16 @@ Desktop app daemons use these to:
 
 import logging
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 
 from openoutreach.api_v2.dependencies_v2 import get_current_user
 from openoutreach.core.models import Task, SiteConfig
 from openoutreach.linkedin.models import LinkedInProfile
 from openoutreach.mongodb.models_user import User
+from openoutreach.api_v2.daemon_security import audit_event, assert_safe_response, require_secure_daemon
 
 
 def _utc_iso(dt: Optional[datetime]) -> Optional[str]:
@@ -53,7 +54,7 @@ class TaskClaimResponse(BaseModel):
 
 class TaskResultRequest(BaseModel):
     task_id: str
-    status: str  # "completed" | "failed"
+    status: Literal["completed", "failed"]
     result: Optional[dict] = None
     error: Optional[str] = None
     duration_ms: int
@@ -146,11 +147,15 @@ async def claim_task(
             "status": Task.Status.PENDING,
             "scheduled_at": {"$lte": now},
             "linkedin_profile_id": linkedin_profile_id,
+            # Tasks without immutable top-level ownership are unavailable until
+            # the Phase 1 backfill has reconciled them.
+            "user_id": user_id,
         },
         {
             "$set": {
                 "status": Task.Status.RUNNING,
                 "started_at": datetime.now(timezone.utc),
+                "claimed_by_daemon_id": daemon_id,
             }
         },
         sort=[("scheduled_at", 1)],
@@ -176,29 +181,36 @@ async def report_task_result(
     user_id: str = Depends(get_current_user),
 ):
     """Report task completion or failure."""
-    task = Task.objects().get(_id=request.task_id)
-    if not task:
+    from openoutreach.mongodb.connection import get_mongodb_collection
+    collection = get_mongodb_collection("tasks")
+    if collection is None:
+        raise HTTPException(503, "Database unavailable")
+
+    # IDs are locators. Ownership and current state are enforced atomically;
+    # payload.profile_id is never used as an authorization source.
+    update: dict = {
+        "$set": {
+            "status": Task.Status.COMPLETED if request.status == "completed" else Task.Status.FAILED,
+            "completed_at": datetime.now(timezone.utc),
+        }
+    }
+    if request.error:
+        update["$set"]["error_message"] = request.error[:500]
+    if request.result is not None:
+        update["$set"]["result"] = request.result
+
+    result = collection.update_one(
+        {
+            "_id": request.task_id,
+            "user_id": user_id,
+            "status": Task.Status.RUNNING,
+        },
+        update,
+    )
+    if result.matched_count == 0:
+        # Do not reveal whether another tenant owns the task or whether it is
+        # already terminal.
         raise HTTPException(404, "Task not found")
-
-    # Verify ownership via profile
-    if "linkedin_profile_id" in task.payload:
-        profile = LinkedInProfile.objects.get(
-            _id=task.payload["linkedin_profile_id"],
-            user_id=user_id,
-        )
-        if not profile:
-            raise HTTPException(403, "Not authorized")
-
-    # Update task status
-    if request.status == "completed":
-        task.mark_completed()
-    else:
-        task.mark_failed(error_message=request.error)
-
-    # Store additional metadata in payload
-    if request.result:
-        task.payload["result"] = request.result
-        task.save(update_fields=["payload"])
 
     return {"status": "ok"}
 
@@ -237,7 +249,7 @@ async def sync_cookies(
         raise HTTPException(503, "Database unavailable")
 
     collection.update_one(
-        {"_id": request.linkedin_profile_id},
+        {"_id": request.linkedin_profile_id, "user_id": user_id},
         {
             "$set": {
                 "cookies_updated_at": datetime.now(timezone.utc),
@@ -277,7 +289,7 @@ async def report_session_state(
         update_fields["linkedin_username"] = request.linkedin_username
 
     collection.update_one(
-        {"_id": request.linkedin_profile_id},
+        {"_id": request.linkedin_profile_id, "user_id": user_id},
         {"$set": update_fields},
     )
 
@@ -286,6 +298,7 @@ async def report_session_state(
 
 @router.get("/config")
 async def get_daemon_config(
+    request: Request,
     linkedin_profile_id: str,
     user_id: str = Depends(get_current_user),
 ):
@@ -293,6 +306,7 @@ async def get_daemon_config(
 
     Load real user settings via SiteConfig.load() not global singleton.
     """
+    require_secure_daemon(request)
     profile = LinkedInProfile.objects.get(
         _id=linkedin_profile_id,
         user_id=user_id,
@@ -305,9 +319,7 @@ async def get_daemon_config(
     # active_days is stored as List[int] in the model
     active_days = config.active_days if isinstance(config.active_days, list) else [1, 2, 3, 4, 5, 6, 7]
 
-    from openoutreach.config import settings as app_settings
-
-    return {
+    response = {
         "rate_limits": {
             "velocity": config.velocity,
             "daily_connect_limit": profile.connect_daily_limit,
@@ -323,40 +335,23 @@ async def get_daemon_config(
         },
         "poll_interval_seconds": 30,
         "heartbeat_interval_seconds": 30,
-        "server_env": {
-            "llm_api_key": app_settings.LLM_API_KEY or None,
-            "llm_api_base": app_settings.LLM_API_BASE or None,
-            "ai_model": app_settings.AI_MODEL or None,
-            "llm_provider": app_settings.LLM_PROVIDER or None,
-        },
     }
+    assert_safe_response(response)
+    return response
 
 
 @router.get("/bootstrap")
 async def bootstrap_daemon(
+    request: Request,
     linkedin_profile_id: str,
-    user_id: str = Depends(get_current_user),
 ):
-    """One-time bootstrap payload for the desktop daemon on startup.
-
-    Returns the MongoDB URI and SECRET_KEY needed for cookie encryption/decryption
-    and JWT signing. Separate from /config so the secret is never mixed into the
-    regularly-polled config response.
-    """
-    profile = LinkedInProfile.objects.get(
-        _id=linkedin_profile_id,
-        user_id=user_id,
+    """Permanently disabled; this endpoint can never return server secrets."""
+    audit_event(request, "bootstrap_attempt", outcome="rejected")
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail="Desktop bootstrap is no longer available",
+        headers={"Cache-Control": "no-store"},
     )
-    if not profile:
-        raise HTTPException(404, "LinkedIn profile not found")
-
-    from openoutreach.config import settings as app_settings
-
-    return {
-        "secret_key": app_settings.SECRET_KEY,
-        "mongodb_uri": app_settings.MONGODB_URI or None,
-        "mongodb_name": app_settings.MONGODB_NAME,
-    }
 
 
 @router.post("/reconcile")

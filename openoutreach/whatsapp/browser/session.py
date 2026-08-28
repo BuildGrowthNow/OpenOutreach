@@ -158,7 +158,13 @@ class WASession:
         except Exception:
             return False
 
-    def close(self) -> None:
-        """Close browser and clean up. Safe to call from Playwright thread."""
+    def close(self, mark_disconnected: bool = True) -> None:
+        """Close browser and clean up.
+
+        ``mark_disconnected`` is false for an intentional daemon shutdown: the
+        persisted session remains authenticated and can be resumed on restart.
+        QR expiry, crashes, and health-check recovery use the default true.
+        Safe to call from the Playwright thread.
+        """
         from openoutreach.whatsapp.browser.launch import close_whatsapp_session
-        close_whatsapp_session(self)
+        close_whatsapp_session(self, mark_disconnected=mark_disconnected)

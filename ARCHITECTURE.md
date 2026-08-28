@@ -1,5 +1,17 @@
 # Architecture
 
+## Security migration boundary
+
+The desktop is an untrusted API client. `/api/daemon/bootstrap` is permanently
+disabled (`410`), legacy daemon routes enforce the secure version floor, and
+v2 routes use asymmetric daemon tokens bound to tenant, device, profile, and
+channel scopes. Device private keys and rotating refresh credentials stay in
+the desktop OS keychain; server-only signing, encryption, provider, and
+MongoDB credentials are never returned to the desktop. Secure desktop task
+execution uses typed v2 leases and event receipts; MongoDB/model imports are
+excluded from the PyInstaller spec. See the migration plan for remaining
+channel-adapter and production rollout gates.
+
 Detailed module documentation for OpenOutreach. See `CLAUDE.md` for rules and quick reference.
 
 ## High-Level Overview
@@ -9,7 +21,10 @@ OpenOutreach automates LinkedIn outreach through a persistent task queue execute
 1. **Desktop daemon** (default): runs `openoutreach/core/daemon_remote.py` on the user's own machine using their residential IP.
 2. **Cloud daemon** (paid add-on): runs `openoutreach/core/daemon.py` server-side in Docker on EC2, using proxies.
 
-Both modes share the same MongoDB Atlas cluster, task handlers, and `SiteConfig` for per-user settings.
+The server-side daemon uses MongoDB. The legacy desktop daemon is cut off
+from bootstrap, provider secrets, and MongoDB; it fails closed until the
+API-only v2 gateway is deployed. Desktop requests are HTTPS-only and must use
+server-owned task APIs.
 
 ```
 ┌────────────────────────────────────────┐
@@ -37,6 +52,11 @@ Both modes share the same MongoDB Atlas cluster, task handlers, and `SiteConfig`
 ## Project Layout
 
 ```
+
+The daemon security boundary is implemented under `openoutreach/api_v2`: the
+legacy bootstrap endpoint is disabled, v2 uses daemon-only RS256 credentials
+and server-checked device bindings, and task leases are tenant/profile/channel
+scoped. Desktop execution is fail-closed until all handlers use these APIs.
 openoutreach/
 ├── api_v2/          # FastAPI routers, schemas, dependencies
 ├── billing/         # Stripe integration, plan enforcement, trial/expiry

@@ -7,6 +7,7 @@ No test send - boxes are mid-warmup; we only confirm the credentials log in.
 from __future__ import annotations
 
 import smtplib
+import imaplib
 
 
 def verify_auth(host: str, port: int, username: str, password: str) -> tuple[bool, str]:
@@ -38,3 +39,15 @@ def verify_auth(host: str, port: int, username: str, password: str) -> tuple[boo
         return False, f"auth rejected ({e.smtp_code}){hint}"
     except (smtplib.SMTPException, OSError) as e:
         return False, f"connection failed: {e}"
+
+
+def verify_imap_auth(host: str, port: int, username: str, password: str) -> tuple[bool, str]:
+    """Connect and authenticate to IMAP without changing mailbox state."""
+    try:
+        with imaplib.IMAP4_SSL(host, port, timeout=20) as imap:
+            status, _ = imap.login(username, password)
+            if status != "OK":
+                return False, "IMAP authentication rejected"
+        return True, "ok"
+    except (imaplib.IMAP4.error, OSError) as e:
+        return False, f"IMAP connection/authentication failed: {e}"

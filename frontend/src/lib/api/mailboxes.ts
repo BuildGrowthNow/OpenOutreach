@@ -18,6 +18,25 @@ export interface Mailbox {
   paused: boolean;
 }
 
+/** Convert the API's snake_case response into the UI's camelCase contract. */
+function normalizeMailbox(value: Record<string, unknown>): Mailbox {
+  return {
+    id: String(value.id ?? ""),
+    host: String(value.host ?? ""),
+    port: Number(value.port ?? 0),
+    username: String(value.username ?? ""),
+    fromAddress: String(value.from_address ?? value.fromAddress ?? ""),
+    fromName: String(value.from_name ?? value.fromName ?? ""),
+    dailyLimit: Number(value.daily_limit ?? value.dailyLimit ?? 0),
+    headroomToday: Number(value.headroom_today ?? value.headroomToday ?? 0),
+    sentToday: Number(value.sent_today ?? value.sentToday ?? 0),
+    imapHost: String(value.imap_host ?? value.imapHost ?? ""),
+    imapPort: Number(value.imap_port ?? value.imapPort ?? 993),
+    imapUsername: String(value.imap_username ?? value.imapUsername ?? ""),
+    paused: Boolean(value.paused),
+  };
+}
+
 export interface MailboxCreate {
   host: string;
   port: number;
@@ -39,7 +58,7 @@ export interface MailboxTestResult {
 
 export async function listMailboxes(): Promise<Mailbox[]> {
   const res = await apiClient.get<Mailbox[]>("/mailboxes");
-  return res.data ?? [];
+  return (res.data ?? []).map((value) => normalizeMailbox(value as unknown as Record<string, unknown>));
 }
 
 export async function testMailbox(
@@ -73,7 +92,7 @@ export async function createMailbox(data: MailboxCreate): Promise<Mailbox> {
     imap_password: data.imapPassword || "",
   });
   if (!res.data) throw new Error(res.error ?? "Failed to create mailbox");
-  return res.data;
+  return normalizeMailbox(res.data as unknown as Record<string, unknown>);
 }
 
 export interface MailboxUpdate {
@@ -97,7 +116,7 @@ export async function updateMailbox(mailboxId: string, data: MailboxUpdate): Pro
   if (data.password !== undefined) payload.password = data.password;
   const res = await apiClient.patch<Mailbox>(`/mailboxes/${mailboxId}`, payload);
   if (!res.data) throw new Error(res.error ?? "Failed to update mailbox");
-  return res.data;
+  return normalizeMailbox(res.data as unknown as Record<string, unknown>);
 }
 
 export async function deleteMailbox(mailboxId: string): Promise<void> {
@@ -107,5 +126,5 @@ export async function deleteMailbox(mailboxId: string): Promise<void> {
 export async function unpauseMailbox(mailboxId: string): Promise<Mailbox> {
   const res = await apiClient.patch<Mailbox>(`/mailboxes/${mailboxId}/unpause`);
   if (!res.data) throw new Error(res.error ?? "Failed to unpause mailbox");
-  return res.data;
+  return normalizeMailbox(res.data as unknown as Record<string, unknown>);
 }

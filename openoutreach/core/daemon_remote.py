@@ -284,35 +284,12 @@ class RemoteDaemon:
         assert self.config is not None
         logger.info("Config loaded: velocity=%d/hr", self.config.velocity)
 
-        # Fetch bootstrap secrets (secret_key + MongoDB URI) via dedicated endpoint.
-        # Separate from get_config so secrets are never mixed into the polling path.
-        try:
-            bootstrap = await self._startup_request(
-                "get bootstrap",
-                lambda: self.client.bootstrap(self.linkedin_profile_id),
-            )
-        except Exception as e:
-            logger.error("Failed to fetch bootstrap secrets: %s", e)
-            self.running = False
-            return
-
-        # Inject server-side env for the desktop process (no local .env available).
-        # Sets os.environ first (for mongodb/crypto.py), then patches the pydantic
-        # settings singleton (for core/crypto.py and llm.py).
-        self._apply_server_env(bootstrap, self.config)
-
-        # Connect to Atlas using the URI provided by the backend
-        mongodb_uri = bootstrap.get("mongodb_uri")
-        mongodb_name = bootstrap.get("mongodb_name", "openoutreach")
-        if mongodb_uri:
-            from openoutreach.mongodb.connection import initialize_mongodb_with_uri
-            ok = initialize_mongodb_with_uri(mongodb_uri, mongodb_name)
-            if ok:
-                logger.info("MongoDB Atlas connected (db: %s)", mongodb_name)
-            else:
-                logger.warning("MongoDB Atlas connection failed - task execution may be degraded")
-        else:
-            logger.warning("No MongoDB URI in bootstrap - task execution will fail")
+        # The legacy daemon performed direct MongoDB access and received server
+        # secrets. It is intentionally fail-closed until the v2 gateway client
+        # is in place; no fallback can restore that trust boundary.
+        logger.error("Legacy remote daemon disabled: secure API-only desktop required")
+        self.running = False
+        return
 
         # Schedule tasks for active campaigns
         try:
@@ -355,45 +332,6 @@ class RemoteDaemon:
             logger.exception("Main loop crashed: %s", e)
             raise
 
-    def _apply_server_env(self, bootstrap: dict, config: "DaemonConfig") -> None:
-        """Inject server-side env values for the desktop process.
-
-        The desktop exe has no .env file, so modules that read os.environ or
-        the pydantic settings singleton directly need these injected at runtime.
-        Sets os.environ first (for mongodb/crypto.py), then patches the settings
-        object (for core/crypto.py and llm.py).
-
-        bootstrap: dict from /api/daemon/bootstrap (secret_key, mongodb_uri, mongodb_name)
-        config: DaemonConfig from /api/daemon/config (llm fields)
-        """
-        import os
-
-        mapping = {
-            "SECRET_KEY": bootstrap.get("secret_key"),
-            "LLM_API_KEY": config.llm_api_key,
-            "LLM_API_BASE": config.llm_api_base,
-            "AI_MODEL": config.ai_model,
-            "LLM_PROVIDER": config.llm_provider,
-            "MONGODB_URI": bootstrap.get("mongodb_uri"),
-            "MONGODB_NAME": bootstrap.get("mongodb_name", "openoutreach"),
-            "MONGODB_ENABLED": "true",
-        }
-        # Populate os.environ BEFORE importing config - config.py instantiates
-        # Settings() at module level and requires SECRET_KEY to be present.
-        for env_key, value in mapping.items():
-            if value:
-                os.environ[env_key] = str(value)
-
-        from openoutreach.config import settings as app_settings
-
-        for env_key, value in mapping.items():
-            if value:
-                try:
-                    object.__setattr__(app_settings, env_key, value)
-                except Exception:
-                    pass
-
-        logger.info("Server env applied to desktop process")
 
     async def stop(self):
         """Stop the daemon gracefully."""
@@ -720,7 +658,13 @@ class RemoteDaemon:
         """Close all WhatsApp browser sessions gracefully."""
         for profile_id, wa_session in list(self._whatsapp_sessions.items()):
             try:
-                await self._run_on_wa_pw_thread(wa_session.close)
+                # Preserve a valid authenticated profile across an intentional
+                # daemon shutdown; the encrypted storage state is reusable on
+                # the next startup. Unexpected failures use the default path
+                # and mark the profile disconnected.
+                await self._run_on_wa_pw_thread(
+                    lambda s=wa_session: s.close(mark_disconnected=False)
+                )
             except Exception as e:
                 logger.debug("WA session close error for %s: %s", profile_id, e)
         self._whatsapp_sessions.clear()

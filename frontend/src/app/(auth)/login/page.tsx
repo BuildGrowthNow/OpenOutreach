@@ -20,16 +20,20 @@ export default function LoginPage() {
       const callback = searchParams.get("callback")
 
       if (isDesktop && callback) {
-        let url = `${callback}?token=${accessToken}`
-        if (refreshToken) url += `&refresh_token=${encodeURIComponent(refreshToken)}`
-
         // Call pywebview API directly if available (avoids OS protocol launch)
         const pywebview = (window as unknown as Record<string, unknown>).pywebview as
-          { api?: { handle_lengrowth_url?: (u: string) => void } } | undefined
-        if (pywebview?.api?.handle_lengrowth_url) {
-          pywebview.api.handle_lengrowth_url(url)
+          { api?: {
+            store_auth_tokens?: (access: string, refresh?: string | null) => void
+            handle_lengrowth_url?: (u: string) => void
+          } } | undefined
+        if (pywebview?.api?.store_auth_tokens) {
+          pywebview.api.store_auth_tokens(accessToken, refreshToken)
+        } else if (pywebview?.api?.handle_lengrowth_url) {
+          // Compatibility with older desktop builds. Never include the
+          // refresh token in the OS protocol URL.
+          pywebview.api.handle_lengrowth_url(`${callback}?token=${encodeURIComponent(accessToken)}`)
         } else {
-          window.location.href = url
+          window.location.href = `${callback}?token=${encodeURIComponent(accessToken)}`
         }
         return
       }

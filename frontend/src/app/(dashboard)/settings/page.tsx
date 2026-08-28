@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -51,6 +52,7 @@ function SettingsLoadingSkeleton() {
 }
 
 export default function SettingsPage() {
+  const searchParams = useSearchParams();
   const [settings, setSettings] = useState<Settings | null>(null);
   const [dailyUsage, setDailyUsage] = useState<DailyUsageResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -114,6 +116,12 @@ export default function SettingsPage() {
     warning: "text-orange-500",
     exceeded: "text-red-500",
   }[dailyUsage?.rate_limit_status || "normal"];
+  const requestedTab = searchParams.get("tab");
+  const initialTab = requestedTab === "linkedin-credentials"
+    ? "linkedin"
+    : ["linkedin", "whatsapp", "email", "rate-limits", "llm", "billing"].includes(requestedTab || "")
+      ? requestedTab!
+      : "linkedin";
 
   return (
     <div className="space-y-6">
@@ -140,7 +148,7 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      <Tabs defaultValue="linkedin" className="space-y-6">
+      <Tabs defaultValue={initialTab} className="space-y-6">
         <TabsList className="grid w-full grid-cols-3 gap-2 rounded-xl bg-muted p-1 sm:grid-cols-6">
           <TabsTrigger value="linkedin" className="flex items-center gap-2 py-2">
             <Icons.Link className="h-4 w-4 shrink-0" />

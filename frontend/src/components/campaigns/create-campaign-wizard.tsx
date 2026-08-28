@@ -94,8 +94,11 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
 
   useEffect(() => {
     const load = async () => {
-      const res = await apiClient.get<{ id: string }[]>('/mailboxes')
-      setHasMailboxes((res.data ?? []).length > 0)
+      const res = await apiClient.get<{ id: string; paused?: boolean }[]>('/mailboxes')
+      // Campaign activation requires at least one unpaused mailbox. Match that
+      // backend readiness rule so users are not offered a channel that will
+      // inevitably fail during activation.
+      setHasMailboxes((res.data ?? []).some(mailbox => mailbox.paused !== true))
     }
     void load()
   }, [])

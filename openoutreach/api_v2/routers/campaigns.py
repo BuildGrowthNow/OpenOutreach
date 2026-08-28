@@ -598,6 +598,22 @@ async def update_campaign(
                 detail="Access denied"
             )
 
+        # Resolve the effective channel configuration before applying an edit.
+        # This prevents campaign updates from bypassing the stricter create-time
+        # WhatsApp checks (e.g. selecting another user's or disconnected profile).
+        effective_channels = data.channel_sequence if data.channel_sequence is not None else (campaign.channel_sequence or ["linkedin"])
+        effective_wa_id = data.whatsapp_profile_id if data.whatsapp_profile_id is not None else campaign.whatsapp_profile_id
+        effective_settings = data.channel_settings if data.channel_settings is not None else (campaign.channel_settings or {})
+        requested_active = data.status == "active" or data.is_paused is False
+        if "whatsapp" in effective_channels and (requested_active or data.channel_sequence is not None or data.whatsapp_profile_id is not None or data.channel_settings is not None):
+            wa_col = get_mongodb_collection("whatsapp_profiles")
+            wa_doc = wa_col.find_one({"_id": effective_wa_id, "user_id": user_id}) if wa_col is not None and effective_wa_id else None
+            if not wa_doc or wa_doc.get("status") not in ("connected", "active"):
+                raise HTTPException(status_code=400, detail="WhatsApp profile is not connected or access was denied")
+            wa_settings = effective_settings.get("whatsapp", {}) if isinstance(effective_settings, dict) else {}
+            if not isinstance(wa_settings, dict) or not str(wa_settings.get("message_template", "")).strip():
+                raise HTTPException(status_code=422, detail="WhatsApp requires a non-empty message template")
+
         # Build update
         updates = {}
         if data.name is not None:

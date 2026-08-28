@@ -100,15 +100,15 @@ async def update_profile(
     profile = WhatsAppProfile.get(profile_id)
     if not profile or profile.user_id != user_id:
         raise HTTPException(status_code=404, detail="WhatsApp profile not found")
+    # Connection state is owned by the desktop daemon after a successful QR
+    # authentication.  Never allow a client to spoof it and bypass campaign
+    # readiness checks.
+    if body.status is not None:
+        raise HTTPException(status_code=400, detail="WhatsApp connection status is read-only")
     update_fields = []
     if body.display_name is not None:
         profile.display_name = body.display_name
         update_fields.append("display_name")
-    if body.status is not None:
-        if body.status not in (STATUS_CONNECTED, STATUS_DISCONNECTED, "banned"):
-            raise HTTPException(status_code=400, detail="Invalid status")
-        profile.status = body.status
-        update_fields.append("status")
     if update_fields:
         profile.save(update_fields=update_fields)
     return _serialize(profile)

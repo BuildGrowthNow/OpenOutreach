@@ -277,17 +277,19 @@ def handle_whatsapp_follow_up(task, wa_session, qualifiers):  # noqa: ARG001
             return
 
         now = datetime.now(timezone.utc)
-        deal.last_outgoing_at = now
-        deal.follow_up_cycled_at = now
+        # Do not persist scheduling state until the browser confirms the
+        # click. Persisting first can suppress retries after a navigation or
+        # Playwright exception, while no outbound message was recorded.
+        next_follow_up_at = None
         if decision.explicit_follow_up_date:
             try:
-                target = datetime.strptime(decision.explicit_follow_up_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
-                deal.next_follow_up_at = target
+                next_follow_up_at = datetime.strptime(
+                    decision.explicit_follow_up_date, "%Y-%m-%d"
+                ).replace(tzinfo=timezone.utc)
             except ValueError:
-                deal.next_follow_up_at = now + timedelta(hours=decision.to_hours())
+                next_follow_up_at = now + timedelta(hours=decision.to_hours())
         else:
-            deal.next_follow_up_at = now + timedelta(hours=decision.to_hours())
-        deal.save(update_fields=["last_outgoing_at", "follow_up_cycled_at", "next_follow_up_at"])
+            next_follow_up_at = now + timedelta(hours=decision.to_hours())
 
         success = wa_session.send_message(lead.phone, message)
         if not success:
@@ -307,6 +309,11 @@ def handle_whatsapp_follow_up(task, wa_session, qualifiers):  # noqa: ARG001
             deal.save(update_fields=["last_outgoing_at", "next_follow_up_at"])
             return
 
+        deal.last_outgoing_at = now
+        deal.follow_up_cycled_at = now
+        deal.next_follow_up_at = next_follow_up_at
+        deal.save(update_fields=["last_outgoing_at", "follow_up_cycled_at", "next_follow_up_at"])
+
         ChatMessage(
             deal_id=str(deal._id),
             content=message,
@@ -314,6 +321,7 @@ def handle_whatsapp_follow_up(task, wa_session, qualifiers):  # noqa: ARG001
             creation_date=now,
             user_id=deal.user_id,
             channel="whatsapp",
+            wa_msg_hash=ChatMessage.compute_wa_hash(str(deal._id), True, message),
         ).save()
 
         ActionLog(

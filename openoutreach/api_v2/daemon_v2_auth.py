@@ -1,0 +1,80 @@
+"""FastAPI authentication for daemon v2 requests."""
+
+from __future__ import annotations
+
+from fastapi import Depends, HTTPException, Request, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from pymongo.errors import DuplicateKeyError
+
+from openoutreach.api_v2.daemon_auth import canonical_request, decode_daemon_access_token, timestamp_is_fresh, token_id_without_verification, verify_request
+from openoutreach.api_v2.daemon_security import is_secure_version
+from openoutreach.api_v2.tenant_security import TenantContext
+from openoutreach.config import settings
+from openoutreach.mongodb.connection import get_mongodb_collection
+
+_bearer = HTTPBearer()
+
+
+async def get_daemon_context(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials = Depends(_bearer),
+) -> TenantContext:
+    """Validate audience/purpose and bind request context to token claims."""
+    if not is_secure_version(request.headers.get("x-daemon-version")):
+        raise HTTPException(status_code=426, detail="Desktop security update required")
+    if not settings.DAEMON_JWT_PUBLIC_KEY:
+        raise HTTPException(status_code=503, detail="Daemon authentication unavailable")
+    try:
+        claims = decode_daemon_access_token(settings.DAEMON_JWT_PUBLIC_KEY, credentials.credentials)
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid daemon token") from exc
+    profile_ids = claims.get("profile_ids", [])
+    scopes = claims.get("scopes", [])
+    if not isinstance(profile_ids, list) or not isinstance(scopes, list):
+        raise HTTPException(status_code=401, detail="Invalid daemon token claims")
+    devices = get_mongodb_collection("daemon_devices")
+    if devices is None:
+        raise HTTPException(status_code=503, detail="Daemon authentication unavailable")
+    device = devices.find_one(
+        {"_id": str(claims["device_id"]), "user_id": str(claims["tenant_id"]), "revoked": False},
+        {"profile_ids": 1, "channels": 1, "version": 1, "public_key": 1},
+    )
+    if not device or not is_secure_version(str(device.get("version", ""))):
+        raise HTTPException(status_code=401, detail="Device revoked or unsupported")
+    try:
+        timestamp = int(request.headers.get("x-daemon-timestamp", ""))
+        nonce = request.headers["x-daemon-nonce"]
+        signature = request.headers["x-daemon-signature"]
+        if not timestamp_is_fresh(timestamp):
+            raise ValueError("stale proof")
+        body = await request.body()
+        proof = canonical_request(request.method, request.url.path, request.url.query, body, timestamp, nonce, token_id_without_verification(credentials.credentials))
+        if not verify_request(str(device["public_key"]).encode(), proof, signature):
+            raise ValueError("invalid proof")
+        nonces = get_mongodb_collection("daemon_nonces")
+        if nonces is None:
+            raise ValueError("nonce store unavailable")
+        from datetime import datetime, timedelta, timezone
+        from uuid import uuid4
+        nonces.insert_one({"_id": str(uuid4()), "device_id": str(claims["device_id"]), "nonce": nonce,
+                           "created_at": datetime.now(timezone.utc),
+                           "expires_at": datetime.now(timezone.utc) + timedelta(minutes=5)})
+    except (KeyError, ValueError, TypeError, DuplicateKeyError) as exc:
+        raise HTTPException(status_code=401, detail="Invalid daemon request proof") from exc
+    # Intersect claims with current server bindings so unbinding takes effect
+    # without waiting for an access token to expire.
+    profile_ids = [value for value in profile_ids if value in device.get("profile_ids", [])]
+    scopes = [value for value in scopes if value in device.get("channels", [])]
+    return TenantContext(
+        tenant_id=str(claims["tenant_id"]),
+        actor_type="daemon",
+        subject_id=str(claims["device_id"]),
+        device_id=str(claims["device_id"]),
+        profile_ids=frozenset(str(value) for value in profile_ids),
+        scopes=frozenset(str(value) for value in scopes),
+    )
+
+
+def require_profile(context: TenantContext, profile_id: str, channel: str) -> None:
+    if profile_id not in context.profile_ids or channel not in context.scopes:
+        raise HTTPException(status_code=404, detail="Resource not found")

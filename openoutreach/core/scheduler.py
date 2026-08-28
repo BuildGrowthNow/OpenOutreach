@@ -1101,7 +1101,10 @@ def plan_email_follow_up_window(campaign, user_id: str, linkedin_profile_id: str
             {
                 "state": {"$in": ["email_sent", "email_opened"]},
                 "email_sequence_step": 2,
-                "email_sent_at": {"$lte": day2_cutoff},
+                "$or": [
+                    {"email_first_sent_at": {"$lte": day2_cutoff}},
+                    {"email_first_sent_at": {"$exists": False}, "email_sent_at": {"$lte": day2_cutoff}},
+                ],
             },
         ],
     })

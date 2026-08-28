@@ -6,6 +6,7 @@ import pytest
 
 from openoutreach.desktop.updater import (
     _get_platform_asset_name,
+    _get_platform_asset_names,
     check_for_updates,
 )
 
@@ -26,6 +27,14 @@ def test_get_platform_asset_name_linux():
     """Test Linux returns empty (not supported)."""
     with patch("platform.system", return_value="Linux"):
         assert _get_platform_asset_name("1.2.3") == ""
+
+
+def test_platform_asset_names_accept_current_and_legacy_branding():
+    with patch("platform.system", return_value="Windows"):
+        assert _get_platform_asset_names("1.2.3") == (
+            "Lengrowth-1.2.3-Setup.exe",
+            "OpenOutreach-1.2.3-Setup.exe",
+        )
 
 
 @pytest.mark.asyncio

@@ -26,7 +26,10 @@ async def get_current_user(
     try:
         payload = jwt.decode(token, settings.jwt_secret, algorithms=["HS256"])
 
-        if payload.get("type") not in ("access", "refresh"):
+        # Resource dependencies accept access tokens only. Refresh, reset, and
+        # verification tokens are purpose-bound to their dedicated endpoints.
+        if payload.get("type") != "access":
+            logger.warning("security_event=token_type_rejection outcome=rejected")
             raise HTTPException(status_code=401, detail="Invalid token format")
 
         user_id = payload.get("sub")

@@ -8,6 +8,7 @@ Periodic behaviour (every 6 h, all platforms):
 """
 
 import json
+import hashlib
 import logging
 import os
 import platform
@@ -79,13 +80,35 @@ def can_auto_update() -> bool:
     return sys.platform == "win32" and is_frozen()
 
 
-def _get_platform_asset_name() -> str:
+def _get_platform_asset_name(release_version: str = "") -> str:
     system = platform.system().lower()
     if system == "darwin":
-        return "Lengrowth-macOS.dmg"
+        return f"OpenOutreach-{release_version}.dmg" if release_version else "Lengrowth-macOS.dmg"
     elif system == "windows":
-        return "Lengrowth.exe"
+        return f"OpenOutreach-{release_version}-Setup.exe" if release_version else "Lengrowth.exe"
     return ""
+
+
+def _get_platform_asset_names(release_version: str = "") -> tuple[str, ...]:
+    """Return accepted release asset names, newest branding first.
+
+    The packaging scripts produce ``Lengrowth-*`` files, while older releases
+    used ``OpenOutreach-*``.  Accepting both keeps upgrades working across the
+    rename and avoids silently falling back to the release page.
+    """
+    system = platform.system().lower()
+    if system == "darwin":
+        if not release_version:
+            return ("Lengrowth-macOS.dmg", "OpenOutreach-macOS.dmg")
+        return (f"Lengrowth-{release_version}.dmg", f"OpenOutreach-{release_version}.dmg")
+    if system == "windows":
+        if not release_version:
+            return ("Lengrowth.exe", "OpenOutreach.exe")
+        return (
+            f"Lengrowth-{release_version}-Setup.exe",
+            f"OpenOutreach-{release_version}-Setup.exe",
+        )
+    return ()
 
 
 async def check_for_updates() -> Optional[dict]:
@@ -106,11 +129,11 @@ async def check_for_updates() -> Optional[dict]:
 
             # Release tags are "v{version}-{short_sha}" e.g. "v1.3.4-abc1234"
             # Strip leading "v" then take everything before the first "-"
-            if not tag_name.startswith("v"):
+            if not (tag_name.startswith("v") or tag_name.startswith("desktop-v")):
                 logger.debug("Skipping unrecognised release tag: %s", tag_name)
                 return None
 
-            latest_version = tag_name.lstrip("v").split("-")[0]
+            latest_version = tag_name.removeprefix("desktop-").lstrip("v").split("-")[0]
 
             try:
                 is_newer = version.parse(latest_version) > version.parse(__version__)
@@ -120,15 +143,16 @@ async def check_for_updates() -> Optional[dict]:
 
             if is_newer:
                 assets = release.get("assets", [])
-                expected_name = _get_platform_asset_name()
                 platform_url = None
+                platform_digest = None
 
-                if expected_name:
+                expected_names = _get_platform_asset_names(latest_version)
+                if expected_names:
                     for asset in assets:
-                        if asset["name"] == expected_name:
+                        if asset.get("name") in expected_names:
                             platform_url = asset["browser_download_url"]
+                            platform_digest = asset.get("digest")
                             break
-
                 download_url = platform_url or release["html_url"]
 
                 return {
@@ -137,6 +161,7 @@ async def check_for_updates() -> Optional[dict]:
                     "release_page": release["html_url"],
                     "notes": release.get("body", ""),
                     "tag_name": tag_name,
+                    "digest": platform_digest,
                 }
 
             return None
@@ -146,7 +171,9 @@ async def check_for_updates() -> Optional[dict]:
         return None
 
 
-async def download_update(url: str, version: str = "") -> Optional[str]:
+async def download_update(
+    url: str, version: str = "", expected_digest: str | None = None
+) -> Optional[str]:
     """Download the update exe silently to a per-user location.
 
     Stored under ~/.lengrowth/ (same dir as pending_update.json) so it
@@ -175,6 +202,15 @@ async def download_update(url: str, version: str = "") -> Optional[str]:
                     async for chunk in response.aiter_bytes(chunk_size=65536):
                         fh.write(chunk)
                         downloaded += len(chunk)
+        if expected_digest:
+            # GitHub returns digests as ``sha256:<hex>``.
+            expected = expected_digest.removeprefix("sha256:").lower()
+            digest = hashlib.sha256()
+            with open(dest, "rb") as fh:
+                for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+                    digest.update(chunk)
+            if digest.hexdigest().lower() != expected:
+                raise ValueError("downloaded update digest does not match GitHub asset digest")
         ver_tag = f"v{version} " if version else ""
         logger.info("Update %sdownloaded to %s (%d bytes)", ver_tag, dest, downloaded)
         return dest

@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 
 from openoutreach.api_v2.dependencies_v2 import get_current_user
 from openoutreach.emails.models import Mailbox
-from openoutreach.emails.smtp import verify_auth
+from openoutreach.emails.smtp import verify_auth, verify_imap_auth
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -109,6 +109,13 @@ async def create_mailbox(data: MailboxCreate, user_id: str = Depends(get_current
     ok, message = verify_auth(data.host, data.port, data.username, data.password)
     if not ok:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
+    if data.imap_host:
+        imap_ok, imap_message = verify_imap_auth(
+            data.imap_host, data.imap_port, data.imap_username or data.username,
+            data.imap_password or data.password,
+        )
+        if not imap_ok:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=imap_message)
 
     existing = Mailbox.find_by_username(data.username)
     if existing and existing.user_id == user_id:
@@ -162,6 +169,13 @@ async def update_mailbox(mailbox_id: str, data: MailboxUpdate, user_id: str = De
             if not ok:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
         box.password = data.password
+    if box.imap_host:
+        imap_ok, imap_message = verify_imap_auth(
+            box.imap_host, box.imap_port, box.imap_username or box.username,
+            box.imap_password,
+        )
+        if not imap_ok:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=imap_message)
     box.save()
     logger.info("mailboxes: updated %s for user %s", box.from_address, user_id)
     return _to_response(box)

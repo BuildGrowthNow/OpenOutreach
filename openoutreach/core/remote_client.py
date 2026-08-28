@@ -13,8 +13,29 @@ from dataclasses import dataclass
 from typing import Optional
 
 import httpx
+import inspect
+import hashlib
+import json
+import secrets
+import time
+from urllib.parse import urlencode
+from openoutreach.api_v2.daemon_auth import canonical_request, token_id_without_verification
+from openoutreach.desktop.__version__ import __version__
 
 logger = logging.getLogger(__name__)
+
+
+def _status_code(response) -> int:
+    """Read status safely from real httpx responses and lightweight test doubles."""
+    value = getattr(response, "status_code", 200)
+    return value if isinstance(value, int) else 200
+
+
+def _request_for(response, method: str, url: str) -> httpx.Request:
+    try:
+        return response.request
+    except (AttributeError, RuntimeError):
+        return httpx.Request(method, url)
 
 
 class SessionExpiredError(Exception):
@@ -36,10 +57,6 @@ class DaemonConfig:
     active_days: list[int]
     poll_interval_seconds: int
     heartbeat_interval_seconds: int
-    llm_api_key: Optional[str] = None
-    llm_api_base: Optional[str] = None
-    ai_model: Optional[str] = None
-    llm_provider: Optional[str] = None
 
 
 @dataclass
@@ -65,21 +82,95 @@ class RemoteClient:
         daemon_id: str,
         refresh_token: Optional[str] = None,
         on_token_refresh: Optional[Callable[[str], None]] = None,
+        secure_v2: bool = False,
+        device_signer: Optional[Callable[[bytes], str]] = None,
     ):
         self.api_url = api_url.rstrip("/")
         self.daemon_id = daemon_id
         self._token = token
         self._refresh_token = refresh_token
         self._on_token_refresh = on_token_refresh
+        self._secure_v2 = secure_v2
+        self._device_signer = device_signer
         self._client = httpx.AsyncClient(
             base_url=self.api_url,
-            headers={"Authorization": f"Bearer {token}"},
+            headers={
+                "Authorization": f"Bearer {token}",
+                "X-Daemon-Version": __version__,
+            },
             timeout=30.0,
         )
 
     async def close(self):
         """Close the HTTP client."""
         await self._client.aclose()
+
+    async def get_compatibility(self) -> dict:
+        """Read the safe v2 compatibility document; no credentials are returned."""
+        response = await self._request_with_retry("GET", "/api/daemon/v2/compatibility")
+        return response.json()
+
+    async def enroll_device(self, code: str, public_key: str) -> dict:
+        """Redeem a human-approved one-time enrollment code."""
+        response = await self._client.post("/api/daemon/v2/devices/enroll", json={
+            "code": code, "public_key": public_key, "version": __version__,
+            "platform": platform.system().lower().replace("windows", "win32"),
+            "capabilities": ["task-leases", "typed-events"],
+        })
+        response.raise_for_status()
+        return response.json()
+
+    async def exchange_device_token(self, device_id: str, refresh_token: str, sign) -> dict:
+        timestamp = int(time.time())
+        nonce = secrets.token_urlsafe(24)
+        body = json.dumps({"device_id": device_id, "refresh_token": refresh_token}, separators=(",", ":"), sort_keys=True).encode()
+        canonical = canonical_request("POST", "/api/daemon/v2/tokens/exchange", "", body, timestamp, nonce, device_id)
+        response = await self._client.post("/api/daemon/v2/tokens/exchange", content=body, headers={
+            "Content-Type": "application/json", "X-Daemon-Timestamp": str(timestamp),
+            "X-Daemon-Nonce": nonce, "X-Daemon-Signature": sign(canonical),
+        })
+        response.raise_for_status()
+        data = response.json()
+        self._refresh_token = data["refresh_token"]
+        self._token = data["access_token"]
+        self._client.headers["Authorization"] = f"Bearer {self._token}"
+        return data
+
+    async def refresh_device_token(self, device_id: str) -> Optional[str]:
+        if not self._refresh_token or not self._device_signer:
+            return None
+        data = await self.exchange_device_token(device_id, self._refresh_token, self._device_signer)
+        if self._on_token_refresh:
+            self._on_token_refresh(data["access_token"])
+        return data["access_token"]
+
+    async def claim_task_v2(self, profile_id: str, channel: str, task_types: list[str] | None = None) -> Optional[dict]:
+        response = await self._request_with_retry("POST", "/api/daemon/v2/tasks/claim", json={
+            "profile_id": profile_id, "channel": channel, "supported_task_types": task_types or [],
+        })
+        data = response.json()
+        return data if data else None
+
+    async def renew_task_v2(self, task_id: str, lease_id: str) -> dict:
+        response = await self._request_with_retry("POST", f"/api/daemon/v2/tasks/{task_id}/renew", json={"lease_id": lease_id})
+        return response.json()
+
+    async def complete_task_v2(self, task_id: str, lease_id: str, idempotency_key: str, result: dict) -> dict:
+        response = await self._request_with_retry("POST", f"/api/daemon/v2/tasks/{task_id}/complete", json={"lease_id": lease_id, "idempotency_key": idempotency_key, "result": result})
+        return response.json()
+
+    async def fail_task_v2(self, task_id: str, lease_id: str, category: str, error: str = "") -> dict:
+        response = await self._request_with_retry("POST", f"/api/daemon/v2/tasks/{task_id}/fail", json={"lease_id": lease_id, "category": category, "error": error[:500]})
+        return response.json()
+
+    async def ingest_events_v2(self, events: list[dict]) -> dict:
+        response = await self._request_with_retry("POST", "/api/daemon/v2/events/batch", json={"events": events})
+        return response.json()
+
+    async def post_typed_observation(self, channel: str, profile_id: str, kind: str, payload: dict) -> dict:
+        """Send one validated channel/session observation to the v2 gateway."""
+        response = await self._request_with_retry("POST", f"/api/daemon/v2/{channel}/{profile_id}/{kind}", json=payload)
+        return response.json()
 
     async def __aenter__(self):
         return self
@@ -130,24 +221,7 @@ class RemoteClient:
             active_days=data["active_hours"]["days"],
             poll_interval_seconds=data["poll_interval_seconds"],
             heartbeat_interval_seconds=data["heartbeat_interval_seconds"],
-            llm_api_key=data.get("server_env", {}).get("llm_api_key"),
-            llm_api_base=data.get("server_env", {}).get("llm_api_base"),
-            ai_model=data.get("server_env", {}).get("ai_model"),
-            llm_provider=data.get("server_env", {}).get("llm_provider"),
         )
-
-    async def bootstrap(self, linkedin_profile_id: str) -> dict:
-        """Fetch one-time bootstrap secrets (secret_key + MongoDB URI).
-
-        Called once at daemon startup - not on the periodic config-refresh path.
-        Returns dict with secret_key, mongodb_uri, mongodb_name.
-        """
-        response = await self._request_with_retry(
-            "GET",
-            "/api/daemon/bootstrap",
-            params={"linkedin_profile_id": linkedin_profile_id},
-        )
-        return response.json()
 
     async def reconcile(self, linkedin_profile_id: str) -> dict:
         """Ask backend to schedule tasks for all active campaigns.
@@ -288,8 +362,12 @@ class RemoteClient:
                 "/api/auth/refresh/",
                 json={"refresh_token": self._refresh_token},
             )
-            response.raise_for_status()
+            if _status_code(response) >= 400:
+                request = _request_for(response, "POST", "/api/auth/refresh/")
+                raise httpx.HTTPStatusError("refresh failed", request=request, response=response)
             data = response.json()
+            if inspect.isawaitable(data):
+                data = await data
             new_token = data.get("access_token")
             if new_token:
                 self._token = new_token
@@ -338,6 +416,8 @@ class RemoteClient:
 
     async def _request_with_retry(self, method: str, url: str, **kwargs):
         """Make HTTP request with automatic token refresh on 401."""
+        if self._secure_v2 and self._token:
+            kwargs["headers"] = {**kwargs.pop("headers", {}), **self._request_proof(method, url, kwargs)}
         try:
             if method == "GET":
                 response = await self._client.get(url, **kwargs)
@@ -346,10 +426,19 @@ class RemoteClient:
             else:
                 raise ValueError(f"Unsupported method: {method}")
 
-            response.raise_for_status()
+            if _status_code(response) >= 400:
+                request = _request_for(response, method, url)
+                raise httpx.HTTPStatusError("request failed", request=request, response=response)
             return response
         except httpx.HTTPStatusError as e:
-            if e.response.status_code == 401 and self._refresh_token:
+            if e.response.status_code == 401 and self._secure_v2 and self.daemon_id:
+                new_token = await self.refresh_device_token(self.daemon_id)
+                if new_token:
+                    retry_kwargs = {**kwargs, "headers": {**kwargs.get("headers", {}), **self._request_proof(method, url, kwargs)}}
+                    retry_response = await self._client.request(method, url, **retry_kwargs)
+                    if _status_code(retry_response) < 400:
+                        return retry_response
+            elif e.response.status_code == 401 and self._refresh_token:
                 logger.info("Got 401, attempting token refresh")
                 new_token = await self.refresh_access_token()
                 if new_token:
@@ -360,6 +449,19 @@ class RemoteClient:
                     elif method == "POST":
                         retry_response = await self._client.post(url, **kwargs)
                     if retry_response:
-                        retry_response.raise_for_status()
+                        if _status_code(retry_response) >= 400:
+                            request = _request_for(retry_response, method, url)
+                            raise httpx.HTTPStatusError("retry failed", request=request, response=retry_response)
                         return retry_response
             raise
+
+    def _request_proof(self, method: str, url: str, kwargs: dict) -> dict[str, str]:
+        timestamp = int(time.time())
+        nonce = secrets.token_urlsafe(24)
+        body_value = kwargs.get("json")
+        body = json.dumps(body_value, separators=(",", ":"), ensure_ascii=False).encode() if body_value is not None else b""
+        token_id = token_id_without_verification(self._token)
+        query = urlencode(sorted((str(key), str(value)) for key, value in (kwargs.get("params") or {}).items()))
+        canonical = canonical_request(method, url.split("?", 1)[0], query, body, timestamp, nonce, token_id)
+        return {"X-Daemon-Timestamp": str(timestamp), "X-Daemon-Nonce": nonce,
+                "X-Daemon-Signature": self._device_signer(canonical) if self._device_signer else ""}

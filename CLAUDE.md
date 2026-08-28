@@ -20,6 +20,18 @@
 
 ## Branding
 
+## Desktop security cutoff
+
+The legacy remote daemon no longer receives bootstrap secrets, provider configuration, or MongoDB credentials. `/api/daemon/bootstrap` is permanently `410 Gone`; other legacy daemon routes require `X-Daemon-Version >= 2.0.0` and otherwise return `426 Upgrade Required`. Desktop startup fails closed until the API-only v2 gateway client replaces direct MongoDB-backed execution. `openoutreach/api_v2/daemon_security.py` owns the denylist, version, and audit policy.
+
+Secure desktop execution now uses `openoutreach/desktop/secure_daemon.py` and
+the v2 gateway only. Device identity is an Ed25519 key stored in the OS
+keychain; enrollment uses a human-approved one-time code. Runtime access uses
+short-lived daemon tokens, proof-bound exchange, rotating refresh credentials,
+and server-owned typed leases. The desktop receives no human refresh token,
+server secret, provider key, or MongoDB credential. Browser execution is an
+injected task-scoped adapter; server persistence remains authoritative.
+
 - **Marketing name**: Lengrowth Outreach (displayed in UI, tray menu, installers, release artifacts)
 - **Internal package name**: `openoutreach` (Python package, Docker image, repo) - do not rename the package
 - **Protocol scheme**: `lengrowth://` (e.g. `lengrowth://auth?token=...`) - Windows registry key is `HKCU\Software\Classes\lengrowth`, macOS Info.plist scheme is `lengrowth`

@@ -487,7 +487,7 @@ const MessagesPage = () => {
       }
       return true;
     });
-  }, [messages, dateRange, hasResponseFilter, search]);
+  }, [messages, channelFilter, dateRange, hasResponseFilter, search]);
 
   const handleExport = () => {
     const headers = ["ID", "Content", "Direction", "Lead", "Campaign", "Created At", "Deal ID"];

@@ -52,9 +52,16 @@ class ChatMessage:
         self.reply_intent = reply_intent  # "interested" | "objection" | "wrong_person" | "not_now" | None
 
     @staticmethod
-    def compute_wa_hash(deal_id: str, is_outgoing: bool, content: str) -> str:
-        """SHA-256 of deal+direction+content. Used to deduplicate WA messages."""
-        raw = f"{deal_id}|{is_outgoing}|{content.strip()}"
+    def compute_wa_hash(
+        deal_id: str, is_outgoing: bool, content: str, message_key: str = ""
+    ) -> str:
+        """Hash a WA message, retaining distinct repeated inbound messages.
+
+        Older callers omit ``message_key`` for backwards compatibility.  The
+        syncer supplies the DOM timestamp for inbound messages so two replies
+        with identical text are not collapsed into one record.
+        """
+        raw = f"{deal_id}|{is_outgoing}|{content.strip()}|{message_key}"
         return hashlib.sha256(raw.encode()).hexdigest()
 
     def to_dict(self) -> Dict[str, Any]:

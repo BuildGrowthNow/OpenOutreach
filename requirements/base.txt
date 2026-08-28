@@ -3,7 +3,7 @@ pytest>=8.0.0
 playwright-stealth
 pydantic>=2.10.0
 pydantic-settings>=2.7.0
-pydantic-ai-slim[openai,anthropic,google,groq,mistral,cohere,bedrock]
+pydantic-ai-slim[openai,anthropic,google,groq,mistral,cohere,bedrock]==1.96.0
 # pydantic-ai 1.96 imports `from griffe import ...`, but griffe 2.x split into an
 # empty `griffelib` meta-package and reorganized symbols. Pin until upstream fixes.
 griffe>=1,<2
@@ -16,6 +16,7 @@ pyyaml
 fastembed
 hf_xet
 scikit-learn
+scipy
 questionary
 pytz
 # linkedin_cli is vendored at project root (PyPI package was yanked)

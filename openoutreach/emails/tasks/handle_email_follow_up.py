@@ -85,7 +85,12 @@ def handle_email_follow_up(task, user_id: str, campaign) -> None:
                 {
                     "state": {"$in": ["email_sent", "email_opened"]},
                     "email_sequence_step": 2,
-                    "email_sent_at": {"$lte": day2_cutoff},
+                    # day2 is configured from the initial cold email, not
+                    # from the step-1 follow-up timestamp.
+                    "$or": [
+                        {"email_first_sent_at": {"$lte": day2_cutoff}},
+                        {"email_first_sent_at": {"$exists": False}, "email_sent_at": {"$lte": day2_cutoff}},
+                    ],
                 },
             ],
         }
@@ -157,7 +162,10 @@ def handle_email_follow_up(task, user_id: str, campaign) -> None:
         prev_mailbox = Mailbox.get(deal.mailbox_id)
         if prev_mailbox:
             from openoutreach.emails.imap_checker import find_reply
-            result = find_reply(prev_mailbox, deal.email_message_id)
+            result = find_reply(
+                prev_mailbox,
+                [deal.email_message_id, deal.email_first_message_id],
+            )
             if result is not None:
                 reply_text, received_at = result
                 _mark_replied(deal, user_id, reply_text, received_at, deals_col)
@@ -239,6 +247,7 @@ def handle_email_follow_up(task, user_id: str, campaign) -> None:
     # Persist the cold-email ID once so step-2 References chain is complete.
     if deal.email_sequence_step == 0:
         db_update["email_first_message_id"] = message_id
+        db_update["email_first_sent_at"] = now
     if target_step_id:
         db_update["sequence_last_step_id"] = target_step_id
 
