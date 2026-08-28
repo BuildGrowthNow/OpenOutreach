@@ -20,19 +20,22 @@ def parse_auth_callback(url: str) -> Optional[dict]:
     """
     try:
         parsed = urllib.parse.urlparse(url)
-        if parsed.scheme != "lengrowth" or parsed.netloc != "auth":
+        # Accept the pre-2.0 scheme for already-installed clients, while all
+        # new app registrations and callbacks use the branded scheme.
+        if parsed.scheme not in {"lengrowth", "openoutreach"} or parsed.netloc != "auth":
             return None
 
         params = urllib.parse.parse_qs(parsed.query)
         token = params.get("token", [None])[0]
+        profile_id = params.get("profile_id", [None])[0]
 
-        if not token:
+        if not token or not profile_id:
             return None
 
         return {
             "token": token,
             "refresh_token": params.get("refresh_token", [None])[0],
-            "profile_id": params.get("profile_id", [None])[0],
+            "profile_id": profile_id,
         }
 
     except Exception as e:

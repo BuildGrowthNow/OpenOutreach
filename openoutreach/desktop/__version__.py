@@ -1,3 +1,3 @@
 """Desktop app version - single source of truth."""
 
-__version__ = "1.9.8"
+__version__ = "2.0.0"
