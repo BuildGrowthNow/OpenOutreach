@@ -18,6 +18,7 @@ from PIL import Image, ImageDraw
 from pystray import MenuItem as Item
 
 from openoutreach.desktop.secure_daemon import SecureRemoteDaemon as RemoteDaemon
+from openoutreach.desktop.linkedin_browser_adapter import LinkedInBrowserAdapter
 from openoutreach.desktop.device_identity import DeviceIdentity
 from openoutreach.desktop.__version__ import __version__
 from openoutreach.desktop.auth import AuthManager
@@ -696,6 +697,7 @@ class TrayApp:
                     identity=DeviceIdentity.load_or_create(),
                     on_credentials_rotated=self.auth.save_daemon_credentials,
                     on_started=on_started,
+                    execute_task=LinkedInBrowserAdapter(profile_id).execute,
                 )
                 try:
                     self._loop.run_until_complete(self.daemon.start())

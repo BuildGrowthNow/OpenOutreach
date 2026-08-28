@@ -563,10 +563,32 @@ def _snapshot(document: dict[str, Any]) -> dict[str, Any]:
         "step_id",
         "message",
         "target_public_identifier",
+        "target_urn",
         "target_url",
         "action",
     }
-    return {key: payload[key] for key in allowed if key in payload}
+    snapshot = {key: payload[key] for key in allowed if key in payload}
+    # Lazy slots historically contain only campaign/deal/message IDs. Resolve
+    # the minimum browser inputs server-side; never send credentials, cookies,
+    # campaign internals, or arbitrary model fields to the desktop.
+    deal_id = snapshot.get("deal_id")
+    if deal_id and not snapshot.get("target_public_identifier"):
+        deals = get_mongodb_collection("deals")
+        leads = get_mongodb_collection("leads")
+        deal = deals.find_one({"_id": deal_id}, {"lead_id": 1}) if deals is not None else None
+        lead = leads.find_one({"_id": deal.get("lead_id")}, {"public_identifier": 1, "urn": 1}) if deal and leads is not None else None
+        if lead:
+            if lead.get("public_identifier"):
+                snapshot["target_public_identifier"] = str(lead["public_identifier"])
+            if lead.get("urn"):
+                snapshot["target_urn"] = str(lead["urn"])
+    message_id = payload.get("message_id")
+    if message_id and not snapshot.get("message"):
+        messages = get_mongodb_collection("messages")
+        message = messages.find_one({"_id": message_id}, {"content": 1}) if messages is not None else None
+        if message and message.get("content"):
+            snapshot["message"] = str(message["content"])
+    return snapshot
 
 
 def _lease_query(context: TenantContext, task_id: str, lease_id: str) -> dict[str, Any]:

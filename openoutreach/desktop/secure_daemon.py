@@ -80,6 +80,9 @@ class SecureRemoteDaemon:
     async def stop(self) -> None:
         self._stop.set()
         self.running = False
+        close = getattr(self.execute_task, "__self__", None)
+        if close is not None and hasattr(close, "close"):
+            await asyncio.get_running_loop().run_in_executor(None, close.close)
         await self.client.close()
 
     async def _execute(self, task: dict) -> None:
