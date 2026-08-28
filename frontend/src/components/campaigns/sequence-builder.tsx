@@ -79,7 +79,7 @@ import {
   SequenceEdge,
 } from "@/lib/api/campaigns";
 import { useToast } from "@/components/ui/use-toast";
-import { Network, Mail, Smartphone, Clock, GitBranch, Flag, Plus, X } from "lucide-react";
+import { Network, Mail, Smartphone, Clock, GitBranch, Flag, Plus, X, Undo2 } from "lucide-react";
 
 // ─── constants ────────────────────────────────────────────────────────────────
 
@@ -246,6 +246,10 @@ function SeqNode({ id, data, selected }: NodeProps) {
             className="!w-3 !h-3 !border-2 !border-rose-600 !bg-zinc-900 hover:!border-rose-400"
             title="No — condition not met (right handle)"
           />
+          <div className="flex justify-between mt-3 px-1">
+            <span className="text-[10px] text-emerald-500/70">Yes</span>
+            <span className="text-[10px] text-rose-500/70">No</span>
+          </div>
         </>
       ) : !isEnd ? (
         <Handle
@@ -598,32 +602,91 @@ function SequenceCanvas({ campaignId, isActive }: { campaignId: string; isActive
   // suppress dirty flag during initial fetch
   const suppressDirty = useRef(true);
 
+  const [history, setHistory] = useState<{ nodes: RFNode[]; edges: RFEdge[] }[]>([]);
+
   const [nodes, setNodes, onNodesChange] = useNodesState<RFNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<RFEdge>([]);
 
+  // stable refs so pushSnapshot doesn't need nodes/edges in its dep array
+  const nodesRef = useRef<RFNode[]>([]);
+  const edgesRef = useRef<RFEdge[]>([]);
+  useEffect(() => { nodesRef.current = nodes; }, [nodes]);
+  useEffect(() => { edgesRef.current = edges; }, [edges]);
+
+  const pushSnapshot = useCallback(() => {
+    setHistory((prev) => [...prev.slice(-19), { nodes: nodesRef.current, edges: edgesRef.current }]);
+  }, []);
+
   // stable node callbacks
   const handleDeleteNode = useCallback((id: string) => {
+    pushSnapshot();
     setNodes((prev) => prev.filter((n) => n.id !== id));
     setEdges((prev) => prev.filter((e) => e.source !== id && e.target !== id));
     setIsDirty(true);
-  }, [setNodes, setEdges]);
+  }, [pushSnapshot, setNodes, setEdges]);
 
   const handleEditNode = useCallback((id: string) => {
     setEditingStepId(id);
   }, []);
 
-  // sync RF nodes → seqSteps (for summary / validation)
+  const handleUndo = useCallback(() => {
+    setHistory((prev) => {
+      if (prev.length === 0) return prev;
+      const snapshot = prev[prev.length - 1];
+      setNodes(snapshot.nodes);
+      setEdges(snapshot.edges);
+      setIsDirty(true);
+      return prev.slice(0, -1);
+    });
+  }, [setNodes, setEdges]);
+
+  const isValidConnection = useCallback(
+    (connection: Connection | RFEdge) => {
+      if (connection.source === connection.target) return false;
+      const sourceNode = nodesRef.current.find((n) => n.id === connection.source);
+      if (!sourceNode) return true;
+      if ((sourceNode.data as SeqNodeData).step.type === "end") return false;
+      const existingFromHandle = edgesRef.current.filter(
+        (e) =>
+          e.source === connection.source &&
+          (e.sourceHandle ?? null) === ((connection.sourceHandle ?? null) as string | null),
+      );
+      return existingFromHandle.length === 0;
+    },
+    [],
+  );
+
+  // sync RF nodes → seqSteps (B3: read step directly from node data, no stale closure)
   useEffect(() => {
     if (suppressDirty.current) return;
-    const updatedSteps = rfNodesToSteps(nodes, seqSteps);
-    setSeqSteps(updatedSteps);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    setSeqSteps(nodesRef.current.map((n) => ({ ...(n.data as SeqNodeData).step, position: n.position })));
   }, [nodes]);
+
+  // G6: live validation
+  useEffect(() => {
+    if (suppressDirty.current) return;
+    const currentSteps = nodesRef.current.map((n) => ({ ...(n.data as SeqNodeData).step, position: n.position }));
+    setValidationWarnings(validateSequence(currentSteps, rfEdgesToSeq(edgesRef.current)));
+  }, [nodes, edges]);
+
+  // G1: Ctrl+Z undo (skip when focus is inside text input)
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (!((e.ctrlKey || e.metaKey) && e.key === "z")) return;
+      const target = e.target as HTMLElement;
+      if (target.tagName === "TEXTAREA" || target.tagName === "INPUT") return;
+      e.preventDefault();
+      handleUndo();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [handleUndo]);
 
   const fetchSequence = useCallback(async () => {
     suppressDirty.current = true;
     setLoading(true);
     setFetchError(false);
+    setHistory([]);
     const res = await getSequence(campaignId);
     if (res.data) {
       const loadedSteps = autoLayout(res.data.steps ?? []);
@@ -637,7 +700,7 @@ function SequenceCanvas({ campaignId, isActive }: { campaignId: string; isActive
         setShowCanvas(true);
         setNodes(stepsToNodes(loadedSteps, cov, handleDeleteNode, handleEditNode));
         setEdges(edgesToRF(loadedEdges));
-        setTimeout(() => { suppressDirty.current = false; void fitView({ padding: 0.15 }); }, 100);
+        // B1: suppressDirty cleared in onInit callback, not setTimeout
       } else {
         suppressDirty.current = false;
       }
@@ -647,7 +710,7 @@ function SequenceCanvas({ campaignId, isActive }: { campaignId: string; isActive
     }
     setLoading(false);
     setIsDirty(false);
-  }, [campaignId, setNodes, setEdges, handleDeleteNode, handleEditNode, fitView]);
+  }, [campaignId, setNodes, setEdges, handleDeleteNode, handleEditNode]);
 
   useEffect(() => { void fetchSequence(); }, [fetchSequence]);
 
@@ -678,12 +741,14 @@ function SequenceCanvas({ campaignId, isActive }: { campaignId: string; isActive
 
   const addStep = useCallback(
     (opt: (typeof ADD_STEP_OPTIONS)[number]) => {
+      pushSnapshot();
       const id = makeId();
+      const maxY = nodesRef.current.reduce((m, n) => Math.max(m, n.position.y), 0);
       const newStep: SequenceStep = {
         id,
         type: opt.type,
         data: { channel: opt.channel, action: opt.action, label: opt.label, wait_days: opt.type === "wait" ? 3 : 0, condition: "always", requires: [...opt.requires] },
-        position: { x: 100 + Math.random() * 400, y: (nodes.length + 1) * 150 },
+        position: { x: 300, y: maxY + 160 },
       };
       setNodes((prev) => [
         ...prev,
@@ -693,13 +758,14 @@ function SequenceCanvas({ campaignId, isActive }: { campaignId: string; isActive
       setIsDirty(true);
       if (opt.type === "condition") setEditingStepId(id);
     },
-    [nodes.length, handleDeleteNode, handleEditNode, setNodes],
+    [pushSnapshot, handleDeleteNode, handleEditNode, setNodes],
   );
 
   // ── connect ───────────────────────────────────────────────────────────────────
 
   const onConnect = useCallback(
     (connection: Connection) => {
+      pushSnapshot();
       const branch = connection.sourceHandle === "yes" ? "yes" : connection.sourceHandle === "no" ? "no" : undefined;
       const newEdge: RFEdge = {
         id: `e_${connection.source}_${connection.target}${branch ? `_${branch}` : ""}`,
@@ -714,20 +780,21 @@ function SequenceCanvas({ campaignId, isActive }: { campaignId: string; isActive
       setEdges((prev) => addEdge(newEdge, prev));
       setIsDirty(true);
     },
-    [setEdges],
+    [pushSnapshot, setEdges],
   );
 
   // ── update step ───────────────────────────────────────────────────────────────
 
   const handleUpdateStep = useCallback(
     (updated: SequenceStep) => {
+      pushSnapshot();
       setNodes((prev) =>
         prev.map((n) => n.id === updated.id ? { ...n, data: { ...(n.data as SeqNodeData), step: updated } } : n),
       );
       setSeqSteps((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
       setIsDirty(true);
     },
-    [setNodes],
+    [pushSnapshot, setNodes],
   );
 
   // ── save ──────────────────────────────────────────────────────────────────────
@@ -735,6 +802,7 @@ function SequenceCanvas({ campaignId, isActive }: { campaignId: string; isActive
   const executeSave = async (): Promise<boolean> => {
     const currentSteps = nodes.map((n) => ({ ...(n.data as SeqNodeData).step, position: n.position }));
     const currentEdges = rfEdgesToSeq(edges);
+    setValidationWarnings([]);
     const warnings = validateSequence(currentSteps, currentEdges);
     setValidationWarnings(warnings);
     if (warnings.some((w) => w.includes("disconnected") || w.includes("no outgoing"))) return false;
@@ -785,7 +853,7 @@ function SequenceCanvas({ campaignId, isActive }: { campaignId: string; isActive
 
   const handleConfirmReset = () => {
     setNodes([]); setEdges([]); setSeqSteps([]);
-    setShowCanvas(false); setIsDirty(false); setShowResetDialog(false); setValidationWarnings([]);
+    setShowCanvas(false); setIsDirty(false); setShowResetDialog(false); setValidationWarnings([]); setHistory([]);
   };
 
   const applyTemplate = (tpl: Template) => {
@@ -946,6 +1014,22 @@ function SequenceCanvas({ campaignId, isActive }: { campaignId: string; isActive
                   )}
                 </div>
 
+                {history.length > 0 && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="border-zinc-700 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300"
+                        onClick={handleUndo}
+                      >
+                        <Undo2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent className="text-xs">Undo (Ctrl+Z)</TooltipContent>
+                  </Tooltip>
+                )}
+
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
@@ -965,7 +1049,7 @@ function SequenceCanvas({ campaignId, isActive }: { campaignId: string; isActive
                   size="sm"
                   className={cn("border-zinc-700 hover:bg-zinc-800", isDirty ? "text-amber-400 border-amber-500/30" : "text-zinc-300")}
                   onClick={handleSave}
-                  disabled={saving || toggling}
+                  disabled={!isDirty || saving || toggling}
                 >
                   {saving ? <Icons.RefreshCw className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Icons.Save className="mr-1.5 h-3.5 w-3.5" />}
                   Save
@@ -996,14 +1080,23 @@ function SequenceCanvas({ campaignId, isActive }: { campaignId: string; isActive
           <ReactFlow
             nodes={nodes}
             edges={edges}
-            onNodesChange={(changes) => { onNodesChange(changes); if (!suppressDirty.current) setIsDirty(true); }}
+            onNodesChange={(changes) => {
+              const removed = changes.filter((c) => c.type === "remove").map((c) => (c as { id: string }).id);
+              if (removed.length > 0) pushSnapshot();
+              onNodesChange(changes);
+              if (!suppressDirty.current) setIsDirty(true);
+              if (editingStepId && removed.includes(editingStepId)) setEditingStepId(null);
+            }}
             onEdgesChange={(changes) => { onEdgesChange(changes); if (!suppressDirty.current) setIsDirty(true); }}
             onConnect={onConnect}
+            isValidConnection={isValidConnection}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
             fitView
             fitViewOptions={{ padding: 0.15 }}
+            onInit={() => { suppressDirty.current = false; void fitView({ padding: 0.15 }); }}
             deleteKeyCode={["Backspace", "Delete"]}
+            proOptions={{ hideAttribution: true }}
             className="bg-zinc-950"
             defaultEdgeOptions={{
               type: "seq",
