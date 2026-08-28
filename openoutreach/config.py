@@ -4,7 +4,9 @@ Pydantic Settings Configuration for OpenOutreach.
 Replaces Django settings with environment-based configuration.
 """
 from pathlib import Path
+import base64
 from typing import Optional, List
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -38,6 +40,10 @@ class Settings(BaseSettings):
     # deployment secret manager. There is intentionally no desktop fallback.
     DAEMON_JWT_PRIVATE_KEY: Optional[str] = None
     DAEMON_JWT_PUBLIC_KEY: Optional[str] = None
+    # Single-line deployment-secret variants avoid multiline dotenv parsing
+    # ambiguity. They are decoded only in memory and never logged or returned.
+    DAEMON_JWT_PRIVATE_KEY_B64: Optional[str] = None
+    DAEMON_JWT_PUBLIC_KEY_B64: Optional[str] = None
     DAEMON_JWT_KEY_ID: Optional[str] = None
     # Security controls default closed for legacy/bootstrap behavior and
     # require an explicit deployment decision for task execution.
@@ -47,6 +53,20 @@ class Settings(BaseSettings):
     DAEMON_V2_LINKEDIN_ENABLED: bool = True
     DAEMON_V2_WHATSAPP_ENABLED: bool = False
     DAEMON_V2_EMAIL_ENABLED: bool = False
+
+    @model_validator(mode="after")
+    def load_daemon_key_variants(self):
+        for plain_name, encoded_name in (
+            ("DAEMON_JWT_PRIVATE_KEY", "DAEMON_JWT_PRIVATE_KEY_B64"),
+            ("DAEMON_JWT_PUBLIC_KEY", "DAEMON_JWT_PUBLIC_KEY_B64"),
+        ):
+            if not getattr(self, plain_name) and getattr(self, encoded_name):
+                try:
+                    value = base64.b64decode(getattr(self, encoded_name), validate=True)
+                    setattr(self, plain_name, value.decode("ascii"))
+                except (ValueError, UnicodeDecodeError):
+                    raise ValueError(f"Invalid {encoded_name}")
+        return self
 
     # =========================================================================
     # API Server
