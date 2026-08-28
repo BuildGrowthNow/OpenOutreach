@@ -2,20 +2,29 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
-  DndContext,
-  closestCenter,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  DragEndEvent,
-} from "@dnd-kit/core";
-import {
-  SortableContext,
-  useSortable,
-  verticalListSortingStrategy,
-  arrayMove,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
+  ReactFlow,
+  Background,
+  Controls,
+  MiniMap,
+  addEdge,
+  useNodesState,
+  useEdgesState,
+  Handle,
+  Position,
+  NodeProps,
+  EdgeProps,
+  getBezierPath,
+  BaseEdge,
+  EdgeLabelRenderer,
+  MarkerType,
+  Connection,
+  Node as RFNode,
+  Edge as RFEdge,
+  useReactFlow,
+  ReactFlowProvider,
+  Panel,
+} from "@xyflow/react";
+import "@xyflow/react/dist/style.css";
 import {
   Card,
   CardContent,
@@ -25,7 +34,6 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import {
   Select,
   SelectContent,
@@ -60,6 +68,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Progress } from "@/components/ui/progress";
 import { Icons } from "@/lib/types/components";
 import { cn } from "@/lib/utils";
 import {
@@ -70,131 +79,303 @@ import {
   SequenceEdge,
 } from "@/lib/api/campaigns";
 import { useToast } from "@/components/ui/use-toast";
-import {
-  Network,
-  Mail,
-  Smartphone,
-  Clock,
-  GitBranch,
-  Flag,
-  ArrowDown,
-  GripVertical,
-} from "lucide-react";
+import { Network, Mail, Smartphone, Clock, GitBranch, Flag, Plus, X } from "lucide-react";
 
-// ─── constants ───────────────────────────────────────────────────────────────
+// ─── constants ────────────────────────────────────────────────────────────────
 
-const STEP_LABELS: Record<string, string> = {
-  connect: "LinkedIn Connect",
-  follow_up: "LinkedIn Follow-up",
-  send_email: "Send Email",
+const STEP_COLORS: Record<string, { border: string; bg: string; text: string; ring: string }> = {
+  connect:       { border: "border-blue-500/40",    bg: "bg-blue-500/10",    text: "text-blue-300",    ring: "ring-blue-500" },
+  follow_up:     { border: "border-blue-500/40",    bg: "bg-blue-500/10",    text: "text-blue-300",    ring: "ring-blue-500" },
+  send_email:    { border: "border-amber-500/40",   bg: "bg-amber-500/10",   text: "text-amber-300",   ring: "ring-amber-500" },
+  send_whatsapp: { border: "border-emerald-500/40", bg: "bg-emerald-500/10", text: "text-emerald-300", ring: "ring-emerald-500" },
+  wait:          { border: "border-zinc-600/40",    bg: "bg-zinc-800/50",    text: "text-zinc-400",    ring: "ring-zinc-500" },
+  condition:     { border: "border-purple-500/40",  bg: "bg-purple-500/10",  text: "text-purple-300",  ring: "ring-purple-500" },
+  end:           { border: "border-rose-500/40",    bg: "bg-rose-500/10",    text: "text-rose-300",    ring: "ring-rose-500" },
+};
+
+const STEP_KEY_LABELS: Record<string, string> = {
+  connect:       "LinkedIn Connect",
+  follow_up:     "LinkedIn Follow-up",
+  send_email:    "Send Email",
   send_whatsapp: "Send WhatsApp",
-  wait: "Wait",
-  condition: "Condition",
-  end: "End",
+  wait:          "Wait",
+  condition:     "Branch / Gate",
+  end:           "End",
 };
 
-const CONDITION_LABELS: Record<string, string> = {
-  always: "Always proceed",
-  no_reply: "If no reply",
-  no_open: "If not opened",
-  replied: "If replied",
-};
-
-const STEP_COLORS: Record<string, string> = {
-  connect: "border-blue-500/30 bg-blue-500/5 text-blue-400",
-  follow_up: "border-blue-500/30 bg-blue-500/5 text-blue-400",
-  send_email: "border-amber-500/30 bg-amber-500/5 text-amber-400",
-  send_whatsapp: "border-emerald-500/30 bg-emerald-500/5 text-emerald-400",
-  wait: "border-zinc-500/30 bg-zinc-500/5 text-zinc-400",
-  condition: "border-purple-500/30 bg-purple-500/5 text-purple-400",
-  end: "border-red-500/30 bg-red-500/5 text-red-400",
-};
-
-const ADD_STEP_OPTIONS = [
-  {
-    type: "action" as const,
-    action: "connect" as const,
-    channel: "linkedin" as const,
-    label: "LinkedIn Connect",
-    requires: [] as string[],
-  },
-  {
-    type: "action" as const,
-    action: "follow_up" as const,
-    channel: "linkedin" as const,
-    label: "LinkedIn Follow-up",
-    requires: [] as string[],
-  },
-  {
-    type: "action" as const,
-    action: "send_email" as const,
-    channel: "email" as const,
-    label: "Send Email",
-    requires: ["api_email"] as string[],
-  },
-  {
-    type: "action" as const,
-    action: "send_whatsapp" as const,
-    channel: "whatsapp" as const,
-    label: "Send WhatsApp",
-    requires: ["phone"] as string[],
-  },
-  {
-    type: "wait" as const,
-    action: null,
-    channel: null,
-    label: "Wait",
-    requires: [] as string[],
-  },
-  {
-    type: "condition" as const,
-    action: null,
-    channel: null,
-    label: "Condition",
-    requires: [] as string[],
-  },
-  {
-    type: "end" as const,
-    action: null,
-    channel: null,
-    label: "End",
-    requires: [] as string[],
-  },
+const CONDITION_OPTIONS = [
+  { value: "always",   label: "Always proceed" },
+  { value: "no_reply", label: "If no reply" },
+  { value: "replied",  label: "If replied" },
+  { value: "no_open",  label: "If not opened" },
 ];
 
-function stepKey(step: SequenceStep): string {
+const EDGE_BRANCH_LABELS: Record<string, string> = {
+  yes: "Yes",
+  no:  "No",
+};
+
+// ─── helpers ──────────────────────────────────────────────────────────────────
+
+function stepColorKey(step: SequenceStep): string {
   return step.data.action || step.type;
 }
 
-// ─── types ────────────────────────────────────────────────────────────────────
+function makeId(): string {
+  return crypto.randomUUID();
+}
 
-type Snapshot = { steps: SequenceStep[]; edges: SequenceEdge[] };
+// ─── step icon ────────────────────────────────────────────────────────────────
+
+function StepIcon({ step, className }: { step: SequenceStep; className?: string }) {
+  const key = stepColorKey(step);
+  const cls = cn("h-4 w-4 shrink-0", className);
+  if (key === "connect" || key === "follow_up") return <Network className={cls} />;
+  if (key === "send_email") return <Mail className={cls} />;
+  if (key === "send_whatsapp") return <Smartphone className={cls} />;
+  if (key === "wait") return <Clock className={cls} />;
+  if (key === "condition") return <GitBranch className={cls} />;
+  return <Flag className={cls} />;
+}
+
+// ─── SeqNode ──────────────────────────────────────────────────────────────────
+
+interface SeqNodeData {
+  step: SequenceStep;
+  coverage: number | null;
+  onDelete: (id: string) => void;
+  onEdit: (id: string) => void;
+  [key: string]: unknown;
+}
+
+function SeqNode({ id, data, selected }: NodeProps) {
+  const d = data as SeqNodeData;
+  const step = d.step;
+  const key = stepColorKey(step);
+  const colors = STEP_COLORS[key] ?? STEP_COLORS.wait;
+  const isEnd = step.type === "end";
+  const isCondition = step.type === "condition";
+  const isWait = step.type === "wait";
+
+  return (
+    <div
+      className={cn(
+        "rounded-xl border-2 p-3 min-w-[200px] max-w-[260px] shadow-lg cursor-pointer select-none bg-zinc-950",
+        colors.border,
+        colors.bg,
+        selected && `ring-2 ring-offset-1 ring-offset-zinc-950 ${colors.ring}`,
+      )}
+    >
+      <Handle
+        type="target"
+        position={Position.Top}
+        className="!w-3 !h-3 !border-2 !border-zinc-600 !bg-zinc-900 hover:!border-zinc-400"
+      />
+
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <span className={cn("mt-0.5", colors.text)}>
+            <StepIcon step={step} />
+          </span>
+          <div className="min-w-0">
+            <div className={cn("text-sm font-semibold truncate", colors.text)}>
+              {step.data.label || STEP_KEY_LABELS[key] || key}
+            </div>
+            {isWait && (
+              <div className="text-xs text-zinc-500 mt-0.5">
+                {step.data.wait_days || 1} day{(step.data.wait_days || 1) !== 1 ? "s" : ""}
+              </div>
+            )}
+            {isCondition && step.data.condition && step.data.condition !== "always" && (
+              <div className="text-xs text-zinc-500 mt-0.5">
+                {CONDITION_OPTIONS.find((o) => o.value === step.data.condition)?.label}
+              </div>
+            )}
+            {step.data.requires && step.data.requires.length > 0 && (
+              <div className="text-xs text-zinc-600 mt-0.5">needs: {step.data.requires.join(", ")}</div>
+            )}
+          </div>
+        </div>
+        <div className="flex gap-1 shrink-0">
+          <button
+            className="text-zinc-600 hover:text-zinc-300 transition-colors p-0.5 rounded"
+            onClick={(e) => { e.stopPropagation(); d.onEdit(id); }}
+            title="Edit step"
+          >
+            <Icons.Settings className="h-3.5 w-3.5" />
+          </button>
+          <button
+            className="text-zinc-600 hover:text-red-400 transition-colors p-0.5 rounded"
+            onClick={(e) => { e.stopPropagation(); d.onDelete(id); }}
+            title="Delete step"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
+
+      {d.coverage !== null && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div className="mt-2 cursor-default">
+              <Progress value={d.coverage} className="h-1 bg-zinc-800 [&>div]:bg-current" />
+              <span className="text-[10px] opacity-50 mt-0.5 inline-block">{d.coverage}% leads covered</span>
+            </div>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="max-w-[200px] text-xs">
+            Percentage of leads in this campaign that have the required data for this step.
+          </TooltipContent>
+        </Tooltip>
+      )}
+
+      {isCondition ? (
+        <>
+          <Handle
+            type="source"
+            position={Position.Bottom}
+            id="yes"
+            style={{ left: "30%" }}
+            className="!w-3 !h-3 !border-2 !border-emerald-600 !bg-zinc-900 hover:!border-emerald-400"
+            title="Yes — condition met (left handle)"
+          />
+          <Handle
+            type="source"
+            position={Position.Bottom}
+            id="no"
+            style={{ left: "70%" }}
+            className="!w-3 !h-3 !border-2 !border-rose-600 !bg-zinc-900 hover:!border-rose-400"
+            title="No — condition not met (right handle)"
+          />
+        </>
+      ) : !isEnd ? (
+        <Handle
+          type="source"
+          position={Position.Bottom}
+          className="!w-3 !h-3 !border-2 !border-zinc-600 !bg-zinc-900 hover:!border-zinc-400"
+        />
+      ) : null}
+    </div>
+  );
+}
+
+// ─── SeqEdge ──────────────────────────────────────────────────────────────────
+
+function SeqEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, data, selected }: EdgeProps) {
+  const [edgePath, labelX, labelY] = getBezierPath({ sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition });
+  const branch = (data as { condition?: string } | undefined)?.condition;
+  const branchLabel = branch ? (EDGE_BRANCH_LABELS[branch] ?? branch) : null;
+
+  return (
+    <>
+      <BaseEdge
+        id={id}
+        path={edgePath}
+        style={{
+          stroke: selected ? "#60a5fa" : branch === "yes" ? "#10b981" : branch === "no" ? "#f43f5e" : "#52525b",
+          strokeWidth: selected ? 2.5 : 1.5,
+        }}
+      />
+      {branchLabel && (
+        <EdgeLabelRenderer>
+          <div
+            style={{ transform: `translate(-50%,-50%) translate(${labelX}px,${labelY}px)`, pointerEvents: "all" }}
+            className="absolute nodrag nopan"
+          >
+            <span
+              className={cn(
+                "text-[10px] font-medium px-1.5 py-0.5 rounded border bg-zinc-950 select-none",
+                branch === "yes" ? "border-emerald-600/40 text-emerald-400" : "border-rose-600/40 text-rose-400",
+              )}
+            >
+              {branchLabel}
+            </span>
+          </div>
+        </EdgeLabelRenderer>
+      )}
+    </>
+  );
+}
+
+const nodeTypes = { seq: SeqNode };
+const edgeTypes = { seq: SeqEdge };
+
+// ─── layout helper ────────────────────────────────────────────────────────────
+
+function autoLayout(steps: SequenceStep[]): SequenceStep[] {
+  return steps.map((s, i) => ({
+    ...s,
+    position:
+      s.position?.x != null && s.position?.y != null && (s.position.x !== 0 || s.position.y !== 0)
+        ? s.position
+        : { x: 300, y: i * 150 },
+  }));
+}
+
+// ─── RF converters ────────────────────────────────────────────────────────────
+
+function stepsToNodes(
+  steps: SequenceStep[],
+  coverage: Record<string, number>,
+  onDelete: (id: string) => void,
+  onEdit: (id: string) => void,
+): RFNode[] {
+  return steps.map((step) => ({
+    id: step.id,
+    type: "seq",
+    position: step.position,
+    data: { step, coverage: coverage[step.id] ?? null, onDelete, onEdit },
+  }));
+}
+
+function edgesToRF(edges: SequenceEdge[]): RFEdge[] {
+  return edges.map((e) => {
+    const cond = (e.data as { condition?: string } | undefined)?.condition;
+    return {
+      id: e.id,
+      source: e.source,
+      target: e.target,
+      sourceHandle: cond === "yes" ? "yes" : cond === "no" ? "no" : undefined,
+      type: "seq",
+      data: e.data ?? {},
+      markerEnd: { type: MarkerType.ArrowClosed, color: "#52525b", width: 12, height: 12 },
+    };
+  });
+}
+
+function rfNodesToSteps(nodes: RFNode[], prevSteps: SequenceStep[]): SequenceStep[] {
+  const prevMap = new Map(prevSteps.map((s) => [s.id, s]));
+  return nodes.map((n) => {
+    const prev = prevMap.get(n.id);
+    return prev ? { ...prev, position: n.position } : { ...(n.data as SeqNodeData).step, position: n.position };
+  });
+}
+
+function rfEdgesToSeq(edges: RFEdge[]): SequenceEdge[] {
+  return edges.map((e) => {
+    const raw = e.data as { condition?: string } | undefined;
+    const seqEdge: SequenceEdge = {
+      id: e.id,
+      source: e.source,
+      target: e.target,
+      label: typeof e.label === "string" ? e.label : undefined,
+    };
+    if (raw?.condition) seqEdge.data = { condition: raw.condition };
+    return seqEdge;
+  });
+}
 
 // ─── validation ───────────────────────────────────────────────────────────────
 
-function validateSequence(
-  steps: SequenceStep[],
-  edges: SequenceEdge[],
-): string[] {
+function validateSequence(steps: SequenceStep[], edges: SequenceEdge[]): string[] {
   if (steps.length === 0) return [];
   const warnings: string[] = [];
   const edgeTargets = new Set(edges.map((e) => e.target));
   const edgeSources = new Set(edges.map((e) => e.source));
   const roots = steps.filter((s) => !edgeTargets.has(s.id));
-  if (roots.length > 1) {
-    warnings.push(
-      `${roots.length} disconnected steps — every step must connect to the next.`,
-    );
-  }
-  if (!steps.some((s) => s.type === "action")) {
-    warnings.push("Add at least one action step (Connect or Follow-up).");
-  }
-  if (!steps.some((s) => s.type === "end")) {
-    warnings.push("Add an End step to mark where the sequence finishes.");
-  }
-  const noOutgoing = steps.filter(
-    (s) => s.type !== "end" && !edgeSources.has(s.id),
-  );
+  if (roots.length > 1) warnings.push(`${roots.length} disconnected entry points — connect all steps.`);
+  if (!steps.some((s) => s.type === "action")) warnings.push("Add at least one action step (Connect or Follow-up).");
+  if (!steps.some((s) => s.type === "end")) warnings.push("Add an End step.");
+  const noOutgoing = steps.filter((s) => s.type !== "end" && !edgeSources.has(s.id));
   if (noOutgoing.length > 0) {
     warnings.push(
       `${noOutgoing.map((s) => `"${s.data.label}"`).join(", ")} ${noOutgoing.length === 1 ? "has" : "have"} no outgoing connection.`,
@@ -203,168 +384,123 @@ function validateSequence(
   return warnings;
 }
 
-// ─── StepIcon ────────────────────────────────────────────────────────────────
+// ─── templates ────────────────────────────────────────────────────────────────
 
-function StepIcon({ step }: { step: SequenceStep }) {
-  const key = stepKey(step);
-  if (key === "connect" || key === "follow_up")
-    return <Network className="h-4 w-4" />;
-  if (key === "send_email") return <Mail className="h-4 w-4" />;
-  if (key === "send_whatsapp") return <Smartphone className="h-4 w-4" />;
-  if (key === "wait") return <Clock className="h-4 w-4" />;
-  if (key === "condition") return <GitBranch className="h-4 w-4" />;
-  return <Flag className="h-4 w-4" />;
+function makeStep(
+  id: string,
+  type: SequenceStep["type"],
+  action: SequenceStep["data"]["action"],
+  channel: SequenceStep["data"]["channel"],
+  label: string,
+  waitDays = 0,
+  requires: string[] = [],
+  condition: SequenceStep["data"]["condition"] = "always",
+): SequenceStep {
+  return { id, type, data: { channel, action, label, wait_days: waitDays, condition, requires }, position: { x: 0, y: 0 } };
 }
 
-// ─── NodeCard ─────────────────────────────────────────────────────────────────
-
-interface NodeCardProps {
-  step: SequenceStep;
-  coverage: number | null;
-  selected: boolean;
-  onSelect: () => void;
-  onDelete: () => void;
-  onUpdateWaitDays?: (days: number) => void;
-  onWaitDaysFocus?: () => void;
+function makeSeqEdge(source: string, target: string, branch?: string): SequenceEdge {
+  return {
+    id: `e_${source}_${target}${branch ? `_${branch}` : ""}`,
+    source,
+    target,
+    data: branch ? { condition: branch } : undefined,
+  };
 }
 
-function NodeCard({
-  step,
-  coverage,
-  selected,
-  onSelect,
-  onDelete,
-  onUpdateWaitDays,
-  onWaitDaysFocus,
-}: NodeCardProps) {
-  const key = stepKey(step);
-  const colorClass = STEP_COLORS[key] || STEP_COLORS.wait;
-  const label = step.data.label || STEP_LABELS[key] || key;
-  const isWait = step.type === "wait";
-  const isCondition = step.type === "condition";
-  // Guard: call onWaitDaysFocus once per focus event, reset on blur
-  const waitFocusGuard = useRef(false);
+type Template = { name: string; description: string; steps: SequenceStep[]; edges: SequenceEdge[] };
 
-  return (
-    <div
-      className={cn(
-        "rounded-lg border-2 p-3 cursor-pointer transition-all select-none w-full",
-        colorClass,
-        selected && "ring-2 ring-offset-2 ring-offset-zinc-950 ring-blue-500",
-      )}
-      onClick={onSelect}
-    >
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 flex-1 min-w-0 flex-wrap">
-          <StepIcon step={step} />
-          <span className="text-sm font-medium truncate">{label}</span>
-          {step.data.requires && step.data.requires.length > 0 && (
-            <Badge
-              variant="outline"
-              className="text-xs shrink-0 border-zinc-600 text-zinc-400"
-            >
-              needs {step.data.requires.join(", ")}
-            </Badge>
-          )}
-          {/* Fix #4 / #9: show configured condition on card */}
-          {isCondition &&
-            step.data.condition &&
-            step.data.condition !== "always" && (
-              <Badge
-                variant="outline"
-                className="text-xs shrink-0 border-purple-500/30 text-purple-400"
-              >
-                {CONDITION_LABELS[step.data.condition] ?? step.data.condition}
-              </Badge>
-            )}
-        </div>
-        <button
-          className="text-zinc-600 hover:text-red-400 transition-colors shrink-0"
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete();
-          }}
-          aria-label="Delete step"
-        >
-          <Icons.Trash2 className="h-3.5 w-3.5" />
-        </button>
-      </div>
+const TEMPLATES: Template[] = [
+  {
+    name: "LinkedIn Only",
+    description: "Connect → 3d → Follow-up → 7d → Follow-up → End",
+    steps: [
+      makeStep("t1", "action",  "connect",   "linkedin", "LinkedIn Connect"),
+      makeStep("t2", "wait",    null,          null,      "Wait 3 days", 3),
+      makeStep("t3", "action",  "follow_up",  "linkedin", "LinkedIn Follow-up"),
+      makeStep("t4", "wait",    null,          null,      "Wait 7 days", 7),
+      makeStep("t5", "action",  "follow_up",  "linkedin", "LinkedIn Follow-up #2"),
+      makeStep("t6", "end",     null,          null,      "End"),
+    ],
+    edges: [
+      makeSeqEdge("t1","t2"), makeSeqEdge("t2","t3"), makeSeqEdge("t3","t4"),
+      makeSeqEdge("t4","t5"), makeSeqEdge("t5","t6"),
+    ],
+  },
+  {
+    name: "LinkedIn + Email",
+    description: "Connect → 3d → Branch (no reply → Email, replied → End) → Follow-up → End",
+    steps: [
+      makeStep("t1", "action",    "connect",   "linkedin", "LinkedIn Connect"),
+      makeStep("t2", "wait",      null,          null,     "Wait 3 days", 3),
+      makeStep("t3", "condition", null,          null,     "Got a reply?", 0, [], "replied"),
+      makeStep("t4", "action",    "send_email", "email",   "Send Email", 0, ["api_email"]),
+      makeStep("t5", "wait",      null,          null,     "Wait 5 days", 5),
+      makeStep("t6", "action",    "follow_up",  "linkedin","LinkedIn Follow-up"),
+      makeStep("t7", "end",       null,          null,     "End"),
+      makeStep("t8", "end",       null,          null,     "End (replied)"),
+    ],
+    edges: [
+      makeSeqEdge("t1","t2"),
+      makeSeqEdge("t2","t3"),
+      makeSeqEdge("t3","t8","yes"),
+      makeSeqEdge("t3","t4","no"),
+      makeSeqEdge("t4","t5"),
+      makeSeqEdge("t5","t6"),
+      makeSeqEdge("t6","t7"),
+    ],
+  },
+  {
+    name: "Full Multichannel",
+    description: "Connect → Branch → Email path + WhatsApp path → Follow-up → End",
+    steps: [
+      makeStep("t1", "action",    "connect",       "linkedin",  "LinkedIn Connect"),
+      makeStep("t2", "wait",      null,             null,        "Wait 3 days", 3),
+      makeStep("t3", "condition", null,             null,        "Has email?", 0, [], "no_reply"),
+      makeStep("t4", "action",    "send_email",    "email",     "Send Email", 0, ["api_email"]),
+      makeStep("t5", "action",    "send_whatsapp", "whatsapp",  "Send WhatsApp", 0, ["phone"]),
+      makeStep("t6", "wait",      null,             null,        "Wait 5 days", 5),
+      makeStep("t7", "action",    "follow_up",     "linkedin",  "LinkedIn Follow-up"),
+      makeStep("t8", "end",       null,             null,        "End"),
+    ],
+    edges: [
+      makeSeqEdge("t1","t2"),
+      makeSeqEdge("t2","t3"),
+      makeSeqEdge("t3","t4","yes"),
+      makeSeqEdge("t3","t5","no"),
+      makeSeqEdge("t4","t6"),
+      makeSeqEdge("t5","t6"),
+      makeSeqEdge("t6","t7"),
+      makeSeqEdge("t7","t8"),
+    ],
+  },
+];
 
-      {isWait && (
-        <div
-          className="mt-2 flex items-center gap-2"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <input
-            type="number"
-            min={1}
-            max={90}
-            value={step.data.wait_days > 0 ? step.data.wait_days : 1}
-            onFocus={() => {
-              if (!waitFocusGuard.current) {
-                waitFocusGuard.current = true;
-                onWaitDaysFocus?.();
-              }
-            }}
-            onBlur={() => { waitFocusGuard.current = false; }}
-            onChange={(e) => {
-              const v = Math.max(1, Math.min(90, Number(e.target.value)));
-              onUpdateWaitDays?.(v);
-            }}
-            className="w-14 bg-zinc-900 border border-zinc-700 rounded text-xs text-zinc-200 px-1.5 py-0.5 focus:outline-none focus:border-zinc-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-          />
-          <span className="text-xs text-zinc-500">days</span>
-        </div>
-      )}
-
-      {coverage !== null && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <div className="mt-2 cursor-default">
-              <Progress
-                value={coverage}
-                className="h-1 bg-zinc-800 [&>div]:bg-current"
-              />
-              <span className="text-xs opacity-60 mt-0.5 inline-block">
-                {coverage}% leads covered
-              </span>
-            </div>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" className="max-w-[220px] text-xs">
-            % of leads in this campaign that have the required data for this
-            step (e.g. a work email for email steps).
-          </TooltipContent>
-        </Tooltip>
-      )}
-    </div>
-  );
-}
+const ADD_STEP_OPTIONS = [
+  { type: "action"    as const, action: "connect"        as const, channel: "linkedin"  as const, label: "LinkedIn Connect",   requires: [] as string[] },
+  { type: "action"    as const, action: "follow_up"      as const, channel: "linkedin"  as const, label: "LinkedIn Follow-up", requires: [] as string[] },
+  { type: "action"    as const, action: "send_email"     as const, channel: "email"     as const, label: "Send Email",         requires: ["api_email"] as string[] },
+  { type: "action"    as const, action: "send_whatsapp"  as const, channel: "whatsapp"  as const, label: "Send WhatsApp",      requires: ["phone"] as string[] },
+  { type: "wait"      as const, action: null,                       channel: null,                 label: "Wait",               requires: [] as string[] },
+  { type: "condition" as const, action: null,                       channel: null,                 label: "Branch / Gate",      requires: [] as string[] },
+  { type: "end"       as const, action: null,                       channel: null,                 label: "End",                requires: [] as string[] },
+];
 
 // ─── ConfigPanel ──────────────────────────────────────────────────────────────
 
-interface ConfigPanelProps {
-  step: SequenceStep;
-  onChange: (updated: SequenceStep) => void;
-  onClose: () => void;
-}
-
-function ConfigPanel({ step, onChange, onClose }: ConfigPanelProps) {
+function ConfigPanel({ step, onChange, onClose }: { step: SequenceStep; onChange: (u: SequenceStep) => void; onClose: () => void }) {
   const [label, setLabel] = useState(step.data.label);
   const [condition, setCondition] = useState(step.data.condition ?? "always");
-  const [waitDays, setWaitDays] = useState(
-    step.type === "wait" ? Math.max(1, step.data.wait_days || 1) : 1,
-  );
+  const [waitDays, setWaitDays] = useState(Math.max(1, step.data.wait_days || 1));
+
+  useEffect(() => {
+    setLabel(step.data.label);
+    setCondition(step.data.condition ?? "always");
+    setWaitDays(Math.max(1, step.data.wait_days || 1));
+  }, [step.id, step.data.label, step.data.condition, step.data.wait_days]);
 
   const save = () => {
-    onChange({
-      ...step,
-      data: {
-        ...step.data,
-        label,
-        condition,
-        ...(step.type === "wait" ? { wait_days: waitDays } : {}),
-      },
-    });
+    onChange({ ...step, data: { ...step.data, label, condition, ...(step.type === "wait" ? { wait_days: waitDays } : {}) } });
     onClose();
   };
 
@@ -374,19 +510,13 @@ function ConfigPanel({ step, onChange, onClose }: ConfigPanelProps) {
         <DialogHeader>
           <DialogTitle>Configure Step</DialogTitle>
           <DialogDescription className="text-zinc-400">
-            {step.type === "action" && step.data.action === "connect" &&
-              "Sends a LinkedIn connection request to the lead."}
-            {step.type === "action" && step.data.action === "follow_up" &&
-              "Sends a LinkedIn message via the campaign follow-up agent."}
-            {step.type === "action" && step.data.action === "send_email" &&
-              "Sends an email to the lead's work email address."}
-            {step.type === "action" && step.data.action === "send_whatsapp" &&
-              "Sends a WhatsApp message to the lead's phone number."}
-            {step.type === "wait" &&
-              "Pauses the sequence for the given number of days before proceeding."}
-            {step.type === "condition" &&
-              "Checks a condition before proceeding. If not met, the sequence stops for that lead."}
-            {step.type === "end" && "Marks the end of the sequence."}
+            {step.type === "action" && step.data.action === "connect"       && "Sends a LinkedIn connection request."}
+            {step.type === "action" && step.data.action === "follow_up"     && "Sends a LinkedIn follow-up message via the campaign AI agent."}
+            {step.type === "action" && step.data.action === "send_email"    && "Sends an email to the lead's work address."}
+            {step.type === "action" && step.data.action === "send_whatsapp" && "Sends a WhatsApp message to the lead's phone number."}
+            {step.type === "wait"      && "Pauses the sequence for the given number of days before proceeding."}
+            {step.type === "condition" && "Routes leads down two paths. Drag from the green handle (Yes/left) and red handle (No/right) to connect both branches."}
+            {step.type === "end"       && "Marks the end of this path."}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-2">
@@ -407,299 +537,120 @@ function ConfigPanel({ step, onChange, onClose }: ConfigPanelProps) {
                 min={1}
                 max={90}
                 value={waitDays}
-                onChange={(e) =>
-                  setWaitDays(Math.max(1, Math.min(90, Number(e.target.value))))
-                }
+                onChange={(e) => setWaitDays(Math.max(1, Math.min(90, Number(e.target.value))))}
                 className="bg-zinc-900 border-zinc-700 text-zinc-100"
               />
             </div>
           )}
           {step.type === "condition" && (
             <div className="space-y-1.5">
-              <Label className="text-zinc-300">Condition</Label>
-              <Select
-                value={condition}
-                onValueChange={(v) => setCondition(v as typeof condition)}
-              >
+              <Label className="text-zinc-300">Condition to check</Label>
+              <Select value={condition} onValueChange={(v) => setCondition(v as typeof condition)}>
                 <SelectTrigger className="bg-zinc-900 border-zinc-700 text-zinc-100">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="bg-zinc-900 border-zinc-700 text-zinc-100">
-                  <SelectItem value="always">Always proceed</SelectItem>
-                  <SelectItem value="no_reply">
-                    Only if no reply received
-                  </SelectItem>
-                  <SelectItem value="no_open">
-                    Only if email not opened
-                  </SelectItem>
-                  <SelectItem value="replied">
-                    Only if reply received
-                  </SelectItem>
+                  {CONDITION_OPTIONS.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
               <p className="text-xs text-zinc-500">
-                If the condition is not met, the sequence stops for that lead.
+                Green handle (left) = Yes / condition met. Red handle (right) = No / not met.
               </p>
             </div>
           )}
         </div>
         <DialogFooter>
-          <Button
-            variant="outline"
-            className="border-zinc-700 text-zinc-300 hover:bg-zinc-800"
-            onClick={onClose}
-          >
-            Cancel
-          </Button>
-          <Button onClick={save} className="bg-blue-600 hover:bg-blue-700">
-            Save
-          </Button>
+          <Button variant="outline" className="border-zinc-700 text-zinc-300 hover:bg-zinc-800" onClick={onClose}>Cancel</Button>
+          <Button onClick={save} className="bg-blue-600 hover:bg-blue-700">Save</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
 
-// ─── SortableItem ─────────────────────────────────────────────────────────────
+// ─── SequenceCanvas ───────────────────────────────────────────────────────────
 
-interface SortableItemProps extends NodeCardProps {
-  id: string;
-}
-
-function SortableItem({ id, ...props }: SortableItemProps) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id });
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  };
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className="flex items-center gap-2 w-full max-w-sm"
-    >
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button
-            {...attributes}
-            {...listeners}
-            className="text-zinc-700 hover:text-zinc-400 cursor-grab active:cursor-grabbing shrink-0 touch-none"
-            aria-label="Drag to reorder"
-            tabIndex={-1}
-          >
-            <GripVertical className="h-4 w-4" />
-          </button>
-        </TooltipTrigger>
-        <TooltipContent side="left" className="text-xs">
-          Drag to reorder
-        </TooltipContent>
-      </Tooltip>
-      <div className="flex-1 min-w-0">
-        <NodeCard {...props} />
-      </div>
-    </div>
-  );
-}
-
-// ─── templates ────────────────────────────────────────────────────────────────
-
-type Template = {
-  name: string;
-  description: string;
-  steps: SequenceStep[];
-  edges: SequenceEdge[];
-};
-
-function makeStep(
-  id: string,
-  type: SequenceStep["type"],
-  action: SequenceStep["data"]["action"],
-  channel: SequenceStep["data"]["channel"],
-  label: string,
-  waitDays = 0,
-  requires: string[] = [],
-  condition: SequenceStep["data"]["condition"] = "always",
-): SequenceStep {
-  return {
-    id,
-    type,
-    data: { channel, action, label, wait_days: waitDays, condition, requires },
-    position: { x: 200, y: 0 },
-  };
-}
-
-function makeEdge(source: string, target: string): SequenceEdge {
-  return { id: `e_${source}_${target}`, source, target };
-}
-
-const TEMPLATES: Template[] = [
-  {
-    name: "LinkedIn Only",
-    description: "Connect → 3d → Follow-up → 7d → Follow-up → End",
-    steps: [
-      makeStep("t1", "action", "connect", "linkedin", "LinkedIn Connect"),
-      makeStep("t2", "wait", null, null, "Wait 3 days", 3),
-      makeStep("t3", "action", "follow_up", "linkedin", "LinkedIn Follow-up"),
-      makeStep("t4", "wait", null, null, "Wait 7 days", 7),
-      makeStep("t5", "action", "follow_up", "linkedin", "LinkedIn Follow-up #2"),
-      makeStep("t6", "end", null, null, "End"),
-    ],
-    edges: [
-      makeEdge("t1", "t2"), makeEdge("t2", "t3"), makeEdge("t3", "t4"),
-      makeEdge("t4", "t5"), makeEdge("t5", "t6"),
-    ],
-  },
-  {
-    name: "LinkedIn + Email",
-    description: "Connect → 3d → no reply check → Email → 5d → Follow-up → End",
-    steps: [
-      makeStep("t1", "action", "connect", "linkedin", "LinkedIn Connect"),
-      makeStep("t2", "wait", null, null, "Wait 3 days", 3),
-      makeStep("t3", "condition", null, null, "No reply?", 0, [], "no_reply"),
-      makeStep("t4", "action", "send_email", "email", "Send Email", 0, ["api_email"]),
-      makeStep("t5", "wait", null, null, "Wait 5 days", 5),
-      makeStep("t6", "action", "follow_up", "linkedin", "LinkedIn Follow-up"),
-      makeStep("t7", "end", null, null, "End"),
-    ],
-    edges: [
-      makeEdge("t1", "t2"), makeEdge("t2", "t3"), makeEdge("t3", "t4"),
-      makeEdge("t4", "t5"), makeEdge("t5", "t6"), makeEdge("t6", "t7"),
-    ],
-  },
-  {
-    name: "Full Multichannel",
-    description: "Connect → Email → WhatsApp → Follow-up → End",
-    steps: [
-      makeStep("t1", "action", "connect", "linkedin", "LinkedIn Connect"),
-      makeStep("t2", "wait", null, null, "Wait 3 days", 3),
-      makeStep("t3", "action", "send_email", "email", "Send Email", 0, ["api_email"]),
-      makeStep("t4", "wait", null, null, "Wait 5 days", 5),
-      makeStep("t5", "action", "send_whatsapp", "whatsapp", "Send WhatsApp", 0, ["phone"]),
-      makeStep("t6", "wait", null, null, "Wait 3 days", 3),
-      makeStep("t7", "action", "follow_up", "linkedin", "LinkedIn Follow-up"),
-      makeStep("t8", "end", null, null, "End"),
-    ],
-    edges: [
-      makeEdge("t1", "t2"), makeEdge("t2", "t3"), makeEdge("t3", "t4"),
-      makeEdge("t4", "t5"), makeEdge("t5", "t6"), makeEdge("t6", "t7"),
-      makeEdge("t7", "t8"),
-    ],
-  },
-];
-
-// ─── SequenceBuilder ──────────────────────────────────────────────────────────
-
-interface SequenceBuilderProps {
-  campaignId: string;
-  /** Set to true when the parent tab that hosts this component is currently visible */
-  isActive?: boolean;
-}
-
-export function SequenceBuilder({ campaignId, isActive }: SequenceBuilderProps) {
+function SequenceCanvas({ campaignId, isActive }: { campaignId: string; isActive?: boolean }) {
   const { toast } = useToast();
+  const { fitView } = useReactFlow();
 
-  const [steps, setSteps] = useState<SequenceStep[]>([]);
-  const [edges, setEdges] = useState<SequenceEdge[]>([]);
-  const [active, setActive] = useState(false);
+  const [seqSteps, setSeqSteps] = useState<SequenceStep[]>([]);
   const [coverage, setCoverage] = useState<Record<string, number>>({});
+  const [active, setActive] = useState(false);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [toggling, setToggling] = useState(false);
-  const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
-  const [showAddMenu, setShowAddMenu] = useState(false);
-  const [insertAfterIndex, setInsertAfterIndex] = useState<number | null>(null);
-  const [showCanvas, setShowCanvas] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
+  const [showCanvas, setShowCanvas] = useState(false);
   const [validationWarnings, setValidationWarnings] = useState<string[]>([]);
-  // Fix #8: proper dialogs replacing window.confirm
+  const [editingStepId, setEditingStepId] = useState<string | null>(null);
+  const [showAddMenu, setShowAddMenu] = useState(false);
   const [showActivateDialog, setShowActivateDialog] = useState(false);
   const [showResetDialog, setShowResetDialog] = useState(false);
   const [showSaveWhileActiveDialog, setShowSaveWhileActiveDialog] = useState(false);
-  // Fix #12: undo history
-  const [history, setHistory] = useState<Snapshot[]>([]);
 
-  const initialLoad = useRef(true);
-  // Tracks the last-saved snapshot for accurate isDirty-after-undo detection
-  const savedSnapshotRef = useRef<string>("");
-  // Tracks previous isActive prop value for tab-switch refetch logic
-  const prevIsActiveRef = useRef<boolean | undefined>(undefined);
-  // Fix #10: click-outside ref for toolbar add-step dropdown
   const addMenuRef = useRef<HTMLDivElement>(null);
+  const savedSnapshotRef = useRef<string>("");
+  const prevIsActiveRef = useRef<boolean | undefined>(undefined);
+  // suppress dirty flag during initial fetch
+  const suppressDirty = useRef(true);
 
-  // ── fetch ───────────────────────────────────────────────────────────────────
+  const [nodes, setNodes, onNodesChange] = useNodesState<RFNode>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<RFEdge>([]);
+
+  // stable node callbacks
+  const handleDeleteNode = useCallback((id: string) => {
+    setNodes((prev) => prev.filter((n) => n.id !== id));
+    setEdges((prev) => prev.filter((e) => e.source !== id && e.target !== id));
+    setIsDirty(true);
+  }, [setNodes, setEdges]);
+
+  const handleEditNode = useCallback((id: string) => {
+    setEditingStepId(id);
+  }, []);
+
+  // sync RF nodes → seqSteps (for summary / validation)
+  useEffect(() => {
+    if (suppressDirty.current) return;
+    const updatedSteps = rfNodesToSteps(nodes, seqSteps);
+    setSeqSteps(updatedSteps);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nodes]);
 
   const fetchSequence = useCallback(async () => {
-    // Mark as initial load so the [steps, edges] dirty-effect skips this batch
-    initialLoad.current = true;
+    suppressDirty.current = true;
     setLoading(true);
     setFetchError(false);
     const res = await getSequence(campaignId);
     if (res.data) {
-      const loadedSteps = res.data.steps ?? [];
+      const loadedSteps = autoLayout(res.data.steps ?? []);
       const loadedEdges = res.data.edges ?? [];
-      setSteps(loadedSteps);
-      setEdges(loadedEdges);
+      const cov = res.data.coverage_per_step ?? {};
+      setSeqSteps(loadedSteps);
+      setCoverage(cov);
       setActive(res.data.active ?? false);
-      setCoverage(res.data.coverage_per_step ?? {});
       savedSnapshotRef.current = JSON.stringify({ steps: loadedSteps, edges: loadedEdges });
-      if (loadedSteps.length > 0) setShowCanvas(true);
+      if (loadedSteps.length > 0) {
+        setShowCanvas(true);
+        setNodes(stepsToNodes(loadedSteps, cov, handleDeleteNode, handleEditNode));
+        setEdges(edgesToRF(loadedEdges));
+        setTimeout(() => { suppressDirty.current = false; void fitView({ padding: 0.15 }); }, 100);
+      } else {
+        suppressDirty.current = false;
+      }
     } else {
       setFetchError(true);
+      suppressDirty.current = false;
     }
     setLoading(false);
     setIsDirty(false);
-    setHistory([]);
-  }, [campaignId]);
+  }, [campaignId, setNodes, setEdges, handleDeleteNode, handleEditNode, fitView]);
 
   useEffect(() => { void fetchSequence(); }, [fetchSequence]);
 
-  useEffect(() => {
-    // First run after a fetch: clear the guard flag without marking dirty
-    if (initialLoad.current) {
-      initialLoad.current = false;
-      return;
-    }
-    setIsDirty(true);
-  }, [steps, edges]);
-
-  useEffect(() => {
-    const handler = (e: BeforeUnloadEvent) => {
-      if (!isDirty) return;
-      e.preventDefault();
-      e.returnValue = "";
-    };
-    window.addEventListener("beforeunload", handler);
-    return () => window.removeEventListener("beforeunload", handler);
-  }, [isDirty]);
-
-  // Fix #10: close toolbar dropdown on outside click
-  useEffect(() => {
-    if (!showAddMenu) return;
-    const handler = (e: MouseEvent) => {
-      if (addMenuRef.current && !addMenuRef.current.contains(e.target as Node)) {
-        setShowAddMenu(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [showAddMenu]);
-
-  // Close inline insert popover on outside click
-  useEffect(() => {
-    if (insertAfterIndex === null) return;
-    const handler = (e: MouseEvent) => {
-      if (!(e.target as Element).closest("[data-insert-popover]")) {
-        setInsertAfterIndex(null);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [insertAfterIndex]);
-
-  // Re-fetch when the parent tab becomes active, unless there are unsaved changes
   useEffect(() => {
     if (prevIsActiveRef.current === false && isActive === true && !isDirty && !loading) {
       void fetchSequence();
@@ -707,256 +658,122 @@ export function SequenceBuilder({ campaignId, isActive }: SequenceBuilderProps) 
     prevIsActiveRef.current = isActive;
   }, [isActive, isDirty, loading, fetchSequence]);
 
-  // ── undo ────────────────────────────────────────────────────────────────────
-
-  const pushSnapshot = useCallback(() => {
-    setHistory((prev) => [...prev.slice(-19), { steps, edges }]);
-  }, [steps, edges]);
-
-  const handleUndo = useCallback(() => {
-    setHistory((prev) => {
-      if (prev.length === 0) return prev;
-      const snapshot = prev[prev.length - 1];
-      setSteps(snapshot.steps);
-      setEdges(snapshot.edges);
-      // If we've landed back on the saved state, clear the dirty flag
-      if (
-        JSON.stringify({ steps: snapshot.steps, edges: snapshot.edges }) ===
-        savedSnapshotRef.current
-      ) {
-        setIsDirty(false);
-      }
-      return prev.slice(0, -1);
-    });
-  }, []);
-
-  // Fix #12: Ctrl+Z keyboard shortcut — skip when focus is inside any text input
+  // close add menu on outside click
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (!(e.ctrlKey || e.metaKey) || e.key !== "z" || e.shiftKey) return;
-      const target = e.target as HTMLElement;
-      const tag = target.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || target.isContentEditable) return;
-      e.preventDefault();
-      handleUndo();
+    if (!showAddMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (addMenuRef.current && !addMenuRef.current.contains(e.target as unknown as globalThis.Node)) setShowAddMenu(false);
     };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [handleUndo]);
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showAddMenu]);
 
-  // ── mutations ────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => { if (!isDirty) return; e.preventDefault(); e.returnValue = ""; };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [isDirty]);
 
-  // Fix #3: toolbar add inserts before last End step; edge bridging is correct
+  // ── add step ──────────────────────────────────────────────────────────────────
+
   const addStep = useCallback(
-    (opt: (typeof ADD_STEP_OPTIONS)[number], afterIndex?: number) => {
-      pushSnapshot();
-      const id = crypto.randomUUID();
+    (opt: (typeof ADD_STEP_OPTIONS)[number]) => {
+      const id = makeId();
       const newStep: SequenceStep = {
         id,
         type: opt.type,
-        data: {
-          channel: opt.channel,
-          action: opt.action,
-          label: opt.label,
-          wait_days: opt.type === "wait" ? 3 : 0,
-          condition: "always",
-          requires: [...opt.requires],
-        },
-        position: { x: 200, y: 0 },
+        data: { channel: opt.channel, action: opt.action, label: opt.label, wait_days: opt.type === "wait" ? 3 : 0, condition: "always", requires: [...opt.requires] },
+        position: { x: 100 + Math.random() * 400, y: (nodes.length + 1) * 150 },
       };
-
-      let insertIdx: number;
-      if (afterIndex !== undefined) {
-        insertIdx = afterIndex;
-      } else {
-        // Insert before the last End step, falling back to end-of-list.
-        // Use >= 0 so a lone End step (endIdx === 0) yields insertIdx = -1,
-        // which splice(0, 0, newStep) correctly handles as a prepend.
-        const endIdx = steps.reduceRight(
-          (acc, s, i) => (acc === -1 && s.type === "end" ? i : acc),
-          -1,
-        );
-        insertIdx = endIdx >= 0 ? endIdx - 1 : steps.length - 1;
-      }
-
-      // Capture edge neighbours from current closure before setState
-      const prevStepId = steps[insertIdx]?.id;
-      const nextStepId = steps[insertIdx + 1]?.id;
-
-      setSteps((prev) => {
-        const next = [...prev];
-        next.splice(insertIdx + 1, 0, newStep);
-        return next;
-      });
-
-      setEdges((prev) => {
-        let next = [...prev];
-        if (prevStepId && nextStepId) {
-          // Bridge: remove old direct edge, route through new step
-          next = next.filter(
-            (e) => !(e.source === prevStepId && e.target === nextStepId),
-          );
-          next.push({ id: `edge_${prevStepId}_${id}`, source: prevStepId, target: id });
-          next.push({ id: `edge_${id}_${nextStepId}`, source: id, target: nextStepId });
-        } else if (prevStepId) {
-          next.push({ id: `edge_${prevStepId}_${id}`, source: prevStepId, target: id });
-        } else if (nextStepId) {
-          // Inserting at the very beginning (e.g. before a lone End step)
-          next.push({ id: `edge_${id}_${nextStepId}`, source: id, target: nextStepId });
-        }
-        return next;
-      });
-
+      setNodes((prev) => [
+        ...prev,
+        { id, type: "seq", position: newStep.position, data: { step: newStep, coverage: null, onDelete: handleDeleteNode, onEdit: handleEditNode } },
+      ]);
       setShowAddMenu(false);
-      setInsertAfterIndex(null);
-      if (opt.type === "condition") {
-        setSelectedStepId(id);
-      }
+      setIsDirty(true);
+      if (opt.type === "condition") setEditingStepId(id);
     },
-    [steps, pushSnapshot],
+    [nodes.length, handleDeleteNode, handleEditNode, setNodes],
   );
 
-  // Fix #1: reconnect predecessor → successor on delete
-  const deleteStep = useCallback(
-    (stepId: string) => {
-      pushSnapshot();
-      const incomingEdge = edges.find((e) => e.target === stepId);
-      const outgoingEdge = edges.find((e) => e.source === stepId);
+  // ── connect ───────────────────────────────────────────────────────────────────
 
-      setSteps((prev) => prev.filter((s) => s.id !== stepId));
-      setEdges((prev) => {
-        const filtered = prev.filter(
-          (e) => e.source !== stepId && e.target !== stepId,
-        );
-        if (incomingEdge && outgoingEdge) {
-          return [
-            ...filtered,
-            {
-              id: `edge_${incomingEdge.source}_${outgoingEdge.target}`,
-              source: incomingEdge.source,
-              target: outgoingEdge.target,
-            },
-          ];
-        }
-        return filtered;
-      });
-
-      if (selectedStepId === stepId) setSelectedStepId(null);
+  const onConnect = useCallback(
+    (connection: Connection) => {
+      const branch = connection.sourceHandle === "yes" ? "yes" : connection.sourceHandle === "no" ? "no" : undefined;
+      const newEdge: RFEdge = {
+        id: `e_${connection.source}_${connection.target}${branch ? `_${branch}` : ""}`,
+        source: connection.source!,
+        target: connection.target!,
+        sourceHandle: connection.sourceHandle ?? undefined,
+        targetHandle: connection.targetHandle ?? undefined,
+        type: "seq",
+        data: branch ? { condition: branch } : {},
+        markerEnd: { type: MarkerType.ArrowClosed, color: "#52525b", width: 12, height: 12 },
+      };
+      setEdges((prev) => addEdge(newEdge, prev));
+      setIsDirty(true);
     },
-    [edges, selectedStepId, pushSnapshot],
+    [setEdges],
   );
 
-  const updateStep = useCallback((updated: SequenceStep) => {
-    pushSnapshot();
-    setSteps((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
-    setSelectedStepId(null);
-  }, [pushSnapshot]);
+  // ── update step ───────────────────────────────────────────────────────────────
 
-  const updateStepWaitDays = useCallback((stepId: string, days: number) => {
-    setSteps((prev) =>
-      prev.map((s) =>
-        s.id === stepId ? { ...s, data: { ...s.data, wait_days: days } } : s,
-      ),
-    );
-  }, []);
-
-  // ── drag ─────────────────────────────────────────────────────────────────────
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-  );
-
-  const handleDragEnd = useCallback(
-    (event: DragEndEvent) => {
-      const { active: dragActive, over } = event;
-      if (!over || dragActive.id === over.id) return;
-      pushSnapshot();
-      setSteps((prev) => {
-        const oldIdx = prev.findIndex((s) => s.id === dragActive.id);
-        const newIdx = prev.findIndex((s) => s.id === over.id);
-        const reordered = arrayMove(prev, oldIdx, newIdx);
-        setEdges((prevEdges) => {
-          // Reuse existing edge objects where source→target still match (preserves edge data/labels)
-          const edgeMap = new Map(prevEdges.map((e) => [`${e.source}|${e.target}`, e]));
-          return reordered.slice(0, -1).map((s, i) => {
-            const next = reordered[i + 1];
-            return (
-              edgeMap.get(`${s.id}|${next.id}`) ?? {
-                id: `edge_${s.id}_${next.id}`,
-                source: s.id,
-                target: next.id,
-              }
-            );
-          });
-        });
-        return reordered;
-      });
+  const handleUpdateStep = useCallback(
+    (updated: SequenceStep) => {
+      setNodes((prev) =>
+        prev.map((n) => n.id === updated.id ? { ...n, data: { ...(n.data as SeqNodeData), step: updated } } : n),
+      );
+      setSeqSteps((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+      setIsDirty(true);
     },
-    [pushSnapshot],
+    [setNodes],
   );
 
-  // ── save / activate ──────────────────────────────────────────────────────────
+  // ── save ──────────────────────────────────────────────────────────────────────
 
-  // Core save logic — always runs, no active-sequence guard
   const executeSave = async (): Promise<boolean> => {
-    const warnings = validateSequence(steps, edges);
+    const currentSteps = nodes.map((n) => ({ ...(n.data as SeqNodeData).step, position: n.position }));
+    const currentEdges = rfEdgesToSeq(edges);
+    const warnings = validateSequence(currentSteps, currentEdges);
     setValidationWarnings(warnings);
-    const hasDisconnected = warnings.some((w) =>
-      w.includes("disconnected") || w.includes("no outgoing"),
-    );
-    if (hasDisconnected) return false;
+    if (warnings.some((w) => w.includes("disconnected") || w.includes("no outgoing"))) return false;
 
     setSaving(true);
-    const res = await saveSequence(campaignId, steps, edges);
+    const res = await saveSequence(campaignId, currentSteps, currentEdges);
     setSaving(false);
     if (res.error) {
       toast({ title: "Save failed", description: res.error, variant: "destructive" });
       return false;
     }
-    savedSnapshotRef.current = JSON.stringify({ steps, edges });
+    savedSnapshotRef.current = JSON.stringify({ steps: currentSteps, edges: currentEdges });
     setIsDirty(false);
     setValidationWarnings([]);
+    // refresh coverage
+    const refreshed = await getSequence(campaignId);
+    if (refreshed.data?.coverage_per_step) {
+      const cov = refreshed.data.coverage_per_step;
+      setCoverage(cov);
+      setNodes((prev) => prev.map((n) => ({ ...n, data: { ...(n.data as SeqNodeData), coverage: cov[n.id] ?? null } })));
+    }
     toast({ title: "Sequence saved" });
     return true;
   };
 
-  // Public save: warns when the sequence is already active (changes affect running deals)
-  const handleSave = async (): Promise<boolean> => {
-    if (active) {
-      setShowSaveWhileActiveDialog(true);
-      return false;
-    }
-    return executeSave();
-  };
+  const handleSave = async () => { if (active) { setShowSaveWhileActiveDialog(true); return; } await executeSave(); };
+  const handleConfirmSaveWhileActive = async () => { setShowSaveWhileActiveDialog(false); await executeSave(); };
 
-  const handleConfirmSaveWhileActive = async () => {
-    setShowSaveWhileActiveDialog(false);
-    await executeSave();
-  };
-
-  // Fix #2: open dialog instead of activating immediately
   const handleActivateClick = () => setShowActivateDialog(true);
 
-  // Fix #2 + #8: save-if-dirty then activate
   const handleConfirmActivate = async () => {
     setShowActivateDialog(false);
-    if (isDirty) {
-      // Use executeSave directly: active may be true (deactivate) or false (activate);
-      // in either case we skip the active-sequence warning since the intent is explicit.
-      const saved = await executeSave();
-      if (!saved) return;
-    }
+    if (isDirty) { const saved = await executeSave(); if (!saved) return; }
     setToggling(true);
     const nextActive = !active;
     const res = await setSequenceActive(campaignId, nextActive);
     setToggling(false);
     if (res.error) {
-      // Backend returns { detail: { errors: [...] } } for validation failures
-      const errDetail = (res as { data?: { errors?: string[] } }).data;
-      const errList =
-        errDetail?.errors?.length
-          ? errDetail.errors
-          : [res.error ?? "Failed to update sequence"];
+      const errList = (res as { data?: { errors?: string[] } }).data?.errors ?? [res.error ?? "Failed"];
       setValidationWarnings(errList);
       toast({ title: "Activation failed", description: errList[0], variant: "destructive" });
       return;
@@ -966,48 +783,44 @@ export function SequenceBuilder({ campaignId, isActive }: SequenceBuilderProps) 
     toast({ title: nextActive ? "Sequence activated" : "Sequence deactivated" });
   };
 
-  // Fix #7: reset to template picker
   const handleConfirmReset = () => {
-    setSteps([]);
-    setEdges([]);
-    setShowCanvas(false);
-    setIsDirty(false);
-    setShowResetDialog(false);
-    setValidationWarnings([]);
-    setHistory([]);
+    setNodes([]); setEdges([]); setSeqSteps([]);
+    setShowCanvas(false); setIsDirty(false); setShowResetDialog(false); setValidationWarnings([]);
   };
 
   const applyTemplate = (tpl: Template) => {
-    // Remap template IDs to fresh UUIDs so applying the same template twice
-    // never produces duplicate step/edge IDs in MongoDB.
     const idMap = new Map<string, string>();
-    tpl.steps.forEach((s) => idMap.set(s.id, crypto.randomUUID()));
-    const freshSteps = tpl.steps.map((s) => ({ ...s, id: idMap.get(s.id)! }));
+    tpl.steps.forEach((s) => idMap.set(s.id, makeId()));
+    const freshSteps = autoLayout(tpl.steps.map((s) => ({ ...s, id: idMap.get(s.id)! })));
     const freshEdges = tpl.edges.map((e) => ({
       ...e,
-      id: `edge_${idMap.get(e.source) ?? e.source}_${idMap.get(e.target) ?? e.target}`,
+      id: `edge_${idMap.get(e.source)}_${idMap.get(e.target)}${e.data?.condition ? `_${e.data.condition}` : ""}`,
       source: idMap.get(e.source) ?? e.source,
       target: idMap.get(e.target) ?? e.target,
     }));
-    setSteps(freshSteps);
-    setEdges(freshEdges);
+    suppressDirty.current = false;
+    setSeqSteps(freshSteps);
+    setNodes(stepsToNodes(freshSteps, {}, handleDeleteNode, handleEditNode));
+    setEdges(edgesToRF(freshEdges));
     setShowCanvas(true);
+    setIsDirty(true);
+    setTimeout(() => void fitView({ padding: 0.15 }), 50);
   };
 
   // ── derived ───────────────────────────────────────────────────────────────────
 
-  const selectedStep = steps.find((s) => s.id === selectedStepId);
+  const editingStep =
+    seqSteps.find((s) => s.id === editingStepId) ??
+    (nodes.find((n) => n.id === editingStepId)?.data as SeqNodeData | undefined)?.step;
 
   const sequenceSummary = (() => {
-    const actionCount = steps.filter((s) => s.type === "action").length;
-    const totalDays = steps
-      .filter((s) => s.type === "wait")
-      .reduce((acc, s) => acc + (s.data.wait_days || 0), 0);
-    if (actionCount === 0) return null;
-    return `${actionCount} action${actionCount !== 1 ? "s" : ""} · ~${totalDays} day${totalDays !== 1 ? "s" : ""}`;
+    const ac = seqSteps.filter((s) => s.type === "action").length;
+    const td = seqSteps.filter((s) => s.type === "wait").reduce((a, s) => a + (s.data.wait_days || 0), 0);
+    if (ac === 0) return null;
+    return `${ac} action${ac !== 1 ? "s" : ""} · ~${td}d`;
   })();
 
-  // ── render: loading ───────────────────────────────────────────────────────────
+  // ── render ────────────────────────────────────────────────────────────────────
 
   if (loading) {
     return (
@@ -1024,32 +837,27 @@ export function SequenceBuilder({ campaignId, isActive }: SequenceBuilderProps) 
     return (
       <Card className="border-zinc-800">
         <CardContent className="py-12 text-center text-zinc-500">
-          <p className="mb-4">Failed to load sequence. Check your connection and try again.</p>
+          <p className="mb-4">Failed to load sequence.</p>
           <Button variant="outline" onClick={() => void fetchSequence()}>
-            <Icons.RefreshCw className="h-4 w-4 mr-2" />
-            Retry
+            <Icons.RefreshCw className="h-4 w-4 mr-2" />Retry
           </Button>
         </CardContent>
       </Card>
     );
   }
 
-  // ── render: template picker ───────────────────────────────────────────────────
-
   if (!showCanvas) {
     return (
       <Card className="border-zinc-800">
         <CardHeader>
           <CardTitle>Sequence Builder</CardTitle>
-          <CardDescription>
-            No sequence configured — campaign uses default single-channel behavior.
-          </CardDescription>
+          <CardDescription>No sequence configured — campaign uses default single-channel behavior.</CardDescription>
         </CardHeader>
         <CardContent className="py-6 space-y-6">
           <p className="text-sm text-zinc-400">
-            Build a multi-step outreach sequence, or start from a template.
-            Every sequence needs at least one action step and an{" "}
-            <span className="text-zinc-300 font-medium">End</span> step.
+            Build a multi-step, multi-path outreach sequence. Use{" "}
+            <strong className="text-zinc-200">Branch / Gate</strong> nodes to route leads down different paths (e.g. replied vs. no reply).
+            Drag from a node handle to connect steps.
           </p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {TEMPLATES.map((tpl) => (
@@ -1058,9 +866,7 @@ export function SequenceBuilder({ campaignId, isActive }: SequenceBuilderProps) 
                 className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4 cursor-pointer hover:border-blue-500/50 hover:bg-zinc-900 transition-all"
                 onClick={() => applyTemplate(tpl)}
               >
-                <div className="font-medium text-sm text-zinc-200 mb-1">
-                  {tpl.name}
-                </div>
+                <div className="font-medium text-sm text-zinc-200 mb-1">{tpl.name}</div>
                 <div className="text-xs text-zinc-500">{tpl.description}</div>
               </div>
             ))}
@@ -1068,10 +874,10 @@ export function SequenceBuilder({ campaignId, isActive }: SequenceBuilderProps) 
           <div className="flex justify-center pt-2">
             <Button
               variant="outline"
-              onClick={() => setShowCanvas(true)}
+              onClick={() => { suppressDirty.current = false; setShowCanvas(true); }}
               className="border-zinc-700 text-zinc-300 hover:bg-zinc-800"
             >
-              <Icons.Plus className="mr-2 h-4 w-4" />
+              <Plus className="mr-2 h-4 w-4" />
               Start from scratch
             </Button>
           </div>
@@ -1080,22 +886,15 @@ export function SequenceBuilder({ campaignId, isActive }: SequenceBuilderProps) 
     );
   }
 
-  // ── render: canvas ────────────────────────────────────────────────────────────
-
   return (
     <TooltipProvider>
-      <div className="space-y-4">
-        {/* Fix #6: validation warning banner */}
+      <div className="space-y-3">
         {validationWarnings.length > 0 && (
           <Alert className="border-red-500/30 bg-red-500/10 text-red-400">
             <Icons.AlertTriangle className="h-4 w-4 text-red-400" />
             <AlertDescription>
-              <ul className="space-y-0.5 ml-1">
-                {validationWarnings.map((w, i) => (
-                  <li key={i} className="text-sm">
-                    {w}
-                  </li>
-                ))}
+              <ul className="ml-1 space-y-0.5">
+                {validationWarnings.map((w, i) => <li key={i} className="text-sm">{w}</li>)}
               </ul>
             </AlertDescription>
           </Alert>
@@ -1106,54 +905,22 @@ export function SequenceBuilder({ campaignId, isActive }: SequenceBuilderProps) 
           <CardContent className="py-3 px-4">
             <div className="flex items-center justify-between flex-wrap gap-3">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-sm font-medium text-zinc-200">
-                  Sequence Builder
-                </span>
+                <span className="text-sm font-medium text-zinc-200">Sequence Builder</span>
                 <Badge
                   variant="outline"
-                  className={cn(
-                    "text-xs",
-                    active
-                      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
-                      : "border-zinc-600 text-zinc-500",
-                  )}
+                  className={cn("text-xs", active ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400" : "border-zinc-600 text-zinc-500")}
                 >
                   {active ? "Active" : "Inactive"}
                 </Badge>
-                {sequenceSummary && (
-                  <span className="text-xs text-zinc-500">{sequenceSummary}</span>
-                )}
+                {sequenceSummary && <span className="text-xs text-zinc-500">{sequenceSummary}</span>}
                 {isDirty && (
-                  <Badge
-                    variant="outline"
-                    className="text-xs border-amber-500/30 bg-amber-500/10 text-amber-400"
-                  >
-                    Unsaved changes
+                  <Badge variant="outline" className="text-xs border-amber-500/30 bg-amber-500/10 text-amber-400">
+                    Unsaved
                   </Badge>
                 )}
               </div>
 
               <div className="flex items-center gap-2">
-                {/* Fix #12: undo button */}
-                {history.length > 0 && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="border-zinc-700 text-zinc-300 hover:bg-zinc-800"
-                        onClick={handleUndo}
-                      >
-                        <Icons.RotateCcw className="h-3.5 w-3.5" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent className="text-xs">
-                      Undo (Ctrl+Z)
-                    </TooltipContent>
-                  </Tooltip>
-                )}
-
-                {/* Fix #10: add-step dropdown with outside-click ref */}
                 <div className="relative" ref={addMenuRef}>
                   <Button
                     variant="outline"
@@ -1161,11 +928,11 @@ export function SequenceBuilder({ campaignId, isActive }: SequenceBuilderProps) 
                     className="border-zinc-700 text-zinc-300 hover:bg-zinc-800"
                     onClick={() => setShowAddMenu((v) => !v)}
                   >
-                    <Icons.Plus className="mr-1.5 h-3.5 w-3.5" />
+                    <Plus className="mr-1.5 h-3.5 w-3.5" />
                     Add Step
                   </Button>
                   {showAddMenu && (
-                    <div className="absolute top-full left-0 mt-1 z-50 rounded-md border border-zinc-800 bg-zinc-950 shadow-lg py-1 min-w-[180px]">
+                    <div className="absolute top-full left-0 mt-1 z-50 rounded-md border border-zinc-800 bg-zinc-950 shadow-lg py-1 min-w-[190px]">
                       {ADD_STEP_OPTIONS.map((opt) => (
                         <button
                           key={`${opt.type}-${opt.action}`}
@@ -1179,7 +946,6 @@ export function SequenceBuilder({ campaignId, isActive }: SequenceBuilderProps) 
                   )}
                 </div>
 
-                {/* Fix #7: reset button */}
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
@@ -1188,39 +954,28 @@ export function SequenceBuilder({ campaignId, isActive }: SequenceBuilderProps) 
                       className="border-zinc-700 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300"
                       onClick={() => setShowResetDialog(true)}
                     >
-                      <Icons.RefreshCw className="h-3.5 w-3.5" />
+                      <Icons.RotateCcw className="h-3.5 w-3.5" />
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent className="text-xs">
-                    Reset to templates
-                  </TooltipContent>
+                  <TooltipContent className="text-xs">Reset to templates</TooltipContent>
                 </Tooltip>
 
                 <Button
                   variant="outline"
                   size="sm"
-                  className="border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+                  className={cn("border-zinc-700 hover:bg-zinc-800", isDirty ? "text-amber-400 border-amber-500/30" : "text-zinc-300")}
                   onClick={handleSave}
                   disabled={saving || toggling}
                 >
-                  {saving ? (
-                    <Icons.RefreshCw className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Icons.Save className="mr-1.5 h-3.5 w-3.5" />
-                  )}
+                  {saving ? <Icons.RefreshCw className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Icons.Save className="mr-1.5 h-3.5 w-3.5" />}
                   Save
                 </Button>
 
-                {/* Fix #2 + #8: dialog instead of window.confirm */}
                 <Button
                   size="sm"
-                  className={cn(
-                    active
-                      ? "bg-zinc-700 hover:bg-zinc-600 text-zinc-200"
-                      : "bg-blue-600 hover:bg-blue-700",
-                  )}
+                  className={cn(active ? "bg-zinc-700 hover:bg-zinc-600 text-zinc-200" : "bg-blue-600 hover:bg-blue-700")}
                   onClick={handleActivateClick}
-                  disabled={toggling || saving || (steps.length === 0 && !active)}
+                  disabled={toggling || saving || (nodes.length === 0 && !active)}
                 >
                   {toggling ? (
                     <Icons.RefreshCw className="mr-1.5 h-3.5 w-3.5 animate-spin" />
@@ -1237,180 +992,69 @@ export function SequenceBuilder({ campaignId, isActive }: SequenceBuilderProps) 
         </Card>
 
         {/* Canvas */}
-        <Card className="border-zinc-800">
-          <CardContent className="py-6">
-            {steps.length === 0 ? (
-              <div className="text-center py-10 text-zinc-500 text-sm space-y-1">
-                <p>No steps yet — click &ldquo;Add Step&rdquo; to begin.</p>
-                <p className="text-xs text-zinc-600">
-                  Every sequence needs at least one action step and an End step.
-                </p>
-              </div>
-            ) : (
-              <DndContext
-                sensors={sensors}
-                collisionDetection={closestCenter}
-                onDragEnd={handleDragEnd}
-              >
-                <SortableContext
-                  items={steps.map((s) => s.id)}
-                  strategy={verticalListSortingStrategy}
-                >
-                  <div className="flex flex-col items-center gap-0">
-                    {steps.map((step, idx) => (
-                      <div
-                        key={step.id}
-                        className="flex flex-col items-center w-full max-w-sm"
-                      >
-                        <SortableItem
-                          id={step.id}
-                          step={step}
-                          coverage={coverage[step.id] ?? null}
-                          selected={selectedStepId === step.id}
-                          onSelect={() =>
-                            setSelectedStepId(
-                              step.id === selectedStepId ? null : step.id,
-                            )
-                          }
-                          onDelete={() => deleteStep(step.id)}
-                          onUpdateWaitDays={(days) =>
-                            updateStepWaitDays(step.id, days)
-                          }
-                          onWaitDaysFocus={pushSnapshot}
-                        />
+        <div className="rounded-xl border border-zinc-800 overflow-hidden" style={{ height: 580 }}>
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            onNodesChange={(changes) => { onNodesChange(changes); if (!suppressDirty.current) setIsDirty(true); }}
+            onEdgesChange={(changes) => { onEdgesChange(changes); if (!suppressDirty.current) setIsDirty(true); }}
+            onConnect={onConnect}
+            nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
+            fitView
+            fitViewOptions={{ padding: 0.15 }}
+            deleteKeyCode={["Backspace", "Delete"]}
+            className="bg-zinc-950"
+            defaultEdgeOptions={{
+              type: "seq",
+              markerEnd: { type: MarkerType.ArrowClosed, color: "#52525b", width: 12, height: 12 },
+            }}
+          >
+            <Background color="#27272a" gap={20} size={1} />
+            <Controls className="[&>button]:bg-zinc-900 [&>button]:border-zinc-700 [&>button]:text-zinc-400 [&>button:hover]:bg-zinc-800" />
+            <MiniMap
+              nodeColor={(n) => {
+                const step = (n.data as SeqNodeData)?.step;
+                if (!step) return "#27272a";
+                const colorMap: Record<string, string> = {
+                  connect: "#3b82f6", follow_up: "#3b82f6", send_email: "#f59e0b",
+                  send_whatsapp: "#10b981", wait: "#52525b", condition: "#a855f7", end: "#f43f5e",
+                };
+                return colorMap[stepColorKey(step)] ?? "#52525b";
+              }}
+              className="!bg-zinc-900 !border-zinc-800"
+              maskColor="rgba(0,0,0,0.5)"
+            />
+            <Panel position="bottom-center">
+              <p className="text-[10px] text-zinc-600 bg-zinc-950/80 px-2 py-1 rounded">
+                Drag to pan · Scroll to zoom · Drag handle to connect · Del/Backspace removes selected
+              </p>
+            </Panel>
+          </ReactFlow>
+        </div>
 
-                        {idx < steps.length - 1 &&
-                          (() => {
-                            const outEdge = edges.find(
-                              (e) => e.source === step.id,
-                            );
-                            const edgeCond = (
-                              outEdge?.data as { condition?: string } | undefined
-                            )?.condition;
-                            const edgeLabel =
-                              edgeCond && edgeCond !== "always"
-                                ? (
-                                    {
-                                      no_reply: "no reply",
-                                      replied: "replied",
-                                      no_open: "not opened",
-                                    } as Record<string, string>
-                                  )[edgeCond]
-                                : null;
-
-                            return (
-                              <div
-                                className="flex flex-col items-center w-full max-w-sm relative group/connector"
-                                data-insert-popover
-                              >
-                                <div className="w-px h-3 bg-zinc-800" />
-                                {edgeLabel && (
-                                  <span className="text-[10px] text-zinc-600 px-1.5 py-0.5 rounded border border-zinc-800 bg-zinc-950 mb-0.5 select-none">
-                                    {edgeLabel}
-                                  </span>
-                                )}
-                                {/* Fix #11: tooltip on insert button */}
-                                <div className="relative flex items-center justify-center">
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <button
-                                        className="opacity-0 group-hover/connector:opacity-100 transition-opacity w-5 h-5 rounded-full border border-zinc-700 bg-zinc-950 hover:bg-zinc-800 hover:border-zinc-500 flex items-center justify-center z-10"
-                                        onClick={() =>
-                                          setInsertAfterIndex(
-                                            insertAfterIndex === idx ? null : idx,
-                                          )
-                                        }
-                                      >
-                                        <Icons.Plus className="h-3 w-3 text-zinc-400" />
-                                      </button>
-                                    </TooltipTrigger>
-                                    <TooltipContent side="right" className="text-xs">
-                                      Insert step here
-                                    </TooltipContent>
-                                  </Tooltip>
-
-                                  {insertAfterIndex === idx && (
-                                    <div
-                                      className="absolute top-full mt-1 z-50 rounded-md border border-zinc-800 bg-zinc-950 shadow-xl py-1 min-w-[190px]"
-                                      data-insert-popover
-                                    >
-                                      <div className="px-3 py-1 text-xs text-zinc-600 font-medium uppercase tracking-wider">
-                                        Insert step
-                                      </div>
-                                      {ADD_STEP_OPTIONS.map((opt) => (
-                                        <button
-                                          key={`${opt.type}-${opt.action}`}
-                                          className="w-full text-left px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"
-                                          onClick={() => addStep(opt, idx)}
-                                        >
-                                          {opt.label}
-                                        </button>
-                                      ))}
-                                      <div className="border-t border-zinc-800 mt-1 pt-1">
-                                        <button
-                                          className="w-full text-left px-3 py-1 text-xs text-zinc-600 hover:bg-zinc-800"
-                                          onClick={() => setInsertAfterIndex(null)}
-                                        >
-                                          Cancel
-                                        </button>
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-                                <div className="w-px h-3 bg-zinc-800" />
-                                <ArrowDown className="h-4 w-4 text-zinc-700" />
-                              </div>
-                            );
-                          })()}
-                      </div>
-                    ))}
-                  </div>
-                </SortableContext>
-              </DndContext>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Config dialog */}
-        {selectedStep && (
-          <ConfigPanel
-            step={selectedStep}
-            onChange={updateStep}
-            onClose={() => setSelectedStepId(null)}
-          />
+        {editingStep && (
+          <ConfigPanel key={editingStep.id} step={editingStep} onChange={handleUpdateStep} onClose={() => setEditingStepId(null)} />
         )}
 
-        {/* Fix #8: activate / deactivate confirmation */}
         <AlertDialog open={showActivateDialog} onOpenChange={setShowActivateDialog}>
           <AlertDialogContent className="bg-zinc-950 border-zinc-800 text-zinc-100">
             <AlertDialogHeader>
-              <AlertDialogTitle>
-                {active ? "Deactivate sequence?" : "Activate sequence?"}
-              </AlertDialogTitle>
+              <AlertDialogTitle>{active ? "Deactivate sequence?" : "Activate sequence?"}</AlertDialogTitle>
               <AlertDialogDescription className="text-zinc-400 space-y-1">
-                {!active && isDirty && (
-                  <span className="block text-amber-400 text-sm">
-                    You have unsaved changes — they will be saved first.
-                  </span>
-                )}
+                {!active && isDirty && <span className="block text-amber-400 text-sm">Unsaved changes will be saved first.</span>}
                 <span className="block">
                   {active
-                    ? "The daemon will stop executing steps. Deals in progress will pause at their current position."
-                    : "The daemon will start executing steps for all active deals in this campaign."}
+                    ? "The daemon stops executing steps. Deals in progress pause at their current position."
+                    : "The daemon starts executing steps for all active deals in this campaign."}
                 </span>
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 bg-zinc-900">
-                Cancel
-              </AlertDialogCancel>
+              <AlertDialogCancel className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 bg-zinc-900">Cancel</AlertDialogCancel>
               <AlertDialogAction
                 onClick={handleConfirmActivate}
-                className={
-                  active
-                    ? "bg-zinc-700 hover:bg-zinc-600 text-zinc-200"
-                    : "bg-blue-600 hover:bg-blue-700"
-                }
+                className={active ? "bg-zinc-700 hover:bg-zinc-600 text-zinc-200" : "bg-blue-600 hover:bg-blue-700"}
               >
                 {active ? "Deactivate" : isDirty ? "Save & Activate" : "Activate"}
               </AlertDialogAction>
@@ -1418,55 +1062,52 @@ export function SequenceBuilder({ campaignId, isActive }: SequenceBuilderProps) 
           </AlertDialogContent>
         </AlertDialog>
 
-        {/* Save while sequence is active — warns that running deals will be affected */}
         <AlertDialog open={showSaveWhileActiveDialog} onOpenChange={setShowSaveWhileActiveDialog}>
           <AlertDialogContent className="bg-zinc-950 border-zinc-800 text-zinc-100">
             <AlertDialogHeader>
               <AlertDialogTitle>Save while sequence is active?</AlertDialogTitle>
               <AlertDialogDescription className="text-zinc-400">
-                This sequence is currently running. Saving will update what the daemon
-                executes for deals already in progress. Steps that have already completed
-                are unaffected; pending steps will use the new configuration immediately.
+                Saving updates what the daemon executes for deals already in progress. Completed steps are unaffected; pending steps use the new configuration immediately.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 bg-zinc-900">
-                Cancel
-              </AlertDialogCancel>
-              <AlertDialogAction
-                onClick={handleConfirmSaveWhileActive}
-                className="bg-blue-600 hover:bg-blue-700"
-              >
-                Save Anyway
-              </AlertDialogAction>
+              <AlertDialogCancel className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 bg-zinc-900">Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleConfirmSaveWhileActive} className="bg-blue-600 hover:bg-blue-700">Save Anyway</AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
 
-        {/* Fix #7: reset confirmation */}
         <AlertDialog open={showResetDialog} onOpenChange={setShowResetDialog}>
           <AlertDialogContent className="bg-zinc-950 border-zinc-800 text-zinc-100">
             <AlertDialogHeader>
               <AlertDialogTitle>Reset sequence?</AlertDialogTitle>
               <AlertDialogDescription className="text-zinc-400">
-                All steps will be cleared and you&apos;ll return to the template
-                picker.{isDirty && " Unsaved changes will be lost."}
+                All steps will be cleared and you&apos;ll return to the template picker.
+                {isDirty && " Unsaved changes will be lost."}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 bg-zinc-900">
-                Cancel
-              </AlertDialogCancel>
-              <AlertDialogAction
-                onClick={handleConfirmReset}
-                className="bg-red-600 hover:bg-red-700"
-              >
-                Reset
-              </AlertDialogAction>
+              <AlertDialogCancel className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 bg-zinc-900">Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleConfirmReset} className="bg-red-600 hover:bg-red-700">Reset</AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
       </div>
     </TooltipProvider>
+  );
+}
+
+// ─── public export ────────────────────────────────────────────────────────────
+
+interface SequenceBuilderProps {
+  campaignId: string;
+  isActive?: boolean;
+}
+
+export function SequenceBuilder({ campaignId, isActive }: SequenceBuilderProps) {
+  return (
+    <ReactFlowProvider>
+      <SequenceCanvas campaignId={campaignId} isActive={isActive} />
+    </ReactFlowProvider>
   );
 }

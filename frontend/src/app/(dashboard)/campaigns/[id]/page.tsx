@@ -667,14 +667,14 @@ export default function CampaignDetailsPage() {
               </Card>
 
               {/* Channel Coverage */}
-              {analytics && analytics.stats.totalLeads > 0 && (
+              {analytics && (analytics.stats as unknown as { totalLeads?: number }).totalLeads && (analytics.stats as unknown as { totalLeads?: number }).totalLeads! > 0 && (
                 <Card>
                   <CardHeader>
                     <CardTitle>Channel Coverage</CardTitle>
                     <CardDescription>Lead data availability per channel</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <CoverageBars campaignId={campaignId} totalLeads={analytics.stats.totalLeads} />
+                    <CoverageBars campaignId={campaignId} totalLeads={(analytics.stats as unknown as { totalLeads: number }).totalLeads} />
                   </CardContent>
                 </Card>
               )}
