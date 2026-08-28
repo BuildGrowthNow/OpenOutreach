@@ -34,29 +34,39 @@ def _get_first_step_id(campaign: Campaign) -> Optional[str]:
 
 
 def _get_next_step_id(campaign: Campaign, current_step_id: str, condition_met: bool) -> Optional[str]:
-    """Follow outgoing edge from current step. Prefers condition-matching edge.
+    """Follow outgoing edge from current step.
 
-    condition_met=True  → condition satisfied (e.g. no reply exists for a no_reply step)
-    condition_met=False → condition not satisfied (e.g. reply exists for a no_reply step)
+    Edges from condition nodes carry ``data.condition = "yes"`` or ``"no"``.
+    Edges in linear (non-branching) sequences carry no condition or ``"always"``.
 
-    When condition_met=False and no replied edge exists, returns None so the caller
-    sets sequence_done=True rather than blindly advancing through an unmatched branch.
+    condition_met=True  → take the "yes" edge (or any unlabeled/always edge)
+    condition_met=False → take the "no" edge; return None if none exists so
+                         the caller marks sequence_done=True.
     """
     outgoing = [e for e in campaign.sequence_edges if e["source"] == current_step_id]
     if not outgoing:
         return None
+
+    # First pass: look for an explicit yes/no branch label.
     for edge in outgoing:
-        edge_condition = (edge.get("data") or {}).get("condition", "always")
-        if condition_met and edge_condition in ("always", "no_reply", "no_open"):
+        branch = (edge.get("data") or {}).get("condition", "always")
+        if condition_met and branch == "yes":
             return edge["target"]
-        if not condition_met and edge_condition == "replied":
+        if not condition_met and branch == "no":
             return edge["target"]
-    # No condition-specific match. When condition is met, fall back to first edge
-    # (simple linear sequence with unlabeled edges). When condition is NOT met and
-    # there is no "replied" branch, return None — the stop-on-reply guard will mark
-    # the deal done on the same or next reconcile cycle.
+
+    # Second pass: fall back to an unlabeled / "always" edge (linear sequence).
+    # Only when the condition was met — if condition_met=False and there is no
+    # "no" branch, return None so the deal is marked done rather than silently
+    # advancing down the wrong path.
     if condition_met:
+        for edge in outgoing:
+            branch = (edge.get("data") or {}).get("condition", "always")
+            if branch in ("always", None, ""):
+                return edge["target"]
+        # All edges are labeled but none matched — take first as last resort.
         return outgoing[0]["target"]
+
     return None
 
 
@@ -68,9 +78,15 @@ def _get_step(campaign: Campaign, step_id: str) -> Optional[dict]:
 
 
 def _check_wait(deal: Deal, step: dict) -> bool:
-    """True if enough days have elapsed since sequence_last_step_at."""
-    wait_days = (step.get("data") or {}).get("wait_days", 0)
-    if wait_days <= 0:
+    """True if enough time has elapsed since sequence_last_step_at.
+
+    Supports both wait_days and wait_hours. When both are set they are additive.
+    A step with zero/absent wait always passes immediately.
+    """
+    data = step.get("data") or {}
+    wait_days = data.get("wait_days", 0) or 0
+    wait_hours = data.get("wait_hours", 0) or 0
+    if wait_days <= 0 and wait_hours <= 0:
         return True
     if deal.sequence_last_step_at is None:
         return True
@@ -78,7 +94,7 @@ def _check_wait(deal: Deal, step: dict) -> bool:
     if ref.tzinfo is None:
         ref = ref.replace(tzinfo=timezone.utc)
     elapsed = datetime.now(timezone.utc) - ref
-    return elapsed >= timedelta(days=wait_days)
+    return elapsed >= timedelta(days=wait_days, hours=wait_hours)
 
 
 def _check_condition(deal: Deal, step: dict) -> bool:
@@ -269,9 +285,14 @@ def resolve_sequence_tasks(campaign: Campaign, user_id: str) -> int:
             continue
 
         if not _check_requires(lead_data, step):
-            logger.debug(
-                "sequence: deal %s skipping step %s (requires not met)",
-                deal._id, current_step_id,
+            step_label = (step.get("data") or {}).get("label") or current_step_id
+            missing = [
+                f for f in ((step.get("data") or {}).get("requires") or [])
+                if not lead_data.get(f)
+            ]
+            logger.info(
+                "sequence: deal %s skipping step %r — missing required fields: %s",
+                deal._id, step_label, ", ".join(missing) or "unknown",
             )
             next_id = _get_next_step_id(campaign, current_step_id, True)
             now = datetime.now(timezone.utc)

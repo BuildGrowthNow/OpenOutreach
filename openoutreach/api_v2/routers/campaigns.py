@@ -1481,7 +1481,8 @@ async def get_lead_sequence_timeline(
                 break
             completed_ids.add(sid)
     elif sequence_done:
-        completed_ids = {s["id"] for s in steps}
+        # Mark all steps on the traversed path as completed (not unvisited branches).
+        completed_ids = set(ordered)
 
     # Fetch per-step task completion timestamps (populated since Bug 10 fix stores step_id)
     tasks_col = get_mongodb_collection("tasks")
@@ -1520,6 +1521,7 @@ async def get_lead_sequence_timeline(
             "channel": data.get("channel"),
             "action": data.get("action"),
             "waitDays": data.get("wait_days", 0),
+            "waitHours": data.get("wait_hours", 0),
             "status": status_val,
             "completedAt": step_completed_at.get(sid),
         }
@@ -2190,31 +2192,58 @@ async def patch_sequence(
     if body.active is not None:
         if body.active:
             # Validate before activating
-            steps_to_check = body.steps if body.steps is not None else campaign.sequence_steps
-            edges_to_check = body.edges if body.edges is not None else campaign.sequence_edges
+            steps_to_check = body.steps if body.steps is not None else (campaign.sequence_steps or [])
+            edges_to_check = body.edges if body.edges is not None else (campaign.sequence_edges or [])
+
+            edge_targets = {e["target"] for e in edges_to_check}
+            edge_sources = {e["source"] for e in edges_to_check}
+            all_in_edges = edge_targets | edge_sources
+
             action_steps = [s for s in steps_to_check if s.get("type") == "action"]
             end_steps = [s for s in steps_to_check if s.get("type") == "end"]
-            connected = set()
-            for edge in edges_to_check:
-                connected.add(edge["source"])
-                connected.add(edge["target"])
-            disconnected = [s["id"] for s in steps_to_check if s["id"] not in connected and len(steps_to_check) > 1]
+
+            # Nodes that appear in neither source nor target of any edge
+            disconnected = [
+                (s.get("data") or {}).get("label") or s["id"]
+                for s in steps_to_check
+                if s["id"] not in all_in_edges and len(steps_to_check) > 1
+            ]
+
+            # Non-end nodes with no outgoing edge
+            no_outgoing = [
+                (s.get("data") or {}).get("label") or s["id"]
+                for s in steps_to_check
+                if s.get("type") != "end" and s["id"] not in edge_sources
+            ]
+
             errors: List[str] = []
+            if not steps_to_check:
+                errors.append("Sequence has no steps.")
             if not action_steps:
                 errors.append("Sequence must have at least one action step.")
             if not end_steps:
-                errors.append("Sequence must have at least one end node.")
+                errors.append("Sequence must have at least one End node.")
             if disconnected:
                 errors.append(f"Disconnected nodes: {', '.join(disconnected)}.")
-            # Each condition node must have at least one outgoing edge per handle
+            if no_outgoing:
+                errors.append(f"Nodes with no outgoing connection: {', '.join(no_outgoing)}.")
+
+            # Each condition node must have both yes and no outgoing branches.
+            # Edges from condition nodes store data.condition = "yes" or "no"
+            # (not sourceHandle — that is only a React Flow runtime property).
             condition_steps = [s for s in steps_to_check if s.get("type") == "condition"]
             for cs in condition_steps:
-                handles = {e.get("sourceHandle") for e in edges_to_check if e["source"] == cs["id"]}
-                if "yes" not in handles or "no" not in handles:
+                branches = {
+                    (e.get("data") or {}).get("condition")
+                    for e in edges_to_check
+                    if e["source"] == cs["id"]
+                }
+                if "yes" not in branches or "no" not in branches:
                     label = (cs.get("data") or {}).get("label") or cs["id"]
                     errors.append(f'Branch node "{label}" must have both Yes and No paths connected.')
+
             if errors:
-                raise HTTPException(status_code=400, detail={"errors": errors})
+                raise HTTPException(status_code=422, detail=errors)
         update["sequence_active"] = body.active
 
     if update:

@@ -187,7 +187,14 @@ function SeqNode({ id, data, selected }: NodeProps) {
             </div>
             {isWait && (
               <div className="text-xs text-zinc-500 mt-0.5">
-                {step.data.wait_days || 1} day{(step.data.wait_days || 1) !== 1 ? "s" : ""}
+                {(() => {
+                  const d = step.data.wait_days || 0;
+                  const h = step.data.wait_hours || 0;
+                  if (d > 0 && h > 0) return `${d}d ${h}h`;
+                  if (d > 0) return `${d} day${d !== 1 ? "s" : ""}`;
+                  if (h > 0) return `${h} hour${h !== 1 ? "s" : ""}`;
+                  return "1 day";
+                })()}
               </div>
             )}
             {isCondition && step.data.condition && step.data.condition !== "always" && (
@@ -420,7 +427,7 @@ function validateSequence(steps: SequenceStep[], edges: SequenceEdge[]): string[
   const edgeSources = new Set(edges.map((e) => e.source));
   const roots = steps.filter((s) => !edgeTargets.has(s.id));
   if (roots.length > 1) warnings.push(`${roots.length} disconnected entry points — connect all steps.`);
-  if (!steps.some((s) => s.type === "action")) warnings.push("Add at least one action step (Connect or Follow-up).");
+  if (!steps.some((s) => s.type === "action")) warnings.push("Add at least one action step (Connect, Follow-up, Send Email, or Send WhatsApp).");
   if (!steps.some((s) => s.type === "end")) warnings.push("Add an End step.");
   const noOutgoing = steps.filter((s) => s.type !== "end" && !edgeSources.has(s.id));
   if (noOutgoing.length > 0) {
@@ -432,6 +439,20 @@ function validateSequence(steps: SequenceStep[], edges: SequenceEdge[]): string[
 }
 
 // ─── coverage helpers ─────────────────────────────────────────────────────────
+
+function instantCoverageForStep(step: SequenceStep, channelCoverage: CampaignChannelCoverage | null): number | null {
+  if (!channelCoverage) return null;
+  if (!step.data.requires || step.data.requires.length === 0) return null;
+  // Map requires fields → channel coverage percentage.
+  // Use the lowest coverage among all required fields (most restrictive).
+  let min = 100;
+  for (const req of step.data.requires) {
+    if (req === "api_email") min = Math.min(min, channelCoverage.email.pct);
+    else if (req === "phone") min = Math.min(min, channelCoverage.whatsapp.pct);
+    else return null; // unknown field — can't compute
+  }
+  return min;
+}
 
 function coverageBarClass(pct: number | null): string {
   if (pct === null) return "[&>div]:bg-zinc-600";
@@ -469,8 +490,9 @@ function makeStep(
   waitDays = 0,
   requires: string[] = [],
   condition: SequenceStep["data"]["condition"] = "always",
+  waitHours = 0,
 ): SequenceStep {
-  return { id, type, data: { channel, action, label, wait_days: waitDays, condition, requires }, position: { x: 0, y: 0 } };
+  return { id, type, data: { channel, action, label, wait_days: waitDays, wait_hours: waitHours, condition, requires }, position: { x: 0, y: 0 } };
 }
 
 function makeSeqEdge(source: string, target: string, branch?: string): SequenceEdge {
@@ -565,16 +587,37 @@ const ADD_STEP_OPTIONS = [
 function ConfigPanel({ step, onChange, onClose }: { step: SequenceStep; onChange: (u: SequenceStep) => void; onClose: () => void }) {
   const [label, setLabel] = useState(step.data.label);
   const [condition, setCondition] = useState(step.data.condition ?? "always");
-  const [waitDays, setWaitDays] = useState(Math.max(1, step.data.wait_days || 1));
+  // waitMode: "days" shows a days input, "hours" shows an hours input, "both" shows both.
+  // Detect initial mode from existing data.
+  const initMode = (() => {
+    const d = step.data.wait_days || 0;
+    const h = step.data.wait_hours || 0;
+    if (d > 0 && h > 0) return "both" as const;
+    if (h > 0) return "hours" as const;
+    return "days" as const;
+  })();
+  const [waitMode, setWaitMode] = useState<"days" | "hours" | "both">(initMode);
+  const [waitDays, setWaitDays] = useState(step.data.wait_days || 0);
+  const [waitHours, setWaitHours] = useState(step.data.wait_hours || 0);
+  const [requires, setRequires] = useState<string[]>(step.data.requires ?? []);
 
   useEffect(() => {
     setLabel(step.data.label);
     setCondition(step.data.condition ?? "always");
-    setWaitDays(Math.max(1, step.data.wait_days || 1));
-  }, [step.id, step.data.label, step.data.condition, step.data.wait_days]);
+    const d = step.data.wait_days || 0;
+    const h = step.data.wait_hours || 0;
+    setWaitDays(d);
+    setWaitHours(h);
+    setWaitMode(d > 0 && h > 0 ? "both" : h > 0 ? "hours" : "days");
+    setRequires(step.data.requires ?? []);
+  }, [step.id, step.data.label, step.data.condition, step.data.wait_days, step.data.wait_hours, step.data.requires]);
 
   const save = () => {
-    onChange({ ...step, data: { ...step.data, label, condition, ...(step.type === "wait" ? { wait_days: waitDays } : {}) } });
+    const waitUpdate = step.type === "wait" ? {
+      wait_days: waitMode !== "hours" ? Math.max(0, waitDays) : 0,
+      wait_hours: waitMode !== "days" ? Math.max(0, waitHours) : 0,
+    } : {};
+    onChange({ ...step, data: { ...step.data, label, condition, requires, ...waitUpdate } });
     onClose();
   };
 
@@ -588,7 +631,7 @@ function ConfigPanel({ step, onChange, onClose }: { step: SequenceStep; onChange
             {step.type === "action" && step.data.action === "follow_up"     && "Sends a LinkedIn follow-up message via the campaign AI agent."}
             {step.type === "action" && step.data.action === "send_email"    && "Sends an email to the lead's work address."}
             {step.type === "action" && step.data.action === "send_whatsapp" && "Sends a WhatsApp message to the lead's phone number."}
-            {step.type === "wait"      && "Pauses the sequence for the given number of days before proceeding."}
+            {step.type === "wait"      && "Pauses the sequence before proceeding to the next step."}
             {step.type === "condition" && "Routes leads down two paths. Drag from the green handle (Yes/left) and red handle (No/right) to connect both branches."}
             {step.type === "end"       && "Marks the end of this path."}
           </DialogDescription>
@@ -604,16 +647,53 @@ function ConfigPanel({ step, onChange, onClose }: { step: SequenceStep; onChange
             />
           </div>
           {step.type === "wait" && (
-            <div className="space-y-1.5">
-              <Label className="text-zinc-300">Wait Days</Label>
-              <Input
-                type="number"
-                min={1}
-                max={90}
-                value={waitDays}
-                onChange={(e) => setWaitDays(Math.max(1, Math.min(90, Number(e.target.value))))}
-                className="bg-zinc-900 border-zinc-700 text-zinc-100"
-              />
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Label className="text-zinc-300">Wait duration</Label>
+                <div className="flex items-center gap-1 ml-auto">
+                  {(["days", "hours", "both"] as const).map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setWaitMode(m)}
+                      className={cn(
+                        "text-xs px-2 py-0.5 rounded border transition-colors",
+                        waitMode === m
+                          ? "border-blue-500/50 bg-blue-500/20 text-blue-300"
+                          : "border-zinc-700 text-zinc-500 hover:text-zinc-300 hover:border-zinc-600",
+                      )}
+                    >
+                      {m}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {waitMode !== "hours" && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-zinc-400">Days</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={365}
+                    value={waitDays}
+                    onChange={(e) => setWaitDays(Math.max(0, Math.min(365, Number(e.target.value))))}
+                    className="bg-zinc-900 border-zinc-700 text-zinc-100"
+                  />
+                </div>
+              )}
+              {waitMode !== "days" && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-zinc-400">Hours</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={23}
+                    value={waitHours}
+                    onChange={(e) => setWaitHours(Math.max(0, Math.min(23, Number(e.target.value))))}
+                    className="bg-zinc-900 border-zinc-700 text-zinc-100"
+                  />
+                </div>
+              )}
             </div>
           )}
           {step.type === "condition" && (
@@ -631,6 +711,46 @@ function ConfigPanel({ step, onChange, onClose }: { step: SequenceStep; onChange
               </Select>
               <p className="text-xs text-zinc-500">
                 Green handle (left) = Yes / condition met. Red handle (right) = No / not met.
+              </p>
+              {condition === "no_open" && (
+                <p className="text-xs text-amber-400/80 mt-1">
+                  Requires email open tracking (TRACKING_BASE_URL + CF Worker). Without it the condition always passes as &quot;not opened&quot;.
+                </p>
+              )}
+            </div>
+          )}
+          {step.type === "action" && (
+            <div className="space-y-1.5">
+              <Label className="text-zinc-300">Required lead data</Label>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { value: "api_email", label: "Work email" },
+                  { value: "phone", label: "Phone / WhatsApp" },
+                ].map((opt) => {
+                  const checked = requires.includes(opt.value);
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() =>
+                        setRequires((prev) =>
+                          checked ? prev.filter((r) => r !== opt.value) : [...prev, opt.value],
+                        )
+                      }
+                      className={cn(
+                        "text-xs px-2.5 py-1 rounded border transition-colors",
+                        checked
+                          ? "border-blue-500/50 bg-blue-500/15 text-blue-300"
+                          : "border-zinc-700 text-zinc-500 hover:text-zinc-300 hover:border-zinc-600",
+                      )}
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-xs text-zinc-500">
+                Leads missing required data automatically skip this step.
               </p>
             </div>
           )}
@@ -828,18 +948,19 @@ function SequenceCanvas({ campaignId, isActive }: { campaignId: string; isActive
       const newStep: SequenceStep = {
         id,
         type: opt.type,
-        data: { channel: opt.channel, action: opt.action, label: opt.label, wait_days: opt.type === "wait" ? 3 : 0, condition: "always", requires: [...opt.requires] },
+        data: { channel: opt.channel, action: opt.action, label: opt.label, wait_days: opt.type === "wait" ? 3 : 0, wait_hours: 0, condition: "always", requires: [...opt.requires] },
         position: { x: 300, y: maxY + 160 },
       };
+      const instantCov = instantCoverageForStep(newStep, channelCoverage);
       setNodes((prev) => [
         ...prev,
-        { id, type: "seq", position: newStep.position, data: { step: newStep, coverage: null, totalLeads, hasBypass: false, onDelete: handleDeleteNode, onEdit: handleEditNode } },
+        { id, type: "seq", position: newStep.position, data: { step: newStep, coverage: instantCov, totalLeads, hasBypass: false, onDelete: handleDeleteNode, onEdit: handleEditNode } },
       ]);
       setShowAddMenu(false);
       setIsDirty(true);
       if (opt.type === "condition") setEditingStepId(id);
     },
-    [pushSnapshot, handleDeleteNode, handleEditNode, setNodes],
+    [pushSnapshot, handleDeleteNode, handleEditNode, setNodes, totalLeads, channelCoverage],
   );
 
   // ── connect ───────────────────────────────────────────────────────────────────
@@ -939,7 +1060,10 @@ function SequenceCanvas({ campaignId, isActive }: { campaignId: string; isActive
     const res = await setSequenceActive(campaignId, nextActive);
     setToggling(false);
     if (res.error) {
-      const errList = (res as { data?: { errors?: string[] } }).data?.errors ?? [res.error ?? "Failed"];
+      const detail = (res as { data?: { detail?: unknown } }).data?.detail;
+      const errList: string[] = Array.isArray(detail)
+        ? (detail as string[])
+        : [typeof detail === "string" ? detail : (res.error ?? "Activation failed")];
       setValidationWarnings(errList);
       toast({ title: "Activation failed", description: errList[0], variant: "destructive" });
       return;
@@ -1026,16 +1150,67 @@ function SequenceCanvas({ campaignId, isActive }: { campaignId: string; isActive
             Drag from a node handle to connect steps.
           </p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {TEMPLATES.map((tpl) => (
-              <div
-                key={tpl.name}
-                className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4 cursor-pointer hover:border-blue-500/50 hover:bg-zinc-900 transition-all"
-                onClick={() => applyTemplate(tpl)}
-              >
-                <div className="font-medium text-sm text-zinc-200 mb-1">{tpl.name}</div>
-                <div className="text-xs text-zinc-500">{tpl.description}</div>
-              </div>
-            ))}
+            {TEMPLATES.map((tpl) => {
+              // Compute which channels this template uses
+              const usesEmail = tpl.steps.some((s) => s.data.requires?.includes("api_email"));
+              const usesWhatsApp = tpl.steps.some((s) => s.data.requires?.includes("phone"));
+              const emailPct = channelCoverage?.email.pct ?? null;
+              const whatsappPct = channelCoverage?.whatsapp.pct ?? null;
+              const hasZeroCoverage =
+                (usesEmail && emailPct === 0) || (usesWhatsApp && whatsappPct === 0);
+              return (
+                <div
+                  key={tpl.name}
+                  className={cn(
+                    "rounded-lg border bg-zinc-900/50 p-4 cursor-pointer transition-all",
+                    hasZeroCoverage
+                      ? "border-amber-500/30 hover:border-amber-500/50 hover:bg-zinc-900"
+                      : "border-zinc-800 hover:border-blue-500/50 hover:bg-zinc-900",
+                  )}
+                  onClick={() => applyTemplate(tpl)}
+                >
+                  <div className="font-medium text-sm text-zinc-200 mb-1">{tpl.name}</div>
+                  <div className="text-xs text-zinc-500 mb-2">{tpl.description}</div>
+                  {channelCoverage && (usesEmail || usesWhatsApp) && (
+                    <div className="flex flex-wrap gap-1.5 mt-1">
+                      {usesEmail && emailPct !== null && (
+                        <span className={cn(
+                          "text-[10px] flex items-center gap-0.5 px-1.5 py-0.5 rounded border",
+                          emailPct === 0
+                            ? "border-amber-500/40 bg-amber-500/10 text-amber-400"
+                            : emailPct < 30
+                              ? "border-red-500/40 bg-red-500/10 text-red-400"
+                              : "border-zinc-700 text-zinc-400",
+                        )}>
+                          <Mail className="h-2.5 w-2.5" />
+                          {emailPct}%
+                          {emailPct === 0 && " ⚠"}
+                        </span>
+                      )}
+                      {usesWhatsApp && whatsappPct !== null && (
+                        <span className={cn(
+                          "text-[10px] flex items-center gap-0.5 px-1.5 py-0.5 rounded border",
+                          whatsappPct === 0
+                            ? "border-amber-500/40 bg-amber-500/10 text-amber-400"
+                            : whatsappPct < 30
+                              ? "border-red-500/40 bg-red-500/10 text-red-400"
+                              : "border-zinc-700 text-zinc-400",
+                        )}>
+                          <Smartphone className="h-2.5 w-2.5" />
+                          {whatsappPct}%
+                          {whatsappPct === 0 && " ⚠"}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  {hasZeroCoverage && (
+                    <p className="text-[10px] text-amber-500/80 mt-1.5">
+                      Most leads will skip the 0% channel step.
+                    </p>
+                  )}
+                </div>
+              );
+            })}
           </div>
           <div className="flex justify-center pt-2">
             <Button
@@ -1130,16 +1305,31 @@ function SequenceCanvas({ campaignId, isActive }: { campaignId: string; isActive
                     Add Step
                   </Button>
                   {showAddMenu && (
-                    <div className="absolute top-full left-0 mt-1 z-50 rounded-md border border-zinc-800 bg-zinc-950 shadow-lg py-1 min-w-[190px]">
-                      {ADD_STEP_OPTIONS.map((opt) => (
-                        <button
-                          key={`${opt.type}-${opt.action}`}
-                          className="w-full text-left px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"
-                          onClick={() => addStep(opt)}
-                        >
-                          {opt.label}
-                        </button>
-                      ))}
+                    <div className="absolute top-full left-0 mt-1 z-50 rounded-md border border-zinc-800 bg-zinc-950 shadow-lg py-1 min-w-[220px]">
+                      {ADD_STEP_OPTIONS.map((opt) => {
+                        const cov = instantCoverageForStep(
+                          { id: "", type: opt.type, data: { channel: opt.channel, action: opt.action, label: opt.label, wait_days: 0, wait_hours: 0, condition: "always", requires: opt.requires }, position: { x: 0, y: 0 } },
+                          channelCoverage,
+                        );
+                        const hasZeroCov = cov !== null && cov === 0;
+                        return (
+                          <button
+                            key={`${opt.type}-${opt.action}`}
+                            className="w-full text-left px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100 flex items-center justify-between gap-2"
+                            onClick={() => addStep(opt)}
+                          >
+                            <span>{opt.label}</span>
+                            {cov !== null && (
+                              <span className={cn(
+                                "text-[10px] shrink-0",
+                                cov === 0 ? "text-amber-400" : cov < 30 ? "text-red-400" : "text-zinc-500",
+                              )}>
+                                {cov}%{hasZeroCov ? " ⚠" : ""}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
                     </div>
                   )}
                 </div>

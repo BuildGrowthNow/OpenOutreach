@@ -28,6 +28,7 @@ export interface SequenceStep {
     action: "connect" | "follow_up" | "send_email" | "send_whatsapp" | null;
     label: string;
     wait_days: number;
+    wait_hours: number;
     condition: "always" | "no_reply" | "no_open" | "replied";
     requires: string[];
   };
@@ -89,6 +90,7 @@ export interface SequenceTimelineEntry {
   channel: string | null;
   action: string | null;
   waitDays: number;
+  waitHours: number;
   status: "completed" | "active" | "pending";
   completedAt: string | null;
 }

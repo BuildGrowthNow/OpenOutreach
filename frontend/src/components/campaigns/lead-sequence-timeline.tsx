@@ -20,9 +20,9 @@ function stepIcon(entry: SequenceTimelineEntry) {
 }
 
 function statusColor(status: SequenceTimelineEntry["status"]) {
-  if (status === "completed") return "text-emerald-600 bg-emerald-50 border-emerald-200";
-  if (status === "active") return "text-blue-600 bg-blue-50 border-blue-200";
-  return "text-muted-foreground bg-muted border-border";
+  if (status === "completed") return "text-emerald-400 bg-emerald-500/10 border-emerald-500/30";
+  if (status === "active") return "text-blue-400 bg-blue-500/10 border-blue-500/30";
+  return "text-zinc-500 bg-zinc-800 border-zinc-700";
 }
 
 export function LeadSequenceTimeline({ campaignId, leadId }: LeadSequenceTimelineProps) {

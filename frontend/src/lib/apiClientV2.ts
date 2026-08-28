@@ -97,10 +97,15 @@ class ApiClient {
       }
 
       if (!response.ok) {
-        const errData = data as Record<string, string> | null
+        const errData = data as Record<string, unknown> | null
+        const detail = errData?.detail
+        const errorMsg = typeof detail === 'string'
+          ? detail
+          : (errData?.message as string | undefined) ?? `Request failed with status ${response.status}`
         return {
           status: response.status,
-          error: errData?.detail || errData?.message || `Request failed with status ${response.status}`,
+          data: data as T,
+          error: errorMsg,
         }
       }
 
