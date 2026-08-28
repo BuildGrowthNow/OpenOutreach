@@ -897,6 +897,11 @@ def reconcile(session) -> None:
             # Pending-check must run even for sequence campaigns so connections accepted
             # on LinkedIn transition deals from PENDING → CONNECTED.
             plan_check_pending_window(session, campaign)
+            # Sequence campaigns still need inbound WhatsApp synchronization;
+            # the legacy planner is intentionally bypassed above.
+            wa_profile_id = getattr(campaign, "whatsapp_profile_id", None)
+            if wa_profile_id and "whatsapp" in (getattr(campaign, "channel_sequence", None) or []):
+                plan_whatsapp_sync_window(campaign, wa_profile_id, profile.user_id)
         else:
             plan_connect_window(session, campaign, connect_cap=connect_cap)
             plan_follow_up_window(session, campaign, follow_up_cap=follow_up_cap)

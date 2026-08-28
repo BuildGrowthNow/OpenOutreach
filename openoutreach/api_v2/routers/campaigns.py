@@ -6,8 +6,9 @@ and team access control.
 """
 
 import logging
+import os
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from pydantic import BaseModel
@@ -407,6 +408,9 @@ async def create_campaign(
 
         # Verify user owns the LinkedIn profile (only when one is provided)
         channel_seq = data.channel_sequence or ["linkedin"]
+        invalid_channels = set(channel_seq) - {"linkedin", "email", "whatsapp"}
+        if invalid_channels:
+            raise HTTPException(status_code=422, detail=f"Unsupported campaign channel(s): {', '.join(sorted(invalid_channels))}")
         linkedin_required = "linkedin" in channel_seq
         if data.linkedin_profile_id and profiles_collection is not None:
             profile_doc = profiles_collection.find_one({
@@ -423,6 +427,22 @@ async def create_campaign(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="linkedin_profile_id is required when linkedin channel is active"
             )
+
+        if "whatsapp" in channel_seq:
+            wa_col = get_mongodb_collection("whatsapp_profiles")
+            if not data.whatsapp_profile_id or wa_col is None:
+                raise HTTPException(status_code=400, detail="A WhatsApp profile is required when WhatsApp is active")
+            wa_doc = wa_col.find_one({"_id": data.whatsapp_profile_id, "user_id": user_id})
+            if not wa_doc or wa_doc.get("status") not in ("connected", "active"):
+                raise HTTPException(status_code=400, detail="WhatsApp profile is not connected or access was denied")
+            wa_settings = (data.channel_settings or {}).get("whatsapp", {})
+            if not isinstance(wa_settings, dict) or not str(wa_settings.get("message_template", "")).strip():
+                raise HTTPException(status_code=422, detail="WhatsApp requires a non-empty message template")
+
+        if "email" in channel_seq:
+            mailbox_col = get_mongodb_collection("mailboxes")
+            if mailbox_col is None or mailbox_col.count_documents({"user_id": user_id, "paused": {"$ne": True}}) == 0:
+                raise HTTPException(status_code=400, detail="Connect an active mailbox before enabling email")
 
         # Verify team members exist
         team_ids = data.team_member_ids or []
@@ -2126,6 +2146,96 @@ class SequencePatch(BaseModel):
     active: Optional[bool] = None
 
 
+def _validate_sequence_graph(steps: List[Dict[str, Any]], edges: List[Dict[str, Any]], *, require_launchable: bool = False) -> List[str]:
+    """Validate and return human-readable graph errors before persisting."""
+    errors: List[str] = []
+    ids = [str(s.get("id", "")) for s in steps]
+    known = set(ids)
+    if len(ids) != len(set(ids)):
+        errors.append("Step IDs must be unique.")
+    valid_types = {"action", "wait", "condition", "end"}
+    for s in steps:
+        if not s.get("id") or s.get("type") not in valid_types:
+            errors.append(f"Invalid step type or ID: {s.get('id', '<missing>')}.")
+        data = s.get("data") or {}
+        if s.get("type") == "action":
+            if data.get("action") not in {"connect", "follow_up", "send_email", "send_whatsapp"}:
+                errors.append(f"Action step {s.get('id')} has an invalid action.")
+            expected = {"connect": "linkedin", "follow_up": "linkedin", "send_email": "email", "send_whatsapp": "whatsapp"}.get(cast(str, data.get("action")))
+            if expected and data.get("channel") != expected:
+                errors.append(f"Action step {s.get('id')} has an incompatible channel.")
+        if s.get("type") == "wait":
+            try:
+                if float(data.get("wait_days", 0) or 0) < 0 or float(data.get("wait_hours", 0) or 0) < 0:
+                    errors.append(f"Wait step {s.get('id')} cannot be negative.")
+                if require_launchable and float(data.get("wait_days", 0) or 0) + float(data.get("wait_hours", 0) or 0) <= 0:
+                    errors.append(f"Wait step {s.get('id')} must have a positive duration.")
+            except (TypeError, ValueError):
+                errors.append(f"Wait step {s.get('id')} has an invalid duration.")
+    outgoing: Dict[str, List[Dict[str, Any]]] = {sid: [] for sid in known}
+    incoming: Dict[str, int] = {sid: 0 for sid in known}
+    edge_keys = set()
+    for e in edges:
+        source, target = cast(str, e.get("source")), cast(str, e.get("target"))
+        if source not in known or target not in known or source == target:
+            errors.append(f"Edge {e.get('id', '<missing>')} references an invalid node.")
+            continue
+        key = (source, target, (e.get("data") or {}).get("condition", "always"))
+        if key in edge_keys:
+            errors.append(f"Duplicate edge from {source} to {target}.")
+        edge_keys.add(key)
+        outgoing[source].append(e)
+        incoming[target] += 1
+    roots = [sid for sid, count in incoming.items() if count == 0]
+    if steps and len(roots) != 1:
+        errors.append("Sequence must have exactly one entry point.")
+    if steps:
+        reachable = set()
+        stack = roots[:1]
+        while stack:
+            cur = stack.pop()
+            if cur in reachable:
+                continue
+            reachable.add(cur)
+            stack.extend(cast(str, e.get("target")) for e in outgoing.get(cur, []) if e.get("target"))
+        if len(reachable) != len(known):
+            errors.append("All steps must be reachable from the entry point.")
+        visiting: set[str] = set()
+        visited: set[str] = set()
+        def visit(node: str) -> None:
+            if node in visiting:
+                errors.append("Sequence graph contains a cycle.")
+                return
+            if node in visited:
+                return
+            visiting.add(node)
+            for child in outgoing.get(node, []):
+                visit(cast(str, child.get("target")))
+            visiting.remove(node)
+            visited.add(node)
+        for root in (roots or list(known)):
+            visit(root)
+    for s in steps:
+        sid, typ = cast(str, s.get("id")), s.get("type")
+        outs = outgoing.get(sid, [])
+        if typ != "end" and not outs:
+            errors.append(f"Step {sid} has no outgoing connection.")
+        if typ == "condition":
+            branches = {(e.get("data") or {}).get("condition") for e in outs}
+            if branches != {"yes", "no"}:
+                errors.append(f"Condition step {sid} must have exactly Yes and No paths.")
+    if require_launchable:
+        if not steps:
+            errors.append("Sequence has no steps.")
+        if not any(s.get("type") == "action" for s in steps):
+            errors.append("Sequence needs at least one action step.")
+        if not any(s.get("type") == "end" for s in steps):
+            errors.append("Sequence needs an End step.")
+        if sum(1 for s in steps if s.get("type") == "action" and (s.get("data") or {}).get("action") == "send_email") > 3:
+            errors.append("A sequence supports at most three email actions.")
+    return errors
+
+
 @router.get("/{campaign_id}/sequence")
 async def get_sequence(
     campaign_id: str,
@@ -2169,6 +2279,66 @@ async def get_sequence(
     }
 
 
+@router.get("/{campaign_id}/sequence/metrics")
+async def get_sequence_metrics(campaign_id: str, user_id: str = Depends(get_current_user)):
+    """Operational sequence health: per-step outcomes and stuck/error counts."""
+    campaign = models.Campaign.get(campaign_id)
+    if not campaign or not campaign.has_access(user_id):
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    events = get_mongodb_collection("sequence_events")
+    deals = get_mongodb_collection("deals")
+    by_step: Dict[str, Dict[str, int]] = {}
+    if events is not None:
+        for row in events.find({"campaign_id": campaign_id}, {"step_id": 1, "event": 1, "reason": 1}):
+            sid = str(row.get("step_id", "unknown"))
+            bucket = by_step.setdefault(sid, {"task_created": 0, "skipped": 0, "failed": 0})
+            key = row.get("event")
+            if key in bucket:
+                bucket[key] += 1
+    stuck = 0
+    errors = 0
+    if deals is not None:
+        stuck = deals.count_documents({"campaign_id": campaign_id, "sequence_position": {"$exists": True}, "sequence_done": {"$ne": True}, "sequence_error": {"$exists": True}})
+        errors = deals.count_documents({"campaign_id": campaign_id, "sequence_error": {"$exists": True}})
+    return {"campaign_id": campaign_id, "active": campaign.sequence_active, "by_step": by_step, "stuck_deals": stuck, "error_deals": errors}
+
+
+@router.post("/{campaign_id}/sequence/preview")
+async def preview_sequence(campaign_id: str, body: Dict[str, Any] = {}, user_id: str = Depends(get_current_user)):
+    """Dry-run graph traversal for selected deals without creating tasks."""
+    campaign = models.Campaign.get(campaign_id)
+    if not campaign or not campaign.has_access(user_id):
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    deals = get_mongodb_collection("deals")
+    leads = get_mongodb_collection("leads")
+    if deals is None or leads is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    wanted = [str(x) for x in (body.get("deal_ids") or [])][:25]
+    query: Dict[str, Any] = {"campaign_id": campaign_id}
+    if wanted:
+        query["_id"] = {"$in": wanted}
+    step_by_id = {s.get("id"): s for s in campaign.sequence_steps}
+    results = []
+    for deal_doc in deals.find(query, limit=25):
+        current = deal_doc.get("sequence_position") or next((s.get("id") for s in campaign.sequence_steps if s.get("id") not in {e.get("target") for e in campaign.sequence_edges}), None)
+        path: List[str] = []
+        seen: set[str] = set()
+        while current and current not in seen and len(path) < 100:
+            seen.add(current)
+            path.append(current)
+            outs = [e for e in campaign.sequence_edges if e.get("source") == current]
+            step = step_by_id.get(current) or {}
+            if step.get("type") == "condition":
+                branch = (step.get("data") or {}).get("condition", "always")
+                wanted_branch = "yes" if branch in ("always", "replied") else "no"
+                chosen = next((e for e in outs if (e.get("data") or {}).get("condition") == wanted_branch), None)
+                current = chosen.get("target") if chosen else None
+            else:
+                current = outs[0].get("target") if outs else None
+        results.append({"deal_id": str(deal_doc.get("_id")), "path": path, "labels": [(step_by_id.get(s) or {}).get("data", {}).get("label", s) for s in path]})
+    return {"campaign_id": campaign_id, "dry_run": True, "results": results}
+
+
 @router.patch("/{campaign_id}/sequence")
 async def patch_sequence(
     campaign_id: str,
@@ -2179,19 +2349,28 @@ async def patch_sequence(
     campaign = models.Campaign.get(campaign_id)
     if not campaign or not campaign.has_access(user_id):
         raise HTTPException(status_code=404, detail="Campaign not found")
+    if campaign.user_id != user_id:
+        raise HTTPException(status_code=403, detail="Only the campaign owner can edit or activate its sequence")
+    if campaign.sequence_active and (body.steps is not None or body.edges is not None) and body.active is not False:
+        raise HTTPException(status_code=409, detail="Deactivate the sequence before editing its graph; this protects in-progress deals from orphaned steps")
 
     col = get_mongodb_collection("campaigns")
     if col is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
 
     update: Dict[str, Any] = {}
+    candidate_steps = body.steps if body.steps is not None else (campaign.sequence_steps or [])
+    candidate_edges = body.edges if body.edges is not None else (campaign.sequence_edges or [])
+    graph_errors = _validate_sequence_graph(candidate_steps, candidate_edges, require_launchable=body.active is True)
+    if graph_errors:
+        raise HTTPException(status_code=422, detail=graph_errors)
     if body.steps is not None:
         update["sequence_steps"] = body.steps
     if body.edges is not None:
         update["sequence_edges"] = body.edges
     if body.active is not None:
         if body.active:
-            # Validate before activating
+            # Validate before activating (graph validation above is canonical).
             steps_to_check = body.steps if body.steps is not None else (campaign.sequence_steps or [])
             edges_to_check = body.edges if body.edges is not None else (campaign.sequence_edges or [])
 
@@ -2244,9 +2423,49 @@ async def patch_sequence(
 
             if errors:
                 raise HTTPException(status_code=422, detail=errors)
+            # Re-check runtime channel readiness at activation time; channels
+            # may have been added long after campaign creation.
+            actions = [s.get("data") or {} for s in steps_to_check if s.get("type") == "action"]
+            channels = {a.get("channel") for a in actions}
+            readiness_errors: List[str] = []
+            if channels & {"linkedin"} and not campaign.linkedin_profile_id:
+                readiness_errors.append("LinkedIn steps require a LinkedIn profile.")
+            if "email" in channels:
+                mailboxes = get_mongodb_collection("mailboxes")
+                if mailboxes is None or mailboxes.count_documents({"user_id": user_id, "paused": {"$ne": True}}) == 0:
+                    readiness_errors.append("Email steps require an active mailbox.")
+            if "whatsapp" in channels:
+                wa_col = get_mongodb_collection("whatsapp_profiles")
+                wa_settings = (campaign.channel_settings or {}).get("whatsapp", {})
+                wa_doc = wa_col.find_one({"_id": campaign.whatsapp_profile_id, "user_id": user_id}) if wa_col is not None and campaign.whatsapp_profile_id else None
+                if not wa_doc or wa_doc.get("status") not in ("connected", "active"):
+                    readiness_errors.append("WhatsApp steps require a connected WhatsApp profile.")
+                if not isinstance(wa_settings, dict) or not str(wa_settings.get("message_template", "")).strip():
+                    readiness_errors.append("WhatsApp steps require a message template.")
+            if readiness_errors:
+                raise HTTPException(status_code=422, detail=readiness_errors)
+            if any((s.get("data") or {}).get("condition") == "no_open" for s in steps_to_check) and not os.getenv("TRACKING_BASE_URL"):
+                raise HTTPException(status_code=422, detail="A no-open condition requires TRACKING_BASE_URL to be configured")
         update["sequence_active"] = body.active
 
     if update:
         col.update_one({"_id": campaign_id}, {"$set": update})
+
+    # Prevent stale work from crossing the sequence lifecycle boundary.
+    if body.active is False:
+        tasks_col = get_mongodb_collection("tasks")
+        if tasks_col is not None:
+            tasks_col.update_many(
+                {"payload.campaign_id": campaign_id, "status": {"$in": ["pending"]}, "payload.step_id": {"$exists": True}},
+                {"$set": {"status": "cancelled", "cancel_reason": "sequence_deactivated"}},
+            )
+    elif body.active is True:
+        # Supersede legacy planner tasks so activation cannot double-send.
+        tasks_col = get_mongodb_collection("tasks")
+        if tasks_col is not None:
+            tasks_col.update_many(
+                {"payload.campaign_id": campaign_id, "status": "pending", "payload.step_id": {"$exists": False}},
+                {"$set": {"status": "cancelled", "cancel_reason": "sequence_activated"}},
+            )
 
     return {"ok": True}

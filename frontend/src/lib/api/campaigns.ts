@@ -66,6 +66,23 @@ export async function setSequenceActive(campaignId: string, active: boolean) {
   return apiClient.patch<void>(`/campaigns/${campaignId}/sequence`, { active });
 }
 
+export interface SequenceMetrics {
+  active: boolean;
+  by_step: Record<string, { task_created: number; skipped: number; failed: number }>;
+  stuck_deals: number;
+  error_deals: number;
+}
+
+export async function getSequenceMetrics(campaignId: string) {
+  return apiClient.get<SequenceMetrics>(`/campaigns/${campaignId}/sequence/metrics`);
+}
+
+export async function previewSequence(campaignId: string, dealIds: string[] = []) {
+  return apiClient.post<{ dry_run: boolean; results: Array<{ deal_id: string; path: string[]; labels: string[] }> }>(
+    `/campaigns/${campaignId}/sequence/preview`, { deal_ids: dealIds },
+  );
+}
+
 export interface ChannelCoverage {
   count: number;
   pct: number;

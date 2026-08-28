@@ -81,12 +81,17 @@ def handle_whatsapp_message(task, wa_session, qualifiers):  # noqa: ARG001
         return
 
     # Find QUALIFIED WA deals oldest-first
-    deal_docs = list(deals_col.find(
-        {
+    eligibility = {
             "campaign_id": campaign_id,
             "state": Deal.DealState.QUALIFIED,
             "active_channel": "whatsapp",
-        },
+        }
+    target_deal_id = (getattr(task, "payload", None) or {}).get("deal_id")
+    if target_deal_id:
+        # Sequence tasks must address the deal they were created for.
+        eligibility["_id"] = str(target_deal_id)
+    deal_docs = list(deals_col.find(
+        eligibility,
         sort=[("creation_date", 1)],
         limit=50,
     ))
@@ -99,6 +104,10 @@ def handle_whatsapp_message(task, wa_session, qualifiers):  # noqa: ARG001
 
     for deal_doc in deal_docs:
         deal = Deal.from_dict(deal_doc)
+        target_step_id = (getattr(task, "payload", None) or {}).get("step_id")
+        if target_step_id and deal_doc.get("sequence_last_step_id") == target_step_id:
+            logger.info("WA send_message: sequence step %s already sent for deal %s", target_step_id, deal._id)
+            continue
         lead = Lead.get(deal.lead_id)
         if not lead or not lead.phone:
             continue
@@ -167,7 +176,11 @@ def handle_whatsapp_message(task, wa_session, qualifiers):  # noqa: ARG001
         # Advance deal to PENDING
         deal.state = Deal.DealState.PENDING
         deal.last_outgoing_at = now
-        deal.save(update_fields=["state", "last_outgoing_at"])
+        if target_step_id:
+            deal.sequence_last_step_id = target_step_id
+            deal.save(update_fields=["state", "last_outgoing_at", "sequence_last_step_id"])
+        else:
+            deal.save(update_fields=["state", "last_outgoing_at"])
 
         # Save ChatMessage
         from openoutreach.mongodb.models_extended import ChatMessage

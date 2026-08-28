@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   Card,
   CardContent,
@@ -97,6 +97,7 @@ interface CampaignAnalyticsResponse {
 export default function CampaignDetailsPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const campaignId = params.id as string;
   const { toast } = useToast();
 
@@ -109,6 +110,12 @@ export default function CampaignDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("overview");
+  useEffect(() => {
+    const requestedTab = searchParams.get("tab");
+    if (["overview", "leads", "sequence", "analytics", "settings"].includes(requestedTab || "")) {
+      setActiveTab(requestedTab!);
+    }
+  }, [searchParams]);
   const [deleting, setDeleting] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showCompletionModal, setShowCompletionModal] = useState(false);

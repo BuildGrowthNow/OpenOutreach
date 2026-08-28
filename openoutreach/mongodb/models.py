@@ -1140,6 +1140,7 @@ class Deal:
         sequence_position: Optional[str] = None,
         sequence_last_step_at: Optional[datetime] = None,
         sequence_done: bool = False,
+        sequence_last_step_id: Optional[str] = None,
     ):
         self._id = _id or str(uuid4())
         self.lead_id = lead_id
@@ -1168,6 +1169,7 @@ class Deal:
         self.sequence_position: Optional[str] = sequence_position
         self.sequence_last_step_at: Optional[datetime] = sequence_last_step_at
         self.sequence_done: bool = sequence_done
+        self.sequence_last_step_id: Optional[str] = sequence_last_step_id
         self._lead: Optional["Lead"] = None
         self.campaign: Optional["Campaign"] = None
 
@@ -1241,6 +1243,8 @@ class Deal:
         if self.sequence_last_step_at is not None:
             data["sequence_last_step_at"] = self.sequence_last_step_at
         data["sequence_done"] = self.sequence_done
+        if self.sequence_last_step_id is not None:
+            data["sequence_last_step_id"] = self.sequence_last_step_id
         return data
 
     @classmethod
@@ -1274,6 +1278,7 @@ class Deal:
             sequence_position=data.get("sequence_position"),
             sequence_last_step_at=data.get("sequence_last_step_at"),
             sequence_done=data.get("sequence_done", False),
+            sequence_last_step_id=data.get("sequence_last_step_id"),
         )
 
     def save(self, update_fields: Optional[List[str]] = None) -> str:
@@ -4506,6 +4511,7 @@ class Task:
     STATUS_RUNNING = "running"
     STATUS_COMPLETED = "completed"
     STATUS_FAILED = "failed"
+    STATUS_CANCELLED = "cancelled"
 
     class TaskType:
         CONNECT = "connect"
@@ -4522,6 +4528,7 @@ class Task:
         RUNNING = "running"
         COMPLETED = "completed"
         FAILED = "failed"
+        CANCELLED = "cancelled"
 
     def __init__(
         self,

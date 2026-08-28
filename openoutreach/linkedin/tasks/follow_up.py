@@ -17,6 +17,7 @@ from openoutreach.core.db.deals import set_profile_state
 from openoutreach.core.db.summaries import materialize_profile_summary_if_missing
 from linkedin_cli.actions.message import send_raw_message
 from openoutreach.core.agents.follow_up import run_follow_up_agent
+from openoutreach.crm.models.deal import DealState
 
 logger = logging.getLogger(__name__)
 
@@ -372,7 +373,18 @@ def handle_follow_up(task, session, qualifiers):
 
     _close_stale_deals(campaign, session)
 
-    deal = _next_followup_deal(campaign)
+    target_deal_id = (getattr(task, "payload", None) or {}).get("deal_id")
+    if target_deal_id:
+        # Sequence tasks are per-deal; do not let the legacy campaign-wide
+        # picker execute a task against a different contact.
+        deal = models.Deal.get(str(target_deal_id))
+        if not deal or str(deal.campaign_id) != str(campaign.pk) or deal.state != DealState.CONNECTED:
+            logger.info("[%s] follow_up: target deal %s is not eligible", campaign, target_deal_id)
+            return
+        if _too_soon_to_nudge(deal):
+            return
+    else:
+        deal = _next_followup_deal(campaign)
     if deal is None:
         connected = len(_connected_deals(campaign))
         if connected:
@@ -529,7 +541,6 @@ def handle_follow_up(task, session, qualifiers):
             logger.exception("post-send sync failed for %s (best-effort)", public_id)
 
     elif decision.action == "mark_completed":
-        from openoutreach.crm.models import DealState
         outcome = decision.outcome or ""
         set_profile_state(
             session, public_id, DealState.COMPLETED, outcome=outcome
@@ -580,5 +591,3 @@ def handle_follow_up(task, session, qualifiers):
     # State Machine Integration - Execute state machine if campaign has one
     # Note: State machine is disabled feature, skipping for now
     # _try_execute_state_machine(deal, session)
-
-

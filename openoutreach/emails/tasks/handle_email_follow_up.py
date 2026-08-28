@@ -48,7 +48,7 @@ def _write_chat_message(
         logger.warning("email_follow_up: failed to write ChatMessage for deal %s: %s", deal._id, exc)
 
 
-def handle_email_follow_up(_task, user_id: str, campaign) -> None:
+def handle_email_follow_up(task, user_id: str, campaign) -> None:
     """Send one email for the next eligible deal in *campaign*.
 
     Args:
@@ -73,8 +73,7 @@ def handle_email_follow_up(_task, user_id: str, campaign) -> None:
     day2_cutoff = now - timedelta(days=config.email_followup_day2)
 
     # Find the earliest-created eligible deal across all steps
-    deal_doc = deals_col.find_one(
-        {
+    eligibility = {
             "campaign_id": campaign.pk,
             "$or": [
                 {"state": "email_queued", "active_channel": "email"},
@@ -89,7 +88,21 @@ def handle_email_follow_up(_task, user_id: str, campaign) -> None:
                     "email_sent_at": {"$lte": day2_cutoff},
                 },
             ],
-        },
+        }
+    # Sequence tasks are per-deal.  Never fall back to the campaign-wide
+    # planner query or a task for one lead can send to another lead.
+    target_deal_id = (getattr(task, "payload", None) or {}).get("deal_id")
+    if target_deal_id:
+        eligibility["_id"] = str(target_deal_id)
+        # Sequence email steps may start from a LinkedIn-connected deal rather
+        # than the legacy email planner states.
+        eligibility.pop("$or", None)
+        eligibility["state"] = {
+            "$in": ["Connected", "Pending", "Qualified", "email_queued",
+                    "email_sent", "email_opened"]
+        }
+    deal_doc = deals_col.find_one(
+        eligibility,
         sort=[("creation_date", 1)],
     )
     if deal_doc is None:
@@ -97,6 +110,10 @@ def handle_email_follow_up(_task, user_id: str, campaign) -> None:
         return
 
     deal = Deal.from_dict(deal_doc)
+    target_step_id = (getattr(task, "payload", None) or {}).get("step_id")
+    if target_step_id and deal_doc.get("sequence_last_step_id") == target_step_id:
+        logger.info("email_follow_up: sequence step %s already sent for deal %s", target_step_id, deal._id)
+        return
 
     # Skip silently if deal advanced past expected state since task was created
     if deal.email_sequence_step >= MAX_SEQUENCE_STEPS:
@@ -118,7 +135,11 @@ def handle_email_follow_up(_task, user_id: str, campaign) -> None:
         logger.warning("email_follow_up: lead %s not found for deal %s", deal.lead_id, deal._id)
         return
 
-    if not lead.api_email:
+    recipient = lead.api_email or (
+        lead.contact_info.get("email")
+        if isinstance(lead.contact_info, dict) else None
+    )
+    if not recipient:
         logger.debug("email_follow_up: lead %s has no api_email — skipping", lead._id)
         return
 
@@ -169,7 +190,7 @@ def handle_email_follow_up(_task, user_id: str, campaign) -> None:
     try:
         message_id = send_email(
             mailbox,
-            lead.api_email,
+            recipient,
             subject,
             body,
             in_reply_to=in_reply_to,
@@ -218,6 +239,8 @@ def handle_email_follow_up(_task, user_id: str, campaign) -> None:
     # Persist the cold-email ID once so step-2 References chain is complete.
     if deal.email_sequence_step == 0:
         db_update["email_first_message_id"] = message_id
+    if target_step_id:
+        db_update["sequence_last_step_id"] = target_step_id
 
     deals_col.update_one({"_id": deal._id}, {"$set": db_update})
 

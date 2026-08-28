@@ -937,7 +937,21 @@ class RemoteDaemon:
                 )
 
                 try:
+                    sequence_before = None
+                    if (task.get("payload") or {}).get("step_id"):
+                        from openoutreach.mongodb.connection import get_mongodb_collection
+                        deals_col = get_mongodb_collection("deals")
+                        sequence_before = deals_col.find_one({"_id": str(task["payload"].get("deal_id"))}) if deals_col is not None else None
                     result = await _run_task(lambda t=task: self._execute_task(t))
+
+                    if (task.get("payload") or {}).get("step_id"):
+                        from openoutreach.core.daemon import _sequence_task_succeeded
+                        check_task = type("Task", (), {
+                            "task_type": task.get("task_type"),
+                            "payload": task.get("payload", {}),
+                        })()
+                        if not _sequence_task_succeeded(check_task, sequence_before):  # type: ignore[arg-type]
+                            raise RuntimeError("Sequence task produced no deal-side effect; retaining step for retry")
 
                     duration_ms = int((datetime.now(tz.utc) - start).total_seconds() * 1000)
                     await self.client.report_result(
@@ -1051,6 +1065,10 @@ class RemoteDaemon:
                     campaign_id, campaign.status if campaign else "not found",
                 )
                 raise ValueError(f"Campaign {campaign_id} not active - task skipped")
+            if campaign.sequence_active and not task.get("payload", {}).get("step_id") and task_type in ("whatsapp_message", "whatsapp_follow_up"):
+                raise ValueError("Legacy WhatsApp task superseded by active sequence")
+            if task.get("payload", {}).get("step_id") and not campaign.sequence_active:
+                raise ValueError("Sequence is inactive; task cancelled")
 
             task_obj = type("Task", (), {
                 "task_type": task_type,
@@ -1074,6 +1092,10 @@ class RemoteDaemon:
                     campaign_id, campaign.status if campaign else "not found",
                 )
                 return None
+            if campaign.sequence_active and not task.get("payload", {}).get("step_id"):
+                raise ValueError("Legacy email task superseded by active sequence")
+            if task.get("payload", {}).get("step_id") and not campaign.sequence_active:
+                raise ValueError("Sequence is inactive; task cancelled")
             user_id: str = (
                 (self.session.user_id or "")
                 if self.session and hasattr(self.session, "user_id")
@@ -1100,6 +1122,10 @@ class RemoteDaemon:
             logger.info("Skipping task - campaign %s is not active (status=%s)",
                         campaign_id, campaign.status if campaign else "not found")
             return None
+        if campaign.sequence_active and not task.get("payload", {}).get("step_id") and task["task_type"] in ("connect", "follow_up"):
+            raise ValueError("Legacy LinkedIn task superseded by active sequence")
+        if task.get("payload", {}).get("step_id") and not campaign.sequence_active:
+            raise ValueError("Sequence is inactive; task cancelled")
 
         # Verify session is initialized
         if not self.session:

@@ -56,6 +56,7 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
   const [waProfiles, setWaProfiles] = useState<WhatsAppProfile[]>([]);
   const [enableEmail, setEnableEmail] = useState(false);
   const [hasMailboxes, setHasMailboxes] = useState(false);
+  const [openSequenceBuilder, setOpenSequenceBuilder] = useState(false);
 
   // Step 3 fields - Lead Source
   const [leadSource, setLeadSource] = useState('linkedin_search');
@@ -225,17 +226,20 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
       const campaign = res.data;
 
       // Activate the campaign immediately
-      await apiClient.patch(`/campaigns/${campaign.id}`, {
+      const activation = await apiClient.patch(`/campaigns/${campaign.id}`, {
         status: 'active',
         is_paused: false,
       });
+      if (activation.error) {
+        throw new Error(`Campaign was created but could not be activated: ${activation.error}`);
+      }
 
       localStorage.setItem('first_campaign_banner_dismissed', '1');
 
       if (onSuccess) {
         onSuccess(campaign.id);
       } else {
-        router.push(`/campaigns/${campaign.id}`);
+        router.push(`/campaigns/${campaign.id}${openSequenceBuilder ? '?tab=sequence' : ''}`);
       }
     } catch (err) {
       console.error('Failed to create campaign:', err);
@@ -567,6 +571,19 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
                 </div>
               </div>
             )}
+          </div>
+
+          <div className="flex items-start gap-3 rounded-lg border p-3 bg-muted/20">
+            <Checkbox
+              id="open-sequence-builder"
+              checked={openSequenceBuilder}
+              onCheckedChange={(checked) => setOpenSequenceBuilder(Boolean(checked))}
+              className="mt-0.5"
+            />
+            <div>
+              <Label htmlFor="open-sequence-builder" className="text-sm font-medium cursor-pointer">Configure a visual sequence after creation</Label>
+              <p className="text-xs text-muted-foreground">The campaign is created active with the default behavior; you can review and activate the sequence separately.</p>
+            </div>
           </div>
 
           {/* Lead Source */}

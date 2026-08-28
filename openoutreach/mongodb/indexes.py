@@ -41,6 +41,7 @@ def ensure_all_indexes():
             ({'user_id': 1, 'status': 1}, {'name': 'task_user_status_idx'}),
             ({'payload.campaign_id': 1}, {'name': 'task_campaign_idx'}),
             ({'payload.deal_id': 1, 'task_type': 1, 'status': 1}, {'name': 'task_deal_type_idx'}),
+            ({'payload.deal_id': 1, 'payload.step_id': 1, 'status': 1}, {'name': 'task_sequence_step_idx'}),
         ]),
 
         # Campaigns
@@ -253,6 +254,11 @@ def ensure_all_indexes():
         ('campaign_templates', [
             ({'created_by_id': 1}, {'name': 'template_creator_idx'}),
             ({'is_public': 1}, {'name': 'template_public_idx'}),
+        ]),
+
+        ('sequence_events', [
+            ({'campaign_id': 1, 'created_at': -1}, {'name': 'sequence_event_campaign_time_idx'}),
+            ({'deal_id': 1, 'step_id': 1, 'created_at': -1}, {'name': 'sequence_event_deal_step_idx'}),
         ]),
 
         # Ghost Mode

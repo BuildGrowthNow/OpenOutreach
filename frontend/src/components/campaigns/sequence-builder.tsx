@@ -79,6 +79,8 @@ import {
   CampaignChannelCoverage,
   SequenceStep,
   SequenceEdge,
+  getSequenceMetrics,
+  SequenceMetrics,
 } from "@/lib/api/campaigns";
 import { useToast } from "@/components/ui/use-toast";
 import { Network, Mail, Smartphone, Clock, GitBranch, Flag, Plus, X, Undo2 } from "lucide-react";
@@ -429,6 +431,8 @@ function validateSequence(steps: SequenceStep[], edges: SequenceEdge[]): string[
   if (roots.length > 1) warnings.push(`${roots.length} disconnected entry points — connect all steps.`);
   if (!steps.some((s) => s.type === "action")) warnings.push("Add at least one action step (Connect, Follow-up, Send Email, or Send WhatsApp).");
   if (!steps.some((s) => s.type === "end")) warnings.push("Add an End step.");
+  const zeroWaits = steps.filter((s) => s.type === "wait" && !(s.data.wait_days || 0) && !(s.data.wait_hours || 0));
+  if (zeroWaits.length) warnings.push(`${zeroWaits.length} Wait step${zeroWaits.length === 1 ? " has" : "s have"} no duration.`);
   const noOutgoing = steps.filter((s) => s.type !== "end" && !edgeSources.has(s.id));
   if (noOutgoing.length > 0) {
     warnings.push(
@@ -774,6 +778,7 @@ function SequenceCanvas({ campaignId, isActive }: { campaignId: string; isActive
   const [coverage, setCoverage] = useState<Record<string, number>>({});
   const [totalLeads, setTotalLeads] = useState(0);
   const [channelCoverage, setChannelCoverage] = useState<CampaignChannelCoverage | null>(null);
+  const [sequenceMetrics, setSequenceMetrics] = useState<SequenceMetrics | null>(null);
   const [active, setActive] = useState(false);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState(false);
@@ -880,10 +885,12 @@ function SequenceCanvas({ campaignId, isActive }: { campaignId: string; isActive
     setLoading(true);
     setFetchError(false);
     setHistory([]);
-    const [res, covRes] = await Promise.all([
+    const [res, covRes, metricsRes] = await Promise.all([
       getSequence(campaignId),
       getCampaignCoverage(campaignId),
+      getSequenceMetrics(campaignId),
     ]);
+    if (metricsRes.data) setSequenceMetrics(metricsRes.data);
     const total = covRes.data?.total ?? 0;
     if (covRes.data) {
       setTotalLeads(total);
@@ -1007,7 +1014,7 @@ function SequenceCanvas({ campaignId, isActive }: { campaignId: string; isActive
     setValidationWarnings([]);
     const warnings = validateSequence(currentSteps, currentEdges);
     setValidationWarnings(warnings);
-    if (warnings.some((w) => w.includes("disconnected") || w.includes("no outgoing"))) return false;
+    if (warnings.some((w) => w.includes("disconnected") || w.includes("no outgoing") || w.includes("no duration"))) return false;
 
     setSaving(true);
     const res = await saveSequence(campaignId, currentSteps, currentEdges);
@@ -1048,7 +1055,10 @@ function SequenceCanvas({ campaignId, isActive }: { campaignId: string; isActive
   };
 
   const handleSave = async () => { if (active) { setShowSaveWhileActiveDialog(true); return; } await executeSave(); };
-  const handleConfirmSaveWhileActive = async () => { setShowSaveWhileActiveDialog(false); await executeSave(); };
+  const handleConfirmSaveWhileActive = async () => {
+    setShowSaveWhileActiveDialog(false);
+    toast({ title: "Deactivate sequence first", description: "Graph edits are blocked while a sequence is active to protect in-progress deals.", variant: "destructive" });
+  };
 
   const handleActivateClick = () => setShowActivateDialog(true);
 
@@ -1254,6 +1264,11 @@ function SequenceCanvas({ campaignId, isActive }: { campaignId: string; isActive
                   {active ? "Active" : "Inactive"}
                 </Badge>
                 {sequenceSummary && <span className="text-xs text-zinc-500">{sequenceSummary}</span>}
+                {sequenceMetrics && (sequenceMetrics.stuck_deals > 0 || sequenceMetrics.error_deals > 0) && (
+                  <Badge variant="outline" className="text-xs border-red-500/30 bg-red-500/10 text-red-400">
+                    {sequenceMetrics.error_deals} errors · {sequenceMetrics.stuck_deals} stuck
+                  </Badge>
+                )}
                 {totalLeads > 0 && <span className="text-xs text-zinc-600">·</span>}
                 {totalLeads > 0 && channelCoverage && (
                   <>
@@ -1480,12 +1495,12 @@ function SequenceCanvas({ campaignId, isActive }: { campaignId: string; isActive
             <AlertDialogHeader>
               <AlertDialogTitle>Save while sequence is active?</AlertDialogTitle>
               <AlertDialogDescription className="text-zinc-400">
-                Saving updates what the daemon executes for deals already in progress. Completed steps are unaffected; pending steps use the new configuration immediately.
+                Graph edits are blocked while active to protect in-progress deals. Deactivate the sequence, edit and save, then activate it again.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 bg-zinc-900">Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={handleConfirmSaveWhileActive} className="bg-blue-600 hover:bg-blue-700">Save Anyway</AlertDialogAction>
+              <AlertDialogAction onClick={handleConfirmSaveWhileActive} className="bg-blue-600 hover:bg-blue-700">Got it</AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>

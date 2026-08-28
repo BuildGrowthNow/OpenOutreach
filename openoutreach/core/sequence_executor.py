@@ -11,7 +11,6 @@ to sequence campaigns are owned by the sequence — existing planners exclude th
 
 import logging
 from datetime import datetime, timedelta, timezone
-from uuid import uuid4
 from typing import Optional
 
 from openoutreach.mongodb.models import Campaign, Deal, Task
@@ -19,6 +18,21 @@ from openoutreach.mongodb.connection import get_mongodb_collection
 from openoutreach.crm.models.deal import DealState
 
 logger = logging.getLogger(__name__)
+
+
+def _record_sequence_event(campaign_id: str, deal_id: str, step_id: str, event: str, reason: str = "") -> None:
+    """Best-effort durable audit trail for sequence operations."""
+    events = get_mongodb_collection("sequence_events")
+    if events is None:
+        return
+    try:
+        events.insert_one({
+            "campaign_id": str(campaign_id), "deal_id": str(deal_id),
+            "step_id": str(step_id), "event": event, "reason": reason,
+            "created_at": datetime.now(timezone.utc),
+        })
+    except Exception:
+        logger.debug("sequence event write failed", exc_info=True)
 
 
 def _get_first_step_id(campaign: Campaign) -> Optional[str]:
@@ -180,8 +194,11 @@ def _create_task(campaign: Campaign, deal: Deal, task_type: str, step_id: str, u
         channel = "email"
     else:
         channel = "whatsapp"
-    tasks_col.insert_one({
-        "_id": str(uuid4()),
+    # Deterministic IDs make reconciliation idempotent even if two daemon
+    # workers race between the existence check and creation.
+    task_id = f"sequence:{campaign._id}:{deal._id}:{step_id}"
+    tasks_col.update_one({"_id": task_id}, {"$setOnInsert": {
+        "_id": task_id,
         "task_type": task_type,
         "status": Task.STATUS_PENDING,
         "scheduled_at": now,
@@ -190,7 +207,7 @@ def _create_task(campaign: Campaign, deal: Deal, task_type: str, step_id: str, u
         "linkedin_profile_id": campaign.linkedin_profile_id,
         "channel": channel,
         "created_at": now,
-    })
+    }}, upsert=True)
 
 
 def resolve_sequence_tasks(campaign: Campaign, user_id: str) -> int:
@@ -221,6 +238,13 @@ def resolve_sequence_tasks(campaign: Campaign, user_id: str) -> int:
         DealState.READY_TO_CONNECT,
         DealState.PENDING,
         DealState.CONNECTED,
+        # Sequence position is independent of the legacy funnel state.  Email
+        # actions move deals into these states and must not strand later nodes.
+        DealState.EMAIL_QUEUED,
+        DealState.EMAIL_SENT,
+        DealState.EMAIL_OPENED,
+        DealState.EMAIL_REPLIED,
+        DealState.EMAIL_BOUNCED,
     ]
 
     deal_docs = list(deals_col.find({
@@ -236,15 +260,26 @@ def resolve_sequence_tasks(campaign: Campaign, user_id: str) -> int:
     tasks_created = 0
 
     for doc in deal_docs:
-        deal = Deal.from_dict(doc)
+        # Short lease prevents two daemon instances from advancing the same
+        # deal concurrently. Expiry makes crashes self-healing.
+        lock_until = datetime.now(timezone.utc) + timedelta(seconds=45)
+        claimed = deals_col.update_one(
+            {"_id": doc["_id"], "$or": [
+                {"sequence_lock_until": {"$exists": False}},
+                {"sequence_lock_until": {"$lte": datetime.now(timezone.utc)}},
+            ]},
+            {"$set": {"sequence_lock_until": lock_until}},
+        )
+        if getattr(claimed, "modified_count", 0) != 1:
+            continue
+        deal = Deal.from_dict(deals_col.find_one({"_id": doc["_id"]}) or doc)
         lead_data = leads_col.find_one({"_id": deal.lead_id}) or {}
 
-        if _has_inbound_reply(deal):
+        if deal.state in (DealState.EMAIL_REPLIED, DealState.EMAIL_BOUNCED):
             deals_col.update_one(
                 {"_id": deal._id},
-                {"$set": {"sequence_done": True}},
+                {"$set": {"sequence_done": True, "sequence_terminal_reason": str(deal.state.value)}},
             )
-            logger.debug("sequence: deal %s stopped on reply", deal._id)
             continue
 
         current_step_id = deal.sequence_position or first_step_id
@@ -254,6 +289,21 @@ def resolve_sequence_tasks(campaign: Campaign, user_id: str) -> int:
             continue
 
         step_type = step.get("type")
+
+        # Give reply/no-reply condition nodes a chance to route first.  A
+        # global stop-on-reply check here made every `replied` branch
+        # unreachable.  For all other nodes, an inbound reply ends outreach.
+        inbound_reply = _has_inbound_reply(deal)
+        if inbound_reply and not (
+            step_type == "condition"
+            and (step.get("data") or {}).get("condition") in ("replied", "no_reply")
+        ):
+            deals_col.update_one(
+                {"_id": deal._id},
+                {"$set": {"sequence_done": True}},
+            )
+            logger.debug("sequence: deal %s stopped on reply", deal._id)
+            continue
 
         if step_type == "end":
             deals_col.update_one({"_id": deal._id}, {"$set": {"sequence_done": True}})
@@ -281,6 +331,13 @@ def resolve_sequence_tasks(campaign: Campaign, user_id: str) -> int:
             deals_col.update_one({"_id": deal._id}, {"$set": {"sequence_position": next_id}})
             continue
 
+        # WhatsApp's sender requires a qualified deal (the pre-flight and
+        # cross-campaign safety checks depend on that state).  Hold the
+        # sequence here until qualification completes instead of creating a
+        # task that can never send.
+        if task_type == Task.TaskType.WHATSAPP_MESSAGE and deal.state != DealState.QUALIFIED:
+            continue
+
         if not _check_wait(deal, step):
             continue
 
@@ -294,6 +351,7 @@ def resolve_sequence_tasks(campaign: Campaign, user_id: str) -> int:
                 "sequence: deal %s skipping step %r — missing required fields: %s",
                 deal._id, step_label, ", ".join(missing) or "unknown",
             )
+            _record_sequence_event(campaign._id, deal._id, current_step_id, "skipped", "missing_required_data")
             next_id = _get_next_step_id(campaign, current_step_id, True)
             now = datetime.now(timezone.utc)
             deals_col.update_one(
@@ -308,18 +366,25 @@ def resolve_sequence_tasks(campaign: Campaign, user_id: str) -> int:
         # No task: first visit — create task, stay at this step until it runs.
         existing = tasks_col.find_one(
             {"payload.deal_id": deal._id, "payload.step_id": current_step_id},
-            projection={"status": 1},
+            projection={"status": 1, "retry_count": 1},
         )
         if existing is not None:
             status = existing.get("status")
             if status in (Task.STATUS_PENDING, Task.STATUS_RUNNING):
                 continue  # wait for execution
-            # Completed or failed: advance to next step
             if status == Task.STATUS_FAILED:
-                logger.warning(
-                    "sequence: task for deal %s step %s failed — advancing past step",
-                    deal._id, current_step_id,
-                )
+                retries = int(existing.get("retry_count", 0) or 0)
+                if retries < 3:
+                    tasks_col.update_one(
+                        {"_id": existing.get("_id")},
+                        {"$set": {"status": Task.STATUS_PENDING, "scheduled_at": datetime.now(timezone.utc)}, "$inc": {"retry_count": 1}},
+                    )
+                    logger.warning("sequence: retrying failed task for deal %s step %s (%d/3)", deal._id, current_step_id, retries + 1)
+                    continue
+                logger.error("sequence: task for deal %s step %s exhausted retries", deal._id, current_step_id)
+                deals_col.update_one({"_id": deal._id}, {"$set": {"sequence_done": True, "sequence_error": "task_retries_exhausted"}})
+                continue
+            # Completed: advance to next step.
             next_id = _get_next_step_id(campaign, current_step_id, True)
             now = datetime.now(timezone.utc)
             deals_col.update_one(
@@ -335,6 +400,7 @@ def resolve_sequence_tasks(campaign: Campaign, user_id: str) -> int:
         # No task exists yet for this step — create it. Position stays at current step
         # until the task completes (checked above on the next reconcile cycle).
         _create_task(campaign, deal, task_type, current_step_id, user_id, tasks_col)
+        _record_sequence_event(campaign._id, deal._id, current_step_id, "task_created", task_type)
         tasks_created += 1
 
     return tasks_created

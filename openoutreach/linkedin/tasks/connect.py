@@ -90,13 +90,29 @@ def handle_connect(task, session, qualifiers):
         )
         return
 
-    try:
-        candidate = strategy.find_candidate(session)
-    except Exception as e:
-        if "Failed to fetch" in str(e) or "Page.evaluate" in str(e):
-            logger.warning("[%s] connect: Voyager API unavailable during candidate search - slot skipped (%s)", campaign, e)
+    target_deal_id = (getattr(task, "payload", None) or {}).get("deal_id")
+    if target_deal_id:
+        # Sequence tasks are bound to one deal.  Resolve that lead directly;
+        # the legacy pool picker is intentionally not used here.
+        target_deal = Deal.get(str(target_deal_id))
+        if not target_deal or str(target_deal.campaign_id) != str(campaign.pk):
+            logger.info("[%s] connect: target deal %s not found", campaign, target_deal_id)
             return
-        raise
+        lead = Lead.get(target_deal.lead_id)
+        if not lead or not lead.public_identifier:
+            logger.info("[%s] connect: target deal %s has no LinkedIn identifier", campaign, target_deal_id)
+            return
+        profile = dict(lead.cached_profile or {})
+        profile.setdefault("public_identifier", lead.public_identifier)
+        candidate = {"public_identifier": lead.public_identifier, "profile": profile}
+    else:
+        try:
+            candidate = strategy.find_candidate(session)
+        except Exception as e:
+            if "Failed to fetch" in str(e) or "Page.evaluate" in str(e):
+                logger.warning("[%s] connect: Voyager API unavailable during candidate search - slot skipped (%s)", campaign, e)
+                return
+            raise
     if candidate is None:
         logger.info("[%s] connect: no candidate available - slot skipped", campaign)
         return
@@ -137,7 +153,9 @@ def handle_connect(task, session, qualifiers):
             return
 
     reason = deal.reason if deal else ""
-    stats = strategy.qualifier.explain(candidate, session) if strategy.qualifier else ""
+    stats = ""
+    if strategy.qualifier and not target_deal_id:
+        stats = strategy.qualifier.explain(candidate, session)
     logger.info("[%s] connect", campaign)
     logger.info("[%s] %s (%s) - %s", campaign, public_id, stats, reason or "")
 

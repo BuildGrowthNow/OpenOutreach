@@ -268,6 +268,15 @@ Extend existing `canvas.tsx` / `node.tsx` / `edge.tsx`:
   ≥1 action step, ≥1 end node, no disconnected nodes. Return 400 with error list if invalid.
 - [x] Frontend: confirm modal when activating — handled via `window.confirm` in sequence builder.
 
+### 5.5 Production hardening (backend + desktop + cloud)
+
+- [x] Validate graph shape, channel prerequisites, wait durations, and tracking configuration before activation.
+- [x] Use deterministic deal/step task IDs, leases, retry limits, and sequence event audit records.
+- [x] Verify real channel side effects before completing tasks in both daemon implementations.
+- [x] Cancel/suppress stale sequence and legacy planner tasks when activation changes.
+- [x] Expose sequence metrics and a bounded dry-run preview for pre-launch validation.
+- [x] Keep WhatsApp inbound synchronization enabled for campaigns containing WhatsApp steps.
+
 ---
 
 ## Files Reference

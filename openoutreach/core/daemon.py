@@ -27,6 +27,53 @@ logger = logging.getLogger(__name__)
 _HANDLERS: dict = {}
 
 
+def _sequence_task_succeeded(task: Task, before: Optional[dict]) -> bool:
+    """Verify a sequence action produced the expected deal-side effect.
+
+    Legacy handlers intentionally return ``None`` for planner no-ops.  A
+    sequence task must not be marked complete in that case, otherwise the
+    graph advances without contacting anyone.
+    """
+    step_id = (task.payload or {}).get("step_id")
+    deal_id = (task.payload or {}).get("deal_id")
+    if not step_id or not deal_id:
+        return True  # non-sequence task
+    from openoutreach.mongodb.connection import get_mongodb_collection
+    deals = get_mongodb_collection("deals")
+    if deals is None:
+        return False
+    after = deals.find_one({"_id": str(deal_id)}) or {}
+    if task.task_type == Task.TaskType.EMAIL_FOLLOW_UP:
+        return after.get("email_sequence_step", 0) > (before or {}).get("email_sequence_step", 0)
+    if task.task_type == Task.TaskType.WHATSAPP_MESSAGE:
+        return after.get("last_outgoing_at") != (before or {}).get("last_outgoing_at")
+    if task.task_type == Task.TaskType.FOLLOW_UP:
+        return after.get("last_outgoing_at") != (before or {}).get("last_outgoing_at")
+    if task.task_type == Task.TaskType.CONNECT:
+        before_state = (before or {}).get("state")
+        return after.get("state") != before_state or before_state in ("Connected", "Pending")
+    return True
+
+
+def _record_sequence_failure(task: Task, reason: str) -> None:
+    if not (task.payload or {}).get("step_id"):
+        return
+    from openoutreach.mongodb.connection import get_mongodb_collection
+    events = get_mongodb_collection("sequence_events")
+    if events is None:
+        return
+    try:
+        events.insert_one({
+            "campaign_id": str(task.payload.get("campaign_id", "")),
+            "deal_id": str(task.payload.get("deal_id", "")),
+            "step_id": str(task.payload.get("step_id", "")),
+            "event": "failed", "reason": reason,
+            "created_at": datetime.now(tz.utc),
+        })
+    except Exception:
+        logger.debug("sequence failure event write failed", exc_info=True)
+
+
 # ── WhatsApp session pool (cloud daemon) ──────────────────────────────
 
 _WA_PW_QUEUE: queue.Queue = queue.Queue()
@@ -654,6 +701,14 @@ def run_daemon():
             if not campaign or campaign.status != Campaign.Status.ACTIVE:
                 task.mark_failed()
                 continue
+            if (task.payload or {}).get("step_id") and not campaign.sequence_active:
+                task.status = Task.STATUS_CANCELLED
+                task.save()
+                continue
+            if campaign.sequence_active and not (task.payload or {}).get("step_id") and task.task_type in (Task.TaskType.CONNECT, Task.TaskType.FOLLOW_UP, Task.TaskType.EMAIL_FOLLOW_UP, Task.TaskType.WHATSAPP_MESSAGE):
+                task.status = Task.STATUS_CANCELLED
+                task.save()
+                continue
 
             # Authenticate lazily on first task
             if not ps.authenticate():
@@ -665,6 +720,11 @@ def run_daemon():
 
             session = ps.ensure_session()
             session.campaign = campaign
+            sequence_before = None
+            if (task.payload or {}).get("step_id"):
+                from openoutreach.mongodb.connection import get_mongodb_collection
+                deals_col = get_mongodb_collection("deals")
+                sequence_before = deals_col.find_one({"_id": str(task.payload.get("deal_id"))}) if deals_col is not None else None
             task.mark_running()
 
             handler = _HANDLERS.get(task.task_type)
@@ -715,6 +775,11 @@ def run_daemon():
                 )
                 continue
 
+            if not _sequence_task_succeeded(task, sequence_before):
+                task.mark_failed()
+                _record_sequence_failure(task, "no_deal_side_effect")
+                logger.warning("Sequence task %s produced no deal-side effect; retaining step for retry", task.pk)
+                continue
             task.mark_completed()
             logger.info(
                 colored("[%s] COMPLETED", "green", attrs=["bold"])
@@ -766,10 +831,28 @@ def run_daemon():
                 if not campaign or campaign.status != Campaign.Status.ACTIVE:
                     wa_task.mark_failed()
                     continue
+                if (wa_task.payload or {}).get("step_id") and not campaign.sequence_active:
+                    wa_task.status = Task.STATUS_CANCELLED
+                    wa_task.save()
+                    continue
+                if campaign.sequence_active and not (wa_task.payload or {}).get("step_id") and wa_task.task_type in (Task.TaskType.WHATSAPP_MESSAGE, Task.TaskType.WHATSAPP_FOLLOW_UP):
+                    wa_task.status = Task.STATUS_CANCELLED
+                    wa_task.save()
+                    continue
 
                 wa_task.mark_running()
+                sequence_before = None
+                if (wa_task.payload or {}).get("step_id"):
+                    from openoutreach.mongodb.connection import get_mongodb_collection
+                    deals_col = get_mongodb_collection("deals")
+                    sequence_before = deals_col.find_one({"_id": str(wa_task.payload.get("deal_id"))}) if deals_col is not None else None
                 try:
                     _execute_wa_task(wa_task, wa_session)
+                    if not _sequence_task_succeeded(wa_task, sequence_before):
+                        wa_task.mark_failed()
+                        _record_sequence_failure(wa_task, "no_deal_side_effect")
+                        logger.warning("Sequence WhatsApp task %s produced no send; retaining step for retry", wa_task.pk)
+                        continue
                     wa_task.mark_completed()
                     logger.info(
                         colored("[%s] WA COMPLETED", "green", attrs=["bold"])
@@ -811,11 +894,29 @@ def run_daemon():
                 if not campaign or campaign.status != Campaign.Status.ACTIVE:
                     email_task.mark_failed()
                     continue
+                if (email_task.payload or {}).get("step_id") and not campaign.sequence_active:
+                    email_task.status = Task.STATUS_CANCELLED
+                    email_task.save()
+                    continue
+                if campaign.sequence_active and not (email_task.payload or {}).get("step_id"):
+                    email_task.status = Task.STATUS_CANCELLED
+                    email_task.save()
+                    continue
 
                 email_task.mark_running()
+                sequence_before = None
+                if (email_task.payload or {}).get("step_id"):
+                    from openoutreach.mongodb.connection import get_mongodb_collection
+                    deals_col = get_mongodb_collection("deals")
+                    sequence_before = deals_col.find_one({"_id": str(email_task.payload.get("deal_id"))}) if deals_col is not None else None
                 try:
                     from openoutreach.emails.tasks.handle_email_follow_up import handle_email_follow_up
                     handle_email_follow_up(email_task, user_id=ps.user_id, campaign=campaign)
+                    if not _sequence_task_succeeded(email_task, sequence_before):
+                        email_task.mark_failed()
+                        _record_sequence_failure(email_task, "no_deal_side_effect")
+                        logger.warning("Sequence email task %s produced no send; retaining step for retry", email_task.pk)
+                        continue
                     email_task.mark_completed()
                     logger.info(
                         colored("[email_follow_up] COMPLETED", "green", attrs=["bold"])

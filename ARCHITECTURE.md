@@ -326,4 +326,8 @@ When `ENABLE_VNC=true`: x11vnc on port 5900, noVNC websockify on port 6080. Fron
 - `AnalyticsOverviewView` - live overview totals + per-campaign metrics for selected `campaign_id` + `period` window.
 - `CampaignAnalyticsView` - per-campaign page: live `connectionsSent`, `connectionsAccepted`, `messagesSent`, `messagesReplied`; zero-safe rates; real 7/30-day aggregates; reply timestamps from `ChatMessage.creation_date`.
 
+## Visual Campaign Sequences
+
+Campaigns may store a visual directed graph in `sequence_steps` and `sequence_edges`. The API validates node types, channel compatibility, roots, reachability, cycles, branch labels, wait durations, and runtime prerequisites before activation. The reconciler advances each deal with a short lease and creates deterministic, deal-targeted tasks; inbound replies, missing prerequisites, exhausted retries, and end nodes are recorded as terminal sequence outcomes. Sequence-owned work is idempotent and suppresses legacy planner tasks. The same execution contract is enforced by the local desktop daemon and the remote/cloud daemon, including side-effect verification for email, LinkedIn, and WhatsApp tasks. Sequence metrics and a dry-run preview are available from the campaign API for operational checks before launch.
+
 No hard-coded placeholder percentages anywhere.
