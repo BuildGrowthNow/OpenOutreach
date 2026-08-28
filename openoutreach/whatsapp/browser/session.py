@@ -88,6 +88,23 @@ class WASession:
             logger.warning("check_inbox failed: %s", e)
             return []
 
+    def sync(self, cursor: str = "", limit: int = 100) -> list[dict[str, str]]:
+        """Return a bounded inbox snapshot for the API receipt path.
+
+        WhatsApp Web does not expose a stable public message API. The local
+        browser adapter therefore uses the currently rendered inbox metadata
+        as the safe sync surface; full durable reconciliation remains server
+        owned and is keyed by the returned bounded observation batch.
+        """
+        del cursor
+        bounded = max(1, min(int(limit), 100))
+        rows = self.check_inbox()[:bounded]
+        return [
+            {str(key): str(value or "")[:2000] for key, value in row.items()
+             if str(key) in {"name", "last_message", "timestamp"}}
+            for row in rows if isinstance(row, dict)
+        ]
+
     def is_alive(self) -> bool:
         """Return True if the WA Web session is still authenticated.
 

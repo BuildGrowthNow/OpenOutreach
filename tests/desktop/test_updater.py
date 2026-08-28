@@ -43,13 +43,13 @@ async def test_check_for_updates_newer_version():
     mock_response = AsyncMock()
     mock_response.status_code = 200
     mock_response.json = lambda: {
-        "tag_name": "desktop-v2.0.0",
-        "html_url": "https://github.com/test/releases/tag/v2.0.0",
+        "tag_name": "desktop-v2.1.0",
+        "html_url": "https://github.com/test/releases/tag/v2.1.0",
         "body": "Release notes",
         "assets": [
             {
-                "name": "OpenOutreach-2.0.0.dmg",
-                "browser_download_url": "https://github.com/test/releases/download/v2.0.0/OpenOutreach-2.0.0.dmg",
+        "name": "OpenOutreach-2.1.0.dmg",
+        "browser_download_url": "https://github.com/test/releases/download/v2.1.0/OpenOutreach-2.1.0.dmg",
             }
         ],
     }
@@ -63,9 +63,9 @@ async def test_check_for_updates_newer_version():
             result = await check_for_updates()
 
             assert result is not None
-            assert result["version"] == "2.0.0"
+            assert result["version"] == "2.1.0"
             assert "download_url" in result
-            assert result["tag_name"] == "desktop-v2.0.0"
+            assert result["tag_name"] == "desktop-v2.1.0"
 
 
 @pytest.mark.asyncio
@@ -110,8 +110,8 @@ async def test_check_for_updates_fallback_to_release_page():
     mock_response = AsyncMock()
     mock_response.status_code = 200
     mock_response.json = lambda: {
-        "tag_name": "desktop-v2.0.0",
-        "html_url": "https://github.com/test/releases/tag/v2.0.0",
+        "tag_name": "desktop-v2.1.0",
+        "html_url": "https://github.com/test/releases/tag/v2.1.0",
         "body": "Release notes",
         "assets": [
             {
@@ -131,4 +131,4 @@ async def test_check_for_updates_fallback_to_release_page():
 
             assert result is not None
             # Should fallback to release page URL
-            assert result["download_url"] == "https://github.com/test/releases/tag/v2.0.0"
+            assert result["download_url"] == "https://github.com/test/releases/tag/v2.1.0"

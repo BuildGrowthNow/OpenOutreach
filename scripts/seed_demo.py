@@ -43,7 +43,7 @@ if not os.environ.get("MONGODB_URI") and os.environ.get("MONGODB_ATLAS_URI"):
 
 sys.path.insert(0, str(_project_root))
 
-from openoutreach.mongodb.connection import get_mongodb_collection
+from openoutreach.mongodb.connection import get_mongodb_collection  # noqa: E402
 
 UTC = timezone.utc
 NOW = datetime.now(UTC)
@@ -662,7 +662,7 @@ def main() -> None:
     ].index(x[0]) if x[0] in ["Discovered", "Qualified", "Ready to Connect", "Pending", "Connected", "Completed", "Failed"] else 99):
         print(f"  {state}: {count}")
 
-    print(f"\nDone. Visit /campaigns to see the demo campaign.")
+    print("\nDone. Visit /campaigns to see the demo campaign.")
     print(f"Campaign ID: {campaign_id}")
 
 

@@ -19,8 +19,8 @@ from openoutreach.api_v2.tenant_security import TenantContext, owned_predicate
 def test_secure_version_policy_is_fail_closed_for_legacy_clients():
     assert not is_secure_version(None)
     assert not is_secure_version("1.9.8")
-    assert is_secure_version("2.0.0")
     assert is_secure_version("2.1.0")
+    assert not is_secure_version("2.0.0")
     assert not is_secure_version("2.0.0-beta")
 
 

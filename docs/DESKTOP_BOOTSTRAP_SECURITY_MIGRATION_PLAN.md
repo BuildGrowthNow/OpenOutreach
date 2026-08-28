@@ -279,7 +279,7 @@ LLM message generation, qualification, summaries, email enrichment, campaign rec
   `server_env`, provider key, database, or encryption field.
 - [x] Resource authentication rejects every JWT whose `type` is not `access`.
 - [x] Legacy daemon routes fail closed with `426` unless `X-Daemon-Version`
-  meets the secure floor (`2.0.0`); the client reports its version.
+  meets the secure floor (`2.1.0`); the client reports its version.
 - [x] Desktop startup no longer calls bootstrap, injects server environment,
   or initializes MongoDB from server-provided material.
 - [x] Recursive forbidden-field/secret-like response checks and focused
@@ -753,6 +753,26 @@ Adopt the fully API-based daemon with a dedicated daemon gateway boundary, asymm
   Ed25519 signing/keychain tests cover local identity behavior.
 - [ ] Full LinkedIn/WhatsApp/email browser adapters and server-owned channel
   observation/action contracts remain incomplete.
+- [x] Local adapter slice: LinkedIn follow-up receipts, WhatsApp send/sync
+  adapter, and task-bound email adapter are implemented with injectable local
+  provider/session boundaries. Contract tests cover successful execution,
+  bounded sync, and rejection without a mailbox grant.
+- [x] Claim-time materialization now scopes deal/lead/message resolution by
+  task tenant and bound profile, derives deterministic effect keys, and
+  releases unmaterializable lazy slots without handing them to a desktop.
+- [x] Legacy cookie and credential daemon endpoints are permanently retired
+  with `410` and `no-store`; v2 completion results reject secret-like fields.
+- [x] Desktop secure floor and release version are now `2.1.0`; PyInstaller
+  metadata, API version, updater fixtures, and CI release naming are aligned.
+- [x] Resumable migration wrappers require `--confirm` for writes and preserve
+  per-collection checkpoints. Read-only index verification, SBOM generation,
+  dependency scanning, artifact hash generation, and forbidden-marker
+  inspection are available in `scripts/` and CI.
+- [x] Secure daemon coordination supports injected executors for each enabled
+  channel while retaining the global claim kill switch.
+- [ ] Full production browser/provider integration, server-side persistence of
+  channel receipts, and end-to-end task execution still require disposable
+  provider accounts and authorized deployment validation.
 - [ ] Production key retirement, Atlas credential/network changes, customer
   reauthentication, forced upgrade, index rollout, and external artifact/SBOM
   verification require authorized deployment access and approval.

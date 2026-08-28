@@ -146,6 +146,15 @@ jobs:
           name: Lengrowth-Windows-Installer-${{ steps.version.outputs.version }}
           path: ./release/windows
 
+      - name: Inspect artifacts and generate release evidence
+        run: |
+          python scripts/inspect_release_artifact.py ./release/macos/Lengrowth-macOS.dmg
+          python scripts/inspect_release_artifact.py ./release/windows/Lengrowth.exe
+          if [ -f ./release/windows/Lengrowth-Windows-Setup.exe ]; then python scripts/inspect_release_artifact.py ./release/windows/Lengrowth-Windows-Setup.exe; fi
+          sha256sum ./release/macos/Lengrowth-macOS.dmg ./release/windows/Lengrowth.exe > ./release/SHA256SUMS.txt
+          if [ -f ./release/windows/Lengrowth-Windows-Setup.exe ]; then sha256sum ./release/windows/Lengrowth-Windows-Setup.exe >> ./release/SHA256SUMS.txt; fi
+          python scripts/generate_sbom.py --output ./release/SBOM.cyclonedx.json
+
       - name: Create release on Lengrowth/outbound
         uses: softprops/action-gh-release@v2
         with:
@@ -182,6 +191,8 @@ jobs:
             ./release/macos/Lengrowth-macOS.dmg
             ./release/windows/Lengrowth.exe
             ./release/windows/Lengrowth-Windows-Setup.exe
+            ./release/SHA256SUMS.txt
+            ./release/SBOM.cyclonedx.json
           token: ${{ secrets.OUTBOUND_RELEASE_TOKEN }}
           draft: false
           prerelease: false

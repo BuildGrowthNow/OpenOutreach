@@ -28,7 +28,7 @@ if not os.environ.get("MONGODB_URI") and os.environ.get("MONGODB_ATLAS_URI"):
 
 sys.path.insert(0, str(_project_root))
 
-from openoutreach.mongodb.connection import get_mongodb_collection
+from openoutreach.mongodb.connection import get_mongodb_collection  # noqa: E402
 
 TARGET_EMAIL = "fern2gue@gmail.com"
 DEMO_CAMPAIGN_NAME = "B2B SaaS Outreach - Demo"
@@ -97,7 +97,7 @@ def main() -> None:
 
     # Delete campaign
     campaigns_col.delete_one({"_id": campaign_id})
-    print(f"  Deleted campaign")
+    print("  Deleted campaign")
 
     print("\nDone. Demo data removed.")
 

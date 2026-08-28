@@ -8,6 +8,7 @@ their contracts land.
 from __future__ import annotations
 
 import asyncio
+import inspect
 import logging
 from collections import deque
 from typing import Awaitable, Callable, Optional
@@ -38,14 +39,16 @@ class SecureRemoteDaemon:
         on_token_refresh: Optional[Callable[[str], None]] = None,
         on_started: Optional[Callable[[], None]] = None,
         identity: Optional[DeviceIdentity] = None,
-        execute_task: Optional[Callable[[dict], Awaitable[dict]]] = None,
+        execute_task: Optional[Callable[[dict], Awaitable[dict] | dict]] = None,
         on_credentials_rotated: Optional[Callable[[str, str], None]] = None,
+        channel_executors: Optional[dict[str, Callable[[dict], Awaitable[dict] | dict]]] = None,
     ) -> None:
         self.identity = identity or DeviceIdentity.load_or_create()
         self.client = RemoteClient(api_url, token, self.identity.device_id or "secure-v2", refresh_token, on_token_refresh, secure_v2=True, device_signer=self.identity.sign)
         self.linkedin_profile_id = linkedin_profile_id
         self.on_started = on_started
         self.execute_task = execute_task
+        self.channel_executors = channel_executors or ({"linkedin": execute_task} if execute_task else {})
         self.on_credentials_rotated = on_credentials_rotated
         self.running = False
         self._stop = asyncio.Event()
@@ -65,13 +68,17 @@ class SecureRemoteDaemon:
             self.on_started()
         # The browser executor is deliberately injected. This coordinator never
         # imports domain models or persists channel state locally.
-        if self.execute_task:
+        if self.channel_executors:
             while not self._stop.is_set():
                 await self._flush_offline_completions()
-                task = await self.client.claim_task_v2(self.linkedin_profile_id, "linkedin")
-                if task:
-                    await self._execute(task)
-                else:
+                claimed = False
+                for channel, executor in self.channel_executors.items():
+                    task = await self.client.claim_task_v2(self.linkedin_profile_id, channel)
+                    if task:
+                        claimed = True
+                        await self._execute(task, executor)
+                        break
+                if not claimed:
                     try:
                         await asyncio.wait_for(self._stop.wait(), timeout=5)
                     except asyncio.TimeoutError:
@@ -85,9 +92,13 @@ class SecureRemoteDaemon:
             await asyncio.get_running_loop().run_in_executor(None, close.close)
         await self.client.close()
 
-    async def _execute(self, task: dict) -> None:
+    async def _execute(self, task: dict, executor: Callable[[dict], Awaitable[dict] | dict]) -> None:
         try:
-            result = await self.execute_task(task)
+            result = executor(task)
+            if inspect.isawaitable(result):
+                result = await result
+            if not isinstance(result, dict):
+                raise SecureDaemonError("Channel adapter returned an invalid receipt")
             completion = (task["task_id"], task["lease_id"], task.get("idempotency_key", task["lease_id"]), result)
             try:
                 await self.client.complete_task_v2(*completion)

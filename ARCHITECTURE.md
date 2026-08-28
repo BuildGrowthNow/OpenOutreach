@@ -351,3 +351,21 @@ When `ENABLE_VNC=true`: x11vnc on port 5900, noVNC websockify on port 6080. Fron
 Campaigns may store a visual directed graph in `sequence_steps` and `sequence_edges`. The API validates node types, channel compatibility, roots, reachability, cycles, branch labels, wait durations, and runtime prerequisites before activation. The reconciler advances each deal with a short lease and creates deterministic, deal-targeted tasks; inbound replies, missing prerequisites, exhausted retries, and end nodes are recorded as terminal sequence outcomes. Sequence-owned work is idempotent and suppresses legacy planner tasks. The same execution contract is enforced by the local desktop daemon and the remote/cloud daemon, including side-effect verification for email, LinkedIn, and WhatsApp tasks. Sequence metrics and a dry-run preview are available from the campaign API for operational checks before launch.
 
 No hard-coded placeholder percentages anywhere.
+
+## Secure desktop execution (v2.1)
+
+The distributed desktop is an untrusted API client. It enrolls a device with
+a human-approved one-time code, uses a server-signed short-lived daemon token
+and proof-of-possession requests, and receives only bounded typed task
+snapshots. Browser and provider sessions remain local to the device. Legacy
+credential, cookie, bootstrap, and direct-database paths are retired; task
+claiming remains disabled until the corresponding channel has passed real
+provider integration validation. Receipts are idempotent and server-side task
+ownership is always derived from tenant/device/profile context.
+
+The historical execution-mode and configuration notes above describe the
+pre-migration implementation only. The current desktop entry point is
+`openoutreach/desktop/secure_daemon.py`; it does not call
+`core/daemon_remote.py`, receive `/api/daemon/config`, receive credentials or
+cookies, or connect to MongoDB. Retired legacy endpoint documentation must not
+be used for new integrations.

@@ -78,11 +78,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--collection", choices=COLLECTIONS, action="append")
     parser.add_argument("--checkpoint-file", type=Path, required=True)
     parser.add_argument("--apply", action="store_true", help="Persist assignments/quarantine; default is dry-run")
+    parser.add_argument("--confirm", action="store_true", help="Required with --apply")
     return parser
 
 
 def main() -> int:
     args = build_parser().parse_args()
+    if args.apply and not args.confirm:
+        raise SystemExit("--apply requires --confirm after scope and backup review")
     checkpoint_data = json.loads(args.checkpoint_file.read_text(encoding="utf-8")) if args.checkpoint_file.exists() else {}
     uri = os.environ.get("OPENOUTREACH_MONGODB_URI")
     db_name = os.environ.get("OPENOUTREACH_MONGODB_NAME")
@@ -97,7 +100,7 @@ def main() -> int:
         report = backfill_collection(db, name, checkpoint=checkpoint_data.get(name), apply=args.apply)
         reports.append(report)
         checkpoint_data[name] = report["checkpoint"]
-        args.checkpoint_file.write_text(json.dumps({"checkpoint": checkpoint_data.get(name), "collection": name}), encoding="utf-8")
+        args.checkpoint_file.write_text(json.dumps(checkpoint_data, sort_keys=True), encoding="utf-8")
     print(json.dumps({"dry_run": not args.apply, "reports": reports}))
     client.close()
     return 0

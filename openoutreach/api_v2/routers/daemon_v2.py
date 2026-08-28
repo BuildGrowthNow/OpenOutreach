@@ -36,8 +36,9 @@ from openoutreach.linkedin.models import LinkedInProfile
 from openoutreach.mongodb.connection import get_mongodb_collection
 from openoutreach.api_v2.security_events import append_security_event
 from openoutreach.api_v2.daemon_channel_contracts import (
-    EmailReceipt, LinkedInActionReceipt, LinkedInObservation, SessionState,
-    WhatsAppState, WhatsAppSyncBatch,
+    EmailReceipt, EmailTaskSnapshot, LinkedInActionReceipt, LinkedInObservation,
+    LinkedInTaskSnapshot, MailboxGrant, SessionState, WhatsAppState,
+    WhatsAppSyncBatch, WhatsAppTaskSnapshot,
 )
 
 router = APIRouter(prefix="/daemon/v2", tags=["daemon-v2"])
@@ -56,10 +57,44 @@ class ConfigurationResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     profile_id: str
-    active_hours: dict[str, object]
-    rate_limits: dict[str, int]
-    channel_policy: dict[str, bool]
+    active_hours: "ActiveHours"
+    rate_limits: "RateLimits"
+    channel_policy: "ChannelPolicy"
     task_capabilities: list[str]
+
+
+class ActiveHours(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool
+    start_hour: int = Field(ge=0, le=23)
+    end_hour: int = Field(ge=0, le=23)
+    timezone: str = Field(min_length=1, max_length=64)
+    days: list[int] = Field(min_length=1, max_length=7)
+
+    @field_validator("days")
+    @classmethod
+    def valid_days(cls, value: list[int]) -> list[int]:
+        if any(day < 0 or day > 6 for day in value) or len(set(value)) != len(value):
+            raise ValueError("days must contain unique values from 0 through 6")
+        return value
+
+
+class RateLimits(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    velocity: int = Field(ge=0, le=10_000)
+    daily_connect_limit: int = Field(ge=0, le=100_000)
+    daily_message_limit: int = Field(ge=0, le=100_000)
+    cooldown_minutes: int = Field(ge=0, le=1_440)
+
+
+class ChannelPolicy(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    linkedin: bool
+    whatsapp: bool
+    email: bool
 
 
 class ClaimRequest(BaseModel):
@@ -78,6 +113,7 @@ class LeaseResponse(BaseModel):
     task_type: str
     channel: str
     attempt: int
+    idempotency_key: str
     lease_expires_at: datetime
     snapshot: dict[str, Any]
 
@@ -95,14 +131,27 @@ class CompleteRequest(LeaseMutation):
     @field_validator("result")
     @classmethod
     def result_must_be_bounded(cls, value: dict[str, Any]) -> dict[str, Any]:
-        if len(json.dumps(value, separators=(",", ":"), default=str).encode("utf-8")) > 64 * 1024:
+        encoded = json.dumps(value, separators=(",", ":"), default=str).encode("utf-8")
+        if len(encoded) > 64 * 1024:
             raise ValueError("result exceeds 64 KiB")
+        forbidden = {"password", "cookie", "cookies", "token", "secret", "mongodb_uri", "provider_key", "qr"}
+        def walk(item: Any) -> None:
+            if isinstance(item, dict):
+                for key, child in item.items():
+                    if any(word in str(key).lower() for word in forbidden):
+                        raise ValueError("result contains a forbidden field")
+                    walk(child)
+            elif isinstance(item, list):
+                for child in item:
+                    walk(child)
+        walk(value)
         return value
 
 
 class FailRequest(LeaseMutation):
     category: Literal["retryable", "permanent", "auth", "rate_limited"]
     error: str = Field(default="", max_length=500)
+    idempotency_key: str = Field(default="", max_length=128)
 
 
 class EnrollmentCodeRequest(BaseModel):
@@ -416,7 +465,10 @@ async def configuration(
     profile_id: str,
     context: TenantContext = Depends(get_daemon_context),
 ) -> Response | ConfigurationResponse:
-    require_profile(context, profile_id, "linkedin")
+    requested_channel = request.query_params.get("channel", "linkedin")
+    if requested_channel not in {"linkedin", "whatsapp", "email"}:
+        raise HTTPException(422, "Unsupported channel")
+    require_profile(context, profile_id, requested_channel)
     configs = get_mongodb_collection("site_config")
     if configs is None:
         raise HTTPException(503, "Database unavailable")
@@ -431,17 +483,27 @@ async def configuration(
     ) or {}
     response = ConfigurationResponse(
         profile_id=profile_id,
-        active_hours={"enabled": bool(config.get("enable_active_hours", False)),
-                      "start_hour": int(config.get("active_start_hour", 9)),
-                      "end_hour": int(config.get("active_end_hour", 18)),
-                      "timezone": str(config.get("active_timezone", "UTC")),
-                      "days": list(config.get("active_days", [1, 2, 3, 4, 5]))},
-        rate_limits={"velocity": int(config.get("velocity", 20)),
-                     "daily_connect_limit": int(config.get("daily_connection_limit", 20)),
-                     "daily_message_limit": int(config.get("daily_follow_up_limit", 40)),
-                     "cooldown_minutes": int(config.get("cooldown_minutes", 0))},
-        channel_policy={channel: channel in context.scopes for channel in ("linkedin", "whatsapp", "email")},
-        task_capabilities=["connect", "check_pending", "follow_up"] if "linkedin" in context.scopes else [],
+        active_hours=ActiveHours(
+            enabled=bool(config.get("enable_active_hours", False)),
+            start_hour=int(config.get("active_start_hour", 9)),
+            end_hour=int(config.get("active_end_hour", 18)),
+            timezone=str(config.get("active_timezone", "UTC")),
+            days=list(config.get("active_days", [1, 2, 3, 4, 5])),
+        ),
+        rate_limits=RateLimits(
+            velocity=int(config.get("velocity", 20)),
+            daily_connect_limit=int(config.get("daily_connection_limit", 20)),
+            daily_message_limit=int(config.get("daily_follow_up_limit", 40)),
+            cooldown_minutes=int(config.get("cooldown_minutes", 0)),
+        ),
+        channel_policy=ChannelPolicy(**{
+            channel: channel in context.scopes for channel in ("linkedin", "whatsapp", "email")
+        }),
+        task_capabilities=(
+            (["connect", "check_pending", "follow_up"] if "linkedin" in context.scopes else [])
+            + (["whatsapp_follow_up", "whatsapp_message", "whatsapp_sync"] if "whatsapp" in context.scopes else [])
+            + (["email_follow_up", "email_send", "email_reply_scan"] if "email" in context.scopes else [])
+        ),
     )
     body = response.model_dump_json()
     etag = '"' + hashlib.sha256(body.encode("utf-8")).hexdigest() + '"'
@@ -565,6 +627,11 @@ def _snapshot(document: dict[str, Any]) -> dict[str, Any]:
         "target_public_identifier",
         "target_urn",
         "target_url",
+        "target_phone",
+        "recipient",
+        "subject",
+        "body",
+        "mailbox_grant",
         "action",
     }
     snapshot = {key: payload[key] for key in allowed if key in payload}
@@ -572,23 +639,143 @@ def _snapshot(document: dict[str, Any]) -> dict[str, Any]:
     # the minimum browser inputs server-side; never send credentials, cookies,
     # campaign internals, or arbitrary model fields to the desktop.
     deal_id = snapshot.get("deal_id")
+    owner_id = str(document.get("user_id", ""))
+    profile_id = str(document.get("linkedin_profile_id", ""))
+    channel = str(document.get("channel", "linkedin"))
+    # Client-controlled task payloads are not authorization. Target identity
+    # is always re-derived from the owned deal/lead below.
+    for key in ("target_public_identifier", "target_urn", "target_phone", "recipient"):
+        snapshot.pop(key, None)
+    snapshot["profile_id"] = profile_id
+    if owner_id and snapshot.get("campaign_id"):
+        campaigns = get_mongodb_collection("campaigns")
+        campaign = campaigns.find_one(
+            {"_id": snapshot["campaign_id"], "user_id": owner_id},
+            {"linkedin_profile_id": 1, "whatsapp_profile_id": 1},
+        ) if campaigns is not None else None
+        bound_campaign_profile = (campaign or {}).get(
+            "whatsapp_profile_id" if channel == "whatsapp" else "linkedin_profile_id"
+        )
+        if not campaign or str(bound_campaign_profile or "") != profile_id:
+            # Leave the task unmaterializable; claim-time logic releases it.
+            snapshot.pop("campaign_id", None)
+            snapshot.pop("deal_id", None)
+    if not deal_id:
+        # Legacy scheduler slots carry only campaign_id. Resolve one eligible
+        # deal while the task is leased, always under the task owner/profile.
+        deals = get_mongodb_collection("deals")
+        if deals is not None and owner_id and snapshot.get("campaign_id"):
+            state_by_type = {
+                "connect": "READY_TO_CONNECT", "check_pending": "PENDING",
+                "follow_up": "CONNECTED", "whatsapp_follow_up": "CONNECTED",
+                "email_follow_up": "CONNECTED",
+            }
+            candidate = deals.find_one(
+                {"user_id": owner_id, "campaign_id": snapshot["campaign_id"],
+                 "active_channel": channel,
+                 "state": state_by_type.get(str(document.get("task_type", "")), {"$exists": True})},
+                {"_id": 1, "lead_id": 1},
+            )
+            if candidate:
+                deal_id = str(candidate["_id"])
+                snapshot["deal_id"] = deal_id
     if deal_id and not snapshot.get("target_public_identifier"):
         deals = get_mongodb_collection("deals")
         leads = get_mongodb_collection("leads")
-        deal = deals.find_one({"_id": deal_id}, {"lead_id": 1}) if deals is not None else None
-        lead = leads.find_one({"_id": deal.get("lead_id")}, {"public_identifier": 1, "urn": 1}) if deal and leads is not None else None
+        deal = deals.find_one({"_id": deal_id, "user_id": owner_id,
+                               "campaign_id": snapshot.get("campaign_id"),
+                               "active_channel": channel},
+                              {"lead_id": 1, "user_id": 1}) if deals is not None and owner_id else None
+        lead = leads.find_one({"_id": deal.get("lead_id"), "user_id": owner_id},
+                              {"public_identifier": 1, "urn": 1, "phone": 1,
+                               "api_email": 1, "contact_info.email": 1}) if deal and leads is not None else None
         if lead:
             if lead.get("public_identifier"):
                 snapshot["target_public_identifier"] = str(lead["public_identifier"])
             if lead.get("urn"):
                 snapshot["target_urn"] = str(lead["urn"])
+            contact = lead.get("contact_info") or {}
+            if lead.get("phone"):
+                snapshot["target_phone"] = str(lead["phone"])
+            elif contact.get("phone"):
+                snapshot["target_phone"] = str(contact["phone"])
+            if lead.get("api_email"):
+                snapshot["recipient"] = str(lead["api_email"])
+            elif contact.get("email"):
+                snapshot["recipient"] = str(contact["email"])
     message_id = payload.get("message_id")
     if message_id and not snapshot.get("message"):
         messages = get_mongodb_collection("messages")
-        message = messages.find_one({"_id": message_id}, {"content": 1}) if messages is not None else None
+        message = messages.find_one({"_id": message_id, "user_id": owner_id}, {"content": 1}) if messages is not None and owner_id else None
         if message and message.get("content"):
             snapshot["message"] = str(message["content"])
+    if channel == "email" and isinstance(snapshot.get("mailbox_grant"), dict):
+        try:
+            grant = MailboxGrant.model_validate(snapshot["mailbox_grant"])
+            if str(grant.task_id) != str(document.get("_id")):
+                snapshot.pop("mailbox_grant", None)
+            else:
+                snapshot["mailbox_grant"] = grant.model_dump(mode="json")
+        except Exception:
+            snapshot.pop("mailbox_grant", None)
+    # Effect identity is server-owned and stable across lease retries.  It is
+    # intentionally based only on bounded task identity, not message bodies.
+    effect_material = ":".join(str(snapshot.get(key, "")) for key in
+                                ("deal_id", "step_id", "campaign_id", "action"))
+    snapshot["effect_key"] = hashlib.sha256(
+        f"{owner_id}:{profile_id}:{channel}:{document.get('task_type', '')}:"
+        f"{document.get('_id', '')}:{effect_material}".encode()
+    ).hexdigest()
     return snapshot
+
+
+def _typed_snapshot(document: dict[str, Any]) -> dict[str, Any] | None:
+    """Materialize and validate the exact channel contract returned to a daemon."""
+    channel = str(document.get("channel", ""))
+    task_type = str(document.get("task_type", ""))
+    raw = _snapshot(document)
+    try:
+        if channel == "linkedin":
+            snapshot = LinkedInTaskSnapshot.model_validate({
+                key: raw[key] for key in
+                ("profile_id", "target_public_identifier", "target_urn", "message", "effect_key")
+                if key in raw
+            })
+        elif channel == "whatsapp":
+            snapshot = WhatsAppTaskSnapshot.model_validate({
+                key: raw[key] for key in
+                ("profile_id", "target_phone", "message", "cursor", "effect_key")
+                if key in raw
+            })
+        elif channel == "email":
+            snapshot = EmailTaskSnapshot.model_validate({
+                key: raw[key] for key in
+                ("profile_id", "recipient", "subject", "body", "mailbox_grant", "cursor", "effect_key")
+                if key in raw
+            })
+        else:
+            return None
+    except Exception:
+        return None
+    if task_type not in {
+        "connect", "check_pending", "follow_up", "send_manual_message",
+        "whatsapp_follow_up", "whatsapp_message", "whatsapp_sync",
+        "email_follow_up", "email_send", "email_reply_scan",
+    }:
+        return None
+    return snapshot.model_dump(mode="json")
+
+
+def _snapshot_is_executable(snapshot: dict[str, Any], task_type: str, channel: str) -> bool:
+    if channel == "linkedin":
+        if task_type in {"connect", "check_pending"}:
+            return bool(snapshot.get("target_public_identifier"))
+        return bool(snapshot.get("target_public_identifier") and snapshot.get("message"))
+    if channel == "whatsapp":
+        return task_type == "whatsapp_sync" or bool(snapshot.get("target_phone") and snapshot.get("message"))
+    if channel == "email":
+        return task_type == "email_reply_scan" or bool(snapshot.get("recipient") and snapshot.get("subject") and snapshot.get("body") and snapshot.get("mailbox_grant"))
+    return False
 
 
 def _lease_query(context: TenantContext, task_id: str, lease_id: str) -> dict[str, Any]:
@@ -643,14 +830,37 @@ async def claim_task_v2(
     )
     if not document:
         return None
+    snapshot = _typed_snapshot(document)
+    if snapshot is None:
+        collection.update_one(
+            {"_id": document["_id"], "user_id": context.tenant_id,
+             "leased_by_device_id": context.device_id, "lease_id": lease_id,
+             "status": "running"},
+            {"$set": {"status": "pending", "lease_id": None,
+                       "lease_expires_at": None}, "$unset": {"leased_by_device_id": ""}},
+        )
+        return None
+    if not _snapshot_is_executable(snapshot, str(document.get("task_type", "")), request.channel):
+        # Never hand a lazy/unmaterializable slot to an untrusted desktop.
+        collection.update_one({"_id": document["_id"], "lease_id": lease_id,
+                                "leased_by_device_id": context.device_id, "status": "running"},
+                               {"$set": {"status": "pending", "started_at": None,
+                                         "lease_id": None, "leased_by_device_id": None},
+                                "$unset": {"lease_expires_at": ""}})
+        append_security_event("daemon_task_not_materialized", outcome="denied", actor_type="daemon", tenant_id=context.tenant_id, device_id=context.device_id)
+        return None
+    collection.update_one({"_id": document["_id"], "lease_id": lease_id,
+                           "leased_by_device_id": context.device_id},
+                          {"$set": {"idempotency_key": str(snapshot.get("effect_key") or lease_id)}})
     return LeaseResponse(
         task_id=str(document["_id"]),
         lease_id=lease_id,
         task_type=str(document.get("task_type", "")),
         channel=request.channel,
         attempt=int(document.get("attempt", 1)),
+        idempotency_key=str(snapshot.get("effect_key") or document.get("idempotency_key") or lease_id),
         lease_expires_at=document["lease_expires_at"],
-        snapshot=_snapshot(document),
+        snapshot=snapshot,
     )
 
 
@@ -671,15 +881,20 @@ async def renew_task_v2(
     )
     if not document:
         raise HTTPException(status.HTTP_410_GONE, "Lease expired")
-    require_profile(context, str(document.get("linkedin_profile_id")), str(document.get("channel", "")))
+    channel = str(document.get("channel", ""))
+    require_profile(context, str(document.get("linkedin_profile_id")), channel)
+    snapshot = _typed_snapshot(document)
+    if snapshot is None:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Task snapshot is no longer executable")
     return LeaseResponse(
         task_id=str(document["_id"]),
         lease_id=request.lease_id,
         task_type=str(document.get("task_type", "")),
-        channel=str(document.get("channel", "")),
+        channel=channel,
         attempt=int(document.get("attempt", 1)),
+        idempotency_key=str(snapshot.get("effect_key") or document.get("idempotency_key") or request.lease_id),
         lease_expires_at=document["lease_expires_at"],
-        snapshot=_snapshot(document),
+        snapshot=snapshot,
     )
 
 
@@ -693,8 +908,38 @@ async def complete_task_v2(
     if collection is None:
         raise HTTPException(503, "Database unavailable")
     now = datetime.now(timezone.utc)
-    prior = collection.find_one({"_id": task_id, "user_id": context.tenant_id,
-                                 "leased_by_device_id": context.device_id})
+    prior = collection.find_one({"_id": task_id, "user_id": context.tenant_id})
+    if prior:
+        expected_key = str(prior.get("idempotency_key") or _snapshot(prior).get("effect_key") or "")
+        if expected_key and request.idempotency_key != expected_key:
+            raise HTTPException(422, "Idempotency key does not match task effect")
+        result_effect = request.result.get("effect_key")
+        if result_effect is not None and str(result_effect) != expected_key:
+            raise HTTPException(422, "Receipt effect does not match task effect")
+    effects = get_mongodb_collection("daemon_effects")
+    if effects is None:
+        raise HTTPException(503, "Effect reconciliation unavailable")
+    effect_document = {
+        "_id": str(uuid4()), "user_id": context.tenant_id,
+        "effect_key": request.idempotency_key, "task_id": task_id,
+        "result": request.result, "created_at": now,
+    }
+    try:
+        effects.insert_one(effect_document)
+    except DuplicateKeyError:
+        # Provider success may have been followed by a lost response. The
+        # unique tenant/effect key makes a retry converge without reapplying
+        # the provider action.
+        existing = effects.find_one({"user_id": context.tenant_id,
+                                     "effect_key": request.idempotency_key},
+                                    {"task_id": 1})
+        if existing and str(existing.get("task_id")) == task_id:
+            collection.update_one({"_id": task_id, "user_id": context.tenant_id,
+                                   "leased_by_device_id": context.device_id},
+                                  {"$set": {"status": "completed", "completed_at": now,
+                                            "result_idempotency_key": request.idempotency_key}})
+            return {"status": "completed", "reconciled": "true"}
+        raise HTTPException(status.HTTP_409_CONFLICT, "Effect already belongs to another task")
     if prior and prior.get("status") == "completed":
         if prior.get("result_idempotency_key") == request.idempotency_key:
             return {"status": "completed", "replayed": "true"}
@@ -719,9 +964,13 @@ async def fail_task_v2(
     if collection is None:
         raise HTTPException(503, "Database unavailable")
     now = datetime.now(timezone.utc)
+    prior = collection.find_one({"_id": task_id, "user_id": context.tenant_id,
+                                 "leased_by_device_id": context.device_id})
+    if prior and prior.get("status") == "failed" and request.idempotency_key and prior.get("failure_idempotency_key") == request.idempotency_key:
+        return {"status": "failed", "replayed": "true"}
     result = collection.update_one(
         {**_lease_query(context, task_id, request.lease_id), "lease_expires_at": {"$gt": now}},
-        {"$set": {"status": "failed", "completed_at": now, "failure_category": request.category, "error_message": request.error}},
+        {"$set": {"status": "failed", "completed_at": now, "failure_category": request.category, "error_message": request.error, "failure_idempotency_key": request.idempotency_key}},
     )
     if result.matched_count == 0:
         raise HTTPException(status.HTTP_410_GONE, "Lease expired or no longer owned")

@@ -164,7 +164,9 @@ def handle_email_follow_up(task, user_id: str, campaign) -> None:
             from openoutreach.emails.imap_checker import find_reply
             result = find_reply(
                 prev_mailbox,
-                [deal.email_message_id, deal.email_first_message_id],
+                [message_id for message_id in
+                 (deal.email_message_id, deal.email_first_message_id)
+                 if message_id is not None],
             )
             if result is not None:
                 reply_text, received_at = result

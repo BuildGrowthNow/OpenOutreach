@@ -6,7 +6,7 @@ import base64
 import json
 import secrets
 from dataclasses import dataclass
-from typing import Any, Iterable, Mapping
+from typing import Any, Mapping
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 

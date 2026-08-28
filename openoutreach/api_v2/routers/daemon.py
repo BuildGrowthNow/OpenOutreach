@@ -20,7 +20,7 @@ from openoutreach.api_v2.dependencies_v2 import get_current_user
 from openoutreach.core.models import Task, SiteConfig
 from openoutreach.linkedin.models import LinkedInProfile
 from openoutreach.mongodb.models_user import User
-from openoutreach.api_v2.daemon_security import audit_event, assert_safe_response, require_secure_daemon
+from openoutreach.api_v2.daemon_security import audit_event, assert_safe_response
 
 
 def _utc_iso(dt: Optional[datetime]) -> Optional[str]:
@@ -34,6 +34,15 @@ def _utc_iso(dt: Optional[datetime]) -> Optional[str]:
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/daemon", tags=["daemon"])
+
+
+def _retired_legacy_endpoint() -> None:
+    """Keep the pre-v2 surface inert; desktop work is v2-only."""
+    raise HTTPException(
+        status.HTTP_410_GONE,
+        "Legacy daemon endpoint is retired; use /api/daemon/v2",
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 class DaemonHeartbeat(BaseModel):
@@ -79,6 +88,7 @@ async def daemon_heartbeat(
     user_id: str = Depends(get_current_user),
 ):
     """Receive daemon health heartbeat. Called every 30s."""
+    _retired_legacy_endpoint()
     profile = LinkedInProfile.objects.get(
         _id=heartbeat.linkedin_profile_id,
         user_id=user_id,
@@ -116,6 +126,7 @@ async def claim_task(
     user_id: str = Depends(get_current_user),
 ):
     """Atomically claim the next available task for this profile."""
+    _retired_legacy_endpoint()
     from openoutreach.billing.enforcement import PlanEnforcer
 
     user = User.get(user_id)
@@ -181,6 +192,7 @@ async def report_task_result(
     user_id: str = Depends(get_current_user),
 ):
     """Report task completion or failure."""
+    _retired_legacy_endpoint()
     from openoutreach.mongodb.connection import get_mongodb_collection
     collection = get_mongodb_collection("tasks")
     if collection is None:
@@ -220,6 +232,9 @@ async def sync_cookies(
     request: CookieSyncRequest,
     user_id: str = Depends(get_current_user),
 ):
+    _retired_legacy_endpoint()
+    raise HTTPException(status.HTTP_410_GONE, "Legacy daemon session sync is retired",
+                        headers={"Cache-Control": "no-store"})
     """Sync browser cookies from desktop daemon to backend.
 
     Expects cookie_data as a JSON string (not encrypted). Server handles encryption.
@@ -266,6 +281,7 @@ async def report_session_state(
     user_id: str = Depends(get_current_user),
 ):
     """Report session state (login status, verification needed)."""
+    _retired_legacy_endpoint()
     profile = LinkedInProfile.objects.get(
         _id=request.linkedin_profile_id,
         user_id=user_id,
@@ -306,7 +322,7 @@ async def get_daemon_config(
 
     Load real user settings via SiteConfig.load() not global singleton.
     """
-    require_secure_daemon(request)
+    _retired_legacy_endpoint()
     profile = LinkedInProfile.objects.get(
         _id=linkedin_profile_id,
         user_id=user_id,
@@ -365,6 +381,7 @@ async def reconcile_tasks(
     is empty for a campaign. Called by the desktop daemon on startup and
     periodically to ensure tasks exist for claiming.
     """
+    _retired_legacy_endpoint()
     from openoutreach.mongodb.connection import get_mongodb_collection
     from openoutreach.core.scheduler import (
         _auto_qualify_wa_leads,
@@ -496,6 +513,9 @@ async def get_credentials(
     linkedin_profile_id: str,
     user_id: str = Depends(get_current_user),
 ):
+    _retired_legacy_endpoint()
+    raise HTTPException(status.HTTP_410_GONE, "Legacy daemon credentials are retired",
+                        headers={"Cache-Control": "no-store"})
     """Get LinkedIn credentials for daemon login.
 
     Reads email/password from LinkedInCredentials (the canonical store).
@@ -545,6 +565,7 @@ async def get_subscription_status(
     Returns subscription info to determine if daemon should run.
     Called on startup and periodically during operation.
     """
+    _retired_legacy_endpoint()
     user = User.get(user_id)
     if not user:
         raise HTTPException(404, "User not found")
@@ -586,6 +607,7 @@ async def get_profile_details(
 
     Daemon queries this when executing tasks to avoid local Mongo requirement.
     """
+    _retired_legacy_endpoint()
     profile = LinkedInProfile.objects.get(
         _id=linkedin_profile_id,
         user_id=user_id,
@@ -620,6 +642,7 @@ async def get_campaign_details(
 
     Daemon queries this when executing tasks to avoid local Mongo requirement.
     """
+    _retired_legacy_endpoint()
     from openoutreach.mongodb.models import Campaign
 
     campaign = Campaign.objects.get(_id=campaign_id, user_id=user_id)

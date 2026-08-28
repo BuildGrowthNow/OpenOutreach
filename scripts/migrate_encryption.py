@@ -20,11 +20,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--checkpoint-file", type=Path, required=True)
     parser.add_argument("--batch-size", type=int, default=100)
     parser.add_argument("--apply", action="store_true", help="Apply changes; default is dry-run")
+    parser.add_argument("--confirm", action="store_true", help="Required with --apply")
     return parser
 
 
 def main() -> int:
     args = build_parser().parse_args()
+    if args.apply and not args.confirm:
+        raise SystemExit("--apply requires --confirm after scope and backup review")
     if args.batch_size < 1 or args.batch_size > 1000:
         raise SystemExit("batch size must be between 1 and 1000")
     checkpoint = None

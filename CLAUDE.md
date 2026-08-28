@@ -22,7 +22,7 @@
 
 ## Desktop security cutoff
 
-The legacy remote daemon no longer receives bootstrap secrets, provider configuration, or MongoDB credentials. `/api/daemon/bootstrap` is permanently `410 Gone`; other legacy daemon routes require `X-Daemon-Version >= 2.0.0` and otherwise return `426 Upgrade Required`. Desktop startup fails closed until the API-only v2 gateway client replaces direct MongoDB-backed execution. `openoutreach/api_v2/daemon_security.py` owns the denylist, version, and audit policy.
+The legacy remote daemon no longer receives bootstrap secrets, provider configuration, or MongoDB credentials. `/api/daemon/bootstrap` is permanently `410 Gone`; other legacy daemon routes require `X-Daemon-Version >= 2.1.0` and otherwise return `426 Upgrade Required`. Desktop startup fails closed until the API-only v2 gateway client replaces direct MongoDB-backed execution. `openoutreach/api_v2/daemon_security.py` owns the denylist, version, and audit policy.
 
 Secure desktop execution now uses `openoutreach/desktop/secure_daemon.py` and
 the v2 gateway only. Device identity is an Ed25519 key stored in the OS
@@ -31,6 +31,12 @@ short-lived daemon tokens, proof-bound exchange, rotating refresh credentials,
 and server-owned typed leases. The desktop receives no human refresh token,
 server secret, provider key, or MongoDB credential. Browser execution is an
 injected task-scoped adapter; server persistence remains authoritative.
+
+Current source-of-truth correction: all legacy `/api/daemon/*` execution,
+profile, campaign, session, reconciliation, and configuration handlers are
+retired with `410 Gone`. New desktop work uses only
+`openoutreach/desktop/secure_daemon.py` and `/api/daemon/v2`; the legacy
+`core/daemon_remote.py` module is excluded from the release artifact.
 
 - **Marketing name**: Lengrowth Outreach (displayed in UI, tray menu, installers, release artifacts)
 - **Internal package name**: `openoutreach` (Python package, Docker image, repo) - do not rename the package
@@ -176,3 +182,11 @@ The following features are **hidden from navigation** and **not supported**:
 - **State Machine UI**: Gated behind `NEXT_PUBLIC_ENABLE_STATE_MACHINE=false` (default OFF). Daemon uses fixed DealState machine, ignores state graphs.
 
 See `docs/PLATFORM_REMEDIATION_PLAN.md` for full rationale and re-enablement strategy.
+## Desktop security boundary
+
+Desktop version 2.1.0 is the current secure floor. The desktop must use the
+v2 daemon gateway and local browser/provider sessions only. Never reintroduce
+server credentials, cookies, MongoDB access, or arbitrary model serialization
+into the desktop. New task types require a bounded snapshot, a deterministic
+effect key, a typed receipt, tenant/profile/device negative tests, and an
+explicitly validated feature flag before claiming is enabled.

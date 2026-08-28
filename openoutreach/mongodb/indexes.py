@@ -371,6 +371,10 @@ def ensure_all_indexes():
             ({'user_id': 1, 'device_id': 1, 'event_id': 1}, {'name': 'daemon_event_dedupe_unique', 'unique': True}),
             ({'user_id': 1, 'created_at': -1}, {'name': 'daemon_event_tenant_time_idx'}),
         ]),
+        ('daemon_effects', [
+            ({'user_id': 1, 'effect_key': 1}, {'name': 'daemon_effect_tenant_key_unique', 'unique': True}),
+            ({'user_id': 1, 'created_at': -1}, {'name': 'daemon_effect_tenant_time_idx'}),
+        ]),
         ('security_audit_events', [
             ({'created_at': -1}, {'name': 'security_event_time_idx'}),
             ({'event': 1, 'created_at': -1}, {'name': 'security_event_type_time_idx'}),

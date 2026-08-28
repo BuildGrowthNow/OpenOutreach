@@ -13,6 +13,9 @@ from datetime import datetime, timedelta, timezone as tz
 from typing import Any, Optional
 from zoneinfo import ZoneInfo
 
+# The compatibility shim below intentionally precedes these imports.
+# ruff: noqa: E402
+
 # Compatibility defaults retained for callers that use the legacy no-user
 # active-hours helper (and for desktop integrations that patch these values).
 ENABLE_ACTIVE_HOURS = True

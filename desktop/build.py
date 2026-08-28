@@ -43,7 +43,7 @@ def get_version() -> str:
             for line in f:
                 if line.startswith("__version__"):
                     return line.split("=")[1].strip().strip("\"'")
-    return "2.0.0"
+    return "2.1.0"
 
 
 def clean():

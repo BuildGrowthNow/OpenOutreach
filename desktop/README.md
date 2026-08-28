@@ -9,7 +9,8 @@ Production-ready desktop application for running LinkedIn automation locally usi
 - **Secure credential storage** - System keychain integration (Keyring)
 - **Background daemon** - Executes tasks while you work
 - **Active hours** - Respects your configured schedule
-- **Cookie persistence** - Maintains LinkedIn session
+- **Local browser persistence** - Maintains provider session state locally; no
+  server cookies or database credentials are downloaded
 - **Auto-updates** - Check for new releases
 - **Protocol handler** - `openoutreach://` URL callbacks for login
 
@@ -29,7 +30,7 @@ See `desktop/requirements.txt`:
 # Install dependencies
 pip install -r desktop/requirements.txt
 
-# Run locally (needs token and profile ID)
+# Run locally after device enrollment (daemon tokens are held in the OS keychain)
 python -m openoutreach.desktop.app
 
 # Build executable
@@ -82,18 +83,20 @@ openoutreach/desktop/
 ## Usage Flow
 
 1. **First launch**
-   - App shows login menu item
-   - Click "Login to OpenOutreach"
-   - Browser opens to web app login
-   - After login, redirects to `openoutreach://auth?token=xxx&profile_id=yyy`
-   - Protocol handler stores credentials in system keychain
+   - Sign in to the web dashboard and choose **Connect this desktop**.
+   - Select only the profiles and channels this device may operate.
+   - Enter the one-time enrollment code in the desktop.
+   - The desktop creates an OS-protected device key and stores only the
+     rotating daemon refresh credential in the OS credential store.
+   - Human login, browser challenges, and reauthentication happen interactively
+     in the local browser; server passwords and cookies are never returned.
 
 2. **Auto-start daemon**
    - On subsequent launches, daemon starts automatically
    - Tray icon turns green (running) or gray (stopped)
    - Daemon polls backend for tasks
    - Executes tasks using local browser
-   - Syncs cookies after each task
+   - Submits bounded typed receipts after each task
 
 3. **Control**
    - Start/Stop automation from tray menu
@@ -125,13 +128,13 @@ HKEY_CURRENT_USER\Software\Classes\openoutreach\shell\open\command
 - Config: `~/Library/Application Support/OpenOutreach/config.json`
 - Daemon ID: `~/Library/Application Support/OpenOutreach/daemon_id`
 - Browser data: `~/Library/Application Support/OpenOutreach/browser_data/`
-- Credentials: macOS Keychain
+- Daemon credentials: macOS Keychain; browser state: local browser profile
 
 **Windows:**
 - Config: `%LOCALAPPDATA%\OpenOutreach\config.json`
 - Daemon ID: `%LOCALAPPDATA%\OpenOutreach\daemon_id`
 - Browser data: `%LOCALAPPDATA%\OpenOutreach\browser_data\`
-- Credentials: Windows Credential Manager
+- Daemon credentials: Windows Credential Manager; browser state: local browser profile
 
 ## Distribution
 

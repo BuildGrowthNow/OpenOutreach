@@ -48,7 +48,7 @@ class Settings(BaseSettings):
     # Security controls default closed for legacy/bootstrap behavior and
     # require an explicit deployment decision for task execution.
     DAEMON_BOOTSTRAP_ENABLED: bool = False
-    DAEMON_MIN_SECURE_VERSION: str = "2.0.0"
+    DAEMON_MIN_SECURE_VERSION: str = "2.1.0"
     DAEMON_TASK_CLAIM_ENABLED: bool = False
     DAEMON_V2_LINKEDIN_ENABLED: bool = True
     DAEMON_V2_WHATSAPP_ENABLED: bool = False

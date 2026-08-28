@@ -1,9 +1,12 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from pydantic import ValidationError
 
-from openoutreach.api_v2.daemon_channel_contracts import LinkedInActionReceipt, WhatsAppSyncBatch
+from openoutreach.api_v2.daemon_channel_contracts import (
+    EmailTaskSnapshot, LinkedInActionReceipt, LinkedInTaskSnapshot,
+    MailboxGrant, WhatsAppSyncBatch, WhatsAppTaskSnapshot,
+)
 
 
 def test_linkedin_receipt_is_strict_and_typed():
@@ -22,3 +25,13 @@ def test_linkedin_receipt_is_strict_and_typed():
 def test_whatsapp_sync_is_bounded():
     with pytest.raises(ValidationError):
         WhatsAppSyncBatch(profile_id="p", messages=[{"id": "x"}] * 101)
+
+
+def test_task_snapshots_reject_extra_fields_and_are_typed():
+    snapshot = LinkedInTaskSnapshot(profile_id="p", target_public_identifier="person", effect_key="e")
+    assert snapshot.target_public_identifier == "person"
+    with pytest.raises(ValidationError):
+        LinkedInTaskSnapshot(profile_id="p", target_public_identifier="person", effect_key="e", password="x")
+    WhatsAppTaskSnapshot(profile_id="p", effect_key="e")
+    EmailTaskSnapshot(profile_id="p", effect_key="e", mailbox_grant=MailboxGrant(
+        task_id="t", mailbox_id="m", expires_at=datetime.now(timezone.utc) + timedelta(seconds=30), purpose="send"))
