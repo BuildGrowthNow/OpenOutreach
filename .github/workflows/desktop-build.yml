@@ -5,6 +5,7 @@ on:
     paths:
       - 'openoutreach/desktop/**'
       - 'desktop/**'
+      - 'requirements/base.txt'
     branches:
       - main
   workflow_dispatch:
