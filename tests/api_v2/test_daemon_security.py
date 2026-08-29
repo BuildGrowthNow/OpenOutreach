@@ -113,6 +113,33 @@ async def test_event_batch_preflights_all_profiles_before_writing(monkeypatch):
     collection.insert_one.assert_not_called()
 
 
+def test_successful_whatsapp_effect_projects_idempotently(monkeypatch):
+    deals = MagicMock()
+    deals.find_one.return_value = {"_id": "deal-a", "user_id": "tenant-a", "state": "Qualified"}
+    logs = MagicMock()
+    messages = MagicMock()
+    collections = {"deals": deals, "action_logs": logs, "chat_messages": messages}
+    monkeypatch.setattr(daemon_v2, "get_mongodb_collection", lambda name: collections.get(name))
+    context = TenantContext(
+        "tenant-a", actor_type="daemon", device_id="device-a",
+        profile_ids=frozenset({"wa-a"}), scopes=frozenset({"whatsapp"}),
+        channel_profile_ids={"whatsapp": frozenset({"wa-a"})},
+    )
+    daemon_v2._project_channel_effect(
+        context,
+        {"_id": "task-a", "channel": "whatsapp", "whatsapp_profile_id": "wa-a",
+         "task_type": "whatsapp_message",
+         "payload": {"deal_id": "deal-a", "campaign_id": "campaign-a", "message": "Hello"}},
+        {"outcome": "applied", "receipt": {"action": "send", "target_key": "+15551212"}},
+        "effect-a", datetime.now(timezone.utc),
+    )
+    assert logs.update_one.call_args.kwargs["upsert"] is True
+    assert messages.update_one.call_args.kwargs["upsert"] is True
+    assert deals.update_one.call_args.args[0]["user_id"] == "tenant-a"
+    assert messages.update_one.call_args.args[0]["user_id"] == "tenant-a"
+    assert logs.update_one.call_args.args[0]["_id"] == "daemon-effect:effect-a"
+
+
 @pytest.mark.asyncio
 async def test_all_lease_mutations_are_tenant_scoped(monkeypatch):
     class Result:

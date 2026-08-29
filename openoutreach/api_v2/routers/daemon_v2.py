@@ -1087,6 +1087,118 @@ def _require_task_binding(context: TenantContext, document: dict[str, Any]) -> N
     require_profile(context, profile_id, channel)
 
 
+def _project_channel_effect(context: TenantContext, task: dict[str, Any],
+                            result: dict[str, Any], effect_key: str,
+                            now: datetime) -> None:
+    """Project a successful local-channel effect into tenant-owned CRM state.
+
+    The durable effect record remains the idempotency authority. These
+    projections use deterministic IDs and ``$setOnInsert`` so a provider
+    success followed by a lost completion response can be reconciled without
+    duplicating messages or activity logs. Email has its own backend writer
+    and is intentionally excluded here.
+    """
+    channel = str(task.get("channel", ""))
+    if channel not in {"linkedin", "whatsapp"}:
+        return
+    raw_payload = task.get("payload")
+    payload: dict[str, Any] = raw_payload if isinstance(raw_payload, dict) else {}
+    raw_snapshot = task.get("snapshot")
+    snapshot: dict[str, Any] = raw_snapshot if isinstance(raw_snapshot, dict) else {}
+    deal_id = str(payload.get("deal_id") or snapshot.get("deal_id") or "")
+    campaign_id = str(payload.get("campaign_id") or snapshot.get("campaign_id") or "")
+    if not deal_id:
+        # Connect/session/sync tasks can be valid without a CRM deal.
+        return
+    deals = get_mongodb_collection("deals")
+    if deals is None:
+        raise HTTPException(503, "Channel effect projection unavailable")
+    deal = deals.find_one({"_id": deal_id, "user_id": context.tenant_id},
+                          {"lead_id": 1, "state": 1})
+    if not deal:
+        raise HTTPException(404, "Deal not found")
+
+    task_type = str(task.get("task_type", ""))
+    raw_receipt = result.get("receipt")
+    receipt: dict[str, Any] = raw_receipt if isinstance(raw_receipt, dict) else result
+    action = str(receipt.get("action") or "")
+    if channel == "linkedin":
+        action_type = {
+            "connect": "connect",
+            "pending_check": "check_pending",
+            "follow_up": "follow_up",
+            "manual_send": "send_manual_message",
+        }.get(action, task_type)
+        if action_type == "check_pending":
+            return
+        message_channel = "linkedin"
+    else:
+        action_type = "whatsapp_message" if action == "send" or task_type in {
+            "whatsapp_message", "whatsapp_follow_up"
+        } else task_type
+        if action_type not in {"whatsapp_message"}:
+            return
+        message_channel = "whatsapp"
+
+    profile_id = _task_profile_id(task)
+    target_key = str(receipt.get("target_key") or "")[:256]
+    message = str(snapshot.get("message") or payload.get("message") or "")[:20000]
+    logs = get_mongodb_collection("action_logs")
+    if logs is None:
+        raise HTTPException(503, "Channel activity projection unavailable")
+    logs.update_one(
+        {"_id": f"daemon-effect:{effect_key}", "user_id": context.tenant_id},
+        {"$setOnInsert": {
+            "_id": f"daemon-effect:{effect_key}",
+            "linkedin_profile_id": profile_id,
+            "campaign_id": campaign_id,
+            "action_type": action_type,
+            "created_at": now,
+            "details": {"deal_id": deal_id, "task_id": str(task.get("_id", "")),
+                         "effect_key": effect_key, "target_key": target_key},
+            "status": "completed",
+            "error_message": "",
+            "duration_ms": None,
+            "user_id": context.tenant_id,
+        }},
+        upsert=True,
+    )
+
+    if message:
+        messages = get_mongodb_collection("chat_messages")
+        if messages is None:
+            raise HTTPException(503, "Channel message projection unavailable")
+        message_doc: dict[str, Any] = {
+            "_id": f"daemon-message:{effect_key}",
+            "deal_id": deal_id,
+            "content": message,
+            "owner_id": context.tenant_id,
+            "linkedin_urn": target_key if message_channel == "linkedin" else "",
+            "is_outgoing": True,
+            "creation_date": now,
+            "user_id": context.tenant_id,
+            "channel": message_channel,
+        }
+        if message_channel == "whatsapp":
+            message_doc["wa_msg_hash"] = hashlib.sha256(
+                f"{deal_id}|True|{message}|{effect_key}".encode()
+            ).hexdigest()
+            message_doc["wa_delivery_status"] = "sent"
+        messages.update_one(
+            {"_id": message_doc["_id"], "user_id": context.tenant_id},
+            {"$setOnInsert": message_doc}, upsert=True,
+        )
+
+    deal_update: dict[str, Any] = {"last_outgoing_at": now}
+    if action_type == "connect":
+        deal_update["state"] = "Pending"
+    deals.update_one(
+        {"_id": deal_id, "user_id": context.tenant_id,
+         "state": {"$nin": ["email_replied", "email_bounced"]}},
+        {"$set": deal_update},
+    )
+
+
 @router.post("/tasks/claim", response_model=LeaseResponse | None)
 async def claim_task_v2(
     request: ClaimRequest,
@@ -1255,14 +1367,14 @@ async def complete_task_v2(
     # expired, revoked, or wrong-device requests from reserving an idempotency
     # key that a later legitimate attempt can never use.
     current = collection.find_one({**_lease_query(context, task_id, request.lease_id),
-                                   "lease_expires_at": {"$gt": now}},
-                                  {"_id": 1})
+                                   "lease_expires_at": {"$gt": now}})
     if not current:
         raise HTTPException(status.HTTP_410_GONE, "Lease expired or no longer owned")
     _require_task_binding(context, current)
     effects = get_mongodb_collection("daemon_effects")
     if effects is None:
         raise HTTPException(503, "Effect reconciliation unavailable")
+    projection_task: dict[str, Any] = prior if isinstance(prior, dict) else current
     effect_document = {
         "_id": str(uuid4()), "user_id": context.tenant_id,
         "effect_key": request.idempotency_key, "task_id": task_id,
@@ -1278,6 +1390,8 @@ async def complete_task_v2(
                                      "effect_key": request.idempotency_key},
                                     {"task_id": 1})
         if existing and str(existing.get("task_id")) == task_id:
+            _project_channel_effect(context, projection_task, request.result,
+                                    request.idempotency_key, now)
             result = collection.update_one(
                 {**_lease_query(context, task_id, request.lease_id),
                  "lease_expires_at": {"$gt": now}},
@@ -1288,6 +1402,8 @@ async def complete_task_v2(
                 raise HTTPException(status.HTTP_410_GONE, "Lease expired or no longer owned")
             return {"status": "completed", "reconciled": "true"}
         raise HTTPException(status.HTTP_409_CONFLICT, "Effect already belongs to another task")
+    _project_channel_effect(context, projection_task, request.result,
+                            request.idempotency_key, now)
     result = collection.update_one(
         {**_lease_query(context, task_id, request.lease_id), "lease_expires_at": {"$gt": now}},
         {"$set": {"status": "completed", "completed_at": now, "result": request.result, "result_idempotency_key": request.idempotency_key}},
