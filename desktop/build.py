@@ -153,7 +153,9 @@ def build() -> bool:
         print(f"Error: Expected output not found: {output}")
         return False
 
-    size_mb = sum(f.stat().st_size for f in output.rglob("*") if f.is_file()) / (1024 * 1024)
+    size_mb = output.stat().st_size / (1024 * 1024) if output.is_file() else (
+        sum(f.stat().st_size for f in output.rglob("*") if f.is_file()) / (1024 * 1024)
+    )
     print(f"\nBuild complete: {output}")
     print(f"Size: {size_mb:.1f} MB")
     return True

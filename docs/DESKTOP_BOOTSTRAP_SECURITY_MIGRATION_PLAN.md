@@ -1,7 +1,7 @@
 # Desktop Bootstrap Security Migration Plan
 
 Status: implementation in progress; production rollout remains approval-gated
-Audit snapshot: 2026-08-28, including uncommitted working-tree changes present at review time
+Audit snapshot: 2026-08-29; deployed task claiming and WhatsApp/email execution remain disabled
 Owners: Security, Backend/Platform, Desktop, Automation/Channels, SRE
 
 ## Executive decision
@@ -284,8 +284,9 @@ LLM message generation, qualification, summaries, email enrichment, campaign rec
   or initializes MongoDB from server-provided material.
 - [x] Recursive forbidden-field/secret-like response checks and focused
   regression tests were added.
-- [ ] Device enrollment, asymmetric daemon credentials, tenant repositories,
-  typed v2 task leases, and API-only channel execution remain required work.
+- [x] Device enrollment, asymmetric daemon credentials, tenant repositories,
+  typed v2 task leases, and API-only channel execution are implemented in the
+  local codebase; production enablement remains gated below.
 
 #### Phase 2/3 implementation evidence (2026-08-28)
 
@@ -299,7 +300,8 @@ LLM message generation, qualification, summaries, email enrichment, campaign rec
 - [x] Added daemon-only v2 compatibility/configuration, typed task lease
   routes, bounded idempotent observations, and atomic tenant/device/profile/
   channel predicates.
-- [ ] Desktop key generation/integration and production enrollment UI remain.
+- [x] Desktop key generation/integration and the Settings “Connect this
+  desktop” enrollment UI are implemented; device list/revoke UI remains.
 
 - [x] Added versioned AES-GCM envelope records with tenant/profile context
   binding, dual-read/new-write support, and resumable dry-run migration helper.
@@ -315,8 +317,9 @@ LLM message generation, qualification, summaries, email enrichment, campaign rec
 - [x] Removed MongoDB/server-model hidden imports and broad package data from
   the PyInstaller desktop spec; the desktop entry point is now an API-only
   fail-closed secure daemon shell.
-- [ ] Browser adapters, local session persistence, and all LinkedIn/WhatsApp/
-  email execution workflows still need migration onto v2 contracts.
+- [x] LinkedIn/WhatsApp/email local adapter boundaries and v2 task execution
+  wiring are implemented; disposable-provider and live end-to-end validation
+  remain deployment gates.
 - [x] Added dry-run-by-default tenant ownership backfill tooling with trusted
   profile/campaign resolution, idempotent predicates, checkpoints, and
   quarantine for ambiguous records.
@@ -368,8 +371,9 @@ LLM message generation, qualification, summaries, email enrichment, campaign rec
   server-derived tenant and `RUNNING` state; payload ownership is ignored.
 - [x] Profile cookie/session metadata updates include tenant ownership in the
   write predicate.
-- [ ] Complete repository migration, ownership backfill/quarantine, device and
-  channel binding, and the full two-tenant endpoint matrix remain required.
+- [ ] Complete repository migration, ownership backfill/quarantine, and the
+  full two-tenant endpoint matrix remain required; device/channel binding is
+  implemented and covered by focused tests.
 
 ### Phase 2 — Scoped daemon authentication and device enrollment
 
@@ -751,8 +755,9 @@ Adopt the fully API-based daemon with a dedicated daemon gateway boundary, asymm
   output contains counts/checkpoints only.
 - [x] Focused security, desktop boundary, updater, and crypto tests pass;
   Ed25519 signing/keychain tests cover local identity behavior.
-- [ ] Full LinkedIn/WhatsApp/email browser adapters and server-owned channel
-  observation/action contracts remain incomplete.
+- [x] Local LinkedIn/WhatsApp/email browser/provider adapter boundaries and
+  server-owned v2 channel contracts are implemented; live provider validation
+  remains external.
 - [x] Local adapter slice: LinkedIn follow-up receipts, WhatsApp send/sync
   adapter, and task-bound email adapter are implemented with injectable local
   provider/session boundaries. Contract tests cover successful execution,
@@ -771,6 +776,12 @@ Adopt the fully API-based daemon with a dedicated daemon gateway boundary, asymm
   inspection are available in `scripts/` and CI.
 - [x] Secure daemon coordination supports injected executors for each enabled
   channel while retaining the global claim kill switch.
+- [x] Adapter outcomes now distinguish applied/observed work from rate limits,
+  auth challenges, timeouts, and permanent rejection; the desktop reports
+  non-success outcomes through the v2 failure/retry contract.
+- [x] Settings includes a tenant-authenticated “Connect this desktop” flow
+  that selects owned LinkedIn profiles/mailboxes and displays only the
+  short-lived enrollment code.
 - [ ] Full production browser/provider integration, server-side persistence of
   channel receipts, and end-to-end task execution still require disposable
   provider accounts and authorized deployment validation.
@@ -795,8 +806,10 @@ Adopt the fully API-based daemon with a dedicated daemon gateway boundary, asymm
   retry controls while retaining dry-run defaults, confirmation gates,
   checkpoints, and secret-free progress output.
 - [x] Release `2.1.2` passed focused tests, v2/desktop regression tests,
-  Pyright, compileall, security scanning, AWS deployment smoke, Windows/macOS
-  packaging, artifact inspection, SBOM generation, and stable URL checks.
+  Pyright, compileall, security scanning, Windows packaging, artifact
+  inspection, SBOM generation, and stable URL checks. macOS packaging remains
+  an operator-gated build on macOS; the published artifact was only checked
+  for availability.
 - [ ] Disposable real-provider execution, production key retirement/Atlas
   changes, customer reauthentication, external penetration testing, and
   operator approval for enabling task claiming remain external gates; the

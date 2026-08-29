@@ -105,18 +105,11 @@ hiddenimports = [
     # LLM (for keyword generation)
     "pydantic_ai",
     "jinja2",
-    # ML pipeline (qualifier.py uses scipy + sklearn + numpy)
-    "numpy",
-    "scipy",
-    "scipy.stats",
-    "scipy.stats._continuous_distns",
-    "sklearn",
-    "sklearn.gaussian_process",
-    "sklearn.gaussian_process._gpr",
 ]
 
 # Packages to completely exclude (heavy/unused in desktop context)
-# NOTE: scipy and numpy are USED by the ML qualifier - do not exclude them.
+# The secure desktop entry point does not import the legacy server-side ML
+# qualifier. Keep the artifact limited to the API-only desktop graph.
 excludes = [
     "matplotlib",
     "pandas",

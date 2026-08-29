@@ -28,6 +28,7 @@ import ActiveHoursForm from "@/components/settings/active-hours-form";
 import { WhatsappConnectionTab } from "@/components/settings/whatsapp-connection-tab";
 import WhatsappSettingsForm from "@/components/settings/whatsapp-settings-form";
 import { EmailTab } from "@/components/settings/email-tab";
+import { DesktopConnectionTab } from "@/components/settings/desktop-connection-tab";
 
 function SettingsLoadingSkeleton() {
   return (
@@ -119,7 +120,7 @@ export default function SettingsPage() {
   const requestedTab = searchParams.get("tab");
   const initialTab = requestedTab === "linkedin-credentials"
     ? "linkedin"
-    : ["linkedin", "whatsapp", "email", "rate-limits", "llm", "billing"].includes(requestedTab || "")
+    : ["linkedin", "whatsapp", "email", "desktop", "rate-limits", "llm", "billing"].includes(requestedTab || "")
       ? requestedTab!
       : "linkedin";
 
@@ -162,6 +163,10 @@ export default function SettingsPage() {
             <Icons.Mail className="h-4 w-4 shrink-0" />
             Email
           </TabsTrigger>
+          <TabsTrigger value="desktop" className="flex items-center gap-2 py-2">
+            <Icons.Server className="h-4 w-4 shrink-0" />
+            Desktop
+          </TabsTrigger>
           <TabsTrigger value="rate-limits" className="flex items-center gap-2 py-2">
             <Icons.Shield className="h-4 w-4 shrink-0" />
             Rate Limits & Hours
@@ -192,6 +197,10 @@ export default function SettingsPage() {
 
         <TabsContent value="email" className="space-y-6">
           <EmailTab />
+        </TabsContent>
+
+        <TabsContent value="desktop" className="space-y-6">
+          <DesktopConnectionTab />
         </TabsContent>
 
         <TabsContent value="rate-limits" className="space-y-6">

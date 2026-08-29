@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+import pytest
+
 
 ROOT = Path(__file__).parents[2]
 
@@ -63,3 +65,31 @@ def test_desktop_api_url_is_allowlisted_against_ssrf():
         except ValueError:
             continue
         raise AssertionError(f"unapproved API URL accepted: {value}")
+
+
+@pytest.mark.asyncio
+async def test_adapter_failure_outcomes_are_reported_as_failures():
+    from openoutreach.desktop.device_identity import DeviceIdentity
+    from openoutreach.desktop.secure_daemon import SecureRemoteDaemon
+
+    class FakeClient:
+        def __init__(self):
+            self.completed = []
+            self.failed = []
+
+        async def complete_task_v2(self, *args):
+            self.completed.append(args)
+
+        async def fail_task_v2(self, *args):
+            self.failed.append(args)
+
+    daemon = SecureRemoteDaemon(
+        "https://outreach-api.lengrowth.com", "", "li-1",
+        identity=DeviceIdentity._new(),
+        channel_executors={"linkedin": lambda task: {"outcome": "rate_limited"}},
+    )
+    daemon.client = FakeClient()
+    task = {"task_id": "task-1", "lease_id": "lease-1", "idempotency_key": "idem-1", "channel": "linkedin"}
+    await daemon._execute(task, lambda _task: {"outcome": "rate_limited"})
+    assert daemon.client.completed == []
+    assert daemon.client.failed == [("task-1", "lease-1", "rate_limited", "local adapter outcome: rate_limited")]

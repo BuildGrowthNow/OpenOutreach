@@ -153,13 +153,21 @@ class SecureRemoteDaemon:
             if not isinstance(result, dict):
                 raise SecureDaemonError("Channel adapter returned an invalid receipt")
             await self._publish_typed_event(task, result)
-            completion = (task["task_id"], task["lease_id"], task.get("idempotency_key", task["lease_id"]), result)
-            try:
-                await self.client.complete_task_v2(*completion)
-            except Exception:
-                if len(self._offline_completions) == self._offline_completions.maxlen:
-                    self._offline_completions.popleft()
-                self._offline_completions.append(completion)
+            outcome = str(result.get("outcome", "")).lower()
+            if outcome in {"applied", "already_applied", "observed"}:
+                completion = (task["task_id"], task["lease_id"], task.get("idempotency_key", task["lease_id"]), result)
+                try:
+                    await self.client.complete_task_v2(*completion)
+                except Exception:
+                    if len(self._offline_completions) == self._offline_completions.maxlen:
+                        self._offline_completions.popleft()
+                    self._offline_completions.append(completion)
+            else:
+                category = self._failure_category(outcome)
+                await self.client.fail_task_v2(
+                    task["task_id"], task["lease_id"], category,
+                    f"local adapter outcome: {outcome or 'rejected'}",
+                )
         except Exception as exc:
             logger.warning("Secure daemon task failed: %s", type(exc).__name__)
             try:
@@ -169,6 +177,17 @@ class SecureRemoteDaemon:
         finally:
             renewal_stop.set()
             await renewal
+
+    @staticmethod
+    def _failure_category(outcome: str) -> str:
+        """Map bounded adapter outcomes to the backend retry policy."""
+        if outcome in {"rate_limited"}:
+            return "rate_limited"
+        if outcome in {"challenge", "logged_out"}:
+            return "auth"
+        if outcome in {"timeout", "reconnecting", "retryable"}:
+            return "retryable"
+        return "permanent"
 
     async def _renew_lease(self, task: dict, stop: asyncio.Event) -> None:
         """Keep a long-running local browser action owned by this device."""

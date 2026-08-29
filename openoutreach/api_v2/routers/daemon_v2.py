@@ -740,8 +740,16 @@ async def execute_email_v2(
             from openoutreach.emails.sender import send_email
             mailbox = Mailbox.from_dict(mailbox_doc)
             if mailbox.paused:
+                append_security_event("daemon_email_suppressed", outcome="denied",
+                                      actor_type="daemon", tenant_id=context.tenant_id,
+                                      device_id=context.device_id,
+                                      metadata={"reason": "mailbox_paused"})
                 return {"status": "suppressed", "reason": "mailbox_paused"}
             if mailbox.sent_today() >= mailbox.daily_limit:
+                append_security_event("daemon_email_rate_limited", outcome="denied",
+                                      actor_type="daemon", tenant_id=context.tenant_id,
+                                      device_id=context.device_id,
+                                      metadata={"reason": "mailbox_daily_limit"})
                 return {"status": "rate_limited", "reason": "mailbox_daily_limit"}
             deal_id = str((task.get("payload") or {}).get("deal_id", ""))
             campaign_id = str((task.get("payload") or {}).get("campaign_id", ""))
@@ -758,6 +766,10 @@ async def execute_email_v2(
                     {"email_unsubscribed": 1, "email_bounced": 1},
                 ) if leads is not None and deal_doc and deal_doc.get("lead_id") else None
                 if lead_doc and (lead_doc.get("email_unsubscribed") or lead_doc.get("email_bounced")):
+                    append_security_event("daemon_email_suppressed", outcome="denied",
+                                          actor_type="daemon", tenant_id=context.tenant_id,
+                                          device_id=context.device_id,
+                                          metadata={"reason": "recipient_suppressed"})
                     return {"status": "suppressed", "reason": "recipient_suppressed"}
             effects.update_one(
                 {"user_id": context.tenant_id, "effect_key": expected_key},
@@ -796,6 +808,10 @@ async def execute_email_v2(
                  "state": {"$nin": ["email_replied", "email_bounced"]}},
                 {"$set": update_fields},
             )
+        append_security_event("daemon_email_sent", outcome="success",
+                              actor_type="daemon", tenant_id=context.tenant_id,
+                              device_id=context.device_id,
+                              metadata={"task_id": request.task_id})
         return {"status": "sent", "message_id": str(message_id)[:256]}
     materialized = _snapshot(task)
     if request.mailbox_grant.purpose != "reply_scan":
@@ -834,6 +850,10 @@ async def execute_email_v2(
                 # Reply state is authoritative; a chat projection failure is
                 # observable in server logs and must not expose IMAP details.
                 pass
+    append_security_event("daemon_email_reply_observed", outcome="success",
+                          actor_type="daemon", tenant_id=context.tenant_id,
+                          device_id=context.device_id,
+                          metadata={"task_id": request.task_id})
     return {"status": "replied", "replies": [{"body": text[:2000], "received_at": received_at.isoformat()}]}
 
 

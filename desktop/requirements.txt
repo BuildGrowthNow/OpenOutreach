@@ -29,6 +29,11 @@ httpx>=0.25,<1.0
 # Data validation
 pydantic>=2.0,<3.0
 
+# Local browser execution for LinkedIn and WhatsApp.  These are runtime
+# requirements, not optional build-time hidden imports.
+playwright>=1.50,<2.0
+playwright-stealth>=1.0.6
+
 # Version comparison (for update checker)
 packaging>=23.0,<25.0
 
