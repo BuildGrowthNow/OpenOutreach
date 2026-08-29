@@ -21,10 +21,13 @@ def test_distributed_v2_client_does_not_import_legacy_server_client():
 
 def test_pyinstaller_spec_excludes_database_and_legacy_daemon():
     source = (ROOT / "desktop" / "openoutreach.spec").read_text(encoding="utf-8")
-    assert '"pymongo"' not in source
-    assert '"openoutreach.mongodb"' not in source
-    assert '"openoutreach.core.daemon_remote"' not in source
-    assert '"openoutreach.core.remote_client"' not in source
+    for marker in (
+        '"pymongo"',
+        '"openoutreach.mongodb"',
+        '"openoutreach.core.daemon_remote"',
+        '"openoutreach.core.remote_client"',
+    ):
+        assert marker in source
 
 
 def test_secure_daemon_requires_explicit_profile_binding_per_channel():
