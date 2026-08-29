@@ -83,6 +83,13 @@ jobs:
             cd ~/OpenOutreach
           "
 
+          # Reclaim unused Docker layers before building. Do not prune volumes:
+          # MongoDB and application data must survive deployments.
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=yes -o IdentitiesOnly=yes "${EC2_USER}@${EC2_HOST}" "
+            set -e
+            docker system prune --all --force
+            df -h "
+
           # Ensure the canonical database name exists before Compose evaluates
           # its required-variable guard. This never overwrites a non-empty value.
           ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=yes -o IdentitiesOnly=yes "${EC2_USER}@${EC2_HOST}" "
