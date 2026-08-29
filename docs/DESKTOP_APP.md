@@ -683,6 +683,12 @@ def _get_mac_app_version(app_path: str) -> Optional[str]:
 
 ### 3.3 Remote Daemon
 
+> Historical reference only. The legacy implementation shown below is
+> retired and is not distributed. Current desktop execution uses
+> `openoutreach/desktop/secure_daemon.py` with the v2-only client in
+> `openoutreach/desktop/remote_client.py`; it never receives credentials,
+> cookies, server settings, or database access.
+
 Create `openoutreach/core/daemon_remote.py`:
 
 ```python
