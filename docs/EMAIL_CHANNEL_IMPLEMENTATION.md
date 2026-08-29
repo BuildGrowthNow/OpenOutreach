@@ -303,7 +303,7 @@ npx wrangler deploy --env production
 # Set secrets
 npx wrangler secret put SECRET_KEY
 npx wrangler secret put WORKER_WEBHOOK_SECRET
-npx wrangler secret put BACKEND_URL   # https://api.lengrowth.com
+npx wrangler secret put BACKEND_URL   # https://outreach-api.lengrowth.com
 
 # Add custom domain route in Cloudflare dashboard:
 # track.lengrowth.com/* → email-tracking Worker

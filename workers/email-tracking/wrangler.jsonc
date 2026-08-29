@@ -12,7 +12,7 @@
   // Secrets (set via `wrangler secret put`):
   //   SECRET_KEY           — shared with Python backend for HMAC verification
   //   WORKER_WEBHOOK_SECRET — sent in X-Webhook-Secret header to backend
-  //   BACKEND_URL          — e.g. https://api.lengrowth.com
+  //   BACKEND_URL          — e.g. https://outreach-api.lengrowth.com
 
   "routes": [
     { "pattern": "track.lengrowth.com", "custom_domain": true }

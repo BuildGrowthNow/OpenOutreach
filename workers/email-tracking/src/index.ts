@@ -10,7 +10,7 @@
  * Secrets (set via `wrangler secret put`):
  *   SECRET_KEY            — HMAC-SHA256 key, shared with Python backend
  *   WORKER_WEBHOOK_SECRET — sent in X-Webhook-Secret header to backend
- *   BACKEND_URL           — https://api.lengrowth.com
+ *   BACKEND_URL           — https://outreach-api.lengrowth.com
  */
 
 export interface Env {

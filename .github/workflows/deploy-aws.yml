@@ -127,9 +127,9 @@ jobs:
         run: |
           set -euo pipefail
           for attempt in $(seq 1 12); do
-            bootstrap=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --max-time 20 'https://api.lengrowth.com/api/daemon/bootstrap?linkedin_profile_id=smoke' || true)
-            compatibility=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --max-time 20 'https://api.lengrowth.com/api/daemon/v2/compatibility' || true)
-            configuration=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --max-time 20 'https://api.lengrowth.com/api/daemon/config?linkedin_profile_id=smoke' || true)
+            bootstrap=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --max-time 20 'https://outreach-api.lengrowth.com/api/daemon/bootstrap?linkedin_profile_id=smoke' || true)
+            compatibility=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --max-time 20 'https://outreach-api.lengrowth.com/api/daemon/v2/compatibility' || true)
+            configuration=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --max-time 20 'https://outreach-api.lengrowth.com/api/daemon/config?linkedin_profile_id=smoke' || true)
             echo "Public daemon smoke attempt ${attempt}/12: bootstrap=${bootstrap} compatibility=${compatibility} configuration=${configuration}"
             if [ "$bootstrap" = '410' ] && [ "$compatibility" = '200' ] && [ "$configuration" != '522' ] && [ "$configuration" != '000' ]; then
               exit 0
