@@ -18,6 +18,11 @@ on:
         required: true
         default: false
         type: boolean
+      sign:
+        description: 'Sign and notarize release artifacts (requires Apple/Windows signing credentials)'
+        required: true
+        default: false
+        type: boolean
 
 jobs:
   build-macos:
@@ -48,7 +53,7 @@ jobs:
         run: python desktop/build.py
 
       - name: Sign macOS app for approved publish
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish == true }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish == true && inputs.sign == true }}
         env:
           APPLE_DEVELOPER_ID: ${{ secrets.APPLE_DEVELOPER_ID }}
         run: python desktop/build.py --no-build --sign
@@ -59,7 +64,7 @@ jobs:
           python desktop/build.py --no-build --dmg
 
       - name: Notarize macOS DMG for approved publish
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish == true }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish == true && inputs.sign == true }}
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
@@ -119,7 +124,7 @@ jobs:
         run: python desktop/build.py --no-build --msix
 
       - name: Sign Windows release artifacts for approved publish
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish == true }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish == true && inputs.sign == true }}
         env:
           WINDOWS_SIGNING_CERT_BASE64: ${{ secrets.WINDOWS_SIGNING_CERT_BASE64 }}
           WINDOWS_SIGNING_CERT_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERT_PASSWORD }}
@@ -216,6 +221,10 @@ jobs:
           make_latest: true
           body: |
             ## Lengrowth Desktop v${{ steps.version.outputs.version }}
+
+            ### Release status
+
+            ${{ inputs.sign == true && 'This release is signed and notarized.' || 'This is an unsigned interim release. Windows SmartScreen and macOS Gatekeeper warnings are expected until platform signing credentials are configured.' }}
 
             ### Installation
 

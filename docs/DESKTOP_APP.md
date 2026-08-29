@@ -1527,11 +1527,11 @@ git tag desktop-v1.0.0
 git push origin desktop-v1.0.0
 ```
 
-The publish job is intentionally manual: set the `publish` input to `true` only after release approval and signing/notarization secrets are configured.
+The publish job is intentionally manual. Set `publish` to `true` to publish an interim unsigned release, or set both `publish` and `sign` to `true` only after release approval and signing/notarization secrets are configured. Unsigned releases are for controlled testing and require the first-launch trust bypass described below.
 
 ### 6.3 First Launch Instructions
 
-Unsigned local builds may require the right-click → Open flow. Published builds must be signed and notarized by the manual release job.
+Unsigned local and interim published builds may require the right-click → Open flow on macOS and a SmartScreen override on Windows. Signed published builds use the manual release job with `sign: true`.
 
 **Add this to the download page and in-app:**
 
@@ -1695,7 +1695,7 @@ python desktop/build.py --installer
 
 **Output:** `desktop/dist/Lengrowth-{version}-Setup.exe`
 
-### 7.5 Code Signing (Required for Publish)
+### 7.5 Code Signing (Required for Signed Publish)
 
 Sign with a code signing certificate to remove SmartScreen warnings:
 
@@ -1908,9 +1908,9 @@ lengrowth://auth?probe=1
 
 | Item | Cost |
 |------|------|
-| Apple Developer (optional) | $0 (or $99/yr for notarization) |
-| Microsoft Store | $0 |
-| **Total** | **$0** |
+| Apple Developer (optional for interim unsigned releases) | $0 for testing; $99/yr for Developer ID signing and notarization |
+| Windows public trust | $0 for self-signed testing; paid certificate/service or Store enrollment for public distribution |
+| **Interim unsigned total** | **$0** |
 
 ---
 
