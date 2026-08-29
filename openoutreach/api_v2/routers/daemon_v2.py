@@ -510,12 +510,20 @@ async def configuration(
             cooldown_minutes=int(config.get("cooldown_minutes", 0)),
         ),
         channel_policy=ChannelPolicy(**{
-            channel: channel in context.scopes for channel in ("linkedin", "whatsapp", "email")
+            channel: channel in context.scopes and {
+                "linkedin": settings.DAEMON_V2_LINKEDIN_ENABLED,
+                "whatsapp": settings.DAEMON_V2_WHATSAPP_ENABLED,
+                "email": settings.DAEMON_V2_EMAIL_ENABLED,
+            }[channel]
+            for channel in ("linkedin", "whatsapp", "email")
         }),
         task_capabilities=(
-            (["connect", "check_pending", "follow_up"] if "linkedin" in context.scopes else [])
-            + (["whatsapp_follow_up", "whatsapp_message", "whatsapp_sync", "whatsapp_reconnect"] if "whatsapp" in context.scopes else [])
-            + (["email_follow_up", "email_send", "email_reply_scan"] if "email" in context.scopes else [])
+            (["connect", "check_pending", "follow_up", "send_manual_message"]
+             if "linkedin" in context.scopes and settings.DAEMON_V2_LINKEDIN_ENABLED else [])
+            + (["whatsapp_follow_up", "whatsapp_message", "whatsapp_sync", "whatsapp_reconnect"]
+               if "whatsapp" in context.scopes and settings.DAEMON_V2_WHATSAPP_ENABLED else [])
+            + (["email_follow_up", "email_send", "email_reply_scan"]
+               if "email" in context.scopes and settings.DAEMON_V2_EMAIL_ENABLED else [])
         ),
     )
     body = response.model_dump_json()
@@ -636,6 +644,20 @@ async def session_state_v2(profile_id: str, state: SessionState,
                               state.model_dump(mode="json"), f"{profile_id}:{state.observed_at.isoformat()}")
 
 
+def _task_profile_id(document: dict[str, Any]) -> str:
+    """Return the server-owned profile binding for a task's channel.
+
+    The legacy task schema stores WhatsApp's profile in
+    ``linkedin_profile_id`` for historical reasons.  Campaign-backed tasks
+    also carry the canonical WhatsApp binding, so prefer that value whenever
+    present and never let a snapshot field choose the execution profile.
+    """
+    channel = str(document.get("channel", ""))
+    if channel == "whatsapp":
+        return str(document.get("whatsapp_profile_id") or document.get("linkedin_profile_id") or "")
+    return str(document.get("linkedin_profile_id") or "")
+
+
 def _snapshot(document: dict[str, Any]) -> dict[str, Any]:
     """Return only the fields a browser adapter needs for one action."""
     payload = document.get("payload") or {}
@@ -660,7 +682,7 @@ def _snapshot(document: dict[str, Any]) -> dict[str, Any]:
     # campaign internals, or arbitrary model fields to the desktop.
     deal_id = snapshot.get("deal_id")
     owner_id = str(document.get("user_id", ""))
-    profile_id = str(document.get("linkedin_profile_id", ""))
+    profile_id = _task_profile_id(document)
     channel = str(document.get("channel", "linkedin"))
     # Client-controlled task payloads are not authorization. Target identity
     # is always re-derived from the owned deal/lead below.
@@ -824,15 +846,32 @@ async def claim_task_v2(
         raise HTTPException(503, "Database unavailable")
     now = datetime.now(timezone.utc)
     lease_id = secrets.token_urlsafe(24)
+    profile_predicate: Any = {"linkedin_profile_id": request.profile_id}
+    if request.channel == "whatsapp":
+        # New tasks may use the canonical field while older scheduler rows
+        # retain WhatsApp's historical alias in linkedin_profile_id.
+        profile_predicate = {"$or": [
+            {"linkedin_profile_id": request.profile_id},
+            {"whatsapp_profile_id": request.profile_id},
+        ]}
     query: dict[str, Any] = {
         "user_id": context.tenant_id,
-        "linkedin_profile_id": request.profile_id,
+        **profile_predicate,
         "channel": request.channel,
         "status": "pending",
         "scheduled_at": {"$lte": now},
     }
+    supported_by_channel = {
+        "linkedin": {"connect", "check_pending", "follow_up", "send_manual_message"},
+        "whatsapp": {"whatsapp_follow_up", "whatsapp_message", "whatsapp_sync", "whatsapp_reconnect"},
+        "email": {"email_follow_up", "email_send", "email_reply_scan"},
+    }
     if request.supported_task_types:
-        query["task_type"] = {"$in": request.supported_task_types}
+        requested = set(request.supported_task_types)
+        allowed = requested & supported_by_channel[request.channel]
+        if not allowed:
+            return None
+        query["task_type"] = {"$in": sorted(allowed)}
     document = collection.find_one_and_update(
         query,
         {
@@ -902,7 +941,7 @@ async def renew_task_v2(
     if not document:
         raise HTTPException(status.HTTP_410_GONE, "Lease expired")
     channel = str(document.get("channel", ""))
-    require_profile(context, str(document.get("linkedin_profile_id")), channel)
+    require_profile(context, _task_profile_id(document), channel)
     snapshot = _typed_snapshot(document)
     if snapshot is None:
         raise HTTPException(status.HTTP_409_CONFLICT, "Task snapshot is no longer executable")
@@ -936,6 +975,18 @@ async def complete_task_v2(
         result_effect = request.result.get("effect_key")
         if result_effect is not None and str(result_effect) != expected_key:
             raise HTTPException(422, "Receipt effect does not match task effect")
+    if prior and prior.get("status") == "completed":
+        if prior.get("result_idempotency_key") == request.idempotency_key:
+            return {"status": "completed", "replayed": "true"}
+        raise HTTPException(status.HTTP_409_CONFLICT, "Task already completed")
+    # Validate the lease before creating a durable effect record.  This keeps
+    # expired, revoked, or wrong-device requests from reserving an idempotency
+    # key that a later legitimate attempt can never use.
+    current = collection.find_one({**_lease_query(context, task_id, request.lease_id),
+                                   "lease_expires_at": {"$gt": now}},
+                                  {"_id": 1})
+    if not current:
+        raise HTTPException(status.HTTP_410_GONE, "Lease expired or no longer owned")
     effects = get_mongodb_collection("daemon_effects")
     if effects is None:
         raise HTTPException(503, "Effect reconciliation unavailable")
@@ -949,21 +1000,21 @@ async def complete_task_v2(
     except DuplicateKeyError:
         # Provider success may have been followed by a lost response. The
         # unique tenant/effect key makes a retry converge without reapplying
-        # the provider action.
+        # the provider action, but only for this exact task.
         existing = effects.find_one({"user_id": context.tenant_id,
                                      "effect_key": request.idempotency_key},
                                     {"task_id": 1})
         if existing and str(existing.get("task_id")) == task_id:
-            collection.update_one({"_id": task_id, "user_id": context.tenant_id,
-                                   "leased_by_device_id": context.device_id},
-                                  {"$set": {"status": "completed", "completed_at": now,
-                                            "result_idempotency_key": request.idempotency_key}})
+            result = collection.update_one(
+                {**_lease_query(context, task_id, request.lease_id),
+                 "lease_expires_at": {"$gt": now}},
+                {"$set": {"status": "completed", "completed_at": now,
+                          "result_idempotency_key": request.idempotency_key}},
+            )
+            if result.matched_count == 0:
+                raise HTTPException(status.HTTP_410_GONE, "Lease expired or no longer owned")
             return {"status": "completed", "reconciled": "true"}
         raise HTTPException(status.HTTP_409_CONFLICT, "Effect already belongs to another task")
-    if prior and prior.get("status") == "completed":
-        if prior.get("result_idempotency_key") == request.idempotency_key:
-            return {"status": "completed", "replayed": "true"}
-        raise HTTPException(status.HTTP_409_CONFLICT, "Task already completed")
     result = collection.update_one(
         {**_lease_query(context, task_id, request.lease_id), "lease_expires_at": {"$gt": now}},
         {"$set": {"status": "completed", "completed_at": now, "result": request.result, "result_idempotency_key": request.idempotency_key}},

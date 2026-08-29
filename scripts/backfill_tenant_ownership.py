@@ -28,6 +28,13 @@ COLLECTIONS = (
 )
 
 
+def _write_checkpoint(path: Path, value: dict[str, Any]) -> None:
+    """Persist resume state atomically without exposing document contents."""
+    temporary = path.with_name(f".{path.name}.tmp")
+    temporary.write_text(json.dumps(value, sort_keys=True) + "\n", encoding="utf-8")
+    os.replace(temporary, path)
+
+
 def _resolve_owner(document: dict[str, Any], profiles: Any, campaigns: Any) -> str | None:
     if document.get("user_id"):
         return str(document["user_id"])
@@ -120,7 +127,7 @@ def main() -> int:
                                      batch_size=args.batch_size, retries=args.retries)
         reports.append(report)
         checkpoint_data[name] = report["checkpoint"]
-        args.checkpoint_file.write_text(json.dumps(checkpoint_data, sort_keys=True), encoding="utf-8")
+        _write_checkpoint(args.checkpoint_file, checkpoint_data)
     print(json.dumps({"dry_run": not args.apply, "reports": reports}))
     client.close()
     return 0

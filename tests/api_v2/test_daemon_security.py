@@ -57,7 +57,7 @@ def test_tenant_predicate_is_server_derived_and_non_empty():
 async def test_bootstrap_is_always_gone():
     request = MagicMock()
     with pytest.raises(HTTPException) as exc_info:
-        await bootstrap_daemon(request, "profile-id")
+        await bootstrap_daemon(request)
     assert exc_info.value.status_code == 410
     assert exc_info.value.headers["Cache-Control"] == "no-store"
 

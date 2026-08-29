@@ -18,7 +18,7 @@ ASSETS_DIR = PROJECT_ROOT / "openoutreach" / "desktop" / "assets"
 
 # Read version from source
 version_file = PROJECT_ROOT / "openoutreach" / "desktop" / "__version__.py"
-__version__ = "2.1.1"
+__version__ = "2.1.2"
 if version_file.exists():
     with open(version_file) as f:
         for line in f:
@@ -66,6 +66,7 @@ hiddenimports = [
     "openoutreach.desktop.protocol_handler",
     "openoutreach.desktop.linkedin_browser_adapter",
     "openoutreach.desktop.whatsapp_browser_adapter",
+    "openoutreach.desktop.whatsapp_session",
     "openoutreach.desktop.email_adapter",
     # Daemon core
     "openoutreach.desktop.secure_daemon",

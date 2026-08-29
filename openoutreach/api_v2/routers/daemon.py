@@ -359,7 +359,7 @@ async def get_daemon_config(
 @router.get("/bootstrap")
 async def bootstrap_daemon(
     request: Request,
-    linkedin_profile_id: str,
+    linkedin_profile_id: str | None = None,
 ):
     """Permanently disabled; this endpoint can never return server secrets."""
     audit_event(request, "bootstrap_attempt", outcome="rejected")

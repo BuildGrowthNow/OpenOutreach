@@ -42,6 +42,7 @@ class SecureRemoteDaemon:
         execute_task: Optional[Callable[[dict], Awaitable[dict] | dict]] = None,
         on_credentials_rotated: Optional[Callable[[str, str], None]] = None,
         channel_executors: Optional[dict[str, Callable[[dict], Awaitable[dict] | dict]]] = None,
+        channel_profile_ids: Optional[dict[str, str]] = None,
     ) -> None:
         self.identity = identity or DeviceIdentity.load_or_create()
         self.client = DesktopRemoteClient(
@@ -50,6 +51,14 @@ class SecureRemoteDaemon:
             on_credentials_rotated,
         )
         self.linkedin_profile_id = linkedin_profile_id
+        # A channel profile is an authorization binding, not a fallback.  In
+        # particular, WhatsApp historically reused the LinkedIn field in
+        # server task documents, so the desktop must never infer its profile
+        # from the LinkedIn profile passed to this coordinator.
+        self.channel_profile_ids = {
+            "linkedin": linkedin_profile_id,
+            **(channel_profile_ids or {}),
+        }
         self.on_started = on_started
         self.execute_task = execute_task
         self.channel_executors = channel_executors or ({"linkedin": execute_task} if execute_task else {})
@@ -75,7 +84,11 @@ class SecureRemoteDaemon:
                 await self._flush_offline_completions()
                 claimed = False
                 for channel, executor in self.channel_executors.items():
-                    task = await self.client.claim_task_v2(self.linkedin_profile_id, channel)
+                    profile_id = self.channel_profile_ids.get(channel)
+                    if not profile_id:
+                        logger.warning("Skipping channel %s: no bound profile configured", channel)
+                        continue
+                    task = await self.client.claim_task_v2(profile_id, channel)
                     if task:
                         claimed = True
                         await self._execute(task, executor)
@@ -89,9 +102,12 @@ class SecureRemoteDaemon:
     async def stop(self) -> None:
         self._stop.set()
         self.running = False
-        close = getattr(self.execute_task, "__self__", None)
-        if close is not None and hasattr(close, "close"):
-            await asyncio.get_running_loop().run_in_executor(None, close.close)
+        closed: set[int] = set()
+        for executor in self.channel_executors.values():
+            close = getattr(executor, "__self__", None)
+            if close is not None and id(close) not in closed and hasattr(close, "close"):
+                closed.add(id(close))
+                await asyncio.get_running_loop().run_in_executor(None, close.close)
         await self.client.close()
 
     async def _execute(self, task: dict, executor: Callable[[dict], Awaitable[dict] | dict]) -> None:

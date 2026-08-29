@@ -13,6 +13,13 @@ import os
 from pathlib import Path
 
 
+def _write_checkpoint(path: Path, checkpoint: str | None) -> None:
+    """Persist resume state atomically; never write encrypted values to logs."""
+    temporary = path.with_name(f".{path.name}.tmp")
+    temporary.write_text(json.dumps({"checkpoint": checkpoint}, sort_keys=True) + "\n", encoding="utf-8")
+    os.replace(temporary, path)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Migrate encrypted server fields")
     parser.add_argument("--collection", required=True)
@@ -54,7 +61,7 @@ def main() -> int:
         context_for=lambda document: {"tenant_id": str(document.get("user_id", "")), "profile_id": str(document.get("linkedin_profile_id", ""))},
         old_ring=old_ring, new_ring=new_ring, checkpoint=checkpoint,
         batch_size=args.batch_size, dry_run=not args.apply, retries=args.retries)
-    args.checkpoint_file.write_text(json.dumps({"checkpoint": report.checkpoint}), encoding="utf-8")
+    _write_checkpoint(args.checkpoint_file, report.checkpoint)
     print(json.dumps({"collection": args.collection, "field": args.field, "dry_run": not args.apply, "scanned": report.scanned, "migrated": report.migrated, "skipped": report.skipped, "failed": report.failed, "checkpoint": report.checkpoint}))
     client.close()
     return 0

@@ -25,3 +25,38 @@ def test_pyinstaller_spec_excludes_database_and_legacy_daemon():
     assert '"openoutreach.mongodb"' not in source
     assert '"openoutreach.core.daemon_remote"' not in source
     assert '"openoutreach.core.remote_client"' not in source
+
+
+def test_secure_daemon_requires_explicit_profile_binding_per_channel():
+    from openoutreach.desktop.secure_daemon import SecureRemoteDaemon
+    from openoutreach.desktop.device_identity import DeviceIdentity
+
+    daemon = SecureRemoteDaemon(
+        "https://outreach-api.lengrowth.com", "", "li-1",
+        identity=DeviceIdentity._new(),
+        channel_executors={"linkedin": lambda task: {}, "whatsapp": lambda task: {}},
+        channel_profile_ids={"whatsapp": "wa-1"},
+    )
+    try:
+        assert daemon.channel_profile_ids == {"linkedin": "li-1", "whatsapp": "wa-1"}
+    finally:
+        import asyncio
+        asyncio.run(daemon.stop())
+
+
+def test_desktop_api_url_is_allowlisted_against_ssrf():
+    from openoutreach.desktop.config import AppConfig
+
+    assert AppConfig(api_url="https://outreach-api.lengrowth.com").api_url == "https://outreach-api.lengrowth.com"
+    assert AppConfig(api_url="http://localhost:8001").api_url == "http://localhost:8001"
+    for value in (
+        "https://169.254.169.254/latest/meta-data",
+        "https://attacker.example/",
+        "https://user:password@outreach-api.lengrowth.com",
+        "file:///etc/passwd",
+    ):
+        try:
+            AppConfig(api_url=value)
+        except ValueError:
+            continue
+        raise AssertionError(f"unapproved API URL accepted: {value}")

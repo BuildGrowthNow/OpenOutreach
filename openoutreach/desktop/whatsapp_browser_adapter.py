@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from openoutreach.api_v2.daemon_channel_contracts import WhatsAppActionReceipt, WhatsAppState
+from openoutreach.desktop.whatsapp_session import LocalWhatsAppSession
 
 
 class UnsupportedWhatsAppAction(RuntimeError):
@@ -23,6 +24,18 @@ class WhatsAppBrowserAdapter:
     def __init__(self, profile_id: str, session: Any) -> None:
         self.profile_id = profile_id
         self.session = session
+
+    @classmethod
+    def local(cls, profile_id: str) -> "WhatsAppBrowserAdapter":
+        """Create an adapter backed by the desktop's local browser profile."""
+        return cls(profile_id, LocalWhatsAppSession(profile_id))
+
+    def start(self, *, qr_timeout_seconds: int = 120) -> str:
+        """Start the local session; QR authentication remains human-driven."""
+        starter = getattr(self.session, "start", None)
+        if not callable(starter):
+            raise UnsupportedWhatsAppAction("Session does not support local startup")
+        return str(starter(qr_timeout_seconds=qr_timeout_seconds))
 
     def execute(self, task: dict[str, Any]) -> dict[str, Any]:
         task_type = str(task.get("task_type", ""))
@@ -38,19 +51,23 @@ class WhatsAppBrowserAdapter:
             try:
                 result = reconnect()
             except Exception as exc:
-                return self._receipt(task, "rejected", "session", type(exc).__name__)
+                return self._receipt(task, self._provider_outcome(exc), "session", type(exc).__name__)
             outcome = "applied" if result is not False else "rejected"
             return self._receipt(task, outcome, "session", "reconnect")
         if task_type == "whatsapp_sync":
             try:
                 messages = self.session.sync(cursor=str(snapshot.get("cursor", "")), limit=100)
             except Exception as exc:
-                return self._receipt(task, "rejected", "sync", type(exc).__name__)
+                return self._receipt(task, self._provider_outcome(exc), "sync", type(exc).__name__)
+            next_cursor = str(snapshot.get("cursor", ""))
+            if isinstance(messages, dict):
+                next_cursor = str(messages.get("cursor", next_cursor))
+                messages = messages.get("messages", [])
             bounded = self._bounded_messages(messages)
             return {"outcome": "observed", "messages": bounded,
-                    "cursor": str(snapshot.get("cursor", "")), "observed_at": int(time.time()),
+                    "cursor": next_cursor, "observed_at": int(time.time()),
                     "sync": {"profile_id": self.profile_id,
-                              "cursor": str(snapshot.get("cursor", "")),
+                              "cursor": next_cursor,
                               "messages": bounded}}
         phone = str(snapshot.get("target_phone", "")).strip()
         message = str(snapshot.get("message", "")).strip()

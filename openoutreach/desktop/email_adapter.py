@@ -46,8 +46,10 @@ class EmailAdapter:
             try:
                 result = self.provider.scan_replies(typed_grant.model_dump(mode="json"), str(snapshot.get("cursor", "")))
             except Exception as exc:
-                return {"outcome": "rejected", "state": self._provider_outcome(exc),
-                        "observed_at": int(time.time())}
+                return self._result_with_receipt(
+                    task, typed_grant, "", self._provider_outcome(exc),
+                    target=str(typed_grant.mailbox_id),
+                )
             replies = self._bounded_replies(result)
             return {"outcome": "observed", "replies": replies, "observed_at": int(time.time())}
         if typed_grant.purpose != "send":
@@ -62,8 +64,9 @@ class EmailAdapter:
         try:
             result = self.provider.send(typed_grant.model_dump(mode="json"), recipient, subject, body, effect_key)
         except Exception as exc:
-            return {"outcome": self._provider_outcome(exc), "target_key": recipient,
-                    "effect_key": effect_key, "observed_at": int(time.time())}
+            return self._result_with_receipt(
+                task, typed_grant, effect_key, self._provider_outcome(exc), target=recipient,
+            )
         outcome = "already_applied" if result in ("duplicate", "already_sent") else ("applied" if result else "rejected")
         receipt = EmailReceipt(
             mailbox_id=typed_grant.mailbox_id,
@@ -72,6 +75,23 @@ class EmailAdapter:
             observed_at=datetime.now(timezone.utc),
         )
         return {"outcome": outcome, "target_key": recipient, "effect_key": effect_key,
+                "observed_at": int(time.time()), "receipt": receipt.model_dump(mode="json")}
+
+    @staticmethod
+    def _result_with_receipt(task: dict[str, Any], grant: MailboxGrant,
+                             effect_key: str, outcome: str, *, target: str) -> dict[str, Any]:
+        """Return a bounded result and a typed failure receipt for retries."""
+        snapshot = task.get("snapshot") or {}
+        key = effect_key or str(snapshot.get("effect_key") or hashlib.sha256(
+            f"{grant.task_id}:{target}:{task.get('task_type', '')}".encode()
+        ).hexdigest())
+        receipt = EmailReceipt(
+            mailbox_id=grant.mailbox_id,
+            effect_key=key,
+            outcome="failed",
+            observed_at=datetime.now(timezone.utc),
+        )
+        return {"outcome": outcome, "target_key": target, "effect_key": key,
                 "observed_at": int(time.time()), "receipt": receipt.model_dump(mode="json")}
 
     @staticmethod

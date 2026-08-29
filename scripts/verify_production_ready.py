@@ -10,6 +10,7 @@ Usage:
 """
 import subprocess
 import sys
+import os
 from pathlib import Path
 
 
@@ -155,6 +156,24 @@ def check_pytest_config() -> bool:
     return True
 
 
+def check_production_prerequisites() -> bool:
+    """Require deployment prerequisites before calling the result production-ready."""
+    print("\n6. Checking production deployment prerequisites...")
+    required = {
+        "MongoDB URI": os.getenv("MONGODB_URI") or os.getenv("OPENOUTREACH_MONGODB_URI"),
+        "MongoDB database name": os.getenv("MONGODB_NAME") or os.getenv("OPENOUTREACH_MONGODB_NAME"),
+        "daemon JWT private key": os.getenv("DAEMON_JWT_PRIVATE_KEY") or os.getenv("DAEMON_JWT_PRIVATE_KEY_B64"),
+        "daemon JWT public key": os.getenv("DAEMON_JWT_PUBLIC_KEY") or os.getenv("DAEMON_JWT_PUBLIC_KEY_B64"),
+    }
+    missing = [name for name, value in required.items() if not value]
+    if missing:
+        print("   [BLOCKED] Missing deployment-managed prerequisites: " + ", ".join(missing))
+        print("   Local source/smoke checks are not evidence of production readiness.")
+        return False
+    print("   [PASS] Required deployment-managed prerequisites are configured")
+    return True
+
+
 def main():
     """Run all verification checks."""
     print("=" * 70)
@@ -168,6 +187,7 @@ def main():
         ("Django Uninstalled", check_django_uninstalled),
         ("Pytest Config", check_pytest_config),
         ("Smoke Tests", check_smoke_tests),
+        ("Production Prerequisites", check_production_prerequisites),
     ]
 
     results = {}
@@ -193,14 +213,8 @@ def main():
     print("=" * 70)
 
     if all_passed:
-        print("\nALL CHECKS PASSED - PRODUCTION READY")
-        print("\nNext steps:")
-        print("  1. Set up MongoDB connection (Atlas or local)")
-        print("  2. Run full integration tests with MongoDB")
-        print("  3. Test daemon: python -m openoutreach.cli rundaemon")
-        print("  4. Test API: python -m openoutreach.cli runserver")
-        print("  5. Deploy to production")
-        print("\nSee PHASE_14_COMPLETE.md for detailed instructions.")
+        print("\nALL CHECKS PASSED - LOCAL AND DEPLOYMENT PREREQUISITE CHECKS PASSED")
+        print("Production readiness still requires live integration, channel validation, and deployment smoke evidence.")
         return 0
     else:
         print("\n[FAIL] SOME CHECKS FAILED - NOT PRODUCTION READY")

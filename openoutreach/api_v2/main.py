@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 app = FastAPI(
     title="Lengrowth API",
     description="LinkedIn Automation Platform - FastAPI + MongoDB",
-    version="2.1.0",
+    version="2.1.2",
     docs_url="/docs",
     redoc_url="/redoc",
     redirect_slashes=False,
@@ -35,7 +35,9 @@ app.add_middleware(
 
 class DaemonSecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
-        if request.url.path.startswith("/api/daemon/") and not request.url.path.startswith("/api/daemon/v2/") and request.url.path != "/api/daemon/bootstrap":
+        if (request.url.path.startswith("/api/daemon/")
+                and not request.url.path.startswith("/api/daemon/v2/")
+                and request.url.path.rstrip("/") != "/api/daemon/bootstrap"):
             from openoutreach.api_v2.daemon_security import require_secure_daemon
 
             try:
