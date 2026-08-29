@@ -20,6 +20,24 @@ class UnsupportedEmailAction(RuntimeError):
     pass
 
 
+class RemoteMailboxProvider:
+    """Bridge email operations to the authenticated daemon API."""
+
+    def __init__(self, submit: Any) -> None:
+        self._submit = submit
+        self._task: dict[str, Any] = {}
+
+    def set_task(self, task: dict[str, Any]) -> None:
+        self._task = task
+
+    def send(self, grant: dict[str, Any], recipient: str, subject: str,
+             body: str, effect_key: str) -> Any:
+        return self._submit(self._task, "send", grant, recipient, subject, body, effect_key)
+
+    def scan_replies(self, grant: dict[str, Any], cursor: str) -> Any:
+        return self._submit(self._task, "reply_scan", grant, "", "", "", "", cursor)
+
+
 class EmailAdapter:
     SUPPORTED_TASKS = frozenset({"email_follow_up", "email_send", "email_reply_scan"})
 
@@ -40,6 +58,9 @@ class EmailAdapter:
             raise UnsupportedEmailAction("Mailbox grant is invalid or expired") from exc
         if task.get("task_id") and str(grant["task_id"]) != str(task["task_id"]):
             raise UnsupportedEmailAction("Mailbox grant is bound to another task")
+        set_task = getattr(self.provider, "set_task", None)
+        if callable(set_task):
+            set_task(task)
         if task_type == "email_reply_scan":
             if typed_grant.purpose != "reply_scan":
                 raise UnsupportedEmailAction("Mailbox grant purpose mismatch")
@@ -50,7 +71,9 @@ class EmailAdapter:
                     task, typed_grant, "", self._provider_outcome(exc),
                     target=str(typed_grant.mailbox_id),
                 )
-            replies = self._bounded_replies(result)
+            replies = self._bounded_replies(
+                result.get("replies", []) if isinstance(result, dict) else result
+            )
             return {"outcome": "observed", "replies": replies, "observed_at": int(time.time())}
         if typed_grant.purpose != "send":
             raise UnsupportedEmailAction("Mailbox grant purpose mismatch")
@@ -67,7 +90,8 @@ class EmailAdapter:
             return self._result_with_receipt(
                 task, typed_grant, effect_key, self._provider_outcome(exc), target=recipient,
             )
-        outcome = "already_applied" if result in ("duplicate", "already_sent") else ("applied" if result else "rejected")
+        provider_status = result.get("status") if isinstance(result, dict) else result
+        outcome = "already_applied" if provider_status in ("duplicate", "already_sent") else ("applied" if provider_status in (True, "sent", "applied") else "rejected")
         receipt = EmailReceipt(
             mailbox_id=typed_grant.mailbox_id,
             effect_key=effect_key,

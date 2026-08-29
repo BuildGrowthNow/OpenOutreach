@@ -154,6 +154,19 @@ class FailRequest(LeaseMutation):
     idempotency_key: str = Field(default="", max_length=128)
 
 
+class EmailExecutionRequest(LeaseMutation):
+    model_config = ConfigDict(extra="forbid")
+
+    task_id: str = Field(min_length=1, max_length=256)
+    idempotency_key: str = Field(min_length=16, max_length=128)
+    operation: Literal["send", "reply_scan"]
+    mailbox_grant: MailboxGrant
+    recipient: str = Field(default="", max_length=320)
+    subject: str = Field(default="", max_length=998)
+    body: str = Field(default="", max_length=20_000)
+    cursor: str = Field(default="", max_length=256)
+
+
 class EnrollmentCodeRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -680,6 +693,150 @@ async def email_receipt_v2(profile_id: str, receipt: EmailReceipt,
                               receipt.model_dump(mode="json"), receipt.effect_key)
 
 
+@router.post("/email/{profile_id}/execute")
+async def execute_email_v2(
+    profile_id: str,
+    request: EmailExecutionRequest,
+    context: TenantContext = Depends(get_daemon_context),
+) -> dict[str, Any]:
+    """Execute an email operation with credentials retained on the backend.
+
+    The desktop receives only a short-lived mailbox grant. SMTP/IMAP
+    credentials are loaded and used here, under the task lease and tenant
+    ownership predicates, and never cross the daemon boundary.
+    """
+    require_profile(context, profile_id, "email")
+    tasks = get_mongodb_collection("tasks")
+    effects = get_mongodb_collection("daemon_effects")
+    if tasks is None or effects is None:
+        raise HTTPException(503, "Email execution unavailable")
+    now = datetime.now(timezone.utc)
+    task = tasks.find_one({**_lease_query(context, request.task_id, request.lease_id),
+                           "lease_expires_at": {"$gt": now}})
+    if not task:
+        raise HTTPException(status.HTTP_410_GONE, "Lease expired or no longer owned")
+    expected_key = str(task.get("idempotency_key") or _snapshot(task).get("effect_key") or "")
+    if request.idempotency_key != expected_key:
+        raise HTTPException(422, "Idempotency key does not match task effect")
+    if request.mailbox_grant.task_id != request.task_id or request.mailbox_grant.mailbox_id != profile_id:
+        raise HTTPException(422, "Mailbox grant is not bound to this task")
+    if request.operation == "send":
+        materialized = _snapshot(task)
+        if any(request_data != materialized.get(field, "") for field, request_data in (
+            ("recipient", request.recipient), ("subject", request.subject), ("body", request.body),
+        )):
+            raise HTTPException(422, "Email payload does not match the materialized task")
+        existing = effects.find_one({"user_id": context.tenant_id, "effect_key": expected_key})
+        if existing and existing.get("provider_state") == "sent":
+            return {"status": "already_sent", "message_id": str(existing.get("message_id", ""))[:256]}
+        if existing and existing.get("provider_state") == "sending":
+            raise HTTPException(409, "Email send outcome is still being reconciled")
+        mailbox_collection = get_mongodb_collection("mailboxes")
+        mailbox_doc = mailbox_collection.find_one({"_id": profile_id, "user_id": context.tenant_id}) if mailbox_collection is not None else None
+        if not mailbox_doc:
+            raise HTTPException(404, "Mailbox not found")
+        try:
+            from openoutreach.emails.models import Mailbox
+            from openoutreach.emails.sender import send_email
+            mailbox = Mailbox.from_dict(mailbox_doc)
+            if mailbox.paused:
+                return {"status": "suppressed", "reason": "mailbox_paused"}
+            if mailbox.sent_today() >= mailbox.daily_limit:
+                return {"status": "rate_limited", "reason": "mailbox_daily_limit"}
+            deal_id = str((task.get("payload") or {}).get("deal_id", ""))
+            campaign_id = str((task.get("payload") or {}).get("campaign_id", ""))
+            deals = get_mongodb_collection("deals")
+            deal_doc = deals.find_one(
+                {"_id": deal_id, "user_id": context.tenant_id},
+                {"lead_id": 1, "email_message_id": 1, "email_first_message_id": 1,
+                 "email_sequence_step": 1, "sequence_last_step_id": 1},
+            ) if deal_id and deals is not None else None
+            if deal_id:
+                leads = get_mongodb_collection("leads")
+                lead_doc = leads.find_one(
+                    {"_id": deal_doc.get("lead_id"), "user_id": context.tenant_id},
+                    {"email_unsubscribed": 1, "email_bounced": 1},
+                ) if leads is not None and deal_doc and deal_doc.get("lead_id") else None
+                if lead_doc and (lead_doc.get("email_unsubscribed") or lead_doc.get("email_bounced")):
+                    return {"status": "suppressed", "reason": "recipient_suppressed"}
+            effects.update_one(
+                {"user_id": context.tenant_id, "effect_key": expected_key},
+                {"$set": {"task_id": request.task_id, "provider_state": "sending", "updated_at": now},
+                 "$setOnInsert": {"_id": str(uuid4()), "created_at": now}},
+                upsert=True,
+            )
+            in_reply_to = str((deal_doc or {}).get("email_message_id") or "") or None
+            references = " ".join(str(value) for value in (
+                (deal_doc or {}).get("email_first_message_id"),
+                (deal_doc or {}).get("email_message_id"),
+            ) if value) or in_reply_to
+            message_id = send_email(
+                mailbox, request.recipient, request.subject, request.body,
+                in_reply_to=in_reply_to, references=references,
+                deal_id=deal_id, campaign_id=campaign_id,
+            )
+        except Exception as exc:
+            effects.update_one({"user_id": context.tenant_id, "effect_key": expected_key},
+                               {"$set": {"provider_state": "failed", "updated_at": now}})
+            raise HTTPException(503, "Email provider rejected the send") from exc
+        effects.update_one({"user_id": context.tenant_id, "effect_key": expected_key},
+                           {"$set": {"provider_state": "sent", "message_id": str(message_id)[:256], "updated_at": now}})
+        if deal_id and deals is not None:
+            current_step = int((deal_doc or {}).get("email_sequence_step", 0) or 0)
+            update_fields: dict[str, Any] = {
+                "state": "email_sent", "mailbox_id": profile_id,
+                "email_sent_at": now, "email_message_id": str(message_id)[:256],
+                "email_sequence_step": current_step + 1,
+            }
+            if current_step == 0:
+                update_fields["email_first_message_id"] = str(message_id)[:256]
+                update_fields["email_first_sent_at"] = now
+            deals.update_one(
+                {"_id": deal_id, "user_id": context.tenant_id,
+                 "state": {"$nin": ["email_replied", "email_bounced"]}},
+                {"$set": update_fields},
+            )
+        return {"status": "sent", "message_id": str(message_id)[:256]}
+    materialized = _snapshot(task)
+    if request.mailbox_grant.purpose != "reply_scan":
+        raise HTTPException(422, "Mailbox grant purpose mismatch")
+    deal_id = str((task.get("payload") or {}).get("deal_id", ""))
+    deals = get_mongodb_collection("deals")
+    deal = deals.find_one({"_id": deal_id, "user_id": context.tenant_id},
+                          {"email_message_id": 1, "email_first_message_id": 1}) if deals is not None and deal_id else None
+    if not deal:
+        return {"status": "none", "replies": []}
+    from openoutreach.emails.imap_checker import find_reply
+    from openoutreach.emails.models import Mailbox
+    mailbox = Mailbox.get(profile_id)
+    if mailbox is None or mailbox.user_id != context.tenant_id:
+        raise HTTPException(404, "Mailbox not found")
+    result = find_reply(mailbox, [str(value) for value in (
+        deal.get("email_message_id"), deal.get("email_first_message_id")) if value])
+    if result is None:
+        return {"status": "none", "replies": []}
+    text, received_at = result
+    if deals is not None:
+        changed = deals.update_one(
+            {"_id": deal_id, "user_id": context.tenant_id,
+             "state": {"$in": ["email_sent", "email_opened"]}},
+            {"$set": {"state": "email_replied"}},
+        )
+        if changed.modified_count:
+            try:
+                from openoutreach.mongodb.models_extended import ChatMessage
+                ChatMessage(
+                    deal_id=deal_id, content=text[:2000], is_outgoing=False,
+                    channel="email", user_id=context.tenant_id,
+                    creation_date=received_at,
+                ).save()
+            except Exception:
+                # Reply state is authoritative; a chat projection failure is
+                # observable in server logs and must not expose IMAP details.
+                pass
+    return {"status": "replied", "replies": [{"body": text[:2000], "received_at": received_at.isoformat()}]}
+
+
 @router.post("/sessions/{profile_id}/state", response_model=TypedEventResponse)
 async def session_state_v2(profile_id: str, state: SessionState,
                            context: TenantContext = Depends(get_daemon_context)) -> TypedEventResponse:
@@ -701,6 +858,9 @@ def _task_profile_id(document: dict[str, Any]) -> str:
     channel = str(document.get("channel", ""))
     if channel == "whatsapp":
         return str(document.get("whatsapp_profile_id") or document.get("linkedin_profile_id") or "")
+    if channel == "email":
+        return str(document.get("mailbox_id") or document.get("email_profile_id")
+                   or document.get("linkedin_profile_id") or "")
     return str(document.get("linkedin_profile_id") or "")
 
 
@@ -712,6 +872,7 @@ def _snapshot(document: dict[str, Any]) -> dict[str, Any]:
         "deal_id",
         "step_id",
         "message_id",
+        "mailbox_id",
         "message",
         "target_public_identifier",
         "target_urn",
@@ -807,6 +968,16 @@ def _snapshot(document: dict[str, Any]) -> dict[str, Any]:
                 snapshot["mailbox_grant"] = grant.model_dump(mode="json")
         except Exception:
             snapshot.pop("mailbox_grant", None)
+    if channel == "email" and "mailbox_grant" not in snapshot and owner_id and profile_id:
+        mailboxes = get_mongodb_collection("mailboxes")
+        mailbox = mailboxes.find_one({"_id": profile_id, "user_id": owner_id}, {"_id": 1}) if mailboxes is not None else None
+        if mailbox:
+            purpose = "reply_scan" if str(document.get("task_type", "")) == "email_reply_scan" else "send"
+            snapshot["mailbox_grant"] = MailboxGrant(
+                task_id=str(document.get("_id", "")), mailbox_id=profile_id,
+                expires_at=datetime.now(timezone.utc) + timedelta(seconds=45),
+                purpose=purpose,
+            ).model_dump(mode="json")
     # Effect identity is server-owned and stable across lease retries.  It is
     # intentionally based only on bounded task identity, not message bodies.
     effect_material = ":".join(str(snapshot.get(key, "")) for key in

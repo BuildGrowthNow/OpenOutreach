@@ -1075,7 +1075,15 @@ def plan_email_follow_up_window(campaign, user_id: str, linkedin_profile_id: str
     if not has_mailbox(user_id=user_id):
         return 0
 
-    if _has_pending(Task.TaskType.EMAIL_FOLLOW_UP, campaign.pk, linkedin_profile_id=linkedin_profile_id, channel="email"):
+    # v2 email authorization is bound to the mailbox, not a LinkedIn profile.
+    # Keep the legacy parameter for callers, but schedule against one owned
+    # mailbox so the daemon can claim with an exact channel binding.
+    mailbox = Mailbox.objects.least_loaded_under_cap(user_id=user_id)
+    if mailbox is None:
+        return 0
+    mailbox_profile_id = str(mailbox.pk)
+
+    if _has_pending(Task.TaskType.EMAIL_FOLLOW_UP, campaign.pk, linkedin_profile_id=mailbox_profile_id, channel="email"):
         return 0
 
     from openoutreach.mongodb.connection import get_mongodb_collection
@@ -1120,7 +1128,7 @@ def plan_email_follow_up_window(campaign, user_id: str, linkedin_profile_id: str
 
     created = _plan_slots(
         Task.TaskType.EMAIL_FOLLOW_UP, campaign.pk, n, velocity,
-        linkedin_profile_id=linkedin_profile_id,
+        linkedin_profile_id=mailbox_profile_id,
         user_id=user_id,
         channel="email",
     )

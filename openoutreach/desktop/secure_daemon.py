@@ -139,7 +139,15 @@ class SecureRemoteDaemon:
         renewal_stop = asyncio.Event()
         renewal = asyncio.create_task(self._renew_lease(task, renewal_stop))
         try:
-            result = executor(task)
+            # Synchronous adapters (WhatsApp and the email bridge) may make
+            # blocking provider calls. Keep them off the lease/event loop;
+            # async browser adapters remain directly awaitable.
+            if inspect.iscoroutinefunction(executor):
+                result = executor(task)
+            else:
+                result = await asyncio.get_running_loop().run_in_executor(
+                    None, executor, task
+                )
             if inspect.isawaitable(result):
                 result = await result
             if not isinstance(result, dict):

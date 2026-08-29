@@ -168,6 +168,20 @@ class DesktopRemoteClient:
             "POST", f"/api/daemon/v2/{channel}/{profile_id}/{kind}", json=payload
         )).json()
 
+    async def execute_email(
+        self, profile_id: str, task_id: str, lease_id: str,
+        idempotency_key: str, operation: str, mailbox_grant: dict[str, Any],
+        *, recipient: str = "", subject: str = "", body: str = "", cursor: str = "",
+    ) -> dict[str, Any]:
+        """Run a backend email operation without transferring mailbox credentials."""
+        return (await self._request(
+            "POST", f"/api/daemon/v2/email/{profile_id}/execute",
+            json={"task_id": task_id, "lease_id": lease_id,
+                  "idempotency_key": idempotency_key, "operation": operation,
+                  "mailbox_grant": mailbox_grant, "recipient": recipient,
+                  "subject": subject, "body": body, "cursor": cursor},
+        )).json()
+
     async def get_configuration(
         self, profile_id: str, channel: str = "linkedin", etag: str | None = None
     ) -> tuple[int, dict[str, Any] | None, str | None]:

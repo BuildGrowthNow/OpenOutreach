@@ -20,6 +20,7 @@ from pystray import MenuItem as Item
 from openoutreach.desktop.secure_daemon import SecureRemoteDaemon as RemoteDaemon
 from openoutreach.desktop.linkedin_browser_adapter import LinkedInBrowserAdapter
 from openoutreach.desktop.whatsapp_browser_adapter import WhatsAppBrowserAdapter
+from openoutreach.desktop.email_adapter import EmailAdapter, RemoteMailboxProvider
 from openoutreach.desktop.device_identity import DeviceIdentity
 from openoutreach.desktop.__version__ import __version__
 from openoutreach.desktop.auth import AuthManager
@@ -701,6 +702,24 @@ class TrayApp:
                 if whatsapp_ids:
                     whatsapp_adapter = WhatsAppBrowserAdapter.local(whatsapp_ids[0])
                     channel_executors["whatsapp"] = whatsapp_adapter.execute
+                email_ids = channel_profile_ids.get("email", [])
+                if email_ids:
+                    def submit_email(task, operation, grant, recipient, subject, body,
+                                     effect_key, cursor=""):
+                        if self.daemon is None or self._loop is None:
+                            raise RuntimeError("Daemon is not running")
+                        future = asyncio.run_coroutine_threadsafe(
+                            self.daemon.client.execute_email(
+                                grant["mailbox_id"], task["task_id"], task["lease_id"],
+                                effect_key, operation, grant,
+                                recipient=recipient, subject=subject, body=body,
+                                cursor=cursor,
+                            ),
+                            self._loop,
+                        )
+                        return future.result(timeout=40)
+                    email_provider = RemoteMailboxProvider(submit_email)
+                    channel_executors["email"] = EmailAdapter(email_provider).execute
                 self.daemon = RemoteDaemon(
                     api_url=self.config.api_url,
                     token=token,

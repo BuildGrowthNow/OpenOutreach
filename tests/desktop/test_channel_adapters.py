@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
-from openoutreach.desktop.email_adapter import EmailAdapter, UnsupportedEmailAction
+from openoutreach.desktop.email_adapter import EmailAdapter, RemoteMailboxProvider, UnsupportedEmailAction
 from openoutreach.desktop.whatsapp_browser_adapter import WhatsAppBrowserAdapter
 from openoutreach.desktop.whatsapp_session import LocalWhatsAppSession
 
@@ -111,3 +111,26 @@ def test_email_adapter_returns_typed_failure_receipt():
     }})
     assert result["outcome"] == "timeout"
     assert result["receipt"]["outcome"] == "failed"
+
+
+def test_remote_mailbox_provider_forwards_task_lease_without_credentials():
+    calls = []
+
+    def submit(task, operation, grant, recipient, subject, body, effect_key, cursor=""):
+        calls.append((task, operation, grant, recipient, subject, body, effect_key, cursor))
+        return {"status": "sent"}
+
+    provider = RemoteMailboxProvider(submit)
+    task = {"task_id": "task-1", "lease_id": "lease-1", "task_type": "email_send"}
+    adapter = EmailAdapter(provider)
+    adapter.execute({**task, "snapshot": {
+        "recipient": "person@example.com", "subject": "Hi", "body": "Hello",
+        "effect_key": "effect-1",
+        "mailbox_grant": {"task_id": "task-1", "mailbox_id": "box-1",
+                           "purpose": "send",
+                           "expires_at": (datetime.now(timezone.utc) + timedelta(seconds=30)).isoformat()},
+    }})
+    assert calls[0][0]["task_id"] == task["task_id"]
+    assert calls[0][0]["lease_id"] == task["lease_id"]
+    assert calls[0][1] == "send"
+    assert "password" not in repr(calls[0][2]).lower()
