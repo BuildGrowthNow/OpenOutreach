@@ -24,6 +24,28 @@ async def test_compatibility_is_available_before_device_exchange():
         await client.close()
 
 
+@pytest.mark.asyncio
+async def test_rotated_refresh_credential_is_persisted():
+    rotated = []
+    client = DesktopRemoteClient(
+        "https://outreach-api.example", "", "device-1",
+        on_credentials_rotated=lambda device, refresh: rotated.append((device, refresh)),
+    )
+    try:
+        async def post(path, **kwargs):
+            return httpx.Response(
+                200, json={"access_token": "access", "refresh_token": "replacement"},
+                request=httpx.Request("POST", "https://outreach-api.example" + path),
+            )
+
+        client._client.post = post
+        await client.exchange_device_token("device-1", "presented", lambda _: "signature")
+        assert rotated == [("device-1", "replacement")]
+        assert client._refresh_token == "replacement"
+    finally:
+        await client.close()
+
+
 def test_desktop_client_has_only_v2_operations():
     forbidden = ("get_credentials", "sync_cookies", "get_profile_details",
                  "get_campaign_details", "/api/daemon/tasks/")

@@ -47,6 +47,7 @@ class SecureRemoteDaemon:
         self.client = DesktopRemoteClient(
             api_url, token, self.identity.device_id or "secure-v2",
             refresh_token, on_token_refresh, self.identity.sign,
+            on_credentials_rotated,
         )
         self.linkedin_profile_id = linkedin_profile_id
         self.on_started = on_started
@@ -64,8 +65,6 @@ class SecureRemoteDaemon:
         if not self.identity.device_id or not self.client._refresh_token:
             raise SecureDaemonError("Secure desktop enrollment is required")
         exchanged = await self.client.exchange_device_token(self.identity.device_id, self.client._refresh_token, self.identity.sign)
-        if self.on_credentials_rotated:
-            self.on_credentials_rotated(self.identity.device_id, exchanged["refresh_token"])
         self.running = True
         if self.on_started:
             self.on_started()
@@ -170,6 +169,4 @@ class SecureRemoteDaemon:
         self.identity.remember_device(data["device_id"])
         self.client._refresh_token = data["refresh_token"]
         exchanged = await self.client.exchange_device_token(data["device_id"], data["refresh_token"], self.identity.sign)
-        if self.on_credentials_rotated:
-            self.on_credentials_rotated(data["device_id"], exchanged["refresh_token"])
         return data

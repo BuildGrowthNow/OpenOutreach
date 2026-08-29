@@ -34,6 +34,7 @@ class DesktopRemoteClient:
         refresh_token: Optional[str] = None,
         on_token_refresh: Optional[Callable[[str], None]] = None,
         device_signer: Optional[Callable[[bytes], str]] = None,
+        on_credentials_rotated: Optional[Callable[[str, str], None]] = None,
     ) -> None:
         self.api_url = api_url.rstrip("/")
         self.device_id = device_id
@@ -41,6 +42,7 @@ class DesktopRemoteClient:
         self._refresh_token = refresh_token
         self._on_token_refresh = on_token_refresh
         self._device_signer = device_signer
+        self._on_credentials_rotated = on_credentials_rotated
         self._client = httpx.AsyncClient(
             base_url=self.api_url,
             headers={
@@ -100,6 +102,8 @@ class DesktopRemoteClient:
         response.raise_for_status()
         data = response.json()
         self._set_credentials(data["access_token"], data["refresh_token"])
+        if self._on_credentials_rotated:
+            self._on_credentials_rotated(device_id, data["refresh_token"])
         return data
 
     async def refresh_device_token(self) -> Optional[str]:
