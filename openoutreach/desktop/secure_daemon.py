@@ -13,7 +13,7 @@ import logging
 from collections import deque
 from typing import Awaitable, Callable, Optional
 
-from openoutreach.core.remote_client import RemoteClient
+from openoutreach.desktop.remote_client import DesktopRemoteClient
 from openoutreach.desktop.device_identity import DeviceIdentity
 
 logger = logging.getLogger(__name__)
@@ -44,7 +44,10 @@ class SecureRemoteDaemon:
         channel_executors: Optional[dict[str, Callable[[dict], Awaitable[dict] | dict]]] = None,
     ) -> None:
         self.identity = identity or DeviceIdentity.load_or_create()
-        self.client = RemoteClient(api_url, token, self.identity.device_id or "secure-v2", refresh_token, on_token_refresh, secure_v2=True, device_signer=self.identity.sign)
+        self.client = DesktopRemoteClient(
+            api_url, token, self.identity.device_id or "secure-v2",
+            refresh_token, on_token_refresh, self.identity.sign,
+        )
         self.linkedin_profile_id = linkedin_profile_id
         self.on_started = on_started
         self.execute_task = execute_task
@@ -93,12 +96,15 @@ class SecureRemoteDaemon:
         await self.client.close()
 
     async def _execute(self, task: dict, executor: Callable[[dict], Awaitable[dict] | dict]) -> None:
+        renewal_stop = asyncio.Event()
+        renewal = asyncio.create_task(self._renew_lease(task, renewal_stop))
         try:
             result = executor(task)
             if inspect.isawaitable(result):
                 result = await result
             if not isinstance(result, dict):
                 raise SecureDaemonError("Channel adapter returned an invalid receipt")
+            await self._publish_typed_event(task, result)
             completion = (task["task_id"], task["lease_id"], task.get("idempotency_key", task["lease_id"]), result)
             try:
                 await self.client.complete_task_v2(*completion)
@@ -108,7 +114,47 @@ class SecureRemoteDaemon:
                 self._offline_completions.append(completion)
         except Exception as exc:
             logger.warning("Secure daemon task failed: %s", type(exc).__name__)
-            await self.client.fail_task_v2(task["task_id"], task["lease_id"], "retryable", "local execution failed")
+            try:
+                await self.client.fail_task_v2(task["task_id"], task["lease_id"], "retryable", "local execution failed")
+            except Exception:
+                logger.warning("Unable to report local task failure")
+        finally:
+            renewal_stop.set()
+            await renewal
+
+    async def _renew_lease(self, task: dict, stop: asyncio.Event) -> None:
+        """Keep a long-running local browser action owned by this device."""
+        while True:
+            try:
+                try:
+                    await asyncio.wait_for(stop.wait(), timeout=120)
+                    return
+                except asyncio.TimeoutError:
+                    pass
+                await self.client.renew_task_v2(task["task_id"], task["lease_id"])
+            except asyncio.CancelledError:
+                return
+            except Exception:
+                logger.warning("Task lease renewal failed")
+                return
+
+    async def _publish_typed_event(self, task: dict, result: dict) -> None:
+        """Persist only adapter-produced typed observations/receipts."""
+        snapshot = task.get("snapshot") or {}
+        profile_id = str(snapshot.get("profile_id") or self.linkedin_profile_id)
+        channel = str(task.get("channel") or "linkedin")
+        if channel == "linkedin":
+            if isinstance(result.get("receipt"), dict):
+                await self.client.post_typed_observation("linkedin", profile_id, "receipts", result["receipt"])
+            if isinstance(result.get("observation"), dict):
+                await self.client.post_typed_observation("linkedin", profile_id, "observations", result["observation"])
+        elif channel == "whatsapp":
+            if isinstance(result.get("sync"), dict):
+                await self.client.post_typed_observation("whatsapp", profile_id, "sync", result["sync"])
+            if isinstance(result.get("receipt"), dict):
+                await self.client.post_typed_observation("whatsapp", profile_id, "receipts", result["receipt"])
+        elif channel == "email" and isinstance(result.get("receipt"), dict):
+            await self.client.post_typed_observation("email", profile_id, "receipts", result["receipt"])
 
     async def _flush_offline_completions(self) -> None:
         while self._offline_completions:

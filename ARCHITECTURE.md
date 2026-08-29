@@ -18,7 +18,7 @@ Detailed module documentation for OpenOutreach. See `CLAUDE.md` for rules and qu
 
 OpenOutreach automates LinkedIn outreach through a persistent task queue executed by one of two daemon modes:
 
-1. **Desktop daemon** (default): runs `openoutreach/core/daemon_remote.py` on the user's own machine using their residential IP.
+1. **Desktop daemon** (default): runs `openoutreach/desktop/secure_daemon.py` on the user's own machine using their residential IP and the `/api/daemon/v2` gateway.
 2. **Cloud daemon** (paid add-on): runs `openoutreach/core/daemon.py` server-side in Docker on EC2, using proxies.
 
 The server-side daemon uses MongoDB. The legacy desktop daemon is cut off
@@ -216,7 +216,7 @@ Signature: `handle_*(task, session, qualifiers)`
 
 See `CLAUDE.md` "Execution Modes" section for the authoritative description and critical code constraints.
 
-- **Desktop**: `core/daemon_remote.py` on user's machine; bootstrapped via `GET /api/daemon/config` which returns MongoDB URI + server env. `RemoteDaemon._apply_server_env()` injects into `os.environ` before any DB code runs.
+- **Desktop**: `desktop/secure_daemon.py` with the v2-only desktop client; it receives typed snapshots and receipts through `/api/daemon/v2` and never receives server credentials or database access.
 - **Cloud**: `core/daemon.py` in Docker on EC2; full `.env` file, no bootstrap needed.
 - Both share MongoDB Atlas, task handlers, `SiteConfig`, and `authenticate()` from `linkedin_cli`.
 
@@ -227,8 +227,8 @@ Paths relative to `openoutreach/`.
 ### Core
 
 - **`core/daemon.py`** - Cloud daemon worker loop. Active-hours guard, `_build_qualifiers()`, freemium support.
-- **`core/daemon_remote.py`** - Desktop daemon. Connects to backend API, executes tasks locally, sends heartbeats.
-- **`core/remote_client.py`** - Async HTTP client for desktop daemon ↔ backend communication (task claim/result, cookie sync, config fetch).
+- **`core/daemon_remote.py`** - Retired legacy desktop daemon; excluded from distributed artifacts and not a supported integration path.
+- **`desktop/remote_client.py`** - Strict v2-only desktop client for enrollment, proof-bound leases, typed receipts, and configuration.
 - **`core/browser_detect.py`** - Detects Chrome/Edge/Safari on Windows/macOS for the desktop daemon.
 - **`core/scheduler.py`** - Single owner of Task row creation. See Task Queue section above.
 - **`core/llm.py`** - `get_llm_model()` factory + `run_agent_sync(coro)` sync boundary. Never use `Agent.run_sync` - it poisons subsequent sync Playwright calls.

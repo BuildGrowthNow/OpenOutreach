@@ -79,6 +79,7 @@ def migrate_collection_field(
     checkpoint: str | None = None,
     batch_size: int = 100,
     dry_run: bool = True,
+    retries: int = 3,
 ) -> MigrationReport:
     """Migrate one encrypted field without printing plaintext or ciphertext."""
     query: dict[str, Any] = {field: {"$exists": True}}
@@ -98,7 +99,19 @@ def migrate_collection_field(
             plaintext = decrypt_value(value, context=context, key_ring=old_ring)
             replacement = encrypt_value(plaintext, context=context, key_ring=new_ring)
             if not dry_run:
-                collection.update_one({"_id": document["_id"]}, {"$set": {field: replacement}})
+                last_error: Exception | None = None
+                for attempt in range(retries):
+                    try:
+                        collection.update_one({"_id": document["_id"]}, {"$set": {field: replacement}})
+                        last_error = None
+                        break
+                    except Exception as exc:
+                        last_error = exc
+                        if attempt + 1 < retries:
+                            import time
+                            time.sleep(2 ** attempt)
+                if last_error is not None:
+                    raise last_error
             migrated += 1
         except Exception:
             failed += 1

@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta, timezone
+
 from openoutreach.desktop.email_adapter import EmailAdapter, UnsupportedEmailAction
 from openoutreach.desktop.whatsapp_browser_adapter import WhatsAppBrowserAdapter
 
@@ -58,6 +60,8 @@ def test_email_adapter_requires_task_bound_grant():
 def test_email_adapter_sends_only_with_grant():
     result = EmailAdapter(FakeMail()).execute({"task_type": "email_send", "snapshot": {
         "recipient": "person@example.com", "subject": "Hi", "body": "Hello",
-        "mailbox_grant": {"task_id": "task-1", "mailbox_id": "box-1"},
+        "mailbox_grant": {"task_id": "task-1", "mailbox_id": "box-1",
+                           "purpose": "send",
+                           "expires_at": (datetime.now(timezone.utc) + timedelta(seconds=30)).isoformat()},
     }})
     assert result["outcome"] == "applied"

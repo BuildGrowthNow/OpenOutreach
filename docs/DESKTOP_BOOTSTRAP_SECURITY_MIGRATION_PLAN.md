@@ -777,3 +777,27 @@ Adopt the fully API-based daemon with a dedicated daemon gateway boundary, asymm
 - [ ] Production key retirement, Atlas credential/network changes, customer
   reauthentication, forced upgrade, index rollout, and external artifact/SBOM
   verification require authorized deployment access and approval.
+
+#### Continued implementation evidence (2026-08-29)
+
+- [x] The distributed desktop now uses the dedicated v2-only
+  `openoutreach/desktop/remote_client.py` and client-side proof primitives;
+  the legacy client containing cookie, credential, and arbitrary profile/
+  campaign methods is not reachable from the PyInstaller graph.
+- [x] Channel adapters now return bounded typed receipts/observations,
+  explicitly validate task-bound mailbox grants, deduplicate bounded sync
+  batches, handle reconnect actions, and publish typed v2 events after local
+  execution. Long-running leases renew while an adapter is active.
+- [x] Compatibility capabilities now reflect the global claim switch and
+  per-channel flags; the deployment defaults use the secure floor `2.1.0`
+  and leave task claiming disabled until provider validation is approved.
+- [x] Ownership/encryption migration wrappers now expose bounded batch and
+  retry controls while retaining dry-run defaults, confirmation gates,
+  checkpoints, and secret-free progress output.
+- [x] Final release `2.1.1` passed focused tests, v2/desktop regression tests,
+  Pyright, compileall, security scanning, AWS deployment smoke, Windows/macOS
+  packaging, artifact inspection, SBOM generation, and stable URL checks.
+- [ ] Disposable real-provider execution, production key retirement/Atlas
+  changes, customer reauthentication, external penetration testing, and
+  operator approval for enabling task claiming remain external gates; the
+  code keeps those capabilities disabled by default.

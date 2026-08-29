@@ -12,8 +12,16 @@ def test_secure_desktop_daemon_has_no_database_imports():
     assert not any(value in source for value in forbidden)
 
 
+def test_distributed_v2_client_does_not_import_legacy_server_client():
+    source = (ROOT / "openoutreach" / "desktop" / "remote_client.py").read_text(encoding="utf-8")
+    forbidden = ("openoutreach.core.remote_client", "openoutreach.api_v2.daemon_auth",
+                 "openoutreach.mongodb", "MONGODB_URI", "SECRET_KEY")
+    assert not any(value in source for value in forbidden)
+
+
 def test_pyinstaller_spec_excludes_database_and_legacy_daemon():
     source = (ROOT / "desktop" / "openoutreach.spec").read_text(encoding="utf-8")
     assert '"pymongo"' not in source
     assert '"openoutreach.mongodb"' not in source
     assert '"openoutreach.core.daemon_remote"' not in source
+    assert '"openoutreach.core.remote_client"' not in source

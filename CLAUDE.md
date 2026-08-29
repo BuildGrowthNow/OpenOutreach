@@ -105,14 +105,12 @@ For detailed module docs, see `ARCHITECTURE.md`.
 There are two mutually exclusive ways to run the LinkedIn automation daemon. **Always check which mode is relevant before touching daemon, session, or env code.**
 
 ### Desktop execution (default for all base plans)
-- The `Lengrowth.exe` desktop app runs `openoutreach/core/daemon_remote.py` on the user's own Windows/macOS machine.
+- The `Lengrowth.exe` desktop app runs `openoutreach/desktop/secure_daemon.py` on the user's own Windows/macOS machine.
 - The browser runs locally on the user's residential IP - no proxy needed, no cloud cost.
 - The exe has **no `.env` file**. `openoutreach/config.py` (pydantic `Settings`) and `openoutreach/mongodb/settings.py` (os.environ) both start with empty/default values.
-- On startup, the daemon calls `GET /api/daemon/config` (auth-protected, HTTPS) which returns `mongodb_uri`, `mongodb_name`, and a `server_env` block (`SECRET_KEY`, `LLM_API_KEY`, `LLM_API_BASE`, `AI_MODEL`, `LLM_PROVIDER`).
-- `RemoteDaemon._apply_server_env()` immediately injects these into `os.environ` and patches the pydantic `settings` object so all downstream code works identically to the server.
-- MongoDB is **Atlas** (same cluster as the server). The daemon reads/writes `Campaign`, `Task`, `Lead`, `Deal`, `ChatMessage`, `ActionLog`, `SiteConfig`, `User` etc. directly - same as the cloud daemon.
-- Cookie encryption/decryption (`mongodb/crypto.py`, `core/crypto.py`) requires `SECRET_KEY` - bootstrapped via `_apply_server_env`.
-- LLM calls (`core/llm.py`) fall back to `settings.LLM_API_KEY` when the user hasn't configured LLM in the UI - bootstrapped via `_apply_server_env`.
+- On startup, the daemon performs public v2 compatibility negotiation, then uses human-approved enrollment and proof-bound device credentials.
+- MongoDB, server settings, provider keys, cookies, and encryption material remain server-side; the desktop receives only bounded typed snapshots and submits typed receipts/events.
+- Browser sessions and provider execution remain local-only; LLM work, encryption, and persistence remain server-owned.
 - **Never add code that reads `settings.*` or `os.environ` at module import time in daemon-path modules** - those values are empty until `_apply_server_env` runs after `get_config`.
 - **Never do a local MongoDB lookup** (`LinkedInProfile.get()`, `User.get()`, etc.) in daemon startup code to obtain data that the backend API already exposes - the `/api/daemon/config`, `/api/daemon/credentials`, and `/api/daemon/profile/{id}` endpoints exist for exactly this purpose.
 - Profile ID is resolved fresh from `/api/linkedin-profiles` on every startup (`app.py:_resolve_profile_id`) - never rely on a cached keychain value being current after a credential delete/recreate.

@@ -19,6 +19,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--field", required=True)
     parser.add_argument("--checkpoint-file", type=Path, required=True)
     parser.add_argument("--batch-size", type=int, default=100)
+    parser.add_argument("--retries", type=int, default=3)
     parser.add_argument("--apply", action="store_true", help="Apply changes; default is dry-run")
     parser.add_argument("--confirm", action="store_true", help="Required with --apply")
     return parser
@@ -30,6 +31,8 @@ def main() -> int:
         raise SystemExit("--apply requires --confirm after scope and backup review")
     if args.batch_size < 1 or args.batch_size > 1000:
         raise SystemExit("batch size must be between 1 and 1000")
+    if args.retries < 1 or args.retries > 5:
+        raise SystemExit("retries must be between 1 and 5")
     checkpoint = None
     if args.checkpoint_file.exists():
         checkpoint = json.loads(args.checkpoint_file.read_text(encoding="utf-8")).get("checkpoint")
@@ -50,7 +53,7 @@ def main() -> int:
     report = migrate_collection_field(collection, field=args.field,
         context_for=lambda document: {"tenant_id": str(document.get("user_id", "")), "profile_id": str(document.get("linkedin_profile_id", ""))},
         old_ring=old_ring, new_ring=new_ring, checkpoint=checkpoint,
-        batch_size=args.batch_size, dry_run=not args.apply)
+        batch_size=args.batch_size, dry_run=not args.apply, retries=args.retries)
     args.checkpoint_file.write_text(json.dumps({"checkpoint": report.checkpoint}), encoding="utf-8")
     print(json.dumps({"collection": args.collection, "field": args.field, "dry_run": not args.apply, "scanned": report.scanned, "migrated": report.migrated, "skipped": report.skipped, "failed": report.failed, "checkpoint": report.checkpoint}))
     client.close()

@@ -8,7 +8,12 @@ from __future__ import annotations
 
 import hashlib
 import time
+from datetime import datetime, timezone
 from typing import Any
+
+from pydantic import ValidationError
+
+from openoutreach.api_v2.daemon_channel_contracts import EmailReceipt, MailboxGrant
 
 
 class UnsupportedEmailAction(RuntimeError):
@@ -29,11 +34,24 @@ class EmailAdapter:
         grant = snapshot.get("mailbox_grant")
         if not isinstance(grant, dict) or not grant.get("task_id") or not grant.get("mailbox_id"):
             raise UnsupportedEmailAction("Email task requires a task-bound mailbox grant")
+        try:
+            typed_grant = MailboxGrant.model_validate(grant)
+        except ValidationError as exc:
+            raise UnsupportedEmailAction("Mailbox grant is invalid or expired") from exc
         if task.get("task_id") and str(grant["task_id"]) != str(task["task_id"]):
             raise UnsupportedEmailAction("Mailbox grant is bound to another task")
         if task_type == "email_reply_scan":
-            result = self.provider.scan_replies(grant, str(snapshot.get("cursor", "")))
-            return {"outcome": "observed", "replies": list(result)[:100], "observed_at": int(time.time())}
+            if typed_grant.purpose != "reply_scan":
+                raise UnsupportedEmailAction("Mailbox grant purpose mismatch")
+            try:
+                result = self.provider.scan_replies(typed_grant.model_dump(mode="json"), str(snapshot.get("cursor", "")))
+            except Exception as exc:
+                return {"outcome": "rejected", "state": self._provider_outcome(exc),
+                        "observed_at": int(time.time())}
+            replies = self._bounded_replies(result)
+            return {"outcome": "observed", "replies": replies, "observed_at": int(time.time())}
+        if typed_grant.purpose != "send":
+            raise UnsupportedEmailAction("Mailbox grant purpose mismatch")
         recipient = str(snapshot.get("recipient", "")).strip()
         subject = str(snapshot.get("subject", "")).strip()
         body = str(snapshot.get("body", ""))
@@ -41,7 +59,37 @@ class EmailAdapter:
             raise UnsupportedEmailAction("Email send requires recipient, subject, and body")
         effect_key = str(snapshot.get("effect_key") or hashlib.sha256(
             f"{grant['task_id']}:{recipient}:{subject}:{body}".encode()).hexdigest())
-        result = self.provider.send(grant, recipient, subject, body, effect_key)
+        try:
+            result = self.provider.send(typed_grant.model_dump(mode="json"), recipient, subject, body, effect_key)
+        except Exception as exc:
+            return {"outcome": self._provider_outcome(exc), "target_key": recipient,
+                    "effect_key": effect_key, "observed_at": int(time.time())}
         outcome = "already_applied" if result in ("duplicate", "already_sent") else ("applied" if result else "rejected")
+        receipt = EmailReceipt(
+            mailbox_id=typed_grant.mailbox_id,
+            effect_key=effect_key,
+            outcome="sent" if outcome in {"applied", "already_applied"} else "failed",
+            observed_at=datetime.now(timezone.utc),
+        )
         return {"outcome": outcome, "target_key": recipient, "effect_key": effect_key,
-                "observed_at": int(time.time())}
+                "observed_at": int(time.time()), "receipt": receipt.model_dump(mode="json")}
+
+    @staticmethod
+    def _bounded_replies(result: Any) -> list[dict[str, str]]:
+        replies: list[dict[str, str]] = []
+        for item in list(result or [])[:100]:
+            if not isinstance(item, dict):
+                continue
+            replies.append({str(key)[:64]: str(value)[:2000] for key, value in list(item.items())[:12]})
+        return replies
+
+    @staticmethod
+    def _provider_outcome(exc: Exception) -> str:
+        name = type(exc).__name__.lower()
+        if any(value in name for value in ("auth", "login", "credential", "grant")):
+            return "logged_out"
+        if any(value in name for value in ("rate", "limit", "thrott")):
+            return "rate_limited"
+        if "timeout" in name:
+            return "timeout"
+        return "rejected"

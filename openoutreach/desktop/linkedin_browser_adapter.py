@@ -12,11 +12,16 @@ import asyncio
 import logging
 import hashlib
 import time
+from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
 from openoutreach.core.browser_detect import get_preferred_browser
+from openoutreach.api_v2.daemon_channel_contracts import (
+    LinkedInActionReceipt,
+    LinkedInObservation,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +80,12 @@ class LinkedInBrowserAdapter:
         task_type = str(task["task_type"])
         if task_type == "check_pending":
             state = get_connection_status(self, profile).value
-            return {"outcome": "observed", "target_key": target, "state": state}
+            observation = LinkedInObservation(
+                profile_id=self.profile_id, observation="pending",
+                target_key=target, observed_at=datetime.now(timezone.utc), state=state,
+            )
+            return {"outcome": "observed", "target_key": target, "state": state,
+                    "observation": observation.model_dump(mode="json")}
 
         if task_type in {"connect", "follow_up"}:
             state = get_connection_status(self, profile).value
@@ -125,7 +135,14 @@ class LinkedInBrowserAdapter:
             f"{task.get('task_id', '')}:{task.get('task_type', '')}:{target}:{snapshot.get('message', '')}".encode()
         ).hexdigest())
         return {"outcome": outcome, "target_key": target, "state": state,
-                "effect_key": effect_key, "observed_at": int(time.time())}
+                "effect_key": effect_key, "observed_at": int(time.time()),
+                "receipt": LinkedInActionReceipt(
+                    action={"connect": "connect", "follow_up": "follow_up",
+                            "send_manual_message": "manual_send"}.get(
+                                str(task.get("task_type")), "connect"),
+                    target_key=target, effect_key=effect_key,
+                    outcome=outcome, observed_at=datetime.now(timezone.utc),
+                ).model_dump(mode="json")}
 
     def _ensure_browser(self) -> None:
         if self._page is not None and not self._page.is_closed():

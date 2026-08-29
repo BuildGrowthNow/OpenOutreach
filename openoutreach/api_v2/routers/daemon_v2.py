@@ -38,7 +38,7 @@ from openoutreach.api_v2.security_events import append_security_event
 from openoutreach.api_v2.daemon_channel_contracts import (
     EmailReceipt, EmailTaskSnapshot, LinkedInActionReceipt, LinkedInObservation,
     LinkedInTaskSnapshot, MailboxGrant, SessionState, WhatsAppState,
-    WhatsAppSyncBatch, WhatsAppTaskSnapshot,
+    WhatsAppActionReceipt, WhatsAppSyncBatch, WhatsAppTaskSnapshot,
 )
 
 router = APIRouter(prefix="/daemon/v2", tags=["daemon-v2"])
@@ -258,8 +258,21 @@ class TypedEventResponse(BaseModel):
 
 
 @router.get("/compatibility", response_model=CompatibilityResponse)
-async def compatibility() -> CompatibilityResponse:
-    return CompatibilityResponse(force_update=False, capabilities=["device-auth", "task-leases", "typed-events"])
+async def compatibility(version: str | None = None) -> CompatibilityResponse:
+    capabilities = ["device-auth", "typed-events"]
+    if settings.DAEMON_TASK_CLAIM_ENABLED:
+        capabilities.append("task-leases")
+    for channel, enabled in (
+        ("linkedin", settings.DAEMON_V2_LINKEDIN_ENABLED),
+        ("whatsapp", settings.DAEMON_V2_WHATSAPP_ENABLED),
+        ("email", settings.DAEMON_V2_EMAIL_ENABLED),
+    ):
+        if settings.DAEMON_TASK_CLAIM_ENABLED and enabled:
+            capabilities.append(f"task:{channel}")
+    return CompatibilityResponse(
+        force_update=bool(version) and not is_secure_version(version),
+        capabilities=capabilities,
+    )
 
 
 @router.post("/enrollment-codes", response_model=EnrollmentCodeResponse)
@@ -501,7 +514,7 @@ async def configuration(
         }),
         task_capabilities=(
             (["connect", "check_pending", "follow_up"] if "linkedin" in context.scopes else [])
-            + (["whatsapp_follow_up", "whatsapp_message", "whatsapp_sync"] if "whatsapp" in context.scopes else [])
+            + (["whatsapp_follow_up", "whatsapp_message", "whatsapp_sync", "whatsapp_reconnect"] if "whatsapp" in context.scopes else [])
             + (["email_follow_up", "email_send", "email_reply_scan"] if "email" in context.scopes else [])
         ),
     )
@@ -597,6 +610,13 @@ async def whatsapp_sync_v2(profile_id: str, sync: WhatsAppSyncBatch,
         raise HTTPException(422, "Profile mismatch")
     return _store_typed_event(context, "whatsapp_sync", profile_id, "whatsapp",
                               sync.model_dump(mode="json"), f"{profile_id}:{sync.cursor}")
+
+
+@router.post("/whatsapp/{profile_id}/receipts", response_model=TypedEventResponse)
+async def whatsapp_receipt_v2(profile_id: str, receipt: WhatsAppActionReceipt,
+                              context: TenantContext = Depends(get_daemon_context)) -> TypedEventResponse:
+    return _store_typed_event(context, "whatsapp_receipt", profile_id, "whatsapp",
+                              receipt.model_dump(mode="json"), receipt.effect_key)
 
 
 @router.post("/email/{profile_id}/receipts", response_model=TypedEventResponse)
@@ -759,7 +779,7 @@ def _typed_snapshot(document: dict[str, Any]) -> dict[str, Any] | None:
         return None
     if task_type not in {
         "connect", "check_pending", "follow_up", "send_manual_message",
-        "whatsapp_follow_up", "whatsapp_message", "whatsapp_sync",
+        "whatsapp_follow_up", "whatsapp_message", "whatsapp_sync", "whatsapp_reconnect",
         "email_follow_up", "email_send", "email_reply_scan",
     }:
         return None
@@ -772,7 +792,7 @@ def _snapshot_is_executable(snapshot: dict[str, Any], task_type: str, channel: s
             return bool(snapshot.get("target_public_identifier"))
         return bool(snapshot.get("target_public_identifier") and snapshot.get("message"))
     if channel == "whatsapp":
-        return task_type == "whatsapp_sync" or bool(snapshot.get("target_phone") and snapshot.get("message"))
+        return task_type in {"whatsapp_sync", "whatsapp_reconnect"} or bool(snapshot.get("target_phone") and snapshot.get("message"))
     if channel == "email":
         return task_type == "email_reply_scan" or bool(snapshot.get("recipient") and snapshot.get("subject") and snapshot.get("body") and snapshot.get("mailbox_grant"))
     return False

@@ -69,7 +69,8 @@ hiddenimports = [
     "openoutreach.desktop.email_adapter",
     # Daemon core
     "openoutreach.desktop.secure_daemon",
-    "openoutreach.core.remote_client",
+    "openoutreach.desktop.remote_client",
+    "openoutreach.desktop.proof",
     "openoutreach.core.browser_detect",
     "openoutreach.core.conf",
     # LinkedIn automation (runs locally on user's browser)
