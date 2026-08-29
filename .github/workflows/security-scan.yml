@@ -19,9 +19,11 @@ jobs:
       - name: Scan tracked files for embedded credentials
         run: python scripts/scan_secrets.py
 
-  regression:
-    runs-on: ubuntu-latest
-    steps:
+    regression:
+      runs-on: ubuntu-latest
+      env:
+        SECRET_KEY: ci-only-regression-secret
+      steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
