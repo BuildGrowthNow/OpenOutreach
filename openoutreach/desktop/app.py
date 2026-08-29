@@ -330,6 +330,14 @@ class DesktopAPI:
         if not self._app._is_running():
             self._app._start_daemon()
 
+    def logout(self) -> None:
+        """Stop local automation and clear desktop-stored authentication state."""
+        logger.info("Desktop logout requested")
+        self._app._stop_daemon()
+        self._app.auth.logout()
+        self._app._token_valid = False
+        self._app._update_menu()
+
     def get_keychain_refresh_token(self) -> Optional[str]:
         """Return the stored refresh token so the frontend can re-authenticate after restart."""
         return self._app.auth.get_refresh_token()

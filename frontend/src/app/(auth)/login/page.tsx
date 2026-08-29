@@ -63,7 +63,16 @@ export default function LoginPage() {
   }
 
   if (isAuthenticated) {
-    return null // Will redirect
+    // Desktop login hands authentication to the native bridge before the
+    // dashboard navigation completes. Keep the webview non-black while that
+    // handoff is in progress.
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center text-muted-foreground">
+          Signing you in…
+        </div>
+      </div>
+    )
   }
 
   return (

@@ -62,6 +62,23 @@ function notifyDesktopAuth(userId: string) {
   }
 }
 
+function clearDesktopAuth() {
+  if (typeof window === 'undefined') return
+  const w = window as unknown as { pywebview?: { api?: { logout?: () => void } } }
+  const invoke = () => {
+    try {
+      w.pywebview?.api?.logout?.()
+    } catch {
+      // Local web logout still completes if the native bridge is unavailable.
+    }
+  }
+  if (w.pywebview?.api?.logout) {
+    invoke()
+  } else {
+    window.addEventListener('pywebviewready', invoke, { once: true })
+  }
+}
+
 export const useAuthStore = create<AuthState>((set, get) => ({
   // Initial state
   isLoading: true,
@@ -265,6 +282,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
    */
   logout: async () => {
     const { accessToken } = get()
+
+    clearDesktopAuth()
 
     try {
       // Call logout endpoint to clear refresh token cookie
