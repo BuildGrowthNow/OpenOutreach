@@ -32,7 +32,8 @@ def test_pyinstaller_spec_excludes_database_and_legacy_daemon():
         assert marker in source
 
 
-def test_secure_daemon_requires_explicit_profile_binding_per_channel():
+@pytest.mark.asyncio
+async def test_secure_daemon_requires_explicit_profile_binding_per_channel():
     from openoutreach.desktop.secure_daemon import SecureRemoteDaemon
     from openoutreach.desktop.device_identity import DeviceIdentity
 
@@ -45,8 +46,7 @@ def test_secure_daemon_requires_explicit_profile_binding_per_channel():
     try:
         assert daemon.channel_profile_ids == {"linkedin": "li-1", "whatsapp": "wa-1"}
     finally:
-        import asyncio
-        asyncio.run(daemon.stop())
+        await daemon.stop()
 
 
 def test_desktop_api_url_is_allowlisted_against_ssrf():

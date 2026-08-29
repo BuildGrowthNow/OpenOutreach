@@ -91,7 +91,8 @@ def test_task_binding_rejects_unbound_profile_for_every_channel(channel):
     assert exc_info.value.status_code == 404
 
 
-def test_event_batch_preflights_all_profiles_before_writing(monkeypatch):
+@pytest.mark.asyncio
+async def test_event_batch_preflights_all_profiles_before_writing(monkeypatch):
     collection = MagicMock()
     monkeypatch.setattr(daemon_v2, "get_mongodb_collection", lambda name: collection)
     context = TenantContext(
@@ -107,8 +108,7 @@ def test_event_batch_preflights_all_profiles_before_writing(monkeypatch):
     with pytest.raises(HTTPException) as exc_info:
         # Call the route function directly so the test exercises the same
         # server-side preflight used by FastAPI after dependency resolution.
-        import asyncio
-        asyncio.run(daemon_v2.ingest_events_v2(EventBatchRequest(events=[event]), context))
+        await daemon_v2.ingest_events_v2(EventBatchRequest(events=[event]), context)
     assert exc_info.value.status_code == 404
     collection.insert_one.assert_not_called()
 
