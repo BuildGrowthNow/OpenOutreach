@@ -45,7 +45,7 @@ def resolve(lead) -> str | None:
             timeout=_TIMEOUT_S,
         )
     except requests.RequestException as exc:
-        logger.info("hub: resolve unavailable for %s: %s", lead.public_identifier, exc)
+        logger.info("hub: resolve unavailable for %s: %s", lead.public_identifier, type(exc).__name__)
         return None
     if resp.status_code not in (200, 404):
         return None  # unexpected → fall back to enrichment waterfall, stay quiet
@@ -166,7 +166,7 @@ def _send(
         resp.raise_for_status()
     except requests.RequestException as exc:
         logger.info(
-            "hub: give-back unavailable for %s: %s", lead.public_identifier, exc
+            "hub: give-back unavailable for %s: %s", lead.public_identifier, type(exc).__name__
         )
         return None
     payload = resp.json()

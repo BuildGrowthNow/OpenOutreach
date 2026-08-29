@@ -3,10 +3,10 @@
 
 param(
     [Parameter(Mandatory=$false)]
-    [string]$FilePath = "desktop\dist\OpenOutreach.exe",
+    [string]$FilePath = "desktop\dist\Lengrowth.exe",
     [string]$CertPath = $env:SIGN_CERT_PATH,
     [string]$CertPass = $env:SIGN_CERT_PASS,
-    [string]$Timestamp = "http://timestamp.digicert.com"
+    [string]$Timestamp = "https://timestamp.digicert.com"
 )
 
 if (-not $CertPath) {
@@ -31,23 +31,38 @@ if (-not (Test-Path $FilePath)) {
     exit 1
 }
 
+# Resolve signtool from PATH or an installed Windows SDK.
+$signToolCommand = Get-Command signtool.exe -ErrorAction SilentlyContinue
+$signTool = if ($signToolCommand) { $signToolCommand.Source } else {
+    $sdkRoot = Join-Path ${env:ProgramFiles(x86)} "Windows Kits\10\bin"
+    $candidate = Get-ChildItem -LiteralPath $sdkRoot -Filter signtool.exe -File -Recurse -ErrorAction SilentlyContinue |
+        Sort-Object -Property FullName -Descending |
+        Select-Object -First 1
+    if ($candidate) { $candidate.FullName }
+}
+if (-not $signTool) {
+    Write-Host "Error: signtool.exe not found in PATH or Windows SDK" -ForegroundColor Red
+    exit 1
+}
+
 Write-Host "Signing: $FilePath" -ForegroundColor Cyan
 Write-Host "Certificate: $CertPath" -ForegroundColor Cyan
 
 # Sign with SHA256
-$signResult = & signtool sign /f "$CertPath" /p "$CertPass" /t "$Timestamp" /fd SHA256 /v "$FilePath" 2>&1
+$signResult = & $signTool sign /f "$CertPath" /p "$CertPass" /t "$Timestamp" /fd SHA256 /v "$FilePath" 2>&1
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host "Successfully signed: $FilePath" -ForegroundColor Green
 
     # Verify signature
     Write-Host "`nVerifying signature..." -ForegroundColor Cyan
-    & signtool verify /pa /v "$FilePath"
+    & $signTool verify /pa /v "$FilePath"
 
     if ($LASTEXITCODE -eq 0) {
         Write-Host "Signature verified successfully!" -ForegroundColor Green
     } else {
-        Write-Host "Warning: Signature verification failed" -ForegroundColor Yellow
+        Write-Host "Error: Signature verification failed" -ForegroundColor Red
+        exit 1
     }
 } else {
     Write-Host "Error: Code signing failed" -ForegroundColor Red

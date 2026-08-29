@@ -74,7 +74,19 @@ class EmailAdapter:
             replies = self._bounded_replies(
                 result.get("replies", []) if isinstance(result, dict) else result
             )
-            return {"outcome": "observed", "replies": replies, "observed_at": int(time.time())}
+            effect_key = str(snapshot.get("effect_key") or hashlib.sha256(
+                f"{typed_grant.task_id}:{typed_grant.mailbox_id}:reply_scan:{snapshot.get('cursor', '')}".encode()
+            ).hexdigest())
+            receipt = EmailReceipt(
+                mailbox_id=typed_grant.mailbox_id,
+                effect_key=effect_key,
+                outcome="replied",
+                observed_at=datetime.now(timezone.utc),
+            )
+            next_cursor = str(result.get("cursor", snapshot.get("cursor", ""))) if isinstance(result, dict) else str(snapshot.get("cursor", ""))
+            return {"outcome": "observed", "replies": replies, "cursor": next_cursor,
+                    "effect_key": effect_key, "observed_at": int(time.time()),
+                    "receipt": receipt.model_dump(mode="json")}
         if typed_grant.purpose != "send":
             raise UnsupportedEmailAction("Mailbox grant purpose mismatch")
         recipient = str(snapshot.get("recipient", "")).strip()

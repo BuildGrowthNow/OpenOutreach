@@ -33,10 +33,10 @@ class WebhookSignatureValidator:
             )
             return True, None
         except stripe.SignatureVerificationError as e:
-            logger.warning(f"Invalid webhook signature: {e}")
+            logger.warning("Invalid webhook signature; exception_type=%s", type(e).__name__)
             return False, f"Invalid signature: {e}"
         except Exception as e:
-            logger.error(f"Webhook verification error: {e}")
+            logger.error("Webhook verification error; exception_type=%s", type(e).__name__)
             return False, f"Verification error: {e}"
 
     @staticmethod
@@ -56,8 +56,8 @@ class WebhookSignatureValidator:
             )
             return event, None
         except stripe.SignatureVerificationError as e:
-            logger.warning(f"Invalid webhook signature: {e}")
+            logger.warning("Invalid webhook signature; exception_type=%s", type(e).__name__)
             return None, "Invalid signature"
         except Exception as e:
-            logger.error(f"Webhook construction error: {e}")
+            logger.error("Webhook construction error; exception_type=%s", type(e).__name__)
             return None, "Failed to construct event"

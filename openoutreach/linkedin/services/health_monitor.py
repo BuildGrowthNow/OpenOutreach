@@ -55,7 +55,7 @@ class CampaignHealthMonitor:
                 check_alerts = check_func()
                 alerts.extend(check_alerts)
             except Exception as e:
-                logger.error(f"Error running health check {check_name}: {e}")
+                logger.error("Error running health check %s: %s", check_name, type(e).__name__)
                 # Log error but don't fail the check
 
         return alerts
@@ -548,7 +548,7 @@ def run_health_check_for_campaign(campaign_id: str) -> list[HealthAlert]:
         monitor = CampaignHealthMonitor(campaign)
         return monitor.run_health_check()
     except Exception as e:
-        logger.error(f"Error running health check for campaign {campaign_id}: {e}")
+        logger.error("Error running health check for campaign %s: %s", campaign_id, type(e).__name__)
         return []
 
 
@@ -561,5 +561,5 @@ def create_hourly_health_metric(campaign_id: str) -> Optional[CampaignHealthMetr
             return None
         return CampaignHealthMetric.create_hourly_snapshot(campaign.pk)
     except Exception as e:
-        logger.error(f"Error creating health metric for campaign {campaign_id}: {e}")
+        logger.error("Error creating health metric for campaign %s: %s", campaign_id, type(e).__name__)
         return None

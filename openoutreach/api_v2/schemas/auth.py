@@ -3,7 +3,7 @@ Pydantic schemas for Auth API endpoints.
 """
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, Field, EmailStr, field_validator
+from pydantic import BaseModel, ConfigDict, Field, EmailStr, field_validator
 
 
 class RegisterRequest(BaseModel):
@@ -53,9 +53,7 @@ class UserResponse(BaseModel):
     is_admin: bool = Field(default=False, description="Whether user has admin access")
     admin_role: Optional[str] = Field(None, description="Admin role (support/finance/superadmin)")
 
-    class Config:
-        populate_by_name = True
-        from_attributes = True
+    model_config = ConfigDict(populate_by_name=True, from_attributes=True)
 
 
 class PasswordResetRequest(BaseModel):

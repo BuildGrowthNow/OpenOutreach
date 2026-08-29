@@ -66,14 +66,14 @@ def find_free(query: FinderQuery, user_id: str | None = None) -> FinderResult | 
     # Layer 2: company website scrape (direct hit — no SMTP needed)
     site_email = scrape_company_email(domain, query.first_name, query.last_name)
     if site_email:
-        logger.info("waterfall: site_found %s", site_email)
+        logger.info("waterfall: site email found")
         update_pattern_from_confirmed(domain, query.first_name, query.last_name, site_email)
         return FinderResult(email=site_email, status="site_found")
 
     # Layer 3: WHOIS/RDAP (best for founders/owners of small companies)
     rdap_email = lookup_registrant_email(domain, query.first_name, query.last_name)
     if rdap_email:
-        logger.info("waterfall: whois_found %s", rdap_email)
+        logger.info("waterfall: whois email found")
         update_pattern_from_confirmed(domain, query.first_name, query.last_name, rdap_email)
         return FinderResult(email=rdap_email, status="whois_found")
 
@@ -94,7 +94,7 @@ def find_free(query: FinderQuery, user_id: str | None = None) -> FinderResult | 
         for email in candidates:
             result = probe(email)
             if result is True:
-                logger.info("waterfall: smtp_verified %s", email)
+                logger.info("waterfall: smtp email verified")
                 update_pattern_from_confirmed(domain, query.first_name, query.last_name, email)
                 return FinderResult(email=email, status="smtp_verified")
             elif result is False:

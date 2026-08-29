@@ -228,7 +228,7 @@ class RemoteDaemon:
                 if elapsed >= max_wait:
                     raise
                 logger.warning(
-                    "%s: connection error (%s) - retrying in %ds", label, e, delay,
+                    "%s: connection error (%s) - retrying in %ds", label, type(e).__name__, delay,
                 )
             await asyncio.sleep(delay)
             elapsed += delay
@@ -248,7 +248,7 @@ class RemoteDaemon:
                 "subscription check", self.client.check_subscription_status
             )
         except Exception as e:
-            logger.error("Subscription check failed: %s", e)
+            logger.error("Subscription check failed: %s", type(e).__name__)
             self.running = False
             return
 
@@ -278,7 +278,7 @@ class RemoteDaemon:
                 lambda: self.client.get_config(self.linkedin_profile_id),
             )
         except Exception as e:
-            logger.error("Failed to fetch config: %s", e)
+            logger.error("Failed to fetch config: %s", type(e).__name__)
             self.running = False
             return
         assert self.config is not None
@@ -297,7 +297,7 @@ class RemoteDaemon:
             logger.info("Reconcile: %d tasks across %d campaigns",
                         result.get("tasks_created", 0), result.get("campaigns", 0))
         except Exception as e:
-            logger.warning("Initial reconcile failed: %s", e)
+            logger.warning("Initial reconcile failed: %s", type(e).__name__)
 
         # Start browser session
         await self._start_session()
@@ -306,7 +306,7 @@ class RemoteDaemon:
         try:
             await self._start_wa_sessions()
         except Exception as e:
-            logger.warning("WA session startup error: %s", e)
+            logger.warning("WA session startup error: %s", type(e).__name__)
 
         # Validate WA phone numbers then re-reconcile so the task queue reflects
         # registration status before the task loop starts consuming tasks.
@@ -315,7 +315,7 @@ class RemoteDaemon:
             try:
                 await self.client.reconcile(self.linkedin_profile_id)
             except Exception as e:
-                logger.warning("Post-WA reconcile failed: %s", e)
+                logger.warning("Post-WA reconcile failed: %s", type(e).__name__)
 
         # Run loops concurrently
         try:
@@ -329,7 +329,7 @@ class RemoteDaemon:
                 return_exceptions=True,
             )
         except Exception as e:
-            logger.exception("Main loop crashed: %s", e)
+            logger.exception("Main loop crashed: %s", type(e).__name__)
             raise
 
 
@@ -345,13 +345,13 @@ class RemoteDaemon:
             try:
                 await self._run_on_pw_thread(session.close)
             except Exception as e:
-                logger.debug("Session close error: %s", e)
+                logger.debug("Session close error: %s", type(e).__name__)
 
         # Close WhatsApp sessions before stopping WA Playwright thread
         try:
             await self._stop_wa_sessions()
         except Exception as e:
-            logger.debug("WA sessions stop error: %s", e)
+            logger.debug("WA sessions stop error: %s", type(e).__name__)
 
         self._stop_wa_pw_thread()
         self._stop_pw_thread()
@@ -577,7 +577,7 @@ class RemoteDaemon:
                 try:
                     fresh_state = await self._run_on_pw_thread(lambda: _launch_and_auth(False))
                 except Exception as e2:
-                    logger.error("Login failed after challenge relaunch: %s", e2)
+                    logger.error("Login failed after challenge relaunch: %s", type(e2).__name__)
                     await self.client.report_session_state(
                         linkedin_profile_id=self.linkedin_profile_id,
                         is_logged_in=False,
@@ -589,11 +589,11 @@ class RemoteDaemon:
             elif isinstance(e, AuthenticationError) and is_new_profile:
                 # Fresh profile login failed in headless - relaunch headed so
                 # the user can see what LinkedIn is showing (CAPTCHA, error, etc.)
-                logger.warning("Login failed headless on fresh profile - relaunching headed: %s", e)
+                logger.warning("Login failed headless on fresh profile - relaunching headed: %s", type(e).__name__)
                 await self._run_on_pw_thread(session.close)
                 fresh_state = await self._run_on_pw_thread(lambda: _launch_and_auth(False))
             else:
-                logger.error("Login failed: %s", e)
+                logger.error("Login failed: %s", type(e).__name__)
                 raise
 
         if fresh_state:
@@ -609,7 +609,7 @@ class RemoteDaemon:
             if discovered_username:
                 logger.info("Discovered LinkedIn username: %s", discovered_username)
         except Exception as e:
-            logger.warning("Could not discover LinkedIn username: %s", e)
+            logger.warning("Could not discover LinkedIn username: %s", type(e).__name__)
 
         await self.client.report_session_state(
             linkedin_profile_id=self.linkedin_profile_id,
@@ -629,7 +629,7 @@ class RemoteDaemon:
             from openoutreach.whatsapp.browser.session import WASession
             from openoutreach.whatsapp.models.profile import WhatsAppProfile
         except Exception as e:
-            logger.warning("WhatsApp module not available: %s", e)
+            logger.warning("WhatsApp module not available: %s", type(e).__name__)
             return
 
         if not self.config:
@@ -652,7 +652,7 @@ class RemoteDaemon:
                 await self._run_on_wa_pw_thread(lambda s=wa_session: start_whatsapp_session(s))
                 logger.info("WA session started: %s", wa_session)
             except Exception as e:
-                logger.warning("WA session start failed for %s: %s", profile, e)
+                logger.warning("WA session start failed for %s: %s", profile, type(e).__name__)
 
     async def _stop_wa_sessions(self) -> None:
         """Close all WhatsApp browser sessions gracefully."""
@@ -666,7 +666,7 @@ class RemoteDaemon:
                     lambda s=wa_session: s.close(mark_disconnected=False)
                 )
             except Exception as e:
-                logger.debug("WA session close error for %s: %s", profile_id, e)
+                logger.debug("WA session close error for %s: %s", profile_id, type(e).__name__)
         self._whatsapp_sessions.clear()
 
     async def _wa_task_loop(self) -> None:
@@ -701,9 +701,9 @@ class RemoteDaemon:
                                 await self._run_on_wa_pw_thread(lambda s=wa_session: start_whatsapp_session(s))
                                 logger.info("WA task loop: session started for new profile %s", wa_session)
                             except Exception as e:
-                                logger.warning("WA task loop: session start failed for new profile %s: %s", profile, e)
+                                logger.warning("WA task loop: session start failed for new profile %s: %s", profile, type(e).__name__)
                 except Exception as e:
-                    logger.debug("WA task loop: new-profile scan error: %s", e)
+                    logger.debug("WA task loop: new-profile scan error: %s", type(e).__name__)
 
             if not self._is_active_time() or not self._whatsapp_sessions:
                 # Sleep briefly so new-profile detection stays responsive even with no active sessions
@@ -722,7 +722,7 @@ class RemoteDaemon:
                                 recovered, wa_profile_id,
                             )
                     except Exception as e:
-                        logger.debug("WA stale recovery error for %s: %s", wa_profile_id, e)
+                        logger.debug("WA stale recovery error for %s: %s", wa_profile_id, type(e).__name__)
 
             for wa_profile_id, wa_session in list(self._whatsapp_sessions.items()):
                 wa_task = Task.objects.claim_next(
@@ -756,7 +756,7 @@ class RemoteDaemon:
                     wa_task.mark_failed()
                     logger.error(
                         "WA task failed (profile=%s, type=%s): %s",
-                        wa_profile_id, wa_task.task_type, e,
+                        wa_profile_id, wa_task.task_type, type(e).__name__,
                     )
 
             await asyncio.sleep(self.config.poll_interval_seconds if self.config else 10)
@@ -826,7 +826,7 @@ class RemoteDaemon:
                         )
 
                 except Exception as e:
-                    logger.debug("WA health check error for %s: %s", profile_id, e)
+                    logger.debug("WA health check error for %s: %s", profile_id, type(e).__name__)
 
     async def _heartbeat_loop(self):
         """Send periodic heartbeats to backend."""
@@ -847,7 +847,7 @@ class RemoteDaemon:
                 await self.stop()
                 return
             except Exception as e:
-                logger.warning("Heartbeat failed: %s", e)
+                logger.warning("Heartbeat failed: %s", type(e).__name__)
 
             await asyncio.sleep(self.config.heartbeat_interval_seconds)
 
@@ -916,7 +916,7 @@ class RemoteDaemon:
                         error=str(e),
                         duration_ms=duration_ms,
                     )
-                    logger.error("Task failed: %s", e)
+                    logger.error("Task failed: %s", type(e).__name__)
                     # Write a failed ActionLog entry so the UI activity feed shows errors
                     self._log_task_failure(task, str(e))
 
@@ -934,7 +934,7 @@ class RemoteDaemon:
                 await self.stop()
                 return
             except Exception as e:
-                logger.error("Task loop error: %s", e)
+                logger.error("Task loop error: %s", type(e).__name__)
                 await asyncio.sleep(30)
 
     def _log_task_failure(self, task: dict, error: str) -> None:
@@ -952,7 +952,7 @@ class RemoteDaemon:
             )
             log.save()
         except Exception as e:
-            logger.debug("Failed to write ActionLog for task failure: %s", e)
+            logger.debug("Failed to write ActionLog for task failure: %s", type(e).__name__)
 
     def _execute_task(self, task: dict) -> Optional[dict]:
         """Execute a task using the appropriate handler (runs in thread).
@@ -1107,7 +1107,7 @@ class RemoteDaemon:
         try:
             self._pending_cookie_state = self.session.context.storage_state()
         except Exception as e:
-            logger.debug("Cookie snapshot failed: %s", e)
+            logger.debug("Cookie snapshot failed: %s", type(e).__name__)
 
         return result if isinstance(result, dict) else None
 
@@ -1151,7 +1151,7 @@ class RemoteDaemon:
             try:
                 await self._run_on_wa_pw_thread(lambda s=wa_session: validate_wa_phones(s))
             except Exception as e:
-                logger.warning("WA pre-flight validation error for %s: %s", wa_session, e)
+                logger.warning("WA pre-flight validation error for %s: %s", wa_session, type(e).__name__)
 
     async def _config_refresh_loop(self):
         """Periodically refresh config and reconcile tasks."""
@@ -1160,12 +1160,12 @@ class RemoteDaemon:
             try:
                 self.config = await self.client.get_config(self.linkedin_profile_id)
             except Exception as e:
-                logger.warning("Config refresh failed: %s", e)
+                logger.warning("Config refresh failed: %s", type(e).__name__)
             await self._run_wa_preflight_validation()
             try:
                 await self.client.reconcile(self.linkedin_profile_id)
             except Exception as e:
-                logger.warning("Reconcile failed: %s", e)
+                logger.warning("Reconcile failed: %s", type(e).__name__)
 
     async def _sync_cookies(self):
         """Sync cookies to backend.
@@ -1184,7 +1184,7 @@ class RemoteDaemon:
             cookie_json = json.dumps(state)
             await self.client.sync_cookies(self.linkedin_profile_id, cookie_json)
         except Exception as e:
-            logger.warning("Cookie sync failed: %s", e)
+            logger.warning("Cookie sync failed: %s", type(e).__name__)
 
     def _is_active_time(self) -> bool:
         """Check if within active hours configured in backend."""
@@ -1276,7 +1276,7 @@ class RemoteDaemon:
                             last_trial_warning_sent = now
 
             except Exception as e:
-                logger.warning("Subscription check failed: %s", e)
+                logger.warning("Subscription check failed: %s", type(e).__name__)
 
             await asyncio.sleep(300)  # Check every 5 minutes
 
@@ -1378,7 +1378,7 @@ class RemoteDaemon:
                 )
             logger.info("Notification shown: %s", title)
         except Exception as e:
-            logger.debug("Could not show system notification: %s", e)
+            logger.debug("Could not show system notification: %s", type(e).__name__)
 
     def _show_verification_notification(self, is_desktop: bool = True) -> None:
         """Show system notification for LinkedIn verification requirement.
@@ -1554,13 +1554,14 @@ async def run_daemon(
         logger.info("Received shutdown signal")
         await daemon.stop()
     except Exception as e:
-        logger.exception("Daemon crashed: %s", e)
+        logger.exception("Daemon crashed: %s", type(e).__name__)
         await daemon.stop()
         raise
 
 
 if __name__ == "__main__":
     import argparse
+    from openoutreach.core.logging import RedactingFormatter
 
     parser = argparse.ArgumentParser(description="Lengrowth Linkedin Remote Daemon")
     parser.add_argument("--api-url", required=True, help="Backend API URL")
@@ -1568,8 +1569,7 @@ if __name__ == "__main__":
     parser.add_argument("--profile-id", required=True, help="LinkedIn profile ID")
     args = parser.parse_args()
 
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    )
+    handler = logging.StreamHandler()
+    handler.setFormatter(RedactingFormatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+    logging.basicConfig(level=logging.INFO, handlers=[handler])
     asyncio.run(run_daemon(args.api_url, args.token, args.profile_id))

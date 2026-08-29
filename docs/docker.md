@@ -5,12 +5,12 @@
 Pre-built production images are published to GitHub Container Registry on every push to `master`.
 
 ```bash
-docker run --pull always -it -e ENABLE_VNC=true -p 6080:6080 -p 5900:5900 -v openoutreach_db:/app/data ghcr.io/eracle/openoutreach:latest
+docker run --pull always -it -v openoutreach_db:/app/data ghcr.io/eracle/openoutreach:latest
 ```
 
-Watch the live browser (and clear any LinkedIn checkpoint) at **http://localhost:6080/vnc.html**.
+VNC is disabled by default for safety. Enable it only with a password file and loopback-only port bindings as described below.
 
-> **`-e ENABLE_VNC=true` is required for the viewer.** The VNC stack (Xvfb + x11vnc + noVNC) is installed in the image but only started when `ENABLE_VNC=true`. Without it, `x11vnc` (5900) and the noVNC web server (6080) never start, so publishing the ports with `-p` leaves nothing listening. The compose setup (`local.yml`) sets this for you; plain `docker run` does not.
+> **VNC is an explicitly secured opt-in feature.** Set `ENABLE_VNC=true` only together with a non-empty `VNC_PASSWORD_FILE`; bind ports to `127.0.0.1` and never expose them publicly.
 
 The interactive onboarding will guide you through LinkedIn credentials, LLM API key, and campaign setup on first run. All data (CRM database, cookies, model blobs, embeddings) persists in the `openoutreach_db` Docker volume.
 
@@ -22,9 +22,9 @@ The interactive onboarding will guide you through LinkedIn credentials, LLM API 
 | `sha-<commit>` | Pinned to a specific commit |
 | `1.0.0` / `1.0` | Semantic version (when tagged) |
 
-### Live Browser View (noVNC)
+### Live Browser View (noVNC, optional)
 
-The container ships a noVNC web viewer for watching the automation live - and for clearing a LinkedIn security checkpoint by hand when one appears. Open it in any browser (no password):
+The container ships an optional noVNC viewer for watching the automation live. It requires a password file and should remain bound to localhost:
 
 ```
 http://localhost:6080/vnc.html
@@ -35,7 +35,7 @@ Prefer a native VNC client? One is also exposed on `localhost:5900`. On Linux wi
 vinagre vnc://127.0.0.1:5900
 ```
 
-> Both ports must be published *and* `ENABLE_VNC=true` must be set for the viewers to work - see the `-e ENABLE_VNC=true -p 6080:6080 -p 5900:5900` flags in the run command above.
+> Both ports must be published, `ENABLE_VNC=true` must be set, and `VNC_PASSWORD_FILE` must point to a non-empty mounted secret. Use `-p 127.0.0.1:6080:6080 -p 127.0.0.1:5900:5900`; never publish these ports on all interfaces.
 
 > **Seeing `SyntaxError: ... does not provide an export named 'encodeUTF8'`?** That's a stale browser cache of noVNC assets from an older image, not a container bug. Hard-reload the page (Ctrl+Shift+R) or open it in a private window.
 
@@ -49,7 +49,7 @@ docker ps
 docker stop <container-id>
 
 # Restart (data persists in the openoutreach_db volume)
-docker run --pull always -it -e ENABLE_VNC=true -p 6080:6080 -p 5900:5900 -v openoutreach_db:/app/data ghcr.io/eracle/openoutreach:latest
+docker run --pull always -it -v openoutreach_db:/app/data ghcr.io/eracle/openoutreach:latest
 ```
 
 ---
@@ -109,7 +109,7 @@ The pre-built `docker run` command uses a named Docker volume (`openoutreach_db`
 To run against a database file you already have, bind-mount the host **directory** containing it onto `/app/data` (the app opens `/app/data/db.sqlite3`):
 
 ```bash
-docker run --pull always -it -e ENABLE_VNC=true -p 6080:6080 -p 5900:5900 -v ~/.openoutreach/data:/app/data ghcr.io/eracle/openoutreach:latest
+docker run --pull always -it -v ~/.openoutreach/data:/app/data ghcr.io/eracle/openoutreach:latest
 ```
 
 Place your `db.sqlite3` inside the mounted directory (`~/.openoutreach/data/` above; swap for your own path). Two caveats: the dir and file must be writable by uid 1000 (the container's `ubuntu` user) or writes fail with `readonly database`; and `rundaemon` runs `migrate` on startup, so back the file up first (`cp db.sqlite3{,.bak}`) if it's precious.

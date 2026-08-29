@@ -49,5 +49,5 @@ def resolve_email(query: FinderQuery, user_id: str | None = None) -> FinderResul
         from openoutreach.emails.enrichment.waterfall import find_free
         return find_free(query, user_id=user_id)
     except Exception as exc:
-        logger.warning("email waterfall raised unexpectedly: %s", exc)
+        logger.warning("email waterfall raised unexpectedly: %s", type(exc).__name__)
         return None

@@ -670,7 +670,7 @@ class LinkedInProfileManager:
                 profiles.append(LinkedInProfile.from_dict(data))
             return profiles
         except Exception as e:
-            logger.error(f"Failed to get all LinkedIn profiles: {e}")
+            logger.error("Failed to get all LinkedIn profiles: %s", type(e).__name__)
             return []
 
     def filter(self, **kwargs):
@@ -685,7 +685,7 @@ class LinkedInProfileManager:
                 profiles.append(LinkedInProfile.from_dict(data))
             return profiles
         except Exception as e:
-            logger.error(f"Failed to filter LinkedIn profiles: {e}")
+            logger.error("Failed to filter LinkedIn profiles: %s", type(e).__name__)
             return []
 
     def get(self, **kwargs):
@@ -700,7 +700,7 @@ class LinkedInProfileManager:
                 return LinkedInProfile.from_dict(data)
             return None
         except Exception as e:
-            logger.error(f"Failed to get LinkedIn profile: {e}")
+            logger.error("Failed to get LinkedIn profile: %s", type(e).__name__)
             return None
 
     def create(self, **kwargs):
@@ -733,7 +733,7 @@ class SearchKeywordManager:
                 keywords.append(SearchKeyword.from_dict(data))
             return keywords
         except Exception as e:
-            logger.error(f"Failed to get all search keywords: {e}")
+            logger.error("Failed to get all search keywords: %s", type(e).__name__)
             return []
 
     def filter(self, **kwargs):
@@ -748,7 +748,7 @@ class SearchKeywordManager:
                 keywords.append(SearchKeyword.from_dict(data))
             return keywords
         except Exception as e:
-            logger.error(f"Failed to filter search keywords: {e}")
+            logger.error("Failed to filter search keywords: %s", type(e).__name__)
             return []
 
     def get(self, **kwargs):
@@ -763,7 +763,7 @@ class SearchKeywordManager:
                 return SearchKeyword.from_dict(data)
             return None
         except Exception as e:
-            logger.error(f"Failed to get search keyword: {e}")
+            logger.error("Failed to get search keyword: %s", type(e).__name__)
             return None
 
     def create(self, **kwargs):
@@ -796,7 +796,7 @@ class ActionLogManager:
                 logs.append(ActionLog.from_dict(data))
             return logs
         except Exception as e:
-            logger.error(f"Failed to get all action logs: {e}")
+            logger.error("Failed to get all action logs: %s", type(e).__name__)
             return []
 
     def filter(self, **kwargs):
@@ -829,7 +829,7 @@ class ActionLogManager:
                 logs.append(ActionLog.from_dict(data))
             return logs
         except Exception as e:
-            logger.error(f"Failed to filter action logs: {e}")
+            logger.error("Failed to filter action logs: %s", type(e).__name__)
             return []
 
     def count(self):
@@ -841,7 +841,7 @@ class ActionLogManager:
         try:
             return collection.count_documents({})
         except Exception as e:
-            logger.error(f"Failed to count action logs: {e}")
+            logger.error("Failed to count action logs: %s", type(e).__name__)
             return 0
 
     def get(self, **kwargs):
@@ -856,7 +856,7 @@ class ActionLogManager:
                 return ActionLog.from_dict(data)
             return None
         except Exception as e:
-            logger.error(f"Failed to get action log: {e}")
+            logger.error("Failed to get action log: %s", type(e).__name__)
             return None
 
     def create(self, **kwargs):

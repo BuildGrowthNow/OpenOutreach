@@ -7,7 +7,7 @@ Corresponds to the MongoDB Deal model in openoutreach.mongodb.models.
 
 from datetime import datetime
 from typing import Any, Dict, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class DealState:
@@ -57,8 +57,7 @@ class DealResponse(BaseModel):
     chat_summary: Dict[str, Any] = Field(default_factory=dict, description="Chat conversation summary (mem0-style facts)")
     creation_date: datetime = Field(..., description="Deal creation timestamp")
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(json_schema_extra={
             "example": {
                 "id": "550e8400-e29b-41d4-a716-446655440000",
                 "lead_id": "660e8400-e29b-41d4-a716-446655440001",
@@ -74,7 +73,7 @@ class DealResponse(BaseModel):
                 "chat_summary": {"facts": ["Interested in product demo", "Available next Tuesday"]},
                 "creation_date": "2026-07-10T12:00:00Z"
             }
-        }
+        })
 
 
 class DealUpdate(BaseModel):
@@ -93,14 +92,13 @@ class DealUpdate(BaseModel):
     profile_summary: Optional[Dict[str, Any]] = Field(None, description="Update profile summary")
     chat_summary: Optional[Dict[str, Any]] = Field(None, description="Update chat summary")
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(json_schema_extra={
             "example": {
                 "state": "Connected",
                 "outcome": "converted",
                 "reason": "Completed onboarding call"
             }
-        }
+        })
 
 
 class DealStateUpdate(BaseModel):
@@ -113,10 +111,9 @@ class DealStateUpdate(BaseModel):
     state: str = Field(..., description="New deal state")
     reason: Optional[str] = Field(None, description="Reason for state transition")
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(json_schema_extra={
             "example": {
                 "state": "Qualified",
                 "reason": "Matches ICP criteria"
             }
-        }
+        })

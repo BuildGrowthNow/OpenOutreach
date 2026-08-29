@@ -126,7 +126,7 @@ class ChatMessage:
             data = collection.find_one({"_id": message_id})
             return cls.from_dict(data) if data else None
         except Exception as e:
-            logger.error(f"Failed to get chat message '{message_id}': {e}")
+            logger.error("Failed to get chat message '%s': %s", message_id, type(e).__name__)
             return None
 
     @classmethod
@@ -138,7 +138,7 @@ class ChatMessage:
             result = collection.delete_one({"_id": message_id})
             return result.deleted_count > 0
         except Exception as e:
-            logger.error(f"Failed to delete chat message '{message_id}': {e}")
+            logger.error("Failed to delete chat message '%s': %s", message_id, type(e).__name__)
             return False
 
     def __str__(self) -> str:
@@ -162,7 +162,7 @@ class ChatMessage:
             data = collection.find_one({"deal_id": deal_id, "linkedin_urn": linkedin_urn})
             return cls.from_dict(data) if data else None
         except Exception as e:
-            logger.error(f"Failed to get message by deal/urn: {e}")
+            logger.error("Failed to get message by deal/urn: %s", type(e).__name__)
             return None
 
     @classmethod
@@ -177,7 +177,7 @@ class ChatMessage:
                 cursor = cursor.limit(limit)
             return [cls.from_dict(data) for data in cursor]
         except Exception as e:
-            logger.error(f"Failed to find messages for deal '{deal_id}': {e}")
+            logger.error("Failed to find messages for deal '%s': %s", deal_id, type(e).__name__)
             return []
 
     @classmethod
@@ -201,7 +201,7 @@ class ChatMessageManager:
         try:
             return [ChatMessage.from_dict(data) for data in collection.find()]
         except Exception as e:
-            logger.error(f"Failed to get all chat messages: {e}")
+            logger.error("Failed to get all chat messages: %s", type(e).__name__)
             return []
 
     def filter(self, **kwargs) -> List[ChatMessage]:
@@ -211,7 +211,7 @@ class ChatMessageManager:
         try:
             return [ChatMessage.from_dict(data) for data in collection.find(kwargs)]
         except Exception as e:
-            logger.error(f"Failed to filter chat messages: {e}")
+            logger.error("Failed to filter chat messages: %s", type(e).__name__)
             return []
 
     def count(self) -> int:
@@ -221,7 +221,7 @@ class ChatMessageManager:
         try:
             return collection.count_documents({})
         except Exception as e:
-            logger.error(f"Failed to count chat messages: {e}")
+            logger.error("Failed to count chat messages: %s", type(e).__name__)
             return 0
 
     def get(self, **kwargs) -> Optional[ChatMessage]:
@@ -232,7 +232,7 @@ class ChatMessageManager:
             data = collection.find_one(kwargs)
             return ChatMessage.from_dict(data) if data else None
         except Exception as e:
-            logger.error(f"Failed to get chat message: {e}")
+            logger.error("Failed to get chat message: %s", type(e).__name__)
             return None
 
 
@@ -322,7 +322,7 @@ class ActionLog:
             data = collection.find_one({"_id": log_id})
             return cls.from_dict(data) if data else None
         except Exception as e:
-            logger.error(f"Failed to get action log '{log_id}': {e}")
+            logger.error("Failed to get action log '%s': %s", log_id, type(e).__name__)
             return None
 
     @classmethod
@@ -334,7 +334,7 @@ class ActionLog:
             result = collection.delete_one({"_id": log_id})
             return result.deleted_count > 0
         except Exception as e:
-            logger.error(f"Failed to delete action log '{log_id}': {e}")
+            logger.error("Failed to delete action log '%s': %s", log_id, type(e).__name__)
             return False
 
     def __str__(self) -> str:
@@ -369,7 +369,7 @@ class ActionLogManager:
         try:
             return [ActionLog.from_dict(data) for data in collection.find()]
         except Exception as e:
-            logger.error(f"Failed to get all action logs: {e}")
+            logger.error("Failed to get all action logs: %s", type(e).__name__)
             return []
 
     def filter(self, **kwargs) -> List[ActionLog]:
@@ -379,7 +379,7 @@ class ActionLogManager:
         try:
             return [ActionLog.from_dict(data) for data in collection.find(kwargs)]
         except Exception as e:
-            logger.error(f"Failed to filter action logs: {e}")
+            logger.error("Failed to filter action logs: %s", type(e).__name__)
             return []
 
     def count(self) -> int:
@@ -389,7 +389,7 @@ class ActionLogManager:
         try:
             return collection.count_documents({})
         except Exception as e:
-            logger.error(f"Failed to count action logs: {e}")
+            logger.error("Failed to count action logs: %s", type(e).__name__)
             return 0
 
 
@@ -485,7 +485,7 @@ class Notification:
             data = collection.find_one({"_id": notification_id})
             return cls.from_dict(data) if data else None
         except Exception as e:
-            logger.error(f"Failed to get notification '{notification_id}': {e}")
+            logger.error("Failed to get notification '%s': %s", notification_id, type(e).__name__)
             return None
 
     @classmethod
@@ -496,7 +496,7 @@ class Notification:
         try:
             return collection.count_documents({"recipient_id": user_id, "is_read": False})
         except Exception as e:
-            logger.error(f"Failed to count unread notifications: {e}")
+            logger.error("Failed to count unread notifications: %s", type(e).__name__)
             return 0
 
     @classmethod
@@ -508,7 +508,7 @@ class Notification:
             result = collection.delete_one({"_id": notification_id})
             return result.deleted_count > 0
         except Exception as e:
-            logger.error(f"Failed to delete notification '{notification_id}': {e}")
+            logger.error("Failed to delete notification '%s': %s", notification_id, type(e).__name__)
             return False
 
     def __str__(self) -> str:
@@ -543,7 +543,7 @@ class NotificationManager:
         try:
             return [Notification.from_dict(data) for data in collection.find()]
         except Exception as e:
-            logger.error(f"Failed to get all notifications: {e}")
+            logger.error("Failed to get all notifications: %s", type(e).__name__)
             return []
 
     def filter(self, **kwargs) -> List[Notification]:
@@ -553,7 +553,7 @@ class NotificationManager:
         try:
             return [Notification.from_dict(data) for data in collection.find(kwargs)]
         except Exception as e:
-            logger.error(f"Failed to filter notifications: {e}")
+            logger.error("Failed to filter notifications: %s", type(e).__name__)
             return []
 
     def count(self) -> int:
@@ -563,7 +563,7 @@ class NotificationManager:
         try:
             return collection.count_documents({})
         except Exception as e:
-            logger.error(f"Failed to count notifications: {e}")
+            logger.error("Failed to count notifications: %s", type(e).__name__)
             return 0
 
 
@@ -630,7 +630,7 @@ class SearchKeyword:
             data = collection.find_one({"_id": keyword_id})
             return cls.from_dict(data) if data else None
         except Exception as e:
-            logger.error(f"Failed to get search keyword '{keyword_id}': {e}")
+            logger.error("Failed to get search keyword '%s': %s", keyword_id, type(e).__name__)
             return None
 
     @classmethod
@@ -642,7 +642,7 @@ class SearchKeyword:
             result = collection.delete_one({"_id": keyword_id})
             return result.deleted_count > 0
         except Exception as e:
-            logger.error(f"Failed to delete search keyword '{keyword_id}': {e}")
+            logger.error("Failed to delete search keyword '%s': %s", keyword_id, type(e).__name__)
             return False
 
     def __str__(self) -> str:
@@ -677,7 +677,7 @@ class SearchKeywordManager:
         try:
             return [SearchKeyword.from_dict(data) for data in collection.find()]
         except Exception as e:
-            logger.error(f"Failed to get all search keywords: {e}")
+            logger.error("Failed to get all search keywords: %s", type(e).__name__)
             return []
 
     def filter(self, **kwargs) -> List[SearchKeyword]:
@@ -687,7 +687,7 @@ class SearchKeywordManager:
         try:
             return [SearchKeyword.from_dict(data) for data in collection.find(kwargs)]
         except Exception as e:
-            logger.error(f"Failed to filter search keywords: {e}")
+            logger.error("Failed to filter search keywords: %s", type(e).__name__)
             return []
 
     def count(self) -> int:
@@ -697,7 +697,7 @@ class SearchKeywordManager:
         try:
             return collection.count_documents({})
         except Exception as e:
-            logger.error(f"Failed to count search keywords: {e}")
+            logger.error("Failed to count search keywords: %s", type(e).__name__)
             return 0
 
 
@@ -771,7 +771,7 @@ class Mailbox:
                 "email_sent_at": {"$gte": midnight}
             })
         except Exception as e:
-            logger.error(f"Failed to count sent emails: {e}")
+            logger.error("Failed to count sent emails: %s", type(e).__name__)
             return 0
 
     def headroom_today(self) -> int:
@@ -786,7 +786,7 @@ class Mailbox:
             data = collection.find_one({"_id": mailbox_id})
             return cls.from_dict(data) if data else None
         except Exception as e:
-            logger.error(f"Failed to get mailbox '{mailbox_id}': {e}")
+            logger.error("Failed to get mailbox '%s': %s", mailbox_id, type(e).__name__)
             return None
 
     @classmethod
@@ -798,7 +798,7 @@ class Mailbox:
             result = collection.delete_one({"_id": mailbox_id})
             return result.deleted_count > 0
         except Exception as e:
-            logger.error(f"Failed to delete mailbox '{mailbox_id}': {e}")
+            logger.error("Failed to delete mailbox '%s': %s", mailbox_id, type(e).__name__)
             return False
 
     def __str__(self) -> str:
@@ -833,7 +833,7 @@ class MailboxManager:
         try:
             return [Mailbox.from_dict(data) for data in collection.find()]
         except Exception as e:
-            logger.error(f"Failed to get all mailboxes: {e}")
+            logger.error("Failed to get all mailboxes: %s", type(e).__name__)
             return []
 
     def filter(self, **kwargs) -> List[Mailbox]:
@@ -843,7 +843,7 @@ class MailboxManager:
         try:
             return [Mailbox.from_dict(data) for data in collection.find(kwargs)]
         except Exception as e:
-            logger.error(f"Failed to filter mailboxes: {e}")
+            logger.error("Failed to filter mailboxes: %s", type(e).__name__)
             return []
 
     def count(self) -> int:
@@ -853,7 +853,7 @@ class MailboxManager:
         try:
             return collection.count_documents({})
         except Exception as e:
-            logger.error(f"Failed to count mailboxes: {e}")
+            logger.error("Failed to count mailboxes: %s", type(e).__name__)
             return 0
 
 
@@ -945,7 +945,7 @@ class CampaignTemplate:
             data = collection.find_one({"_id": template_id})
             return cls.from_dict(data) if data else None
         except Exception as e:
-            logger.error(f"Failed to get campaign template '{template_id}': {e}")
+            logger.error("Failed to get campaign template '%s': %s", template_id, type(e).__name__)
             return None
 
     @classmethod
@@ -957,7 +957,7 @@ class CampaignTemplate:
             result = collection.delete_one({"_id": template_id})
             return result.deleted_count > 0
         except Exception as e:
-            logger.error(f"Failed to delete campaign template '{template_id}': {e}")
+            logger.error("Failed to delete campaign template '%s': %s", template_id, type(e).__name__)
             return False
 
     def __str__(self) -> str:
@@ -992,7 +992,7 @@ class CampaignTemplateManager:
         try:
             return [CampaignTemplate.from_dict(data) for data in collection.find()]
         except Exception as e:
-            logger.error(f"Failed to get all campaign templates: {e}")
+            logger.error("Failed to get all campaign templates: %s", type(e).__name__)
             return []
 
     def filter(self, **kwargs) -> List[CampaignTemplate]:
@@ -1002,7 +1002,7 @@ class CampaignTemplateManager:
         try:
             return [CampaignTemplate.from_dict(data) for data in collection.find(kwargs)]
         except Exception as e:
-            logger.error(f"Failed to filter campaign templates: {e}")
+            logger.error("Failed to filter campaign templates: %s", type(e).__name__)
             return []
 
     def count(self) -> int:
@@ -1012,7 +1012,7 @@ class CampaignTemplateManager:
         try:
             return collection.count_documents({})
         except Exception as e:
-            logger.error(f"Failed to count campaign templates: {e}")
+            logger.error("Failed to count campaign templates: %s", type(e).__name__)
             return 0
 
 

@@ -23,6 +23,15 @@ from openoutreach.config import settings
 from openoutreach.billing.rate_limiter import SignupRateLimiter
 
 
+@pytest.fixture(autouse=True, scope="module")
+def require_mongodb_for_auth_phase1():
+    """Skip DB-backed auth checks when the local integration dependency is absent."""
+    from openoutreach.mongodb.connection import check_mongodb_connection
+
+    if not check_mongodb_connection():
+        pytest.skip("MongoDB not available; auth phase tests require the integration database")
+
+
 class TestUserStatusChecks:
     """Test that blocked, deleted, and inactive users are rejected."""
 

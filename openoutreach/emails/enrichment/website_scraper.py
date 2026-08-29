@@ -174,7 +174,7 @@ def scrape_company_email(
                 hits = _extract_name_emails(resp.text, domain, first_name, last_name)
                 if hits:
                     email = hits[0][0]
-                    logger.info("website_scraper: found %s at %s", email, url)
+                    logger.info("website_scraper: matching email found")
                     return email
         except Exception:
             continue
@@ -194,7 +194,7 @@ def scrape_company_email(
                 hits = _extract_name_emails(resp.text, domain, first_name, last_name)
                 if hits:
                     email = hits[0][0]
-                    logger.info("website_scraper: found %s at %s", email, url)
+                    logger.info("website_scraper: matching email found")
                     return email
         except Exception:
             continue

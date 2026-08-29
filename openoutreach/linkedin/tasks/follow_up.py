@@ -335,7 +335,7 @@ def _close_stale_deals(campaign, session):
                         data={"public_identifier": public_id, "campaign_id": str(campaign.pk), "dedup_key": dedup_key},
                     ).save()
             except Exception as exc:
-                logger.debug("Could not create unmessaged-48h notification: %s", exc)
+                logger.debug("Could not create unmessaged-48h notification: %s", type(exc).__name__)
 
 
 def _next_followup_deal(campaign):
@@ -470,7 +470,7 @@ def handle_follow_up(task, session, qualifiers):
                 data={"public_identifier": public_id, "campaign_id": str(campaign.pk)},
             ).save()
         except Exception as exc:
-            logger.debug("Could not create never-messaged notification: %s", exc)
+            logger.debug("Could not create never-messaged notification: %s", type(exc).__name__)
         return
 
     profile = _build_send_profile(deal)
@@ -481,7 +481,7 @@ def handle_follow_up(task, session, qualifiers):
         message = _replace_placeholders(message, deal)
         # Strip em-dashes - the LLM occasionally ignores the hard constraint
         message = message.replace("—", "-").replace("–", "-")
-        logger.info("[%s] follow_up message for %s: %s", campaign, public_id, message)
+        logger.info("[%s] follow_up message prepared for profile", campaign)
 
         # Pre-stamp last_outgoing_at BEFORE sending so the duplicate guard survives
         # a crash between send and save. If send fails we clear it and save again.
@@ -565,7 +565,7 @@ def handle_follow_up(task, session, qualifiers):
                 data={"public_identifier": public_id, "campaign_id": str(campaign.pk)},
             ).save()
         except Exception as exc:
-            logger.debug("Could not create flag_human notification: %s", exc)
+            logger.debug("Could not create flag_human notification: %s", type(exc).__name__)
         logger.info("[%s] follow_up flag_human for %s", campaign, public_id)
 
     elif decision.action == "wait":

@@ -11,7 +11,11 @@ import os
 from typing import Any
 
 REQUIRED = {
-    "tasks": {"daemon_v2_task_claim_idx", "daemon_v2_task_lease_idx"},
+    "tasks": {
+        "daemon_v2_task_claim_idx", "daemon_v2_task_whatsapp_claim_idx",
+        "daemon_v2_task_mailbox_claim_idx", "daemon_v2_task_email_profile_claim_idx",
+        "daemon_v2_task_lease_idx",
+    },
     "daemon_devices": {"daemon_device_user_status_idx"},
     "daemon_refresh_families": {"daemon_refresh_device_hash_unique"},
     "daemon_enrollment_codes": {"daemon_enrollment_code_hash_unique"},

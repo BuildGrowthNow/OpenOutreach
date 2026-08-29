@@ -78,7 +78,7 @@ def _scrape_gumtree(page, query: str, country_code: str) -> List[BusinessListing
                 source="gumtree",
             ))
         except Exception as exc:
-            logger.debug("gumtree: error on %s: %s", link, exc)
+            logger.debug("gumtree: error on %s: %s", link, type(exc).__name__)
 
     return listings
 
@@ -151,7 +151,7 @@ def create_leads_from_classified(
                 logger.info("classified: %s returned %d listings", site, len(results))
                 all_listings.extend(results)
             except Exception as exc:
-                logger.warning("classified: site %s failed: %s", site, exc)
+                logger.warning("classified: site %s failed: %s", site, type(exc).__name__)
 
     if not all_listings:
         from openoutreach.whatsapp.pipeline.alerts import fire_scrape_zero_results
@@ -171,7 +171,7 @@ def create_leads_from_classified(
                 ) if d.get("phone")
             )
     except Exception as exc:
-        logger.warning("classified: dedup pre-fetch failed: %s", exc)
+        logger.warning("classified: dedup pre-fetch failed: %s", type(exc).__name__)
 
     if already_known:
         before = len(all_listings)

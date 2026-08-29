@@ -277,7 +277,7 @@ async def get_current_usage(
             "campaigns_limit": user.campaign_limit,
         }
     except Exception as e:
-        logger.error(f"Failed to get usage: {e}")
+        logger.error("Failed to get usage; exception_type=%s", type(e).__name__)
         return {
             "linkedin_accounts_used": 0,
             "linkedin_accounts_limit": user.linkedin_account_limit,
@@ -389,7 +389,7 @@ async def create_checkout(
                 # Add referral extension if user was referred
                 if user.referrer_id:
                     trial_days += config.referral_trial_extension_days
-                    logger.info(f"Applied referral trial extension: {trial_days} days total for {user.email}")
+                    logger.info("Applied referral trial extension: %s days total", trial_days)
 
             coupon_id = None
             if request.coupon_code:
@@ -421,7 +421,7 @@ async def create_checkout(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Checkout error: {e}")
+        logger.error("Checkout error; exception_type=%s", type(e).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Checkout creation failed",
@@ -463,7 +463,7 @@ async def create_portal(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Portal error: {e}")
+        logger.error("Portal error; exception_type=%s", type(e).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Portal creation failed",
@@ -551,7 +551,7 @@ async def change_plan(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Plan change error: {e}")
+        logger.error("Plan change error; exception_type=%s", type(e).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Plan change failed",
@@ -622,7 +622,7 @@ async def update_cloud_addon(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Cloud addon error: {e}")
+        logger.error("Cloud addon error; exception_type=%s", type(e).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update cloud addon",
@@ -648,7 +648,7 @@ async def cancel_sub(
         cancel_subscription(user.stripe_subscription_id, immediate=False)
         return {"status": "scheduled_for_cancellation"}
     except Exception as e:
-        logger.error(f"Cancel subscription error: {e}")
+        logger.error("Cancel subscription error; exception_type=%s", type(e).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to cancel subscription",
@@ -674,7 +674,7 @@ async def reactivate_sub(
         reactivate_subscription(user.stripe_subscription_id)
         return {"status": "reactivated"}
     except Exception as e:
-        logger.error(f"Reactivate subscription error: {e}")
+        logger.error("Reactivate subscription error; exception_type=%s", type(e).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to reactivate subscription",
@@ -712,7 +712,7 @@ async def get_invoices(
             for inv in invoices
         ]
     except Exception as e:
-        logger.error(f"Failed to get invoices: {e}")
+        logger.error("Failed to get invoices; exception_type=%s", type(e).__name__)
         return []
 
 

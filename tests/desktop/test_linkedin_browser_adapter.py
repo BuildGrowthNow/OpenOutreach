@@ -33,3 +33,29 @@ def test_supported_tasks_are_explicit():
         "check_pending",
         "send_manual_message",
     }
+    assert "observe" in LinkedInBrowserAdapter.SUPPORTED_V2_TASKS
+
+
+def test_observe_task_returns_connection_observation(monkeypatch):
+    from types import SimpleNamespace
+
+    import linkedin_cli.actions.status as status_actions
+
+    monkeypatch.setattr(status_actions, "get_connection_status",
+                        lambda _adapter, _profile: SimpleNamespace(value="connected"))
+    adapter = LinkedInBrowserAdapter("profile-1")
+    monkeypatch.setattr(adapter, "_ensure_browser", lambda: None)
+    try:
+        result = adapter._execute_sync({
+            "task_id": "task-1",
+            "task_type": "observe",
+            "snapshot": {
+                "target_public_identifier": "person-1",
+                "effect_key": "effect-1",
+            },
+        })
+    finally:
+        adapter._executor.shutdown(wait=True, cancel_futures=True)
+    assert result["outcome"] == "observed"
+    assert result["observation"]["observation"] == "connection"
+    assert result["observation"]["state"] == "connected"

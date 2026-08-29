@@ -7,7 +7,7 @@ Corresponds to the MongoDB Message model in openoutreach.mongodb.models.
 
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class MessageResponse(BaseModel):
@@ -24,8 +24,7 @@ class MessageResponse(BaseModel):
     user_id: Optional[str] = Field(None, description="Author user ID (creator of the message)")
     created_at: datetime = Field(..., description="Message creation timestamp")
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(json_schema_extra={
             "example": {
                 "id": "550e8400-e29b-41d4-a716-446655440000",
                 "deal_id": "660e8400-e29b-41d4-a716-446655440001",
@@ -34,7 +33,7 @@ class MessageResponse(BaseModel):
                 "user_id": "880e8400-e29b-41d4-a716-446655440003",
                 "created_at": "2026-07-10T12:00:00Z"
             }
-        }
+        })
 
 
 class MessageCreate(BaseModel):
@@ -50,12 +49,11 @@ class MessageCreate(BaseModel):
     is_outgoing: bool = Field(default=True, description="True if sent by user, False if received from lead")
     user_id: Optional[str] = Field(None, description="Author user ID (optional, typically set from auth context)")
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(json_schema_extra={
             "example": {
                 "deal_id": "660e8400-e29b-41d4-a716-446655440001",
                 "content": "Thank you for your interest! Let's schedule a call.",
                 "is_outgoing": True,
                 "user_id": "880e8400-e29b-41d4-a716-446655440003"
             }
-        }
+        })

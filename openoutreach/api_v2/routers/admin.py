@@ -579,7 +579,7 @@ async def get_all_invoices(
         invoices_response = _stripe.Invoice.list(**params)
         invoices_list = invoices_response.data if invoices_response else []
     except Exception as e:
-        logger.error(f"Failed to list invoices from Stripe: {e}")
+        logger.error("Failed to list invoices from Stripe; exception_type=%s", type(e).__name__)
         raise HTTPException(status_code=500, detail="Failed to fetch invoices")
 
     results = []
@@ -815,7 +815,7 @@ async def get_user_action_logs(
 # ==================== PHASE 2 - USER MANAGEMENT WRITE ENDPOINTS ====================
 
 
-@router.delete("/users/{user_id}")
+@router.delete("/users/{user_id}", dependencies=[Depends(get_admin_user)])
 async def delete_user(
     user_id: str,
     current_admin: str = Depends(get_admin_user),
@@ -850,7 +850,7 @@ async def delete_user(
     return {"ok": True, "deletion_scheduled_at": user.deletion_scheduled_at.isoformat()}
 
 
-@router.post("/users/{user_id}/restore")
+@router.post("/users/{user_id}/restore", dependencies=[Depends(get_admin_user)])
 async def restore_user(
     user_id: str,
     current_admin: str = Depends(get_admin_user),
@@ -878,7 +878,7 @@ class ExtendTrialRequest(BaseModel):
     days: int
 
 
-@router.post("/users/{user_id}/extend-trial")
+@router.post("/users/{user_id}/extend-trial", dependencies=[Depends(get_admin_user)])
 async def extend_trial(
     user_id: str,
     body: ExtendTrialRequest,
@@ -907,7 +907,7 @@ async def extend_trial(
     return {"ok": True, "trial_ends_at": user.trial_ends_at.isoformat()}
 
 
-@router.post("/users/{user_id}/cancel-subscription")
+@router.post("/users/{user_id}/cancel-subscription", dependencies=[Depends(get_admin_user)])
 async def force_cancel_subscription(
     user_id: str,
     current_admin: str = Depends(get_admin_user),
@@ -927,7 +927,11 @@ async def force_cancel_subscription(
     try:
         _stripe.Subscription.cancel(user.stripe_subscription_id)  # type: ignore[arg-type]
     except Exception as e:
-        logger.error(f"Stripe cancel failed for {user_id}: {e}")
+        logger.error(
+            "Stripe cancel failed; user_id=%s exception_type=%s",
+            user_id,
+            type(e).__name__,
+        )
         raise HTTPException(status_code=500, detail="Stripe cancellation failed")
 
     user.subscription_status = "canceled"
@@ -947,7 +951,7 @@ class SetPlanRequest(BaseModel):
     cloud_profiles: Optional[int] = None
 
 
-@router.post("/users/{user_id}/set-plan")
+@router.post("/users/{user_id}/set-plan", dependencies=[Depends(get_admin_user)])
 async def set_user_plan(
     user_id: str,
     body: SetPlanRequest,
@@ -1002,7 +1006,7 @@ async def set_user_plan(
     return _build_user_detail_response(user)
 
 
-@router.post("/users/{user_id}/verify-email")
+@router.post("/users/{user_id}/verify-email", dependencies=[Depends(get_admin_user)])
 async def force_verify_email(
     user_id: str,
     current_admin: str = Depends(get_admin_user),
@@ -1023,7 +1027,7 @@ async def force_verify_email(
     return {"ok": True}
 
 
-@router.post("/users/{user_id}/send-password-reset")
+@router.post("/users/{user_id}/send-password-reset", dependencies=[Depends(get_admin_user)])
 async def send_password_reset_for_user(
     user_id: str,
     current_admin: str = Depends(get_admin_user),
@@ -1049,7 +1053,7 @@ class ImpersonateResponse(BaseModel):
     expires_in: int
 
 
-@router.post("/users/{user_id}/impersonate")
+@router.post("/users/{user_id}/impersonate", dependencies=[Depends(get_admin_user)])
 async def impersonate_user(
     user_id: str,
     current_admin: str = Depends(get_admin_user),

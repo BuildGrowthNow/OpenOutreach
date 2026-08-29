@@ -109,7 +109,7 @@ def handle_check_pending(task, session, qualifiers):
         status = get_connection_status(session, profile_for_status)
         new_state = status.value  # Keep as string for MongoDB
     except SkipProfile as e:
-        logger.warning("Skipping %s: %s", public_id, e)
+        logger.warning("Skipping %s: %s", public_id, type(e).__name__)
         set_profile_state(session, public_id, models.Deal.DealState.FAILED)
         return
 

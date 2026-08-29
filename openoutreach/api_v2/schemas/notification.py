@@ -1,7 +1,7 @@
 """
 Pydantic schemas for Notification endpoints
 """
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional, Dict, Any
 from datetime import datetime
 
@@ -34,11 +34,7 @@ class NotificationResponse(NotificationBase):
     read_at: Optional[datetime] = Field(None, description="When notification was read")
     created_at: datetime = Field(..., description="When notification was created")
 
-    class Config:
-        populate_by_name = True
-        json_encoders = {
-            datetime: lambda v: v.isoformat() if v else None
-        }
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class NotificationListResponse(BaseModel):

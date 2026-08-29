@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help logs test docker-test stop build up setup run shell api healthcheck migrate ensure-indexes
+.PHONY: help logs test lint pyright docker-test stop build up setup run shell api healthcheck migrate ensure-indexes
 
 help:
 	@perl -nle'print $& if m{^[a-zA-Z_-]+:.*?## .*$$}' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-25s\033[0m %s\n", $$1, $$2}'
@@ -10,7 +10,13 @@ help:
 
 install: ## Install all Python dependencies (local dev)
 	pip install uv 2>/dev/null || true
-	uv pip install -r requirements/base.txt
+	uv pip install -r requirements/local.txt
+
+lint: ## Run Python lint checks
+	python -m ruff check --select E9,F63,F7,F82 openoutreach linkedin_cli scripts tests
+
+pyright: ## Run Python type checks
+	python -m pyright
 
 setup: install ## Install deps + Playwright browsers + ensure MongoDB indexes
 	playwright install --with-deps chromium
@@ -45,45 +51,45 @@ test: ## Run the test suite
 # ============================================================================
 
 logs: ## Follow the logs of the service
-	docker compose -f docker-compose.v2.yml logs -f
+	docker compose -f docker-compose.yml logs -f
 
 docker-test: ## Run tests in Docker
-	docker compose -f docker-compose.v2.yml run --rm openoutreach pytest -vv
+	docker compose -f docker-compose.yml run --rm openoutreach pytest -vv
 
 stop: ## Stop all services defined in Docker Compose
-	docker compose -f docker-compose.v2.yml stop
+	docker compose -f docker-compose.yml stop
 
 down: ## Stop and remove all containers
-	docker compose -f docker-compose.v2.yml down
+	docker compose -f docker-compose.yml down
 
 build: ## Build all services defined in Docker Compose
-	docker compose -f docker-compose.v2.yml build
+	docker compose -f docker-compose.yml build
 
 up: ## Run the service in Docker Compose (foreground)
-	docker compose -f docker-compose.v2.yml up --build
+	docker compose -f docker-compose.yml up --build
 
 up-detached: ## Run the service in Docker Compose (background)
-	docker compose -f docker-compose.v2.yml up --build -d
-	docker compose -f docker-compose.v2.yml logs -f
+	docker compose -f docker-compose.yml up --build -d
+	docker compose -f docker-compose.yml logs -f
 
 restart: ## Restart all services
-	docker compose -f docker-compose.v2.yml restart
+	docker compose -f docker-compose.yml restart
 
 ps: ## Show running containers
-	docker compose -f docker-compose.v2.yml ps
+	docker compose -f docker-compose.yml ps
 
 # ============================================================================
 # MongoDB Management
 # ============================================================================
 
 mongo-shell: ## Open MongoDB shell
-	docker compose -f docker-compose.v2.yml exec mongodb mongosh openoutreach
+	docker compose -f docker-compose.yml exec mongodb mongosh openoutreach
 
 mongo-backup: ## Backup MongoDB to ./data/mongo-backup/
 	mkdir -p ./data/mongo-backup
-	docker compose -f docker-compose.v2.yml exec -T mongodb mongodump --out=/data/db/backup --db=openoutreach
-	docker compose -f docker-compose.v2.yml exec -T mongodb tar czf /data/db/backup.tar.gz -C /data/db backup
-	docker cp $$(docker compose -f docker-compose.v2.yml ps -q mongodb):/data/db/backup.tar.gz ./data/mongo-backup/backup-$$(date +%Y%m%d-%H%M%S).tar.gz
+	docker compose -f docker-compose.yml exec -T mongodb mongodump --out=/data/db/backup --db=openoutreach
+	docker compose -f docker-compose.yml exec -T mongodb tar czf /data/db/backup.tar.gz -C /data/db backup
+	docker cp $$(docker compose -f docker-compose.yml ps -q mongodb):/data/db/backup.tar.gz ./data/mongo-backup/backup-$$(date +%Y%m%d-%H%M%S).tar.gz
 
 mongo-restore: ## Restore MongoDB from latest backup in ./data/mongo-backup/
 	@LATEST=$$(ls -t ./data/mongo-backup/backup-*.tar.gz 2>/dev/null | head -1); \
@@ -92,9 +98,9 @@ mongo-restore: ## Restore MongoDB from latest backup in ./data/mongo-backup/
 		exit 1; \
 	fi; \
 	echo "Restoring from $$LATEST"; \
-	docker cp $$LATEST $$(docker compose -f docker-compose.v2.yml ps -q mongodb):/tmp/backup.tar.gz; \
-	docker compose -f docker-compose.v2.yml exec -T mongodb tar xzf /tmp/backup.tar.gz -C /tmp; \
-	docker compose -f docker-compose.v2.yml exec -T mongodb mongorestore --drop --db=openoutreach /tmp/backup/openoutreach
+	docker cp $$LATEST $$(docker compose -f docker-compose.yml ps -q mongodb):/tmp/backup.tar.gz; \
+	docker compose -f docker-compose.yml exec -T mongodb tar xzf /tmp/backup.tar.gz -C /tmp; \
+	docker compose -f docker-compose.yml exec -T mongodb mongorestore --drop --db=openoutreach /tmp/backup/openoutreach
 
 # ============================================================================
 # Cleanup
@@ -107,7 +113,7 @@ clean: ## Remove Python cache files
 	find . -type d -name '.pytest_cache' -exec rm -rf {} +
 
 clean-docker: ## Remove all Docker containers, images, and volumes
-	docker compose -f docker-compose.v2.yml down -v --rmi all
+	docker compose -f docker-compose.yml down -v --rmi all
 
 # ============================================================================
 # Frontend

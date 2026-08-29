@@ -130,7 +130,7 @@ class AccountSession:
                     self.playwright.stop()
                 logger.info("Browser closed gracefully (%s)", self)
             except Exception as e:
-                logger.debug("Error closing browser: %s", e)
+                logger.debug("Error closing browser: %s", type(e).__name__)
             finally:
                 self.page = self.context = self.browser = self.playwright = None
 

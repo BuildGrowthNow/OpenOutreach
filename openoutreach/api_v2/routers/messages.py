@@ -370,6 +370,6 @@ async def list_deal_messages(
             # Log but don't fail - just return stale data
             import logging
             logger = logging.getLogger(__name__)
-            logger.warning(f"Message sync failed for deal {deal_id}: {e}")
+            logger.warning("Message sync failed; deal_id=%s exception_type=%s", deal_id, type(e).__name__)
 
     return await list_messages(user_id=user_id, deal_id=deal_id, limit=limit, offset=offset)

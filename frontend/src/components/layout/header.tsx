@@ -130,9 +130,7 @@ const Header = ({ onMenuClick, className }: HeaderProps) => {
   }
 
   const handleBadgeClick = () => {
-    if (typeof window !== 'undefined') {
-      window.location.href = '/settings?tab=linkedin-credentials'
-    }
+    router.push('/settings?tab=linkedin-credentials')
   }
 
   useEffect(() => {
@@ -329,7 +327,7 @@ const Header = ({ onMenuClick, className }: HeaderProps) => {
               <button
                 className="relative p-1.5 rounded hover:bg-accent transition-colors"
                 title={waStatus.tooltip}
-                onClick={() => { window.location.href = '/settings?tab=whatsapp' }}
+                onClick={() => { router.push('/settings?tab=whatsapp') }}
                 aria-label="WhatsApp status"
               >
                 <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4 text-muted-foreground" aria-hidden="true">
@@ -340,7 +338,7 @@ const Header = ({ onMenuClick, className }: HeaderProps) => {
               <button
                 className="relative p-1.5 rounded hover:bg-accent transition-colors"
                 title={emailStatus.tooltip}
-                onClick={() => { window.location.href = '/settings?tab=email' }}
+                onClick={() => { router.push('/settings?tab=email') }}
                 aria-label="Email status"
               >
                 <Mail className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
@@ -490,7 +488,7 @@ const Header = ({ onMenuClick, className }: HeaderProps) => {
                  await logout()
                } catch (error) {
                  console.error('Logout error:', error)
-                 window.location.href = '/login'
+                 router.push('/login')
                }
              }}>
                <LogOut className="h-4 w-4" />

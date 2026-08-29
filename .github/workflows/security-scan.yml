@@ -1,11 +1,53 @@
 name: Security and Supply Chain Scan
 
+permissions:
+  contents: read
+
 on:
   pull_request:
   push:
     branches: [main]
 
 jobs:
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Scan tracked files for embedded credentials
+        run: python scripts/scan_secrets.py
+
+  regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install declared Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements/base.txt -r requirements/api.txt -r requirements/production.txt -r desktop/requirements.txt
+      - name: Run deterministic regression suites
+        run: >-
+          python -m pytest -q
+          tests/api_v2
+          tests/desktop
+          tests/emails
+          tests/test_migration_wrappers.py
+          tests/test_production_verifier.py
+          tests/test_release_workflow.py
+          tests/test_deploy_workflow.py
+          tests/test_compose_production_safety.py
+          tests/test_secret_scanner.py
+          tests/test_desktop_log_audit.py
+          tests/test_logging_redaction.py
+          --ignore=tests/api_v2/test_auth_phase1.py
+          tests/test_health_probe_timeout.py
+          tests/integration/test_api.py::TestHealthEndpoint::test_health_check
+
   python-dependencies:
     runs-on: ubuntu-latest
     steps:
@@ -17,15 +59,62 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements/base.txt
+          pip install -r requirements/api.txt -r requirements/production.txt
+          pip install -r desktop/requirements.txt
           pip install pip-audit
       - name: Audit dependencies
         # Audit declared manifests directly. Auditing the checkout as a
         # project also discovers the local editable distribution name, which
         # is intentionally not published to PyPI and cannot be resolved.
-        run: pip-audit --strict -r requirements/base.txt -r desktop/requirements.txt
+        run: >-
+          pip-audit --strict
+          -r requirements/base.txt
+          -r requirements/api.txt
+          -r requirements/production.txt
+          -r desktop/requirements.txt
       - name: Generate SBOM
         run: python scripts/generate_sbom.py --output SBOM.cyclonedx.json
       - uses: actions/upload-artifact@v4
         with:
           name: python-sbom
           path: SBOM.cyclonedx.json
+
+  worker-dependencies:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: workers/email-tracking
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: workers/email-tracking/package-lock.json
+      - name: Install locked Worker dependencies
+        run: npm ci
+      - name: Audit Worker production dependencies
+        run: npm audit --omit=dev --audit-level=high
+      - name: Type-check Worker
+        run: npm run check
+
+  frontend-regression:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install locked frontend dependencies
+        run: npm ci
+      - name: Audit frontend production dependencies
+        run: npm audit --omit=dev --audit-level=high
+      - name: Lint frontend
+        run: npm run lint
+      - name: Build frontend
+        run: npm run build

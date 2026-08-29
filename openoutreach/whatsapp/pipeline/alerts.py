@@ -47,4 +47,4 @@ def fire_scrape_zero_results(
             source, campaign_id,
         )
     except Exception as exc:
-        logger.warning("alerts: failed to fire zero-results notification: %s", exc)
+        logger.warning("alerts: failed to fire zero-results notification: %s", type(exc).__name__)

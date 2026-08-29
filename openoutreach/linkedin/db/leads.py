@@ -238,11 +238,11 @@ def discover_and_enrich(session, urls):
         try:
             profile, _raw = api.get_profile(profile_url=url)
         except Exception:
-            logger.warning("Voyager API failed for %s - skipping", url)
+            logger.warning("Voyager API failed for profile - skipping")
             continue
 
         if not profile:
-            logger.warning("Empty profile for %s - skipping", url)
+            logger.warning("Empty profile returned - skipping")
             continue
 
         if create_enriched_lead(session, url, profile) is not None:

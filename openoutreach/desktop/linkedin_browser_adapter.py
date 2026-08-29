@@ -41,7 +41,7 @@ class LinkedInBrowserAdapter:
     # Keep the old public constant for clients which used it as a capability
     # probe; the v2 capability set is deliberately broader.
     SUPPORTED_TASKS = frozenset({"connect", "check_pending", "send_manual_message"})
-    SUPPORTED_V2_TASKS = frozenset({"connect", "check_pending", "follow_up", "send_manual_message"})
+    SUPPORTED_V2_TASKS = frozenset({"connect", "check_pending", "follow_up", "send_manual_message", "observe"})
 
     def __init__(self, profile_id: str, session_factory: Any = None) -> None:
         self.profile_id = profile_id
@@ -78,10 +78,11 @@ class LinkedInBrowserAdapter:
             "urn": str(snapshot.get("target_urn", "")).strip(),
         }
         task_type = str(task["task_type"])
-        if task_type == "check_pending":
+        if task_type in {"check_pending", "observe"}:
             state = get_connection_status(self, profile).value
             observation = LinkedInObservation(
-                profile_id=self.profile_id, observation="pending",
+                profile_id=self.profile_id,
+                observation="pending" if task_type == "check_pending" else "connection",
                 target_key=target, observed_at=datetime.now(timezone.utc), state=state,
             )
             return {"outcome": "observed", "target_key": target, "state": state,

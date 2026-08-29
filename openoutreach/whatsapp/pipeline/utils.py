@@ -178,7 +178,7 @@ def scrape_retry(
                     label or getattr(fn, "__name__", "?"),
                     attempt + 1,
                     max_attempts,
-                    exc,
+                    type(exc).__name__,
                     delay,
                 )
                 time.sleep(delay)

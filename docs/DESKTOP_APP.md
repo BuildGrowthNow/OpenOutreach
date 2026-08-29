@@ -1265,7 +1265,10 @@ class AuthManager:
 
 ### 4.4 URL Protocol Handler
 
-For handling `openoutreach://auth?token=xxx` callbacks after web login.
+The custom protocol is retained for launching an installed client, but current
+login tokens are transferred only through the in-process desktop bridge. Never
+put access or refresh tokens in a custom-protocol URL, browser history, or
+process arguments.
 
 **macOS** - Add to Info.plist:
 ```xml
@@ -1274,22 +1277,22 @@ For handling `openoutreach://auth?token=xxx` callbacks after web login.
     <dict>
         <key>CFBundleURLSchemes</key>
         <array>
-            <string>openoutreach</string>
+            <string>lengrowth</string>
         </array>
         <key>CFBundleURLName</key>
-        <string>OpenOutreach Auth</string>
+        <string>Lengrowth Auth</string>
     </dict>
 </array>
 ```
 
 **Windows** - Registry entries (added by installer):
 ```reg
-[HKEY_CLASSES_ROOT\openoutreach]
-@="URL:OpenOutreach Protocol"
+[HKEY_CLASSES_ROOT\lengrowth]
+@="URL:Lengrowth Protocol"
 "URL Protocol"=""
 
-[HKEY_CLASSES_ROOT\openoutreach\shell\open\command]
-@="\"C:\\Program Files\\OpenOutreach\\OpenOutreach.exe\" \"%1\""
+[HKEY_CLASSES_ROOT\lengrowth\shell\open\command]
+@="\"C:\\Program Files\\Lengrowth\\Lengrowth.exe\" \"%1\""
 ```
 
 ---
@@ -1508,14 +1511,14 @@ pip install -r desktop/requirements.txt
 python desktop/build.py --dmg
 ```
 
-Output: `desktop/dist/OpenOutreach-{version}.dmg`
+Output: `desktop/dist/Lengrowth-{version}.dmg`
 
 ### 6.2 CI/CD Build
 
-GitHub Actions workflow at `.github/workflows/desktop-build.yml` builds automatically:
+GitHub Actions workflow at `.github/workflows/desktop-build.yml` builds on qualifying pushes to `main` or by manual dispatch:
 
-- **Trigger**: Push a tag like `desktop-v1.0.0` or manual workflow dispatch
-- **Artifacts**: macOS DMG + Windows exe uploaded as release assets
+- **Trigger**: qualifying push to `main` or manual workflow dispatch
+- **Artifacts**: macOS DMG, Windows executable, MSIX, and NSIS installer uploaded as workflow artifacts
 - **macOS**: Builds on `macos-latest`, generates proper `.icns` icons
 
 Manual build trigger:
@@ -1524,22 +1527,24 @@ git tag desktop-v1.0.0
 git push origin desktop-v1.0.0
 ```
 
+The publish job is intentionally manual: set the `publish` input to `true` only after release approval and signing/notarization secrets are configured.
+
 ### 6.3 First Launch Instructions
 
-Since the app is unsigned, users need to right-click → Open on first launch.
+Unsigned local builds may require the right-click → Open flow. Published builds must be signed and notarized by the manual release job.
 
 **Add this to the download page and in-app:**
 
 ```
 ## macOS Installation
 
-1. Download OpenOutreach.dmg
-2. Open the DMG and drag OpenOutreach to Applications
+1. Download `Lengrowth-{version}.dmg`
+2. Open the DMG and drag Lengrowth to Applications
 3. **Important - First launch only:**
-   - Right-click (or Control-click) on OpenOutreach in Applications
+   - Right-click (or Control-click) on Lengrowth in Applications
    - Click "Open" from the menu
    - Click "Open" again in the dialog
-4. Log in with your OpenOutreach account
+4. Log in with your Lengrowth account
 
 After the first launch, you can open normally.
 ```
@@ -1601,7 +1606,7 @@ Steps:
 - Generates AppxManifest.xml dynamically
 - Creates required asset images from icon.png
 - Packages with Windows SDK makeappx.exe
-- Output: `desktop/dist/OpenOutreach-{version}.msix`
+- Output: `desktop/dist/Lengrowth-{version}.msix`
 
 The manifest template:
 
@@ -1611,14 +1616,14 @@ The manifest template:
          xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
          xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities">
   
-  <Identity Name="OpenOutreach"
+  <Identity Name="Lengrowth"
             Publisher="CN=YourPublisher"
             Version="1.0.0.0"
             ProcessorArchitecture="x64" />
   
   <Properties>
-    <DisplayName>OpenOutreach</DisplayName>
-    <PublisherDisplayName>OpenOutreach</PublisherDisplayName>
+    <DisplayName>Lengrowth</DisplayName>
+    <PublisherDisplayName>Lengrowth</PublisherDisplayName>
     <Description>LinkedIn automation with your local IP</Description>
     <Logo>assets\icon-150.png</Logo>
   </Properties>
@@ -1637,10 +1642,10 @@ The manifest template:
   </Capabilities>
   
   <Applications>
-    <Application Id="OpenOutreach"
-                 Executable="OpenOutreach.exe"
+    <Application Id="Lengrowth"
+                 Executable="Lengrowth.exe"
                  EntryPoint="Windows.FullTrustApplication">
-      <uap:VisualElements DisplayName="OpenOutreach"
+      <uap:VisualElements DisplayName="Lengrowth"
                           Description="LinkedIn automation"
                           BackgroundColor="#22c55e"
                           Square150x150Logo="assets\icon-150.png"
@@ -1648,8 +1653,8 @@ The manifest template:
       </uap:VisualElements>
       <Extensions>
         <uap:Extension Category="windows.protocol">
-          <uap:Protocol Name="openoutreach">
-            <uap:DisplayName>OpenOutreach Auth</uap:DisplayName>
+          <uap:Protocol Name="lengrowth">
+            <uap:DisplayName>Lengrowth Auth</uap:DisplayName>
           </uap:Protocol>
         </uap:Extension>
       </Extensions>
@@ -1671,7 +1676,7 @@ python desktop/build.py --msix
 python desktop/build.py
 
 # Create MSIX
-& "C:\Program Files (x86)\Windows Kits\10\bin\10.0.22000.0\x64\makeappx.exe" pack /d desktop\dist /p desktop\dist\OpenOutreach.msix
+& "C:\Program Files (x86)\Windows Kits\10\bin\10.0.22000.0\x64\makeappx.exe" pack /d desktop\dist /p desktop\dist\Lengrowth-{version}.msix
 ```
 
 ### 7.4 NSIS Installer (Recommended Distribution Method)
@@ -1688,24 +1693,24 @@ python desktop/build.py --installer
 - Add/Remove Programs integration
 - Uninstaller included
 
-**Output:** `desktop/dist/OpenOutreach-{version}-Setup.exe`
+**Output:** `desktop/dist/Lengrowth-{version}-Setup.exe`
 
-### 7.5 Code Signing (Optional)
+### 7.5 Code Signing (Required for Publish)
 
 Sign with a code signing certificate to remove SmartScreen warnings:
 
-**PowerShell script provided:**
+**Local PowerShell helper:**
 ```powershell
-.\desktop\windows\sign.ps1
+.\desktop\windows\sign.ps1 -FilePath "desktop\dist\Lengrowth.exe"
 ```
 
 **Environment variables:**
-- `SIGN_CERT_PATH`: Path to .pfx certificate
-- `SIGN_CERT_PASS`: Certificate password
+- Local signing uses `SIGN_CERT_PATH` and `SIGN_CERT_PASS`.
+- Approved CI publishing uses the ephemeral certificate workflow in `desktop/windows/sign_release.ps1` with repository secrets; do not paste certificate material into chat or commit it.
 
 **Manual signing:**
 ```powershell
-signtool sign /f cert.pfx /p password /t http://timestamp.digicert.com /fd SHA256 desktop\dist\OpenOutreach.exe
+signtool sign /f cert.pfx /p password /tr https://timestamp.digicert.com /td SHA256 /fd SHA256 desktop\dist\Lengrowth.exe
 ```
 
 ### 7.6 Distribution Options
@@ -1713,17 +1718,17 @@ signtool sign /f cert.pfx /p password /t http://timestamp.digicert.com /fd SHA25
 Three distribution methods supported:
 
 1. **NSIS Installer (Recommended for most users)**
-   - Download: `OpenOutreach-{version}-Setup.exe`
+   - Download: `Lengrowth-{version}-Setup.exe`
    - Pros: Familiar installer UX, protocol handler auto-registered, uninstaller
    - Best for: Direct download from website
 
 2. **Standalone Executable**
-   - Download: `OpenOutreach.exe`
+    - Download: `Lengrowth.exe`
    - Pros: Portable, no installation needed
    - Best for: Users who prefer portable apps
 
 3. **MSIX Package**
-   - Download: `OpenOutreach-{version}.msix`
+    - Download: `Lengrowth-{version}.msix`
    - Pros: Microsoft Store compatible, sandboxed
    - Best for: Enterprise deployment or Store submission
 
@@ -1764,19 +1769,19 @@ git push origin desktop-v1.0.0
 
 Registry entries:
 ```
-HKEY_CLASSES_ROOT\openoutreach
-  (Default) = "URL:OpenOutreach Protocol"
+HKEY_CLASSES_ROOT\lengrowth
+  (Default) = "URL:Lengrowth Protocol"
   URL Protocol = ""
 
-HKEY_CLASSES_ROOT\openoutreach\shell\open\command
-  (Default) = "C:\Program Files\OpenOutreach\OpenOutreach.exe" "%1"
+HKEY_CLASSES_ROOT\lengrowth\shell\open\command
+  (Default) = "C:\Program Files\Lengrowth\Lengrowth.exe" "%1"
 ```
 
 **Manual registration:** Use `desktop/windows/register_protocol.reg` (edit paths first)
 
 **Testing:**
 ```
-openoutreach://auth?token=test
+lengrowth://auth?probe=1
 ```
 
 ---

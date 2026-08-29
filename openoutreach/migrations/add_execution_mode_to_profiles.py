@@ -68,10 +68,11 @@ def migrate_execution_mode():
 
 
 if __name__ == "__main__":
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    )
+    from openoutreach.core.logging import RedactingFormatter
+
+    handler = logging.StreamHandler()
+    handler.setFormatter(RedactingFormatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+    logging.basicConfig(level=logging.INFO, handlers=[handler])
 
     success = migrate_execution_mode()
     exit(0 if success else 1)

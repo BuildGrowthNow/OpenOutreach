@@ -94,7 +94,7 @@ def _from_cache(company: str) -> str | None:
         )
         return doc["domain"] if doc and doc.get("domain") else None
     except Exception as exc:
-        logger.debug("domain cache lookup failed: %s", exc)
+        logger.debug("domain cache lookup failed: %s", type(exc).__name__)
         return None
 
 
@@ -112,7 +112,7 @@ def _save_cache(company: str, domain: str) -> None:
             upsert=True,
         )
     except Exception as exc:
-        logger.debug("domain cache save failed: %s", exc)
+        logger.debug("domain cache save failed: %s", type(exc).__name__)
 
 
 def _from_duckduckgo(company: str) -> str | None:
@@ -140,7 +140,7 @@ def _from_duckduckgo(company: str) -> str | None:
                 return domain
 
     except Exception as exc:
-        logger.debug("duckduckgo domain search failed for %r: %s", company, exc)
+        logger.debug("duckduckgo domain search failed for %r: %s", company, type(exc).__name__)
 
     return None
 

@@ -1,11 +1,8 @@
 """Integration tests for FastAPI endpoints."""
 import pytest
 from fastapi.testclient import TestClient
-from datetime import datetime, timezone as tz
 
 from openoutreach.api_v2.main import app
-from openoutreach.mongodb.models import User, Campaign, Deal, Lead, SiteConfig
-from openoutreach.crm.models import DealState
 
 
 @pytest.fixture
@@ -29,8 +26,19 @@ class TestHealthEndpoint:
         """Test /api/health endpoint."""
         response = client.get("/api/health")
         assert response.status_code == 200
+        assert response.headers["cache-control"] == "no-store"
         data = response.json()
         assert "status" in data or "message" in data
+        assert data["build"]["version"]
+        assert "commit" in data["build"]
+        assert "python_version" not in data["system"]
+        assert "cpu_percent" not in data["system"]
+        assert "memory_percent" not in data["system"]
+        assert isinstance(data["database"]["latency_ms"], (int, float))
+        assert data["database"]["latency_ms"] >= 0
+        assert isinstance(data["api"]["latency_ms"], (int, float))
+        assert data["api"]["latency_ms"] >= 0
+        assert data["services"]["linkedin"] == "unknown"
 
 
 class TestCampaignEndpoints:
@@ -107,10 +115,10 @@ class TestWebSocketEndpoint:
         # WebSocket testing requires different approach
         # Just verify the route exists
         try:
-            with client.websocket_connect("/api/ws") as websocket:
+            with client.websocket_connect("/api/ws"):
                 # Connection should fail without auth
                 pass
-        except Exception as e:
+        except Exception:
             # Expected - websocket requires auth or proper handshake
             assert True
 
@@ -150,7 +158,7 @@ class TestLinkedInProfileEndpoints:
 
     def test_linkedin_profiles_require_auth(self, client):
         """Test that LinkedIn profiles require authentication."""
-        response = client.get("/api/linkedin/profiles")
+        response = client.get("/api/linkedin-profiles/")
         assert response.status_code in [401, 403, 422]
 
 
@@ -169,10 +177,33 @@ class TestFastAPIStartup:
         # Just verify app has middleware
         assert hasattr(app, "middleware_stack")
 
+    def test_cors_rejects_wildcard_origins_with_credentials(self):
+        """Test credentialed CORS cannot be configured with a wildcard."""
+        from openoutreach.api_v2.main import _parse_cors_origins
+
+        assert _parse_cors_origins("https://app.example, https://admin.example") == [
+            "https://app.example",
+            "https://admin.example",
+        ]
+        with pytest.raises(RuntimeError, match="explicit origins"):
+            _parse_cors_origins("*")
+        with pytest.raises(RuntimeError, match="explicit origins"):
+            _parse_cors_origins(" , ")
+
+    def test_lifespan_uses_context_manager(self):
+        """Test startup/shutdown use the non-deprecated lifespan API."""
+        from openoutreach.api_v2.main import app
+        assert app.router.on_startup == []
+        assert app.router.on_shutdown == []
+        assert callable(app.router.lifespan_context)
+
     def test_routers_registered(self):
         """Test that all routers are registered."""
         from openoutreach.api_v2.main import app
-        routes = [route.path for route in app.routes]
+        # FastAPI stores included routers as `_IncludedRouter` entries in
+        # `app.routes`; the flattened OpenAPI path map is the stable public
+        # registration surface for this assertion.
+        routes = list(app.openapi().get("paths", {}))
 
         # Key routes should exist
         assert any("/health" in path for path in routes)
@@ -190,7 +221,6 @@ class TestDatabaseConnection:
 
     def test_models_accessible_from_api(self):
         """Test that models can be imported in API context."""
-        from openoutreach.api_v2.dependencies_v2 import get_current_user
         from openoutreach.mongodb.models import User, Campaign, Lead, Deal
         assert User is not None
         assert Campaign is not None

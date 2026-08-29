@@ -1,67 +1,95 @@
 name: Deploy to AWS EC2
 
+permissions:
+  contents: read
+
 on:
-  push:
-    branches:
-      - main
-      - master
   workflow_dispatch:
+    inputs:
+      confirm_production_deploy:
+        description: "Confirm this authorized production deployment"
+        required: true
+        default: false
+        type: boolean
 
 jobs:
   deploy:
     name: Deploy to AWS EC2
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.confirm_production_deploy == true }}
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: production
+    env:
+      DEPLOY_SHA: ${{ github.sha }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Resolve application version from source
+        id: version
+        run: |
+          VERSION=$(python -c "import ast; tree=ast.parse(open('openoutreach/desktop/__version__.py', encoding='utf-8').read()); print(next(node.value.value for node in tree.body if isinstance(node, ast.Assign) and any(getattr(target, 'id', '') == '__version__' for target in node.targets)))")
+          echo "app_version=$VERSION" >> "$GITHUB_OUTPUT"
+
       - name: Set up SSH
         env:
           EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+          EC2_KNOWN_HOSTS: ${{ secrets.EC2_KNOWN_HOSTS }}
         run: |
+          set -euo pipefail
+          if [ -z "$EC2_KNOWN_HOSTS" ]; then
+            echo 'EC2_KNOWN_HOSTS must be configured; refusing unverified SSH'
+            exit 1
+          fi
           mkdir -p ~/.ssh
           echo "$EC2_SSH_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+          printf '%s\n' "$EC2_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
 
       - name: Deploy via SSH
         env:
           EC2_HOST: ${{ secrets.EC2_HOST }}
           EC2_USER: ${{ secrets.EC2_USER }}
+          APP_VERSION: ${{ steps.version.outputs.app_version }}
           SECRET_KEY: ${{ secrets.SECRET_KEY }}
           DEBUG: ${{ secrets.DEBUG }}
           SSH_AUTH_SOCK: /dev/null
         run: |
           # Ensure lingering is enabled so rootless Docker survives SSH disconnect
-          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o IdentitiesOnly=yes "${EC2_USER}@${EC2_HOST}" "
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=yes -o IdentitiesOnly=yes "${EC2_USER}@${EC2_HOST}" "
             sudo loginctl enable-linger ${EC2_USER}
           "
 
           # Clone or update the repository on the server (force reset to avoid merge conflicts)
-          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o IdentitiesOnly=yes "${EC2_USER}@${EC2_HOST}" "
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=yes -o IdentitiesOnly=yes "${EC2_USER}@${EC2_HOST}" "
             set -e
             if [ -d ~/OpenOutreach/.git ]; then
               cd ~/OpenOutreach
               # Ensure deploy user owns workspace files before cleanup
               sudo chown -R "${EC2_USER}:${EC2_USER}" .
-              # Remove unsynced files (Dockerfile, docker-compose.yml, .env) and reset to GitHub
+              # Remove unsynced files (Dockerfile, docker-compose.yml, .env) and reset to the selected SHA
               git clean -fd
               git reset --hard
-              git pull origin main
+              git fetch origin '${DEPLOY_SHA}'
+              git checkout --detach '${DEPLOY_SHA}'
             else
               git clone https://github.com/buildgrowthnow/openoutreach.git ~/OpenOutreach
+              cd ~/OpenOutreach
+              git checkout --detach '${DEPLOY_SHA}'
             fi
             cd ~/OpenOutreach
           "
 
           # Deploy with docker-compose - build new image first, then recreate
           # (avoids a hard down→up gap that causes 502s for desktop daemons)
-          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o IdentitiesOnly=yes "${EC2_USER}@${EC2_HOST}" "
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=yes -o IdentitiesOnly=yes "${EC2_USER}@${EC2_HOST}" "
             set -e
             cd ~/OpenOutreach
-            docker compose build
-            docker compose up -d --force-recreate --remove-orphans
+            APP_VERSION='${APP_VERSION}' BUILD_COMMIT='${DEPLOY_SHA}' docker compose build
+            APP_VERSION='${APP_VERSION}' BUILD_COMMIT='${DEPLOY_SHA}' docker compose up -d --force-recreate --remove-orphans
           "
 
       - name: Ensure MongoDB Indexes
@@ -70,7 +98,7 @@ jobs:
           EC2_USER: ${{ secrets.EC2_USER }}
         run: |
           echo "Creating MongoDB indexes..."
-          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o IdentitiesOnly=yes "${EC2_USER}@${EC2_HOST}" "
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=yes -o IdentitiesOnly=yes "${EC2_USER}@${EC2_HOST}" "
             set -e
             cd ~/OpenOutreach
             # Ensure MongoDB indexes are created (idempotent)
@@ -83,7 +111,7 @@ jobs:
           EC2_USER: ${{ secrets.EC2_USER }}
         run: |
           echo "Waiting for container to report healthy..."
-          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o IdentitiesOnly=yes "${EC2_USER}@${EC2_HOST}" "
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=yes -o IdentitiesOnly=yes "${EC2_USER}@${EC2_HOST}" "
             set -e
             cd ~/OpenOutreach
             for i in \$(seq 1 24); do
@@ -95,8 +123,9 @@ jobs:
               fi
               sleep 10
             done
-            echo 'WARNING: Container did not reach healthy state in time'
-            exit 0
+            echo 'ERROR: Container did not reach healthy state in time'
+            docker compose ps -a
+            exit 1
           "
 
       - name: Check Docker Compose Status
@@ -105,7 +134,7 @@ jobs:
           EC2_USER: ${{ secrets.EC2_USER }}
         run: |
           echo "Checking Docker Compose status..."
-          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o IdentitiesOnly=yes "${EC2_USER}@${EC2_HOST}" "
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=yes -o IdentitiesOnly=yes "${EC2_USER}@${EC2_HOST}" "
             set -e
             cd ~/OpenOutreach
             docker compose ps -a
@@ -117,11 +146,30 @@ jobs:
           EC2_USER: ${{ secrets.EC2_USER }}
         run: |
           echo "Checking Docker logs for services..."
-          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o IdentitiesOnly=yes "${EC2_USER}@${EC2_HOST}" "
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=yes -o IdentitiesOnly=yes "${EC2_USER}@${EC2_HOST}" "
             set -e
             cd ~/OpenOutreach
             docker compose logs --tail=50
           "
+
+      - name: Verify deployed build identity
+        env:
+          EXPECTED_VERSION: ${{ steps.version.outputs.app_version }}
+          EXPECTED_COMMIT: ${{ env.DEPLOY_SHA }}
+        run: |
+          set -euo pipefail
+          headers=$(mktemp)
+          trap 'rm -f "$headers"' EXIT
+          body=$(curl --fail --silent --show-error --dump-header "$headers" --max-time 20 'https://outreach-api.lengrowth.com/api/health')
+          if ! grep -Eiq '^cache-control:[[:space:]]*no-store' "$headers"; then
+            echo 'Deployed health endpoint is missing Cache-Control: no-store'
+            exit 1
+          fi
+          actual_version=$(printf '%s' "$body" | jq -r '.build.version // empty')
+          actual_commit=$(printf '%s' "$body" | jq -r '.build.commit // empty')
+          test "$actual_version" = "$EXPECTED_VERSION"
+          test "$actual_commit" = "$EXPECTED_COMMIT"
+          echo "Verified deployed build $actual_version ($actual_commit)"
 
       - name: Smoke test public daemon gateway
         run: |

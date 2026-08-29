@@ -124,7 +124,7 @@ def migrate_existing_users_to_billing(
         }
 
     except Exception as e:
-        logger.error(f"Migration failed: {e}")
+        logger.error("Migration failed; exception_type=%s", type(e).__name__)
         raise
 
 
@@ -149,7 +149,7 @@ def mark_migration_complete():
             )
             logger.info("Migration marked as complete in SiteConfig")
     except Exception as e:
-        logger.error(f"Failed to mark migration complete: {e}")
+        logger.error("Failed to mark migration complete; exception_type=%s", type(e).__name__)
 
 
 if __name__ == "__main__":

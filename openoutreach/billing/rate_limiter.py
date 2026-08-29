@@ -25,7 +25,7 @@ class SignupRateLimiter:
         collection = get_mongodb_collection("ip_signup_attempts")
         if collection is None:
             logger.warning("Could not check IP rate limit: collection not available")
-            return True, None
+            return False, "Signup temporarily unavailable. Please try again later."
 
         cutoff = datetime.now(tz.utc) - timedelta(hours=SignupRateLimiter.WINDOW_HOURS)
 
@@ -55,7 +55,7 @@ class SignupRateLimiter:
                 "created_at": datetime.now(tz.utc),
             })
         except Exception as e:
-            logger.error(f"Failed to record signup attempt for IP {ip_address}: {e}")
+            logger.error("Failed to record signup attempt; exception_type=%s", type(e).__name__)
 
 
 class EmailRateLimiter:
@@ -71,7 +71,7 @@ class EmailRateLimiter:
         collection = get_mongodb_collection(EmailRateLimiter.COLLECTION)
         if collection is None:
             logger.warning("Could not check email rate limit: collection not available")
-            return True, None
+            return False, "Email service temporarily unavailable. Please try again later."
 
         cutoff = datetime.now(tz.utc) - timedelta(hours=EmailRateLimiter.WINDOW_HOURS)
         count = collection.count_documents({
@@ -98,7 +98,7 @@ class EmailRateLimiter:
                 "created_at": datetime.now(tz.utc),
             })
         except Exception as e:
-            logger.error("Failed to record email attempt for IP %s: %s", ip_address, e)
+            logger.error("Failed to record email attempt; exception_type=%s", type(e).__name__)
 
 
 class LinkedInCredentialValidator:

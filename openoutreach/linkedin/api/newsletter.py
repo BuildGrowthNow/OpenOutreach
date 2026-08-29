@@ -37,17 +37,17 @@ def subscribe_to_newsletter(email: str, linkedin: str | None = None) -> bool:
     try:
         r = requests.post(BREVO_FORM_URL, data=data, headers=headers, timeout=10)
 
-        logger.debug("Brevo response: %d - %s", r.status_code, r.text[:200])
+        logger.debug("Brevo response received: status=%d body_length=%d", r.status_code, len(r.text))
 
         response_lower = r.text.lower()
 
         if r.status_code == 200:
             if len(r.text.strip()) == 0 or "successful" in response_lower:
-                logger.info("Newsletter: successfully added %s", email)
+                logger.info("Newsletter: successfully added subscriber")
                 return True
 
             if "already subscribed" in response_lower:
-                logger.info("Newsletter: already subscribed %s", email)
+                logger.info("Newsletter: subscriber already subscribed")
                 return True
 
         logger.warning(
@@ -59,7 +59,7 @@ def subscribe_to_newsletter(email: str, linkedin: str | None = None) -> bool:
         return False
 
     except requests.RequestException as e:
-        logger.error("Newsletter request failed for %s: %s", email, e)
+        logger.error("Newsletter request failed: %s", type(e).__name__)
         return False
 
 
@@ -75,8 +75,8 @@ def ensure_newsletter_subscription(
 
     email = lp.linkedin_username
     if not email or "@" not in str(email):
-        logger.warning("No valid email for newsletter: %s", session)
+        logger.warning("No valid email for newsletter")
         return
 
-    logger.debug("Subscribing %s to OpenOutreach newsletter...", email)
+    logger.debug("Subscribing to OpenOutreach newsletter")
     subscribe_to_newsletter(email, linkedin=linkedin_url)

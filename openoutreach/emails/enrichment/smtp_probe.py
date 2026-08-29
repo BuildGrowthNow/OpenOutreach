@@ -79,7 +79,7 @@ def _probe_raw(email: str, domain: str) -> bool | None:
         logger.debug("smtp_probe: connect refused for %s — port 25 may be blocked", domain)
         return None
     except (smtplib.SMTPException, OSError, socket.timeout, TimeoutError) as exc:
-        logger.debug("smtp_probe: %s for %s: %s", type(exc).__name__, email, exc)
+        logger.debug("smtp_probe: %s", type(exc).__name__)
         return None
 
 
@@ -109,7 +109,7 @@ def _get_mx(domain: str) -> str | None:
         return min(records, key=lambda r: r[0])[1] if records else None
 
     except Exception as exc:
-        logger.debug("smtp_probe: MX lookup failed for %s: %s", domain, exc)
+        logger.debug("smtp_probe: MX lookup failed for %s: %s", domain, type(exc).__name__)
         return None
 
 

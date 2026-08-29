@@ -5,35 +5,35 @@
 ### Option 1: NSIS Installer (Recommended)
 **Best for:** Most users who want a traditional installer experience
 
-1. Download `OpenOutreach-{version}-Setup.exe` from the latest release
+1. Download `Lengrowth-{version}-Setup.exe` from the latest release
 2. Run the installer
 3. If Windows SmartScreen appears:
    - Click "More info"
    - Click "Run anyway"
 4. Follow the installation wizard:
-   - Choose installation directory (default: `C:\Program Files\OpenOutreach`)
+   - The per-user installer uses `%LOCALAPPDATA%\Programs\Lengrowth Outreach`
    - Installer will create Start Menu shortcuts and desktop icon
-   - Protocol handler (`openoutreach://`) is registered automatically
-5. Launch OpenOutreach from Start Menu or desktop icon
-6. Log in with your OpenOutreach account
+   - Protocol handler (`lengrowth://`) is registered automatically
+5. Launch Lengrowth from Start Menu or desktop icon
+6. Complete interactive account enrollment when instructed
 
 **What gets installed:**
-- Application: `C:\Program Files\OpenOutreach\OpenOutreach.exe`
+- Application: `%LOCALAPPDATA%\Programs\Lengrowth Outreach\Lengrowth.exe`
 - Start Menu shortcuts
 - Desktop shortcut
 - Protocol handler registration
-- Uninstaller: `C:\Program Files\OpenOutreach\Uninstall.exe`
+- Uninstaller: `%LOCALAPPDATA%\Programs\Lengrowth Outreach\Uninstall.exe`
 
 ### Option 2: Standalone Executable
 **Best for:** Users who prefer portable apps without installation
 
-1. Download `OpenOutreach.exe` from the latest release
-2. Move it to your preferred location (e.g., `C:\Tools\OpenOutreach\`)
+1. Download `Lengrowth.exe` from the latest release
+2. Move it to your preferred location (for example, `C:\Tools\Lengrowth\`)
 3. If Windows SmartScreen appears:
    - Click "More info"
    - Click "Run anyway"
 4. Double-click to run
-5. Log in with your OpenOutreach account
+5. Complete interactive account enrollment when instructed
 
 **Note:** Protocol handler must be registered manually (see below)
 
@@ -46,7 +46,7 @@ The MSIX package is available for:
 
 **To sideload:**
 1. Enable Developer Mode: Settings → Update & Security → For developers → Developer mode
-2. Download `OpenOutreach-{version}.msix`
+2. Download `Lengrowth-{version}.msix`
 3. Double-click the MSIX file
 4. Click "Install"
 5. Launch from Start Menu
@@ -57,7 +57,7 @@ The MSIX package is available for:
 Windows SmartScreen shows a warning for apps that don't have enough download reputation. This is normal for new or unsigned applications.
 
 ### Is it safe?
-Yes! OpenOutreach is open-source and built from the GitHub repository. The warning will disappear automatically after the app gains reputation (~10-20 downloads from different users).
+Yes! Lengrowth is built from the GitHub repository. The warning will disappear automatically after the app gains reputation (~10-20 downloads from different users).
 
 ### How to bypass:
 1. Click "More info"
@@ -78,11 +78,11 @@ If using the standalone executable, register the protocol handler manually:
 ### Method 2: PowerShell
 ```powershell
 # Run as Administrator
-New-Item -Path "HKCR:\openoutreach" -Force
-Set-ItemProperty -Path "HKCR:\openoutreach" -Name "(Default)" -Value "URL:OpenOutreach Protocol"
-Set-ItemProperty -Path "HKCR:\openoutreach" -Name "URL Protocol" -Value ""
-New-Item -Path "HKCR:\openoutreach\shell\open\command" -Force
-Set-ItemProperty -Path "HKCR:\openoutreach\shell\open\command" -Name "(Default)" -Value '"C:\Path\To\OpenOutreach.exe" "%1"'
+New-Item -Path "HKCR:\lengrowth" -Force
+Set-ItemProperty -Path "HKCR:\lengrowth" -Name "(Default)" -Value "URL:Lengrowth Protocol"
+Set-ItemProperty -Path "HKCR:\lengrowth" -Name "URL Protocol" -Value ""
+New-Item -Path "HKCR:\lengrowth\shell\open\command" -Force
+Set-ItemProperty -Path "HKCR:\lengrowth\shell\open\command" -Name "(Default)" -Value '"C:\Path\To\Lengrowth.exe" "%1"'
 ```
 
 ## Auto-Start on Login
@@ -91,27 +91,27 @@ Set-ItemProperty -Path "HKCR:\openoutreach\shell\open\command" -Name "(Default)"
 The installer creates a Start Menu shortcut. To auto-start:
 1. Press `Win+R`
 2. Type: `shell:startup`
-3. Create a shortcut to `C:\Program Files\OpenOutreach\OpenOutreach.exe`
+3. Create a shortcut to `C:\Path\To\Lengrowth.exe`
 
 ### Standalone
 1. Press `Win+R`
 2. Type: `shell:startup`
-3. Copy `OpenOutreach.exe` or create a shortcut to it
+3. Copy `Lengrowth.exe` or create a shortcut to it
 
 ## Uninstallation
 
 ### NSIS Installer
 **Via Settings:**
 1. Settings → Apps → Apps & features
-2. Find "OpenOutreach"
+2. Find "Lengrowth Outreach"
 3. Click "Uninstall"
 
 **Via Start Menu:**
-1. Start → OpenOutreach → Uninstall
+1. Start → Lengrowth Outreach → Uninstall
 
 **Via Command Line:**
 ```cmd
-"C:\Program Files\OpenOutreach\Uninstall.exe"
+"%LOCALAPPDATA%\Programs\Lengrowth Outreach\Uninstall.exe"
 ```
 
 ### Standalone
@@ -119,7 +119,7 @@ Simply delete the executable and remove any shortcuts you created.
 
 ### MSIX
 1. Settings → Apps → Apps & features
-2. Find "OpenOutreach"
+2. Find "Lengrowth Outreach"
 3. Click "Uninstall"
 
 ## Troubleshooting
@@ -134,13 +134,13 @@ Simply delete the executable and remove any shortcuts you created.
 - Check Windows Event Viewer for errors
 
 ### Protocol handler not working
-- Verify registration: Run `reg query HKCR\openoutreach\shell\open\command`
+- Verify registration: Run `reg query HKCR\lengrowth\shell\open\command`
 - Re-run the registration steps above
 - Restart browser after registration
 
 ### Tray icon not showing
 - Check system tray settings: Settings → Personalization → Taskbar → Select which icons appear on taskbar
-- Enable "OpenOutreach"
+- Enable "Lengrowth Outreach"
 
 ### Can't find browser
 - Install Chrome or Edge
@@ -151,12 +151,12 @@ Simply delete the executable and remove any shortcuts you created.
 ## Data Storage
 
 ### Application data location:
-- Config: `%APPDATA%\Local\OpenOutreach\config.json`
-- Browser data: `%APPDATA%\Local\OpenOutreach\browser_data\`
-- Daemon ID: `%APPDATA%\Local\OpenOutreach\daemon_id`
+- Config: `%USERPROFILE%\AppData\Local\Lengrowth\config.json`
+- Browser data: `%USERPROFILE%\AppData\Local\Lengrowth\browser_data\`
+- Daemon ID: `%USERPROFILE%\AppData\Local\Lengrowth\daemon_id`
 
 ### Credentials
-Stored securely in Windows Credential Manager under "OpenOutreach"
+Stored securely in Windows Credential Manager under "Lengrowth"
 
 ## System Requirements
 
@@ -178,7 +178,7 @@ Current releases are unsigned (SmartScreen warning appears). Future releases may
 
 ### Permissions
 The app requires:
-- **Internet access:** To connect to OpenOutreach backend
+- **Internet access:** To connect to the Lengrowth backend
 - **System tray:** For tray icon
 - **User data access:** To store config in AppData
 - **Browser control:** To automate LinkedIn via your installed browser

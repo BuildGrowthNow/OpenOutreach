@@ -36,6 +36,7 @@ interface AuthState {
   initialize: () => Promise<void>
   register: (email: string, password: string, fullName: string) => Promise<{ error: string | null }>
   login: (email: string, password: string) => Promise<{ error: string | null }>
+  adoptAccessToken: (accessToken: string) => Promise<boolean>
   logout: () => Promise<void>
   refreshToken: () => Promise<boolean>
   clearError: () => void
@@ -80,20 +81,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       set({ isLoading: true, error: null })
 
-      // Desktop restart: the exe passes a fresh access token in the URL so we
-      // don't need to race the pywebview bridge for the keychain refresh token.
-      if (typeof window !== 'undefined') {
-        const params = new URLSearchParams(window.location.search)
-        const desktopToken = params.get('desktop_token')
-        if (desktopToken) {
-          set({ accessToken: desktopToken })
-          const url = new URL(window.location.href)
-          url.searchParams.delete('desktop_token')
-          window.history.replaceState({}, '', url.pathname + url.search)
-        }
-      }
-
-      // If we already have an access token (from desktop_token or prior session),
+      // If an access token is already available in this in-memory session,
       // validate it directly before falling through to the refresh flow.
       const existingToken = get().accessToken
       if (existingToken) {
@@ -243,6 +231,32 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const errorMessage = 'Network error. Please try again.'
       set({ isLoading: false, error: errorMessage })
       return { error: errorMessage }
+    }
+  },
+
+  adoptAccessToken: async (accessToken: string) => {
+    if (!accessToken || accessToken.length > 16 * 1024) return false
+    try {
+      const response = await fetch(`${API_BASE}/auth/me/`, {
+        credentials: 'include',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+      })
+      if (!response.ok) return false
+      const user = await response.json() as User
+      set({
+        accessToken,
+        user,
+        isAuthenticated: true,
+        isLoading: false,
+        isInitialized: true,
+        error: null,
+      })
+      return true
+    } catch {
+      return false
     }
   },
 

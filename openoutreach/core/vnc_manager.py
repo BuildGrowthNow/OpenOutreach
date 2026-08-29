@@ -74,7 +74,7 @@ class VNCSession:
             return True
 
         except Exception as e:
-            logger.error("Failed to start VNC session for %s: %s", self.profile_id, e)
+            logger.error("Failed to start VNC session for %s: %s", self.profile_id, type(e).__name__)
             self.stop()
             return False
 
@@ -86,7 +86,7 @@ class VNCSession:
                     proc.terminate()
                     proc.wait(timeout=5)
                 except Exception as e:
-                    logger.debug("Error stopping VNC process: %s", e)
+                    logger.debug("Error stopping VNC process: %s", type(e).__name__)
 
         # Clean up password file if x11vnc didn't delete it (rm: prefix does auto-delete)
         if self._passwd_file and os.path.exists(self._passwd_file):

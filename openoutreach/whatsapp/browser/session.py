@@ -44,17 +44,17 @@ class WASession:
         try:
             self.page.wait_for_selector(_CHAT_LOAD_SELECTOR, timeout=15000)
         except Exception:
-            logger.warning("Chat panel did not load for %s", phone)
+            logger.warning("Chat panel did not load")
             return False
 
         try:
             send_btn = self.page.wait_for_selector(_SEND_BTN_SELECTOR, timeout=8000)
             if send_btn:
                 send_btn.click()
-                logger.info("WA message sent to %s", phone)
+                logger.info("WA message sent")
                 return True
         except Exception as e:
-            logger.warning("Send button not found for %s: %s", phone, e)
+            logger.warning("Send button not found for %s: %s", phone, type(e).__name__)
 
         return False
 
@@ -85,7 +85,7 @@ class WASession:
             }""")
             return result if isinstance(result, list) else []
         except Exception as e:
-            logger.warning("check_inbox failed: %s", e)
+            logger.warning("check_inbox failed: %s", type(e).__name__)
             return []
 
     def sync(self, cursor: str = "", limit: int = 100) -> list[dict[str, str]]:
@@ -138,7 +138,7 @@ class WASession:
             )
         except Exception:
             # Can't determine - assume registered to avoid losing real leads
-            logger.warning("is_registered: timed out for %s - assuming registered", phone)
+            logger.warning("is_registered: timed out - assuming registered")
             return True
 
         try:
@@ -151,10 +151,10 @@ class WASession:
                     || text.includes('invalid phone number');
             }""")
             if result:
-                logger.info("is_registered: %s is NOT on WhatsApp", phone)
+                logger.info("is_registered: number is NOT on WhatsApp")
                 return False
         except Exception as e:
-            logger.warning("is_registered: evaluation failed for %s: %s - assuming registered", phone, e)
+            logger.warning("is_registered: evaluation failed: %s - assuming registered", type(e).__name__)
 
         return True
 

@@ -8,7 +8,7 @@ in the FastAPI v2 API, mapping to MongoDB Lead model fields.
 from datetime import datetime
 from typing import Any, Dict, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ChannelAvailability(BaseModel):
@@ -148,10 +148,9 @@ class LeadResponse(BaseModel):
         description="Timestamp when the lead was first discovered/created"
     )
 
-    class Config:
-        """Pydantic model configuration."""
-        populate_by_name = True
-        json_schema_extra = {
+    model_config = ConfigDict(
+        populate_by_name=True,
+        json_schema_extra={
             "example": {
                 "_id": "550e8400-e29b-41d4-a716-446655440000",
                 "linkedin_url": "https://www.linkedin.com/in/johndoe/",
@@ -167,7 +166,8 @@ class LeadResponse(BaseModel):
                 "user_id": "123e4567-e89b-12d3-a456-426614174000",
                 "creation_date": "2026-07-10T12:34:56.789Z"
             }
-        }
+        },
+    )
 
 
 class LeadWithDeal(LeadResponse):
@@ -195,9 +195,7 @@ class LeadWithDeal(LeadResponse):
         description="ID of the campaign this lead-deal relationship belongs to"
     )
 
-    class Config(LeadResponse.Config):
-        """Pydantic model configuration."""
-        json_schema_extra = {
+    model_config = ConfigDict(json_schema_extra={
             "example": {
                 "_id": "550e8400-e29b-41d4-a716-446655440000",
                 "linkedin_url": "https://www.linkedin.com/in/johndoe/",
@@ -215,4 +213,4 @@ class LeadWithDeal(LeadResponse):
                 "deal_outcome": "",
                 "campaign_id": "770e8400-e29b-41d4-a716-446655440002"
             }
-        }
+        })

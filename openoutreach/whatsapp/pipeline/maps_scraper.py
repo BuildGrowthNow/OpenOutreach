@@ -238,7 +238,7 @@ def _scrape_google_maps(page, query: str, country_code: str) -> List[BusinessLis
                 )
             )
         except Exception as exc:
-            logger.debug("google_maps: error parsing place %s: %s", place_url, exc)
+            logger.debug("google_maps: error parsing place: %s", type(exc).__name__)
 
     return listings
 
@@ -337,7 +337,7 @@ def _scrape_bing_maps(page, query: str, country_code: str) -> List[BusinessListi
                 )
             )
         except Exception as exc:
-            logger.debug("bing_maps: error parsing card: %s", exc)
+            logger.debug("bing_maps: error parsing card: %s", type(exc).__name__)
 
     return listings
 
@@ -433,7 +433,7 @@ def _scrape_yellow_pages(page, query: str, country_code: str) -> List[BusinessLi
                 )
             )
         except Exception as exc:
-            logger.debug("yellow_pages: card parse error: %s", exc)
+            logger.debug("yellow_pages: card parse error: %s", type(exc).__name__)
 
     return listings
 
@@ -528,7 +528,7 @@ def _scrape_yelp(page, query: str, country_code: str) -> List[BusinessListing]:
                 )
             )
         except Exception as exc:
-            logger.debug("yelp: error on %s: %s", biz_url, exc)
+            logger.debug("yelp: error parsing business: %s", type(exc).__name__)
 
     return listings
 
@@ -629,7 +629,7 @@ def create_leads_from_maps(
                             list(_session_states.keys()),
                         )
         except Exception as exc:
-            logger.debug("maps_scraper: failed to load session states: %s", exc)
+            logger.debug("maps_scraper: failed to load session states: %s", type(exc).__name__)
 
     all_listings: List[BusinessListing] = []
 
@@ -662,10 +662,10 @@ def create_leads_from_maps(
                             logger.debug("maps_scraper: persisted session state for %s", backend)
                     except Exception as exc:
                         logger.debug(
-                            "maps_scraper: failed to save session state for %s: %s", backend, exc
+                            "maps_scraper: failed to save session state for %s: %s", backend, type(exc).__name__
                         )
             except Exception as exc:
-                logger.warning("maps_scraper: backend %s failed: %s", backend, exc)
+                logger.warning("maps_scraper: backend %s failed: %s", backend, type(exc).__name__)
 
     if min_rating is not None:
         before = len(all_listings)
@@ -691,7 +691,7 @@ def create_leads_from_maps(
                 ) if d.get("phone")
             )
     except Exception as exc:
-        logger.warning("maps_scraper: dedup pre-fetch failed: %s", exc)
+        logger.warning("maps_scraper: dedup pre-fetch failed: %s", type(exc).__name__)
 
     if already_known:
         before = len(all_listings)
@@ -738,7 +738,7 @@ def create_leads_from_maps(
                             )
                         )
                 except Exception as exc:
-                    logger.debug("maps_scraper: spider failed for %s: %s", lst.website, exc)
+                    logger.debug("maps_scraper: spider failed for %s: %s", lst.website, type(exc).__name__)
 
         recovered = len(ready) - len([lst for lst in all_listings if lst.phone])
         logger.info(

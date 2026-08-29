@@ -94,7 +94,7 @@ async def list_notifications(
             unread_count=unread_count,
         )
     except Exception as e:
-        logger.error(f"Failed to list notifications: {e}")
+        logger.error("Failed to list notifications; exception_type=%s", type(e).__name__)
         raise HTTPException(status_code=500, detail="Failed to retrieve notifications")
 
 
@@ -126,7 +126,7 @@ async def get_notification_summary(
             recent_notifications=recent_notifications,
         )
     except Exception as e:
-        logger.error(f"Failed to get notification summary: {e}")
+        logger.error("Failed to get notification summary; exception_type=%s", type(e).__name__)
         raise HTTPException(status_code=500, detail="Failed to retrieve summary")
 
 
@@ -309,13 +309,13 @@ async def sse_notification_stream(
                     yield ": keepalive\n\n"
 
                 except Exception as e:
-                    logger.error(f"Error polling notifications for user {user_id}: {e}")
+                    logger.error("Error polling notifications; user_id=%s exception_type=%s", user_id, type(e).__name__)
                     # Continue polling despite errors
 
         except asyncio.CancelledError:
             logger.info(f"SSE stream cancelled for user {user_id}")
         except Exception as e:
-            logger.error(f"SSE stream error for user {user_id}: {e}")
+            logger.error("SSE stream error; user_id=%s exception_type=%s", user_id, type(e).__name__)
 
     return StreamingResponse(
         event_generator(),

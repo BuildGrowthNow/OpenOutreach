@@ -68,7 +68,7 @@ async def _send_password_reset_email(user: User) -> bool:
     reset_url = f"{app_url}/reset-password?token={reset_token}"
     email_sent = send_password_reset(user, reset_url)
     if not email_sent:
-        logger.error(f"Failed to send password reset email to {user.email}")
+        logger.error("Failed to send password reset email")
     return email_sent
 
 
@@ -168,7 +168,11 @@ async def register(data: RegisterRequest, request: Request):
         site_config = models.SiteConfig(user_id=user._id)
         site_config.save()
     except Exception as e:
-        logger.warning(f"Failed to create SiteConfig for {user.email}: {e}")
+        logger.warning(
+            "Failed to create SiteConfig; user_id=%s exception_type=%s",
+            user._id,
+            type(e).__name__,
+        )
 
     # Send verification email
     app_url = settings.APP_URL or "http://localhost:3000"
@@ -176,9 +180,9 @@ async def register(data: RegisterRequest, request: Request):
     email_sent = send_email_verification(user, verification_url)
 
     if not email_sent:
-        logger.error(f"Failed to send verification email to {user.email}")
+        logger.error("Failed to send verification email")
 
-    logger.info(f"New user registered: {user.email}")
+    logger.info("New user registered")
 
     return UserResponse(
         id=user._id,
@@ -206,7 +210,7 @@ async def login(credentials: LoginRequest, response: Response, request: Request)
     # Find user by email
     user = User.get_by_email(credentials.email)
     if not user:
-        logger.warning(f"Login failed: user not found for {credentials.email}")
+        logger.warning("Login failed: user not found")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password"
@@ -221,7 +225,7 @@ async def login(credentials: LoginRequest, response: Response, request: Request)
 
     # Verify password
     if not user.verify_password(credentials.password):
-        logger.warning(f"Login failed: incorrect password for {credentials.email}")
+        logger.warning("Login failed: incorrect password")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password"
@@ -278,7 +282,7 @@ async def login(credentials: LoginRequest, response: Response, request: Request)
         path="/",
     )
 
-    logger.info(f"User login successful: {user.email}")
+    logger.info("User login successful")
 
     return TokenResponse(
         access_token=access_token,
@@ -383,7 +387,7 @@ async def refresh_token(request: Request, response: Response):
         )
 
     except JWTError as e:
-        logger.warning(f"Token refresh failed: {e}")
+        logger.warning("Token refresh failed; exception_type=%s", type(e).__name__)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired refresh token"
@@ -498,12 +502,12 @@ async def verify_email(body: EmailVerifyRequest):
 
         user.save()
 
-        logger.info(f"Email verified for user: {email}")
+        logger.info("Email verified for user")
 
         return {"status": "success", "message": "Email verified successfully"}
 
     except JWTError as e:
-        logger.warning(f"Email verification failed: {e}")
+        logger.warning("Email verification failed; exception_type=%s", type(e).__name__)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid or expired verification token"
@@ -511,7 +515,7 @@ async def verify_email(body: EmailVerifyRequest):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Email verification error: {e}")
+        logger.error("Email verification error; exception_type=%s", type(e).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An error occurred. Please try again."
@@ -560,16 +564,16 @@ async def resend_verification(email: str, request: Request):
             email_sent = send_email_verification(user, verification_url)
 
             if not email_sent:
-                logger.error(f"Failed to resend verification email to {user.email}")
+                logger.error("Failed to resend verification email")
 
-            logger.info(f"Verification email resent to: {email}")
+            logger.info("Verification email resent")
 
         return {"status": "success", "message": "If an unverified account exists, a verification link has been sent"}
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Resend verification error: {e}")
+        logger.error("Resend verification error; exception_type=%s", type(e).__name__)
         return {"status": "success", "message": "If an unverified account exists, a verification link has been sent"}
 
 
@@ -601,14 +605,14 @@ async def password_reset_request(request: PasswordResetRequest, http_request: Re
 
         if user and user.hashed_password:
             await _send_password_reset_email(user)
-            logger.info(f"Password reset requested for: {request.email}")
+        logger.info("Password reset requested")
 
         return {"status": "success", "message": "If an account exists, a reset link has been sent"}
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Password reset request error: {e}")
+        logger.error("Password reset request error; exception_type=%s", type(e).__name__)
         return {"status": "success", "message": "If an account exists, a reset link has been sent"}
 
 
@@ -654,12 +658,12 @@ async def password_reset_confirm(request: PasswordResetConfirm):
         user.set_password(request.new_password)
         user.save()
 
-        logger.info(f"Password reset successful for: {email}")
+        logger.info("Password reset successful")
 
         return {"status": "success", "message": "Password successfully reset"}
 
     except JWTError as e:
-        logger.warning(f"Password reset confirm failed: {e}")
+        logger.warning("Password reset confirm failed; exception_type=%s", type(e).__name__)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid or expired token"
@@ -667,7 +671,7 @@ async def password_reset_confirm(request: PasswordResetConfirm):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Password reset confirm error: {e}")
+        logger.error("Password reset confirm error; exception_type=%s", type(e).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An error occurred. Please try again."
@@ -712,7 +716,7 @@ async def update_password(
     user.set_password(request.new_password)
     user.save()
 
-    logger.info(f"Password updated for user: {user.email}")
+    logger.info("Password updated for user")
 
     return {"status": "success", "message": "Password successfully updated"}
 
@@ -733,7 +737,7 @@ async def request_deletion(user_id: str = Depends(get_current_user)):
         logger.info(f"Deletion requested for user: {user_id}")
         return result
     except Exception as e:
-        logger.error(f"Deletion request error: {e}")
+        logger.error("Deletion request error; exception_type=%s", type(e).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to process deletion request"
@@ -751,13 +755,13 @@ async def cancel_deletion(user_id: str = Depends(get_current_user)):
         result = cancel_account_deletion(user_id)
         logger.info(f"Deletion canceled for user: {user_id}")
         return result
-    except ValueError as e:
+    except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
+            detail="Unable to cancel deletion request"
         )
     except Exception as e:
-        logger.error(f"Cancel deletion error: {e}")
+        logger.error("Cancel deletion error; exception_type=%s", type(e).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to cancel deletion"
@@ -776,7 +780,7 @@ async def export_data(user_id: str = Depends(get_current_user)):
         logger.info(f"Data exported for user: {user_id}")
         return data
     except Exception as e:
-        logger.error(f"Export data error: {e}")
+        logger.error("Export data error; exception_type=%s", type(e).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to export data"

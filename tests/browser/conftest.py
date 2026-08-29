@@ -8,6 +8,12 @@ from linkedin_cli.conf import FIXTURE_PAGES_DIR
 
 @pytest.fixture(scope="session")
 def browser():
+    # Do not start Playwright's synchronous bridge when this checkout has no
+    # snapshots. Its bridge owns the process event loop and can contaminate
+    # later pytest-asyncio tests even though all browser tests would skip.
+    if not any(FIXTURE_PAGES_DIR.rglob("*.html")):
+        pytest.skip("Playwright HTML snapshots are not available")
+
     with sync_playwright() as pw:
         b = pw.chromium.launch(headless=True)
         yield b

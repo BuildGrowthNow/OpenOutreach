@@ -1,4 +1,4 @@
-# docker-compose.v2.yml - Phase 3: FastAPI + MongoDB (Django-free)
+# docker-compose.yml - production FastAPI + MongoDB stack (Django-free)
 services:
   openoutreach:
     build:
@@ -13,7 +13,9 @@ services:
     tty: true
     environment:
       # Core
-      - SECRET_KEY=${SECRET_KEY:-change-in-production}
+      - APP_VERSION=${APP_VERSION:-2.1.2}
+      - BUILD_COMMIT=${BUILD_COMMIT:-unknown}
+      - SECRET_KEY=${SECRET_KEY:?SECRET_KEY must be configured}
       - DEBUG=${DEBUG:-false}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - DOCKER_ENV=true
@@ -25,8 +27,8 @@ services:
 
       # MongoDB
       - MONGODB_ENABLED=true
-      - MONGODB_URI=${MONGODB_URI}
-      - MONGODB_NAME=${MONGODB_NAME:-openoutreach}
+      - MONGODB_URI=${MONGODB_URI:?MONGODB_URI must be configured}
+      - MONGODB_NAME=${MONGODB_NAME:?MONGODB_NAME must be configured}
 
       # LLM Configuration
       - LLM_PROVIDER=${LLM_PROVIDER:-openai}
@@ -62,14 +64,17 @@ services:
 
       # Browser
       - BROWSER_HEADLESS=${BROWSER_HEADLESS:-true}
-      - ENABLE_VNC=${ENABLE_VNC:-true}
+      # VNC is an explicitly opt-in local debugging feature. The bundled
+      # start script uses passwordless x11vnc, so it must never be enabled by
+      # a production-default environment.
+      - ENABLE_VNC=${ENABLE_VNC:-false}
 
       # Encryption
       - COOKIE_ENCRYPTION_KEY=${COOKIE_ENCRYPTION_KEY:-}
 
 
       # App URL (used in email links)
-      - APP_URL=${APP_URL:-http://localhost:3000}
+      - APP_URL=${APP_URL:?APP_URL must be configured}
 
       # Email
       - EMAIL_PROVIDER=${EMAIL_PROVIDER:-}
@@ -78,7 +83,7 @@ services:
       - EMAIL_FROM_NAME=${EMAIL_FROM_NAME:-}
 
       # CORS
-      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-https://outreach.lengrowth.com,https://outreach-api.lengrowth.com,https://linkedin.lengrowth.com,https://linkedin-api.lengrowth.com,http://localhost:3000,http://127.0.0.1:3000}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:?CORS_ALLOWED_ORIGINS must be configured}
 
       # Stripe
       - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-}
@@ -99,7 +104,7 @@ services:
     ports:
       - "3000:3000"  # Next.js frontend
       - "8001:8001"  # FastAPI backend
-      - "6080:6080"  # noVNC web viewer
-      - "5900:5900"  # VNC direct connection
+      - "127.0.0.1:6080:6080"  # noVNC web viewer (local debugging only)
+      - "127.0.0.1:5900:5900"  # VNC direct connection (local debugging only)
 
     command: ["/start"]

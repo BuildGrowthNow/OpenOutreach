@@ -70,7 +70,7 @@ class MongoDBConnection:
         else:
             logger.info("MongoDB is disabled.")
 
-    def connect(self) -> bool:
+    def connect(self, timeout_ms: Optional[int] = None) -> bool:
         """
         Establish MongoDB connection.
 
@@ -82,6 +82,8 @@ class MongoDBConnection:
             return True
 
         try:
+            selection_timeout_ms = timeout_ms if timeout_ms is not None else 30000
+            connect_timeout_ms = timeout_ms if timeout_ms is not None else 30000
             # Get connection URI
             uri = _get_mongodb_uri()
 
@@ -92,8 +94,8 @@ class MongoDBConnection:
             # Create client with connection options
             self._client = MongoClient(
                 uri,
-                serverSelectionTimeoutMS=30000,
-                connectTimeoutMS=30000,
+                serverSelectionTimeoutMS=selection_timeout_ms,
+                connectTimeoutMS=connect_timeout_ms,
                 socketTimeoutMS=10000,
             )
 
@@ -108,7 +110,7 @@ class MongoDBConnection:
             return True
 
         except Exception as e:
-            logger.error(f"Failed to connect to MongoDB: {e}")
+            logger.error("Failed to connect to MongoDB: %s", type(e).__name__)
             self._client = None
             self._database = None
             return False
@@ -150,7 +152,7 @@ class MongoDBConnection:
         try:
             return self._database[collection_name]
         except Exception as e:
-            logger.error(f"Failed to get collection '{collection_name}': {e}")
+            logger.error("Failed to get collection '%s': %s", collection_name, type(e).__name__)
             return None
 
     def collection_exists(self, collection_name: str) -> bool:
@@ -169,7 +171,7 @@ class MongoDBConnection:
         try:
             return collection_name in self._database.list_collection_names()
         except Exception as e:
-            logger.error(f"Failed to check collection existence: {e}")
+            logger.error("Failed to check collection existence: %s", type(e).__name__)
             return False
 
     def ensure_indexes(self, collection_name: str, indexes: list) -> None:
@@ -194,7 +196,7 @@ class MongoDBConnection:
                 )
                 logger.debug(f"Created index '{index_name}' on '{collection_name}'")
             except Exception as e:
-                logger.error(f"Failed to create index '{index_name}': {e}")
+                logger.error("Failed to create index '%s': %s", index_name, type(e).__name__)
 
 
 # Global connection instance
@@ -232,7 +234,7 @@ def get_mongodb_collection(collection_name: str) -> Optional[Collection]:
     return mongodb_connection.get_collection(collection_name)
 
 
-def check_mongodb_connection() -> bool:
+def check_mongodb_connection(timeout_ms: Optional[int] = None) -> bool:
     """
     Check if MongoDB connection is active.
     Attempts to connect if not already connected and MongoDB is enabled.
@@ -244,7 +246,7 @@ def check_mongodb_connection() -> bool:
     if mongodb_connection._initialized and not mongodb_connection.client:
         try:
             if _is_mongodb_enabled() and _get_mongodb_uri():
-                mongodb_connection.connect()
+                mongodb_connection.connect(timeout_ms=timeout_ms)
         except Exception:
             pass
 
@@ -273,7 +275,7 @@ def initialize_mongodb_connection() -> bool:
         else:
             logger.info("MongoDB is disabled or URI not configured")
     except Exception as e:
-        logger.error(f"Failed to initialize MongoDB connection: {e}")
+        logger.error("Failed to initialize MongoDB connection: %s", type(e).__name__)
     return False
 
 
@@ -300,5 +302,5 @@ def initialize_mongodb_with_uri(uri: str, db_name: str = "openoutreach") -> bool
         logger.info("MongoDB connected via provided URI (db: %s)", db_name)
         return True
     except Exception as e:
-        logger.error("MongoDB connection failed: %s", e)
+        logger.error("MongoDB connection failed: %s", type(e).__name__)
         return False

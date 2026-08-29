@@ -606,8 +606,9 @@ async def impersonate_user(
     return ImpersonateResponse(access_token=token, expires_in=900)
 ```
 
-The frontend opens the returned token in a new tab via the `lengrowth://` protocol or by setting it
-directly in local storage. Show a visible "Impersonation active" banner in the UI (read
+The frontend opens `/impersonate` in a new tab and transfers the short-lived token only through an
+origin-checked in-memory `postMessage` handshake with the opener. Never place it in a URL, browser
+history, or local storage. Show a visible "Impersonation active" banner in the UI (read the
 `impersonated_by` claim from the JWT).
 
 ### 2.9 Register all new endpoints in the API router ✅

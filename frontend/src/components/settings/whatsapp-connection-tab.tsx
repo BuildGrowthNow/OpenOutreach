@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -124,9 +125,12 @@ function QrPoller({ profileId, onConnected }: { profileId: string; onConnected: 
       <p className="text-sm text-muted-foreground">
         Open WhatsApp on your phone → Linked Devices → Link a device, then scan:
       </p>
-      <img
+      <Image
         src={qrSrc}
         alt="WhatsApp QR code"
+        width={192}
+        height={192}
+        unoptimized
         className="h-48 w-48 rounded border object-contain"
       />
     </div>

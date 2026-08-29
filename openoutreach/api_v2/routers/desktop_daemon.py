@@ -94,7 +94,11 @@ async def desktop_heartbeat(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Heartbeat error for profile {request.profile_id}: {e}")
+        logger.error(
+            "Heartbeat error; profile_id=%s exception_type=%s",
+            request.profile_id,
+            type(e).__name__,
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to process heartbeat",
@@ -146,7 +150,11 @@ async def get_daemon_status(
         return DaemonStatusResponse(profiles=profile_statuses)
 
     except Exception as e:
-        logger.error(f"Failed to get daemon status for user {user_id}: {e}")
+        logger.error(
+            "Failed to get daemon status; user_id=%s exception_type=%s",
+            user_id,
+            type(e).__name__,
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to retrieve daemon status",

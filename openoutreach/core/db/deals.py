@@ -101,7 +101,7 @@ def _capture_contact_info(lead, session) -> None:
         lead.capture_contact_info(session)
     except (ProfileInaccessibleError, IOError) as exc:
         logger.warning(
-            "contact-info capture failed for %s: %s", lead.public_identifier, exc
+            "contact-info capture failed for %s: %s", lead.public_identifier, type(exc).__name__
         )
 
 

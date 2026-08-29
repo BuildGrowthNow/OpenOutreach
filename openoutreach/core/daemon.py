@@ -142,7 +142,7 @@ def _refresh_wa_sessions() -> None:
         from openoutreach.whatsapp.browser.session import WASession
         from openoutreach.whatsapp.models.profile import WhatsAppProfile
     except ImportError as e:
-        logger.debug("WA modules not available: %s", e)
+        logger.debug("WA modules not available: %s", type(e).__name__)
         return
 
     from openoutreach.mongodb.connection import get_mongodb_collection
@@ -158,7 +158,7 @@ def _refresh_wa_sessions() -> None:
             try:
                 _run_on_wa_thread(lambda s=_WA_SESSIONS[pid]: s.close(), timeout=30)
             except Exception as e:
-                logger.debug("WA session close error %s: %s", pid, e)
+                logger.debug("WA session close error %s: %s", pid, type(e).__name__)
             del _WA_SESSIONS[pid]
 
     for doc in docs:
@@ -172,7 +172,7 @@ def _refresh_wa_sessions() -> None:
             _WA_SESSIONS[pid] = wa_session
             logger.info("WA session started: %s", wa_session)
         except Exception as e:
-            logger.warning("WA session start failed for profile %s: %s", pid, e)
+            logger.warning("WA session start failed; profile_id=%s exception_type=%s", pid, type(e).__name__)
 
 
 def _wa_health_check() -> None:
@@ -203,7 +203,7 @@ def _wa_health_check() -> None:
                 except Exception as reconnect_err:
                     logger.warning("WA health: reconnect failed: %s", reconnect_err)
         except Exception as e:
-            logger.debug("WA health check error %s: %s", profile_id, e)
+            logger.debug("WA health check error %s: %s", profile_id, type(e).__name__)
 
 
 def _run_wa_preflight_validation() -> None:
@@ -225,7 +225,7 @@ def _run_wa_preflight_validation() -> None:
             if validated:
                 logger.info("WA preflight: %d phones validated for profile %s", validated, profile_id)
         except Exception as e:
-            logger.warning("WA preflight validation error for %s: %s", profile_id, e)
+            logger.warning("WA preflight validation error; profile_id=%s exception_type=%s", profile_id, type(e).__name__)
 
 
 def _execute_wa_task(task, wa_session) -> None:
@@ -275,7 +275,7 @@ def _notify_auth_required(user_id: str, reason: str) -> None:
             message=f"Authentication failed: {reason}. Please add valid LinkedIn credentials in Settings → LinkedIn Connection.",
         ).save()
     except Exception as e:
-        logger.debug("Could not create auth notification: %s", e)
+        logger.debug("Could not create auth notification: %s", type(e).__name__)
 
 
 def _notify_checkpoint_challenge(user_id: str, url: str) -> None:
@@ -289,7 +289,7 @@ def _notify_checkpoint_challenge(user_id: str, url: str) -> None:
             data={"challenge_url": url, "requires_action": True},
         ).save()
     except Exception as e:
-        logger.debug("Could not create checkpoint notification: %s", e)
+        logger.debug("Could not create checkpoint notification: %s", type(e).__name__)
 
 
 # ── Heartbeat ──────────────────────────────────────────────────────────
@@ -460,7 +460,7 @@ def _run_health_checks(session) -> None:
                 if alert.severity in [HealthAlert.SEVERITY_LOW, HealthAlert.SEVERITY_MEDIUM]:
                     monitor.auto_remediate(alert)
         except Exception as e:
-            logger.error("Health check error for %s: %s", campaign.name, e)
+            logger.error("Health check error; exception_type=%s", type(e).__name__)
 
 
 # ── Session pool ───────────────────────────────────────────────────────
@@ -524,17 +524,17 @@ class ProfileSession:
             self._sync_credential_username(session)
             return True
         except CheckpointChallengeError as exc:
-            logger.warning("Checkpoint for %s: %s", self.profile.linkedin_username, exc.url)
+            logger.warning("Checkpoint for %s; challenge_url_present=%s", self.profile.linkedin_username, bool(exc.url))
             _notify_checkpoint_challenge(self.user_id, exc.url)
             self.pause(300)
             return False
         except AuthenticationError as exc:
-            logger.error("Auth failed for %s: %s", self.profile.linkedin_username, exc)
+            logger.error("Auth failed for %s: %s", self.profile.linkedin_username, type(exc).__name__)
             _notify_auth_required(self.user_id, str(exc))
             self.pause(300)
             return False
         except Exception as exc:
-            logger.error("Unexpected auth error for %s: %s", self.profile.linkedin_username, exc)
+            logger.error("Unexpected auth error for %s: %s", self.profile.linkedin_username, type(exc).__name__)
             self.pause(120)
             return False
 
@@ -554,7 +554,7 @@ class ProfileSession:
                             cred.username = public_id
                             cred.save()
         except Exception as exc:
-            logger.debug("Could not sync credential profile: %s", exc)
+            logger.debug("Could not sync credential profile: %s", type(exc).__name__)
 
     def close(self):
         if self.session:
@@ -651,7 +651,7 @@ def run_daemon():
                     session = ps.ensure_session()
                     reconcile(session)
                 except Exception as e:
-                    logger.debug("Immediate reconcile skipped for new profile %s: %s", profile.pk, e)
+                    logger.debug("Immediate reconcile skipped for new profile %s: %s", profile.pk, type(e).__name__)
 
         # Remove deactivated profiles
         for pid in list(pool.keys()):
@@ -780,7 +780,7 @@ def run_daemon():
                 logger.error(
                     colored("LLM API error", "red", attrs=["bold"])
                     + " for %s\n%s\nCheck SiteConfig LLM settings.",
-                    ps.profile.linkedin_username, e,
+                    ps.profile.linkedin_username, type(e).__name__,
                 )
                 ps.pause(600)
                 continue
@@ -983,7 +983,7 @@ def _reconcile_all(pool: dict[str, ProfileSession]) -> None:
             session = ps.ensure_session()
             reconcile(session)
         except Exception as e:
-            logger.error("Reconcile error for %s: %s", ps.profile.linkedin_username, e)
+            logger.error("Reconcile error; exception_type=%s", type(e).__name__)
 
 
 def _min_wait_across_profiles(pool: dict[str, ProfileSession]) -> Optional[float]:

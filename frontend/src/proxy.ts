@@ -71,11 +71,12 @@ export function proxy(request: NextRequest) {
 
   const isProtectedRoute = protectedPaths.some(path => pathname.startsWith(path));
 
-  // desktop_token is passed by the Python desktop app on startup — let the page
-  // handle auth itself (it validates via /api/auth/me/ and bootstraps cookies).
-  const desktopToken = request.nextUrl.searchParams.get('desktop_token');
+  // The desktop app uses a non-secret marker while the page obtains its token
+  // through the OS-keychain bridge. The marker only permits the shell to load;
+  // API authorization is still enforced by the backend.
+  const desktopMode = request.nextUrl.searchParams.get('desktop') === 'true';
 
-  if (isProtectedRoute && !token && !authHeader && !desktopToken) {
+  if (isProtectedRoute && !token && !authHeader && !desktopMode) {
     // Redirect to login with return URL
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('returnUrl', pathname);

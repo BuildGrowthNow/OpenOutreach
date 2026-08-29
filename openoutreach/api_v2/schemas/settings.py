@@ -6,7 +6,7 @@ Corresponds to the MongoDB SiteConfig model in openoutreach.mongodb.models.
 """
 
 from typing import Any, Optional
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class SiteConfigResponse(BaseModel):
@@ -45,8 +45,7 @@ class SiteConfigResponse(BaseModel):
     wa_active_end_hour: int = Field(default=21, ge=0, le=23, description="WhatsApp active hours end (0-23)")
     wa_active_days: str = Field(default="1,2,3,4,5,6,7", description="Comma-separated active days for WhatsApp (1=Monday, 7=Sunday)")
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(json_schema_extra={
             "example": {
                 "id": "550e8400-e29b-41d4-a716-446655440000",
                 "llm_provider": "openai",
@@ -62,7 +61,7 @@ class SiteConfigResponse(BaseModel):
                 "contacts_api_token": "ct-***",
                 "contacts_api_url": "https://contacts.api.example.com"
             }
-        }
+        })
 
 
 class SiteConfigUpdate(BaseModel):
@@ -194,12 +193,11 @@ class SiteConfigUpdate(BaseModel):
 
         return data
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(json_schema_extra={
             "example": {
                 "llm_provider": "anthropic",
                 "ai_model": "claude-3-opus-20240229",
                 "daily_connection_limit": 30,
                 "velocity": 25
             }
-        }
+        })

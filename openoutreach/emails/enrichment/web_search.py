@@ -60,7 +60,7 @@ def _duckduckgo(first: str, last: str, domain: str) -> str | None:
         return _extract_email(resp.text, domain)
 
     except Exception as exc:
-        logger.debug("duckduckgo search failed (%s %s @%s): %s", first, last, domain, exc)
+        logger.debug("duckduckgo search failed (%s %s @%s): %s", first, last, domain, type(exc).__name__)
         return None
 
 
@@ -100,7 +100,7 @@ def _github(first: str, last: str, domain: str) -> str | None:
                 return email
 
     except Exception as exc:
-        logger.debug("github search failed (%s %s @%s): %s", first, last, domain, exc)
+        logger.debug("github search failed (%s %s @%s): %s", first, last, domain, type(exc).__name__)
 
     return None
 

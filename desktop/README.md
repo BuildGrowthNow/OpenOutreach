@@ -65,7 +65,7 @@ Output: `desktop/dist/Lengrowth.exe`
 
 **MSIX packaging for Microsoft Store:**
 ```powershell
-makeappx pack /d desktop\dist /p desktop\dist\OpenOutreach.msix
+makeappx pack /d desktop\dist /p desktop\dist\Lengrowth.msix
 ```
 
 ## Architecture
@@ -94,8 +94,9 @@ openoutreach/desktop/
    - Human login, browser challenges, and reauthentication happen interactively
      in the local browser; server passwords and cookies are never returned.
 
-2. **Auto-start daemon**
-   - On subsequent launches, daemon starts automatically
+2. **Auto-start daemon (when enabled for the enrolled device)**
+   - On subsequent launches, the daemon starts automatically only when the
+     server has enabled the device capability
    - Tray icon turns green (running) or gray (stopped)
    - Daemon polls backend for tasks
    - Executes tasks using local browser
@@ -128,15 +129,15 @@ HKEY_CURRENT_USER\Software\Classes\lengrowth\shell\open\command
 ## File Locations
 
 **macOS:**
-- Config: `~/Library/Application Support/OpenOutreach/config.json`
-- Daemon ID: `~/Library/Application Support/OpenOutreach/daemon_id`
-- Browser data: `~/Library/Application Support/OpenOutreach/browser_data/`
+- Config: `~/Library/Application Support/Lengrowth/config.json`
+- Device identity: stored in the macOS Keychain
+- Browser data: local browser profile managed by the desktop app
 - Daemon credentials: macOS Keychain; browser state: local browser profile
 
 **Windows:**
-- Config: `%LOCALAPPDATA%\OpenOutreach\config.json`
-- Daemon ID: `%LOCALAPPDATA%\OpenOutreach\daemon_id`
-- Browser data: `%LOCALAPPDATA%\OpenOutreach\browser_data\`
+- Config: `%LOCALAPPDATA%\Lengrowth\config.json`
+- Device identity: stored in Windows Credential Manager
+- Browser data: local browser profile managed by the desktop app
 - Daemon credentials: Windows Credential Manager; browser state: local browser profile
 
 ## Distribution

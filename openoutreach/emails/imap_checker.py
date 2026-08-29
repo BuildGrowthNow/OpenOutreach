@@ -48,7 +48,7 @@ def find_reply(mailbox, original_message_id: str | list[str]) -> tuple[str, date
     except Exception as exc:
         logger.debug(
             "imap_checker: could not check replies for %s: %s",
-            original_message_id, exc,
+            original_message_id, type(exc).__name__,
         )
 
     return None
@@ -195,7 +195,7 @@ def scan_imap_replies(user_id: str) -> int:
                         )
                         msg.save()
                     except Exception as exc:
-                        logger.debug("scan_imap_replies: ChatMessage write failed for deal %s: %s", deal_doc["_id"], exc)
+                        logger.debug("scan_imap_replies: ChatMessage write failed for deal %s: %s", deal_doc["_id"], type(exc).__name__)
 
                     replied_count += 1
                     logger.info(
@@ -206,7 +206,7 @@ def scan_imap_replies(user_id: str) -> int:
         except Exception as exc:
             logger.debug(
                 "scan_imap_replies: IMAP error for mailbox %s: %s",
-                mailbox_id, exc,
+                mailbox_id, type(exc).__name__,
             )
 
     return replied_count

@@ -167,7 +167,7 @@ Working tree may have partial fixes. Re-verify and keep or re-open:
 - [x] Email verification page: `/verify-email?token=...` verifies token and redirects to login
 - [x] Middleware updated: uses `refresh_token` cookie, redirects to `/login` (not `/login-v2`)
 - [x] Reset-password page: call JWT confirm endpoint, not Supabase `updatePassword`.
-- [x] Desktop callback on JWT login page: if `desktop=true&callback=openoutreach://auth`, after success redirect to `openoutreach://auth?token=...`.
+- [x] Desktop login completion uses the in-process bridge when `desktop=true`; the former token-bearing protocol redirect is removed from the current client. The protocol handler remains only as a legacy compatibility path for older installed clients.
 
 ### 1.3 Phase 1 tests
 
@@ -429,7 +429,9 @@ Implement at minimum:
 
 - [x] Desktop opens `{APP_URL}/login?desktop=true&callback=openoutreach://auth` - Already implemented
 - [x] Replace fragile `linkedin-api.` → `linkedin.` - Implemented via URL parsing in app.py
-- [ ] Fix download CTA to real GitHub releases org/repo - Out of scope (desktop building separate)
+- [x] Download CTA now targets the Lengrowth `outbound` release repository and
+  stable `dl.lengrowth.com` installer URLs; release availability and signed
+  artifacts remain gated by the manual publishing workflow.
 - [x] Rename notifications from “Lengrowth” → “OpenOutreach” - Done across daemon_remote.py, app.py, config.py
 
 ### 5.2 Remote client resilience (D3, D4)

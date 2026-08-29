@@ -169,7 +169,7 @@ def enrich_leads_with_contact_phones(
             return None
         phone = extract_phone_from_domain(website, country_code)
         if not phone:
-            logger.debug("contact_spider: no phone at %s", website)
+            logger.debug("contact_spider: no phone found")
             return None
         return (doc["_id"], phone)
 
@@ -186,7 +186,7 @@ def enrich_leads_with_contact_phones(
                 {"$set": {"phone": phone, "phone_source": "contact_spider"}},
             )
             enriched += 1
-            logger.info("contact_spider: enriched lead %s → %s", lead_id, phone)
+            logger.info("contact_spider: lead enriched with phone")
 
     logger.info(
         "contact_spider: enriched %d/%d leads for campaign %s",

@@ -33,6 +33,9 @@ server secret, provider key, or MongoDB credential. Browser/provider execution
 is injected per channel and profile (LinkedIn, WhatsApp, and email); server
 persistence remains authoritative. Non-success adapter outcomes are reported
 through the v2 retry/failure contract rather than completed as successful work.
+Enrollment completes the initial proof-bound token exchange before the secure
+daemon is considered enrolled; the current Windows build was locally rebuilt
+and artifact-scanned on 2026-08-29.
 
 Current source-of-truth correction: all legacy `/api/daemon/*` execution,
 profile, campaign, session, reconciliation, and configuration handlers are
@@ -65,6 +68,8 @@ make api      # FastAPI server at localhost:8001/api
 
 # Testing
 make test / make docker-test
+make lint              # correctness-focused Ruff checks
+make pyright           # Python type checks
 pytest tests/api/test_voyager.py   # single file
 pytest -k test_name                # single test
 

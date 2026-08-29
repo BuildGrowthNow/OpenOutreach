@@ -113,7 +113,7 @@ def start_browser_session(session: Any) -> None:
             display_override = vnc_session.display
             logger.debug("Using VNC display %s for profile %s", display_override, profile.pk)
     except Exception as e:
-        logger.debug("Could not get VNC display, using default: %s", e)
+        logger.debug("Could not get VNC display, using default: %s", type(e).__name__)
 
     session.page, session.context, session.browser, session.playwright = launch_browser(
         storage_state=storage_state,

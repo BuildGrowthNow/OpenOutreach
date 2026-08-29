@@ -134,3 +134,16 @@ def test_remote_mailbox_provider_forwards_task_lease_without_credentials():
     assert calls[0][0]["lease_id"] == task["lease_id"]
     assert calls[0][1] == "send"
     assert "password" not in repr(calls[0][2]).lower()
+
+
+def test_email_reply_scan_returns_typed_receipt_and_cursor():
+    result = EmailAdapter(FakeMail()).execute({"task_id": "task-1", "task_type": "email_reply_scan", "snapshot": {
+        "cursor": "c1",
+        "effect_key": "effect-scan-1",
+        "mailbox_grant": {"task_id": "task-1", "mailbox_id": "box-1",
+                           "purpose": "reply_scan",
+                           "expires_at": (datetime.now(timezone.utc) + timedelta(seconds=30)).isoformat()},
+    }})
+    assert result["outcome"] == "observed"
+    assert result["effect_key"] == "effect-scan-1"
+    assert result["receipt"]["outcome"] == "replied"

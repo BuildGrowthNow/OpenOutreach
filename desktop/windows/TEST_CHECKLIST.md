@@ -22,20 +22,20 @@
 
 ### Basic Build
 - [ ] `python desktop/build.py` completes without errors
-- [ ] `desktop/dist/OpenOutreach.exe` created
+- [ ] `desktop/dist/Lengrowth.exe` created
 - [ ] File size is 20-30MB
 - [ ] Exe has version info (right-click → Properties → Details)
 
 ### MSIX Build
 - [ ] Windows SDK installed (makeappx.exe available)
 - [ ] `python desktop/build.py --msix` completes
-- [ ] `desktop/dist/OpenOutreach-{version}.msix` created
+- [ ] `desktop/dist/Lengrowth-{version}.msix` created
 - [ ] MSIX opens with App Installer (double-click)
 
 ### NSIS Installer Build
 - [ ] NSIS installed: `where makensis` or `choco install nsis`
 - [ ] `python desktop/build.py --installer` completes
-- [ ] `desktop/dist/OpenOutreach-{version}-Setup.exe` created
+- [ ] `desktop/dist/Lengrowth-{version}-Setup.exe` created
 - [ ] Installer runs without errors
 
 ### All Formats
@@ -49,19 +49,19 @@
 ## Functional Testing - Standalone .exe
 
 ### Launch
-- [ ] Double-click `OpenOutreach.exe`
+- [ ] Double-click `Lengrowth.exe`
 - [ ] SmartScreen appears (if unsigned)
 - [ ] "More info" → "Run anyway" works
 - [ ] Application launches
 - [ ] System tray icon appears
 
 ### Authentication
-- [ ] "Login to OpenOutreach" menu item visible
+- [ ] "Login to Lengrowth" menu item visible
 - [ ] Click opens browser to login page
-- [ ] URL includes `?desktop=true&callback=openoutreach://auth`
+- [ ] URL includes `?desktop=true&callback=lengrowth://auth`
 - [ ] Login flow completes
-- [ ] Callback redirects to `openoutreach://` (if protocol registered)
-- [ ] App receives auth token
+- [ ] Desktop bridge stores tokens in the OS credential store (no token in URL/argv)
+- [ ] If the bridge is unavailable, the flow waits for `pywebviewready` and does not redirect with credentials
 - [ ] Menu changes to show "Status: Running"
 
 ### Menu Items
@@ -80,40 +80,40 @@
 
 ### Credential Storage
 - [ ] Credentials stored in Windows Credential Manager
-- [ ] Check: Control Panel → Credential Manager → Windows Credentials → "OpenOutreach"
+- [ ] Check: Control Panel → Credential Manager → Windows Credentials → "Lengrowth"
 - [ ] Logout removes credentials
 
 ### Data Persistence
-- [ ] Config saved to `%APPDATA%\Local\OpenOutreach\config.json`
-- [ ] Daemon ID saved to `%APPDATA%\Local\OpenOutreach\daemon_id`
-- [ ] Browser data saved to `%APPDATA%\Local\OpenOutreach\browser_data\`
+- [ ] Config saved to `%USERPROFILE%\AppData\Local\Lengrowth\config.json`
+- [ ] Daemon ID saved to `%USERPROFILE%\AppData\Local\Lengrowth\daemon_id`
+- [ ] Browser data saved to `%USERPROFILE%\AppData\Local\Lengrowth\browser_data\`
 - [ ] Data persists across app restarts
 
 ## Functional Testing - NSIS Installer
 
 ### Installation
-- [ ] Run `OpenOutreach-{version}-Setup.exe`
+- [ ] Run `Lengrowth-{version}-Setup.exe`
 - [ ] SmartScreen appears (if unsigned)
 - [ ] Installer launches
-- [ ] Select installation directory (default: `C:\Program Files\OpenOutreach`)
+- [ ] Select installation directory (default: `%LOCALAPPDATA%\Programs\Lengrowth Outreach`)
 - [ ] Installation completes
-- [ ] Start Menu folder created: "OpenOutreach"
+- [ ] Start Menu folder created: "Lengrowth Outreach"
 - [ ] Desktop shortcut created
 
 ### Installed Files
-- [ ] Executable: `C:\Program Files\OpenOutreach\OpenOutreach.exe`
-- [ ] Uninstaller: `C:\Program Files\OpenOutreach\Uninstall.exe`
+- [ ] Executable: `%LOCALAPPDATA%\Programs\Lengrowth Outreach\Lengrowth.exe`
+- [ ] Uninstaller: `%LOCALAPPDATA%\Programs\Lengrowth Outreach\Uninstall.exe`
 - [ ] Start Menu shortcuts work
 - [ ] Desktop shortcut works
 
 ### Protocol Handler
-- [ ] Registry key exists: `HKEY_CLASSES_ROOT\openoutreach`
-- [ ] Test URL: `start openoutreach://auth?token=test`
-- [ ] App launches and receives URL
+- [ ] Registry key exists: `HKEY_CLASSES_ROOT\lengrowth`
+- [ ] Non-secret probe: `start lengrowth://auth?probe=1`
+- [ ] App launches and receives the probe without changing credentials
 
 ### Uninstallation
 - [ ] Run Uninstaller from Start Menu
-- [ ] Or: Settings → Apps → OpenOutreach → Uninstall
+- [ ] Or: Settings → Apps → Lengrowth Outreach → Uninstall
 - [ ] All files removed from Program Files
 - [ ] Start Menu shortcuts removed
 - [ ] Desktop shortcut removed
@@ -127,7 +127,7 @@
 - [ ] Or: Enterprise environment with sideloading policy
 
 ### Installation
-- [ ] Double-click `OpenOutreach-{version}.msix`
+- [ ] Double-click `Lengrowth-{version}.msix`
 - [ ] App Installer opens
 - [ ] Click "Install"
 - [ ] Installation completes
@@ -139,7 +139,7 @@
 - [ ] Protocol handler works
 
 ### Uninstallation
-- [ ] Settings → Apps → OpenOutreach → Uninstall
+- [ ] Settings → Apps → Lengrowth Outreach → Uninstall
 - [ ] Or: PowerShell: `Remove-AppxPackage`
 - [ ] App removed completely (including data)
 
@@ -152,14 +152,15 @@
 - [ ] Registry keys created
 
 ### Testing
-- [ ] Command: `start openoutreach://auth?token=abc123`
+- [ ] Command: `start lengrowth://auth?probe=1`
 - [ ] App launches (if not running)
 - [ ] App receives callback
-- [ ] Token parsed correctly
+- [ ] Probe is rejected without changing credentials
+- [ ] A real login is verified only through the in-process desktop bridge
 
 ### Browser Integration
-- [ ] Click `openoutreach://` link in browser
-- [ ] Browser prompts to open OpenOutreach
+- [ ] Click `lengrowth://` link in browser
+- [ ] Browser prompts to open Lengrowth
 - [ ] Allow and app launches
 - [ ] Subsequent clicks open automatically
 
@@ -173,7 +174,7 @@
 ### Signing
 - [ ] Run: `.\desktop\windows\sign.ps1`
 - [ ] Signature applied successfully
-- [ ] Verify: `signtool verify /pa /v desktop\dist\OpenOutreach.exe`
+- [ ] Verify: `signtool verify /pa /v desktop\dist\Lengrowth.exe`
 
 ### Results
 - [ ] Right-click exe → Properties → Digital Signatures tab shows signature
@@ -186,7 +187,9 @@
 - [ ] Workflow file valid: `.github/workflows/desktop-build.yml`
 - [ ] Create tag: `git tag desktop-v1.0.0-test`
 - [ ] Push tag: `git push origin desktop-v1.0.0-test`
-- [ ] Workflow triggers automatically
+- [ ] Build workflow triggers automatically on an approved source change
+- [ ] Publish workflow is manually dispatched with `publish: true` only after
+      release approval
 
 ### Build Job
 - [ ] Windows build job starts
@@ -197,15 +200,15 @@
 
 ### Artifacts
 - [ ] Three artifacts uploaded:
-  - `OpenOutreach-Windows-{version}` (exe)
-  - `OpenOutreach-Windows-MSIX-{version}` (msix)
-  - `OpenOutreach-Windows-Installer-{version}` (setup.exe)
+  - `Lengrowth-Windows-{version}` (exe)
+  - `Lengrowth-Windows-MSIX-{version}` (msix)
+  - `Lengrowth-Windows-Installer-{version}` (setup.exe)
 
 ### Release
-- [ ] Release created automatically
+- [ ] Release created only after explicit manual publish approval
 - [ ] Release notes generated
 - [ ] All artifacts attached
-- [ ] Release title: "OpenOutreach Desktop v{version}"
+- [ ] Release title: "Lengrowth Desktop v{version}"
 
 ### Download & Test
 - [ ] Download artifacts from release
@@ -216,7 +219,7 @@
 ### Resource Usage (Idle)
 - [ ] CPU usage < 1%
 - [ ] Memory usage < 50MB
-- [ ] Check: Task Manager → Details → OpenOutreach.exe
+- [ ] Check: Task Manager → Details → Lengrowth.exe
 
 ### Resource Usage (Running)
 - [ ] CPU usage < 5%
@@ -357,4 +360,3 @@ List any issues discovered:
 
 ### Notes
 Additional observations or comments:
-

@@ -585,7 +585,7 @@ class LeadManager:
                 leads.append(Lead.from_dict(data))
             return leads
         except Exception as e:
-            logger.error(f"Failed to get all leads: {e}")
+            logger.error("Failed to get all leads: %s", type(e).__name__)
             return []
 
     def filter(self, **kwargs) -> "LeadManager":
@@ -939,7 +939,7 @@ class Campaign:
                 return cls.from_dict(data)
             return None
         except Exception as e:
-            logger.error(f"Failed to get campaign '{campaign_id}': {e}")
+            logger.error("Failed to get campaign '%s': %s", campaign_id, type(e).__name__)
             return None
 
     @classmethod
@@ -955,7 +955,7 @@ class Campaign:
                 return cls.from_dict(data)
             return None
         except Exception as e:
-            logger.error(f"Failed to find campaign by name '{name}': {e}")
+            logger.error("Failed to find campaign by name '%s': %s", name, type(e).__name__)
             return None
 
     @classmethod
@@ -969,7 +969,7 @@ class Campaign:
             result = collection.delete_one({"_id": campaign_id})
             return result.deleted_count > 0
         except Exception as e:
-            logger.error(f"Failed to delete campaign '{campaign_id}': {e}")
+            logger.error("Failed to delete campaign '%s': %s", campaign_id, type(e).__name__)
             return False
 
     def __str__(self):
@@ -1010,7 +1010,7 @@ class CampaignManager:
                 campaigns.append(Campaign.from_dict(data))
             return campaigns
         except Exception as e:
-            logger.error(f"Failed to get all campaigns: {e}")
+            logger.error("Failed to get all campaigns: %s", type(e).__name__)
             return []
 
     def filter(self, **kwargs) -> List[Campaign]:
@@ -1025,7 +1025,7 @@ class CampaignManager:
                 campaigns.append(Campaign.from_dict(data))
             return campaigns
         except Exception as e:
-            logger.error(f"Failed to filter campaigns: {e}")
+            logger.error("Failed to filter campaigns: %s", type(e).__name__)
             return []
 
     def count(self) -> int:
@@ -1037,7 +1037,7 @@ class CampaignManager:
         try:
             return collection.count_documents({})
         except Exception as e:
-            logger.error(f"Failed to count campaigns: {e}")
+            logger.error("Failed to count campaigns: %s", type(e).__name__)
             return 0
 
     def get(self, **kwargs) -> Optional[Campaign]:
@@ -1052,7 +1052,7 @@ class CampaignManager:
                 return Campaign.from_dict(data)
             return None
         except Exception as e:
-            logger.error(f"Failed to get campaign: {e}")
+            logger.error("Failed to get campaign: %s", type(e).__name__)
             return None
 
     def get_or_create(
@@ -1329,7 +1329,7 @@ class Deal:
                 return cls.from_dict(data)
             return None
         except Exception as e:
-            logger.error(f"Failed to get deal '{deal_id}': {e}")
+            logger.error("Failed to get deal '%s': %s", deal_id, type(e).__name__)
             return None
 
     @classmethod
@@ -1394,7 +1394,7 @@ class Deal:
                 deals.append(cls.from_dict(data))
             return deals
         except Exception as e:
-            logger.error(f"Failed to find deals by lead_id '{lead_id}': {e}")
+            logger.error("Failed to find deals by lead_id '%s': %s", lead_id, type(e).__name__)
             return []
 
     @classmethod
@@ -1410,7 +1410,7 @@ class Deal:
                 deals.append(cls.from_dict(data))
             return deals
         except Exception as e:
-            logger.error(f"Failed to find deals by campaign_id '{campaign_id}': {e}")
+            logger.error("Failed to find deals by campaign_id '%s': %s", campaign_id, type(e).__name__)
             return []
 
     @classmethod
@@ -1426,7 +1426,7 @@ class Deal:
                 deals.append(cls.from_dict(data))
             return deals
         except Exception as e:
-            logger.error(f"Failed to find deals by user_id '{user_id}': {e}")
+            logger.error("Failed to find deals by user_id '%s': %s", user_id, type(e).__name__)
             return []
 
     @classmethod
@@ -1440,7 +1440,7 @@ class Deal:
             result = collection.delete_one({"_id": deal_id})
             return result.deleted_count > 0
         except Exception as e:
-            logger.error(f"Failed to delete deal '{deal_id}': {e}")
+            logger.error("Failed to delete deal '%s': %s", deal_id, type(e).__name__)
             return False
 
     def __str__(self):
@@ -1577,7 +1577,7 @@ class UserProfile:
                 return cls.from_dict(data)
             return None
         except Exception as e:
-            logger.error(f"Failed to get user profile for user '{user_id}': {e}")
+            logger.error("Failed to get user profile for user '%s': %s", user_id, type(e).__name__)
             return None
     
     @classmethod
@@ -1591,7 +1591,7 @@ class UserProfile:
             result = collection.delete_one({"user_id": user_id})
             return result.deleted_count > 0
         except Exception as e:
-            logger.error(f"Failed to delete user profile for user '{user_id}': {e}")
+            logger.error("Failed to delete user profile for user '%s': %s", user_id, type(e).__name__)
             return False
     
     def __str__(self):
@@ -1636,7 +1636,7 @@ class UserProfileManager:
                 profiles.append(UserProfile.from_dict(data))
             return profiles
         except Exception as e:
-            logger.error(f"Failed to get all user profiles: {e}")
+            logger.error("Failed to get all user profiles: %s", type(e).__name__)
             return []
     
     def filter(self, **kwargs) -> List[UserProfile]:
@@ -1651,7 +1651,7 @@ class UserProfileManager:
                 profiles.append(UserProfile.from_dict(data))
             return profiles
         except Exception as e:
-            logger.error(f"Failed to filter user profiles: {e}")
+            logger.error("Failed to filter user profiles: %s", type(e).__name__)
             return []
     
     def count(self) -> int:
@@ -1663,7 +1663,7 @@ class UserProfileManager:
         try:
             return collection.count_documents({})
         except Exception as e:
-            logger.error(f"Failed to count user profiles: {e}")
+            logger.error("Failed to count user profiles: %s", type(e).__name__)
             return 0
     
     def get(self, **kwargs) -> Optional[UserProfile]:
@@ -1678,7 +1678,7 @@ class UserProfileManager:
                 return UserProfile.from_dict(data)
             return None
         except Exception as e:
-            logger.error(f"Failed to get user profile: {e}")
+            logger.error("Failed to get user profile: %s", type(e).__name__)
             return None
     
     def get_or_create(
@@ -1779,7 +1779,7 @@ class Message:
                 return cls.from_dict(data)
             return None
         except Exception as e:
-            logger.error(f"Failed to get message '{message_id}': {e}")
+            logger.error("Failed to get message '%s': %s", message_id, type(e).__name__)
             return None
 
     @classmethod
@@ -1795,7 +1795,7 @@ class Message:
                 messages.append(cls.from_dict(data))
             return messages
         except Exception as e:
-            logger.error(f"Failed to find messages by deal_id '{deal_id}': {e}")
+            logger.error("Failed to find messages by deal_id '%s': %s", deal_id, type(e).__name__)
             return []
 
     @classmethod
@@ -1811,7 +1811,7 @@ class Message:
                 messages.append(cls.from_dict(data))
             return messages
         except Exception as e:
-            logger.error(f"Failed to find messages by user_id '{user_id}': {e}")
+            logger.error("Failed to find messages by user_id '%s': %s", user_id, type(e).__name__)
             return []
 
     @classmethod
@@ -1825,7 +1825,7 @@ class Message:
             result = collection.delete_one({"_id": message_id})
             return result.deleted_count > 0
         except Exception as e:
-            logger.error(f"Failed to delete message '{message_id}': {e}")
+            logger.error("Failed to delete message '%s': %s", message_id, type(e).__name__)
             return False
 
     def __str__(self) -> str:
@@ -1870,7 +1870,7 @@ class MessageManager:
                 messages.append(Message.from_dict(data))
             return messages
         except Exception as e:
-            logger.error(f"Failed to get all messages: {e}")
+            logger.error("Failed to get all messages: %s", type(e).__name__)
             return []
 
     def filter(self, **kwargs) -> List[Message]:
@@ -1885,7 +1885,7 @@ class MessageManager:
                 messages.append(Message.from_dict(data))
             return messages
         except Exception as e:
-            logger.error(f"Failed to filter messages: {e}")
+            logger.error("Failed to filter messages: %s", type(e).__name__)
             return []
 
     def count(self) -> int:
@@ -1897,7 +1897,7 @@ class MessageManager:
         try:
             return collection.count_documents({})
         except Exception as e:
-            logger.error(f"Failed to count messages: {e}")
+            logger.error("Failed to count messages: %s", type(e).__name__)
             return 0
 
     def get(self, **kwargs) -> Optional[Message]:
@@ -1912,7 +1912,7 @@ class MessageManager:
                 return Message.from_dict(data)
             return None
         except Exception as e:
-            logger.error(f"Failed to get message: {e}")
+            logger.error("Failed to get message: %s", type(e).__name__)
             return None
 
     def get_or_create(
@@ -2005,7 +2005,7 @@ class Note:
                 return cls.from_dict(data)
             return None
         except Exception as e:
-            logger.error(f"Failed to get note '{note_id}': {e}")
+            logger.error("Failed to get note '%s': %s", note_id, type(e).__name__)
             return None
 
     @classmethod
@@ -2021,7 +2021,7 @@ class Note:
                 notes.append(cls.from_dict(data))
             return notes
         except Exception as e:
-            logger.error(f"Failed to find notes by deal_id '{deal_id}': {e}")
+            logger.error("Failed to find notes by deal_id '%s': %s", deal_id, type(e).__name__)
             return []
 
     @classmethod
@@ -2037,7 +2037,7 @@ class Note:
                 notes.append(cls.from_dict(data))
             return notes
         except Exception as e:
-            logger.error(f"Failed to find notes by user_id '{user_id}': {e}")
+            logger.error("Failed to find notes by user_id '%s': %s", user_id, type(e).__name__)
             return []
 
     @classmethod
@@ -2051,7 +2051,7 @@ class Note:
             result = collection.delete_one({"_id": note_id})
             return result.deleted_count > 0
         except Exception as e:
-            logger.error(f"Failed to delete note '{note_id}': {e}")
+            logger.error("Failed to delete note '%s': %s", note_id, type(e).__name__)
             return False
 
     def __str__(self) -> str:
@@ -2096,7 +2096,7 @@ class NoteManager:
                 notes.append(Note.from_dict(data))
             return notes
         except Exception as e:
-            logger.error(f"Failed to get all notes: {e}")
+            logger.error("Failed to get all notes: %s", type(e).__name__)
             return []
 
     def filter(self, **kwargs) -> List[Note]:
@@ -2111,7 +2111,7 @@ class NoteManager:
                 notes.append(Note.from_dict(data))
             return notes
         except Exception as e:
-            logger.error(f"Failed to filter notes: {e}")
+            logger.error("Failed to filter notes: %s", type(e).__name__)
             return []
 
     def count(self) -> int:
@@ -2123,7 +2123,7 @@ class NoteManager:
         try:
             return collection.count_documents({})
         except Exception as e:
-            logger.error(f"Failed to count notes: {e}")
+            logger.error("Failed to count notes: %s", type(e).__name__)
             return 0
 
     def get(self, **kwargs) -> Optional[Note]:
@@ -2138,7 +2138,7 @@ class NoteManager:
                 return Note.from_dict(data)
             return None
         except Exception as e:
-            logger.error(f"Failed to get note: {e}")
+            logger.error("Failed to get note: %s", type(e).__name__)
             return None
 
     def get_or_create(
@@ -2266,7 +2266,7 @@ class LeadPersona:
                 return cls.from_dict(data)
             return None
         except Exception as e:
-            logger.error(f"Failed to get lead persona '{persona_id}': {e}")
+            logger.error("Failed to get lead persona '%s': %s", persona_id, type(e).__name__)
             return None
 
     @classmethod
@@ -2282,7 +2282,7 @@ class LeadPersona:
                 personae.append(cls.from_dict(data))
             return personae
         except Exception as e:
-            logger.error(f"Failed to find personae by lead_id '{lead_id}': {e}")
+            logger.error("Failed to find personae by lead_id '%s': %s", lead_id, type(e).__name__)
             return []
 
     @classmethod
@@ -2298,7 +2298,7 @@ class LeadPersona:
                 personae.append(cls.from_dict(data))
             return personae
         except Exception as e:
-            logger.error(f"Failed to find personae by campaign_id '{campaign_id}': {e}")
+            logger.error("Failed to find personae by campaign_id '%s': %s", campaign_id, type(e).__name__)
             return []
 
     @classmethod
@@ -2314,7 +2314,7 @@ class LeadPersona:
                 personae.append(cls.from_dict(data))
             return personae
         except Exception as e:
-            logger.error(f"Failed to find personae by user_id '{user_id}': {e}")
+            logger.error("Failed to find personae by user_id '%s': %s", user_id, type(e).__name__)
             return []
 
     @classmethod
@@ -2328,7 +2328,7 @@ class LeadPersona:
             result = collection.delete_one({"_id": persona_id})
             return result.deleted_count > 0
         except Exception as e:
-            logger.error(f"Failed to delete lead persona '{persona_id}': {e}")
+            logger.error("Failed to delete lead persona '%s': %s", persona_id, type(e).__name__)
             return False
 
     def __str__(self) -> str:
@@ -2391,7 +2391,7 @@ class LeadPersonaManager:
                 personae.append(LeadPersona.from_dict(data))
             return personae
         except Exception as e:
-            logger.error(f"Failed to get all personae: {e}")
+            logger.error("Failed to get all personae: %s", type(e).__name__)
             return []
 
     def filter(self, **kwargs) -> List[LeadPersona]:
@@ -2406,7 +2406,7 @@ class LeadPersonaManager:
                 personae.append(LeadPersona.from_dict(data))
             return personae
         except Exception as e:
-            logger.error(f"Failed to filter personae: {e}")
+            logger.error("Failed to filter personae: %s", type(e).__name__)
             return []
 
     def count(self) -> int:
@@ -2418,7 +2418,7 @@ class LeadPersonaManager:
         try:
             return collection.count_documents({})
         except Exception as e:
-            logger.error(f"Failed to count personae: {e}")
+            logger.error("Failed to count personae: %s", type(e).__name__)
             return 0
 
     def get(self, **kwargs) -> Optional[LeadPersona]:
@@ -2433,7 +2433,7 @@ class LeadPersonaManager:
                 return LeadPersona.from_dict(data)
             return None
         except Exception as e:
-            logger.error(f"Failed to get persona: {e}")
+            logger.error("Failed to get persona: %s", type(e).__name__)
             return None
 
     def get_or_create(
@@ -2569,7 +2569,7 @@ class TrackedLink:
                 return cls.from_dict(data)
             return None
         except Exception as e:
-            logger.error(f"Failed to get tracked link '{link_id}': {e}")
+            logger.error("Failed to get tracked link '%s': %s", link_id, type(e).__name__)
             return None
 
     @classmethod
@@ -2586,7 +2586,8 @@ class TrackedLink:
             return None
         except Exception as e:
             logger.error(
-                f"Failed to find tracked link by short_code '{short_code}': {e}"
+                "Failed to find tracked link by short_code '%s': %s",
+                short_code, type(e).__name__,
             )
             return None
 
@@ -2603,7 +2604,7 @@ class TrackedLink:
                 links.append(cls.from_dict(data))
             return links
         except Exception as e:
-            logger.error(f"Failed to find links by campaign_id '{campaign_id}': {e}")
+            logger.error("Failed to find links by campaign_id '%s': %s", campaign_id, type(e).__name__)
             return []
 
     @classmethod
@@ -2619,7 +2620,7 @@ class TrackedLink:
                 links.append(cls.from_dict(data))
             return links
         except Exception as e:
-            logger.error(f"Failed to find links by user_id '{user_id}': {e}")
+            logger.error("Failed to find links by user_id '%s': %s", user_id, type(e).__name__)
             return []
 
     @classmethod
@@ -2633,7 +2634,7 @@ class TrackedLink:
             result = collection.delete_one({"_id": link_id})
             return result.deleted_count > 0
         except Exception as e:
-            logger.error(f"Failed to delete tracked link '{link_id}': {e}")
+            logger.error("Failed to delete tracked link '%s': %s", link_id, type(e).__name__)
             return False
 
     def record_click(
@@ -2713,7 +2714,7 @@ class TrackedLinkManager:
                 links.append(TrackedLink.from_dict(data))
             return links
         except Exception as e:
-            logger.error(f"Failed to get all tracked links: {e}")
+            logger.error("Failed to get all tracked links: %s", type(e).__name__)
             return []
 
     def filter(self, **kwargs) -> List[TrackedLink]:
@@ -2728,7 +2729,7 @@ class TrackedLinkManager:
                 links.append(TrackedLink.from_dict(data))
             return links
         except Exception as e:
-            logger.error(f"Failed to filter tracked links: {e}")
+            logger.error("Failed to filter tracked links: %s", type(e).__name__)
             return []
 
     def count(self) -> int:
@@ -2740,7 +2741,7 @@ class TrackedLinkManager:
         try:
             return collection.count_documents({})
         except Exception as e:
-            logger.error(f"Failed to count tracked links: {e}")
+            logger.error("Failed to count tracked links: %s", type(e).__name__)
             return 0
 
     def get(self, **kwargs) -> Optional[TrackedLink]:
@@ -2755,7 +2756,7 @@ class TrackedLinkManager:
                 return TrackedLink.from_dict(data)
             return None
         except Exception as e:
-            logger.error(f"Failed to get tracked link: {e}")
+            logger.error("Failed to get tracked link: %s", type(e).__name__)
             return None
 
     def get_or_create(
@@ -2854,7 +2855,7 @@ class LinkClick:
                 return cls.from_dict(data)
             return None
         except Exception as e:
-            logger.error(f"Failed to get link click '{click_id}': {e}")
+            logger.error("Failed to get link click '%s': %s", click_id, type(e).__name__)
             return None
 
     @classmethod
@@ -2870,7 +2871,7 @@ class LinkClick:
                 clicks.append(cls.from_dict(data))
             return clicks
         except Exception as e:
-            logger.error(f"Failed to find clicks by link_id '{link_id}': {e}")
+            logger.error("Failed to find clicks by link_id '%s': %s", link_id, type(e).__name__)
             return []
 
     @classmethod
@@ -2884,7 +2885,7 @@ class LinkClick:
             result = collection.delete_one({"_id": click_id})
             return result.deleted_count > 0
         except Exception as e:
-            logger.error(f"Failed to delete link click '{click_id}': {e}")
+            logger.error("Failed to delete link click '%s': %s", click_id, type(e).__name__)
             return False
 
     def detect_device(self) -> Optional[str]:
@@ -2944,7 +2945,7 @@ class LinkClickManager:
                 clicks.append(LinkClick.from_dict(data))
             return clicks
         except Exception as e:
-            logger.error(f"Failed to get all link clicks: {e}")
+            logger.error("Failed to get all link clicks: %s", type(e).__name__)
             return []
 
     def filter(self, **kwargs) -> List[LinkClick]:
@@ -2959,7 +2960,7 @@ class LinkClickManager:
                 clicks.append(LinkClick.from_dict(data))
             return clicks
         except Exception as e:
-            logger.error(f"Failed to filter link clicks: {e}")
+            logger.error("Failed to filter link clicks: %s", type(e).__name__)
             return []
 
     def count(self) -> int:
@@ -2971,7 +2972,7 @@ class LinkClickManager:
         try:
             return collection.count_documents({})
         except Exception as e:
-            logger.error(f"Failed to count link clicks: {e}")
+            logger.error("Failed to count link clicks: %s", type(e).__name__)
             return 0
 
     def get(self, **kwargs) -> Optional[LinkClick]:
@@ -2986,7 +2987,7 @@ class LinkClickManager:
                 return LinkClick.from_dict(data)
             return None
         except Exception as e:
-            logger.error(f"Failed to get link click: {e}")
+            logger.error("Failed to get link click: %s", type(e).__name__)
             return None
 
     def get_or_create(
@@ -3075,7 +3076,7 @@ class LinkDealConversion:
                 return cls.from_dict(data)
             return None
         except Exception as e:
-            logger.error(f"Failed to get link conversion '{conversion_id}': {e}")
+            logger.error("Failed to get link conversion '%s': %s", conversion_id, type(e).__name__)
             return None
 
     @classmethod
@@ -3091,7 +3092,7 @@ class LinkDealConversion:
                 conversions.append(cls.from_dict(data))
             return conversions
         except Exception as e:
-            logger.error(f"Failed to find conversions by link_id '{link_id}': {e}")
+            logger.error("Failed to find conversions by link_id '%s': %s", link_id, type(e).__name__)
             return []
 
     @classmethod
@@ -3107,7 +3108,7 @@ class LinkDealConversion:
                 conversions.append(cls.from_dict(data))
             return conversions
         except Exception as e:
-            logger.error(f"Failed to find conversions by deal_id '{deal_id}': {e}")
+            logger.error("Failed to find conversions by deal_id '%s': %s", deal_id, type(e).__name__)
             return []
 
     @classmethod
@@ -3121,7 +3122,7 @@ class LinkDealConversion:
             result = collection.delete_one({"_id": conversion_id})
             return result.deleted_count > 0
         except Exception as e:
-            logger.error(f"Failed to delete link conversion '{conversion_id}': {e}")
+            logger.error("Failed to delete link conversion '%s': %s", conversion_id, type(e).__name__)
             return False
 
     def __str__(self) -> str:
@@ -3166,7 +3167,7 @@ class LinkDealConversionManager:
                 conversions.append(LinkDealConversion.from_dict(data))
             return conversions
         except Exception as e:
-            logger.error(f"Failed to get all conversions: {e}")
+            logger.error("Failed to get all conversions: %s", type(e).__name__)
             return []
 
     def filter(self, **kwargs) -> List[LinkDealConversion]:
@@ -3181,7 +3182,7 @@ class LinkDealConversionManager:
                 conversions.append(LinkDealConversion.from_dict(data))
             return conversions
         except Exception as e:
-            logger.error(f"Failed to filter conversions: {e}")
+            logger.error("Failed to filter conversions: %s", type(e).__name__)
             return []
 
     def count(self) -> int:
@@ -3193,7 +3194,7 @@ class LinkDealConversionManager:
         try:
             return collection.count_documents({})
         except Exception as e:
-            logger.error(f"Failed to count conversions: {e}")
+            logger.error("Failed to count conversions: %s", type(e).__name__)
             return 0
 
     def get(self, **kwargs) -> Optional[LinkDealConversion]:
@@ -3208,7 +3209,7 @@ class LinkDealConversionManager:
                 return LinkDealConversion.from_dict(data)
             return None
         except Exception as e:
-            logger.error(f"Failed to get conversion: {e}")
+            logger.error("Failed to get conversion: %s", type(e).__name__)
             return None
 
     def get_or_create(
@@ -3668,7 +3669,7 @@ class LinkedInCredentials:
                         if username and username != "me":
                             self.username = username
         except Exception as e:
-            logger.debug("Could not discover username: %s", e)
+            logger.debug("Could not discover username: %s", type(e).__name__)
 
     def check_checkpoint_challenge(self, session) -> tuple:
         """Check if LinkedIn is presenting a checkpoint/challenge."""
@@ -3840,7 +3841,7 @@ class LinkedInCredentialsManager:
                 credentials.append(LinkedInCredentials.from_dict(data))
             return credentials
         except Exception as e:
-            logger.error(f"Failed to get all LinkedIn credentials: {e}")
+            logger.error("Failed to get all LinkedIn credentials: %s", type(e).__name__)
             return []
 
     def filter(self, **kwargs) -> List[LinkedInCredentials]:
@@ -3855,7 +3856,7 @@ class LinkedInCredentialsManager:
                 credentials.append(LinkedInCredentials.from_dict(data))
             return credentials
         except Exception as e:
-            logger.error(f"Failed to filter credentials: {e}")
+            logger.error("Failed to filter credentials: %s", type(e).__name__)
             return []
 
     def count(self) -> int:
@@ -3867,7 +3868,7 @@ class LinkedInCredentialsManager:
         try:
             return collection.count_documents({})
         except Exception as e:
-            logger.error(f"Failed to count credentials: {e}")
+            logger.error("Failed to count credentials: %s", type(e).__name__)
             return 0
 
     def get(self, **kwargs) -> Optional[LinkedInCredentials]:
@@ -3882,7 +3883,7 @@ class LinkedInCredentialsManager:
                 return LinkedInCredentials.from_dict(data)
             return None
         except Exception as e:
-            logger.error(f"Failed to get credential: {e}")
+            logger.error("Failed to get credential: %s", type(e).__name__)
             return None
 
     def get_or_create(
@@ -3987,7 +3988,7 @@ class LinkedInCredentialLog:
                 return cls.from_dict(data)
             return None
         except Exception as e:
-            logger.error(f"Failed to get credential log '{log_id}': {e}")
+            logger.error("Failed to get credential log '%s': %s", log_id, type(e).__name__)
             return None
 
     @classmethod
@@ -4003,7 +4004,7 @@ class LinkedInCredentialLog:
                 logs.append(cls.from_dict(data))
             return logs
         except Exception as e:
-            logger.error(f"Failed to find logs by credential_id '{credential_id}': {e}")
+            logger.error("Failed to find logs by credential_id '%s': %s", credential_id, type(e).__name__)
             return []
 
     @classmethod
@@ -4017,7 +4018,7 @@ class LinkedInCredentialLog:
             result = collection.delete_one({"_id": log_id})
             return result.deleted_count > 0
         except Exception as e:
-            logger.error(f"Failed to delete credential log '{log_id}': {e}")
+            logger.error("Failed to delete credential log '%s': %s", log_id, type(e).__name__)
             return False
 
     def __str__(self) -> str:
@@ -4062,7 +4063,7 @@ class LinkedInCredentialLogManager:
                 logs.append(LinkedInCredentialLog.from_dict(data))
             return logs
         except Exception as e:
-            logger.error(f"Failed to get all credential logs: {e}")
+            logger.error("Failed to get all credential logs: %s", type(e).__name__)
             return []
 
     def filter(self, **kwargs) -> List[LinkedInCredentialLog]:
@@ -4077,7 +4078,7 @@ class LinkedInCredentialLogManager:
                 logs.append(LinkedInCredentialLog.from_dict(data))
             return logs
         except Exception as e:
-            logger.error(f"Failed to filter logs: {e}")
+            logger.error("Failed to filter logs: %s", type(e).__name__)
             return []
 
     def count(self) -> int:
@@ -4089,7 +4090,7 @@ class LinkedInCredentialLogManager:
         try:
             return collection.count_documents({})
         except Exception as e:
-            logger.error(f"Failed to count logs: {e}")
+            logger.error("Failed to count logs: %s", type(e).__name__)
             return 0
 
     def get(self, **kwargs) -> Optional[LinkedInCredentialLog]:
@@ -4104,7 +4105,7 @@ class LinkedInCredentialLogManager:
                 return LinkedInCredentialLog.from_dict(data)
             return None
         except Exception as e:
-            logger.error(f"Failed to get log: {e}")
+            logger.error("Failed to get log: %s", type(e).__name__)
             return None
 
     def get_or_create(
@@ -4336,7 +4337,7 @@ class SiteConfig:
             _SITE_CONFIG_CACHE[cache_key] = (time.monotonic(), config)
             return config
         except Exception as e:
-            logger.error(f"Failed to load site config: {e}")
+            logger.error("Failed to load site config: %s", type(e).__name__)
             return cls()
 
     @classmethod
@@ -4358,7 +4359,7 @@ class SiteConfig:
                 return cls.from_dict(data)
             return None
         except Exception as e:
-            logger.error(f"Failed to get site config '{config_id}': {e}")
+            logger.error("Failed to get site config '%s': %s", config_id, type(e).__name__)
             return None
 
     @classmethod
@@ -4375,7 +4376,8 @@ class SiteConfig:
             return None
         except Exception as e:
             logger.error(
-                f"Failed to find site config by llm_provider '{llm_provider}': {e}"
+                "Failed to find site config by llm_provider '%s': %s",
+                llm_provider, type(e).__name__,
             )
             return None
 
@@ -4390,7 +4392,7 @@ class SiteConfig:
             result = collection.delete_one({"_id": config_id})
             return result.deleted_count > 0
         except Exception as e:
-            logger.error(f"Failed to delete site config '{config_id}': {e}")
+            logger.error("Failed to delete site config '%s': %s", config_id, type(e).__name__)
             return False
 
     def __str__(self) -> str:
@@ -4435,7 +4437,7 @@ class SiteConfigManager:
                 configs.append(SiteConfig.from_dict(data))
             return configs
         except Exception as e:
-            logger.error(f"Failed to get all site configs: {e}")
+            logger.error("Failed to get all site configs: %s", type(e).__name__)
             return []
 
     def filter(self, **kwargs) -> List[SiteConfig]:
@@ -4450,7 +4452,7 @@ class SiteConfigManager:
                 configs.append(SiteConfig.from_dict(data))
             return configs
         except Exception as e:
-            logger.error(f"Failed to filter configs: {e}")
+            logger.error("Failed to filter configs: %s", type(e).__name__)
             return []
 
     def count(self) -> int:
@@ -4462,7 +4464,7 @@ class SiteConfigManager:
         try:
             return collection.count_documents({})
         except Exception as e:
-            logger.error(f"Failed to count configs: {e}")
+            logger.error("Failed to count configs: %s", type(e).__name__)
             return 0
 
     def get(self, **kwargs) -> Optional[SiteConfig]:
@@ -4477,7 +4479,7 @@ class SiteConfigManager:
                 return SiteConfig.from_dict(data)
             return None
         except Exception as e:
-            logger.error(f"Failed to get config: {e}")
+            logger.error("Failed to get config: %s", type(e).__name__)
             return None
 
     def get_or_create(
@@ -4622,7 +4624,7 @@ class Task:
                 return cls.from_dict(data)
             return None
         except Exception as e:
-            logger.error(f"Failed to get task '{task_id}': {e}")
+            logger.error("Failed to get task '%s': %s", task_id, type(e).__name__)
             return None
 
     @classmethod
@@ -4638,7 +4640,7 @@ class Task:
                 tasks.append(cls.from_dict(data))
             return tasks
         except Exception as e:
-            logger.error(f"Failed to find tasks by status '{status}': {e}")
+            logger.error("Failed to find tasks by status '%s': %s", status, type(e).__name__)
             return []
 
     @classmethod
@@ -4654,7 +4656,7 @@ class Task:
                 tasks.append(cls.from_dict(data))
             return tasks
         except Exception as e:
-            logger.error(f"Failed to find tasks by user_id '{user_id}': {e}")
+            logger.error("Failed to find tasks by user_id '%s': %s", user_id, type(e).__name__)
             return []
 
     @classmethod
@@ -4668,7 +4670,7 @@ class Task:
             result = collection.delete_one({"_id": task_id})
             return result.deleted_count > 0
         except Exception as e:
-            logger.error(f"Failed to delete task '{task_id}': {e}")
+            logger.error("Failed to delete task '%s': %s", task_id, type(e).__name__)
             return False
 
     def mark_running(self) -> None:
@@ -4728,7 +4730,7 @@ class TaskManager:
                 tasks.append(Task.from_dict(data))
             return tasks
         except Exception as e:
-            logger.error(f"Failed to get all tasks: {e}")
+            logger.error("Failed to get all tasks: %s", type(e).__name__)
             return []
 
     def filter(self, **kwargs) -> List[Task]:
@@ -4743,7 +4745,7 @@ class TaskManager:
                 tasks.append(Task.from_dict(data))
             return tasks
         except Exception as e:
-            logger.error(f"Failed to filter tasks: {e}")
+            logger.error("Failed to filter tasks: %s", type(e).__name__)
             return []
 
     def count(self) -> int:
@@ -4755,7 +4757,7 @@ class TaskManager:
         try:
             return collection.count_documents({})
         except Exception as e:
-            logger.error(f"Failed to count tasks: {e}")
+            logger.error("Failed to count tasks: %s", type(e).__name__)
             return 0
 
     def get(self, **kwargs) -> Optional[Task]:
@@ -4770,7 +4772,7 @@ class TaskManager:
                 return Task.from_dict(data)
             return None
         except Exception as e:
-            logger.error(f"Failed to get task: {e}")
+            logger.error("Failed to get task: %s", type(e).__name__)
             return None
 
     def get_or_create(
@@ -4904,7 +4906,7 @@ class DealManager:
                 deals.append(Deal.from_dict(data))
             return deals
         except Exception as e:
-            logger.error(f"Failed to get all deals: {e}")
+            logger.error("Failed to get all deals: %s", type(e).__name__)
             return []
 
     def filter(self, **kwargs) -> List[Deal]:
@@ -4919,7 +4921,7 @@ class DealManager:
                 deals.append(Deal.from_dict(data))
             return deals
         except Exception as e:
-            logger.error(f"Failed to filter deals: {e}")
+            logger.error("Failed to filter deals: %s", type(e).__name__)
             return []
 
     def count(self) -> int:
@@ -4931,7 +4933,7 @@ class DealManager:
         try:
             return collection.count_documents({})
         except Exception as e:
-            logger.error(f"Failed to count deals: {e}")
+            logger.error("Failed to count deals: %s", type(e).__name__)
             return 0
 
     def get(self, **kwargs) -> Optional[Deal]:
@@ -4946,7 +4948,7 @@ class DealManager:
                 return Deal.from_dict(data)
             return None
         except Exception as e:
-            logger.error(f"Failed to get deal: {e}")
+            logger.error("Failed to get deal: %s", type(e).__name__)
             return None
 
     def get_or_create(
@@ -5121,7 +5123,7 @@ def ensure_mongodb_indexes():
             try:
                 existing_indexes = [idx["name"] for idx in collection.list_indexes()]
             except Exception as e:
-                logger.debug(f"Could not list indexes for '{collection_name}': {e}")
+                logger.debug("Could not list indexes for '%s': %s", collection_name, type(e).__name__)
             
             for field_name, options in collection_indexes:
                 index_name = options["name"]
@@ -5133,21 +5135,31 @@ def ensure_mongodb_indexes():
                             f"Created index '{index_name}' on '{collection_name}'"
                         )
                     except Exception as e:
-                        logger.error(f"Failed to create index '{index_name}': {e}")
+                        logger.error("Failed to create index '%s': %s", index_name, type(e).__name__)
                 else:
                     logger.debug(
                         f"Index '{index_name}' already exists on '{collection_name}', skipping"
                     )
         except Exception as e:
-            logger.error(f"Failed to process indexes for '{collection_name}': {e}")
+            logger.error("Failed to process indexes for '%s': %s", collection_name, type(e).__name__)
 
 
 # Backwards-compatible public import.  Older integration code imports User
 # from this aggregate module, while application code imports the canonical
 # implementation from models_user.
 from .models_user import User  # noqa: E402,F401
-from openoutreach.linkedin.models import (  # noqa: E402,F401
-    ActionLog, LinkedInProfile, SearchKeyword,
-)
 from openoutreach.emails.models import Mailbox  # noqa: E402,F401
 from openoutreach.mongodb.models_extended import ChatMessage  # noqa: E402,F401
+
+
+def __getattr__(name):
+    """Lazily preserve legacy LinkedIn model re-exports without a cycle."""
+    if name in {"ActionLog", "LinkedInProfile", "SearchKeyword"}:
+        from openoutreach.linkedin.models import ActionLog, LinkedInProfile, SearchKeyword
+
+        return {
+            "ActionLog": ActionLog,
+            "LinkedInProfile": LinkedInProfile,
+            "SearchKeyword": SearchKeyword,
+        }[name]
+    raise AttributeError(name)

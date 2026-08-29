@@ -148,12 +148,13 @@ class DesktopRemoteClient:
         )).json()
 
     async def fail_task_v2(
-        self, task_id: str, lease_id: str, category: str, error: str = ""
+        self, task_id: str, lease_id: str, idempotency_key: str,
+        category: str, error: str = ""
     ) -> dict[str, Any]:
         return (await self._request(
             "POST", f"/api/daemon/v2/tasks/{task_id}/fail",
-            json={"lease_id": lease_id, "category": category,
-                  "error": error[:500]},
+            json={"lease_id": lease_id, "idempotency_key": idempotency_key,
+                  "category": category, "error": error[:500]},
         )).json()
 
     async def ingest_events_v2(self, events: list[dict[str, Any]]) -> dict[str, Any]:

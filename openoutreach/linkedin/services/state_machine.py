@@ -188,7 +188,7 @@ class StateMachineEngine:
                     "last_message": {"is_outgoing": True},
                 }
             except Exception as e:
-                logger.error(f"Failed to execute message node: {e}")
+                logger.error("Failed to execute message node: %s", type(e).__name__)
                 return {
                     "success": False,
                     "output": {"message_sent": False},
@@ -449,7 +449,7 @@ class StateMachineEngine:
                     "last_message": {"is_outgoing": True},
                 }
             except Exception as e:
-                logger.error(f"Failed to create message with link: {e}")
+                logger.error("Failed to create message with link: %s", type(e).__name__)
                 return {
                     "success": False,
                     "output": {"link_injected": False},
@@ -457,7 +457,7 @@ class StateMachineEngine:
                 }
 
         except Exception as e:
-            logger.error(f"Failed to execute link node: {e}")
+            logger.error("Failed to execute link node: %s", type(e).__name__)
             return {
                 "success": False,
                 "output": {"link_injected": False},
@@ -567,7 +567,7 @@ def validate_state_graph(graph_id: int) -> Tuple[bool, List[Dict]]:
             {"type": "not_found", "message": f"State graph {graph_id} does not exist"}
         ]
     except Exception as e:
-        logger.error(f"Error validating state graph {graph_id}: {e}")
+        logger.error("Error validating state graph %s: %s", graph_id, type(e).__name__)
         return False, [{"type": "error", "message": str(e)}]
 
 
@@ -601,6 +601,7 @@ def simulate_state_machine(
         return {"success": False, "error": "Deal not found"}
     except Exception as e:
         logger.error(
-            f"Error simulating state machine for campaign {campaign_id}, deal {deal_id}: {e}"
+            "Error simulating state machine for campaign %s, deal %s: %s",
+            campaign_id, deal_id, type(e).__name__,
         )
         return {"success": False, "error": str(e)}

@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from openoutreach.api_v2.dependencies_v2 import get_current_user
 from openoutreach.mongodb.connection import get_mongodb_collection
@@ -106,8 +106,7 @@ class AnalyticsOverviewResponse(BaseModel):
     campaigns: list[CampaignOverview]
     data: dict  # Duplicate root-level data for backward compatibility
 
-    class Config:
-        populate_by_name = True
+    model_config = ConfigDict(populate_by_name=True)
 
 
 # ========== Helper Functions ==========
@@ -141,7 +140,7 @@ def _get_deals_by_state(campaign_id: str, state: str) -> int:
             "state": state
         })
     except Exception as e:
-        logger.error(f"Failed to count deals for state '{state}': {e}")
+        logger.error("Failed to count deals; state=%s exception_type=%s", state, type(e).__name__)
         return 0
 
 
@@ -159,7 +158,7 @@ def _get_action_logs_count(campaign_id: str, action_type: str, since: datetime) 
             "created_at": {"$gte": since}
         })
     except Exception as e:
-        logger.error(f"Failed to count action logs for type '{action_type}': {e}")
+        logger.error("Failed to count action logs; action_type=%s exception_type=%s", action_type, type(e).__name__)
         return 0
 
 
@@ -177,7 +176,7 @@ def _get_action_logs_count_multi(
             "created_at": {"$gte": since},
         })
     except Exception as e:
-        logger.error("Failed to count action logs for types %s: %s", action_types, e)
+        logger.error("Failed to count action logs; action_types=%s exception_type=%s", action_types, type(e).__name__)
         return 0
 
 
@@ -225,7 +224,7 @@ def _get_connections_accepted_count(campaign_id: str, since: datetime | None = N
         result = list(deals_collection.aggregate(pipeline))
         return result[0]["total"] if result else 0
     except Exception as e:
-        logger.error(f"Failed to count connections accepted: {e}")
+        logger.error("Failed to count connections accepted; exception_type=%s", type(e).__name__)
         return 0
 
 
@@ -260,7 +259,7 @@ def _get_distinct_deals_messaged_count(campaign_id: str, since: datetime) -> int
         result = list(messages_collection.aggregate(pipeline))
         return result[0]["total"] if result else 0
     except Exception as e:
-        logger.error(f"Failed to count distinct deals messaged: {e}")
+        logger.error("Failed to count distinct deals messaged; exception_type=%s", type(e).__name__)
         return 0
 
 
@@ -307,7 +306,7 @@ def _get_messages_replied_count(campaign_id: str, since: datetime) -> int:
         result = list(messages_collection.aggregate(pipeline))
         return result[0]["total"] if result else 0
     except Exception as e:
-        logger.error(f"Failed to count messages replied: {e}")
+        logger.error("Failed to count messages replied; exception_type=%s", type(e).__name__)
         return 0
 
 
@@ -349,7 +348,7 @@ async def get_analytics_overview(
         for data in campaigns_collection.find(campaign_query).sort("name", 1):
             campaigns.append(models.Campaign.from_dict(data))
     except Exception as e:
-        logger.error(f"Failed to fetch campaigns: {e}")
+        logger.error("Failed to fetch campaigns; exception_type=%s", type(e).__name__)
         campaigns = []
 
     if not campaigns:
@@ -474,7 +473,7 @@ async def get_analytics_overview(
             result2 = list(messages_collection.aggregate(messaged_pipeline))
             total_distinct_deals_messaged = result2[0]["total"] if result2 else 0
         except Exception as e:
-            logger.error(f"Failed to count messages replied: {e}")
+            logger.error("Failed to count messages replied; exception_type=%s", type(e).__name__)
 
     total_conversions = deals_collection.count_documents({
         "campaign_id": {"$in": campaign_ids},

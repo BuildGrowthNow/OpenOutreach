@@ -360,10 +360,10 @@ export interface HealthStatus {
   message: string;
   system: {
     timestamp: string;
-    python_version: string;
+    python_version?: string;
     platform: string;
-    cpu_percent: number;
-    memory_percent: number;
+    cpu_percent?: number;
+    memory_percent?: number;
   };
   database: {
     connected: boolean;

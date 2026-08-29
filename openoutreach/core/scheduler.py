@@ -848,7 +848,7 @@ def _scan_email_replies_once(user_id: str) -> None:
         if count:
             logger.info("IMAP scan: advanced %d deal(s) to EMAIL_REPLIED", count)
     except Exception as exc:
-        logger.debug("IMAP scan error for user %s: %s", user_id, exc)
+        logger.debug("IMAP scan error for user %s: %s", user_id, type(exc).__name__)
 
 
 def reconcile(session) -> None:
@@ -1181,7 +1181,7 @@ def _retry_no_email_deals(campaign) -> None:
                     campaign, lead.public_identifier,
                 )
         except Exception as exc:
-            logger.warning("[%s] NO_EMAIL retry error for deal %s: %s", campaign, doc.get("_id"), exc)
+            logger.warning("[%s] NO_EMAIL retry error for deal %s: %s", campaign, doc.get("_id"), type(exc).__name__)
 
 
 # ── Maps scraper trigger ───────────────────────────────────────────────
@@ -1250,7 +1250,7 @@ def _maybe_trigger_lead_scrape(campaign, user_id: str) -> None:
             )
             logger.info("Maps scrape [%s]: created %d new leads", campaign_id, created)
         except Exception as exc:
-            logger.error("Maps scrape [%s] failed: %s", campaign_id, exc)
+            logger.error("Maps scrape [%s] failed: %s", campaign_id, type(exc).__name__)
         finally:
             _maps_scraping.discard(campaign_id)
 
@@ -1267,7 +1267,7 @@ def _maybe_trigger_lead_scrape(campaign, user_id: str) -> None:
             )
             logger.info("Classified scrape [%s]: created %d new leads", campaign_id, created)
         except Exception as exc:
-            logger.error("Classified scrape [%s] failed: %s", campaign_id, exc)
+            logger.error("Classified scrape [%s] failed: %s", campaign_id, type(exc).__name__)
         finally:
             _maps_scraping.discard(campaign_id)
 
@@ -1282,7 +1282,7 @@ def _maybe_trigger_lead_scrape(campaign, user_id: str) -> None:
             )
             logger.info("WA groups scrape [%s]: created %d new leads", campaign_id, created)
         except Exception as exc:
-            logger.error("WA groups scrape [%s] failed: %s", campaign_id, exc)
+            logger.error("WA groups scrape [%s] failed: %s", campaign_id, type(exc).__name__)
         finally:
             _maps_scraping.discard(campaign_id)
 

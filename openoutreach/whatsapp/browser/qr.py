@@ -74,5 +74,5 @@ def extract_phone_and_name(page) -> tuple[Optional[str], Optional[str]]:
                 phone = "+" + str(raw_phone).split("@")[0]
             name = result.get("name")
     except Exception as e:
-        logger.debug("Could not extract phone/name: %s", e)
+        logger.debug("Could not extract phone/name: %s", type(e).__name__)
     return phone, name

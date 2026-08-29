@@ -52,14 +52,14 @@ async def get_current_user(
 
         return user._id
 
-    except JWTError as e:
-        logger.debug(f"JWT verification failed: {e}")
+    except JWTError:
+        logger.debug("JWT verification failed; exception_type=JWTError")
         raise HTTPException(status_code=401, detail="Invalid token")
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Authentication failed: {e}")
-        raise HTTPException(status_code=401, detail=f"Authentication failed: {str(e)}")
+        logger.error("Authentication failed; exception_type=%s", type(e).__name__)
+        raise HTTPException(status_code=401, detail="Invalid authentication")
 
 
 async def get_current_user_optional(

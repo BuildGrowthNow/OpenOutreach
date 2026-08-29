@@ -5,6 +5,8 @@ from openoutreach.core.envelope_crypto import (
     decrypt_value,
 )
 from scripts.backfill_tenant_ownership import backfill_collection
+from scripts.migrate_encryption import _encryption_context
+from scripts.verify_indexes import REQUIRED
 
 
 class _Cursor:
@@ -70,6 +72,23 @@ def test_tenant_backfill_dry_run_and_apply_are_explicit():
     assert len(target.updates) == 3
 
 
+def test_tenant_backfill_resolves_whatsapp_and_mailbox_bindings():
+    target = _Collection([
+        {"_id": "wa-task", "whatsapp_profile_id": "wa-a"},
+        {"_id": "mail-task", "mailbox_id": "mail-a"},
+    ])
+    db = _Database({
+        "tasks": target,
+        "linkedin_profiles": _Collection([]),
+        "campaigns": _Collection([]),
+        "whatsapp_profiles": _Collection([{"_id": "wa-a", "user_id": "tenant-wa"}]),
+        "mailboxes": _Collection([{"_id": "mail-a", "user_id": "tenant-mail"}]),
+    })
+    report = backfill_collection(db, "tasks", checkpoint=None, apply=False, batch_size=10)
+    assert report["assigned"] == 2
+    assert report["quarantined"] == 0
+
+
 def test_encryption_migration_rekeys_without_logging_or_body_output():
     old = KeyRing("old", {"old": b"o" * 32})
     new = KeyRing("new", {"new": b"n" * 32})
@@ -92,3 +111,22 @@ def test_encryption_migration_rekeys_without_logging_or_body_output():
     assert applied.migrated == 1
     assert collection.documents[0]["secret"]["kid"] == "new"
     assert decrypt_value(collection.documents[0]["secret"], context=context, key_ring=new) == b"opaque-value"
+
+
+def test_encryption_context_supports_channel_profile_bindings():
+    assert _encryption_context({"user_id": "tenant-wa", "whatsapp_profile_id": "wa-a"}) == {
+        "tenant_id": "tenant-wa", "profile_id": "wa-a"
+    }
+    assert _encryption_context({"user_id": "tenant-mail", "mailbox_id": "mail-a"}) == {
+        "tenant_id": "tenant-mail", "profile_id": "mail-a"
+    }
+
+
+def test_index_verifier_covers_all_daemon_claim_aliases():
+    assert REQUIRED["tasks"] >= {
+        "daemon_v2_task_claim_idx",
+        "daemon_v2_task_whatsapp_claim_idx",
+        "daemon_v2_task_mailbox_claim_idx",
+        "daemon_v2_task_email_profile_claim_idx",
+        "daemon_v2_task_lease_idx",
+    }

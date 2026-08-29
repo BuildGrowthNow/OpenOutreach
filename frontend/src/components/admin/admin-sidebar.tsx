@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { BarChart2, Users, DollarSign, FileText, Server, ShieldCheck, LogOut, ArrowLeft } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -18,6 +18,7 @@ const NAV = [
 
 export default function AdminSidebar() {
   const pathname = usePathname()
+  const router = useRouter()
   const { logout } = useAuthStore()
 
   return (
@@ -76,7 +77,7 @@ export default function AdminSidebar() {
           className="w-full justify-start gap-3.5 rounded-lg px-3 py-2.5 transition-all duration-200"
           onClick={async () => {
             await logout()
-            window.location.href = '/login'
+            router.push('/login')
           }}
         >
           <LogOut className="h-4 w-4 shrink-0" />

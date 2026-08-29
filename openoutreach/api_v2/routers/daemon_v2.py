@@ -18,7 +18,9 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
 
-from openoutreach.api_v2.daemon_security import MIN_SECURE_DAEMON_VERSION, is_secure_version
+from openoutreach.api_v2.daemon_security import (
+    MIN_SECURE_DAEMON_VERSION, assert_safe_response, is_secure_version,
+)
 from openoutreach.api_v2.daemon_auth import (
     canonical_request,
     hash_secret,
@@ -56,11 +58,11 @@ class CompatibilityResponse(BaseModel):
 class ConfigurationResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    profile_id: str
+    profile_id: str = Field(min_length=1, max_length=128)
     active_hours: "ActiveHours"
     rate_limits: "RateLimits"
     channel_policy: "ChannelPolicy"
-    task_capabilities: list[str]
+    task_capabilities: list[str] = Field(default_factory=list, max_length=20)
 
 
 class ActiveHours(BaseModel):
@@ -100,9 +102,16 @@ class ChannelPolicy(BaseModel):
 class ClaimRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    profile_id: str
+    profile_id: str = Field(min_length=1, max_length=128)
     channel: Literal["linkedin", "whatsapp", "email"]
     supported_task_types: list[str] = Field(default_factory=list, max_length=20)
+
+    @field_validator("supported_task_types")
+    @classmethod
+    def task_types_are_bounded(cls, value: list[str]) -> list[str]:
+        if any(not item or len(item) > 64 for item in value):
+            raise ValueError("task type must be between 1 and 64 characters")
+        return value
 
 
 class LeaseResponse(BaseModel):
@@ -151,7 +160,7 @@ class CompleteRequest(LeaseMutation):
 class FailRequest(LeaseMutation):
     category: Literal["retryable", "permanent", "auth", "rate_limited"]
     error: str = Field(default="", max_length=500)
-    idempotency_key: str = Field(default="", max_length=128)
+    idempotency_key: str = Field(min_length=16, max_length=128)
 
 
 class EmailExecutionRequest(LeaseMutation):
@@ -263,6 +272,18 @@ class DaemonEvent(BaseModel):
     def payload_must_be_bounded(cls, value: dict[str, Any]) -> dict[str, Any]:
         if len(json.dumps(value, separators=(",", ":"), default=str).encode("utf-8")) > 32 * 1024:
             raise ValueError("event payload exceeds 32 KiB")
+        forbidden = {"password", "cookie", "cookies", "token", "secret", "mongodb_uri", "provider_key", "qr"}
+        def walk(item: Any) -> None:
+            if isinstance(item, dict):
+                for key, child in item.items():
+                    if any(term in str(key).lower() for term in forbidden):
+                        raise ValueError("event payload contains a forbidden field")
+                    walk(child)
+            elif isinstance(item, list):
+                for child in item:
+                    walk(child)
+        walk(value)
+        assert_safe_response(value)
         return value
 
 
@@ -577,7 +598,7 @@ async def configuration(
             for channel in ("linkedin", "whatsapp", "email")
         }),
         task_capabilities=(
-            (["connect", "check_pending", "follow_up", "send_manual_message"]
+            (["connect", "check_pending", "follow_up", "send_manual_message", "observe"]
              if "linkedin" in context.scopes and settings.DAEMON_V2_LINKEDIN_ENABLED else [])
             + (["whatsapp_follow_up", "whatsapp_message", "whatsapp_sync", "whatsapp_reconnect"]
                if "whatsapp" in context.scopes and settings.DAEMON_V2_WHATSAPP_ENABLED else [])
@@ -585,7 +606,10 @@ async def configuration(
                if "email" in context.scopes and settings.DAEMON_V2_EMAIL_ENABLED else [])
         ),
     )
+    assert_safe_response(response.model_dump(mode="json"))
     body = response.model_dump_json()
+    if len(body.encode("utf-8")) > 16 * 1024:
+        raise HTTPException(500, "Daemon configuration response exceeds safety bound")
     etag = '"' + hashlib.sha256(body.encode("utf-8")).hexdigest() + '"'
     headers = {"ETag": etag, "Cache-Control": "no-store"}
     if request.headers.get("if-none-match") == etag:
@@ -1060,7 +1084,7 @@ def _typed_snapshot(document: dict[str, Any]) -> dict[str, Any] | None:
     except Exception:
         return None
     if task_type not in {
-        "connect", "check_pending", "follow_up", "send_manual_message",
+        "connect", "check_pending", "follow_up", "send_manual_message", "observe",
         "whatsapp_follow_up", "whatsapp_message", "whatsapp_sync", "whatsapp_reconnect",
         "email_follow_up", "email_send", "email_reply_scan",
     }:
@@ -1070,7 +1094,7 @@ def _typed_snapshot(document: dict[str, Any]) -> dict[str, Any] | None:
 
 def _snapshot_is_executable(snapshot: dict[str, Any], task_type: str, channel: str) -> bool:
     if channel == "linkedin":
-        if task_type in {"connect", "check_pending"}:
+        if task_type in {"connect", "check_pending", "observe"}:
             return bool(snapshot.get("target_public_identifier"))
         return bool(snapshot.get("target_public_identifier") and snapshot.get("message"))
     if channel == "whatsapp":
@@ -1097,6 +1121,42 @@ def _require_task_binding(context: TenantContext, document: dict[str, Any]) -> N
     if channel not in {"linkedin", "whatsapp", "email"} or not profile_id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Task not found")
     require_profile(context, profile_id, channel)
+
+
+def _validate_completion_result(document: dict[str, Any], result: dict[str, Any],
+                                expected_effect_key: str) -> None:
+    """Require the bounded result shape appropriate for the leased task."""
+    channel = str(document.get("channel", ""))
+    task_type = str(document.get("task_type", ""))
+    raw_receipt = result.get("receipt")
+    if isinstance(raw_receipt, dict):
+        try:
+            if channel == "linkedin":
+                receipt = LinkedInActionReceipt.model_validate(raw_receipt)
+            elif channel == "whatsapp":
+                receipt = WhatsAppActionReceipt.model_validate(raw_receipt)
+            elif channel == "email":
+                receipt = EmailReceipt.model_validate(raw_receipt)
+            else:
+                raise ValueError("unsupported channel")
+        except Exception as exc:
+            raise HTTPException(422, "Invalid typed task receipt") from exc
+        if receipt.effect_key != expected_effect_key:
+            raise HTTPException(422, "Receipt effect does not match task effect")
+        return
+
+    # These task types report observations/batches rather than provider action
+    # receipts. Every mutating task must still carry a typed receipt above.
+    try:
+        if channel == "linkedin" and task_type in {"check_pending", "observe"}:
+            LinkedInObservation.model_validate(result.get("observation"))
+            return
+        if channel == "whatsapp" and task_type == "whatsapp_sync":
+            WhatsAppSyncBatch.model_validate(result.get("sync") or result)
+            return
+    except Exception as exc:
+        raise HTTPException(422, "Invalid typed task observation") from exc
+    raise HTTPException(422, "Task result requires a typed receipt")
 
 
 def _project_channel_effect(context: TenantContext, task: dict[str, Any],
@@ -1311,7 +1371,7 @@ async def claim_task_v2(
         "scheduled_at": {"$lte": now},
     }
     supported_by_channel = {
-        "linkedin": {"connect", "check_pending", "follow_up", "send_manual_message"},
+        "linkedin": {"connect", "check_pending", "follow_up", "send_manual_message", "observe"},
         "whatsapp": {"whatsapp_follow_up", "whatsapp_message", "whatsapp_sync", "whatsapp_reconnect"},
         "email": {"email_follow_up", "email_send", "email_reply_scan"},
     }
@@ -1387,6 +1447,7 @@ async def renew_task_v2(
          "lease_expires_at": {"$gt": now}}
     )
     if not current:
+        append_security_event("daemon_task_lease_rejected", outcome="failure", actor_type="daemon", tenant_id=context.tenant_id, device_id=context.device_id, metadata={"task_id": task_id, "operation": "renew"})
         raise HTTPException(status.HTTP_410_GONE, "Lease expired")
     _require_task_binding(context, current)
     document = collection.find_one_and_update(
@@ -1395,6 +1456,7 @@ async def renew_task_v2(
         return_document=ReturnDocument.AFTER,
     )
     if not document:
+        append_security_event("daemon_task_lease_rejected", outcome="failure", actor_type="daemon", tenant_id=context.tenant_id, device_id=context.device_id, metadata={"task_id": task_id, "operation": "renew"})
         raise HTTPException(status.HTTP_410_GONE, "Lease expired")
     channel = str(document.get("channel", ""))
     _require_task_binding(context, document)
@@ -1442,8 +1504,13 @@ async def complete_task_v2(
     current = collection.find_one({**_lease_query(context, task_id, request.lease_id),
                                    "lease_expires_at": {"$gt": now}})
     if not current:
+        append_security_event("daemon_task_lease_rejected", outcome="failure", actor_type="daemon", tenant_id=context.tenant_id, device_id=context.device_id, metadata={"task_id": task_id, "operation": "complete"})
         raise HTTPException(status.HTTP_410_GONE, "Lease expired or no longer owned")
     _require_task_binding(context, current)
+    current_effect_key = str(current.get("idempotency_key") or _snapshot(current).get("effect_key") or "")
+    if not current_effect_key:
+        raise HTTPException(409, "Task has no effect identity")
+    _validate_completion_result(current, request.result, current_effect_key)
     effects = get_mongodb_collection("daemon_effects")
     if effects is None:
         raise HTTPException(503, "Effect reconciliation unavailable")
@@ -1472,8 +1539,10 @@ async def complete_task_v2(
                           "result_idempotency_key": request.idempotency_key}},
             )
             if result.matched_count == 0:
+                append_security_event("daemon_task_lease_rejected", outcome="failure", actor_type="daemon", tenant_id=context.tenant_id, device_id=context.device_id, metadata={"task_id": task_id, "operation": "complete_reconcile"})
                 raise HTTPException(status.HTTP_410_GONE, "Lease expired or no longer owned")
             return {"status": "completed", "reconciled": "true"}
+        append_security_event("daemon_effect_duplicate", outcome="failure", actor_type="daemon", tenant_id=context.tenant_id, device_id=context.device_id, metadata={"task_id": task_id})
         raise HTTPException(status.HTTP_409_CONFLICT, "Effect already belongs to another task")
     _project_channel_effect(context, projection_task, request.result,
                             request.idempotency_key, now)
@@ -1482,6 +1551,7 @@ async def complete_task_v2(
         {"$set": {"status": "completed", "completed_at": now, "result": request.result, "result_idempotency_key": request.idempotency_key}},
     )
     if result.matched_count == 0:
+        append_security_event("daemon_task_lease_rejected", outcome="failure", actor_type="daemon", tenant_id=context.tenant_id, device_id=context.device_id, metadata={"task_id": task_id, "operation": "complete"})
         raise HTTPException(status.HTTP_410_GONE, "Lease expired or no longer owned")
     append_security_event("daemon_task_completed", outcome="success", actor_type="daemon", tenant_id=context.tenant_id, device_id=context.device_id, metadata={"task_id": task_id})
     return {"status": "completed"}
@@ -1501,6 +1571,9 @@ async def fail_task_v2(
                                  "leased_by_device_id": context.device_id})
     if prior:
         _require_task_binding(context, prior)
+        expected_key = str(prior.get("idempotency_key") or _snapshot(prior).get("effect_key") or "")
+        if expected_key and request.idempotency_key != expected_key:
+            raise HTTPException(422, "Failure idempotency key does not match task effect")
     if prior and prior.get("status") == "failed" and request.idempotency_key and prior.get("failure_idempotency_key") == request.idempotency_key:
         return {"status": "failed", "replayed": "true"}
     current = collection.find_one(
@@ -1508,15 +1581,22 @@ async def fail_task_v2(
          "lease_expires_at": {"$gt": now}}
     )
     if not current:
+        append_security_event("daemon_task_lease_rejected", outcome="failure", actor_type="daemon", tenant_id=context.tenant_id, device_id=context.device_id, metadata={"task_id": task_id, "operation": "fail"})
         raise HTTPException(status.HTTP_410_GONE, "Lease expired or no longer owned")
     _require_task_binding(context, current)
+    current_key = str(current.get("idempotency_key") or _snapshot(current).get("effect_key") or "")
+    if not current_key or request.idempotency_key != current_key:
+        raise HTTPException(422, "Failure idempotency key does not match task effect")
     result = collection.update_one(
         {**_lease_query(context, task_id, request.lease_id), "lease_expires_at": {"$gt": now}},
         {"$set": {"status": "failed", "completed_at": now, "failure_category": request.category, "error_message": request.error, "failure_idempotency_key": request.idempotency_key}},
     )
     if result.matched_count == 0:
+        append_security_event("daemon_task_lease_rejected", outcome="failure", actor_type="daemon", tenant_id=context.tenant_id, device_id=context.device_id, metadata={"task_id": task_id, "operation": "fail"})
         raise HTTPException(status.HTTP_410_GONE, "Lease expired or no longer owned")
     append_security_event("daemon_task_failed", outcome="success", actor_type="daemon", tenant_id=context.tenant_id, device_id=context.device_id, metadata={"task_id": task_id, "category": request.category})
+    if request.category == "auth":
+        append_security_event("daemon_provider_challenge", outcome="failure", actor_type="daemon", tenant_id=context.tenant_id, device_id=context.device_id, metadata={"task_id": task_id})
     return {"status": "failed"}
 
 

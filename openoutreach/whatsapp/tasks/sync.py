@@ -140,7 +140,7 @@ def _navigate_to_chat(wa_session, phone: str) -> bool:
         )
         return True
     except Exception as e:
-        logger.warning("WA sync: failed to load chat for %s: %s", phone, e)
+        logger.warning("WA sync: failed to load chat: %s", type(e).__name__)
         return False
 
 
@@ -229,7 +229,7 @@ def handle_whatsapp_sync(task, wa_session, qualifiers):  # noqa: ARG001
         try:
             raw_msgs = wa_session.page.evaluate(_EXTRACT_MESSAGES_JS)
         except Exception as e:
-            logger.warning("WA sync: JS extraction failed for %s: %s", lead.phone, e)
+            logger.warning("WA sync: JS extraction failed: %s", type(e).__name__)
             continue
 
         if not raw_msgs:
@@ -361,6 +361,6 @@ def handle_whatsapp_sync(task, wa_session, qualifiers):  # noqa: ARG001
                     user_id=deal.user_id,
                 )
             except Exception as e:
-                logger.warning("WA sync: chat_summary update failed for deal %s: %s", deal._id, e)
+                logger.warning("WA sync: chat_summary update failed for deal %s: %s", deal._id, type(e).__name__)
 
     logger.info("WA sync [%s]: done", campaign)

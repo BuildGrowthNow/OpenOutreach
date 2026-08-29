@@ -3,7 +3,7 @@ Pydantic schemas for Campaign API endpoints.
 """
 from datetime import datetime
 from typing import Optional, List, Dict, Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class CampaignCreate(BaseModel):
@@ -53,8 +53,7 @@ class CampaignResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        populate_by_name = True
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class CampaignStats(BaseModel):

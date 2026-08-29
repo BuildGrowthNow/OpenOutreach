@@ -363,7 +363,10 @@ claiming remains deployment-gated until the corresponding channel has passed
 real provider integration validation. The local implementation supports
 profile-specific LinkedIn, WhatsApp, and email executors. Receipts are
 idempotent and server-side task ownership is always derived from
-tenant/device/profile context.
+tenant/device/profile context. Enrollment performs the initial proof-bound
+token exchange before reporting success, and the current Windows artifact has
+been rebuilt and forbidden-marker scanned locally; provider execution and
+production enablement remain externally gated.
 
 The historical execution-mode and configuration notes above describe the
 pre-migration implementation only. The current desktop entry point is

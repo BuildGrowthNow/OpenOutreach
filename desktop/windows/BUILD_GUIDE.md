@@ -31,7 +31,7 @@ pip install -r desktop/requirements.txt
 # Build standalone exe
 python desktop/build.py
 
-# Output: desktop/dist/OpenOutreach.exe
+# Output: desktop/dist/Lengrowth.exe
 ```
 
 ### 3. Create Installer (Recommended)
@@ -43,7 +43,7 @@ choco install nsis -y
 # Build exe + NSIS installer
 python desktop/build.py --installer
 
-# Output: desktop/dist/OpenOutreach-{version}-Setup.exe
+# Output: desktop/dist/Lengrowth-{version}-Setup.exe
 ```
 
 ### 4. Create MSIX Package
@@ -52,7 +52,7 @@ python desktop/build.py --installer
 # Requires Windows SDK
 python desktop/build.py --msix
 
-# Output: desktop/dist/OpenOutreach-{version}.msix
+# Output: desktop/dist/Lengrowth-{version}.msix
 ```
 
 ### 5. Build Everything
@@ -61,9 +61,9 @@ python desktop/build.py --msix
 python desktop/build.py --all
 
 # Creates:
-# - OpenOutreach.exe (standalone)
-# - OpenOutreach-{version}.msix (Store package)
-# - OpenOutreach-{version}-Setup.exe (installer)
+# - Lengrowth.exe (standalone)
+# - Lengrowth-{version}.msix (Store package)
+# - Lengrowth-{version}-Setup.exe (installer)
 ```
 
 ## Build Commands Reference
@@ -146,19 +146,19 @@ $env:SIGN_CERT_PASS = "your_password"
 .\desktop\windows\sign.ps1
 
 # Or sign specific file
-.\desktop\windows\sign.ps1 -FilePath "desktop\dist\OpenOutreach.exe"
+.\desktop\windows\sign.ps1 -FilePath "desktop\dist\Lengrowth.exe"
 
 # Manual signing
-signtool sign /f cert.pfx /p password /t http://timestamp.digicert.com /fd SHA256 desktop\dist\OpenOutreach.exe
+signtool sign /f cert.pfx /p password /tr https://timestamp.digicert.com /td SHA256 /fd SHA256 desktop\dist\Lengrowth.exe
 
 # Verify signature
-signtool verify /pa /v desktop\dist\OpenOutreach.exe
+signtool verify /pa /v desktop\dist\Lengrowth.exe
 ```
 
 ### Sign MSIX
 
 ```powershell
-signtool sign /f cert.pfx /p password /fd SHA256 desktop\dist\OpenOutreach-1.0.0.msix
+signtool sign /f cert.pfx /p password /tr https://timestamp.digicert.com /td SHA256 /fd SHA256 desktop\dist\Lengrowth-2.1.2.msix
 ```
 
 ## Testing Build
@@ -167,32 +167,31 @@ signtool sign /f cert.pfx /p password /fd SHA256 desktop\dist\OpenOutreach-1.0.0
 
 ```bash
 # Run directly
-desktop/dist/OpenOutreach.exe
+desktop/dist/Lengrowth.exe
 
-# Test protocol handler
-start openoutreach://auth?token=test
+# Test protocol handler without placing credentials in a URL or argv
+start lengrowth://auth?probe=1
 
 # Check version
-desktop/dist/OpenOutreach.exe --version
-
-# View help
-desktop/dist/OpenOutreach.exe --help
+## The windowed executable has no CLI version/help mode; verify the
+## packaged version with `openoutreach/desktop/__version__.py` and the
+## component test instead.
 ```
 
 ### Test Installer
 
 ```bash
 # Install
-desktop/dist/OpenOutreach-1.0.0-Setup.exe
+desktop/dist/Lengrowth-2.1.2-Setup.exe
 
 # Check installation
-dir "C:\Program Files\OpenOutreach"
+dir "$env:LOCALAPPDATA\Programs\Lengrowth Outreach"
 
 # Test launch
-& "C:\Program Files\OpenOutreach\OpenOutreach.exe"
+& "$env:LOCALAPPDATA\Programs\Lengrowth Outreach\Lengrowth.exe"
 
 # Uninstall
-& "C:\Program Files\OpenOutreach\Uninstall.exe"
+& "$env:LOCALAPPDATA\Programs\Lengrowth Outreach\Uninstall.exe"
 ```
 
 ### Test MSIX
@@ -201,13 +200,13 @@ dir "C:\Program Files\OpenOutreach"
 # Enable Developer Mode first: Settings → For developers → Developer mode
 
 # Install
-Add-AppxPackage -Path desktop\dist\OpenOutreach-1.0.0.msix
+Add-AppxPackage -Path desktop\dist\Lengrowth-2.1.2.msix
 
 # List installed
-Get-AppxPackage | Where-Object {$_.Name -like "*OpenOutreach*"}
+Get-AppxPackage | Where-Object {$_.Name -like "*Lengrowth*"}
 
 # Uninstall
-Remove-AppxPackage OpenOutreach.Desktop_1.0.0.0_x64__XXXXX
+Remove-AppxPackage Lengrowth.Desktop_2.1.2.0_x64__XXXXX
 ```
 
 ## Troubleshooting
@@ -285,7 +284,7 @@ $env:PATH += ";C:\Program Files (x86)\Windows Kits\10\bin\10.0.22000.0\x64"
 
 **Timestamp server fails:**
 - Retry (sometimes servers are slow)
-- Try alternative: `-t http://timestamp.comodoca.com`
+- Do not use an `http://` timestamp URL. Use the HTTPS DigiCert timestamp endpoint shown above.
 
 ## Size Optimization
 
@@ -300,7 +299,7 @@ Current build size: ~20-30MB
 ### What's Included:
 - Python runtime (~8MB)
 - Core dependencies (httpx, pystray, keyring, Pillow)
-- OpenOutreach modules (daemon, browser_detect, remote_client)
+- Lengrowth modules (daemon, browser_detect, remote_client)
 
 ### What's Excluded:
 - Playwright (not bundled, uses system browser)
@@ -349,9 +348,9 @@ GitHub Actions workflow: `.github/workflows/desktop-build.yml`
 - Manual workflow dispatch
 
 **Outputs:**
-- `OpenOutreach.exe` (standalone)
-- `OpenOutreach-{version}.msix` (if SDK available)
-- `OpenOutreach-{version}-Setup.exe` (via Chocolatey NSIS)
+- `Lengrowth.exe` (standalone)
+- `Lengrowth-{version}.msix` (if SDK available)
+- `Lengrowth-{version}-Setup.exe` (via Chocolatey NSIS)
 
 **Local simulation:**
 ```bash

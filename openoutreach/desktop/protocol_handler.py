@@ -12,11 +12,13 @@ def parse_auth_callback(url: str) -> Optional[dict]:
     """Parse lengrowth://auth callback URL.
 
     Args:
-        url: URL like "lengrowth://auth?token=xxx" or with optional
-             "&refresh_token=yyy&profile_id=zzz"
+        url: A legacy callback URL from a pre-bridge client. Current clients
+             must use the in-process bridge and must not place credentials in
+             custom-protocol URLs, browser history, or process arguments.
 
     Returns:
-        Dict with at least token, or None if invalid
+        Legacy credential dict, or None if invalid. Callers should keep this
+        path behind minimum-secure-version enforcement during migration.
     """
     try:
         parsed = urllib.parse.urlparse(url)
@@ -39,7 +41,7 @@ def parse_auth_callback(url: str) -> Optional[dict]:
         }
 
     except Exception as e:
-        logger.error("Failed to parse auth callback: %s", e)
+        logger.error("Failed to parse auth callback; exception_type=%s", type(e).__name__)
         return None
 
 
@@ -88,7 +90,7 @@ def register_protocol_handler():
         logger.info("Protocol handler registered")
 
     except Exception as e:
-        logger.warning("Failed to register protocol handler: %s", e)
+        logger.warning("Failed to register protocol handler: %s", type(e).__name__)
 
 
 def handle_protocol_url(url: str, auth_manager) -> bool:
@@ -114,5 +116,5 @@ def handle_protocol_url(url: str, auth_manager) -> bool:
         logger.info("Login successful via protocol callback")
         return True
     except Exception as e:
-        logger.error("Failed to store credentials: %s", e)
+        logger.error("Failed to store credentials; exception_type=%s", type(e).__name__)
         return False

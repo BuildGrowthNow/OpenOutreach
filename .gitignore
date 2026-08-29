@@ -13,6 +13,12 @@ __pycache__/
 !/data/.gitkeep
 /media/
 .cache/
+/build/
+/dist/
+/.next/
+/.wrangler/
+node_modules/
+workers/email-tracking/node_modules/
 tests/fixtures/pages/**/*.html
 
 # Desktop build artifacts

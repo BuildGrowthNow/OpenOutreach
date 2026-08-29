@@ -179,7 +179,7 @@ class WhatsAppProfileManager:
         try:
             return [WhatsAppProfile.from_dict(d) for d in collection.find()]
         except Exception as e:
-            logger.error("Failed to get all WhatsApp profiles: %s", e)
+            logger.error("Failed to get all WhatsApp profiles; exception_type=%s", type(e).__name__)
             return []
 
     def filter(self, **kwargs) -> List[WhatsAppProfile]:
@@ -189,7 +189,7 @@ class WhatsAppProfileManager:
         try:
             return [WhatsAppProfile.from_dict(d) for d in collection.find(kwargs)]
         except Exception as e:
-            logger.error("Failed to filter WhatsApp profiles: %s", e)
+            logger.error("Failed to filter WhatsApp profiles; exception_type=%s", type(e).__name__)
             return []
 
     def get(self, **kwargs) -> Optional[WhatsAppProfile]:
@@ -200,7 +200,7 @@ class WhatsAppProfileManager:
             data = collection.find_one(kwargs)
             return WhatsAppProfile.from_dict(data) if data else None
         except Exception as e:
-            logger.error("Failed to get WhatsApp profile: %s", e)
+            logger.error("Failed to get WhatsApp profile; exception_type=%s", type(e).__name__)
             return None
 
 

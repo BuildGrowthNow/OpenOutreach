@@ -1,5 +1,8 @@
 name: Build Desktop App
 
+permissions:
+  contents: read
+
 on:
   push:
     paths:
@@ -9,6 +12,12 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Publish artifacts to the Lengrowth release repository and R2'
+        required: true
+        default: false
+        type: boolean
 
 jobs:
   build-macos:
@@ -38,10 +47,24 @@ jobs:
       - name: Build macOS app
         run: python desktop/build.py
 
+      - name: Sign macOS app for approved publish
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish == true }}
+        env:
+          APPLE_DEVELOPER_ID: ${{ secrets.APPLE_DEVELOPER_ID }}
+        run: python desktop/build.py --no-build --sign
+
       - name: Create DMG
         run: |
           brew install create-dmg || true
           python desktop/build.py --no-build --dmg
+
+      - name: Notarize macOS DMG for approved publish
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish == true }}
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: python desktop/build.py --no-build --notarize
 
       - name: Get version
         id: version
@@ -77,6 +100,13 @@ jobs:
           pip install -r desktop/requirements.txt
           pip install playwright playwright-stealth
 
+      - name: Get version
+        id: version
+        shell: bash
+        run: |
+          VERSION=$(python -c "exec(open('openoutreach/desktop/__version__.py').read()); print(__version__)")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
       - name: Build Windows exe
         run: python desktop/build.py
 
@@ -84,14 +114,21 @@ jobs:
         run: |
           choco install nsis -y
           python desktop/build.py --no-build --installer
-        continue-on-error: true
 
-      - name: Get version
-        id: version
-        shell: bash
+      - name: Create MSIX package
+        run: python desktop/build.py --no-build --msix
+
+      - name: Sign Windows release artifacts for approved publish
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish == true }}
+        env:
+          WINDOWS_SIGNING_CERT_BASE64: ${{ secrets.WINDOWS_SIGNING_CERT_BASE64 }}
+          WINDOWS_SIGNING_CERT_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERT_PASSWORD }}
+        shell: pwsh
         run: |
-          VERSION=$(python -c "exec(open('openoutreach/desktop/__version__.py').read()); print(__version__)")
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          .\desktop\windows\sign_release.ps1 -FilePath `
+            desktop\dist\Lengrowth.exe, `
+            desktop\dist\Lengrowth-${{ steps.version.outputs.version }}-Setup.exe, `
+            desktop\dist\Lengrowth-${{ steps.version.outputs.version }}.msix
 
       - name: Upload Windows exe artifact
         uses: actions/upload-artifact@v4
@@ -101,18 +138,24 @@ jobs:
 
       - name: Rename installer for stable download URL
         shell: bash
-        run: mv desktop/dist/Lengrowth-${{ steps.version.outputs.version }}-Setup.exe desktop/dist/Lengrowth-Windows-Setup.exe 2>/dev/null || true
+        run: mv desktop/dist/Lengrowth-${{ steps.version.outputs.version }}-Setup.exe desktop/dist/Lengrowth-Windows-Setup.exe
 
       - name: Upload Windows installer artifact
         uses: actions/upload-artifact@v4
-        if: hashFiles('desktop/dist/Lengrowth-Windows-Setup.exe') != ''
         with:
           name: Lengrowth-Windows-Installer-${{ steps.version.outputs.version }}
           path: desktop/dist/Lengrowth-Windows-Setup.exe
 
+      - name: Upload Windows MSIX artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Lengrowth-Windows-MSIX-${{ steps.version.outputs.version }}
+          path: desktop/dist/Lengrowth-${{ steps.version.outputs.version }}.msix
+
   release:
     name: Publish to Lengrowth/outbound
     needs: [build-macos, build-windows]
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish == true }}
     runs-on: ubuntu-latest
 
     steps:
@@ -142,18 +185,26 @@ jobs:
 
       - name: Download Windows installer artifact
         uses: actions/download-artifact@v4
-        continue-on-error: true
         with:
           name: Lengrowth-Windows-Installer-${{ steps.version.outputs.version }}
+          path: ./release/windows
+
+      - name: Download Windows MSIX artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: Lengrowth-Windows-MSIX-${{ steps.version.outputs.version }}
           path: ./release/windows
 
       - name: Inspect artifacts and generate release evidence
         run: |
           python scripts/inspect_release_artifact.py ./release/macos/Lengrowth-macOS.dmg
           python scripts/inspect_release_artifact.py ./release/windows/Lengrowth.exe
-          if [ -f ./release/windows/Lengrowth-Windows-Setup.exe ]; then python scripts/inspect_release_artifact.py ./release/windows/Lengrowth-Windows-Setup.exe; fi
+          test -f ./release/windows/Lengrowth-Windows-Setup.exe
+          python scripts/inspect_release_artifact.py ./release/windows/Lengrowth-Windows-Setup.exe
+          python scripts/inspect_release_artifact.py ./release/windows/Lengrowth-${{ steps.version.outputs.version }}.msix
           sha256sum ./release/macos/Lengrowth-macOS.dmg ./release/windows/Lengrowth.exe > ./release/SHA256SUMS.txt
-          if [ -f ./release/windows/Lengrowth-Windows-Setup.exe ]; then sha256sum ./release/windows/Lengrowth-Windows-Setup.exe >> ./release/SHA256SUMS.txt; fi
+          sha256sum ./release/windows/Lengrowth-Windows-Setup.exe >> ./release/SHA256SUMS.txt
+          sha256sum ./release/windows/Lengrowth-${{ steps.version.outputs.version }}.msix >> ./release/SHA256SUMS.txt
           python scripts/generate_sbom.py --output ./release/SBOM.cyclonedx.json
 
       - name: Create release on Lengrowth/outbound
@@ -185,6 +236,10 @@ jobs:
             2. Run directly from any folder
             3. If SmartScreen appears, click **"More info" → "Run anyway"**
 
+            **Windows - MSIX (sideloading):**
+            1. Download `Lengrowth-${{ steps.version.outputs.version }}.msix`
+            2. Open it with Windows App Installer
+
             ### Why run locally?
             - Use your own residential IP
             - Your LinkedIn credentials never leave your machine
@@ -192,6 +247,7 @@ jobs:
             ./release/macos/Lengrowth-macOS.dmg
             ./release/windows/Lengrowth.exe
             ./release/windows/Lengrowth-Windows-Setup.exe
+            ./release/windows/Lengrowth-${{ steps.version.outputs.version }}.msix
             ./release/SHA256SUMS.txt
             ./release/SBOM.cyclonedx.json
           token: ${{ secrets.OUTBOUND_RELEASE_TOKEN }}

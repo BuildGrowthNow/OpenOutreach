@@ -207,7 +207,7 @@ class User:
         doc = self.to_dict()
         update: Dict[str, Any] = {"$set": doc, "$unset": {"supabase_user_id": ""}}
         collection.update_one({"_id": self._id}, update, upsert=True)
-        logger.info(f"Saved user: {self.email}")
+        logger.info("Saved user")
         return self._id
 
     @classmethod
@@ -261,7 +261,7 @@ class User:
         self.deletion_scheduled_at = datetime.now(tz.utc)
         self.is_deleted = True
         self.save()
-        logger.info(f"Account deletion scheduled for: {self.email}")
+        logger.info("Account deletion scheduled")
         return self.deletion_scheduled_at
 
     def cancel_deletion(self):
@@ -270,7 +270,7 @@ class User:
         self.is_deleted = False
         self.deleted_at = None
         self.save()
-        logger.info(f"Account deletion canceled for: {self.email}")
+        logger.info("Account deletion canceled")
 
     def is_deletion_grace_period_expired(self) -> bool:
         """Check if 30-day deletion grace period has expired."""
@@ -284,11 +284,11 @@ class User:
         collection = get_mongodb_collection("users")
         if collection is not None:
             collection.delete_one({"_id": self._id})
-            logger.info(f"User permanently deleted: {self.email}")
+            logger.info("User permanently deleted")
 
     def soft_delete(self):
         """Soft delete - mark as deleted but retain data for 30 days."""
         self.is_deleted = True
         self.deleted_at = datetime.now(tz.utc)
         self.save()
-        logger.info(f"User soft deleted: {self.email}")
+        logger.info("User soft deleted")

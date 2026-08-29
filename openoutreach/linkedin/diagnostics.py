@@ -34,12 +34,12 @@ def capture_failure(session: Any, error: BaseException) -> None:
     try:
         (folder / "page.html").write_text(page.content())
     except Exception as exc:
-        logger.debug("Failed to capture HTML: %s", exc)
+        logger.debug("Failed to capture HTML: %s", type(exc).__name__)
 
     try:
         page.screenshot(path=str(folder / "screenshot.png"))
     except Exception as exc:
-        logger.debug("Failed to capture screenshot: %s", exc)
+        logger.debug("Failed to capture screenshot: %s", type(exc).__name__)
 
     logger.info("Failure diagnostics saved → %s", folder)
 
@@ -53,5 +53,5 @@ def failure_diagnostics(session: Any):
         try:
             capture_failure(session, exc)
         except Exception as cap_exc:
-            logger.debug("Diagnostic capture itself failed: %s", cap_exc)
+            logger.debug("Diagnostic capture itself failed: %s", type(cap_exc).__name__)
         raise

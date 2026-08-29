@@ -143,7 +143,7 @@ class GhostCampaign:
                 return cls.from_dict(data)
             return None
         except Exception as e:
-            logger.error(f"Failed to get ghost campaign '{ghost_campaign_id}': {e}")
+            logger.error("Failed to get ghost campaign '%s': %s", ghost_campaign_id, type(e).__name__)
             return None
 
     @classmethod
@@ -159,7 +159,7 @@ class GhostCampaign:
                 results.append(cls.from_dict(data))
             return results
         except Exception as e:
-            logger.error(f"Failed to get ghost campaigns for campaign '{campaign_id}': {e}")
+            logger.error("Failed to get ghost campaigns for campaign '%s': %s", campaign_id, type(e).__name__)
             return []
 
     @classmethod
@@ -173,7 +173,7 @@ class GhostCampaign:
             result = collection.delete_one({"_id": ghost_campaign_id})
             return result.deleted_count > 0
         except Exception as e:
-            logger.error(f"Failed to delete ghost campaign '{ghost_campaign_id}': {e}")
+            logger.error("Failed to delete ghost campaign '%s': %s", ghost_campaign_id, type(e).__name__)
             return False
 
     def __str__(self):
@@ -297,7 +297,7 @@ class GhostSimulationLog:
                 return cls.from_dict(data)
             return None
         except Exception as e:
-            logger.error(f"Failed to get simulation log '{log_id}': {e}")
+            logger.error("Failed to get simulation log '%s': %s", log_id, type(e).__name__)
             return None
 
     @classmethod
@@ -313,7 +313,7 @@ class GhostSimulationLog:
                 results.append(cls.from_dict(data))
             return results
         except Exception as e:
-            logger.error(f"Failed to get logs for ghost campaign '{ghost_campaign_id}': {e}")
+            logger.error("Failed to get logs for ghost campaign '%s': %s", ghost_campaign_id, type(e).__name__)
             return []
 
     @classmethod
@@ -327,7 +327,7 @@ class GhostSimulationLog:
             result = collection.delete_one({"_id": log_id})
             return result.deleted_count > 0
         except Exception as e:
-            logger.error(f"Failed to delete simulation log '{log_id}': {e}")
+            logger.error("Failed to delete simulation log '%s': %s", log_id, type(e).__name__)
             return False
 
     def __str__(self):
@@ -434,7 +434,7 @@ class GhostTestScenario:
                 return cls.from_dict(data)
             return None
         except Exception as e:
-            logger.error(f"Failed to get test scenario '{scenario_id}': {e}")
+            logger.error("Failed to get test scenario '%s': %s", scenario_id, type(e).__name__)
             return None
 
     @classmethod
@@ -450,7 +450,7 @@ class GhostTestScenario:
                 results.append(cls.from_dict(data))
             return results
         except Exception as e:
-            logger.error(f"Failed to get public test scenarios: {e}")
+            logger.error("Failed to get public test scenarios: %s", type(e).__name__)
             return []
 
     @classmethod
@@ -466,7 +466,7 @@ class GhostTestScenario:
                 results.append(cls.from_dict(data))
             return results
         except Exception as e:
-            logger.error(f"Failed to get scenarios for creator '{creator_id}': {e}")
+            logger.error("Failed to get scenarios for creator '%s': %s", creator_id, type(e).__name__)
             return []
 
     @classmethod
@@ -480,7 +480,7 @@ class GhostTestScenario:
             result = collection.delete_one({"_id": scenario_id})
             return result.deleted_count > 0
         except Exception as e:
-            logger.error(f"Failed to delete test scenario '{scenario_id}': {e}")
+            logger.error("Failed to delete test scenario '%s': %s", scenario_id, type(e).__name__)
             return False
 
     def __str__(self):

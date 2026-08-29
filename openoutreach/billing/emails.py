@@ -53,10 +53,10 @@ class ResendProvider(EmailProvider):
                     "text": text,
                 }
             )
-            logger.info(f"Email sent to {to} via Resend")
+            logger.info("Email sent via Resend")
             return True
         except Exception as e:
-            logger.error(f"Failed to send email via Resend: {e}")
+            logger.error("Failed to send email via Resend; exception_type=%s", type(e).__name__)
             return False
 
 
@@ -99,10 +99,10 @@ class SMTPProvider(EmailProvider):
                 smtp.login(self.username, self.password)
                 smtp.send_message(msg)
 
-            logger.info(f"Email sent to {to} via SMTP")
+            logger.info("Email sent via SMTP")
             return True
         except Exception as e:
-            logger.error(f"Failed to send email via SMTP: {e}")
+            logger.error("Failed to send email via SMTP; exception_type=%s", type(e).__name__)
             return False
 
 
@@ -116,7 +116,7 @@ class SESProvider(EmailProvider):
             import boto3
             self.ses_client = boto3.client("ses")
         except Exception as e:
-            logger.error(f"Failed to initialize SES client: {e}")
+            logger.error("Failed to initialize SES client; exception_type=%s", type(e).__name__)
             self.ses_client = None
 
     def send(self, to: str, subject: str, html: str, text: str) -> bool:
@@ -137,10 +137,10 @@ class SESProvider(EmailProvider):
                     },
                 },
             )
-            logger.info(f"Email sent to {to} via SES")
+            logger.info("Email sent via SES")
             return True
         except Exception as e:
-            logger.error(f"Failed to send email via SES: {e}")
+            logger.error("Failed to send email via SES; exception_type=%s", type(e).__name__)
             return False
 
 

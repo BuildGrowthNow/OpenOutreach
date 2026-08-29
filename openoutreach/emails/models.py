@@ -37,7 +37,7 @@ class MailboxManager:
             query: dict = {"user_id": user_id} if user_id else {}
             return [Mailbox.from_dict(data) for data in collection.find(query)]
         except Exception as e:
-            logger.error(f"Failed to get all mailboxes: {e}")
+            logger.error("Failed to get all mailboxes; exception_type=%s", type(e).__name__)
             return []
 
     def remaining_today(self, user_id: str = "") -> int:
@@ -64,7 +64,7 @@ class MailboxManager:
             query: dict = {"user_id": user_id} if user_id else {}
             return collection.count_documents(query) > 0
         except Exception as e:
-            logger.error(f"Failed to check mailbox existence: {e}")
+            logger.error("Failed to check mailbox existence; exception_type=%s", type(e).__name__)
             return False
 
     def update_or_create(
@@ -106,7 +106,7 @@ class MailboxManager:
                 mailbox.save()
                 return mailbox, True
         except Exception as e:
-            logger.error(f"Failed to update_or_create mailbox: {e}")
+            logger.error("Failed to update_or_create mailbox; exception_type=%s", type(e).__name__)
             raise
 
 
@@ -240,7 +240,7 @@ class Mailbox:
                 return cls.from_dict(data)
             return None
         except Exception as e:
-            logger.error(f"Failed to get mailbox '{mailbox_id}': {e}")
+            logger.error("Failed to get mailbox; exception_type=%s", type(e).__name__)
             return None
 
     @classmethod
@@ -256,7 +256,7 @@ class Mailbox:
                 return cls.from_dict(data)
             return None
         except Exception as e:
-            logger.error(f"Failed to find mailbox by username '{username}': {e}")
+            logger.error("Failed to find mailbox by username; exception_type=%s", type(e).__name__)
             return None
 
     @classmethod
@@ -270,7 +270,7 @@ class Mailbox:
             result = collection.delete_one({"_id": mailbox_id})
             return result.deleted_count > 0
         except Exception as e:
-            logger.error(f"Failed to delete mailbox '{mailbox_id}': {e}")
+            logger.error("Failed to delete mailbox; exception_type=%s", type(e).__name__)
             return False
 
     def __str__(self):
@@ -307,7 +307,7 @@ class Mailbox:
             )
             return count
         except Exception as e:
-            logger.error(f"Failed to count sent emails for mailbox '{self._id}': {e}")
+            logger.error("Failed to count sent emails for mailbox; exception_type=%s", type(e).__name__)
             return 0
 
     def headroom_today(self) -> int:

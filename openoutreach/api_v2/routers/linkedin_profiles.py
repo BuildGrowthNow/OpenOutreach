@@ -11,7 +11,7 @@ from typing import Dict, List, Optional
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status, Body
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from openoutreach.api_v2.dependencies_v2 import get_current_user
 from openoutreach.api_v2.schemas.linkedin import (
@@ -28,8 +28,7 @@ class CookieUploadRequest(BaseModel):
     """Request schema for cookie upload."""
     cookie_data: str | Dict | List
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(json_schema_extra={
             "example": {
                 "cookie_data": {
                     "cookies": [
@@ -46,7 +45,7 @@ class CookieUploadRequest(BaseModel):
                     ]
                 }
             }
-        }
+        })
 
 
 class CookieUploadResponse(BaseModel):
@@ -105,10 +104,10 @@ def encrypt_cookie_data(storage_state: Dict) -> str:
         json_str = json.dumps(storage_state)
         return encrypt_text(json_str)
     except Exception as e:
-        logger.error(f"Failed to encrypt cookie data: {e}")
+        logger.error("Failed to encrypt cookie data; exception_type=%s", type(e).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Encryption failed: {str(e)}"
+            detail="Encryption failed"
         )
 
 
@@ -166,10 +165,10 @@ async def list_linkedin_profiles(
         return ProfileListResponse(profiles=profiles, count=count)
 
     except Exception as e:
-        logger.exception("Failed to list LinkedIn profiles")
+        logger.error("Failed to list LinkedIn profiles; exception_type=%s", type(e).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve profiles: {str(e)}"
+            detail="Failed to retrieve profiles"
         )
 
 
@@ -210,10 +209,10 @@ async def upload_profile_cookies(
                 detail="Profile not found or access denied"
             )
     except Exception as e:
-        logger.error(f"Failed to find profile {profile_id}: {e}")
+        logger.error("Failed to find profile %s; exception_type=%s", profile_id, type(e).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error: {str(e)}"
+            detail="Database error"
         )
 
     # Normalize cookie payload into storage_state dict
@@ -257,15 +256,16 @@ async def upload_profile_cookies(
             # EditThisCookie/Cookie-Editor format sent directly as array
             storage_state = {"cookies": [normalize_cookie(c) for c in cookie_payload]}
     except ValueError as exc:
+        logger.warning("Rejected invalid LinkedIn cookie payload; exception_type=%s", type(exc).__name__)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(exc)
+            detail="Invalid cookie format"
         )
     except Exception as e:
-        logger.error(f"Failed to parse cookie data: {e}")
+        logger.error("Failed to parse cookie data; exception_type=%s", type(e).__name__)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid cookie format: {str(e)}"
+            detail="Invalid cookie format"
         )
 
     if not storage_state:
@@ -307,11 +307,11 @@ async def upload_profile_cookies(
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception("Failed to save cookie data")
+        logger.error("Failed to save cookie data; exception_type=%s", type(e).__name__)
         return CookieUploadResponse(
             success=False,
             message="",
-            error=str(e)
+            error="Unable to save cookie data"
         )
 
 
@@ -383,7 +383,7 @@ async def create_profile(
                 })
                 logger.info(f"Created SmartRateLimitContext for profile {profile._id}")
         except Exception as e:
-            logger.warning(f"Failed to create SmartRateLimitContext: {e}")
+            logger.warning("Failed to create SmartRateLimitContext; exception_type=%s", type(e).__name__)
 
         return LinkedInProfileResponse(
             id=profile._id,
@@ -400,10 +400,10 @@ async def create_profile(
         )
 
     except Exception as e:
-        logger.exception("Failed to create LinkedIn profile")
+        logger.error("Failed to create LinkedIn profile; exception_type=%s", type(e).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create profile: {str(e)}"
+            detail="Failed to create profile"
         )
 
 
@@ -498,7 +498,7 @@ async def get_profile_health(
                                     details.get("reason")
                                 )
                         except Exception as e:
-                            logger.error(f"Failed to get error logs: {e}")
+                            logger.error("Failed to get error logs; exception_type=%s", type(e).__name__)
                             last_error = None
 
             # Determine overall health status
@@ -545,10 +545,10 @@ async def get_profile_health(
         }
 
     except Exception as e:
-        logger.exception("Failed to get profile health")
+        logger.error("Failed to get profile health; exception_type=%s", type(e).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve profile health: {str(e)}"
+            detail="Failed to retrieve profile health"
         )
 
 
@@ -618,10 +618,10 @@ async def get_daemon_status(user_id: str = Depends(get_current_user)):
         }
 
     except Exception as e:
-        logger.exception("Failed to get daemon status")
+        logger.error("Failed to get daemon status; exception_type=%s", type(e).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve daemon status: {str(e)}"
+            detail="Failed to retrieve daemon status"
         )
 
 
@@ -668,10 +668,10 @@ async def get_profile(
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception("Failed to get LinkedIn profile")
+        logger.error("Failed to get LinkedIn profile; exception_type=%s", type(e).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve profile: {str(e)}"
+            detail="Failed to retrieve profile"
         )
 
 
@@ -766,10 +766,10 @@ async def update_profile(
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception("Failed to update LinkedIn profile")
+        logger.error("Failed to update LinkedIn profile; exception_type=%s", type(e).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to update profile: {str(e)}"
+            detail="Failed to update profile"
         )
 
 
@@ -841,10 +841,11 @@ async def test_proxy(
                         "error": f"HTTP {response.status_code}",
                     }
         except httpx.ProxyError as e:
+            logger.warning("LinkedIn proxy test failed; exception_type=%s", type(e).__name__)
             return {
                 "success": False,
                 "message": "Proxy connection failed",
-                "error": str(e),
+                "error": "Proxy connection failed",
             }
         except httpx.TimeoutException:
             return {
@@ -853,19 +854,20 @@ async def test_proxy(
                 "error": "Request timed out after 10 seconds",
             }
         except Exception as e:
+            logger.error("LinkedIn proxy test failed; exception_type=%s", type(e).__name__)
             return {
                 "success": False,
                 "message": "Proxy test failed",
-                "error": str(e),
+                "error": "Proxy test failed",
             }
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception("Failed to test proxy")
+        logger.error("Failed to test proxy; exception_type=%s", type(e).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to test proxy: {str(e)}"
+            detail="Failed to test proxy"
         )
 
 
@@ -910,10 +912,10 @@ async def get_proxy_config(
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception("Failed to get proxy config")
+        logger.error("Failed to get proxy config; exception_type=%s", type(e).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve proxy config: {str(e)}"
+            detail="Failed to retrieve proxy config"
         )
 
 
@@ -966,7 +968,7 @@ async def delete_profile(
                 rate_ctx_collection.delete_one({"linkedin_profile_id": profile_id})
                 logger.info(f"Deleted SmartRateLimitContext for profile {profile_id}")
         except Exception as e:
-            logger.warning(f"Failed to delete SmartRateLimitContext: {e}")
+            logger.warning("Failed to delete SmartRateLimitContext; exception_type=%s", type(e).__name__)
 
         # Delete profile
         result = profiles_collection.delete_one({"_id": profile_id, "user_id": user_id})
@@ -982,8 +984,8 @@ async def delete_profile(
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception("Failed to delete LinkedIn profile")
+        logger.error("Failed to delete LinkedIn profile; exception_type=%s", type(e).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to delete profile: {str(e)}"
+            detail="Failed to delete profile"
         )

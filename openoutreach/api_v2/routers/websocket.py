@@ -59,7 +59,7 @@ class ConnectionManager:
             try:
                 await ws.send_json(data)
             except Exception as e:
-                logger.warning(f"Failed to send to user {user_id}: {e}")
+                logger.warning("Failed to send to user; user_id=%s exception_type=%s", user_id, type(e).__name__)
                 dead.add(ws)
         connections -= dead
 
@@ -71,7 +71,7 @@ class ConnectionManager:
             try:
                 await ws.send_json(data)
             except Exception as e:
-                logger.warning(f"Failed to send to campaign {campaign_id}: {e}")
+                logger.warning("Failed to send to campaign; campaign_id=%s exception_type=%s", campaign_id, type(e).__name__)
                 dead.add(ws)
         connections -= dead
 
@@ -104,7 +104,7 @@ async def _ws_authenticate(websocket: WebSocket) -> Optional[str]:
         creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials=first["token"])
         return await get_current_user(creds)
     except Exception as e:
-        logger.warning(f"WebSocket auth failed: {e}")
+        logger.warning("WebSocket auth failed; exception_type=%s", type(e).__name__)
         await websocket.close(code=4001)
         return None
 
@@ -145,7 +145,7 @@ async def notification_websocket(websocket: WebSocket):
     except WebSocketDisconnect:
         await manager.disconnect_user(websocket, user_id)
     except Exception as e:
-        logger.error(f"WebSocket error for user {user_id}: {e}")
+        logger.error("WebSocket error for user; user_id=%s exception_type=%s", user_id, type(e).__name__)
         await manager.disconnect_user(websocket, user_id)
 
 
@@ -177,7 +177,7 @@ async def campaign_status_websocket(websocket: WebSocket, campaign_id: str):
     except WebSocketDisconnect:
         await manager.disconnect_campaign(websocket, campaign_id)
     except Exception as e:
-        logger.error(f"WebSocket error for campaign {campaign_id}: {e}")
+        logger.error("WebSocket error for campaign; campaign_id=%s exception_type=%s", campaign_id, type(e).__name__)
         await manager.disconnect_campaign(websocket, campaign_id)
 
 

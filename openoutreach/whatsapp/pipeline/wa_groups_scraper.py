@@ -219,7 +219,7 @@ def _ddg_search_and_collect(
                     "wa_groups: DDG page 2 added %d phones for %r", len(extra_phones), query
                 )
         except Exception as exc:
-            logger.debug("wa_groups: DDG page 2 failed for %r: %s", query, exc)
+            logger.debug("wa_groups: DDG page 2 failed for %r: %s", query, type(exc).__name__)
 
     return phones[:_MAX_SEARCH_RESULTS], urls
 
@@ -306,7 +306,7 @@ def _visit_site_in_isolation(
             finally:
                 browser.close()
     except Exception as exc:
-        logger.debug("wa_groups: isolated visit failed for %s: %s", site_url, exc)
+        logger.debug("wa_groups: isolated visit failed: %s", type(exc).__name__)
         return []
 
 
@@ -388,7 +388,7 @@ def _scrape_wa_links(page, query: str, country_code: str) -> List[BusinessListin
                         elif phone in direct_phones and not phone_name.get(phone) and page_name:
                             phone_name[phone] = page_name
                 except Exception as exc:
-                    logger.debug("wa_groups: detail visit %s failed: %s", site_url, exc)
+                    logger.debug("wa_groups: detail visit failed: %s", type(exc).__name__)
 
     all_phones = list(phone_name.keys())
     logger.info("wa_groups: %d total unique phones for %r", len(all_phones), query)
@@ -438,7 +438,7 @@ def create_leads_from_wa_links(
     try:
         all_listings = _scrape_retry(_run_ddg_search, max_attempts=2, base_delay=4.0, label="wa_groups:ddg")
     except Exception as exc:
-        logger.error("wa_groups: scrape failed after retries: %s", exc)
+        logger.error("wa_groups: scrape failed after retries: %s", type(exc).__name__)
         return 0
 
     if not all_listings:
@@ -459,7 +459,7 @@ def create_leads_from_wa_links(
                 ) if d.get("phone")
             )
     except Exception as exc:
-        logger.warning("wa_groups: dedup pre-fetch failed: %s", exc)
+        logger.warning("wa_groups: dedup pre-fetch failed: %s", type(exc).__name__)
 
     if already_known:
         before = len(all_listings)

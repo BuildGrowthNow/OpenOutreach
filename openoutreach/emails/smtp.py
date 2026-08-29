@@ -37,8 +37,9 @@ def verify_auth(host: str, port: int, username: str, password: str) -> tuple[boo
             else ""
         )
         return False, f"auth rejected ({e.smtp_code}){hint}"
-    except (smtplib.SMTPException, OSError) as e:
-        return False, f"connection failed: {e}"
+    except (smtplib.SMTPException, OSError):
+        # Provider exception strings can echo connection details or credentials.
+        return False, "connection failed"
 
 
 def verify_imap_auth(host: str, port: int, username: str, password: str) -> tuple[bool, str]:
@@ -49,5 +50,5 @@ def verify_imap_auth(host: str, port: int, username: str, password: str) -> tupl
             if status != "OK":
                 return False, "IMAP authentication rejected"
         return True, "ok"
-    except (imaplib.IMAP4.error, OSError) as e:
-        return False, f"IMAP connection/authentication failed: {e}"
+    except (imaplib.IMAP4.error, OSError):
+        return False, "IMAP connection/authentication failed"

@@ -814,3 +814,365 @@ Adopt the fully API-based daemon with a dedicated daemon gateway boundary, asymm
   changes, customer reauthentication, external penetration testing, and
   operator approval for enabling task claiming remain external gates; the
   code keeps those capabilities disabled by default.
+
+#### Local verification evidence (2026-08-29)
+
+- [x] An earlier Windows rebuild produced a 119,032,848-byte executable with
+  SHA-256 `9957296b5e8ed18e6e6599536efbf8e83b645de84ec9538d702cfb19456ba3c3`;
+  that evidence is superseded by the later current-source artifact recorded
+  below. The pre-existing root `dist/Lengrowth.exe` remains stale and must not
+  be used as release evidence.
+- [x] Focused v2/desktop security tests passed 49 tests; the broader
+  API-v2/desktop regression set passed 74 tests; migration/verifier/artifact
+  checks passed 5 tests; Pyright reported zero errors/warnings; compileall,
+  Ruff on production source, and `git diff --check` passed.
+- [x] The repository-wide pytest command now passes after making the
+  environment-dependent auth and browser fixtures explicit: `385 passed, 56
+  skipped, 34 warnings`. MongoDB-backed auth tests skip when no integration
+  database is available; browser snapshot tests skip before starting
+  Playwright when no HTML snapshots exist, preventing event-loop
+  contamination. The fail-closed signup limiter has a direct outage test.
+- [x] Read-only production smoke checks on 2026-08-29 returned bootstrap
+  `410`, v2 compatibility `200`, legacy config `426`, and `200` for both
+  stable Windows/macOS download URLs. The checked LinkedIn API `/health`
+  path returned `404`; provider deployment health remains unverified.
+- [ ] A fresh read-only check of the canonical API host
+  `https://outreach-api.lengrowth.com/api/health` returned `200` and reported
+  deployed API version `2.1.0`, but the response lacks the audited `build`
+  identity and required `Cache-Control: no-store` header. The deployed API
+  therefore cannot yet be proven to match current source `2.1.2`;
+  `/api/daemon/v2/compatibility` remains secure with task claiming disabled,
+  while authenticated v2 routes correctly reject unauthenticated requests.
+- [x] A read-only check of the canonical frontend `https://outreach.lengrowth.com`
+  returned HTTP 200 with 95,366 bytes on 2026-08-29; this does not establish
+  frontend/API version parity.
+- [ ] `scripts/verify_production_ready.py --cloud-url
+  https://outreach-api.lengrowth.com --frontend-url
+  https://outreach.lengrowth.com --expected-cloud-version 2.1.2
+  --expected-cloud-commit 8c889e654bfb9227c588bb8ab54a3b8d56da04f5` confirms
+  the same blocker: local deployment prerequisites are absent and the cloud
+  OpenAPI smoke request returns HTTP `404`.
+- [x] `scripts/verify_production_ready.py` now invokes subprocess checks with
+  the active interpreter, avoiding false results from a different system
+  Python installation; it still fails closed when deployment prerequisites are
+  absent.
+- [x] The read-only cloud verifier now fails fast on stale health headers and
+  requires non-empty build identity plus the secure daemon compatibility
+  contract (`device-auth` and `typed-events`) before accepting a deployment;
+  verifier, release, and deployment workflow regressions pass (`10 passed`).
+- [x] The production verifier now supports an explicit `--frontend-url`
+  read-only smoke check requiring HTTP 200 and non-empty content, so API and
+  public frontend deployment evidence can be collected together; it now fails
+  closed if `--cloud-url` is supplied without `--frontend-url`.
+- [x] Python and Worker email-tracking token verification now applies bounded
+  payload/type/event validation before accepting signed tokens, while retaining
+  legacy no-expiry compatibility; email/security tests pass (`25 passed`) and
+  the Worker typecheck passes.
+- [x] Health observability now returns measured MongoDB probe latency and
+  health-request latency; the analytics contract and integration assertion
+  cover both fields.
+- [x] The email-tracking webhook now bounds event timestamps at the API schema
+  boundary, preventing platform-dependent `datetime` overflow/retry loops;
+  focused email/daemon/channel tests pass (`54 passed`).
+- [x] Offline completion spooling rejects secret-like fields and results over
+  64 KiB before local persistence; focused daemon boundary tests pass and
+  Pyright reports zero errors or warnings.
+- [x] Secure daemon execution treats a provider-reported `duplicate` as an
+  idempotent successful reconciliation and completes the lease with its stable
+  effect key; secure daemon regression coverage passes.
+- [x] Offline completion spool files are restricted to owner-only mode on POSIX
+  desktops (Windows user-profile ACLs remain authoritative); the permission
+  regression test passes.
+- [x] Reloaded offline completions are rechecked against the same size and
+  secret-field policy as newly queued results, preventing a tampered local
+  spool from bypassing the desktop boundary; the tamper regression passes.
+- [x] Offline flush now removes terminal server rejections (`404`, `409`,
+  `410`, `422`) so an expired or invalid completion cannot starve later queued
+  results; transient failures remain queued for retry and the regression test
+  passes.
+- [x] LinkedIn credential/profile error responses and credential verification
+  audit records no longer expose raw provider, cookie, proxy, or database
+  exception text; focused redaction tests pass (`2 passed`) and the full suite
+  remains green.
+- [x] SMTP/IMAP mailbox-auth failures now return fixed messages instead of
+  provider exception text that could echo connection details or credentials;
+  injected secret-bearing failure tests pass (`2 passed`).
+- [x] The shared secure-v2 authentication dependency now returns a fixed
+  authentication error for unexpected failures rather than echoing exception
+  text; the secret-bearing failure regression passes.
+- [x] Campaign API error responses now use stable generic messages instead of
+  returning raw database/provider exception text; the campaign redaction
+  regression passes.
+- [x] Account-deletion cancellation validation now returns a fixed client
+  message instead of raw exception text; the API-v2 scan finds no remaining
+  direct raw-exception response patterns.
+- [x] The desktop entrypoint is regression-locked to
+  `SecureRemoteDaemon`; legacy remote daemons, direct MongoDB modules, and
+  server-side credential graphs remain excluded from the packaged client.
+- [x] Desktop authenticated dashboard and protocol callback URLs are no longer
+  written to logs; the callback and package-boundary regression suite passes
+  and Pyright reports zero errors.
+- [x] The desktop login flow no longer falls back to putting access tokens in
+  custom-protocol URLs when the in-process bridge is unavailable; it waits for
+  the bridge instead. The package-boundary regression suite covers the
+  forbidden fallback and the frontend build/lint remain green.
+- [x] Admin impersonation no longer places short-lived JWTs in query strings;
+  it uses an origin-checked in-memory `postMessage` handoff to the dedicated
+  `/impersonate` page, which validates the token through `/api/auth/me/` without
+  persisting it. Frontend build and focused security tests pass.
+- [x] All admin API routes now declare the admin dependency at the route level;
+  an AST regression test prevents future write/read routes from omitting the
+  explicit authorization boundary. Admin failure logs no longer interpolate
+  raw exception text.
+- [x] MongoDB/LinkedIn model compatibility imports are lazy, eliminating an
+  import-order circularity that previously made profile activation tests fail
+  when LinkedIn models loaded first. Full pytest now passes `399 passed, 56
+  skipped, 34 warnings`.
+- [x] API-facing auth, billing, analytics, websocket, notification, daemon,
+  admin, startup, lifecycle, email, webhook, desktop, MongoDB connection,
+  crypto, DAO, index-management, enrichment, and scraper failure logs now
+  record exception types rather than raw provider/database exception text; the
+  source-wide AST redaction gate passes and no raw-exception logger patterns
+  remain under `openoutreach`. A permanent AST regression test now enforces
+  this boundary.
+- [x] Central `RedactingFormatter` protection now scrubs emails, phone-like
+  numbers, bearer credentials, and URL query/fragment data from configured
+  CLI and desktop log handlers; focused logging regression tests pass (`5
+  passed`).
+- [x] Production Compose now defaults `ENABLE_VNC=false`; passwordless
+  x11vnc is therefore opt-in only, with a regression test guarding the safe
+  default (`tests/test_compose_production_safety.py`). The optional VNC ports
+  are also bound to loopback (`127.0.0.1`) rather than publicly exposed.
+- [x] Offline secure-daemon completions now use a bounded atomic local spool
+  that survives restart, rejects overflow without dropping older results, and
+  stores only task metadata plus adapter results; focused daemon/channel tests
+  pass (`38 passed`).
+- [x] Generic health no longer claims LinkedIn is operational without a
+  provider probe; it reports `unknown` and directs provider status to the
+  authenticated profile-health path.
+- [x] The Cloudflare email-tracking worker now has a reproducible local check:
+  Wrangler-generated runtime types are current, `tsc --noEmit` passes, and
+  `wrangler deploy --dry-run` packages the worker with both configured KV
+  bindings. No deployment or worker secret mutation was performed.
+- [x] Email click-tracking destinations are now validated as bounded HTTP(S)
+  URLs without embedded credentials in both the Python token generator and
+  the Worker redirect handler; unsafe schemes fail closed with local tests.
+- [x] Newly issued email tracking tokens now carry a 90-day `iat`/`exp`
+  window, and both verifiers reject expired claims. Legacy tokens without an
+  expiry claim remain accepted only for the coordinated rollout period; old
+  token invalidation still requires an authorized Worker/backend deployment.
+- [x] Worker webhook delivery now bounds each request to five seconds and
+  retries only throttling or transient server/network failures; permanent
+  client/authentication failures stop without futile retries.
+- [x] The backend tracking webhook now validates event names against the
+  supported `open`/`click`/`unsub` union and bounds deal/campaign identifiers;
+  the email test suite covers the accepted and rejected shapes.
+- [x] Secure desktop v2 failure reports now carry the task idempotency key on
+  both adapter-outcome and exception paths, allowing the backend failure
+  replay predicate to work; daemon security/client regression tests pass.
+- [x] The v2 backend `FailRequest` now requires a 16–128 character
+  idempotency key, preventing alternate clients from bypassing failure replay
+  protection; server/client daemon regression tests pass.
+- [x] Email tracking webhooks now return `503` when MongoDB persistence is
+  unavailable instead of acknowledging and losing the event; the Worker
+  retry policy can therefore recover transient database outages.
+- [x] LinkedIn now exposes an explicit typed `observe` task in the v2 claim
+  allowlist and local adapter. It returns a bounded connection observation,
+  shares the same server-materialized target validation as pending checks,
+  and is covered by adapter and daemon contract tests.
+- [x] Email reply-scan execution now returns a deterministic effect key and a
+  typed `EmailReceipt` with `replied` outcome, alongside bounded replies and
+  cursor state; the desktop adapter contract test covers the receipt.
+- [x] Tenant ownership backfill now resolves LinkedIn, WhatsApp, and mailbox
+  bindings before assigning ownership; the migration acceptance suite covers
+  both non-destructive dry-run behavior and channel-specific bindings.
+- [x] Encryption migration context derivation now uses the channel-appropriate
+  profile binding (LinkedIn, WhatsApp, or mailbox) and rejects records without
+  a tenant binding; migration acceptance tests cover both channel mappings.
+- [x] Daemon configuration responses now bound profile IDs and capability-list
+  size and reject undeclared fields; the security suite covers strict and
+  oversize configuration payloads.
+- [x] LinkedIn configuration capability advertisements now include the typed
+  `observe` task whenever the LinkedIn v2 capability is enabled; an endpoint
+  regression test verifies the serialized response.
+- [x] Task completion now validates channel-specific typed receipts and effect
+  identity server-side; only LinkedIn observation and WhatsApp sync tasks may
+  complete with their corresponding typed observation payloads instead.
+  Security and desktop boundary tests cover the rejection path.
+- [x] Task failure reports now require the same server-derived effect key as
+  completion, preventing a client from recording an unrelated failure identity
+  or bypassing failure replay reconciliation.
+- [x] A separate Python 3.12.10 release environment was created from the
+  declared production, desktop, and local-test manifests. It reports no
+  broken requirements (`pip check`) and no known vulnerabilities
+  (`pip-audit`). The existing project virtualenv remains intentionally
+  untouched; its unrelated orphaned packages are not release evidence.
+- [x] The daemon index definition and read-only verifier now cover the
+  tenant/channel/schedule claim paths for LinkedIn, WhatsApp, mailbox, and
+  historical email-profile task bindings; local index-contract tests pass.
+- [x] Claim requests now bound profile IDs and each client-supplied task type
+  string, preventing oversized query inputs at the daemon boundary; security
+  tests cover empty and overlong values.
+- [x] Typed daemon event payloads now apply the secret-field denylist and
+  secret-like value checks in addition to the 32 KiB bound; security tests
+  cover nested cookie/token rejection.
+- [x] Redacted structured security events now cover daemon token/claims/device/
+  proof rejection, nonce replay, lease rejection, duplicate effects, and
+  provider challenges; the focused daemon security/auth suite remains green
+  (`29 passed`).
+- [x] Windows release documentation, protocol examples, AppData paths, and
+  updater asset naming now use the current `Lengrowth` branding and
+  `lengrowth://` scheme while retaining legacy asset-name compatibility in
+  update discovery; updater/component tests pass (`16 passed`).
+- [x] Frontend production build and lint completed successfully with Next.js
+  16.3.3; the explicit Turbopack root removes the multiple-lockfile warning,
+  and local SBOM generation completed as CycloneDX 1.5 with 239 unique
+  components.
+- [x] Desktop updater now fails closed without a valid GitHub SHA-256 digest,
+  promotes verified downloads atomically, removes mismatched partial files, and
+  preserves the previous executable for copy-failure recovery; updater tests
+  cover acceptance and rejection (`11 passed`).
+- [x] Rebuilt the Windows artifact from the current worktree in the clean
+  Python 3.12.10 environment using PyInstaller 6.22.2; the packaged
+  executable launched for a bounded five seconds and was then stopped, and
+  the rebuilt artifact scan found no forbidden markers.
+- [x] Current clean-environment packaged artifact evidence:
+  `desktop/dist/Lengrowth.exe`, `94843894` bytes, SHA-256
+  `3fa338cd6898b78d52716d8954de35d69c8f4bafb25897627bd6bd28a15af761`;
+  clean-environment full pytest passes `385 passed, 56 skipped, 34
+  warnings`, and the artifact launch smoke passed.
+- [x] Superseding current-worktree rebuild completed with the repository
+  virtualenv (Python 3.11.9, PyInstaller 6.21.0) after the latest security
+  changes. Artifact inspection found no forbidden markers; bounded launch
+  stayed alive for five seconds. Current artifact:
+  `desktop/dist/Lengrowth.exe`, `119071241` bytes, SHA-256
+  `5eb6e448f1aea45dfb5f60ef51a2b19dfba3b48c4b20b461c932ba26b0b66e82`.
+- [x] CI supply-chain coverage now audits the declared base, API, production,
+  and desktop Python manifests and separately runs locked Worker installation,
+  type checking, and high-severity npm audit; the frontend CI job now also
+  installs from the lockfile, audits production dependencies, lints, and
+  builds. After upgrading Next.js/eslint-config-next to 16.3.3 and next-auth
+  to 4.24.15, clean `npm ci` and both declared/runtime audits report zero
+  vulnerabilities; frontend lint passes with zero warnings/errors and the
+  production build passes.
+- [x] Added a dependency-free high-confidence tracked-file secret scanner that
+  reports only rule/path metadata, with synthetic detection and placeholder
+  tests; CI now runs it before dependency audits. Local scan passed over 670
+  tracked paths with no high-confidence findings.
+- [x] The existing local virtualenv still contains unrelated orphaned
+  packages (`djangorestframework-stubs` and `types-channels` requiring absent
+  `django-stubs`), but a separate clean release environment now passes the
+  complete test and dependency checks. The declared manifests remain
+  Django-free.
+- [x] A no-install resolver check across `requirements/production.txt`,
+  `requirements/api.txt`, and `desktop/requirements.txt` completed with a
+  consistent dependency solution; the remaining `pip check` failure is
+  isolated to pre-existing packages outside those manifests.
+- [x] Desktop package-boundary regression tests verify MongoDB/server modules
+  are excluded from PyInstaller hidden imports and absent from desktop
+  requirements; the generated PyInstaller warning and cross-reference files
+  contain no forbidden module references.
+- [x] Desktop release workflow now requires an explicit manual
+  `workflow_dispatch` boolean before publishing to the release repository or
+  R2, and missing Windows installers fail both the build artifact and release
+  stages instead of allowing a partial release; static workflow-safety tests
+  pass.
+- [x] Production-readiness verification now scans Django imports natively and
+  invokes package/smoke checks through the active Python interpreter, avoiding
+  Windows shell-tool and interpreter-path ambiguity; verifier regression tests
+  pass and the verifier still fails closed on missing deployment prerequisites.
+- [x] Security CI now runs the deterministic API-v2, desktop, email, migration,
+  verifier, release-workflow, and secret-scanner regression suites through the
+  active Python interpreter; only the explicitly MongoDB-dependent legacy auth
+  module is excluded pending a database-backed CI service. The current local
+  equivalent passes `125 tests` including the focused health contract.
+- [x] Desktop packaging now propagates MSIX, NSIS, DMG, signing, and
+  notarization failures instead of reporting a successful build after a failed
+  requested operation; Windows CI builds and uploads the documented MSIX
+  artifact and release inspection includes it. Unsupported signing requests
+  also fail closed; Windows signature verification now fails closed on a bad
+  result and uses an HTTPS timestamp endpoint.
+- [x] Approved desktop publishes now require Windows EXE/installer/MSIX signing
+  and macOS app signing plus notarization before release artifacts are uploaded;
+  the Windows signing script fails closed and removes temporary certificate
+  material.
+- [x] Local release-tooling gate was verified on 2026-08-29: NSIS 3.12 was
+  installed with `winget`, and `desktop/build.py --no-build --installer`
+  produced `desktop/dist/Lengrowth-2.1.2-Setup.exe` successfully. The
+  installer is 117910010 bytes with SHA-256
+  `6a6495b5c5fb9f2929bb9ccd2bcf46a92450056a0177b74c9500fa40ce7273ab`.
+  The EXE and installer remain unsigned. Focused release, fail-closed
+  packaging, and artifact-inspection tests pass (`11 passed`).
+- [x] Windows SDK 10.0.18362 was installed locally with `winget`, and
+  `desktop/build.py --no-build --msix` successfully packed
+  `desktop/dist/Lengrowth-2.1.2.msix` (117961830 bytes, SHA-256
+  `75a3d9dfd8d820ba4a038cbcb9bc1af22256f213db27c9c9cc76a14841d0f4b9`).
+  The package is unsigned; `signtool.exe` is now available, but signing still
+  fails closed until the release certificate is supplied.
+- [x] The local Windows signer now resolves `signtool.exe` from either PATH or
+  installed Windows SDK locations, matching the approved CI signer; its
+  missing-certificate preflight remains fail-closed and signer regression
+  tests pass (`5 passed`).
+- [x] The generated MSIX was unpacked with `makeappx` into a disposable local
+  verification directory; extraction succeeded with the `2.1.2.0` manifest,
+  `Lengrowth.exe`, and all three declared logo assets present. The package was
+  not installed or submitted.
+- [x] Desktop logging contract is now regression-tested: on Windows the log
+  path is `%LOCALAPPDATA%\\Lengrowth\\daemon.log`, using a 5 MiB rotating
+  file with three backups; logging/updater tests pass (`13 passed`).
+- [x] Installer smoke verification completed in a disposable per-user target:
+  silent install exit `0` created the EXE/uninstaller and correct HKCU
+  `lengrowth://` registration; silent uninstall exit `0` removed the target,
+  protocol key, and uninstall entry. A historical local log still contains a
+  callback token from an older build and requires authorized security
+  remediation; current source logging now redacts callback query strings and
+  raw profile-resolution exceptions, with redaction tests passing (`16
+  passed`).
+- [x] Added the read-only `scripts/audit_desktop_log.py --path <log>` operator
+  audit. Against the existing local log it reports only aggregate metadata:
+  23,180 lines, 2 callback-token lines, and 38 sensitive-marker lines; it
+  prints no log content and exits non-zero when callback tokens are detected.
+  Its regression tests now run in the CI security workflow alongside the
+  source-wide logging-redaction gate.
+- [x] Current-worktree supply-chain evidence was refreshed on 2026-08-29:
+  strict `pip-audit` over all declared Python manifests and production-only
+  npm audits for the frontend and email-tracking Worker report zero known
+  vulnerabilities. `scripts/generate_sbom.py` produced CycloneDX 1.5
+  `SBOM.cyclonedx.json` with 202 library components (SHA-256
+  `59253d88c72714d98119ea0739d89d612ae9fed337cf1dc38c09c197c9eefc6f`).
+- [x] The current read-only verifier run against
+  `https://outreach-api.lengrowth.com` passes local imports/smoke checks and
+  the public frontend check, but fails closed on missing deployment-managed
+  secrets and the deployed API's empty `/api/health` `Cache-Control` header;
+  Docker is unavailable on the verification host and WSL 2 has no installed
+  distribution for compose validation.
+- [x] Frontend internal navigation now uses the Next router instead of direct
+  `window.location.href` assignments. Current `npm run lint` completes with
+  zero warnings/errors, and `npm run build` completes successfully with
+  TypeScript checking and route generation passing.
+- [x] Release-boundary inspection was rerun for all current Windows outputs,
+  not only the executable: EXE, NSIS setup EXE, and MSIX each contain no
+  forbidden database/secret markers and their SHA-256 digests match the
+  recorded artifact manifest. Authenticode reports `NotSigned` for all three
+  until the release certificate is supplied.
+- [x] A full current-worktree Pyright pass over `openoutreach` and `scripts`
+  now reports `0 errors, 0 warnings, 0 informations`; the auth registration
+  logging type mismatch and log-audit counter narrowing errors were corrected.
+  The affected auth/log-audit tests pass (`2 passed, 7 skipped`).
+- [x] The complete current-worktree suite now passes `401 passed, 56 skipped`
+  with no warnings. The production verifier regression suite passes (`5
+  passed`) and now requires independent application, JWT-signing, and cookie
+  encryption secrets rather than accepting the global-secret fallbacks.
+- [x] Direct Windows signing preflights also fail closed on this host: the
+  approved release signer rejects missing `WINDOWS_SIGNING_CERT_BASE64`, and
+  the local signer rejects missing `SIGN_CERT_PATH`, both with exit code 1;
+  no signing or artifact mutation was performed.
+- [x] GitHub Actions workflows now declare repository contents as read-only by
+  default; regression tests cover the permission boundary.
+- [x] Public health responses now set `Cache-Control: no-store`, preventing
+  intermediaries from serving stale database/service state; the integration
+  health contract covers the header.
+- [x] Health database probes use a bounded 5-second timeout without changing
+  the normal 30-second application connection default, preventing an
+  unavailable database from monopolizing an async health worker; delegation
+  coverage passes locally.

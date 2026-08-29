@@ -9,14 +9,135 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import json
 import logging
+import os
 from collections import deque
+from pathlib import Path
+import sys
 from typing import Awaitable, Callable, Optional
 
 from openoutreach.desktop.remote_client import DesktopRemoteClient
 from openoutreach.desktop.device_identity import DeviceIdentity
 
 logger = logging.getLogger(__name__)
+
+_OFFLINE_COMPLETION_LIMIT = 100
+_OFFLINE_COMPLETION_MAX_BYTES = 64 * 1024
+_SECRET_FIELD_MARKERS = {
+    "password", "secret", "token", "cookie", "authorization", "private_key",
+    "refresh_token", "access_token", "api_key", "credential",
+}
+
+
+class OfflineCompletionStore:
+    """Small atomic local spool for results accepted during API outages.
+
+    The spool contains only task metadata and adapter-produced bounded
+    results. Credentials and broad campaign data are never written here.
+    """
+
+    def __init__(self, path: Path | None = None) -> None:
+        self.path = path or self._default_path()
+        self.items: deque[tuple[str, str, str, dict]] = deque(
+            self._load(), maxlen=_OFFLINE_COMPLETION_LIMIT
+        )
+
+    @staticmethod
+    def _default_path() -> Path:
+        if sys.platform == "win32":
+            base = Path.home() / "AppData" / "Local" / "Lengrowth"
+        elif sys.platform == "darwin":
+            base = Path.home() / "Library" / "Application Support" / "Lengrowth"
+        else:
+            base = Path.home() / ".lengrowth"
+        return base / "offline_completions.json"
+
+    def _load(self) -> list[tuple[str, str, str, dict]]:
+        try:
+            raw = json.loads(self.path.read_text(encoding="utf-8"))
+            if not isinstance(raw, list):
+                return []
+            loaded = []
+            for item in raw[-_OFFLINE_COMPLETION_LIMIT:]:
+                if (
+                    not isinstance(item, list)
+                    or len(item) != 4
+                    or not isinstance(item[3], dict)
+                    or not self._safe_result(item[3])
+                ):
+                    continue
+                loaded.append((str(item[0]), str(item[1]), str(item[2]), item[3]))
+            return loaded
+        except (FileNotFoundError, json.JSONDecodeError, OSError):
+            return []
+
+    def _persist(self) -> None:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = self.path.with_name(f".{self.path.name}.tmp")
+        payload = [list(item) for item in self.items]
+        temporary.write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
+        temporary.replace(self.path)
+        # On POSIX desktops keep the spool readable only by the current user.
+        # Windows user-profile ACLs remain authoritative there.
+        if os.name != "nt":
+            try:
+                os.chmod(self.path, 0o600)
+            except OSError:
+                logger.warning("Unable to restrict offline completion spool permissions")
+
+    def append(self, item: tuple[str, str, str, dict]) -> bool:
+        if len(self.items) >= _OFFLINE_COMPLETION_LIMIT:
+            logger.critical("Offline completion spool is full; preserving queued results")
+            return False
+        if not self._safe_result(item[3]):
+            logger.error("Rejecting unserializable offline completion payload")
+            return False
+        self.items.append(item)
+        try:
+            self._persist()
+        except (TypeError, ValueError, OSError):
+            self.items.pop()
+            logger.exception("Unable to persist offline completion")
+            return False
+        return True
+
+    @classmethod
+    def _safe_result(cls, result: dict) -> bool:
+        try:
+            encoded = json.dumps(result, separators=(",", ":"), ensure_ascii=False)
+        except (TypeError, ValueError):
+            return False
+        return (
+            len(encoded.encode("utf-8")) <= _OFFLINE_COMPLETION_MAX_BYTES
+            and not cls._contains_secret_field(result)
+        )
+
+    @classmethod
+    def _contains_secret_field(cls, value: object) -> bool:
+        if isinstance(value, dict):
+            for key, nested in value.items():
+                normalized = str(key).casefold().replace("-", "_")
+                if any(marker in normalized for marker in _SECRET_FIELD_MARKERS):
+                    return True
+                if cls._contains_secret_field(nested):
+                    return True
+        elif isinstance(value, (list, tuple)):
+            return any(cls._contains_secret_field(item) for item in value)
+        return False
+
+    def peek(self) -> tuple[str, str, str, dict] | None:
+        return self.items[0] if self.items else None
+
+    def popleft(self) -> tuple[str, str, str, dict]:
+        item = self.items.popleft()
+        try:
+            self._persist()
+        except OSError:
+            # Keep the in-memory removal; a successful server acknowledgement
+            # must not be retried forever after a local cleanup failure.
+            logger.exception("Unable to persist offline completion cleanup")
+        return item
 
 
 class SecureDaemonError(Exception):
@@ -80,7 +201,7 @@ class SecureRemoteDaemon:
         self.on_credentials_rotated = on_credentials_rotated
         self.running = False
         self._stop = asyncio.Event()
-        self._offline_completions: deque[tuple[str, str, str, dict]] = deque(maxlen=100)
+        self._offline_completions = OfflineCompletionStore()
 
     async def start(self) -> None:
         compatibility = await self.client.get_compatibility()
@@ -162,24 +283,31 @@ class SecureRemoteDaemon:
                 raise SecureDaemonError("Channel adapter returned an invalid receipt")
             await self._publish_typed_event(task, result)
             outcome = str(result.get("outcome", "")).lower()
-            if outcome in {"applied", "already_applied", "observed"}:
+            # A provider-reported duplicate is a successful reconciliation:
+            # the effect already exists, so complete the leased task with
+            # its stable idempotency key instead of marking it permanently
+            # failed and risking a later re-execution.
+            if outcome in {"applied", "already_applied", "observed", "duplicate"}:
                 completion = (task["task_id"], task["lease_id"], task.get("idempotency_key", task["lease_id"]), result)
                 try:
                     await self.client.complete_task_v2(*completion)
                 except Exception:
-                    if len(self._offline_completions) == self._offline_completions.maxlen:
-                        self._offline_completions.popleft()
                     self._offline_completions.append(completion)
             else:
                 category = self._failure_category(outcome)
                 await self.client.fail_task_v2(
-                    task["task_id"], task["lease_id"], category,
+                    task["task_id"], task["lease_id"],
+                    task.get("idempotency_key", task["lease_id"]), category,
                     f"local adapter outcome: {outcome or 'rejected'}",
                 )
         except Exception as exc:
             logger.warning("Secure daemon task failed: %s", type(exc).__name__)
             try:
-                await self.client.fail_task_v2(task["task_id"], task["lease_id"], "retryable", "local execution failed")
+                await self.client.fail_task_v2(
+                    task["task_id"], task["lease_id"],
+                    task.get("idempotency_key", task["lease_id"]),
+                    "retryable", "local execution failed",
+                )
             except Exception:
                 logger.warning("Unable to report local task failure")
         finally:
@@ -232,11 +360,22 @@ class SecureRemoteDaemon:
             await self.client.post_typed_observation("email", profile_id, "receipts", result["receipt"])
 
     async def _flush_offline_completions(self) -> None:
-        while self._offline_completions:
-            task_id, lease_id, idempotency_key, result = self._offline_completions[0]
+        while self._offline_completions.peek() is not None:
+            task_id, lease_id, idempotency_key, result = self._offline_completions.peek()
             try:
                 await self.client.complete_task_v2(task_id, lease_id, idempotency_key, result)
-            except Exception:
+            except Exception as exc:
+                status_code = getattr(getattr(exc, "response", None), "status_code", None)
+                if status_code in {404, 409, 410, 422}:
+                    # The server has made a terminal decision (missing task,
+                    # conflict, expired lease, or invalid result). Retrying
+                    # this item would starve every later completion forever.
+                    logger.error(
+                        "Offline completion permanently rejected for task %s (HTTP %s)",
+                        task_id, status_code,
+                    )
+                    self._offline_completions.popleft()
+                    continue
                 return
             self._offline_completions.popleft()
 
@@ -244,5 +383,7 @@ class SecureRemoteDaemon:
         data = await self.client.enroll_device(code, self.identity.public_key_pem.decode("ascii"))
         self.identity.remember_device(data["device_id"])
         self.client._refresh_token = data["refresh_token"]
-        exchanged = await self.client.exchange_device_token(data["device_id"], data["refresh_token"], self.identity.sign)
+        await self.client.exchange_device_token(
+            data["device_id"], data["refresh_token"], self.identity.sign
+        )
         return data

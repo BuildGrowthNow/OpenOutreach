@@ -122,7 +122,7 @@ def _get_or_create_product(
         )
         return product
     except stripe.StripeError as e:
-        logger.error(f"Failed to get/create product for {plan_name}: {e}")
+        logger.error("Failed to get/create product; plan=%s exception_type=%s", plan_name, type(e).__name__)
         return None
 
 
@@ -177,7 +177,7 @@ def _create_or_update_price(
             )
         return price
     except stripe.StripeError as e:
-        logger.error(f"Failed to create price for {price_key}: {e}")
+        logger.error("Failed to create price; price_key=%s exception_type=%s", price_key, type(e).__name__)
         return None
 
 
@@ -191,10 +191,10 @@ def create_or_get_customer(
     try:
         existing = stripe.Customer.search(query=f'email:"{email}"')
         if existing.data:
-            logger.info(f"Found existing customer: {email}")
+            logger.info("Found existing customer")
             return existing.data[0]
 
-        logger.info(f"Creating new customer: {email}")
+        logger.info("Creating new customer")
         customer = stripe.Customer.create(
             email=email,
             name=full_name or "",
@@ -202,7 +202,7 @@ def create_or_get_customer(
         )
         return customer
     except stripe.StripeError as e:
-        logger.error(f"Failed to get/create customer for {email}: {e}")
+        logger.error("Failed to get/create customer; exception_type=%s", type(e).__name__)
         return None
 
 
@@ -247,7 +247,7 @@ def create_checkout_session(
         logger.info(f"Created checkout session: {session.id}")
         return session.url
     except stripe.StripeError as e:
-        logger.error(f"Failed to create checkout session: {e}")
+        logger.error("Failed to create checkout session; exception_type=%s", type(e).__name__)
         return None
 
 
@@ -262,7 +262,7 @@ def create_portal_session(customer_id: str, return_url: str = "") -> Optional[st
         logger.info(f"Created portal session for {customer_id}")
         return session.url
     except stripe.StripeError as e:
-        logger.error(f"Failed to create portal session: {e}")
+        logger.error("Failed to create portal session; exception_type=%s", type(e).__name__)
         return None
 
 
@@ -271,7 +271,7 @@ def get_subscription(subscription_id: str) -> Optional[stripe.Subscription]:
     try:
         return stripe.Subscription.retrieve(subscription_id)
     except stripe.StripeError as e:
-        logger.error(f"Failed to get subscription {subscription_id}: {e}")
+        logger.error("Failed to get subscription; exception_type=%s", type(e).__name__)
         return None
 
 
@@ -280,7 +280,7 @@ def get_customer(customer_id: str) -> Optional[stripe.Customer]:
     try:
         return stripe.Customer.retrieve(customer_id)
     except stripe.StripeError as e:
-        logger.error(f"Failed to get customer {customer_id}: {e}")
+        logger.error("Failed to get customer; exception_type=%s", type(e).__name__)
         return None
 
 
@@ -302,7 +302,7 @@ def construct_webhook_event(body: str, signature: str) -> Optional[dict[str, Any
         )
         return json.loads(body)
     except (ValueError, stripe.SignatureVerificationError) as e:
-        logger.error(f"Webhook signature verification failed: {e}")
+        logger.error("Webhook signature verification failed; exception_type=%s", type(e).__name__)
         return None
 
 
@@ -335,7 +335,7 @@ def update_subscription_price(
         logger.info(f"Updated subscription {subscription_id} with new price")
         return updated_sub
     except stripe.StripeError as e:
-        logger.error(f"Failed to update subscription {subscription_id}: {e}")
+        logger.error("Failed to update subscription; exception_type=%s", type(e).__name__)
         return None
 
 
@@ -352,7 +352,7 @@ def cancel_subscription(subscription_id: str, immediate: bool = False) -> Option
         logger.info(f"Canceled subscription {subscription_id}")
         return canceled_sub
     except stripe.StripeError as e:
-        logger.error(f"Failed to cancel subscription {subscription_id}: {e}")
+        logger.error("Failed to cancel subscription; exception_type=%s", type(e).__name__)
         return None
 
 
@@ -366,7 +366,7 @@ def reactivate_subscription(subscription_id: str) -> Optional[stripe.Subscriptio
         logger.info(f"Reactivated subscription {subscription_id}")
         return reactivated_sub
     except stripe.StripeError as e:
-        logger.error(f"Failed to reactivate subscription {subscription_id}: {e}")
+        logger.error("Failed to reactivate subscription; exception_type=%s", type(e).__name__)
         return None
 
 
@@ -376,7 +376,7 @@ def list_invoices(customer_id: str, limit: int = 10) -> list[stripe.Invoice]:
         invoices = stripe.Invoice.list(customer=customer_id, limit=limit)
         return invoices.data if invoices else []
     except stripe.StripeError as e:
-        logger.error(f"Failed to list invoices for {customer_id}: {e}")
+        logger.error("Failed to list invoices; exception_type=%s", type(e).__name__)
         return []
 
 
@@ -406,5 +406,5 @@ def create_lifetime_checkout_session(
         logger.info(f"Created lifetime deal checkout session: {session.id}")
         return session.url
     except stripe.StripeError as e:
-        logger.error(f"Failed to create lifetime checkout session: {e}")
+        logger.error("Failed to create lifetime checkout session; exception_type=%s", type(e).__name__)
         return None

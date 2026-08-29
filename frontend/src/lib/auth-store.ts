@@ -106,7 +106,8 @@ export const useAuthStore = create<AuthState>()(
         set({ token: null, user: null });
         localStorage.removeItem('token');
         localStorage.removeItem('selected_profile_id');
-        window.location.href = '/login';
+        window.history.pushState({}, '', '/login');
+        window.dispatchEvent(new PopStateEvent('popstate'));
       },
 
       fetchUser: async () => {

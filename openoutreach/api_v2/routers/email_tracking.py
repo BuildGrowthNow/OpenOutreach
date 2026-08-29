@@ -10,9 +10,10 @@ from __future__ import annotations
 import hmac
 import logging
 import os
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
@@ -20,10 +21,13 @@ router = APIRouter(prefix="/api/email-tracking", tags=["email-tracking"])
 
 
 class TrackingEvent(BaseModel):
-    deal_id: str
-    campaign_id: str = ""
-    event: str  # "open" | "click" | "unsub"
-    ts: int = 0
+    deal_id: str = Field(min_length=1, max_length=128)
+    campaign_id: str = Field(default="", max_length=128)
+    event: Literal["open", "click", "unsub"]
+    # Keep timestamps within the range supported by datetime on all
+    # deployment platforms. ``0`` retains the worker's optional fallback to
+    # server time for older callers.
+    ts: int = Field(default=0, ge=0, le=4_102_444_800)
 
 
 @router.post("/event", status_code=204)
@@ -38,7 +42,9 @@ async def tracking_event(request: Request, body: TrackingEvent) -> None:
 
     if deals_col is None or leads_col is None:
         logger.warning("email_tracking webhook: MongoDB not available")
-        return
+        # Do not acknowledge the event: the Worker retries 5xx responses and
+        # would otherwise discard the event while persistence is unavailable.
+        raise HTTPException(status_code=503, detail="Database unavailable")
 
     if body.event == "open":
         _handle_open(body, deals_col)

@@ -147,7 +147,7 @@ def _autostart_windows(enable: bool) -> None:
                 except FileNotFoundError:
                     pass
     except Exception as e:
-        logger.warning("Auto-start (Windows) failed: %s", e)
+        logger.warning("Auto-start (Windows) failed: %s", type(e).__name__)
 
 
 def _autostart_macos(enable: bool) -> None:
@@ -170,12 +170,12 @@ def _autostart_macos(enable: bool) -> None:
             plist_path.parent.mkdir(parents=True, exist_ok=True)
             plist_path.write_text(plist)
         except Exception as e:
-            logger.warning("Auto-start (macOS) failed: %s", e)
+            logger.warning("Auto-start (macOS) failed: %s", type(e).__name__)
     else:
         try:
             plist_path.unlink(missing_ok=True)
         except Exception as e:
-            logger.warning("Auto-start removal (macOS) failed: %s", e)
+            logger.warning("Auto-start removal (macOS) failed: %s", type(e).__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -225,7 +225,7 @@ def _ipc_send(url: str) -> None:
             sock.sendall(url.encode())
             sock.close()
     except Exception as e:
-        logger.warning("IPC send failed: %s", e)
+        logger.warning("IPC send failed: %s", type(e).__name__)
 
 
 def _ipc_listen(callback) -> threading.Thread:
@@ -253,7 +253,7 @@ def _ipc_listen(callback) -> threading.Thread:
                 except pywintypes.error:
                     break
                 except Exception as e:
-                    logger.warning("IPC listen error: %s", e)
+                    logger.warning("IPC listen error: %s", type(e).__name__)
         else:
             import socket as _socket
             sock_path = Path(_IPC_PIPE_NAME)
@@ -274,7 +274,7 @@ def _ipc_listen(callback) -> threading.Thread:
                     if url:
                         callback(url)
                 except Exception as e:
-                    logger.warning("IPC listen error: %s", e)
+                    logger.warning("IPC listen error: %s", type(e).__name__)
 
     t = threading.Thread(target=_serve, daemon=True, name="ipc-listener")
     t.start()
@@ -293,7 +293,7 @@ class DesktopAPI:
 
     def handle_lengrowth_url(self, url: str) -> None:
         """Called by JS when window.location.href is set to lengrowth://..."""
-        logger.info("Protocol callback received: %s", url[:80])
+        logger.info("Protocol callback received")
         if handle_protocol_url(url, self._app.auth):
             self._app._update_menu()
             self._app._pending_login_notification = False
@@ -370,7 +370,7 @@ class TrayApp:
             try:
                 return Image.open(icon_path)
             except Exception as e:
-                logger.warning("Failed to load icon: %s", e)
+                logger.warning("Failed to load icon: %s", type(e).__name__)
         img = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
         draw = ImageDraw.Draw(img)
         color = (34, 197, 94) if self._is_running() else (156, 163, 175)
@@ -447,12 +447,16 @@ class TrayApp:
 
     def _start_window(self):
         """Create and show the pywebview window. Blocks until the window closes."""
-        if self.auth.is_logged_in() and self._token_valid is not False:
-            token = self.auth.get_token()
-            url = (self._app_url("dashboard") + f"?desktop_token={token}") if token else self._app_url("dashboard")
+        is_authenticated = self.auth.is_logged_in() and self._token_valid is not False
+        if is_authenticated:
+            # The webview refreshes the access token from the OS keychain via
+            # the bridge. Never put the token in a URL or browser history.
+            url = self._app_url("dashboard") + "?desktop=true"
         else:
             url = self._app_url("login") + "?desktop=true&callback=lengrowth%3A%2F%2Fauth"
-        logger.info("Opening window: %s", url)
+        # Never log the URL: authenticated state is recovered through the
+        # in-process keychain bridge, not through query-string credentials.
+        logger.info("Opening authenticated window" if is_authenticated else "Opening login window")
 
         api = DesktopAPI(self)
 
@@ -498,7 +502,7 @@ class TrayApp:
             try:
                 self._window.evaluate_js(_INJECT_JS)
             except Exception as e:
-                logger.debug("JS inject failed: %s", e)
+                logger.debug("JS inject failed: %s", type(e).__name__)
         # Reliable daemon start fallback: pywebviewready does not fire for remote
         # HTTPS URLs in Edge WebView2, so confirm_auth() from the JS bridge is
         # unreliable. Start the daemon on first page load when user is authenticated.
@@ -755,7 +759,7 @@ class TrayApp:
                     pass
                 except Exception as e:
                     from openoutreach.desktop.secure_daemon import BrowserNotFoundError
-                    logger.exception("Daemon error: %s", e)
+                    logger.exception("Daemon error: %s", type(e).__name__)
                     msg = "No supported browser found." if isinstance(e, BrowserNotFoundError) else "Daemon error - check logs."
                     if self.icon:
                         self.icon.notify("Daemon Error", msg)
@@ -828,7 +832,7 @@ class TrayApp:
             else:
                 logger.warning("Startup token refresh failed: HTTP Error %d: %s", e.code, e.reason)
         except Exception as e:
-            logger.warning("Startup token refresh failed: %s", e)
+                logger.warning("Startup token refresh failed: %s", type(e).__name__)
         return None
 
     def _resolve_profile_id(self, token: str) -> Optional[str]:
@@ -861,13 +865,16 @@ class TrayApp:
                         try:
                             return _fetch(new_token)
                         except Exception as e2:
-                            logger.error("Failed to resolve profile_id after refresh: %s", e2)
+                            logger.error(
+                                "Failed to resolve profile_id after refresh: %s",
+                                type(e2).__name__,
+                            )
                 logger.error("Failed to resolve profile_id: token expired and refresh unavailable")
                 self._token_valid = False
             else:
-                logger.error("Failed to resolve profile_id: %s", e)
+                logger.error("Failed to resolve profile_id: %s", type(e).__name__)
         except Exception as e:
-            logger.error("Failed to resolve profile_id: %s", e)
+            logger.error("Failed to resolve profile_id: %s", type(e).__name__)
         return None
 
     def _stop_daemon(self):
@@ -880,7 +887,7 @@ class TrayApp:
             try:
                 asyncio.run_coroutine_threadsafe(daemon.stop(), loop).result(timeout=10)
             except Exception as e:
-                logger.warning("Error stopping daemon: %s", e)
+                logger.warning("Error stopping daemon: %s", type(e).__name__)
         # run_daemon's finally block clears self.daemon/self.daemon_thread after the
         # loop exits.  Join the thread directly so we don't race on the attribute.
         if thread and thread.is_alive():
@@ -899,7 +906,7 @@ class TrayApp:
         try:
             self._window.evaluate_js(_UPDATE_BANNER_JS.format(version=ver))
         except Exception as e:
-            logger.debug("Update banner inject failed: %s", e)
+            logger.debug("Update banner inject failed: %s", type(e).__name__)
 
     def _run_startup_update_check(self) -> None:
         """Force-apply a pending update if one was downloaded during a previous session.
@@ -976,7 +983,7 @@ class TrayApp:
                     self._pending_update = info
                     self._update_menu()
             except Exception as e:
-                logger.warning("Background update check failed: %s", e)
+                logger.warning("Background update check failed: %s", type(e).__name__)
 
         def run():
             lp = asyncio.new_event_loop()
@@ -1033,7 +1040,7 @@ class TrayApp:
                             if self.icon:
                                 self.icon.notify(f"Update Available: v{ver}", "Click the tray icon to download")
                 except Exception as e:
-                    logger.warning("Periodic update check failed: %s", e)
+                    logger.warning("Periodic update check failed: %s", type(e).__name__)
 
         def run():
             lp = asyncio.new_event_loop()
@@ -1111,6 +1118,7 @@ class TrayApp:
 
 def main():
     from openoutreach.desktop.config import AppConfig
+    from openoutreach.core.logging import RedactingFormatter
     log_dir = AppConfig._config_path().parent
     log_dir.mkdir(parents=True, exist_ok=True)
     log_file = log_dir / "daemon.log"
@@ -1128,11 +1136,10 @@ def main():
     except OSError:
         pass
 
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        handlers=handlers,
-    )
+    formatter = RedactingFormatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    for handler in handlers:
+        handler.setFormatter(formatter)
+    logging.basicConfig(level=logging.INFO, handlers=handlers)
     logging.getLogger("urllib3").setLevel(logging.WARNING)
     logging.getLogger("httpx").setLevel(logging.WARNING)
 
@@ -1161,7 +1168,7 @@ def main():
         logger.info("Interrupted")
         sys.exit(0)
     except Exception as e:
-        logger.exception("Fatal error: %s", e)
+        logger.exception("Fatal error: %s", type(e).__name__)
         sys.exit(1)
 
 

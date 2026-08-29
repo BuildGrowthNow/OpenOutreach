@@ -3,18 +3,20 @@ FastAPI Application Entry Point
 """
 import logging
 import os
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
+from openoutreach.api_v2.build_info import APP_VERSION
 
 logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="Lengrowth API",
     description="LinkedIn Automation Platform - FastAPI + MongoDB",
-    version="2.1.2",
+    version=APP_VERSION,
     docs_url="/docs",
     redoc_url="/redoc",
     # Preserve FastAPI's canonical trailing-slash redirects for human-facing
@@ -23,9 +25,20 @@ app = FastAPI(
     redirect_slashes=True,
 )
 
+def _parse_cors_origins(raw_origins: str) -> list[str]:
+    """Parse CORS origins and reject wildcard credentials configuration."""
+    origins = [origin.strip() for origin in raw_origins.split(",") if origin.strip()]
+    if not origins or "*" in origins:
+        raise RuntimeError(
+            "CORS_ALLOWED_ORIGINS must contain one or more explicit origins; "
+            "wildcard origins are incompatible with credentialed requests"
+        )
+    return origins
+
+
 # CORS configuration
 _cors_origins = os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000")
-_allowed_origins = [o.strip() for o in _cors_origins.split(",") if o.strip()]
+_allowed_origins = _parse_cors_origins(_cors_origins)
 
 app.add_middleware(
     CORSMiddleware,
@@ -66,8 +79,7 @@ class DaemonSecurityHeadersMiddleware(BaseHTTPMiddleware):
 app.add_middleware(DaemonSecurityHeadersMiddleware)
 
 
-@app.on_event("startup")
-async def startup():
+async def _startup():
     """Initialize MongoDB connection and indexes on startup."""
     logger.info("🚀 Initializing FastAPI app...")
 
@@ -101,15 +113,33 @@ async def startup():
             if result.modified_count:
                 logger.info("Migration: reset enable_active_hours=True → False for %d site config(s)", result.modified_count)
     except Exception as e:
-        logger.warning("Migration enable_active_hours failed: %s", e)
+        logger.warning(
+            "Migration enable_active_hours failed; exception_type=%s",
+            type(e).__name__,
+        )
 
     logger.info("✅ FastAPI app ready!")
 
 
-@app.on_event("shutdown")
-async def shutdown():
+async def _shutdown():
     """Cleanup on shutdown."""
     logger.info("👋 Shutting down FastAPI app...")
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Run application startup and shutdown through FastAPI's lifespan API."""
+    await _startup()
+    try:
+        yield
+    finally:
+        await _shutdown()
+
+
+# The app is constructed above so middleware can be declared near the entry
+# point. Assigning the context here keeps that structure while avoiding the
+# deprecated ``on_event`` lifecycle hooks.
+app.router.lifespan_context = lifespan
 
 
 # Include routers (will be added as we implement them)

@@ -180,7 +180,7 @@ def _notify_wa_unmessaged(deal_doc, user_id: str) -> None:
             data={"dedup_key": dedup_key, "deal_id": str(deal_doc["_id"])},
         ).save()
     except Exception as e:
-        logger.debug("Could not create WA unmessaged notification: %s", e)
+        logger.debug("Could not create WA unmessaged notification: %s", type(e).__name__)
 
 
 def handle_whatsapp_follow_up(task, wa_session, qualifiers):  # noqa: ARG001
@@ -293,7 +293,7 @@ def handle_whatsapp_follow_up(task, wa_session, qualifiers):  # noqa: ARG001
 
         success = wa_session.send_message(lead.phone, message)
         if not success:
-            logger.warning("WA follow_up: send failed for %s", lead.phone)
+            logger.warning("WA follow_up: send failed")
             banned = wa_session.detect_ban()
             if banned:
                 from openoutreach.whatsapp.models.profile import STATUS_BANNED
@@ -361,7 +361,7 @@ def handle_whatsapp_follow_up(task, wa_session, qualifiers):  # noqa: ARG001
                 data={"deal_id": str(deal._id), "phone": lead.phone, "campaign_id": str(campaign_id)},
             ).save()
         except Exception as exc:
-            logger.debug("Could not create flag_human notification: %s", exc)
+            logger.debug("Could not create flag_human notification: %s", type(exc).__name__)
         logger.info("WA follow_up [%s]: flag_human for deal %s", campaign, deal._id)
 
     elif decision.action == "wait":

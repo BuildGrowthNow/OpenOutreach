@@ -72,7 +72,7 @@ class NotificationService:
                     "deal_id": deal_id,
                 })
             except Exception as e:
-                logger.error(f"Failed to create notification for user {recipient_id}: {e}")
+                logger.error("Failed to create notification; recipient_id=%s exception_type=%s", recipient_id, type(e).__name__)
 
         logger.info(
             f"Sent '{notification_type}' notification to {len(recipient_ids)} users "
@@ -104,7 +104,7 @@ class NotificationService:
                 data={"message_id": chat_message._id},
             )
         except Exception as e:
-            logger.error(f"Failed to create new message notification: {e}")
+            logger.error("Failed to create new message notification; exception_type=%s", type(e).__name__)
 
     @staticmethod
     async def on_action_error(action_log: ActionLog):
@@ -131,7 +131,7 @@ class NotificationService:
             from openoutreach.api_v2.routers.websocket import emit_campaign_error
             await emit_campaign_error(campaign._id, action_log.error_message)
         except Exception as e:
-            logger.error(f"Failed to create action error notification: {e}")
+            logger.error("Failed to create action error notification; exception_type=%s", type(e).__name__)
 
     @staticmethod
     async def on_campaign_status_change(campaign: models.Campaign, status_change: str):
@@ -160,7 +160,7 @@ class NotificationService:
             from openoutreach.api_v2.routers.websocket import emit_campaign_status_update
             await emit_campaign_status_update(campaign._id, status_change)
         except Exception as e:
-            logger.error(f"Failed to create campaign status notification: {e}")
+            logger.error("Failed to create campaign status notification; exception_type=%s", type(e).__name__)
 
     @staticmethod
     async def on_rate_limit_warning(
@@ -180,4 +180,4 @@ class NotificationService:
                 message=f"Rate limit in '{campaign.name}': {warning_message}",
             )
         except Exception as e:
-            logger.error(f"Failed to create rate limit warning notification: {e}")
+            logger.error("Failed to create rate limit warning notification; exception_type=%s", type(e).__name__)

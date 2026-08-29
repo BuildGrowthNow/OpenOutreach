@@ -72,7 +72,7 @@ def filter_by_icp(
         from pydantic_ai import Agent
         from openoutreach.core.llm import get_llm_model, run_agent_sync
     except ImportError as exc:
-        logger.warning("icp_filter: pydantic_ai unavailable (%s) - skipping filter", exc)
+        logger.warning("icp_filter: pydantic_ai unavailable (%s) - skipping filter", type(exc).__name__)
         return listings
 
     agent = Agent(
@@ -135,7 +135,7 @@ def filter_by_icp(
                 "icp_filter: LLM call failed for batch %d-%d: %s - keeping all",
                 batch_start,
                 batch_start + len(batch),
-                exc,
+                type(exc).__name__,
             )
             kept.extend(batch)
 
@@ -168,6 +168,6 @@ def apply_icp_filter(
         logger.warning(
             "icp_filter%s: error: %s - keeping all listings",
             f"[{label}]" if label else "",
-            exc,
+            type(exc).__name__,
         )
     return listings

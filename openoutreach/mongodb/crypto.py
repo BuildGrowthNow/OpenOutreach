@@ -85,7 +85,7 @@ def encrypt_text(text: str) -> str:
         token = f.encrypt(text.encode("utf-8"))
         return base64.urlsafe_b64encode(token).decode("utf-8")
     except Exception as e:
-        logger.error(f"Failed to encrypt text: {e}")
+        logger.error("Failed to encrypt text: %s", type(e).__name__)
         raise
 
 
@@ -113,10 +113,10 @@ def decrypt_text(encoded_token: str) -> str:
         decrypted = f.decrypt(token)
         return decrypted.decode("utf-8")
     except InvalidToken as e:
-        logger.error(f"Invalid encryption token (corrupted or wrong key): {e}")
+        logger.error("Invalid encryption token (corrupted or wrong key): %s", type(e).__name__)
         raise
     except Exception as e:
-        logger.error(f"Failed to decrypt text: {e}")
+        logger.error("Failed to decrypt text: %s", type(e).__name__)
         raise
 
 
@@ -178,7 +178,7 @@ def decrypt_dict(data: dict, keys_to_decrypt: list) -> dict:
             try:
                 result[key] = decrypt_text(result[key])
             except (InvalidToken, Exception) as e:
-                logger.warning(f"Failed to decrypt key '{key}': {e}")
+                logger.warning("Failed to decrypt key '%s': %s", key, type(e).__name__)
                 result[key] = None
     return result
 
@@ -254,7 +254,7 @@ def safe_decrypt(text: str) -> str:
     try:
         return decrypt_text(text)
     except Exception as e:
-        logger.warning(f"Failed to decrypt text: {e}. Returning original.")
+        logger.warning("Failed to decrypt text: %s. Returning original.", type(e).__name__)
         return text
 
 

@@ -96,7 +96,7 @@ def validate_wa_phones(wa_session) -> int:
         try:
             registered = wa_session.is_registered(lead.phone)
         except Exception as e:
-            logger.warning("validate_wa_phones: is_registered failed for %s: %s", lead.phone, e)
+            logger.warning("validate_wa_phones: is_registered failed: %s", type(e).__name__)
             continue
 
         lead.phone_on_whatsapp = registered

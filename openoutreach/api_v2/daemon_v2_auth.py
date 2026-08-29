@@ -8,11 +8,24 @@ from pymongo.errors import DuplicateKeyError
 
 from openoutreach.api_v2.daemon_auth import canonical_request, decode_daemon_access_token, timestamp_is_fresh, token_id_without_verification, verify_request
 from openoutreach.api_v2.daemon_security import is_secure_version
+from openoutreach.api_v2.security_events import append_security_event
 from openoutreach.api_v2.tenant_security import TenantContext
 from openoutreach.config import settings
 from openoutreach.mongodb.connection import get_mongodb_collection
 
 _bearer = HTTPBearer()
+
+
+def _audit_auth_failure(request: Request, event: str, *, tenant_id: str | None = None,
+                        device_id: str | None = None) -> None:
+    append_security_event(
+        event,
+        outcome="failure",
+        actor_type="daemon",
+        tenant_id=tenant_id,
+        device_id=device_id,
+        request_id=request.headers.get("x-request-id"),
+    )
 
 
 async def get_daemon_context(
@@ -21,20 +34,25 @@ async def get_daemon_context(
 ) -> TenantContext:
     """Validate audience/purpose and bind request context to token claims."""
     if not is_secure_version(request.headers.get("x-daemon-version")):
+        _audit_auth_failure(request, "daemon_auth_unsupported_version")
         raise HTTPException(status_code=426, detail="Desktop security update required")
     if not settings.DAEMON_JWT_PUBLIC_KEY:
+        _audit_auth_failure(request, "daemon_auth_unavailable")
         raise HTTPException(status_code=503, detail="Daemon authentication unavailable")
     try:
         claims = decode_daemon_access_token(settings.DAEMON_JWT_PUBLIC_KEY, credentials.credentials)
     except Exception as exc:
+        _audit_auth_failure(request, "daemon_auth_token_rejected")
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid daemon token") from exc
     profile_ids = claims.get("profile_ids", [])
     scopes = claims.get("scopes", [])
     channel_profile_ids = claims.get("channel_profile_ids", {})
     if not isinstance(profile_ids, list) or not isinstance(scopes, list) or not isinstance(channel_profile_ids, dict):
+        _audit_auth_failure(request, "daemon_auth_claims_rejected")
         raise HTTPException(status_code=401, detail="Invalid daemon token claims")
     devices = get_mongodb_collection("daemon_devices")
     if devices is None:
+        _audit_auth_failure(request, "daemon_auth_unavailable", tenant_id=str(claims.get("tenant_id")), device_id=str(claims.get("device_id")))
         raise HTTPException(status_code=503, detail="Daemon authentication unavailable")
     device = devices.find_one(
         {"_id": str(claims["device_id"]), "user_id": str(claims["tenant_id"]), "revoked": False},
@@ -42,6 +60,7 @@ async def get_daemon_context(
          "version": 1, "public_key": 1},
     )
     if not device or not is_secure_version(str(device.get("version", ""))):
+        _audit_auth_failure(request, "daemon_auth_device_rejected", tenant_id=str(claims.get("tenant_id")), device_id=str(claims.get("device_id")))
         raise HTTPException(status_code=401, detail="Device revoked or unsupported")
     try:
         timestamp = int(request.headers.get("x-daemon-timestamp", ""))
@@ -62,6 +81,12 @@ async def get_daemon_context(
                            "created_at": datetime.now(timezone.utc),
                            "expires_at": datetime.now(timezone.utc) + timedelta(minutes=5)})
     except (KeyError, ValueError, TypeError, DuplicateKeyError) as exc:
+        _audit_auth_failure(
+            request,
+            "daemon_auth_nonce_replay" if isinstance(exc, DuplicateKeyError) else "daemon_auth_proof_rejected",
+            tenant_id=str(claims.get("tenant_id")),
+            device_id=str(claims.get("device_id")),
+        )
         raise HTTPException(status_code=401, detail="Invalid daemon request proof") from exc
     # Intersect claims with current server bindings so unbinding takes effect
     # without waiting for an access token to expire.
@@ -72,6 +97,7 @@ async def get_daemon_context(
     bindings: dict[str, frozenset[str]] = {}
     for channel, values in claimed_bindings.items():
         if not isinstance(values, list):
+            _audit_auth_failure(request, "daemon_auth_claims_rejected", tenant_id=str(claims.get("tenant_id")), device_id=str(claims.get("device_id")))
             raise HTTPException(status_code=401, detail="Invalid channel profile claims")
         allowed = device_bindings.get(channel, values)
         bindings[str(channel)] = frozenset(

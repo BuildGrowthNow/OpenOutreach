@@ -45,7 +45,7 @@ def _write_chat_message(
         )
         msg.save()
     except Exception as exc:
-        logger.warning("email_follow_up: failed to write ChatMessage for deal %s: %s", deal._id, exc)
+        logger.warning("email_follow_up: failed to write ChatMessage for deal %s: %s", deal._id, type(exc).__name__)
 
 
 def handle_email_follow_up(task, user_id: str, campaign) -> None:
@@ -215,14 +215,14 @@ def handle_email_follow_up(task, user_id: str, campaign) -> None:
             _mark_bounced(deal, lead, deals_col, leads_col)
             logger.warning(
                 "email_follow_up: hard bounce for %s (%s) — EMAIL_BOUNCED + suppressed",
-                lead.api_email, exc,
+                lead.api_email, type(exc).__name__,
             )
             return
 
         if outcome == SmtpOutcome.RETRY_LATER:
             logger.info(
                 "email_follow_up: transient failure for %s (%s) — will retry next cycle",
-                lead.api_email, exc,
+                lead.api_email, type(exc).__name__,
             )
             return
 
@@ -232,7 +232,7 @@ def handle_email_follow_up(task, user_id: str, campaign) -> None:
             logger.error(
                 "email_follow_up: auth failure on mailbox %s (%s) — paused; fix credentials "
                 "and un-pause in Settings to resume sends",
-                mailbox.from_address, exc,
+                mailbox.from_address, type(exc).__name__,
             )
             return
 

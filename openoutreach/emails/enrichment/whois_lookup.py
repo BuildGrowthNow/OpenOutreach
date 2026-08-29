@@ -102,11 +102,11 @@ def lookup_registrant_email(
             if _is_privacy_email(email):
                 continue
             if _name_matches(email, first_name, last_name):
-                logger.info("whois_lookup: registrant match %s for %s", email, domain)
+                logger.info("whois_lookup: registrant match found")
                 return email
 
         return None
 
     except Exception as exc:
-        logger.debug("whois_lookup: RDAP failed for %s: %s", domain, exc)
+        logger.debug("whois_lookup: RDAP failed for %s: %s", domain, type(exc).__name__)
         return None

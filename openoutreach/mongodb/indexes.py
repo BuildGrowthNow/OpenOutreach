@@ -382,6 +382,9 @@ def ensure_all_indexes():
         ]),
         ('tasks', [
             ({'user_id': 1, 'linkedin_profile_id': 1, 'channel': 1, 'status': 1, 'scheduled_at': 1}, {'name': 'daemon_v2_task_claim_idx'}),
+            ({'user_id': 1, 'whatsapp_profile_id': 1, 'channel': 1, 'status': 1, 'scheduled_at': 1}, {'name': 'daemon_v2_task_whatsapp_claim_idx'}),
+            ({'user_id': 1, 'mailbox_id': 1, 'channel': 1, 'status': 1, 'scheduled_at': 1}, {'name': 'daemon_v2_task_mailbox_claim_idx'}),
+            ({'user_id': 1, 'email_profile_id': 1, 'channel': 1, 'status': 1, 'scheduled_at': 1}, {'name': 'daemon_v2_task_email_profile_claim_idx'}),
             ({'user_id': 1, 'leased_by_device_id': 1, 'lease_id': 1, 'status': 1}, {'name': 'daemon_v2_task_lease_idx'}),
         ]),
     ]
@@ -399,7 +402,7 @@ def ensure_all_indexes():
             try:
                 existing_indexes = {idx["name"] for idx in collection.list_indexes()}
             except Exception as e:
-                logger.debug(f"Could not list indexes for '{collection_name}': {e}")
+                logger.debug("Could not list indexes for '%s': %s", collection_name, type(e).__name__)
 
             for keys, options in collection_indexes:
                 index_name = options.get("name", "")
@@ -426,11 +429,11 @@ def ensure_all_indexes():
                     created_count += 1
 
                 except Exception as e:
-                    logger.error(f"Failed to create index '{index_name}' on '{collection_name}': {e}")
+                    logger.error("Failed to create index '%s' on '%s': %s", index_name, collection_name, type(e).__name__)
                     error_count += 1
 
         except Exception as e:
-            logger.error(f"Failed to process indexes for collection '{collection_name}': {e}")
+            logger.error("Failed to process indexes for collection '%s': %s", collection_name, type(e).__name__)
             error_count += 1
 
     # Summary
@@ -480,10 +483,10 @@ def drop_all_indexes():
                     collection.drop_index(idx_name)
                     logger.info(f"Dropped index '{idx_name}' from '{collection_name}'")
                 except Exception as e:
-                    logger.error(f"Failed to drop index '{idx_name}' from '{collection_name}': {e}")
+                    logger.error("Failed to drop index '%s' from '%s': %s", idx_name, collection_name, type(e).__name__)
 
         except Exception as e:
-            logger.error(f"Failed to process collection '{collection_name}': {e}")
+            logger.error("Failed to process collection '%s': %s", collection_name, type(e).__name__)
 
 
 __all__ = ['ensure_all_indexes', 'drop_all_indexes']

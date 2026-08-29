@@ -42,9 +42,9 @@ def request_account_deletion(user_id: str) -> dict:
     if user.stripe_subscription_id:
         try:
             cancel_subscription(user.stripe_subscription_id, immediate=True)
-            logger.info(f"Canceled subscription for deletion: {user.email}")
+            logger.info("Canceled subscription for deletion")
         except Exception as e:
-            logger.error(f"Failed to cancel subscription during deletion: {e}")
+            logger.error("Failed to cancel subscription during deletion; exception_type=%s", type(e).__name__)
 
     # Deactivate all LinkedIn profiles
     try:
@@ -54,15 +54,15 @@ def request_account_deletion(user_id: str) -> dict:
                 {"user_id": user_id},
                 {"$set": {"is_active": False}},
             )
-            logger.info(f"Deactivated all profiles for user: {user.email}")
+        logger.info("Deactivated all profiles for user")
     except Exception as e:
-        logger.error(f"Failed to deactivate profiles: {e}")
+        logger.error("Failed to deactivate profiles; exception_type=%s", type(e).__name__)
 
     # Schedule deletion
     deletion_scheduled_at = user.schedule_deletion()
     grace_period_ends_at = deletion_scheduled_at + timedelta(days=30)
 
-    logger.info(f"Account deletion scheduled for {user.email}: {deletion_scheduled_at}")
+    logger.info("Account deletion scheduled: %s", deletion_scheduled_at)
 
     return {
         "deletion_scheduled_at": deletion_scheduled_at.isoformat(),
@@ -96,9 +96,9 @@ def cancel_account_deletion(user_id: str) -> dict:
             reactivate_subscription(user.stripe_subscription_id)
             user.subscription_status = "active"
             subscription_reactivated = True
-            logger.info(f"Reactivated subscription for user: {user.email}")
+            logger.info("Reactivated subscription for user")
         except Exception as e:
-            logger.error(f"Failed to reactivate subscription: {e}")
+            logger.error("Failed to reactivate subscription; exception_type=%s", type(e).__name__)
             # Continue with profile reactivation even if subscription fails
 
     # Save user state
@@ -113,11 +113,11 @@ def cancel_account_deletion(user_id: str) -> dict:
                     {"user_id": user_id},
                     {"$set": {"is_active": True}},
                 )
-                logger.info(f"Reactivated all profiles for user: {user.email}")
+                logger.info("Reactivated all profiles for user")
         except Exception as e:
-            logger.error(f"Failed to reactivate profiles: {e}")
+            logger.error("Failed to reactivate profiles; exception_type=%s", type(e).__name__)
 
-    logger.info(f"Account deletion canceled for: {user.email}")
+    logger.info("Account deletion canceled")
 
     message = "Your account has been reactivated."
     if subscription_reactivated:
@@ -176,7 +176,7 @@ def export_user_data(user_id: str) -> dict:
                 for p in profiles
             ]
     except Exception as e:
-        logger.warning(f"Failed to export linkedin_profiles: {e}")
+        logger.warning("Failed to export linkedin_profiles; exception_type=%s", type(e).__name__)
 
     try:
         campaigns_collection = get_mongodb_collection("campaigns")
@@ -193,7 +193,7 @@ def export_user_data(user_id: str) -> dict:
                 for c in campaigns
             ]
     except Exception as e:
-        logger.warning(f"Failed to export campaigns: {e}")
+        logger.warning("Failed to export campaigns; exception_type=%s", type(e).__name__)
 
     try:
         leads_collection = get_mongodb_collection("leads")
@@ -210,7 +210,7 @@ def export_user_data(user_id: str) -> dict:
                 for lead_doc in leads
             ]
     except Exception as e:
-        logger.warning(f"Failed to export leads: {e}")
+        logger.warning("Failed to export leads; exception_type=%s", type(e).__name__)
 
     try:
         deals_collection = get_mongodb_collection("deals")
@@ -227,9 +227,9 @@ def export_user_data(user_id: str) -> dict:
                 for d in deals
             ]
     except Exception as e:
-        logger.warning(f"Failed to export deals: {e}")
+        logger.warning("Failed to export deals; exception_type=%s", type(e).__name__)
 
-    logger.info(f"Exported data for user: {user.email}")
+    logger.info("Exported data for user")
     return data
 
 
@@ -250,7 +250,7 @@ def permanently_delete_user_data(user_id: str):
         logger.warning(f"User not found for deletion: {user_id}")
         return
 
-    logger.info(f"Permanently deleting all data for user: {user.email}")
+    logger.info("Permanently deleting all data for user")
 
     # Delete from all collections
     collections_to_clean = [
@@ -275,14 +275,14 @@ def permanently_delete_user_data(user_id: str):
                     f"Deleted {result.deleted_count} docs from {collection_name}"
                 )
         except Exception as e:
-            logger.error(f"Failed to delete from {collection_name}: {e}")
+            logger.error("Failed to delete from collection; collection=%s exception_type=%s", collection_name, type(e).__name__)
 
     # Finally, delete user record
     try:
         user.permanently_delete()
-        logger.info(f"User permanently deleted: {user.email}")
+        logger.info("User permanently deleted")
     except Exception as e:
-        logger.error(f"Failed to delete user record: {e}")
+        logger.error("Failed to delete user record; exception_type=%s", type(e).__name__)
 
 
 def cleanup_expired_deletions():
@@ -317,10 +317,10 @@ def cleanup_expired_deletions():
                 permanently_delete_user_data(user_doc["_id"])
                 count += 1
             except Exception as e:
-                logger.error(f"Failed to cleanup user {user_doc['_id']}: {e}")
+                logger.error("Failed to cleanup user; exception_type=%s", type(e).__name__)
 
         if count > 0:
             logger.info(f"Cleaned up {count} expired user deletions")
 
     except Exception as e:
-        logger.error(f"Cleanup job failed: {e}")
+        logger.error("Cleanup job failed; exception_type=%s", type(e).__name__)

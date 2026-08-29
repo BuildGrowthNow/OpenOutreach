@@ -91,7 +91,10 @@ class AdminSecurityPolicy:
                 "created_at": datetime.now(tz.utc),
             })
         except Exception as e:
-            logger.error(f"Failed to log admin action: {e}")
+            logger.error(
+                "Failed to log admin action; exception_type=%s",
+                type(e).__name__,
+            )
 
     @staticmethod
     def mask_sensitive_fields(user: User, requester_id: str) -> dict:

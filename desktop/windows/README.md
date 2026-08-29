@@ -17,21 +17,21 @@
 python desktop/build.py
 ```
 
-Output: `desktop/dist/OpenOutreach.exe`
+Output: `desktop/dist/Lengrowth.exe`
 
 ### 2. Create MSIX package (Microsoft Store)
 ```bash
 python desktop/build.py --msix
 ```
 
-Output: `desktop/dist/OpenOutreach-{version}.msix`
+Output: `desktop/dist/Lengrowth-{version}.msix`
 
 ### 3. Create NSIS installer (Direct Download)
 ```bash
 python desktop/build.py --installer
 ```
 
-Output: `desktop/dist/OpenOutreach-{version}-Setup.exe`
+Output: `desktop/dist/Lengrowth-{version}-Setup.exe`
 
 ### 4. Build all formats
 ```bash
@@ -46,13 +46,13 @@ python desktop/build.py --all
 set SIGN_CERT_PATH=C:\path\to\certificate.pfx
 set SIGN_CERT_PASS=your_password
 
-# Sign the executable
-signtool sign /f "%SIGN_CERT_PATH%" /p "%SIGN_CERT_PASS%" /t http://timestamp.digicert.com /fd SHA256 desktop\dist\OpenOutreach.exe
+# Sign the executable with an HTTPS timestamp
+signtool sign /f "%SIGN_CERT_PATH%" /p "%SIGN_CERT_PASS%" /tr https://timestamp.digicert.com /td SHA256 /fd SHA256 desktop\dist\Lengrowth.exe
 ```
 
 ### Sign the MSIX
 ```bash
-signtool sign /f "%SIGN_CERT_PATH%" /p "%SIGN_CERT_PASS%" /fd SHA256 desktop\dist\OpenOutreach-{version}.msix
+signtool sign /f "%SIGN_CERT_PATH%" /p "%SIGN_CERT_PASS%" /tr https://timestamp.digicert.com /td SHA256 /fd SHA256 desktop\dist\Lengrowth-{version}.msix
 ```
 
 ## Microsoft Store Submission
@@ -65,11 +65,11 @@ signtool sign /f "%SIGN_CERT_PATH%" /p "%SIGN_CERT_PASS%" /fd SHA256 desktop\dis
 
 ## Protocol Handler
 
-The installer automatically registers the `openoutreach://` protocol handler for OAuth callbacks.
+The installer automatically registers the `lengrowth://` protocol handler for OAuth callbacks.
 
 Registry entries:
-- `HKEY_CLASSES_ROOT\openoutreach`
-- Command: `"C:\Program Files\OpenOutreach\OpenOutreach.exe" "%1"`
+- `HKEY_CLASSES_ROOT\lengrowth`
+- Command: `"%LOCALAPPDATA%\Programs\Lengrowth Outreach\Lengrowth.exe" "%1"`
 
 ## SmartScreen Warning
 
@@ -83,8 +83,8 @@ This warning disappears after the app gains reputation (~10-20 downloads from di
 
 ### NSIS Installer
 - Via "Add or Remove Programs"
-- Or run: `"C:\Program Files\OpenOutreach\Uninstall.exe"`
+- Or run: `"%LOCALAPPDATA%\Programs\Lengrowth Outreach\Uninstall.exe"`
 
 ### MSIX
 - Via "Add or Remove Programs"
-- Or: Settings → Apps → OpenOutreach → Uninstall
+- Or: Settings → Apps → Lengrowth Outreach → Uninstall

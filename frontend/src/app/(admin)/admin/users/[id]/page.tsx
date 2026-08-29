@@ -298,7 +298,19 @@ export default function AdminUserDetailPage() {
     if (res.error) { setActionError(res.error); return }
     if (res.data) {
       const token = res.data.access_token
-      window.open(`/impersonate?token=${encodeURIComponent(token)}`, '_blank')
+      const child = window.open('/impersonate', '_blank')
+      if (!child) {
+        setActionError('Allow pop-ups to open the impersonated session')
+        return
+      }
+      const origin = window.location.origin
+      const onReady = (event: MessageEvent) => {
+        if (event.source !== child || event.origin !== origin || event.data?.type !== 'lengrowth-impersonation-ready') return
+        child.postMessage({ type: 'lengrowth-impersonation-token', token }, origin)
+        window.removeEventListener('message', onReady)
+      }
+      window.addEventListener('message', onReady)
+      window.setTimeout(() => window.removeEventListener('message', onReady), 30_000)
     }
   }
 

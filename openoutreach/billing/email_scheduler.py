@@ -60,7 +60,7 @@ def send_trial_expiry_warnings() -> int:
                 )
                 sent_count += 1
         except Exception as e:
-            logger.error(f"Failed to send trial warning to {user_doc.get('email')}: {e}")
+            logger.error("Failed to send trial warning; exception_type=%s", type(e).__name__)
 
     if sent_count > 0:
         logger.info(f"Sent {sent_count} trial expiry warnings")
@@ -112,7 +112,7 @@ def expire_trials() -> int:
             user = User.from_dict(user_doc)
             send_trial_expired(user)
         except Exception as e:
-            logger.error(f"Failed to send trial expired email to {user_doc.get('email')}: {e}")
+            logger.error("Failed to send trial expired email; exception_type=%s", type(e).__name__)
 
     return expired_count
 
@@ -154,7 +154,7 @@ def send_account_blocked_notifications() -> int:
                 )
                 sent_count += 1
         except Exception as e:
-            logger.error(f"Failed to send blocked notification to {user_doc.get('email')}: {e}")
+            logger.error("Failed to send blocked notification; exception_type=%s", type(e).__name__)
 
     if sent_count > 0:
         logger.info(f"Sent {sent_count} account blocked notifications")

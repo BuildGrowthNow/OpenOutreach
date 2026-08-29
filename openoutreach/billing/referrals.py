@@ -172,13 +172,13 @@ def apply_referral_code(referred_user: User, referral_code: str) -> Optional[Use
 
     # Prevent self-referral
     if referrer._id == referred_user._id:
-        logger.warning(f"User attempted to apply their own referral code: {referred_user.email}")
+        logger.warning("User attempted to apply their own referral code")
         return None
 
     referred_user.referrer_id = referrer._id
     referred_user.save()
 
-    logger.info(f"Applied referral code {referral_code} from {referrer.email} to {referred_user.email}")
+    logger.info("Applied referral code")
     return referrer
 
 

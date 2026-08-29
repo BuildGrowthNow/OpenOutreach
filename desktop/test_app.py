@@ -36,10 +36,12 @@ def test_config():
     original_url = config.api_url
 
     # Save and reload
-    config.api_url = "https://test.example.com"
+    # Use an approved loopback URL; production hosts are intentionally
+    # allowlisted by AppConfig to prevent an SSRF-capable endpoint override.
+    config.api_url = "http://127.0.0.1:8765"
     config.save()
     config2 = AppConfig.load()
-    assert config2.api_url == "https://test.example.com"
+    assert config2.api_url == "http://127.0.0.1:8765"
 
     # Restore original
     config.api_url = original_url

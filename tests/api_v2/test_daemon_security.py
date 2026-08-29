@@ -1,10 +1,13 @@
 """Regression tests for desktop bootstrap containment and token separation."""
 
 from datetime import datetime, timedelta, timezone
+import json
 from unittest.mock import MagicMock
 
 import pytest
 from fastapi import HTTPException
+from pydantic import ValidationError
+from starlette.requests import Request
 
 from openoutreach.api_v2.daemon_security import (
     assert_safe_response,
@@ -17,9 +20,11 @@ from openoutreach.api_v2.routers.daemon import bootstrap_daemon
 from openoutreach.api_v2.daemon_v2_auth import require_profile
 from openoutreach.api_v2.routers import daemon_v2
 from openoutreach.api_v2.routers.daemon_v2 import (
-    ClaimRequest, CompleteRequest, DaemonEvent, EventBatchRequest,
+    ClaimRequest, CompleteRequest, ConfigurationResponse,
+    DaemonEvent, EventBatchRequest,
     FailRequest, LeaseMutation,
 )
+from openoutreach.api_v2.daemon_channel_contracts import LinkedInActionReceipt
 from openoutreach.api_v2.tenant_security import TenantContext, owned_predicate
 
 
@@ -45,6 +50,95 @@ def test_response_secret_denylist_fails_closed():
         assert_safe_response({"nested": {"llm_api_key": "secret"}})
     with pytest.raises(RuntimeError):
         assert_safe_response({"message": "mongodb+srv://user:password@example/db"})
+
+
+def test_typed_event_payload_rejects_secret_material():
+    with pytest.raises(ValidationError):
+        DaemonEvent(event_id="event-0000000001", event_type="linkedin_state",
+                    profile_id="profile-a", channel="linkedin",
+                    payload={"cookie_data": "redacted"})
+    with pytest.raises(ValidationError):
+        DaemonEvent(event_id="event-0000000002", event_type="linkedin_state",
+                    profile_id="profile-a", channel="linkedin",
+                    payload={"nested": {"provider_token": "redacted"}})
+
+
+def test_daemon_configuration_contract_is_bounded_and_strict():
+    base = {
+        "profile_id": "profile-a",
+        "active_hours": {"enabled": False, "start_hour": 9, "end_hour": 18,
+                          "timezone": "UTC", "days": [1, 2, 3, 4, 5]},
+        "rate_limits": {"velocity": 20, "daily_connect_limit": 20,
+                         "daily_message_limit": 40, "cooldown_minutes": 0},
+        "channel_policy": {"linkedin": True, "whatsapp": False, "email": False},
+        "task_capabilities": ["connect"],
+    }
+    response = ConfigurationResponse.model_validate(base)
+    assert response.task_capabilities == ["connect"]
+    with pytest.raises(ValidationError):
+        ConfigurationResponse.model_validate({**base, "unexpected": True})
+    with pytest.raises(ValidationError):
+        ConfigurationResponse.model_validate({**base, "task_capabilities": [str(i) for i in range(21)]})
+
+
+def test_completion_requires_channel_typed_receipt_and_matching_effect():
+    task = {"channel": "linkedin", "task_type": "send_manual_message"}
+    valid = {"receipt": LinkedInActionReceipt(
+        action="manual_send", target_key="person-1", effect_key="effect-1",
+        outcome="applied", observed_at=datetime.now(timezone.utc),
+    ).model_dump(mode="json")}
+    daemon_v2._validate_completion_result(task, valid, "effect-1")
+    with pytest.raises(HTTPException) as missing:
+        daemon_v2._validate_completion_result(task, {}, "effect-1")
+    assert missing.value.status_code == 422
+    with pytest.raises(HTTPException) as wrong_effect:
+        daemon_v2._validate_completion_result(task, valid, "effect-2")
+    assert wrong_effect.value.status_code == 422
+
+
+def test_claim_request_bounds_profile_and_task_type_inputs():
+    with pytest.raises(ValidationError):
+        ClaimRequest(profile_id="", channel="linkedin")
+    with pytest.raises(ValidationError):
+        ClaimRequest(profile_id="p", channel="linkedin", supported_task_types=["x" * 65])
+
+
+@pytest.mark.asyncio
+async def test_failure_idempotency_key_is_checked_against_task_effect(monkeypatch):
+    effect_key = "e" * 16
+    task = {"_id": "task-1", "channel": "linkedin", "task_type": "connect",
+            "linkedin_profile_id": "profile-a", "idempotency_key": effect_key,
+            "failure_idempotency_key": effect_key, "status": "failed",
+            "leased_by_device_id": "device-a"}
+    context = TenantContext("tenant-a", actor_type="daemon", device_id="device-a",
+                            profile_ids=frozenset({"profile-a"}), scopes=frozenset({"linkedin"}),
+                            channel_profile_ids={"linkedin": frozenset({"profile-a"})})
+    collection = MagicMock()
+    collection.find_one.return_value = task
+    monkeypatch.setattr(daemon_v2, "get_mongodb_collection", lambda _name: collection)
+    with pytest.raises(HTTPException) as exc_info:
+        await daemon_v2.fail_task_v2(
+            "task-1", FailRequest(lease_id="l" * 16, category="retryable",
+                                   idempotency_key="w" * 16), context)
+    assert exc_info.value.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_daemon_configuration_advertises_linkedin_observation(monkeypatch):
+    collection = MagicMock()
+    collection.find_one.return_value = {}
+    monkeypatch.setattr(daemon_v2, "get_mongodb_collection", lambda _name: collection)
+    monkeypatch.setattr(daemon_v2.settings, "DAEMON_V2_LINKEDIN_ENABLED", True)
+    context = TenantContext(
+        "tenant-a", actor_type="daemon", device_id="device-a",
+        profile_ids=frozenset({"profile-a"}), scopes=frozenset({"linkedin"}),
+        channel_profile_ids={"linkedin": frozenset({"profile-a"})},
+    )
+    request = Request({"type": "http", "method": "GET", "path": "/",
+                       "query_string": b"channel=linkedin", "headers": []})
+    response = await daemon_v2.configuration(request, "profile-a", context)
+    body = json.loads(response.body)
+    assert "observe" in body["task_capabilities"]
 
 
 def test_tenant_predicate_is_server_derived_and_non_empty():
@@ -215,7 +309,7 @@ async def test_all_lease_mutations_are_tenant_scoped(monkeypatch):
         )
     with pytest.raises(HTTPException) as fail_error:
         await daemon_v2.fail_task_v2(
-            "task-b", FailRequest(lease_id=lease_id, category="retryable"), context,
+            "task-b", FailRequest(lease_id=lease_id, category="retryable", idempotency_key="i" * 16), context,
         )
     with pytest.raises(HTTPException) as cancel_error:
         await daemon_v2.cancel_ack_task_v2("task-b", LeaseMutation(lease_id=lease_id), context)

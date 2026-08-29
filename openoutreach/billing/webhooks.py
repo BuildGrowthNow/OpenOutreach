@@ -71,11 +71,11 @@ def handle_checkout_session_completed(event: dict[str, Any]) -> None:
                 from openoutreach.billing.config import increment_lifetime_buyer_count
                 increment_lifetime_buyer_count()
             except Exception as e:
-                logger.error(f"Failed to increment lifetime buyer count: {e}")
+                logger.error("Failed to increment lifetime buyer count; exception_type=%s", type(e).__name__)
             try:
                 send_lifetime_deal_purchase(user)
             except Exception as e:
-                logger.error(f"Failed to send lifetime deal email: {e}")
+                logger.error("Failed to send lifetime deal email; exception_type=%s", type(e).__name__)
     else:
         user.stripe_subscription_id = subscription_id
 
@@ -105,7 +105,7 @@ def handle_checkout_session_completed(event: dict[str, Any]) -> None:
         try:
             send_welcome_email(user)
         except Exception as e:
-            logger.error(f"Failed to send welcome email: {e}")
+            logger.error("Failed to send welcome email; exception_type=%s", type(e).__name__)
 
     logger.info(f"Activated subscription for user {user._id}")
 
@@ -218,7 +218,7 @@ def handle_customer_subscription_updated(event: dict[str, Any]) -> None:
                     effective_date = datetime.fromtimestamp(subscription.get("current_period_end", 0), tz=tz.utc)
                     send_plan_downgraded(user, old_plan, plan_name, effective_date)
             except Exception as e:
-                logger.error(f"Failed to send plan change email: {e}")
+                logger.error("Failed to send plan change email; exception_type=%s", type(e).__name__)
 
     user.save()
     logger.info(f"Updated subscription for user {user._id}")
@@ -228,7 +228,7 @@ def handle_customer_subscription_updated(event: dict[str, Any]) -> None:
         try:
             send_payment_failed(user)
         except Exception as e:
-            logger.error(f"Failed to send payment failed email: {e}")
+            logger.error("Failed to send payment failed email; exception_type=%s", type(e).__name__)
 
 
 def handle_customer_subscription_deleted(event: dict[str, Any]) -> None:
@@ -292,7 +292,7 @@ def _apply_referral_credit(user: User, invoice: dict[str, Any]) -> None:
             )
             logger.info(f"Applied $19 Stripe credit to {referrer.email} from new user {user.email}")
         except stripe.StripeError as e:
-            logger.error(f"Failed to apply Stripe credit to {referrer.email}: {e}")
+            logger.error("Failed to apply Stripe credit; exception_type=%s", type(e).__name__)
             return
     else:
         logger.warning(f"Referrer {referrer.email} has no Stripe customer ID, credit tracked locally only")
@@ -351,7 +351,7 @@ def handle_invoice_payment_failed(event: dict[str, Any]) -> None:
     try:
         send_payment_failed(user)
     except Exception as e:
-        logger.error(f"Failed to send payment failed email: {e}")
+        logger.error("Failed to send payment failed email; exception_type=%s", type(e).__name__)
 
 
 def _is_event_processed(event_id: str) -> bool:
@@ -376,7 +376,7 @@ def _mark_event_processed(event_id: str) -> None:
             "processed_at": datetime.now(tz.utc),
         })
     except Exception as e:
-        logger.error(f"Failed to mark event {event_id} as processed: {e}")
+        logger.error("Failed to mark event processed; event_id=%s exception_type=%s", event_id, type(e).__name__)
 
 
 def process_webhook_event(event: dict[str, Any]) -> bool:
@@ -418,7 +418,7 @@ def process_webhook_event(event: dict[str, Any]) -> bool:
             _mark_event_processed(event_id)
         return True
     except Exception as e:
-        logger.error(f"Error processing event {event_type}: {e}", exc_info=True)
+        logger.error("Error processing event; event_type=%s exception_type=%s", event_type, type(e).__name__)
         return False
 
 
@@ -436,7 +436,7 @@ def _get_plan_name_from_subscription(subscription: Any) -> Optional[str]:
         product = stripe.Product.retrieve(product_id)
         return product.metadata.get("plan_name")  # type: ignore
     except stripe.StripeError as e:
-        logger.error(f"Failed to retrieve product {product_id}: {e}")
+        logger.error("Failed to retrieve product; exception_type=%s", type(e).__name__)
         return None
 
 
@@ -457,7 +457,7 @@ def handle_customer_subscription_trial_will_end(event: dict[str, Any]) -> None:
     try:
         send_trial_expiry_warning(user, 1)
     except Exception as e:
-        logger.error(f"Failed to send trial expiry warning email: {e}")
+        logger.error("Failed to send trial expiry warning email; exception_type=%s", type(e).__name__)
 
     logger.info(f"Sent trial expiry warning for user {user._id}")
 
@@ -476,7 +476,7 @@ def _deactivate_user_profiles(user_id: str) -> None:
         )
         logger.info(f"Deactivated {result.modified_count} profiles for user {user_id}")
     except Exception as e:
-        logger.error(f"Failed to deactivate profiles for user {user_id}: {e}")
+        logger.error("Failed to deactivate profiles; user_id=%s exception_type=%s", user_id, type(e).__name__)
 
 
 def _enforce_wa_account_limit(user_id: str, limit: int) -> None:
@@ -500,7 +500,7 @@ def _enforce_wa_account_limit(user_id: str, limit: int) -> None:
             wa_collection.delete_many({"_id": {"$in": excess_ids}})
             logger.info(f"Deleted {len(excess)} excess WA profiles for user {user_id}")
     except Exception as e:
-        logger.error(f"Failed to enforce WA account limits for user {user_id}: {e}")
+        logger.error("Failed to enforce WA account limits; user_id=%s exception_type=%s", user_id, type(e).__name__)
 
 
 def _enforce_linkedin_account_limit(user_id: str, limit: int) -> None:
@@ -528,4 +528,4 @@ def _enforce_linkedin_account_limit(user_id: str, limit: int) -> None:
             )
             logger.info(f"Deactivated {len(excess_profiles)} excess profiles for user {user_id}")
     except Exception as e:
-        logger.error(f"Failed to enforce account limits for user {user_id}: {e}")
+        logger.error("Failed to enforce account limits; user_id=%s exception_type=%s", user_id, type(e).__name__)

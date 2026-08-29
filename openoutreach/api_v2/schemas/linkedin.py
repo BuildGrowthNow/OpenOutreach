@@ -8,7 +8,7 @@ and credential management operations in the FastAPI v2 API.
 from datetime import datetime
 from typing import Dict, List, Optional, Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class LinkedInProfileResponse(BaseModel):
@@ -34,8 +34,7 @@ class LinkedInProfileResponse(BaseModel):
     created_at: Optional[datetime] = Field(None, description="Profile creation timestamp")
     updated_at: Optional[datetime] = Field(None, description="Last profile update timestamp")
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(json_schema_extra={
             "example": {
                 "id": "507f1f77bcf86cd799439011",
                 "user_id": "507f1f77bcf86cd799439012",
@@ -52,7 +51,7 @@ class LinkedInProfileResponse(BaseModel):
                 "created_at": "2026-07-10T12:00:00Z",
                 "updated_at": "2026-07-10T12:00:00Z"
             }
-        }
+        })
 
 
 class LinkedInCredentialCreate(BaseModel):
@@ -74,8 +73,7 @@ class LinkedInCredentialCreate(BaseModel):
     rotation_required_days: int = Field(default=90, description="Days until credential rotation is required")
     execution_mode: str = Field(default="desktop", description="Execution mode: 'desktop' or 'cloud'")
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(json_schema_extra={
             "example": {
                 "email": "user@example.com",
                 "password": "SecurePassword123!",
@@ -87,7 +85,7 @@ class LinkedInCredentialCreate(BaseModel):
                 "backup_of_id": None,
                 "rotation_required_days": 90
             }
-        }
+        })
 
 
 class LinkedInCredentialResponse(BaseModel):
@@ -129,9 +127,9 @@ class LinkedInCredentialResponse(BaseModel):
     # Audit log entries (if included)
     logs: Optional[List[Dict[str, Any]]] = Field(None, description="Recent audit log entries")
 
-    class Config:
-        populate_by_name = True
-        json_schema_extra = {
+    model_config = ConfigDict(
+        populate_by_name=True,
+        json_schema_extra={
             "example": {
                 "id": "507f1f77bcf86cd799439014",
                 "linkedin_profile_id": "507f1f77bcf86cd799439011",
@@ -156,7 +154,8 @@ class LinkedInCredentialResponse(BaseModel):
                 "security_alert_sent_at": None,
                 "logs": []
             }
-        }
+        },
+    )
 
 
 class LinkedInCredentialUpdate(BaseModel):
@@ -177,14 +176,13 @@ class LinkedInCredentialUpdate(BaseModel):
     is_backup: Optional[bool] = Field(None, description="Update backup status")
     rotation_required_days: Optional[int] = Field(None, description="Update rotation requirement")
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(json_schema_extra={
             "example": {
                 "email": "newemail@example.com",
                 "password": "NewSecurePassword456!",
                 "status": "active"
             }
-        }
+        })
 
 
 class LinkedInCredentialLogResponse(BaseModel):
@@ -202,8 +200,7 @@ class LinkedInCredentialLogResponse(BaseModel):
     user_agent: str = Field("", description="User agent string")
     created_at: datetime = Field(..., description="Log entry timestamp")
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(json_schema_extra={
             "example": {
                 "id": "507f1f77bcf86cd799439015",
                 "credential_id": "507f1f77bcf86cd799439014",
@@ -213,7 +210,7 @@ class LinkedInCredentialLogResponse(BaseModel):
                 "user_agent": "Mozilla/5.0...",
                 "created_at": "2026-07-10T11:00:00Z"
             }
-        }
+        })
 
 
 class LinkedInProfileHealthResponse(BaseModel):
@@ -238,8 +235,7 @@ class LinkedInProfileHealthResponse(BaseModel):
     recommendations: List[str] = Field(default_factory=list, description="Health improvement recommendations")
     alerts: List[Dict[str, Any]] = Field(default_factory=list, description="Active health alerts")
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(json_schema_extra={
             "example": {
                 "profile_id": "507f1f77bcf86cd799439011",
                 "overall_status": "healthy",
@@ -258,4 +254,4 @@ class LinkedInProfileHealthResponse(BaseModel):
                 ],
                 "alerts": []
             }
-        }
+        })

@@ -110,7 +110,7 @@ def handle_connect(task, session, qualifiers):
             candidate = strategy.find_candidate(session)
         except Exception as e:
             if "Failed to fetch" in str(e) or "Page.evaluate" in str(e):
-                logger.warning("[%s] connect: Voyager API unavailable during candidate search - slot skipped (%s)", campaign, e)
+                logger.warning("[%s] connect: Voyager API unavailable during candidate search - slot skipped (%s)", campaign, type(e).__name__)
                 return
             raise
     if candidate is None:
@@ -252,10 +252,10 @@ def handle_connect(task, session, qualifiers):
             )
 
     except ReachedConnectionLimit as e:
-        logger.warning("Rate limited: %s", e)
+        logger.warning("Rate limited: %s", type(e).__name__)
         session.linkedin_profile.mark_exhausted(ActionLog.ActionType.CONNECT)
     except ProfileInaccessibleError as e:
-        logger.warning("Profile inaccessible - marking FAILED: %s", e)
+        logger.warning("Profile inaccessible - marking FAILED: %s", type(e).__name__)
         set_profile_state(
             session,
             public_id,
@@ -263,10 +263,10 @@ def handle_connect(task, session, qualifiers):
             reason=f"Profile inaccessible: {e}",
         )
     except SkipProfile as e:
-        logger.warning("Skipping %s: %s", public_id, e)
+        logger.warning("Skipping %s: %s", public_id, type(e).__name__)
         set_profile_state(session, public_id, DealState.FAILED.value)
     except Exception as e:
         if "Failed to fetch" in str(e) or "Page.evaluate" in str(e):
-            logger.warning("[%s] connect: Voyager API unavailable during connect attempt - slot skipped (%s)", campaign, e)
+            logger.warning("[%s] connect: Voyager API unavailable during connect attempt - slot skipped (%s)", campaign, type(e).__name__)
             return
         raise

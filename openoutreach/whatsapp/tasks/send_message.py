@@ -136,7 +136,7 @@ def handle_whatsapp_message(task, wa_session, qualifiers):  # noqa: ARG001
             deal.state = Deal.DealState.FAILED
             deal.reason = "phone_not_on_whatsapp"
             deal.save(update_fields=["state", "reason"])
-            logger.info("WA send_message [%s]: %s not on WA - skipping", campaign, lead.phone)
+            logger.info("WA send_message [%s]: lead not on WA - skipping", campaign)
             continue
 
         message_template = (
@@ -209,7 +209,7 @@ def handle_whatsapp_message(task, wa_session, qualifiers):  # noqa: ARG001
             },
         ).save()
 
-        logger.info("WA send_message [%s]: sent to %s", campaign, lead.phone)
+        logger.info("WA send_message [%s]: message sent", campaign)
         return
 
     logger.info("WA send_message [%s]: all eligible leads already messaged", campaign)

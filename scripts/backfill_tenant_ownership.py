@@ -35,14 +35,20 @@ def _write_checkpoint(path: Path, value: dict[str, Any]) -> None:
     os.replace(temporary, path)
 
 
-def _resolve_owner(document: dict[str, Any], profiles: Any, campaigns: Any) -> str | None:
+def _resolve_owner(document: dict[str, Any], profiles: Any, campaigns: Any,
+                   whatsapp_profiles: Any = None, mailboxes: Any = None) -> str | None:
     if document.get("user_id"):
         return str(document["user_id"])
-    profile_id = document.get("linkedin_profile_id") or document.get("profile_id")
-    if profile_id:
-        profile = profiles.find_one({"_id": profile_id}, {"user_id": 1})
-        if profile and profile.get("user_id"):
-            return str(profile["user_id"])
+    profile_sources = (
+        (document.get("linkedin_profile_id") or document.get("profile_id"), profiles),
+        (document.get("whatsapp_profile_id"), whatsapp_profiles),
+        (document.get("mailbox_id") or document.get("email_profile_id"), mailboxes),
+    )
+    for profile_id, source in profile_sources:
+        if profile_id and source is not None:
+            profile = source.find_one({"_id": profile_id}, {"user_id": 1})
+            if profile and profile.get("user_id"):
+                return str(profile["user_id"])
     campaign_id = document.get("campaign_id") or (document.get("payload") or {}).get("campaign_id")
     if campaign_id:
         campaign = campaigns.find_one({"_id": campaign_id}, {"user_id": 1})
@@ -69,6 +75,8 @@ def backfill_collection(db: Any, collection_name: str, *, checkpoint: str | None
     collection = db[collection_name]
     profiles = db["linkedin_profiles"]
     campaigns = db["campaigns"]
+    whatsapp_profiles = db.get("whatsapp_profiles")
+    mailboxes = db.get("mailboxes")
     query: dict[str, Any] = {"user_id": {"$exists": False}, "ownership_status": {"$ne": "quarantined"}}
     if checkpoint is not None:
         query["_id"] = {"$gt": checkpoint}
@@ -77,7 +85,7 @@ def backfill_collection(db: Any, collection_name: str, *, checkpoint: str | None
     for document in _retry(lambda: collection.find(query).sort("_id", 1).limit(batch_size), attempts=retries):
         scanned += 1
         last_id = str(document["_id"])
-        owner = _resolve_owner(document, profiles, campaigns)
+        owner = _resolve_owner(document, profiles, campaigns, whatsapp_profiles, mailboxes)
         if owner:
             assigned += 1
             if apply:

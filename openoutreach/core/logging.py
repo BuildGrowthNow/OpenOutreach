@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import sys
 
 from termcolor import colored
@@ -56,6 +57,27 @@ class ColoredFormatter(logging.Formatter):
         label = _LEVEL_LABELS.get(record.levelno, "???")
         prefix = colored(f"[{label}]", color, attrs=attrs) if color else f"[{label}]"
         return f"{prefix} {msg}"
+
+
+_EMAIL_RE = re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.IGNORECASE)
+_BEARER_RE = re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]+")
+_URL_SECRET_RE = re.compile(r"(?i)(https?://[^\s]+?)([?#][^\s]*)")
+_PHONE_RE = re.compile(r"(?<!\d)(?:\+?\d[\d ()-]{7,}\d)(?!\d)")
+
+
+def redact_log_text(text: str) -> str:
+    """Remove credentials and direct contact identifiers from log output."""
+    text = _BEARER_RE.sub("Bearer [REDACTED]", text)
+    text = _URL_SECRET_RE.sub(r"\1[REDACTED]", text)
+    text = _EMAIL_RE.sub("[EMAIL REDACTED]", text)
+    return _PHONE_RE.sub("[PHONE REDACTED]", text)
+
+
+class RedactingFormatter(ColoredFormatter):
+    """Format records while preventing accidental sensitive-data leakage."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        return redact_log_text(super().format(record))
 
 
 # ── Public API ──────────────────────────────────────────────────────
@@ -136,7 +158,7 @@ def configure_logging(level: int | None = None) -> None:
     root.handlers.clear()
 
     handler = logging.StreamHandler(sys.stdout)
-    handler.setFormatter(ColoredFormatter("%(message)s"))
+    handler.setFormatter(RedactingFormatter("%(message)s"))
     # Ensure level is not None before setting
     if level is not None:
         handler.setLevel(level)

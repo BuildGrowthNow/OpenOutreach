@@ -121,7 +121,7 @@ def _from_cache(domain: str) -> str | None:
         )
         return doc["pattern"] if doc and doc.get("pattern") else None
     except Exception as exc:
-        logger.debug("pattern cache lookup failed for %s: %s", domain, exc)
+        logger.debug("pattern cache lookup failed for %s: %s", domain, type(exc).__name__)
         return None
 
 
@@ -139,7 +139,7 @@ def _save_pattern_cache(domain: str, pattern: str, source: str) -> None:
             upsert=True,
         )
     except Exception as exc:
-        logger.debug("pattern cache save failed for %s: %s", domain, exc)
+        logger.debug("pattern cache save failed for %s: %s", domain, type(exc).__name__)
 
 
 def update_pattern_from_confirmed(domain: str, first: str, last: str, email: str) -> None:
@@ -184,5 +184,5 @@ def _from_hunter(domain: str, user_id: str | None) -> str | None:
         return _HUNTER_PATTERN_MAP.get(raw_pattern)
 
     except Exception as exc:
-        logger.debug("hunter pattern lookup failed for %s: %s", domain, exc)
+        logger.debug("hunter pattern lookup failed for %s: %s", domain, type(exc).__name__)
         return None

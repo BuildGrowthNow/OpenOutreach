@@ -51,5 +51,5 @@ def classify_reply_intent(content: str, user_id: Optional[str] = None) -> Option
             return None
         return label
     except Exception as exc:
-        logger.debug("Intent classification failed: %s", exc)
+        logger.debug("Intent classification failed: %s", type(exc).__name__)
         return None

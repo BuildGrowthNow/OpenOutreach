@@ -35,7 +35,15 @@ interface TokenPayload {
   campaign_id: string;
   event: string;
   dest_url: string;
+  iat?: number;
+  exp?: number;
 }
+
+const MAX_ID_LENGTH = 256;
+const MAX_EVENT_LENGTH = 16;
+const MAX_DESTINATION_LENGTH = 2048;
+const MAX_TOKEN_LENGTH = 8192;
+const VALID_EVENTS = new Set(["open", "click", "unsub"]);
 
 function b64url(buf: ArrayBuffer): string {
   const bytes = new Uint8Array(buf);
@@ -51,6 +59,7 @@ function b64urlDecode(s: string): Uint8Array {
 }
 
 async function verifyToken(token: string, secret: string): Promise<TokenPayload | null> {
+  if (token.length > MAX_TOKEN_LENGTH) return null;
   const dot = token.indexOf(".");
   if (dot === -1) return null;
   const payloadB64 = token.slice(0, dot);
@@ -80,7 +89,23 @@ async function verifyToken(token: string, secret: string): Promise<TokenPayload 
   if (diff !== 0) return null;
 
   try {
-    return JSON.parse(new TextDecoder().decode(b64urlDecode(payloadB64)));
+    const payload = JSON.parse(new TextDecoder().decode(b64urlDecode(payloadB64))) as Partial<TokenPayload>;
+    if (
+      !payload || typeof payload !== "object" ||
+      typeof payload.deal_id !== "string" || payload.deal_id.length === 0 || payload.deal_id.length > MAX_ID_LENGTH ||
+      typeof payload.campaign_id !== "string" || payload.campaign_id.length > MAX_ID_LENGTH ||
+      typeof payload.event !== "string" || payload.event.length > MAX_EVENT_LENGTH || !VALID_EVENTS.has(payload.event) ||
+      typeof payload.dest_url !== "string" || payload.dest_url.length > MAX_DESTINATION_LENGTH
+    ) return null;
+    for (const timestamp of [payload.iat, payload.exp]) {
+      if (timestamp !== undefined && (typeof timestamp !== "number" || !Number.isFinite(timestamp))) return null;
+    }
+    // Legacy tokens without expiry remain valid during the coordinated
+    // rollout; all newly issued tokens are time-bounded.
+    if (payload.exp !== undefined && (!Number.isFinite(payload.exp) || payload.exp <= Date.now() / 1000)) {
+      return null;
+    }
+    return payload as TokenPayload;
   } catch {
     return null;
   }
@@ -99,15 +124,37 @@ async function postWebhook(
     "X-Webhook-Secret": env.WORKER_WEBHOOK_SECRET,
   };
   for (let attempt = 0; attempt < 3; attempt++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5_000);
     try {
-      const res = await fetch(url, { method: "POST", headers, body });
+      const res = await fetch(url, { method: "POST", headers, body, signal: controller.signal });
       if (res.ok) return;
+      // Do not retry permanent auth/validation/client failures. Retry only
+      // throttling and transient upstream/server responses.
+      if (res.status !== 429 && res.status < 500) return;
     } catch {
-      // network error — retry
+      // Timeout/network error — retry while attempts remain.
+    } finally {
+      clearTimeout(timeout);
     }
     if (attempt < 2) {
       await new Promise((r) => setTimeout(r, 200 * 2 ** attempt));
     }
+  }
+}
+
+function isSafeRedirect(destination: string): boolean {
+  if (destination.length > 2048) return false;
+  try {
+    const parsed = new URL(destination);
+    return (
+      (parsed.protocol === "http:" || parsed.protocol === "https:") &&
+      parsed.hostname.length > 0 &&
+      !parsed.username &&
+      !parsed.password
+    );
+  } catch {
+    return false;
   }
 }
 
@@ -146,7 +193,7 @@ async function handleOpen(request: Request, env: Env, ctx: ExecutionContext, tok
 
 async function handleClick(request: Request, env: Env, ctx: ExecutionContext, token: string): Promise<Response> {
   const payload = await verifyToken(token, env.SECRET_KEY);
-  if (!payload || payload.event !== "click" || !payload.dest_url) {
+  if (!payload || payload.event !== "click" || !payload.dest_url || !isSafeRedirect(payload.dest_url)) {
     return new Response(null, { status: 400 });
   }
 

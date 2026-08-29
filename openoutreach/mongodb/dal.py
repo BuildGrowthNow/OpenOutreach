@@ -72,7 +72,7 @@ class TaskDAL:
                 return Task.from_dict(result)
             return None
         except Exception as e:
-            logger.error(f"Failed to claim next task: {e}")
+            logger.error("Failed to claim next task: %s", type(e).__name__)
             return None
 
     @staticmethod
@@ -94,7 +94,7 @@ class TaskDAL:
             )
             return result.modified_count > 0
         except Exception as e:
-            logger.error(f"Failed to mark task completed '{task_id}': {e}")
+            logger.error("Failed to mark task completed '%s': %s", task_id, type(e).__name__)
             return False
 
     @staticmethod
@@ -117,7 +117,7 @@ class TaskDAL:
             )
             return result.modified_count > 0
         except Exception as e:
-            logger.error(f"Failed to mark task failed '{task_id}': {e}")
+            logger.error("Failed to mark task failed '%s': %s", task_id, type(e).__name__)
             return False
 
     @staticmethod
@@ -143,7 +143,7 @@ class TaskDAL:
                 tasks.append(Task.from_dict(data))
             return tasks
         except Exception as e:
-            logger.error(f"Failed to get pending tasks for deal '{deal_id}': {e}")
+            logger.error("Failed to get pending tasks for deal '%s': %s", deal_id, type(e).__name__)
             return []
 
     @staticmethod
@@ -162,7 +162,7 @@ class TaskDAL:
         try:
             return collection.count_documents(query)
         except Exception as e:
-            logger.error(f"Failed to count pending tasks: {e}")
+            logger.error("Failed to count pending tasks: %s", type(e).__name__)
             return 0
 
     @staticmethod
@@ -181,7 +181,7 @@ class TaskDAL:
             logger.info(f"Deleted {deleted_count} tasks for campaign '{campaign_id}'")
             return deleted_count
         except Exception as e:
-            logger.error(f"Failed to cleanup tasks for campaign '{campaign_id}': {e}")
+            logger.error("Failed to cleanup tasks for campaign '%s': %s", campaign_id, type(e).__name__)
             return 0
 
     @staticmethod
@@ -212,7 +212,7 @@ class TaskDAL:
                 logger.warning(f"Recovered {recovered_count} stale tasks")
             return recovered_count
         except Exception as e:
-            logger.error(f"Failed to recover stale tasks: {e}")
+            logger.error("Failed to recover stale tasks: %s", type(e).__name__)
             return 0
 
 
@@ -234,7 +234,7 @@ class CampaignDAL:
                 campaigns.append(Campaign.from_dict(data))
             return campaigns
         except Exception as e:
-            logger.error(f"Failed to get campaigns for user '{user_id}': {e}")
+            logger.error("Failed to get campaigns for user '%s': %s", user_id, type(e).__name__)
             return []
 
     @staticmethod
@@ -256,7 +256,7 @@ class CampaignDAL:
                 campaigns.append(Campaign.from_dict(data))
             return campaigns
         except Exception as e:
-            logger.error(f"Failed to get active campaigns: {e}")
+            logger.error("Failed to get active campaigns: %s", type(e).__name__)
             return []
 
     @staticmethod
@@ -275,7 +275,7 @@ class CampaignDAL:
                 result = deals_collection.delete_many({"campaign_id": campaign_id})
                 logger.info(f"Deleted {result.deleted_count} deals for campaign '{campaign_id}'")
             except Exception as e:
-                logger.error(f"Failed to delete deals for campaign '{campaign_id}': {e}")
+                logger.error("Failed to delete deals for campaign '%s': %s", campaign_id, type(e).__name__)
 
         # Delete state graph + nodes + transitions
         graph_collection = get_mongodb_collection('campaign_state_graphs')
@@ -298,7 +298,7 @@ class CampaignDAL:
                     # Delete graph
                     graph_collection.delete_one({"_id": graph["_id"]})
             except Exception as e:
-                logger.error(f"Failed to delete state graph for campaign '{campaign_id}': {e}")
+                logger.error("Failed to delete state graph for campaign '%s': %s", campaign_id, type(e).__name__)
 
         # Delete search keywords
         keywords_collection = get_mongodb_collection('search_keywords')
@@ -306,7 +306,7 @@ class CampaignDAL:
             try:
                 keywords_collection.delete_many({"campaign_id": campaign_id})
             except Exception as e:
-                logger.error(f"Failed to delete keywords for campaign '{campaign_id}': {e}")
+                logger.error("Failed to delete keywords for campaign '%s': %s", campaign_id, type(e).__name__)
 
         # Delete action logs
         logs_collection = get_mongodb_collection('action_logs')
@@ -314,7 +314,7 @@ class CampaignDAL:
             try:
                 logs_collection.delete_many({"campaign_id": campaign_id})
             except Exception as e:
-                logger.error(f"Failed to delete action logs for campaign '{campaign_id}': {e}")
+                logger.error("Failed to delete action logs for campaign '%s': %s", campaign_id, type(e).__name__)
 
         # Nullify campaign_id in notifications (don't delete notifications)
         notifications_collection = get_mongodb_collection('notifications')
@@ -325,7 +325,7 @@ class CampaignDAL:
                     {"$set": {"campaign_id": None}}
                 )
             except Exception as e:
-                logger.error(f"Failed to nullify notifications for campaign '{campaign_id}': {e}")
+                logger.error("Failed to nullify notifications for campaign '%s': %s", campaign_id, type(e).__name__)
 
         # Finally delete the campaign itself
         campaigns_collection = get_mongodb_collection('campaigns')
@@ -339,7 +339,7 @@ class CampaignDAL:
                     logger.warning(f"Campaign '{campaign_id}' not found")
                     return False
             except Exception as e:
-                logger.error(f"Failed to delete campaign '{campaign_id}': {e}")
+                logger.error("Failed to delete campaign '%s': %s", campaign_id, type(e).__name__)
                 return False
 
         return False
@@ -367,7 +367,7 @@ class DealDAL:
                 deals.append(Deal.from_dict(data))
             return deals
         except Exception as e:
-            logger.error(f"Failed to get qualified deals for campaign '{campaign_id}': {e}")
+            logger.error("Failed to get qualified deals for campaign '%s': %s", campaign_id, type(e).__name__)
             return []
 
     @staticmethod
@@ -385,7 +385,7 @@ class DealDAL:
                 deals.append(Deal.from_dict(data))
             return deals
         except Exception as e:
-            logger.error(f"Failed to get deals for campaign '{campaign_id}': {e}")
+            logger.error("Failed to get deals for campaign '%s': %s", campaign_id, type(e).__name__)
             return []
 
     @staticmethod
@@ -406,7 +406,7 @@ class DealDAL:
             )
             return result.modified_count > 0
         except Exception as e:
-            logger.error(f"Failed to set deal state '{deal_id}': {e}")
+            logger.error("Failed to set deal state '%s': %s", deal_id, type(e).__name__)
             return False
 
     @staticmethod
@@ -428,7 +428,7 @@ class DealDAL:
                 deals.append(Deal.from_dict(data))
             return deals
         except Exception as e:
-            logger.error(f"Failed to get deals by state for campaign '{campaign_id}': {e}")
+            logger.error("Failed to get deals by state for campaign '%s': %s", campaign_id, type(e).__name__)
             return []
 
 
@@ -489,7 +489,7 @@ class LeadDAL:
                 leads.append(Lead.from_dict(data))
             return leads
         except Exception as e:
-            logger.error(f"Failed to get leads for user '{user_id}': {e}")
+            logger.error("Failed to get leads for user '%s': %s", user_id, type(e).__name__)
             return []
 
 
@@ -540,7 +540,7 @@ class NotificationDAL:
                 notifications.append(Notification.from_dict(data))
             return notifications
         except Exception as e:
-            logger.error(f"Failed to get unread notifications for user '{user_id}': {e}")
+            logger.error("Failed to get unread notifications for user '%s': %s", user_id, type(e).__name__)
             return []
 
     @staticmethod
@@ -563,7 +563,7 @@ class NotificationDAL:
             )
             return result.modified_count
         except Exception as e:
-            logger.error(f"Failed to mark all notifications read for user '{user_id}': {e}")
+            logger.error("Failed to mark all notifications read for user '%s': %s", user_id, type(e).__name__)
             return 0
 
 
@@ -618,7 +618,7 @@ class ActionLogDAL:
                 "created_at": {"$gte": midnight}
             })
         except Exception as e:
-            logger.error(f"Failed to count daily actions: {e}")
+            logger.error("Failed to count daily actions: %s", type(e).__name__)
             return 0
 
     @staticmethod
@@ -640,7 +640,7 @@ class ActionLogDAL:
                 logs.append(ActionLog.from_dict(data))
             return logs
         except Exception as e:
-            logger.error(f"Failed to get campaign activity '{campaign_id}': {e}")
+            logger.error("Failed to get campaign activity '%s': %s", campaign_id, type(e).__name__)
             return []
 
 

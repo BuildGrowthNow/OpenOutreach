@@ -20,6 +20,22 @@ def _write_checkpoint(path: Path, checkpoint: str | None) -> None:
     os.replace(temporary, path)
 
 
+def _encryption_context(document: dict[str, object]) -> dict[str, str]:
+    """Derive the stable tenant/profile binding without exposing document data."""
+    tenant_id = str(document.get("user_id") or "").strip()
+    profile_id = str(
+        document.get("linkedin_profile_id")
+        or document.get("whatsapp_profile_id")
+        or document.get("mailbox_id")
+        or document.get("email_profile_id")
+        or document.get("profile_id")
+        or ""
+    ).strip()
+    if not tenant_id:
+        raise ValueError("document has no tenant binding")
+    return {"tenant_id": tenant_id, "profile_id": profile_id}
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Migrate encrypted server fields")
     parser.add_argument("--collection", required=True)
@@ -58,7 +74,7 @@ def main() -> int:
     old_ring = KeyRing("old", {"old": base64.b64decode(old_key)})
     new_ring = KeyRing("new", {"new": base64.b64decode(new_key)})
     report = migrate_collection_field(collection, field=args.field,
-        context_for=lambda document: {"tenant_id": str(document.get("user_id", "")), "profile_id": str(document.get("linkedin_profile_id", ""))},
+        context_for=_encryption_context,
         old_ring=old_ring, new_ring=new_ring, checkpoint=checkpoint,
         batch_size=args.batch_size, dry_run=not args.apply, retries=args.retries)
     _write_checkpoint(args.checkpoint_file, report.checkpoint)

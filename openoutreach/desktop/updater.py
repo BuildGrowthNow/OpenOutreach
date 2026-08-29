@@ -12,8 +12,10 @@ import hashlib
 import logging
 import os
 import platform
+import re
 import subprocess
 import sys
+import urllib.parse
 import webbrowser
 from pathlib import Path
 from typing import Optional
@@ -33,6 +35,22 @@ GITHUB_RELEASES_URL = (
 _PENDING_UPDATE_FILE = Path.home() / ".lengrowth" / "pending_update.json"
 
 
+def _normalized_sha256(value: str | None) -> str | None:
+    """Return a canonical SHA-256 digest or None for untrusted metadata."""
+    if not value:
+        return None
+    digest = value.removeprefix("sha256:").lower()
+    return digest if re.fullmatch(r"[0-9a-f]{64}", digest) else None
+
+
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as fh:
+        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def save_pending_update(info: dict, exe_path: str) -> None:
     """Persist downloaded update info to disk so the next startup can force-apply it."""
     try:
@@ -41,7 +59,7 @@ def save_pending_update(info: dict, exe_path: str) -> None:
         _PENDING_UPDATE_FILE.write_text(json.dumps(payload), encoding="utf-8")
         logger.info("Pending update v%s saved to %s", info.get("version"), _PENDING_UPDATE_FILE)
     except Exception as e:
-        logger.warning("Failed to save pending update: %s", e)
+        logger.warning("Failed to save pending update: %s", type(e).__name__)
 
 
 def load_pending_update() -> Optional[dict]:
@@ -51,13 +69,19 @@ def load_pending_update() -> Optional[dict]:
             return None
         data = json.loads(_PENDING_UPDATE_FILE.read_text(encoding="utf-8"))
         exe_path = data.get("exe_path", "")
-        if not exe_path or not Path(exe_path).exists():
+        path = Path(exe_path)
+        expected = _normalized_sha256(data.get("digest"))
+        if not exe_path or not path.exists() or not expected:
             # Stale entry - the temp file was cleaned up
+            clear_pending_update()
+            return None
+        if _file_sha256(path) != expected:
+            logger.warning("Discarding pending update with a digest mismatch")
             clear_pending_update()
             return None
         return data
     except Exception as e:
-        logger.warning("Failed to load pending update: %s", e)
+        logger.warning("Failed to load pending update: %s", type(e).__name__)
         return None
 
 
@@ -66,7 +90,7 @@ def clear_pending_update() -> None:
     try:
         _PENDING_UPDATE_FILE.unlink(missing_ok=True)
     except Exception as e:
-        logger.warning("Failed to clear pending update: %s", e)
+        logger.warning("Failed to clear pending update: %s", type(e).__name__)
 
 
 
@@ -83,9 +107,9 @@ def can_auto_update() -> bool:
 def _get_platform_asset_name(release_version: str = "") -> str:
     system = platform.system().lower()
     if system == "darwin":
-        return f"OpenOutreach-{release_version}.dmg" if release_version else "Lengrowth-macOS.dmg"
+        return f"Lengrowth-{release_version}.dmg" if release_version else "Lengrowth-macOS.dmg"
     elif system == "windows":
-        return f"OpenOutreach-{release_version}-Setup.exe" if release_version else "Lengrowth.exe"
+        return f"Lengrowth-{release_version}-Setup.exe" if release_version else "Lengrowth.exe"
     return ""
 
 
@@ -167,7 +191,7 @@ async def check_for_updates() -> Optional[dict]:
             return None
 
     except Exception as e:
-        logger.warning("Update check failed: %s", e)
+        logger.warning("Update check failed: %s", type(e).__name__)
         return None
 
 
@@ -185,11 +209,22 @@ async def download_update(
     dest_dir = _PENDING_UPDATE_FILE.parent
     dest_dir.mkdir(parents=True, exist_ok=True)
     dest = str(dest_dir / "Lengrowth_update.exe")
+    partial = f"{dest}.part"
+
+    if not expected_digest:
+        logger.error("Refusing update download without a SHA-256 digest")
+        return None
+    expected = _normalized_sha256(expected_digest)
+    if not expected:
+        logger.error("Refusing update download with an invalid SHA-256 digest")
+        return None
 
     # Remove any stale partial download before starting
     try:
         if os.path.exists(dest):
             os.remove(dest)
+        if os.path.exists(partial):
+            os.remove(partial)
     except Exception:
         pass
 
@@ -198,28 +233,24 @@ async def download_update(
             async with client.stream("GET", url) as response:
                 response.raise_for_status()
                 downloaded = 0
-                with open(dest, "wb") as fh:
+                with open(partial, "wb") as fh:
                     async for chunk in response.aiter_bytes(chunk_size=65536):
                         fh.write(chunk)
                         downloaded += len(chunk)
-        if expected_digest:
-            # GitHub returns digests as ``sha256:<hex>``.
-            expected = expected_digest.removeprefix("sha256:").lower()
-            digest = hashlib.sha256()
-            with open(dest, "rb") as fh:
-                for chunk in iter(lambda: fh.read(1024 * 1024), b""):
-                    digest.update(chunk)
-            if digest.hexdigest().lower() != expected:
-                raise ValueError("downloaded update digest does not match GitHub asset digest")
+        if _file_sha256(Path(partial)) != expected:
+            raise ValueError("downloaded update digest does not match GitHub asset digest")
+        os.replace(partial, dest)
         ver_tag = f"v{version} " if version else ""
         logger.info("Update %sdownloaded to %s (%d bytes)", ver_tag, dest, downloaded)
         return dest
     except Exception as e:
-        logger.error("Update download failed: %s", e)
+        logger.error("Update download failed: %s", type(e).__name__)
         # Remove incomplete file so load_pending_update won't find a corrupt exe
         try:
             if os.path.exists(dest):
                 os.remove(dest)
+            if os.path.exists(partial):
+                os.remove(partial)
         except Exception:
             pass
         return None
@@ -248,6 +279,7 @@ def apply_update_windows(new_exe_path: str, download_url: str = "") -> None:
     ps_script = f"""
 $pid_to_wait = {current_pid}
 $target = '{current_exe.replace("'", "''")}'
+$backup = "$target.previous"
 $source = '{new_exe_path.replace("'", "''")}'
 $log = '{log_path.replace("'", "''")}'
 $fallback_url = '{fallback_url.replace("'", "''")}'
@@ -278,10 +310,18 @@ Write-Log "Old process exited. Attempting copy..."
 Start-Sleep -Milliseconds 1000
 
 try {{
+    if (Test-Path $target) {{
+        Copy-Item -Path $target -Destination $backup -Force -ErrorAction Stop
+        Write-Log "Previous executable backed up to $backup"
+    }}
     Copy-Item -Path $source -Destination $target -Force -ErrorAction Stop
     Write-Log "Copy succeeded."
 }} catch {{
     Write-Log "ERROR: Copy-Item failed: $_"
+    if (Test-Path $backup) {{
+        Copy-Item -Path $backup -Destination $target -Force -ErrorAction SilentlyContinue
+        Write-Log "Previous executable restored from backup."
+    }}
     # Open download page so user can update manually
     Start-Process $fallback_url
     exit 1
@@ -322,7 +362,7 @@ Remove-Item -Path '{ps_path.replace("'", "''")}' -Force -ErrorAction SilentlyCon
         )
         logger.info("Update PowerShell script launched - exiting for replacement")
     except Exception as e:
-        logger.error("Failed to launch update script: %s", e)
+        logger.error("Failed to launch update script: %s", type(e).__name__)
         return
 
     os._exit(0)
@@ -333,7 +373,11 @@ def prompt_update(update_info: dict) -> None:
     try:
         url = update_info.get("download_url", update_info.get("release_page"))
         if url:
-            logger.info("Opening update URL: %s", url)
+            parsed = urllib.parse.urlsplit(str(url))
+            safe_url = urllib.parse.urlunsplit(
+                (parsed.scheme, parsed.netloc, parsed.path, "", "")
+            )
+            logger.info("Opening update URL: %s", safe_url)
             webbrowser.open(url)
     except Exception as e:
-        logger.error("Failed to open update URL: %s", e)
+        logger.error("Failed to open update URL: %s", type(e).__name__)

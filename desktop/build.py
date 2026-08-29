@@ -9,7 +9,7 @@ Usage:
     python desktop/build.py --all            # Build all available formats
     python desktop/build.py --clean          # Clean build artifacts only
     python desktop/build.py --icons          # Regenerate icons only
-    python desktop/build.py --sign           # Sign the app (macOS/Windows)
+    python desktop/build.py --sign           # Sign the macOS app
     python desktop/build.py --notarize       # Notarize macOS app (requires Apple Developer)
 
 Environment:
@@ -17,8 +17,8 @@ Environment:
     APPLE_TEAM_ID           Apple Team ID for notarization
     APPLE_ID                Apple ID email for notarization
     APPLE_APP_PASSWORD      App-specific password for notarization
-    SIGN_CERT_PATH          Path to Windows code signing certificate (optional)
-    SIGN_CERT_PASS          Windows certificate password (optional)
+    Windows signing is handled by desktop/windows/sign.ps1 (local) or
+    desktop/windows/sign_release.ps1 (approved CI publishing).
 """
 
 import argparse
@@ -666,8 +666,9 @@ def main():
             sys.exit(1)
 
     # Code signing (macOS)
-    if args.sign and sys.platform == "darwin":
-        sign_macos_app()
+    if args.sign:
+        if sys.platform != "darwin" or not sign_macos_app():
+            sys.exit(1)
 
     # Platform-specific packaging
     if args.all:
@@ -678,17 +679,21 @@ def main():
             if args.notarize:
                 notarize_macos_app()
         elif sys.platform == "win32":
-            create_msix()
-            create_nsis_installer()
+            if not create_msix() or not create_nsis_installer():
+                sys.exit(1)
     else:
         if args.dmg:
-            create_dmg()
+            if not create_dmg():
+                sys.exit(1)
         if args.msix:
-            create_msix()
+            if not create_msix():
+                sys.exit(1)
         if args.installer:
-            create_nsis_installer()
+            if not create_nsis_installer():
+                sys.exit(1)
         if args.notarize:
-            notarize_macos_app()
+            if not notarize_macos_app():
+                sys.exit(1)
 
     print("\nBuild process complete!")
 

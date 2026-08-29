@@ -61,9 +61,23 @@ class TestAntiAbuse:
 
     def test_signup_rate_limiter_check_succeeds(self):
         """Test IP rate limiter allows first signup."""
+        from openoutreach.mongodb.connection import check_mongodb_connection
+
+        if not check_mongodb_connection():
+            pytest.skip("MongoDB not available; first-signup behavior requires the integration database")
         allowed, error = SignupRateLimiter.check_ip_limit("192.168.1.1")
         assert allowed is True
         assert error is None
+
+    def test_signup_rate_limiter_fails_closed_without_database(self, monkeypatch):
+        """A database outage must not disable signup anti-abuse controls."""
+        monkeypatch.setattr(
+            "openoutreach.billing.rate_limiter.get_mongodb_collection",
+            lambda _name: None,
+        )
+        allowed, error = SignupRateLimiter.check_ip_limit("192.168.1.2")
+        assert allowed is False
+        assert "temporarily unavailable" in error.lower()
 
     def test_linkedin_credential_validator_empty_username(self):
         """Test credential validator rejects empty username."""

@@ -171,10 +171,10 @@ async def list_credentials(
             count=len(credential_responses)
         )
     except Exception as e:
-        logger.error(f"Failed to list credentials: {e}")
+        logger.error("Failed to list credentials; exception_type=%s", type(e).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to list credentials: {str(e)}"
+            detail="Failed to list credentials"
         )
 
 
@@ -291,10 +291,10 @@ async def create_credential(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to create credential: {e}")
+        logger.error("Failed to create credential; exception_type=%s", type(e).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create credential: {str(e)}"
+            detail="Failed to create credential"
         )
 
 
@@ -449,10 +449,10 @@ async def update_credential(
         updated_profile = LinkedInProfile.objects.get(_id=credential.linkedin_profile_id) if credential.linkedin_profile_id else None
         return _build_credential_response(credential, updated_profile)
     except Exception as e:
-        logger.error(f"Failed to update credential: {e}")
+        logger.error("Failed to update credential; exception_type=%s", type(e).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to update credential: {str(e)}"
+            detail="Failed to update credential"
         )
 
 
@@ -531,10 +531,10 @@ async def delete_credential(
 
         return None
     except Exception as e:
-        logger.error(f"Failed to delete credential: {e}")
+        logger.error("Failed to delete credential; exception_type=%s", type(e).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to delete credential: {str(e)}"
+            detail="Failed to delete credential"
         )
 
 
@@ -628,7 +628,7 @@ async def verify_credential(
                     display_override = vnc_session.display
                     logger.debug("Using VNC display %s for verification", display_override)
             except Exception as e:
-                logger.debug("Could not get VNC display: %s", e)
+                logger.debug("Could not get VNC display: %s", type(e).__name__)
 
         # Launch browser with proxy and VNC support
         page, context, browser, playwright = launch_browser(
@@ -701,7 +701,10 @@ async def verify_credential(
                     profile.cookies_updated_at = datetime.now(tz.utc)
                     profile.save(update_fields=["cookie_data_encrypted", "cookies_updated_at"])
                 except Exception as e:
-                    logger.error("Failed to save cookies after verification: %s", e)
+                    logger.error(
+                        "Failed to save cookies after verification; exception_type=%s",
+                        type(e).__name__,
+                    )
 
             # Discover the real LinkedIn public identifier while browser is open
             if profile:
@@ -713,7 +716,10 @@ async def verify_credential(
                         profile.linkedin_username = public_id
                         logger.info("Discovered LinkedIn username on verify: %s", public_id)
                 except Exception as e:
-                    logger.warning("Could not discover LinkedIn username during verify: %s", e)
+                    logger.warning(
+                        "Could not discover LinkedIn username during verify; exception_type=%s",
+                        type(e).__name__,
+                    )
 
             # Success
             credential.mark_verified()
@@ -748,7 +754,7 @@ async def verify_credential(
 
     except IllegalPageTransition as e:
         # Challenge/verification detected
-        logger.warning(f"Verification requires challenge: {e}")
+        logger.warning("Verification requires challenge; exception_type=%s", type(e).__name__)
 
         # Update profile to indicate verification required
         if profile:
@@ -761,7 +767,7 @@ async def verify_credential(
         log_entry = LinkedInCredentialLog(
             credential_id=credential._id,
             action="awaiting_challenge",
-            details={"method": "browser_login", "message": str(e)},
+            details={"method": "browser_login", "message": "challenge_required"},
             ip_address=_get_client_ip(request),
             user_agent=request.headers.get("user-agent", ""),
         )
@@ -771,11 +777,11 @@ async def verify_credential(
             success=False,
             message="LinkedIn requires verification. Please complete the challenge.",
             status=credential.status,
-            error=json.dumps({"errorType": "awaiting_challenge", "message": str(e)})
+            error=json.dumps({"errorType": "awaiting_challenge", "message": "challenge_required"})
         )
 
     except Exception as e:
-        logger.error(f"Verification failed: {e}")
+        logger.error("Verification failed; exception_type=%s", type(e).__name__)
 
         # Mark as failed
         credential.mark_verification_failed()
@@ -784,7 +790,7 @@ async def verify_credential(
         log_entry = LinkedInCredentialLog(
             credential_id=credential._id,
             action="failed",
-            details={"method": "browser_login", "error": str(e)},
+            details={"method": "browser_login", "error": "verification_failed"},
             ip_address=_get_client_ip(request),
             user_agent=request.headers.get("user-agent", ""),
         )
@@ -794,7 +800,7 @@ async def verify_credential(
             success=False,
             message="Verification failed",
             status=credential.status,
-            error=str(e)
+            error="Verification failed"
         )
 
 
@@ -943,11 +949,11 @@ async def rotate_credential(
             backup_id=backup._id
         )
     except Exception as e:
-        logger.error(f"Failed to rotate credential: {e}")
+        logger.error("Failed to rotate credential; exception_type=%s", type(e).__name__)
         return RotateResponse(
             success=False,
             message="Rotation failed",
-            error=str(e)
+            error="Rotation failed"
         )
 
 

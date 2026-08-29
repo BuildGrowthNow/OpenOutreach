@@ -158,8 +158,8 @@ class RemoteClient:
         response = await self._request_with_retry("POST", f"/api/daemon/v2/tasks/{task_id}/complete", json={"lease_id": lease_id, "idempotency_key": idempotency_key, "result": result})
         return response.json()
 
-    async def fail_task_v2(self, task_id: str, lease_id: str, category: str, error: str = "") -> dict:
-        response = await self._request_with_retry("POST", f"/api/daemon/v2/tasks/{task_id}/fail", json={"lease_id": lease_id, "category": category, "error": error[:500]})
+    async def fail_task_v2(self, task_id: str, lease_id: str, idempotency_key: str, category: str, error: str = "") -> dict:
+        response = await self._request_with_retry("POST", f"/api/daemon/v2/tasks/{task_id}/fail", json={"lease_id": lease_id, "idempotency_key": idempotency_key, "category": category, "error": error[:500]})
         return response.json()
 
     async def ingest_events_v2(self, events: list[dict]) -> dict:
@@ -377,16 +377,16 @@ class RemoteClient:
                     try:
                         self._on_token_refresh(new_token)
                     except Exception as e:
-                        logger.warning("Token refresh callback failed: %s", e)
+                        logger.warning("Token refresh callback failed; exception_type=%s", type(e).__name__)
                 return new_token
             return None
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 401:
                 raise SessionExpiredError("Refresh token expired - re-login required") from e
-            logger.error("Token refresh failed: %s", e)
+            logger.error("Token refresh failed; exception_type=%s", type(e).__name__)
             return None
         except Exception as e:
-            logger.error("Token refresh failed: %s", e)
+            logger.error("Token refresh failed; exception_type=%s", type(e).__name__)
             return None
 
     async def get_profile_details(self, linkedin_profile_id: str) -> dict:

@@ -151,5 +151,5 @@ def _get_mac_app_version(app_path: str) -> Optional[str]:
         )
         return result.stdout.strip() if result.returncode == 0 else None
     except Exception as e:
-        logger.debug("Could not get app version for %s: %s", app_path, e)
+        logger.debug("Could not get app version for %s: %s", app_path, type(e).__name__)
         return None

@@ -222,7 +222,7 @@ def _save_qualification_result(
         try:
             deal = promote_lead_to_deal(session, public_id, reason=reason)
         except ValueError as e:
-            logger.warning("Cannot promote %s: %s \u2014 disqualifying", public_id, e)
+            logger.warning("Cannot promote %s: %s \u2014 disqualifying", public_id, type(e).__name__)
             create_disqualified_deal(session, public_id, reason=str(e))
             _log_qualification_action(session, lead_id, public_id, False, str(e))
             return

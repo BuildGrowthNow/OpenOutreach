@@ -11,7 +11,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, cast
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from openoutreach.api_v2.dependencies_v2 import get_current_user, get_campaign_with_access
 from openoutreach.mongodb.connection import get_mongodb_collection
@@ -46,8 +46,7 @@ class CampaignCreate(BaseModel):
     maps_location: Optional[str] = None
     classified_sites: Optional[List[str]] = None
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(json_schema_extra={
             "example": {
                 "name": "SaaS Founders Outreach",
                 "product_pitch": "We help SaaS founders automate their lead generation",
@@ -60,7 +59,7 @@ class CampaignCreate(BaseModel):
                 "follow_up_strategy": "Send personalized follow-up after 3 days",
                 "target_degrees": [1, 2, 3]
             }
-        }
+        })
 
 
 class CampaignUpdate(BaseModel):
@@ -186,7 +185,7 @@ def _on_campaign_activated(campaign: models.Campaign, user_id: str) -> None:
         created += plan_check_pending_window(session, campaign)
         logger.info("Campaign %s activated: %d tasks scheduled", campaign._id, created)
     except Exception as e:
-        logger.warning("Failed to schedule tasks on activation: %s", e)
+        logger.warning("Failed to schedule tasks on activation; exception_type=%s", type(e).__name__)
 
 
 # Endpoints
@@ -359,10 +358,10 @@ async def list_campaigns(
         )
 
     except Exception as e:
-        logger.exception("Failed to list campaigns")
+        logger.error("Failed to list campaigns; exception_type=%s", type(e).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve campaigns: {str(e)}"
+            detail="Failed to retrieve campaigns"
         )
 
 
@@ -518,10 +517,10 @@ async def create_campaign(
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception("Failed to create campaign")
+        logger.error("Failed to create campaign; exception_type=%s", type(e).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create campaign: {str(e)}"
+            detail="Failed to create campaign"
         )
 
 
@@ -754,10 +753,10 @@ async def update_campaign(
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception("Failed to update campaign")
+        logger.error("Failed to update campaign; exception_type=%s", type(e).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to update campaign: {str(e)}"
+            detail="Failed to update campaign"
         )
 
 
@@ -823,10 +822,10 @@ async def delete_campaign(
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception("Failed to delete campaign")
+        logger.error("Failed to delete campaign; exception_type=%s", type(e).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to delete campaign: {str(e)}"
+            detail="Failed to delete campaign"
         )
 
 
@@ -946,10 +945,10 @@ async def pause_campaign(
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception("Failed to pause campaign")
+        logger.error("Failed to pause campaign; exception_type=%s", type(e).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to pause campaign: {str(e)}"
+            detail="Failed to pause campaign"
         )
 
 
@@ -1056,10 +1055,10 @@ async def resume_campaign(
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception("Failed to resume campaign")
+        logger.error("Failed to resume campaign; exception_type=%s", type(e).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to resume campaign: {str(e)}"
+            detail="Failed to resume campaign"
         )
 
 

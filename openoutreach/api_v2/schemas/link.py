@@ -7,7 +7,7 @@ Corresponds to the MongoDB TrackedLink model in openoutreach.mongodb.models.
 
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class LinkCreate(BaseModel):
@@ -28,8 +28,7 @@ class LinkCreate(BaseModel):
     utm_term: str = Field(default="", description="UTM term parameter")
     utm_content: str = Field(default="", description="UTM content parameter")
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(json_schema_extra={
             "example": {
                 "campaign_id": "770e8400-e29b-41d4-a716-446655440002",
                 "user_id": "880e8400-e29b-41d4-a716-446655440003",
@@ -42,7 +41,7 @@ class LinkCreate(BaseModel):
                 "utm_term": "b2b_saas",
                 "utm_content": "link1"
             }
-        }
+        })
 
 
 class LinkUpdate(BaseModel):
@@ -67,13 +66,12 @@ class LinkUpdate(BaseModel):
     last_ip: Optional[str] = Field(None, description="Update last click IP address")
     last_user_agent: Optional[str] = Field(None, description="Update last click user agent")
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(json_schema_extra={
             "example": {
                 "is_active": False,
                 "utm_campaign": "q4_outreach"
             }
-        }
+        })
 
 
 class LinkResponse(BaseModel):
@@ -101,8 +99,7 @@ class LinkResponse(BaseModel):
     last_ip: Optional[str] = Field(None, description="Last click IP address")
     last_user_agent: str = Field(default="", description="Last click user agent string")
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(json_schema_extra={
             "example": {
                 "id": "550e8400-e29b-41d4-a716-446655440000",
                 "campaign_id": "770e8400-e29b-41d4-a716-446655440002",
@@ -122,4 +119,4 @@ class LinkResponse(BaseModel):
                 "last_ip": "192.168.1.100",
                 "last_user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
             }
-        }
+        })

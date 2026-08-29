@@ -293,7 +293,7 @@ class BackupManager:
             return {"backup_id": "temp", "collection": collection_name}
 
         except Exception as e:
-            logger.error(f"Failed to create backup: {e}")
+            logger.error("Failed to create backup: %s", type(e).__name__)
             return None
 
     def restore_backup(self, backup_id: str) -> bool:
@@ -330,7 +330,7 @@ class BackupManager:
             return True
 
         except Exception as e:
-            logger.error(f"Failed to restore backup: {e}")
+            logger.error("Failed to restore backup: %s", type(e).__name__)
             return False
 
     def list_backups(
@@ -365,7 +365,7 @@ class BackupManager:
                 for b in backups
             ]
         except Exception as e:
-            logger.error(f"Failed to list backups: {e}")
+            logger.error("Failed to list backups: %s", type(e).__name__)
             return []
 
 
@@ -397,7 +397,7 @@ class CleanupManager:
             return result.deleted_count
 
         except Exception as e:
-            logger.error(f"Failed to cleanup old logs: {e}")
+            logger.error("Failed to cleanup old logs: %s", type(e).__name__)
             return 0
 
     def cleanup_expired_tokens(self) -> int:
@@ -418,7 +418,7 @@ class CleanupManager:
             return result.deleted_count
 
         except Exception as e:
-            logger.error(f"Failed to cleanup expired tokens: {e}")
+            logger.error("Failed to cleanup expired tokens: %s", type(e).__name__)
             return 0
 
     def cleanup_orphaned_data(self, collection_name: str, reference_field: str) -> int:
@@ -465,7 +465,7 @@ class CleanupManager:
             return 0
 
         except Exception as e:
-            logger.error(f"Failed to cleanup orphaned data: {e}")
+            logger.error("Failed to cleanup orphaned data: %s", type(e).__name__)
             return 0
 
 
@@ -508,7 +508,7 @@ def create_indexes(collection_name: str, indexes: List[Dict[str, Any]]) -> None:
             logger.info(f"Created index '{options['name']}' on '{collection_name}'")
 
         except Exception as e:
-            logger.error(f"Failed to create index: {e}")
+            logger.error("Failed to create index: %s", type(e).__name__)
 
 
 def get_index_stats(collection_name: str) -> List[Dict[str, Any]]:
@@ -538,7 +538,7 @@ def get_index_stats(collection_name: str) -> List[Dict[str, Any]]:
             for idx in indexes
         ]
     except Exception as e:
-        logger.error(f"Failed to get index stats: {e}")
+        logger.error("Failed to get index stats: %s", type(e).__name__)
         return []
 
 
@@ -590,5 +590,5 @@ def validate_document(
         return True
 
     except Exception as e:
-        logger.error(f"Document validation failed: {e}")
+        logger.error("Document validation failed: %s", type(e).__name__)
         return False

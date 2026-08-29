@@ -521,8 +521,8 @@ Same data as §6.2 but `compact=false` - shows more detail per row. No additiona
 
 | Service | Status source | Latency source |
 |---|---|---|
-| Database | `healthStatus.services.database` mapped: `"operational"` → `connected`, `"degraded"` → `degraded`, other → `disconnected` | `healthStatus.database.latency_ms` (often 0 - not reliably populated) |
-| API | `healthStatus.status === "operational"` → `connected`, else `degraded` | `healthStatus.api.latency_ms` (often 0) |
+| Database | `healthStatus.services.database` mapped: `"operational"` → `connected`, `"degraded"` → `degraded`, other → `disconnected` | `healthStatus.database.latency_ms` measured around the MongoDB probe |
+| API | `healthStatus.status === "operational"` → `connected`, else `degraded` | `healthStatus.api.latency_ms` measured for the health request |
 
 ### 11.3 Database Status card
 
@@ -531,7 +531,12 @@ Same data as §6.2 but `compact=false` - shows more detail per row. No additiona
 | Database Type | Hard-coded string `"MongoDB"` |
 | Connection Status | `healthStatus.services.database === "operational"` → `"Connected"` with pulsing green dot, else `"Disconnected"` with red dot |
 
-**Note:** Latency values shown in Service Timeline are populated as 0 by default - the health endpoint does not currently measure real latency.
+The generic health endpoint reports LinkedIn as `unknown` because it does not
+perform a provider API probe. Provider/profile health must come from the
+authenticated LinkedIn profile health endpoint.
+
+Latency values are measured by the health endpoint for each request. They are
+diagnostic probe timings, not an externally observed request-duration SLI.
 
 ---
 

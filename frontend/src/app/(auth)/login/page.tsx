@@ -20,20 +20,23 @@ export default function LoginPage() {
       const callback = searchParams.get("callback")
 
       if (isDesktop && callback) {
-        // Call pywebview API directly if available (avoids OS protocol launch)
+        // Access tokens must stay inside the in-process desktop bridge. Never
+        // place them in custom-protocol URLs, browser history, or argv.
         const pywebview = (window as unknown as Record<string, unknown>).pywebview as
           { api?: {
             store_auth_tokens?: (access: string, refresh?: string | null) => void
-            handle_lengrowth_url?: (u: string) => void
           } } | undefined
         if (pywebview?.api?.store_auth_tokens) {
           pywebview.api.store_auth_tokens(accessToken, refreshToken)
-        } else if (pywebview?.api?.handle_lengrowth_url) {
-          // Compatibility with older desktop builds. Never include the
-          // refresh token in the OS protocol URL.
-          pywebview.api.handle_lengrowth_url(`${callback}?token=${encodeURIComponent(accessToken)}`)
         } else {
-          window.location.href = `${callback}?token=${encodeURIComponent(accessToken)}`
+          // The bridge can load after React. Retry once it is ready; do not
+          // fall back to the legacy protocol callback because it exposes the
+          // access token to the OS protocol handler.
+          window.addEventListener("pywebviewready", () => {
+            const api = (window as unknown as Record<string, unknown>).pywebview as
+              { api?: { store_auth_tokens?: (access: string, refresh?: string | null) => void } } | undefined
+            api?.api?.store_auth_tokens?.(accessToken, refreshToken)
+          }, { once: true })
         }
         return
       }
