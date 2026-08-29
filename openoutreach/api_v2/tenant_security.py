@@ -20,6 +20,7 @@ class TenantContext:
     device_id: str | None = None
     profile_ids: frozenset[str] = frozenset()
     scopes: frozenset[str] = frozenset()
+    channel_profile_ids: Mapping[str, frozenset[str]] | None = None
 
     def __post_init__(self) -> None:
         if not self.tenant_id or not self.tenant_id.strip():

@@ -160,6 +160,16 @@ class EnrollmentCodeRequest(BaseModel):
     profile_ids: list[str] = Field(min_length=1, max_length=20)
     channels: list[Literal["linkedin", "whatsapp", "email"]] = Field(min_length=1, max_length=3)
     device_name: str = Field(min_length=1, max_length=100)
+    channel_profile_ids: dict[str, list[str]] = Field(default_factory=dict, max_length=3)
+
+    @field_validator("channel_profile_ids")
+    @classmethod
+    def validate_channel_profile_ids(cls, value: dict[str, list[str]]) -> dict[str, list[str]]:
+        allowed = {"linkedin", "whatsapp", "email"}
+        if set(value) - allowed or any(not ids or len(ids) > 20 for ids in value.values()):
+            raise ValueError("invalid channel profile bindings")
+        return {channel: sorted(set(str(profile_id) for profile_id in ids))
+                for channel, ids in value.items()}
 
 
 class EnrollmentCodeResponse(BaseModel):
@@ -169,6 +179,7 @@ class EnrollmentCodeResponse(BaseModel):
     expires_at: datetime
     profile_ids: list[str]
     channels: list[str]
+    channel_profile_ids: dict[str, list[str]] = Field(default_factory=dict)
 
 
 class DeviceEnrollRequest(BaseModel):
@@ -188,6 +199,7 @@ class DeviceEnrollResponse(BaseModel):
     refresh_token: str
     profile_ids: list[str]
     channels: list[str]
+    channel_profile_ids: dict[str, list[str]] = Field(default_factory=dict)
 
 
 class TokenExchangeRequest(BaseModel):
@@ -206,6 +218,9 @@ class TokenExchangeResponse(BaseModel):
     access_token: str
     refresh_token: str
     expires_in: int = 300
+    profile_ids: list[str] = Field(default_factory=list)
+    channels: list[str] = Field(default_factory=list)
+    channel_profile_ids: dict[str, list[str]] = Field(default_factory=dict)
 
 
 class DeviceResponse(BaseModel):
@@ -286,10 +301,26 @@ async def create_enrollment_code(
     Profile ownership is checked server-side; the requested IDs never become
     authorization authority for later daemon requests.
     """
-    profile_ids = sorted(set(request.profile_ids))
-    for profile_id in profile_ids:
-        if not LinkedInProfile.objects.get(_id=profile_id, user_id=user_id):
-            raise HTTPException(404, "Profile not found")
+    channels = sorted(set(request.channels))
+    bindings = request.channel_profile_ids or {"linkedin": sorted(set(request.profile_ids))}
+    if set(bindings) != set(channels):
+        raise HTTPException(422, "Every enrollment channel requires an explicit profile binding")
+    for channel in channels:
+        channel_ids = bindings[channel]
+        if channel == "linkedin":
+            valid = all(LinkedInProfile.objects.get(_id=profile_id, user_id=user_id)
+                        for profile_id in channel_ids)
+        else:
+            collection = get_mongodb_collection(
+                "whatsapp_profiles" if channel == "whatsapp" else "mailboxes"
+            )
+            valid = collection is not None and all(
+                collection.find_one({"_id": profile_id, "user_id": user_id})
+                for profile_id in channel_ids
+            )
+        if not valid:
+            raise HTTPException(404, f"{channel.title()} profile not found")
+    profile_ids = sorted({profile_id for ids in bindings.values() for profile_id in ids})
     code, code_hash = new_enrollment_code()
     expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
     collection = get_mongodb_collection("daemon_enrollment_codes")
@@ -301,7 +332,8 @@ async def create_enrollment_code(
             "code_hash": code_hash,
             "user_id": user_id,
             "profile_ids": profile_ids,
-            "channels": sorted(set(request.channels)),
+            "channels": channels,
+            "channel_profile_ids": bindings,
             "device_name": request.device_name,
             "created_at": datetime.now(timezone.utc),
             "expires_at": expires_at,
@@ -310,7 +342,9 @@ async def create_enrollment_code(
     )
     append_security_event("daemon_enrollment_code_created", outcome="success", actor_type="human", tenant_id=user_id, metadata={"profile_count": len(profile_ids)})
     response.headers["Cache-Control"] = "no-store"
-    return EnrollmentCodeResponse(code=code, expires_at=expires_at, profile_ids=profile_ids, channels=sorted(set(request.channels)))
+    return EnrollmentCodeResponse(code=code, expires_at=expires_at,
+                                  profile_ids=profile_ids, channels=list(channels),
+                                  channel_profile_ids=bindings)
 
 
 @router.post("/devices/enroll", response_model=DeviceEnrollResponse)
@@ -352,6 +386,7 @@ async def enroll_device(request: DeviceEnrollRequest, response: Response) -> Dev
             "public_key": request.public_key,
             "profile_ids": code_doc["profile_ids"],
             "channels": code_doc["channels"],
+            "channel_profile_ids": code_doc.get("channel_profile_ids", {}),
             "revoked": False,
             "created_at": now,
             "last_seen_at": now,
@@ -376,6 +411,7 @@ async def enroll_device(request: DeviceEnrollRequest, response: Response) -> Dev
         refresh_token=refresh,
         profile_ids=code_doc["profile_ids"],
         channels=code_doc["channels"],
+        channel_profile_ids=code_doc.get("channel_profile_ids", {}),
     )
 
 
@@ -432,11 +468,21 @@ async def exchange_device_token(request: TokenExchangeRequest, response: Respons
         tenant_id=device["user_id"],
         profile_ids=device.get("profile_ids", []),
         scopes=device.get("channels", []),
+        channel_profile_ids=device.get("channel_profile_ids", {}),
     )
     devices.update_one({"_id": request.device_id}, {"$set": {"last_seen_at": now}})
     append_security_event("daemon_token_issued", outcome="success", actor_type="daemon", tenant_id=str(device["user_id"]), device_id=request.device_id)
     response.headers["Cache-Control"] = "no-store"
-    return TokenExchangeResponse(access_token=access, refresh_token=replacement)
+    return TokenExchangeResponse(
+        access_token=access,
+        refresh_token=replacement,
+        profile_ids=[str(value) for value in device.get("profile_ids", [])],
+        channels=[str(value) for value in device.get("channels", [])],
+        channel_profile_ids={
+            str(channel): [str(value) for value in values]
+            for channel, values in (device.get("channel_profile_ids") or {}).items()
+        },
+    )
 
 
 @router.get("/devices", response_model=list[DeviceResponse])
@@ -665,6 +711,7 @@ def _snapshot(document: dict[str, Any]) -> dict[str, Any]:
         "campaign_id",
         "deal_id",
         "step_id",
+        "message_id",
         "message",
         "target_public_identifier",
         "target_urn",

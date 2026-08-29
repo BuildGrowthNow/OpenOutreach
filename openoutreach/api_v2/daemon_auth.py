@@ -108,6 +108,7 @@ def issue_daemon_access_token(
     tenant_id: str,
     profile_ids: Iterable[str],
     scopes: Iterable[str],
+    channel_profile_ids: Mapping[str, Iterable[str]] | None = None,
     token_id: str | None = None,
     now: datetime | None = None,
 ) -> str:
@@ -121,6 +122,10 @@ def issue_daemon_access_token(
         "tenant_id": tenant_id,
         "profile_ids": sorted(set(profile_ids)),
         "scopes": sorted(set(scopes)),
+        "channel_profile_ids": {
+            str(channel): sorted(set(str(value) for value in values))
+            for channel, values in (channel_profile_ids or {}).items()
+        },
         "aud": DAEMON_AUDIENCE,
         "type": DAEMON_TOKEN_TYPE,
         "jti": token_id or secrets.token_urlsafe(18),

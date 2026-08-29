@@ -1,5 +1,7 @@
 """Desktop app authentication using system keychain."""
 
+import json
+
 from typing import Optional
 
 import keyring
@@ -69,7 +71,7 @@ class AuthManager:
     def logout(self):
         """Remove stored credentials from all service name variants."""
         for svc in (SERVICE_NAME, _LEGACY_SERVICE_NAME):
-            for key in ("token", "refresh_token", "profile_id"):
+            for key in ("token", "refresh_token", "profile_id", "daemon_channel_profile_ids"):
                 try:
                     keyring.delete_password(svc, key)
                 except keyring.errors.PasswordDeleteError:
@@ -99,3 +101,30 @@ class AuthManager:
                 keyring.delete_password(SERVICE_NAME, key)
             except Exception:
                 pass
+
+    def get_daemon_channel_profile_ids(self) -> dict[str, list[str]]:
+        """Return non-secret channel bindings saved during device enrollment."""
+        try:
+            raw = keyring.get_password(SERVICE_NAME, "daemon_channel_profile_ids") or "{}"
+            value = json.loads(raw)
+            if not isinstance(value, dict):
+                return {}
+            return {
+                str(channel): [str(profile_id) for profile_id in profile_ids]
+                for channel, profile_ids in value.items()
+                if isinstance(profile_ids, list) and profile_ids
+            }
+        except Exception:
+            return {}
+
+    def save_daemon_channel_profile_ids(self, bindings: dict[str, list[str]]) -> None:
+        """Persist only server-issued opaque profile IDs, never credentials."""
+        bounded = {
+            str(channel): [str(profile_id)[:128] for profile_id in profile_ids[:20]]
+            for channel, profile_ids in bindings.items()
+            if isinstance(profile_ids, list) and profile_ids
+        }
+        keyring.set_password(
+            SERVICE_NAME, "daemon_channel_profile_ids",
+            json.dumps(bounded, sort_keys=True),
+        )

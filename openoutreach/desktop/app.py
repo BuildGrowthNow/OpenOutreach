@@ -19,6 +19,7 @@ from pystray import MenuItem as Item
 
 from openoutreach.desktop.secure_daemon import SecureRemoteDaemon as RemoteDaemon
 from openoutreach.desktop.linkedin_browser_adapter import LinkedInBrowserAdapter
+from openoutreach.desktop.whatsapp_browser_adapter import WhatsAppBrowserAdapter
 from openoutreach.desktop.device_identity import DeviceIdentity
 from openoutreach.desktop.__version__ import __version__
 from openoutreach.desktop.auth import AuthManager
@@ -671,6 +672,11 @@ class TrayApp:
                 # API unreachable - fall back to keychain so we can still start offline
                 profile_id = self.auth.get_profile_id()
 
+            channel_profile_ids = self.auth.get_daemon_channel_profile_ids()
+            if not profile_id:
+                profile_id = next(iter(channel_profile_ids.get("linkedin", [])), "")
+            if not profile_id and channel_profile_ids:
+                profile_id = next(iter(next(iter(channel_profile_ids.values()))), "")
             if not profile_id:
                 logger.error("No outreach profile found")
                 if self.icon:
@@ -688,6 +694,13 @@ class TrayApp:
                     # Fires from inside the async start() after subscription check passes
                     self._update_menu()
 
+                channel_executors = {}
+                if profile_id:
+                    channel_executors["linkedin"] = LinkedInBrowserAdapter(profile_id).execute
+                whatsapp_ids = channel_profile_ids.get("whatsapp", [])
+                if whatsapp_ids:
+                    whatsapp_adapter = WhatsAppBrowserAdapter.local(whatsapp_ids[0])
+                    channel_executors["whatsapp"] = whatsapp_adapter.execute
                 self.daemon = RemoteDaemon(
                     api_url=self.config.api_url,
                     token=token,
@@ -697,7 +710,12 @@ class TrayApp:
                     identity=DeviceIdentity.load_or_create(),
                     on_credentials_rotated=self.auth.save_daemon_credentials,
                     on_started=on_started,
-                    execute_task=LinkedInBrowserAdapter(profile_id).execute,
+                    execute_task=channel_executors.get("linkedin"),
+                    channel_executors=channel_executors,
+                    channel_profile_ids={
+                        channel: values for channel, values in channel_profile_ids.items()
+                        if values
+                    },
                 )
                 try:
                     self._loop.run_until_complete(self.daemon.start())
@@ -734,6 +752,8 @@ class TrayApp:
             loop = asyncio.new_event_loop()
             result = loop.run_until_complete(daemon.enroll(code))
             self.auth.save_daemon_credentials(result["device_id"], daemon.client._refresh_token or "")
+            if isinstance(result.get("channel_profile_ids"), dict):
+                self.auth.save_daemon_channel_profile_ids(result["channel_profile_ids"])
             if self.icon:
                 self.icon.notify("Desktop connected", "This device can now run scoped automation.")
         except Exception as exc:

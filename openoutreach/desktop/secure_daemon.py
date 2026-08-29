@@ -42,7 +42,7 @@ class SecureRemoteDaemon:
         execute_task: Optional[Callable[[dict], Awaitable[dict] | dict]] = None,
         on_credentials_rotated: Optional[Callable[[str, str], None]] = None,
         channel_executors: Optional[dict[str, Callable[[dict], Awaitable[dict] | dict]]] = None,
-        channel_profile_ids: Optional[dict[str, str]] = None,
+        channel_profile_ids: Optional[dict[str, str | list[str]]] = None,
     ) -> None:
         self.identity = identity or DeviceIdentity.load_or_create()
         self.client = DesktopRemoteClient(
@@ -57,7 +57,20 @@ class SecureRemoteDaemon:
         # from the LinkedIn profile passed to this coordinator.
         self.channel_profile_ids = {
             "linkedin": linkedin_profile_id,
-            **(channel_profile_ids or {}),
+            **{
+                channel: (values[0] if isinstance(values, list) and values else values)
+                for channel, values in (channel_profile_ids or {}).items()
+                if values
+            },
+        }
+        self.channel_profile_bindings: dict[str, list[str]] = {
+            "linkedin": [linkedin_profile_id] if linkedin_profile_id else [],
+            **{
+                channel: ([str(value) for value in values] if isinstance(values, list)
+                          else [str(values)])
+                for channel, values in (channel_profile_ids or {}).items()
+                if values
+            },
         }
         self.on_started = on_started
         self.execute_task = execute_task
@@ -74,6 +87,15 @@ class SecureRemoteDaemon:
         if not self.identity.device_id or not self.client._refresh_token:
             raise SecureDaemonError("Secure desktop enrollment is required")
         exchanged = await self.client.exchange_device_token(self.identity.device_id, self.client._refresh_token, self.identity.sign)
+        server_bindings = exchanged.get("channel_profile_ids")
+        if isinstance(server_bindings, dict):
+            self.channel_profile_bindings = {
+                str(channel): [str(value) for value in values]
+                for channel, values in server_bindings.items()
+                if isinstance(values, list) and values
+            }
+            for channel, values in self.channel_profile_bindings.items():
+                self.channel_profile_ids[channel] = values[0]
         self.running = True
         if self.on_started:
             self.on_started()
@@ -84,14 +106,17 @@ class SecureRemoteDaemon:
                 await self._flush_offline_completions()
                 claimed = False
                 for channel, executor in self.channel_executors.items():
-                    profile_id = self.channel_profile_ids.get(channel)
-                    if not profile_id:
+                    profile_ids = self.channel_profile_bindings.get(channel, [])
+                    if not profile_ids:
                         logger.warning("Skipping channel %s: no bound profile configured", channel)
                         continue
-                    task = await self.client.claim_task_v2(profile_id, channel)
-                    if task:
-                        claimed = True
-                        await self._execute(task, executor)
+                    for profile_id in profile_ids:
+                        task = await self.client.claim_task_v2(profile_id, channel)
+                        if task:
+                            claimed = True
+                            await self._execute(task, executor)
+                            break
+                    if claimed:
                         break
                 if not claimed:
                     try:

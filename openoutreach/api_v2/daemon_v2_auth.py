@@ -30,14 +30,16 @@ async def get_daemon_context(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid daemon token") from exc
     profile_ids = claims.get("profile_ids", [])
     scopes = claims.get("scopes", [])
-    if not isinstance(profile_ids, list) or not isinstance(scopes, list):
+    channel_profile_ids = claims.get("channel_profile_ids", {})
+    if not isinstance(profile_ids, list) or not isinstance(scopes, list) or not isinstance(channel_profile_ids, dict):
         raise HTTPException(status_code=401, detail="Invalid daemon token claims")
     devices = get_mongodb_collection("daemon_devices")
     if devices is None:
         raise HTTPException(status_code=503, detail="Daemon authentication unavailable")
     device = devices.find_one(
         {"_id": str(claims["device_id"]), "user_id": str(claims["tenant_id"]), "revoked": False},
-        {"profile_ids": 1, "channels": 1, "version": 1, "public_key": 1},
+        {"profile_ids": 1, "channels": 1, "channel_profile_ids": 1,
+         "version": 1, "public_key": 1},
     )
     if not device or not is_secure_version(str(device.get("version", ""))):
         raise HTTPException(status_code=401, detail="Device revoked or unsupported")
@@ -65,6 +67,16 @@ async def get_daemon_context(
     # without waiting for an access token to expire.
     profile_ids = [value for value in profile_ids if value in device.get("profile_ids", [])]
     scopes = [value for value in scopes if value in device.get("channels", [])]
+    device_bindings = device.get("channel_profile_ids") or {}
+    claimed_bindings = channel_profile_ids or device_bindings
+    bindings: dict[str, frozenset[str]] = {}
+    for channel, values in claimed_bindings.items():
+        if not isinstance(values, list):
+            raise HTTPException(status_code=401, detail="Invalid channel profile claims")
+        allowed = device_bindings.get(channel, values)
+        bindings[str(channel)] = frozenset(
+            str(value) for value in values if value in allowed and value in profile_ids
+        )
     return TenantContext(
         tenant_id=str(claims["tenant_id"]),
         actor_type="daemon",
@@ -72,9 +84,12 @@ async def get_daemon_context(
         device_id=str(claims["device_id"]),
         profile_ids=frozenset(str(value) for value in profile_ids),
         scopes=frozenset(str(value) for value in scopes),
+        channel_profile_ids=bindings,
     )
 
 
 def require_profile(context: TenantContext, profile_id: str, channel: str) -> None:
-    if profile_id not in context.profile_ids or channel not in context.scopes:
+    channel_profiles = (context.channel_profile_ids or {}).get(channel)
+    profile_allowed = profile_id in channel_profiles if channel_profiles is not None else profile_id in context.profile_ids
+    if not profile_allowed or channel not in context.scopes:
         raise HTTPException(status_code=404, detail="Resource not found")

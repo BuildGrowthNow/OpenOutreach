@@ -32,12 +32,17 @@ def key_pair() -> tuple[bytes, bytes]:
 
 def test_daemon_token_is_asymmetric_and_scoped(key_pair):
     private, public = key_pair
-    token = issue_daemon_access_token(private, key_id="k1", device_id="d1", tenant_id="t1", profile_ids=["p1"], scopes=["linkedin"])
+    token = issue_daemon_access_token(
+        private, key_id="k1", device_id="d1", tenant_id="t1",
+        profile_ids=["p1", "wa1"], scopes=["linkedin", "whatsapp"],
+        channel_profile_ids={"linkedin": ["p1"], "whatsapp": ["wa1"]},
+    )
     claims = decode_daemon_access_token(public, token)
     assert claims["aud"] == "daemon-gateway"
     assert claims["type"] == "daemon_access"
     assert claims["tenant_id"] == "t1"
-    assert claims["profile_ids"] == ["p1"]
+    assert claims["profile_ids"] == ["p1", "wa1"]
+    assert claims["channel_profile_ids"] == {"linkedin": ["p1"], "whatsapp": ["wa1"]}
 
 
 def test_wrong_audience_or_modified_token_is_rejected(key_pair):
