@@ -65,7 +65,7 @@ cd frontend && npm install && npm run dev   # Next.js at localhost:3000
 
 ## Desktop App
 
-OpenOutreach ships a native desktop daemon for **macOS and Windows** (v1.5.8). Instead of running the browser automation on a cloud server (which requires expensive mobile proxies), the desktop daemon runs Playwright on your own machine using your residential IP - the same IP LinkedIn already knows.
+OpenOutreach ships a native secure-v2 desktop daemon for **macOS and Windows** (v2.1.2). Instead of running the browser automation on a cloud server (which requires expensive mobile proxies), the desktop daemon runs Playwright on your own machine using your residential IP - the same IP LinkedIn already knows.
 
 **Why this matters:** LinkedIn blocks cloud provider IP ranges (AWS, GCP, Azure). Running on your own machine with your own IP eliminates proxy costs ($25–75/profile/month) and reduces detection risk.
 
@@ -74,7 +74,7 @@ OpenOutreach ships a native desktop daemon for **macOS and Windows** (v1.5.8). I
 - **System tray app** - start/stop the daemon from the menu bar with real-time status
 - **Secure credential storage** - credentials stored in your OS keychain (macOS Keychain / Windows Credential Manager)
 - **Auto-updates** - checks GitHub releases every 6 hours and notifies you of new versions
-- **One-click login** - opens the web app in your browser and captures the JWT token via the `openoutreach://` protocol handler
+- **One-click login** - opens the web app in your browser and captures the JWT token via the `lengrowth://` protocol handler
 - **Automatic browser detection** - finds your installed Chrome, Edge, or Safari automatically
 - **Full feature parity** - same task execution, active hours, rate limits, and campaign support as the cloud daemon
 

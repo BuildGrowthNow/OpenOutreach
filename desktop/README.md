@@ -1,6 +1,6 @@
 # OpenOutreach Desktop App
 
-Production-ready desktop application for running LinkedIn automation locally using your residential IP and browser.
+Secure-v2 desktop application for running supported outreach automation locally using your residential IP and browser.
 
 ## Features
 
@@ -51,7 +51,7 @@ python desktop/build.py --dmg
 python desktop/build.py --dmg
 ```
 
-Output: `desktop/dist/OpenOutreach.dmg`
+Output: `desktop/dist/Lengrowth-2.1.2.dmg`
 
 **First launch:** Users must right-click → Open (unsigned app)
 
@@ -61,7 +61,7 @@ Output: `desktop/dist/OpenOutreach.dmg`
 python desktop/build.py
 ```
 
-Output: `desktop/dist/OpenOutreach.exe`
+Output: `desktop/dist/Lengrowth.exe`
 
 **MSIX packaging for Microsoft Store:**
 ```powershell
