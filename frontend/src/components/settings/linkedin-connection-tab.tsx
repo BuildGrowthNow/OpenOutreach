@@ -45,6 +45,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { Separator } from "@/components/ui/separator";
 import { PlanLimitButton } from "@/components/billing/plan-limit-button";
 import { useUpgradeToast } from "@/lib/hooks/use-upgrade-toast";
+import { useBilling } from "@/lib/contexts/billing-context";
 import {
   Plus,
   RefreshCw,
@@ -109,6 +110,7 @@ export function LinkedInConnectionTab({
     useState<LinkedInCredentials | null>(null);
 
   const { toast } = useToast();
+  const { refetch: refetchBilling } = useBilling();
   const handleUpgradeError = useUpgradeToast();
 
   // Check if desktop daemon is actively running
@@ -233,6 +235,7 @@ export function LinkedInConnectionTab({
         });
         setIsAddDialogOpen(false);
         handleLinkedInCredentialsUpdate();
+        void refetchBilling();
       } else {
         toast({
           title: "Error",
@@ -271,6 +274,7 @@ export function LinkedInConnectionTab({
         });
         setEditingCredential(null);
         handleLinkedInCredentialsUpdate();
+        void refetchBilling();
       } else {
         toast({
           title: "Error",
@@ -304,6 +308,7 @@ export function LinkedInConnectionTab({
           description: "Account removed successfully",
         });
         handleLinkedInCredentialsUpdate();
+        void refetchBilling();
       } else {
         toast({
           title: "Error",

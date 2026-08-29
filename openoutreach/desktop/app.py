@@ -39,6 +39,7 @@ from openoutreach.desktop.updater import (
     prompt_update,
     save_pending_update,
 )
+from openoutreach.desktop.notifications import notify_icon, truncate_notification_text
 
 logger = logging.getLogger(__name__)
 
@@ -297,8 +298,7 @@ class DesktopAPI:
         if handle_protocol_url(url, self._app.auth):
             self._app._update_menu()
             self._app._pending_login_notification = False
-            if self._app.icon:
-                self._app.icon.notify("Login successful", "Lengrowth is ready")
+            self._app._notify("Login successful", "Lengrowth is ready")
             if self._app.auth.is_logged_in():
                 self._app._start_daemon()
 
@@ -360,6 +360,14 @@ class TrayApp:
     # ------------------------------------------------------------------
     # Icon helpers
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _notification_text(value: str) -> str:
+        return truncate_notification_text(value)
+
+    def _notify(self, title: str, message: str) -> None:
+        """Show a best-effort tray notification without breaking daemon startup."""
+        notify_icon(self.icon, title, message)
 
     def _create_icon(self) -> Image.Image:
         base = Path(getattr(sys, "_MEIPASS", Path(__file__).parent.parent.parent))
@@ -613,7 +621,7 @@ class TrayApp:
 
         if self._pending_login_notification:
             self._pending_login_notification = False
-            icon.notify("Login successful", "Lengrowth is ready")
+            self._notify("Login successful", "Lengrowth is ready")
 
         # Daemon start is deferred until the frontend calls confirm_auth() after
         # successful login/initialize - avoids starting with stale credentials if
@@ -659,7 +667,7 @@ class TrayApp:
             device_id = self.auth.get_daemon_device_id()
             if not refresh_token or not device_id:
                 if self.icon:
-                    self.icon.notify("Connect this desktop", "Open Security settings and connect this device before starting automation.")
+                    self._notify("Connect this desktop", "Open Security settings and connect this device before starting automation.")
                 return
 
             # Always resolve fresh profile_id so a credential delete+recreate doesn't
@@ -685,7 +693,7 @@ class TrayApp:
             if not profile_id:
                 logger.error("No outreach profile found")
                 if self.icon:
-                    self.icon.notify("No Profile Found", "Add a LinkedIn or WhatsApp profile in the dashboard first.")
+                    self._notify("No Profile Found", "Add a LinkedIn or WhatsApp profile in the dashboard first.")
                 return
 
             def on_token_refresh(new_token: str):
@@ -762,7 +770,7 @@ class TrayApp:
                     logger.exception("Daemon error: %s", type(e).__name__)
                     msg = "No supported browser found." if isinstance(e, BrowserNotFoundError) else "Daemon error - check logs."
                     if self.icon:
-                        self.icon.notify("Daemon Error", msg)
+                        self._notify("Daemon Error", msg)
                 finally:
                     self._loop.close()
                     self._loop = None
@@ -791,11 +799,11 @@ class TrayApp:
             if isinstance(result.get("channel_profile_ids"), dict):
                 self.auth.save_daemon_channel_profile_ids(result["channel_profile_ids"])
             if self.icon:
-                self.icon.notify("Desktop connected", "This device can now run scoped automation.")
+                self._notify("Desktop connected", "This device can now run scoped automation.")
         except Exception as exc:
             logger.warning("Desktop enrollment failed: %s", type(exc).__name__)
             if self.icon:
-                self.icon.notify("Connection failed", "The enrollment code may be expired or already used.")
+                self._notify("Connection failed", "The enrollment code may be expired or already used.")
         finally:
             try:
                 loop.run_until_complete(daemon.client.close())
@@ -962,7 +970,7 @@ class TrayApp:
                 if can_auto_update():
                     logger.info("Update v%s available - downloading in background", ver)
                     if self.icon:
-                        self.icon.notify(f"Downloading Lengrowth v{ver}…", "Will notify when ready to install.")
+                        self._notify(f"Downloading Lengrowth v{ver}…", "Will notify when ready to install.")
                     path = await download_update(
                         info["download_url"], version=ver, expected_digest=info.get("digest")
                     )
@@ -972,7 +980,7 @@ class TrayApp:
                         self._update_menu()
                         self._inject_update_banner(ver)
                         if self.icon:
-                            self.icon.notify(
+                            self._notify(
                                 f"Lengrowth v{ver} ready to install",
                                 "Click 'Restart to update' in the tray menu.",
                             )
@@ -1025,7 +1033,7 @@ class TrayApp:
                                 self._update_menu()
                                 self._inject_update_banner(ver)
                                 if self.icon:
-                                    self.icon.notify(
+                                    self._notify(
                                         f"Lengrowth v{ver} ready to install",
                                         "Click 'Restart to update' in the tray menu.",
                                     )
@@ -1033,12 +1041,12 @@ class TrayApp:
                                 self._pending_update = info
                                 self._update_menu()
                                 if self.icon:
-                                    self.icon.notify(f"Update Available: v{ver}", "Click the tray icon to download")
+                                    self._notify(f"Update Available: v{ver}", "Click the tray icon to download")
                         else:
                             self._pending_update = info
                             self._update_menu()
                             if self.icon:
-                                self.icon.notify(f"Update Available: v{ver}", "Click the tray icon to download")
+                                self._notify(f"Update Available: v{ver}", "Click the tray icon to download")
                 except Exception as e:
                     logger.warning("Periodic update check failed: %s", type(e).__name__)
 
@@ -1064,7 +1072,7 @@ class TrayApp:
             self._token_valid = True
             self._update_menu()
             if self.icon:
-                self.icon.notify("Login successful", "Lengrowth is ready")
+                self._notify("Login successful", "Lengrowth is ready")
             if not self._is_running():
                 self._start_daemon()
 
