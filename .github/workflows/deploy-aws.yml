@@ -83,6 +83,22 @@ jobs:
             cd ~/OpenOutreach
           "
 
+          # Ensure the canonical database name exists before Compose evaluates
+          # its required-variable guard. This never overwrites a non-empty value.
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=yes -o IdentitiesOnly=yes "${EC2_USER}@${EC2_HOST}" "
+            set -e
+            cd ~/OpenOutreach
+            if [ ! -f .env ]; then
+              printf 'MONGODB_NAME=openoutreach\n' > .env
+            elif ! grep -Eq '^MONGODB_NAME=[^[:space:]]+$' .env; then
+              if grep -q '^MONGODB_NAME=' .env; then
+                sed -i 's/^MONGODB_NAME=.*/MONGODB_NAME=openoutreach/' .env
+              else
+                printf '\nMONGODB_NAME=openoutreach\n' >> .env
+              fi
+            fi
+          "
+
           # Deploy with docker-compose - build new image first, then recreate
           # (avoids a hard down→up gap that causes 502s for desktop daemons)
           ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=yes -o IdentitiesOnly=yes "${EC2_USER}@${EC2_HOST}" "
