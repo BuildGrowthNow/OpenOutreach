@@ -366,18 +366,21 @@ def create_msix() -> bool:
         print(f"Error: {exe_path} not found. Run build first.")
         return False
 
-    # Check for Windows SDK makeappx
-    makeappx_paths = [
-        Path(r"C:\Program Files (x86)\Windows Kits\10\bin\10.0.22000.0\x64\makeappx.exe"),
-        Path(r"C:\Program Files (x86)\Windows Kits\10\bin\10.0.19041.0\x64\makeappx.exe"),
-        Path(r"C:\Program Files (x86)\Windows Kits\10\bin\10.0.18362.0\x64\makeappx.exe"),
-    ]
+    # Resolve the SDK tool from an explicit override, PATH, or any installed
+    # Windows 10 SDK version. Hosted runners update SDK versions independently
+    # of this project, so hard-coding a short allowlist is brittle.
+    makeappx_candidates = []
+    configured_makeappx = os.environ.get("MAKEAPPX")
+    if configured_makeappx:
+        makeappx_candidates.append(Path(configured_makeappx))
+    on_path = shutil.which("makeappx.exe")
+    if on_path:
+        makeappx_candidates.append(Path(on_path))
+    sdk_root = Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")) / "Windows Kits" / "10" / "bin"
+    if sdk_root.exists():
+        makeappx_candidates.extend(sorted(sdk_root.glob("*\\x64\\makeappx.exe"), reverse=True))
 
-    makeappx = None
-    for path in makeappx_paths:
-        if path.exists():
-            makeappx = path
-            break
+    makeappx = next((path for path in makeappx_candidates if path.is_file()), None)
 
     if not makeappx:
         print("Error: Windows SDK (makeappx.exe) not found.")
