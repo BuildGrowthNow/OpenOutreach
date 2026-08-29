@@ -17,7 +17,10 @@ app = FastAPI(
     version="2.1.2",
     docs_url="/docs",
     redoc_url="/redoc",
-    redirect_slashes=False,
+    # Preserve FastAPI's canonical trailing-slash redirects for human-facing
+    # routes. Daemon proof-of-possession requests use their exact v2 path and
+    # are never redirected by the desktop client.
+    redirect_slashes=True,
 )
 
 # CORS configuration
