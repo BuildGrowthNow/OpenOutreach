@@ -696,12 +696,21 @@ class TrayApp:
                     self._update_menu()
 
                 channel_executors = {}
-                if profile_id:
-                    channel_executors["linkedin"] = LinkedInBrowserAdapter(profile_id).execute
+                profile_executors = {}
+                linkedin_ids = channel_profile_ids.get("linkedin", []) or ([profile_id] if profile_id else [])
+                for linked_profile_id in linkedin_ids:
+                    adapter = LinkedInBrowserAdapter(linked_profile_id)
+                    profile_executors[("linkedin", linked_profile_id)] = adapter.execute
+                if linkedin_ids:
+                    channel_executors["linkedin"] = profile_executors[("linkedin", linkedin_ids[0])]
+
                 whatsapp_ids = channel_profile_ids.get("whatsapp", [])
+                for whatsapp_id in whatsapp_ids:
+                    adapter = WhatsAppBrowserAdapter.local(whatsapp_id)
+                    profile_executors[("whatsapp", whatsapp_id)] = adapter.execute
                 if whatsapp_ids:
-                    whatsapp_adapter = WhatsAppBrowserAdapter.local(whatsapp_ids[0])
-                    channel_executors["whatsapp"] = whatsapp_adapter.execute
+                    channel_executors["whatsapp"] = profile_executors[("whatsapp", whatsapp_ids[0])]
+
                 email_ids = channel_profile_ids.get("email", [])
                 if email_ids:
                     def submit_email(task, operation, grant, recipient, subject, body,
@@ -719,7 +728,10 @@ class TrayApp:
                         )
                         return future.result(timeout=40)
                     email_provider = RemoteMailboxProvider(submit_email)
-                    channel_executors["email"] = EmailAdapter(email_provider).execute
+                    for mailbox_id in email_ids:
+                        adapter = EmailAdapter(email_provider)
+                        profile_executors[("email", mailbox_id)] = adapter.execute
+                    channel_executors["email"] = profile_executors[("email", email_ids[0])]
                 self.daemon = RemoteDaemon(
                     api_url=self.config.api_url,
                     token=token,
@@ -735,6 +747,7 @@ class TrayApp:
                         channel: values for channel, values in channel_profile_ids.items()
                         if values
                     },
+                    profile_executors=profile_executors,
                 )
                 try:
                     self._loop.run_until_complete(self.daemon.start())

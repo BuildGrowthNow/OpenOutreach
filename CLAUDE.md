@@ -29,8 +29,10 @@ the v2 gateway only. Device identity is an Ed25519 key stored in the OS
 keychain; enrollment uses a human-approved one-time code. Runtime access uses
 short-lived daemon tokens, proof-bound exchange, rotating refresh credentials,
 and server-owned typed leases. The desktop receives no human refresh token,
-server secret, provider key, or MongoDB credential. Browser execution is an
-injected task-scoped adapter; server persistence remains authoritative.
+server secret, provider key, or MongoDB credential. Browser/provider execution
+is injected per channel and profile (LinkedIn, WhatsApp, and email); server
+persistence remains authoritative. Non-success adapter outcomes are reported
+through the v2 retry/failure contract rather than completed as successful work.
 
 Current source-of-truth correction: all legacy `/api/daemon/*` execution,
 profile, campaign, session, reconciliation, and configuration handlers are

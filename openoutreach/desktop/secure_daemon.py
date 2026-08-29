@@ -43,6 +43,7 @@ class SecureRemoteDaemon:
         on_credentials_rotated: Optional[Callable[[str, str], None]] = None,
         channel_executors: Optional[dict[str, Callable[[dict], Awaitable[dict] | dict]]] = None,
         channel_profile_ids: Optional[dict[str, str | list[str]]] = None,
+        profile_executors: Optional[dict[tuple[str, str], Callable[[dict], Awaitable[dict] | dict]]] = None,
     ) -> None:
         self.identity = identity or DeviceIdentity.load_or_create()
         self.client = DesktopRemoteClient(
@@ -75,6 +76,7 @@ class SecureRemoteDaemon:
         self.on_started = on_started
         self.execute_task = execute_task
         self.channel_executors = channel_executors or ({"linkedin": execute_task} if execute_task else {})
+        self.profile_executors = profile_executors or {}
         self.on_credentials_rotated = on_credentials_rotated
         self.running = False
         self._stop = asyncio.Event()
@@ -111,10 +113,16 @@ class SecureRemoteDaemon:
                         logger.warning("Skipping channel %s: no bound profile configured", channel)
                         continue
                     for profile_id in profile_ids:
+                        executor_for_profile = self.profile_executors.get(
+                            (channel, profile_id), self.channel_executors.get(channel)
+                        )
+                        if executor_for_profile is None:
+                            logger.warning("Skipping %s profile %s: no executor configured", channel, profile_id)
+                            continue
                         task = await self.client.claim_task_v2(profile_id, channel)
                         if task:
                             claimed = True
-                            await self._execute(task, executor)
+                            await self._execute(task, executor_for_profile)
                             break
                     if claimed:
                         break
@@ -128,7 +136,7 @@ class SecureRemoteDaemon:
         self._stop.set()
         self.running = False
         closed: set[int] = set()
-        for executor in self.channel_executors.values():
+        for executor in (*self.channel_executors.values(), *self.profile_executors.values()):
             close = getattr(executor, "__self__", None)
             if close is not None and id(close) not in closed and hasattr(close, "close"):
                 closed.add(id(close))

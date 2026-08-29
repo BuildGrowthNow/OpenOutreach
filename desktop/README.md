@@ -11,8 +11,10 @@ Production-ready desktop application for running LinkedIn automation locally usi
 - **Active hours** - Respects your configured schedule
 - **Local browser persistence** - Maintains provider session state locally; no
   server cookies or database credentials are downloaded
+- **Scoped desktop enrollment** - Select LinkedIn profiles, WhatsApp numbers,
+  and mailboxes from Settings; revoke registered devices at any time
 - **Auto-updates** - Check for new releases
-- **Protocol handler** - `openoutreach://` URL callbacks for login
+- **Protocol handler** - `lengrowth://` URL callbacks for login
 
 ## Requirements
 
@@ -22,6 +24,7 @@ See `desktop/requirements.txt`:
 - Pillow (icons)
 - keyring (credential storage)
 - httpx (API communication)
+- playwright and playwright-stealth (local browser execution)
 - pyinstaller (packaging)
 
 ## Development
@@ -108,7 +111,7 @@ openoutreach/desktop/
 
 **Windows:** Automatic on first launch via registry:
 ```
-HKEY_CURRENT_USER\Software\Classes\openoutreach\shell\open\command
+HKEY_CURRENT_USER\Software\Classes\lengrowth\shell\open\command
 ```
 
 **macOS:** Handled by app bundle's `Info.plist`:
@@ -117,7 +120,7 @@ HKEY_CURRENT_USER\Software\Classes\openoutreach\shell\open\command
 <array>
     <dict>
         <key>CFBundleURLSchemes</key>
-        <array><string>openoutreach</string></array>
+        <array><string>lengrowth</string></array>
     </dict>
 </array>
 ```
@@ -138,7 +141,8 @@ HKEY_CURRENT_USER\Software\Classes\openoutreach\shell\open\command
 
 ## Distribution
 
-App size: ~20-30MB (no bundled browser)
+App size: approximately 102MB for the current Windows one-file build; browser
+engines are not bundled and the user’s installed Chrome/Edge is used.
 
 **Free distribution:**
 - macOS: Direct download (.dmg)

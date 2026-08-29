@@ -10,7 +10,7 @@ the desktop OS keychain; server-only signing, encryption, provider, and
 MongoDB credentials are never returned to the desktop. Secure desktop task
 execution uses typed v2 leases and event receipts; MongoDB/model imports are
 excluded from the PyInstaller spec. See the migration plan for remaining
-channel-adapter and production rollout gates.
+real-provider and production rollout gates.
 
 Detailed module documentation for OpenOutreach. See `CLAUDE.md` for rules and quick reference.
 
@@ -359,9 +359,11 @@ a human-approved one-time code, uses a server-signed short-lived daemon token
 and proof-of-possession requests, and receives only bounded typed task
 snapshots. Browser and provider sessions remain local to the device. Legacy
 credential, cookie, bootstrap, and direct-database paths are retired; task
-claiming remains disabled until the corresponding channel has passed real
-provider integration validation. Receipts are idempotent and server-side task
-ownership is always derived from tenant/device/profile context.
+claiming remains deployment-gated until the corresponding channel has passed
+real provider integration validation. The local implementation supports
+profile-specific LinkedIn, WhatsApp, and email executors. Receipts are
+idempotent and server-side task ownership is always derived from
+tenant/device/profile context.
 
 The historical execution-mode and configuration notes above describe the
 pre-migration implementation only. The current desktop entry point is

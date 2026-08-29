@@ -150,7 +150,7 @@ export default function SettingsPage() {
       </div>
 
       <Tabs defaultValue={initialTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-3 gap-2 rounded-xl bg-muted p-1 sm:grid-cols-6">
+        <TabsList className="grid w-full grid-cols-3 gap-2 rounded-xl bg-muted p-1 sm:grid-cols-7">
           <TabsTrigger value="linkedin" className="flex items-center gap-2 py-2">
             <Icons.Link className="h-4 w-4 shrink-0" />
             LinkedIn

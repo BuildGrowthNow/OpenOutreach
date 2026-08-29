@@ -602,13 +602,17 @@ async def ingest_events_v2(
     collection = get_mongodb_collection("daemon_events")
     if collection is None:
         raise HTTPException(503, "Database unavailable")
-    now = datetime.now(timezone.utc)
-    accepted = 0
-    duplicates = 0
+    # Validate the entire batch before writing anything. A mixed batch must
+    # never partially persist tenant-A events before rejecting a tenant-B or
+    # unbound profile event later in the same request.
     for event in request.events:
         if event.channel not in context.scopes:
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Channel not authorized")
         require_profile(context, event.profile_id, event.channel)
+    now = datetime.now(timezone.utc)
+    accepted = 0
+    duplicates = 0
+    for event in request.events:
         try:
             collection.insert_one(
                 {
@@ -1074,6 +1078,15 @@ def _lease_query(context: TenantContext, task_id: str, lease_id: str) -> dict[st
     }
 
 
+def _require_task_binding(context: TenantContext, document: dict[str, Any]) -> None:
+    """Re-check the current device/channel binding for every lease mutation."""
+    channel = str(document.get("channel", ""))
+    profile_id = _task_profile_id(document)
+    if channel not in {"linkedin", "whatsapp", "email"} or not profile_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Task not found")
+    require_profile(context, profile_id, channel)
+
+
 @router.post("/tasks/claim", response_model=LeaseResponse | None)
 async def claim_task_v2(
     request: ClaimRequest,
@@ -1097,6 +1110,13 @@ async def claim_task_v2(
         profile_predicate = {"$or": [
             {"linkedin_profile_id": request.profile_id},
             {"whatsapp_profile_id": request.profile_id},
+        ]}
+    elif request.channel == "email":
+        # Support historical scheduler rows and canonical mailbox-backed rows.
+        profile_predicate = {"$or": [
+            {"linkedin_profile_id": request.profile_id},
+            {"mailbox_id": request.profile_id},
+            {"email_profile_id": request.profile_id},
         ]}
     query: dict[str, Any] = {
         "user_id": context.tenant_id,
@@ -1177,6 +1197,13 @@ async def renew_task_v2(
     if collection is None:
         raise HTTPException(503, "Database unavailable")
     now = datetime.now(timezone.utc)
+    current = collection.find_one(
+        {**_lease_query(context, task_id, request.lease_id),
+         "lease_expires_at": {"$gt": now}}
+    )
+    if not current:
+        raise HTTPException(status.HTTP_410_GONE, "Lease expired")
+    _require_task_binding(context, current)
     document = collection.find_one_and_update(
         {**_lease_query(context, task_id, request.lease_id), "lease_expires_at": {"$gt": now}},
         {"$set": {"lease_expires_at": now + timedelta(minutes=5)}},
@@ -1185,7 +1212,7 @@ async def renew_task_v2(
     if not document:
         raise HTTPException(status.HTTP_410_GONE, "Lease expired")
     channel = str(document.get("channel", ""))
-    require_profile(context, _task_profile_id(document), channel)
+    _require_task_binding(context, document)
     snapshot = _typed_snapshot(document)
     if snapshot is None:
         raise HTTPException(status.HTTP_409_CONFLICT, "Task snapshot is no longer executable")
@@ -1213,6 +1240,7 @@ async def complete_task_v2(
     now = datetime.now(timezone.utc)
     prior = collection.find_one({"_id": task_id, "user_id": context.tenant_id})
     if prior:
+        _require_task_binding(context, prior)
         expected_key = str(prior.get("idempotency_key") or _snapshot(prior).get("effect_key") or "")
         if expected_key and request.idempotency_key != expected_key:
             raise HTTPException(422, "Idempotency key does not match task effect")
@@ -1231,6 +1259,7 @@ async def complete_task_v2(
                                   {"_id": 1})
     if not current:
         raise HTTPException(status.HTTP_410_GONE, "Lease expired or no longer owned")
+    _require_task_binding(context, current)
     effects = get_mongodb_collection("daemon_effects")
     if effects is None:
         raise HTTPException(503, "Effect reconciliation unavailable")
@@ -1281,8 +1310,17 @@ async def fail_task_v2(
     now = datetime.now(timezone.utc)
     prior = collection.find_one({"_id": task_id, "user_id": context.tenant_id,
                                  "leased_by_device_id": context.device_id})
+    if prior:
+        _require_task_binding(context, prior)
     if prior and prior.get("status") == "failed" and request.idempotency_key and prior.get("failure_idempotency_key") == request.idempotency_key:
         return {"status": "failed", "replayed": "true"}
+    current = collection.find_one(
+        {**_lease_query(context, task_id, request.lease_id),
+         "lease_expires_at": {"$gt": now}}
+    )
+    if not current:
+        raise HTTPException(status.HTTP_410_GONE, "Lease expired or no longer owned")
+    _require_task_binding(context, current)
     result = collection.update_one(
         {**_lease_query(context, task_id, request.lease_id), "lease_expires_at": {"$gt": now}},
         {"$set": {"status": "failed", "completed_at": now, "failure_category": request.category, "error_message": request.error, "failure_idempotency_key": request.idempotency_key}},
@@ -1302,6 +1340,11 @@ async def cancel_ack_task_v2(
     collection = get_mongodb_collection("tasks")
     if collection is None:
         raise HTTPException(503, "Database unavailable")
+    current = collection.find_one({**_lease_query(context, task_id, request.lease_id),
+                                   "cancel_requested": True})
+    if not current:
+        raise HTTPException(404, "Task not found")
+    _require_task_binding(context, current)
     result = collection.update_one(
         {**_lease_query(context, task_id, request.lease_id), "cancel_requested": True},
         {"$set": {"status": "cancelled", "completed_at": datetime.now(timezone.utc)}},
