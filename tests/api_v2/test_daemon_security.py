@@ -140,6 +140,32 @@ def test_successful_whatsapp_effect_projects_idempotently(monkeypatch):
     assert logs.update_one.call_args.args[0]["_id"] == "daemon-effect:effect-a"
 
 
+def test_whatsapp_sync_projects_delivery_and_opt_out(monkeypatch):
+    deals = MagicMock()
+    deals.find_one.return_value = {"_id": "deal-a", "user_id": "tenant-a", "lead_id": "lead-a", "state": "Pending"}
+    leads = MagicMock()
+    messages = MagicMock()
+    logs = MagicMock()
+    collections = {"deals": deals, "leads": leads, "chat_messages": messages, "action_logs": logs}
+    monkeypatch.setattr(daemon_v2, "get_mongodb_collection", lambda name: collections.get(name))
+    context = TenantContext(
+        "tenant-a", actor_type="daemon", device_id="device-a",
+        profile_ids=frozenset({"wa-a"}), scopes=frozenset({"whatsapp"}),
+        channel_profile_ids={"whatsapp": frozenset({"wa-a"})},
+    )
+    daemon_v2._project_channel_effect(
+        context,
+        {"_id": "task-sync", "channel": "whatsapp", "whatsapp_profile_id": "wa-a",
+         "task_type": "whatsapp_sync", "payload": {"deal_id": "deal-a", "campaign_id": "campaign-a"}},
+        {"outcome": "observed", "receipt": {"action": "sync", "target_key": "sync"},
+         "sync": {"messages": [{"content": "STOP", "is_outgoing": "false", "delivery_status": ""}]}},
+        "effect-sync", datetime.now(timezone.utc),
+    )
+    assert any(call.args[0].get("_id") == "lead-a" for call in leads.update_one.call_args_list)
+    assert any(call.args[0].get("_id") == "deal-a" for call in deals.update_one.call_args_list)
+    assert messages.update_one.call_args.kwargs["upsert"] is True
+
+
 @pytest.mark.asyncio
 async def test_all_lease_mutations_are_tenant_scoped(monkeypatch):
     class Result:

@@ -93,6 +93,7 @@ class LinkedInTaskSnapshot(BaseModel):
 class WhatsAppTaskSnapshot(BaseModel):
     model_config = ConfigDict(extra="forbid")
     profile_id: str = Field(min_length=1, max_length=128)
+    deal_id: str = Field(default="", max_length=128)
     target_phone: str = Field(default="", max_length=32)
     message: str = Field(default="", max_length=20000)
     cursor: str = Field(default="", max_length=256)

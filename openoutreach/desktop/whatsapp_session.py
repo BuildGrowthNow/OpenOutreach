@@ -18,6 +18,17 @@ _CHAT_READY = "[data-testid='conversation-panel-wrapper'], [aria-label='Chat lis
 _CHAT_PANEL = "[data-testid='conversation-panel-wrapper']"
 _SEND_BUTTON = "[data-testid='send'], [data-testid='compose-btn-send']"
 _QR_SELECTOR = "[data-testid='qrcode'], canvas"
+_MESSAGE_EXTRACT_JS = """() => Array.from(document.querySelectorAll(
+    '[data-testid="msg-container"], .message-in, .message-out'
+)).map(el => {
+    const body = el.querySelector('[data-testid="msg-text"], .copyable-text, span.selectable-text');
+    const dbl = el.querySelector('[data-testid="msg-dblcheck"]');
+    const out = el.classList.contains('message-out') || !!el.querySelector('[data-testid="msg-check"], [data-testid="msg-dblcheck"]');
+    const label = dbl?.getAttribute('aria-label')?.toLowerCase() || '';
+    return {content: body?.innerText || '', is_outgoing: out,
+            delivery_status: out ? (label.includes('read') ? 'read' : dbl ? 'delivered' : 'sent') : '',
+            ts_text: el.querySelector('[data-testid="msg-meta"]')?.getAttribute('data-pre-plain-text') || ''};
+}).filter(item => item.content)"""
 
 
 class LocalWhatsAppSession:
@@ -100,18 +111,24 @@ class LocalWhatsAppSession:
                 return "timeout"
             raise
 
-    def sync(self, *, cursor: str = "", limit: int = 100) -> dict[str, Any]:
+    def sync(self, *, cursor: str = "", limit: int = 100, phone: str = "") -> dict[str, Any]:
         del cursor
         if not self.page:
             raise RuntimeError("WhatsApp session is not started")
         bounded = max(1, min(int(limit), 100))
-        rows = self.page.evaluate("""(limit) => Array.from(
-            document.querySelectorAll('[data-testid="cell-frame-container"]')
-        ).slice(0, limit).map(row => ({
-            name: row.querySelector('[data-testid="cell-frame-title"]')?.textContent || '',
-            last_message: row.querySelector('[data-testid="last-msg"]')?.textContent || '',
-            timestamp: row.querySelector('[data-testid="cell-frame-secondary"]')?.textContent || ''
-        }))""", bounded)
+        if phone:
+            query = urllib.parse.urlencode({"phone": phone.lstrip("+")})
+            self.page.goto(f"{_WA_URL}send?{query}", wait_until="domcontentloaded")
+            self.page.wait_for_selector(_CHAT_PANEL, timeout=15_000)
+            rows = self.page.evaluate(_MESSAGE_EXTRACT_JS)
+        else:
+            rows = self.page.evaluate("""(limit) => Array.from(
+                document.querySelectorAll('[data-testid="cell-frame-container"]')
+            ).slice(0, limit).map(row => ({
+                name: row.querySelector('[data-testid="cell-frame-title"]')?.textContent || '',
+                last_message: row.querySelector('[data-testid="last-msg"]')?.textContent || '',
+                timestamp: row.querySelector('[data-testid="cell-frame-secondary"]')?.textContent || ''
+            }))""", bounded)
         messages = []
         for row in rows if isinstance(rows, list) else []:
             if isinstance(row, dict):

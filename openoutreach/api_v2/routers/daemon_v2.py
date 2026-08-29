@@ -921,6 +921,7 @@ def _snapshot(document: dict[str, Any]) -> dict[str, Any]:
     for key in ("target_public_identifier", "target_urn", "target_phone", "recipient"):
         snapshot.pop(key, None)
     snapshot["profile_id"] = profile_id
+    whatsapp_opted_out = False
     if owner_id and snapshot.get("campaign_id"):
         campaigns = get_mongodb_collection("campaigns")
         campaign = campaigns.find_one(
@@ -948,6 +949,7 @@ def _snapshot(document: dict[str, Any]) -> dict[str, Any]:
                 "connect": "READY_TO_CONNECT", "check_pending": "PENDING",
                 "follow_up": "Connected", "whatsapp_follow_up": "Connected",
                 "whatsapp_message": {"$in": ["Qualified", "Pending", "Connected"]},
+                "whatsapp_sync": {"$in": ["Pending", "Connected"]},
                 "email_follow_up": {"$in": ["Connected", "Pending", "Qualified", "email_queued", "email_sent", "email_opened"]},
             }
             candidate = deals.find_one(
@@ -968,16 +970,23 @@ def _snapshot(document: dict[str, Any]) -> dict[str, Any]:
                               {"lead_id": 1, "user_id": 1}) if deals is not None and owner_id else None
         lead = leads.find_one({"_id": deal.get("lead_id"), "user_id": owner_id},
                               {"public_identifier": 1, "urn": 1, "phone": 1,
+                               "whatsapp_opted_out": 1,
                                "api_email": 1, "contact_info.email": 1}) if deal and leads is not None else None
         if lead:
+            if channel == "whatsapp" and lead.get("whatsapp_opted_out"):
+                # Keep the task claimable only long enough for the server to
+                # release/requeue it; never return a sendable snapshot.
+                snapshot.pop("target_phone", None)
+                snapshot.pop("message", None)
+                whatsapp_opted_out = True
             if lead.get("public_identifier"):
                 snapshot["target_public_identifier"] = str(lead["public_identifier"])
             if lead.get("urn"):
                 snapshot["target_urn"] = str(lead["urn"])
             contact = lead.get("contact_info") or {}
-            if lead.get("phone"):
+            if lead.get("phone") and not lead.get("whatsapp_opted_out"):
                 snapshot["target_phone"] = str(lead["phone"])
-            elif contact.get("phone"):
+            elif contact.get("phone") and not lead.get("whatsapp_opted_out"):
                 snapshot["target_phone"] = str(contact["phone"])
             if lead.get("api_email"):
                 snapshot["recipient"] = str(lead["api_email"])
@@ -1008,6 +1017,9 @@ def _snapshot(document: dict[str, Any]) -> dict[str, Any]:
                 expires_at=datetime.now(timezone.utc) + timedelta(seconds=45),
                 purpose=purpose,
             ).model_dump(mode="json")
+    if whatsapp_opted_out:
+        snapshot.pop("target_phone", None)
+        snapshot.pop("message", None)
     # Effect identity is server-owned and stable across lease retries.  It is
     # intentionally based only on bounded task identity, not message bodies.
     effect_material = ":".join(str(snapshot.get(key, "")) for key in
@@ -1034,7 +1046,7 @@ def _typed_snapshot(document: dict[str, Any]) -> dict[str, Any] | None:
         elif channel == "whatsapp":
             snapshot = WhatsAppTaskSnapshot.model_validate({
                 key: raw[key] for key in
-                ("profile_id", "target_phone", "message", "cursor", "effect_key")
+                ("profile_id", "deal_id", "target_phone", "message", "cursor", "effect_key")
                 if key in raw
             })
         elif channel == "email":
@@ -1139,10 +1151,11 @@ def _project_channel_effect(context: TenantContext, task: dict[str, Any],
             return
         message_channel = "linkedin"
     else:
-        action_type = "whatsapp_message" if action == "send" or task_type in {
-            "whatsapp_message", "whatsapp_follow_up"
-        } else task_type
-        if action_type not in {"whatsapp_message"}:
+        if action == "sync" or task_type == "whatsapp_sync":
+            action_type = "whatsapp_sync"
+        elif action == "send" or task_type in {"whatsapp_message", "whatsapp_follow_up"}:
+            action_type = "whatsapp_message"
+        else:
             return
         message_channel = "whatsapp"
 
@@ -1169,6 +1182,60 @@ def _project_channel_effect(context: TenantContext, task: dict[str, Any],
         }},
         upsert=True,
     )
+
+    if action_type == "whatsapp_sync":
+        messages = get_mongodb_collection("chat_messages")
+        if messages is None:
+            raise HTTPException(503, "Channel message projection unavailable")
+        sync_payload = result.get("sync") if isinstance(result.get("sync"), dict) else result
+        raw_messages = sync_payload.get("messages") if isinstance(sync_payload, dict) else []
+        if not isinstance(raw_messages, list):
+            return
+        lead_id = str(deal.get("lead_id") or "")
+        leads = get_mongodb_collection("leads")
+        opt_out_markers = {"stop", "unsubscribe", "unsub", "cancel", "remove me", "no more"}
+        saw_inbound = False
+        for raw in raw_messages[:100]:
+            if not isinstance(raw, dict):
+                continue
+            content = str(raw.get("content") or "").strip()[:2000]
+            if not content:
+                continue
+            is_outgoing = str(raw.get("is_outgoing", "")).lower() in {"1", "true", "yes"}
+            message_key = str(raw.get("ts_text") or raw.get("id") or effect_key)
+            message_hash = hashlib.sha256(
+                f"{deal_id}|{is_outgoing}|{content}|{message_key}".encode()
+            ).hexdigest()
+            messages.update_one(
+                {"_id": f"daemon-wa-message:{message_hash}", "user_id": context.tenant_id},
+                {"$setOnInsert": {
+                    "_id": f"daemon-wa-message:{message_hash}",
+                    "deal_id": deal_id, "content": content,
+                    "owner_id": context.tenant_id,
+                    "linkedin_urn": "", "is_outgoing": is_outgoing,
+                    "creation_date": now, "user_id": context.tenant_id,
+                    "channel": "whatsapp", "wa_msg_hash": message_hash,
+                    "wa_delivery_status": str(raw.get("delivery_status") or "") or None,
+                }},
+                upsert=True,
+            )
+            if not is_outgoing:
+                saw_inbound = True
+                if content.casefold() in opt_out_markers and leads is not None and lead_id:
+                    leads.update_one(
+                        {"_id": lead_id, "user_id": context.tenant_id},
+                        {"$set": {"whatsapp_opted_out": True}},
+                    )
+                    deals.update_one(
+                        {"_id": deal_id, "user_id": context.tenant_id},
+                        {"$set": {"state": "Failed", "reason": "whatsapp_opted_out"}},
+                    )
+        if saw_inbound:
+            deals.update_one(
+                {"_id": deal_id, "user_id": context.tenant_id, "state": "Pending"},
+                {"$set": {"state": "Connected", "next_follow_up_at": now + timedelta(minutes=30)}},
+            )
+        return
 
     if message:
         messages = get_mongodb_collection("chat_messages")

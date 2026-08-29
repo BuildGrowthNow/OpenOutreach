@@ -56,7 +56,17 @@ class WhatsAppBrowserAdapter:
             return self._receipt(task, outcome, "session", "reconnect")
         if task_type == "whatsapp_sync":
             try:
-                messages = self.session.sync(cursor=str(snapshot.get("cursor", "")), limit=100)
+                sync_kwargs = {"cursor": str(snapshot.get("cursor", "")), "limit": 100}
+                target_phone = str(snapshot.get("target_phone", "")).strip()
+                if target_phone:
+                    sync_kwargs["phone"] = target_phone
+                try:
+                    messages = self.session.sync(**sync_kwargs)
+                except TypeError:
+                    # Keep compatibility with deterministic test providers and
+                    # older local session implementations.
+                    sync_kwargs.pop("phone", None)
+                    messages = self.session.sync(**sync_kwargs)
             except Exception as exc:
                 return self._receipt(task, self._provider_outcome(exc), "sync", type(exc).__name__)
             next_cursor = str(snapshot.get("cursor", ""))
@@ -64,6 +74,10 @@ class WhatsAppBrowserAdapter:
                 next_cursor = str(messages.get("cursor", next_cursor))
                 messages = messages.get("messages", [])
             bounded = self._bounded_messages(messages)
+            deal_id = str(snapshot.get("deal_id", ""))
+            if deal_id:
+                for item in bounded:
+                    item.setdefault("deal_id", deal_id)
             return {"outcome": "observed", "messages": bounded,
                     "cursor": next_cursor, "observed_at": int(time.time()),
                     "sync": {"profile_id": self.profile_id,
