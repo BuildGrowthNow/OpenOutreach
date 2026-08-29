@@ -27,6 +27,7 @@ PLANS: list[PlanDefinition] = [
         "max_whatsapp_accounts": 1,
         "max_campaigns": 3,
         "features": [
+            "ai_messages",
             "1 LinkedIn account",
             "3 active campaigns",
             "AI-written messages",
@@ -44,6 +45,8 @@ PLANS: list[PlanDefinition] = [
         "max_whatsapp_accounts": 1,
         "max_campaigns": None,
         "features": [
+            "ai_messages",
+            "api_access",
             "Everything in Starter",
             "Unlimited campaigns",
         ],
@@ -57,6 +60,9 @@ PLANS: list[PlanDefinition] = [
         "max_whatsapp_accounts": 3,
         "max_campaigns": None,
         "features": [
+            "ai_messages",
+            "api_access",
+            "team_members",
             "Everything in Pro",
             "3 LinkedIn accounts",
             "Priority support",
@@ -71,6 +77,10 @@ PLANS: list[PlanDefinition] = [
         "max_whatsapp_accounts": 10,
         "max_campaigns": None,
         "features": [
+            "ai_messages",
+            "api_access",
+            "team_members",
+            "white_label",
             "Everything in Business",
             "10 LinkedIn accounts",
             "Priority support",
@@ -85,6 +95,8 @@ PLANS: list[PlanDefinition] = [
         "max_whatsapp_accounts": 1,
         "max_campaigns": None,
         "features": [
+            "ai_messages",
+            "api_access",
             "Fully managed execution",
             "AI included (no API key needed)",
             "No desktop app needed",
@@ -101,7 +113,7 @@ PLANS: list[PlanDefinition] = [
         "max_linkedin_accounts": 0,
         "max_whatsapp_accounts": 0,
         "max_campaigns": None,
-        "features": ["Managed cloud execution"],
+        "features": ["ai_messages", "Managed cloud execution"],
     },
     {
         "name": "lifetime",
@@ -112,6 +124,8 @@ PLANS: list[PlanDefinition] = [
         "max_whatsapp_accounts": 1,
         "max_campaigns": None,
         "features": [
+            "ai_messages",
+            "api_access",
             "Everything in Pro",
             "Lifetime access - pay once",
             "All future updates included",
