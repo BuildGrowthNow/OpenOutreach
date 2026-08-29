@@ -901,12 +901,17 @@ def _snapshot(document: dict[str, Any]) -> dict[str, Any]:
         campaigns = get_mongodb_collection("campaigns")
         campaign = campaigns.find_one(
             {"_id": snapshot["campaign_id"], "user_id": owner_id},
-            {"linkedin_profile_id": 1, "whatsapp_profile_id": 1},
+            {"linkedin_profile_id": 1, "whatsapp_profile_id": 1,
+             "channel_sequence": 1},
         ) if campaigns is not None else None
-        bound_campaign_profile = (campaign or {}).get(
-            "whatsapp_profile_id" if channel == "whatsapp" else "linkedin_profile_id"
-        )
-        if not campaign or str(bound_campaign_profile or "") != profile_id:
+        if channel == "email":
+            campaign_binding_valid = bool(campaign and "email" in (campaign.get("channel_sequence") or []))
+        else:
+            bound_campaign_profile = (campaign or {}).get(
+                "whatsapp_profile_id" if channel == "whatsapp" else "linkedin_profile_id"
+            )
+            campaign_binding_valid = bool(campaign and str(bound_campaign_profile or "") == profile_id)
+        if not campaign_binding_valid:
             # Leave the task unmaterializable; claim-time logic releases it.
             snapshot.pop("campaign_id", None)
             snapshot.pop("deal_id", None)
@@ -917,8 +922,9 @@ def _snapshot(document: dict[str, Any]) -> dict[str, Any]:
         if deals is not None and owner_id and snapshot.get("campaign_id"):
             state_by_type = {
                 "connect": "READY_TO_CONNECT", "check_pending": "PENDING",
-                "follow_up": "CONNECTED", "whatsapp_follow_up": "CONNECTED",
-                "email_follow_up": "CONNECTED",
+                "follow_up": "Connected", "whatsapp_follow_up": "Connected",
+                "whatsapp_message": {"$in": ["Qualified", "Pending", "Connected"]},
+                "email_follow_up": {"$in": ["Connected", "Pending", "Qualified", "email_queued", "email_sent", "email_opened"]},
             }
             candidate = deals.find_one(
                 {"user_id": owner_id, "campaign_id": snapshot["campaign_id"],
