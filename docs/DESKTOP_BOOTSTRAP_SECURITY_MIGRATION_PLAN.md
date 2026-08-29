@@ -762,7 +762,8 @@ Adopt the fully API-based daemon with a dedicated daemon gateway boundary, asymm
   releases unmaterializable lazy slots without handing them to a desktop.
 - [x] Legacy cookie and credential daemon endpoints are permanently retired
   with `410` and `no-store`; v2 completion results reject secret-like fields.
-- [x] Desktop secure floor and release version are now `2.1.0`; PyInstaller
+- [x] Desktop release version is now `2.1.1` (API secure floor remains
+  `2.1.0`); PyInstaller
   metadata, API version, updater fixtures, and CI release naming are aligned.
 - [x] Resumable migration wrappers require `--confirm` for writes and preserve
   per-collection checkpoints. Read-only index verification, SBOM generation,

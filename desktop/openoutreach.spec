@@ -18,7 +18,7 @@ ASSETS_DIR = PROJECT_ROOT / "openoutreach" / "desktop" / "assets"
 
 # Read version from source
 version_file = PROJECT_ROOT / "openoutreach" / "desktop" / "__version__.py"
-__version__ = "2.1.0"
+__version__ = "2.1.1"
 if version_file.exists():
     with open(version_file) as f:
         for line in f:

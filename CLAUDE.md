@@ -184,7 +184,8 @@ The following features are **hidden from navigation** and **not supported**:
 See `docs/PLATFORM_REMEDIATION_PLAN.md` for full rationale and re-enablement strategy.
 ## Desktop security boundary
 
-Desktop version 2.1.0 is the current secure floor. The desktop must use the
+Desktop release version 2.1.1 is the current secure release (the API secure
+floor remains 2.1.0). The desktop must use the
 v2 daemon gateway and local browser/provider sessions only. Never reintroduce
 server credentials, cookies, MongoDB access, or arbitrary model serialization
 into the desktop. New task types require a bounded snapshot, a deterministic
