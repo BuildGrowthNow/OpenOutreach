@@ -1105,6 +1105,12 @@ def _project_channel_effect(context: TenantContext, task: dict[str, Any],
     payload: dict[str, Any] = raw_payload if isinstance(raw_payload, dict) else {}
     raw_snapshot = task.get("snapshot")
     snapshot: dict[str, Any] = raw_snapshot if isinstance(raw_snapshot, dict) else {}
+    if "message" not in snapshot or "deal_id" not in snapshot:
+        # The claim response contains the materialized snapshot, but the
+        # completion request intentionally carries only the bounded result.
+        # Re-resolve missing CRM fields server-side from the leased task.
+        resolved = _snapshot(task)
+        snapshot = {**resolved, **snapshot}
     deal_id = str(payload.get("deal_id") or snapshot.get("deal_id") or "")
     campaign_id = str(payload.get("campaign_id") or snapshot.get("campaign_id") or "")
     if not deal_id:
