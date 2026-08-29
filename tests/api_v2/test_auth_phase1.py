@@ -14,7 +14,7 @@ from datetime import datetime, timedelta, timezone as tz
 from unittest.mock import MagicMock
 
 from fastapi import HTTPException
-from jose import jwt
+import jwt
 
 from openoutreach.api_v2.dependencies_v2 import get_current_user
 from openoutreach.api_v2.routers.auth import create_access_token

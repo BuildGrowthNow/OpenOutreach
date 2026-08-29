@@ -12,7 +12,8 @@ from datetime import datetime, timedelta, timezone as tz
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status, Response, Request
-from jose import jwt, JWTError
+import jwt
+from jwt import InvalidTokenError as JWTError
 
 from openoutreach.config import settings
 from openoutreach.api_v2.dependencies_v2 import get_current_user

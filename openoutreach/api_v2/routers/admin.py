@@ -1057,7 +1057,7 @@ async def impersonate_user(
     """Issue a short-lived (15 min) JWT for the target user so the admin can act as them."""
     from openoutreach.billing.admin_security import AdminSecurityPolicy
     from openoutreach.config import settings
-    from jose import jwt as _jwt
+    import jwt as _jwt
 
     target_user = User.get(user_id)
     if not target_user:

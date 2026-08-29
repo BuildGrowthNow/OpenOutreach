@@ -20,7 +20,7 @@ from urllib.parse import parse_qsl, urlencode
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ed25519, padding
 from cryptography.exceptions import InvalidSignature
-from jose import jwt
+import jwt
 
 DAEMON_AUDIENCE = "daemon-gateway"
 DAEMON_TOKEN_TYPE = "daemon_access"

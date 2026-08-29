@@ -8,7 +8,8 @@ from typing import Optional
 
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from jose import jwt, JWTError
+import jwt
+from jwt import InvalidTokenError as JWTError
 
 from openoutreach.config import settings
 from openoutreach.mongodb.models_user import User
