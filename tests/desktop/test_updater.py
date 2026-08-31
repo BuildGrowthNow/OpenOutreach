@@ -47,8 +47,10 @@ def test_get_platform_asset_name_linux():
 def test_platform_asset_names_accept_current_and_legacy_branding():
     with patch("platform.system", return_value="Windows"):
         assert _get_platform_asset_names("1.2.3") == (
-            "Lengrowth-1.2.3-Setup.exe",
-            "OpenOutreach-1.2.3-Setup.exe",
+            "Lengrowth.exe",
+            "OpenOutreach.exe",
+            "Lengrowth-1.2.3.exe",
+            "OpenOutreach-1.2.3.exe",
         )
 
 
@@ -147,6 +149,42 @@ async def test_check_for_updates_fallback_to_release_page():
             assert result is not None
             # Should fallback to release page URL
             assert result["download_url"] == "https://github.com/test/releases/tag/v2.1.1"
+
+
+@pytest.mark.asyncio
+async def test_check_for_updates_reads_digest_from_checksum_manifest():
+    payload_digest = "a" * 64
+    mock_response = AsyncMock()
+    mock_response.status_code = 200
+    mock_response.json = lambda: {
+        "tag_name": "desktop-v2.1.1",
+        "html_url": "https://github.com/test/releases/tag/v2.1.1",
+        "assets": [
+            {
+                "name": "Lengrowth.exe",
+                "browser_download_url": "https://github.com/test/Lengrowth.exe",
+            },
+            {
+                "name": "SHA256SUMS.txt",
+                "browser_download_url": "https://github.com/test/SHA256SUMS.txt",
+            },
+        ],
+    }
+
+    manifest_response = AsyncMock()
+    manifest_response.text = f"{payload_digest}  ./release/windows/Lengrowth.exe\n"
+    manifest_response.raise_for_status = lambda: None
+
+    with patch("openoutreach.desktop.updater.__version__", "1.0.0"):
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_ctx = AsyncMock()
+            mock_ctx.get = AsyncMock(side_effect=[mock_response, manifest_response])
+            mock_client.return_value.__aenter__.return_value = mock_ctx
+
+            result = await check_for_updates()
+
+    assert result["download_url"].endswith("Lengrowth.exe")
+    assert result["digest"] == payload_digest
 
 
 @pytest.mark.asyncio

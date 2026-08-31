@@ -126,13 +126,41 @@ def _get_platform_asset_names(release_version: str = "") -> tuple[str, ...]:
             return ("Lengrowth-macOS.dmg", "OpenOutreach-macOS.dmg")
         return (f"Lengrowth-{release_version}.dmg", f"OpenOutreach-{release_version}.dmg")
     if system == "windows":
+        # The updater replaces the running standalone executable.  Installer
+        # packages must never be selected here: copying an installer over the
+        # running exe produces an unusable installation.
         if not release_version:
             return ("Lengrowth.exe", "OpenOutreach.exe")
         return (
-            f"Lengrowth-{release_version}-Setup.exe",
-            f"OpenOutreach-{release_version}-Setup.exe",
+            "Lengrowth.exe",
+            "OpenOutreach.exe",
+            f"Lengrowth-{release_version}.exe",
+            f"OpenOutreach-{release_version}.exe",
         )
     return ()
+
+
+async def _manifest_digest(client: httpx.AsyncClient, assets: list, asset_name: str) -> str | None:
+    """Read a release's SHA256SUMS.txt when GitHub has no asset digest.
+
+    GitHub's API digest field is not consistently populated for assets uploaded
+    by release actions, while our publishing workflow already uploads this
+    checksum manifest.  Keeping the fail-closed behavior and using the
+    manifest makes older and newly published releases work alike.
+    """
+    manifest = next((asset for asset in assets if asset.get("name") == "SHA256SUMS.txt"), None)
+    if not manifest:
+        return None
+    try:
+        response = await client.get(manifest["browser_download_url"])
+        response.raise_for_status()
+        for line in response.text.splitlines():
+            fields = line.split()
+            if len(fields) >= 2 and Path(fields[-1]).name == asset_name:
+                return _normalized_sha256(fields[0])
+    except Exception as e:
+        logger.warning("Failed to read release checksum manifest: %s", type(e).__name__)
+    return None
 
 
 async def check_for_updates() -> Optional[dict]:
@@ -176,6 +204,10 @@ async def check_for_updates() -> Optional[dict]:
                         if asset.get("name") in expected_names:
                             platform_url = asset["browser_download_url"]
                             platform_digest = asset.get("digest")
+                            if not platform_digest:
+                                platform_digest = await _manifest_digest(
+                                    client, assets, asset["name"]
+                                )
                             break
                 download_url = platform_url or release["html_url"]
 
