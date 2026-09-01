@@ -30,7 +30,7 @@ class TrackingEvent(BaseModel):
     ts: int = Field(default=0, ge=0, le=4_102_444_800)
 
 
-@router.post("/event", status_code=204)
+@router.post("/event", status_code=204, response_model=None)
 async def tracking_event(request: Request, body: TrackingEvent) -> None:
     """Handle an open/click/unsub event from the Cloudflare Worker."""
     _verify_webhook_secret(request)

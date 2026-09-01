@@ -21,6 +21,9 @@ node_modules/
 workers/email-tracking/node_modules/
 tests/fixtures/pages/**/*.html
 
+# Migration evidence (timestamped, local-only; never commit)
+.migration-evidence/
+
 # Desktop build artifacts
 desktop/build/
 desktop/dist/

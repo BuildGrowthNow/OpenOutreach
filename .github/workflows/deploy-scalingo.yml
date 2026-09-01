@@ -1,0 +1,64 @@
+name: Deploy to Scalingo
+
+on:
+  workflow_dispatch:
+    inputs:
+      rollback_sha:
+        description: "Optional previously accepted commit SHA to deploy instead"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  SCALINGO_REGION: osc-fr1
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r requirements/production.txt
+      - run: python -m compileall -q openoutreach
+      - run: python -m pytest -q
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci --prefix frontend
+      - run: npm run build --prefix frontend
+
+  production:
+    needs: test
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install Scalingo CLI
+        run: |
+          curl -fsSL https://cli-dl.scalingo.com/release/scalingo_latest_linux_amd64.tar.gz | tar -xz
+          sudo install scalingo /usr/local/bin/scalingo
+      - name: Deploy approved SHA to production (daemon remains scaled separately)
+        env:
+          SCALINGO_API_TOKEN: ${{ secrets.SCALINGO_API_TOKEN }}
+          DEPLOY_SHA: ${{ github.event.inputs.rollback_sha || github.sha }}
+        run: |
+          scalingo whoami
+          git archive --format=tar.gz --output=/tmp/openoutreach.tgz "$DEPLOY_SHA"
+          scalingo --app outreach-api --region "$SCALINGO_REGION" deploy /tmp/openoutreach.tgz "$DEPLOY_SHA"
+          scalingo --app outreach-web --region "$SCALINGO_REGION" deploy /tmp/openoutreach.tgz "$DEPLOY_SHA"
+
+  rollback:
+    if: ${{ inputs.rollback_sha != '' }}
+    needs: production
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - run: echo "Rollback SHA was deployed through the same guarded archive path; verify acceptance before resuming traffic."

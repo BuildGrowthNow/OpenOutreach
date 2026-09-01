@@ -13,10 +13,8 @@ from typing import Literal
 
 import jinja2
 from pydantic import BaseModel, Field, model_validator
-from pydantic_ai import Agent
 
 from openoutreach.core.conf import PROMPTS_DIR
-from openoutreach.core.llm import get_llm_model, run_agent_sync
 from openoutreach.linkedin.agents.persona import get_lead_persona
 
 logger = logging.getLogger(__name__)
@@ -302,6 +300,8 @@ def run_follow_up_agent(session, deal, channel: str = "linkedin") -> FollowUpDec
     then render the prompt from the Deal's persistent summaries plus a small
     recency window of verbatim messages, and ask the LLM to decide.
     """
+    from pydantic_ai import Agent
+    from openoutreach.core.llm import get_llm_model, run_agent_sync
     from openoutreach.linkedin.db.chat import sync_conversation
     from openoutreach.mongodb.models import Lead
 

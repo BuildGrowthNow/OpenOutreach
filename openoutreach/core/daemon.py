@@ -7,6 +7,7 @@ from __future__ import annotations
 import logging
 import queue
 import random
+import signal
 import threading
 import time
 from datetime import datetime, timedelta, timezone as tz
@@ -30,13 +31,9 @@ class _TimezoneCompat:
 
 timezone = _TimezoneCompat()
 
-from pydantic_ai.exceptions import ModelHTTPError
 from termcolor import colored
 
 from openoutreach.core.conf import CAMPAIGN_CONFIG
-from openoutreach.linkedin.diagnostics import failure_diagnostics
-from linkedin_cli.exceptions import AuthenticationError, CheckpointChallengeError
-from openoutreach.linkedin.ml.qualifier import BayesianQualifier
 from openoutreach.mongodb.models import Campaign, SiteConfig, Task
 
 logger = logging.getLogger(__name__)
@@ -295,7 +292,14 @@ def _notify_checkpoint_challenge(user_id: str, url: str) -> None:
 # ── Heartbeat ──────────────────────────────────────────────────────────
 
 HEARTBEAT_INTERVAL = 300
-HEARTBEAT_SLICE = 60
+HEARTBEAT_SLICE = 1
+_SHUTDOWN_EVENT = threading.Event()
+
+
+def _request_shutdown(_signum, _frame) -> None:
+    """Request a bounded, graceful shutdown for process replacement."""
+    logger.info("Shutdown requested; draining daemon sessions")
+    _SHUTDOWN_EVENT.set()
 HEALTH_CHECK_INTERVAL = 3600
 
 
@@ -362,6 +366,8 @@ class _HumanRhythmBreak:
 def seconds_until_active(user_id: Optional[str] = None) -> float:
     """Return seconds to wait before the next active window, or 0 if active now.
     Reads config from the user's SiteConfig."""
+    from openoutreach.mongodb.models import SiteConfig
+
     config = SiteConfig.load(user_id=user_id) if user_id else None
     enabled = config.enable_active_hours if config else ENABLE_ACTIVE_HOURS
     if not enabled:
@@ -423,6 +429,7 @@ def seconds_until_active(user_id: Optional[str] = None) -> float:
 
 def _build_qualifiers(campaigns, cfg):
     from openoutreach.crm.models import Lead
+    from openoutreach.linkedin.ml.qualifier import BayesianQualifier
 
     qualifiers: dict = {}
     for campaign in campaigns:
@@ -607,6 +614,14 @@ def run_daemon():
     from openoutreach.mongodb.connection import initialize_mongodb_connection
     from openoutreach.mongodb.indexes import ensure_all_indexes
 
+    from pydantic_ai.exceptions import ModelHTTPError
+    from openoutreach.linkedin.diagnostics import failure_diagnostics
+    from linkedin_cli.exceptions import AuthenticationError, CheckpointChallengeError
+
+    _SHUTDOWN_EVENT.clear()
+    signal.signal(signal.SIGTERM, _request_shutdown)
+    signal.signal(signal.SIGINT, _request_shutdown)
+
     initialize_mongodb_connection()
     ensure_all_indexes()
     _register_handlers()
@@ -674,7 +689,7 @@ def run_daemon():
 
     logger.info(colored("Daemon starting", "green", attrs=["bold"]) + " - multi-profile mode")
 
-    while True:
+    while not _SHUTDOWN_EVENT.is_set():
         refresh_pool()
 
         # Recover stale RUNNING tasks on a fixed timer, not just on idle.
@@ -966,6 +981,12 @@ def run_daemon():
                 h, m = int(min_wait // 3600), int(min_wait % 3600 // 60)
                 logger.info("No tasks ready - sleeping %dh%02dm", h, m)
             sleep_with_heartbeat(min(min_wait, 60), heartbeat, "idle")
+
+    for session in pool.values():
+        try:
+            session.close()
+        except Exception:
+            logger.debug("Profile session close failed during shutdown", exc_info=True)
 
 
 def _reconcile_all(pool: dict[str, ProfileSession]) -> None:

@@ -12,10 +12,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field
-from pydantic_ai import Agent
-
 from openoutreach.core.conf import PROMPTS_DIR
-from openoutreach.core.llm import get_llm_model, run_agent_sync
 
 if TYPE_CHECKING:
     from openoutreach.crm.models import Deal, LeadPersona
@@ -101,6 +98,9 @@ def generate_lead_persona(session, deal: "Deal") -> LeadPersonaOutput | None:
     prompt = template.render(**context)
 
     # Call LLM
+    from pydantic_ai import Agent
+    from openoutreach.core.llm import get_llm_model, run_agent_sync
+
     agent = Agent(
         get_llm_model(user_id=session.user_id),
         output_type=LeadPersonaOutput,
