@@ -18,6 +18,14 @@
 - **Frontend UI components**: Always use `shadcn@latest` components. Install new components with `npx shadcn@latest add <component> --yes`. Never implement custom UI components when shadcn has one available.
 - **Agent execution**: Do not launch subagents for tasks. Execute tasks sequentially because the API rate limit is not very high.
 
+## Production access and migration state
+
+- Production runs in Scalingo project `outreach` (`osc-fr1`) with apps `outreach-web` and `outreach-api`. Use the authenticated CLI or protected production workflow; never print or commit environment values.
+- Public production URLs are `https://outreach.lengrowth.com` and `https://outreach-api.lengrowth.com`. `track.lengrowth.com` remains the existing Cloudflare Worker and must not be replaced during deployments.
+- MongoDB Atlas remains the production database. There is no staging Scalingo app or staging database for this migration.
+- The API daemon is intentionally scaled to exactly one container to preserve browser-session ownership. Do not scale it horizontally without an explicit runbook checkpoint.
+- The former AWS EC2 host is stopped but retained for rollback during the observation window. Termination and Elastic IP release require completion of the migration runbook gates and explicit approval.
+
 ## Branding
 
 ## Desktop security cutoff
