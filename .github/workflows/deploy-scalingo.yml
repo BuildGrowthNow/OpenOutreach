@@ -17,6 +17,10 @@ env:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      # Tests only need a deterministic non-production signing key for settings import.
+      SECRET_KEY: ci-test-only-not-for-production
+      MONGODB_ENABLED: "false"
     steps:
       - uses: actions/checkout@v4
         with:
