@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Install the browser into the slug. Runtime launch is verified after boot.
+python -m playwright install chromium

@@ -1,0 +1,16 @@
+{
+  "jobs": [
+    {
+      "command": "0 */6 * * * python -m openoutreach.cli expire-trials",
+      "size": "M"
+    },
+    {
+      "command": "0 3 * * * python -m openoutreach.cli cleanup-deleted-accounts",
+      "size": "M"
+    },
+    {
+      "command": "0 */6 * * * python -m openoutreach.cli send-trial-warnings",
+      "size": "M"
+    }
+  ]
+}

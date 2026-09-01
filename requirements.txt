@@ -1,0 +1,3 @@
+# Scalingo Python buildpack entrypoint. Keep application dependencies in the
+# existing, reviewed production requirements file.
+-r requirements/production.txt

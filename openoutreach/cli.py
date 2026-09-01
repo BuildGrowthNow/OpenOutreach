@@ -290,7 +290,12 @@ def send_trial_warnings():
     from openoutreach.billing.email_scheduler import send_trial_expiry_warnings
 
     initialize_mongodb_connection()
-    count = send_trial_expiry_warnings()
+    from openoutreach.billing.scheduled_lock import scheduled_job_lock
+    with scheduled_job_lock("send-trial-warnings") as acquired:
+        if not acquired:
+            click.echo("Another send-trial-warnings job is active; exiting")
+            return
+        count = send_trial_expiry_warnings()
     click.echo(f"Sent {count} trial expiry warning emails")
 
 
@@ -301,7 +306,12 @@ def expire_trials():
     from openoutreach.billing.email_scheduler import expire_trials
 
     initialize_mongodb_connection()
-    count = expire_trials()
+    from openoutreach.billing.scheduled_lock import scheduled_job_lock
+    with scheduled_job_lock("expire-trials") as acquired:
+        if not acquired:
+            click.echo("Another expire-trials job is active; exiting")
+            return
+        count = expire_trials()
     click.echo(f"Expired {count} user trials")
 
 
@@ -353,7 +363,12 @@ def cleanup_deleted_accounts():
 
     initialize_mongodb_connection()
     click.echo("Running account deletion cleanup...")
-    cleanup_expired_deletions()
+    from openoutreach.billing.scheduled_lock import scheduled_job_lock
+    with scheduled_job_lock("cleanup-deleted-accounts") as acquired:
+        if not acquired:
+            click.echo("Another cleanup-deleted-accounts job is active; exiting")
+            return
+        cleanup_expired_deletions()
     click.echo("Cleanup completed")
 
 
