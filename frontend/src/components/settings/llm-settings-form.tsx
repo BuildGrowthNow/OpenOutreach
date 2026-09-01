@@ -37,6 +37,7 @@ const providerValues = [
   'mistral',
   'cohere',
   'openai_compatible',
+  'cloudflare_workers_ai',
 ] as const
 
 const providerOptions: Array<{
@@ -51,6 +52,7 @@ const providerOptions: Array<{
   { value: 'mistral', label: 'Mistral', description: 'Hosted Mistral models.' },
   { value: 'cohere', label: 'Cohere', description: 'Hosted Cohere models.' },
   { value: 'openai_compatible', label: 'OpenAI-compatible', description: 'Use a custom OpenAI-style endpoint and base URL.' },
+  { value: 'cloudflare_workers_ai', label: 'Cloudflare Workers AI', description: 'Run supported models through your Cloudflare account.' },
 ]
 
 const llmSchema = z
@@ -321,7 +323,7 @@ export default function LlmSettingsForm({ initialData, onSuccess }: LlmSettingsF
               name="apiKey"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>API key <span className="text-zinc-500 font-normal text-xs">(from your AI provider)</span></FormLabel>
+                  <FormLabel>API key <span className="text-zinc-500 font-normal text-xs">({provider === 'cloudflare_workers_ai' ? 'Cloudflare API token for Workers AI' : 'from your AI provider'})</span></FormLabel>
                   <FormControl>
                     <Input
                       type="password"

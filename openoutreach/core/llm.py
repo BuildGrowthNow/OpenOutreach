@@ -166,6 +166,33 @@ def _build_openai_compatible(cfg):
     return OpenAIChatModel(cfg.ai_model, provider=OpenAIProvider(openai_client=client))
 
 
+def _build_cloudflare_workers_ai(cfg):
+    """Build an OpenAI-compatible model backed by Cloudflare Workers AI."""
+    from openai import AsyncOpenAI
+    from pydantic_ai.models.openai import OpenAIChatModel
+    from pydantic_ai.providers.openai import OpenAIProvider
+    from openoutreach.config import settings
+
+    account_id = settings.CLOUDFLARE_ACCOUNT_ID.strip()
+    # Prefer the deployment secret, but allow an encrypted per-user token from
+    # SiteConfig for installations that configure providers in the Settings UI.
+    api_token = (settings.CLOUDFLARE_API_TOKEN or cfg.llm_api_key).strip()
+    if not account_id:
+        raise ValueError("CLOUDFLARE_ACCOUNT_ID is required for cloudflare_workers_ai.")
+    if not api_token:
+        raise ValueError("CLOUDFLARE_API_TOKEN is required for cloudflare_workers_ai.")
+
+    client = AsyncOpenAI(
+        base_url=f"https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1",
+        api_key=api_token,
+        max_retries=_MAX_RETRIES,
+    )
+    return OpenAIChatModel(
+        cfg.ai_model,
+        provider=OpenAIProvider(openai_client=client),
+    )
+
+
 _PROVIDER_BUILDERS: dict[str, Callable] = {
     "openai": _build_openai,
     "anthropic": _build_anthropic,
@@ -174,6 +201,7 @@ _PROVIDER_BUILDERS: dict[str, Callable] = {
     "mistral": _build_mistral,
     "cohere": _build_cohere,
     "openai_compatible": _build_openai_compatible,
+    "cloudflare_workers_ai": _build_cloudflare_workers_ai,
 }
 
 
@@ -206,7 +234,11 @@ def _validated_site_config(user_id: str | None = None):
         # No custom key - use the full platform LLM config (key, provider, model, base).
         # Always override provider here: core/models.py defaults it to "openai" even when
         # the DB has no value, so `not cfg.llm_provider` would never be true.
-        cfg.llm_api_key = settings.LLM_API_KEY
+        cfg.llm_api_key = (
+            settings.CLOUDFLARE_API_TOKEN
+            if settings.LLM_PROVIDER == "cloudflare_workers_ai"
+            else settings.LLM_API_KEY
+        )
         cfg.llm_provider = settings.LLM_PROVIDER
         cfg.ai_model = cfg.ai_model or settings.AI_MODEL
         cfg.llm_api_base = cfg.llm_api_base or settings.LLM_API_BASE or ""

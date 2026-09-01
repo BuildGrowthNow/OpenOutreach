@@ -49,6 +49,7 @@ LLM_PROVIDERS = [
     "mistral",
     "cohere",
     "openai_compatible",
+    "cloudflare_workers_ai",
 ]
 LLM_PROVIDER = Autocomplete(
     "llm_provider",
@@ -56,7 +57,7 @@ LLM_PROVIDER = Autocomplete(
     resolver=lambda _: LLM_PROVIDERS,
     default="openai",
 )
-LLM_API_KEY = Password("llm_api_key", "LLM API key (e.g. sk-...)")
+LLM_API_KEY = Password("llm_api_key", "LLM API key (e.g. sk-... or Cloudflare token)")
 AI_MODEL = Text("ai_model", "AI model (e.g. gpt-4o, claude-sonnet-4-5-20250929)")
 LLM_API_BASE = Text(
     "llm_api_base",

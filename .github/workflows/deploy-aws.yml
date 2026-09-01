@@ -56,6 +56,8 @@ jobs:
           APP_VERSION: ${{ steps.version.outputs.app_version }}
           SECRET_KEY: ${{ secrets.SECRET_KEY }}
           DEBUG: ${{ secrets.DEBUG }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           SSH_AUTH_SOCK: /dev/null
         run: |
           # Ensure lingering is enabled so rootless Docker survives SSH disconnect
@@ -104,6 +106,23 @@ jobs:
                 printf '\nMONGODB_NAME=openoutreach\n' >> .env
               fi
             fi
+          "
+
+          # Sync the Workers AI deployment secrets into the server-only .env.
+          # Values are sent over SSH stdin and are never placed in command args.
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=yes -o IdentitiesOnly=yes "${EC2_USER}@${EC2_HOST}" "
+            set -e
+            cd ~/OpenOutreach
+            sed -i '/^CLOUDFLARE_ACCOUNT_ID=/d; /^CLOUDFLARE_API_TOKEN=/d' .env
+          "
+          {
+            printf 'CLOUDFLARE_ACCOUNT_ID=%s\n' "$CLOUDFLARE_ACCOUNT_ID"
+            printf 'CLOUDFLARE_API_TOKEN=%s\n' "$CLOUDFLARE_API_TOKEN"
+          } | ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=yes -o IdentitiesOnly=yes "${EC2_USER}@${EC2_HOST}" "
+            set -e
+            cd ~/OpenOutreach
+            umask 077
+            cat >> .env
           "
 
           # Deploy with docker-compose - build new image first, then recreate

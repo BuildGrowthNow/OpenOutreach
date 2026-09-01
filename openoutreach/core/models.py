@@ -24,6 +24,7 @@ class SiteConfig:
         MISTRAL = "mistral"
         COHERE = "cohere"
         OPENAI_COMPATIBLE = "openai_compatible"
+        CLOUDFLARE_WORKERS_AI = "cloudflare_workers_ai"
 
     class AggressivenessPreset:
         VERY_SLOW = "very_slow"

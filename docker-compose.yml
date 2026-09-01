@@ -35,6 +35,8 @@ services:
       - LLM_API_KEY=${LLM_API_KEY}
       - LLM_API_BASE=${LLM_API_BASE:-}
       - AI_MODEL=${AI_MODEL:-gpt-4o-mini}
+      - CLOUDFLARE_ACCOUNT_ID=${CLOUDFLARE_ACCOUNT_ID:-}
+      - CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN:-}
 
       # LinkedIn Configuration
       - LINKEDIN_USERNAME=${LINKEDIN_USERNAME}

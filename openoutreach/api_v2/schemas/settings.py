@@ -17,7 +17,7 @@ class SiteConfigResponse(BaseModel):
     Includes all SiteConfig fields from MongoDB.
     """
     id: str = Field(..., description="SiteConfig unique identifier")
-    llm_provider: str = Field(default="", description="LLM provider (openai, anthropic, google, groq, mistral, cohere, openai_compatible)")
+    llm_provider: str = Field(default="", description="LLM provider (openai, anthropic, google, groq, mistral, cohere, openai_compatible, cloudflare_workers_ai)")
     llm_api_key: str = Field(default="", description="LLM API key (encrypted)")
     ai_model: str = Field(default="", description="AI model identifier")
     llm_api_base: str = Field(default="", description="LLM API base URL (for openai_compatible provider)")

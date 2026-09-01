@@ -94,6 +94,8 @@ class Settings(BaseSettings):
     LLM_API_KEY: str = ""
     LLM_API_BASE: Optional[str] = None
     AI_MODEL: str = "gpt-4o-mini"
+    CLOUDFLARE_ACCOUNT_ID: str = ""
+    CLOUDFLARE_API_TOKEN: str = ""
 
     # =========================================================================
     # LinkedIn Configuration
