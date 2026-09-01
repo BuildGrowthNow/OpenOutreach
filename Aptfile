@@ -8,4 +8,5 @@ libasound2t64
 libxtst6
 xauth
 xvfb
+xkb-data
 curl
