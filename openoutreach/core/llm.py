@@ -29,8 +29,13 @@ slot stays inside this module - the caller thread is never touched.
 from __future__ import annotations
 
 import asyncio
+import logging
 import threading
+from contextlib import asynccontextmanager
 from typing import Awaitable, Callable, TypeVar
+
+from pydantic_ai.models import Model
+from pydantic_ai.models.openai import OpenAIChatModel
 
 _T = TypeVar("_T")
 
@@ -38,6 +43,7 @@ _T = TypeVar("_T")
 # exponential backoff and honors `Retry-After`, so 8 attempts ride through
 # typical 429/529 capacity blips (~1–2 minutes) instead of failing in ~1.5s.
 _MAX_RETRIES = 8
+logger = logging.getLogger(__name__)
 
 
 # ── Async runner ─────────────────────────────────────────────────────
@@ -169,7 +175,6 @@ def _build_openai_compatible(cfg):
 def _build_cloudflare_workers_ai(cfg):
     """Build an OpenAI-compatible model backed by Cloudflare Workers AI."""
     from openai import AsyncOpenAI
-    from pydantic_ai.models.openai import OpenAIChatModel
     from pydantic_ai.providers.openai import OpenAIProvider
     from openoutreach.config import settings
 
@@ -182,15 +187,95 @@ def _build_cloudflare_workers_ai(cfg):
     if not api_token:
         raise ValueError("CLOUDFLARE_API_TOKEN is required for cloudflare_workers_ai.")
 
-    client = AsyncOpenAI(
-        base_url=f"https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1",
-        api_key=api_token,
-        max_retries=_MAX_RETRIES,
+    def build_model(model_name: str):
+        client = AsyncOpenAI(
+            base_url=f"https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1",
+            api_key=api_token,
+            max_retries=_MAX_RETRIES,
+        )
+        return OpenAIChatModel(model_name, provider=OpenAIProvider(openai_client=client))
+
+    models = [build_model(cfg.ai_model)]
+    fallback_names = getattr(settings, "AI_MODEL_FALLBACKS", "")
+    for model_name in fallback_names.split(","):
+        model_name = model_name.strip()
+        if model_name and model_name not in {cfg.ai_model, *(m.model_name for m in models)}:
+            models.append(build_model(model_name))
+    return _FallbackModel(models) if len(models) > 1 else models[0]
+
+
+def _is_transient_model_error(error: Exception) -> bool:
+    """Return whether a model error is safe to retry on another model."""
+    status_code = getattr(error, "status_code", None)
+    if status_code in {408, 409, 429} or (isinstance(status_code, int) and status_code >= 500):
+        return True
+    return any(
+        marker in type(error).__name__.lower()
+        for marker in ("timeout", "connection", "rate_limit", "internalserver")
     )
-    return OpenAIChatModel(
-        cfg.ai_model,
-        provider=OpenAIProvider(openai_client=client),
-    )
+
+
+class _FallbackModel(Model):
+    """Try configured models in order when a provider has a transient failure."""
+
+    def __init__(self, models: list[Model]):
+        super().__init__(profile=models[0].profile)
+        self._models = models
+
+    @property
+    def model_name(self) -> str:
+        return self._models[0].model_name
+
+    @property
+    def system(self) -> str:
+        return self._models[0].system
+
+    @property
+    def provider(self):
+        return self._models[0].provider
+
+    @property
+    def base_url(self) -> str | None:
+        return self._models[0].base_url
+
+    async def request(self, messages, model_settings, model_request_parameters):
+        last_error = None
+        for index, model in enumerate(self._models):
+            try:
+                return await model.request(messages, model_settings, model_request_parameters)
+            except Exception as error:
+                last_error = error
+                if not _is_transient_model_error(error) or index == len(self._models) - 1:
+                    raise
+                logger.warning(
+                    "LLM model failed transiently; trying fallback %s/%s (%s)",
+                    index + 1,
+                    len(self._models),
+                    type(error).__name__,
+                )
+        raise last_error  # pragma: no cover
+
+    @asynccontextmanager
+    async def request_stream(self, messages, model_settings, model_request_parameters, run_context=None):
+        last_error = None
+        for index, model in enumerate(self._models):
+            try:
+                async with model.request_stream(
+                    messages, model_settings, model_request_parameters, run_context
+                ) as stream:
+                    yield stream
+                return
+            except Exception as error:
+                last_error = error
+                if not _is_transient_model_error(error) or index == len(self._models) - 1:
+                    raise
+                logger.warning(
+                    "LLM streaming model failed transiently; trying fallback %s/%s (%s)",
+                    index + 1,
+                    len(self._models),
+                    type(error).__name__,
+                )
+        raise last_error  # pragma: no cover
 
 
 _PROVIDER_BUILDERS: dict[str, Callable] = {

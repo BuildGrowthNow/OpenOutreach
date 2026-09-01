@@ -94,6 +94,7 @@ class Settings(BaseSettings):
     LLM_API_KEY: str = ""
     LLM_API_BASE: Optional[str] = None
     AI_MODEL: str = "gpt-4o-mini"
+    AI_MODEL_FALLBACKS: str = ""
     CLOUDFLARE_ACCOUNT_ID: str = ""
     CLOUDFLARE_API_TOKEN: str = ""
 
