@@ -5,6 +5,7 @@ claims tasks scoped by linkedin_profile_id, and round-robins across all users.
 from __future__ import annotations
 
 import logging
+import os
 import queue
 import random
 import signal
@@ -96,6 +97,9 @@ _WA_SESSIONS: dict[str, Any] = {}
 _WA_HEALTH_INTERVAL = 300       # 5 minutes
 _WA_SESSION_REFRESH_INTERVAL = 300  # 5 minutes
 _WA_VALIDATION_INTERVAL = 1800  # 30 minutes
+_WA_CLOUD_ENABLED = os.getenv("DAEMON_V2_WHATSAPP_ENABLED", "false").strip().lower() in {
+    "1", "true", "yes", "on"
+}
 
 
 def _start_wa_pw_thread() -> None:
@@ -134,6 +138,11 @@ def _run_on_wa_thread(fn, timeout: float = 120) -> Any:
 
 def _refresh_wa_sessions() -> None:
     """Ensure a WA session exists for every non-banned WhatsApp profile."""
+    # WhatsApp browser sessions are opt-in for the cloud daemon.  Desktop
+    # users must not cause the server to launch one Chromium process per
+    # stored WhatsApp profile (which can exhaust an M container).
+    if not _WA_CLOUD_ENABLED:
+        return
     try:
         from openoutreach.whatsapp.browser.launch import start_whatsapp_session
         from openoutreach.whatsapp.browser.session import WASession
