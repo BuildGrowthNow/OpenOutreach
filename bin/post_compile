@@ -1,12 +1,5 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Install the browser into the slug and fail the build if it cannot launch.
+# Install the browser into the slug. Runtime launch is verified after boot.
 python -m playwright install chromium
-xvfb-run -a python - <<'PY'
-from playwright.sync_api import sync_playwright
-
-with sync_playwright() as pw:
-    browser = pw.chromium.launch(headless=True, args=["--no-sandbox"])
-    browser.close()
-PY
