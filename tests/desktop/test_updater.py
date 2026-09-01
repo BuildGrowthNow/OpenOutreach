@@ -176,12 +176,13 @@ async def test_check_for_updates_reads_digest_from_checksum_manifest():
     manifest_response.raise_for_status = lambda: None
 
     with patch("openoutreach.desktop.updater.__version__", "1.0.0"):
-        with patch("httpx.AsyncClient") as mock_client:
-            mock_ctx = AsyncMock()
-            mock_ctx.get = AsyncMock(side_effect=[mock_response, manifest_response])
-            mock_client.return_value.__aenter__.return_value = mock_ctx
+        with patch("openoutreach.desktop.updater.platform.system", return_value="Windows"):
+            with patch("httpx.AsyncClient") as mock_client:
+                mock_ctx = AsyncMock()
+                mock_ctx.get = AsyncMock(side_effect=[mock_response, manifest_response])
+                mock_client.return_value.__aenter__.return_value = mock_ctx
 
-            result = await check_for_updates()
+                result = await check_for_updates()
 
     assert result["download_url"].endswith("Lengrowth.exe")
     assert result["digest"] == payload_digest
