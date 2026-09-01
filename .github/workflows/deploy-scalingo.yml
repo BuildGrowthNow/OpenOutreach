@@ -51,9 +51,16 @@ jobs:
           DEPLOY_SHA: ${{ github.event.inputs.rollback_sha || github.sha }}
         run: |
           scalingo whoami
-          git archive --format=tar.gz --output=/tmp/openoutreach.tgz "$DEPLOY_SHA"
-          scalingo --app outreach-api --region "$SCALINGO_REGION" deploy /tmp/openoutreach.tgz "$DEPLOY_SHA"
-          scalingo --app outreach-web --region "$SCALINGO_REGION" deploy /tmp/openoutreach.tgz "$DEPLOY_SHA"
+          # The API app expects the repository root (root Procfile and Python files).
+          git archive --format=tar.gz --output=/tmp/openoutreach-api.tgz "$DEPLOY_SHA"
+          scalingo --app outreach-api --region "$SCALINGO_REGION" deploy /tmp/openoutreach-api.tgz "$DEPLOY_SHA"
+          # The web app must receive frontend/ as the archive root so its Node buildpack
+          # sees frontend/package.json and frontend/Procfile, not the API Procfile.
+          rm -rf /tmp/openoutreach-web-src
+          mkdir -p /tmp/openoutreach-web-src
+          git archive "$DEPLOY_SHA" frontend | tar -x -C /tmp/openoutreach-web-src
+          tar -czf /tmp/openoutreach-web.tgz -C /tmp/openoutreach-web-src/frontend .
+          scalingo --app outreach-web --region "$SCALINGO_REGION" deploy /tmp/openoutreach-web.tgz "$DEPLOY_SHA"
 
   rollback:
     if: ${{ inputs.rollback_sha != '' }}
