@@ -116,6 +116,8 @@ jobs:
             sed -i '/^CLOUDFLARE_ACCOUNT_ID=/d; /^CLOUDFLARE_API_TOKEN=/d' .env
           "
           {
+            printf 'LLM_PROVIDER=cloudflare_workers_ai\n'
+            printf 'AI_MODEL=@cf/deepseek-ai/deepseek-v4-pro-0813\n'
             printf 'CLOUDFLARE_ACCOUNT_ID=%s\n' "$CLOUDFLARE_ACCOUNT_ID"
             printf 'CLOUDFLARE_API_TOKEN=%s\n' "$CLOUDFLARE_API_TOKEN"
           } | ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=yes -o IdentitiesOnly=yes "${EC2_USER}@${EC2_HOST}" "
