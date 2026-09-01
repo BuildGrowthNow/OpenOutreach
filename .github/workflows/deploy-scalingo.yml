@@ -48,7 +48,7 @@ jobs:
       - name: Install Scalingo CLI
         run: |
           curl -fsSL https://cli-dl.scalingo.com/release/scalingo_latest_linux_amd64.tar.gz | tar -xz
-          sudo install scalingo /usr/local/bin/scalingo
+          sudo install scalingo_*/scalingo /usr/local/bin/scalingo
       - name: Deploy approved SHA to production (daemon remains scaled separately)
         env:
           SCALINGO_API_TOKEN: ${{ secrets.SCALINGO_API_TOKEN }}
