@@ -54,6 +54,7 @@ jobs:
           SCALINGO_API_TOKEN: ${{ secrets.SCALINGO_API_TOKEN }}
           DEPLOY_SHA: ${{ github.event.inputs.rollback_sha || github.sha }}
         run: |
+          scalingo login --api-token "$SCALINGO_API_TOKEN"
           scalingo whoami
           # The API app expects the repository root (root Procfile and Python files).
           git archive --format=tar.gz --output=/tmp/openoutreach-api.tgz "$DEPLOY_SHA"
