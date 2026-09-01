@@ -4,6 +4,7 @@
 
 - Production runs in Scalingo project `outreach` (region `osc-fr1`). Use the authenticated Scalingo CLI; never commit or print environment values.
 - Apps: `outreach-web` (Next.js) and `outreach-api` (FastAPI plus the single `daemon` process).
+- The server daemon is cloud-only: it selects profiles with `execution_mode="cloud"`; desktop-enrolled profiles stay owned by the desktop daemon.
 - Public URLs: `https://outreach.lengrowth.com`, `https://outreach-api.lengrowth.com`, and the existing tracking Worker `https://track.lengrowth.com`.
 - MongoDB Atlas remains the production database. Do not create a staging database or change the tracking Worker during routine deployments.
 - Cloudflare DNS routes the two `outreach` hostnames to their Scalingo custom domains and keeps `track.lengrowth.com` on the existing Worker.

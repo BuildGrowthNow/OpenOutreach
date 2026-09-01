@@ -581,13 +581,20 @@ STALE_RECOVERY_INTERVAL = 300  # Run stale-task recovery independently every 5 m
 
 
 def _get_all_active_profiles() -> list:
-    """Return all active LinkedIn profiles with valid cookie data.
-    Profiles must be active and not plan-deactivated to run.
+    """Return eligible *cloud* profiles with valid cookie data.
+
+    Desktop-enrolled profiles intentionally remain out of this pool: the
+    desktop daemon owns those sessions.  Filtering at the database query
+    boundary prevents a server daemon restart/refresh from accidentally
+    claiming a desktop account.
     """
     from openoutreach.linkedin.models import LinkedInProfile
     from openoutreach.billing.enforcement import PlanEnforcer
 
-    active_profiles = LinkedInProfile.objects.filter(active=True)
+    active_profiles = LinkedInProfile.objects.filter(
+        active=True,
+        execution_mode="cloud",
+    )
     result = []
     for p in active_profiles:
         if not p.cookie_data_encrypted:
