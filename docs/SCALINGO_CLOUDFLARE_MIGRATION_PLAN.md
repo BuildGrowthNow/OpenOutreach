@@ -1,6 +1,6 @@
 # AWS EC2 to Scalingo + Cloudflare Migration Plan
 
-Status: Phase 0 evidence captured; backup/restore requirement explicitly waived by the user; proceeding with production-only Scalingo migration, 2026-09-01  
+Status: Production-only Scalingo apps deployed, Cloudflare DNS cutover completed, and public hostnames return HTTP 200; AWS retained for observation gates, 2026-09-01  
 Scalingo destination project: `outreach` (new; existing `lengrowth` project is out of scope)  
 Confirmed AWS source: `Linkedin-auth`, instance `i-027c586e0728aaded`, `t3.large`, `us-east-1b`, Elastic IP `50.19.251.160`  
 Confirmed root volume: `vol-0d7f16cbe367284fd`, 35 GiB gp3, unencrypted, `DeleteOnTermination=true`  
