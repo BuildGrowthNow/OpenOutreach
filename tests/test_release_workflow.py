@@ -2,8 +2,14 @@ from pathlib import Path
 
 import yaml
 
+from openoutreach.desktop.__version__ import __version__
+
 
 WORKFLOW = Path(__file__).parents[1] / ".github" / "workflows" / "desktop-build.yml"
+
+
+def test_desktop_version_is_bumped_for_release():
+    assert tuple(int(part) for part in __version__.split(".")) >= (2, 1, 5)
 
 
 def test_release_requires_explicit_manual_publish_input():
