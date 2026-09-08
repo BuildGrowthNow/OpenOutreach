@@ -9,6 +9,7 @@ on:
       - 'openoutreach/desktop/**'
       - 'desktop/**'
       - 'requirements/base.txt'
+      - '.github/workflows/desktop-build.yml'
     branches:
       - main
   workflow_dispatch:
@@ -160,7 +161,7 @@ jobs:
   release:
     name: Publish to Lengrowth/outbound
     needs: [build-macos, build-windows]
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish == true }}
+    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish == true) }}
     runs-on: ubuntu-latest
 
     steps:

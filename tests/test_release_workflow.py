@@ -22,6 +22,16 @@ def test_release_requires_explicit_manual_publish_input():
     assert workflow["permissions"]["contents"] == "read"
 
 
+def test_push_to_main_publishes_desktop_release():
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    trigger = yaml.safe_load(workflow).get("on", yaml.safe_load(workflow).get(True))
+
+    assert ".github/workflows/desktop-build.yml" in trigger["push"]["paths"]
+    release_job = workflow.split("  release:", 1)[1].split("    runs-on:", 1)[0]
+    assert "github.event_name == 'push'" in release_job
+    assert "inputs.publish == true" in release_job
+
+
 def test_windows_installer_build_is_fail_closed():
     text = WORKFLOW.read_text(encoding="utf-8")
     installer_step = text.split("- name: Install NSIS and create installer", 1)[1].split(
