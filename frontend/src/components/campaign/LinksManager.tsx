@@ -68,7 +68,7 @@ export function LinksManager({ campaignId }: LinksManagerProps) {
   const handleUpdateLink = async (data: Partial<TrackedLink>) => {
     if (!editingLink?.id) return
     try {
-      const response = await updateLink(editingLink.id, data)
+      const response = await updateLink(editingLink.id, data, campaignId)
       if (response.data) {
         await fetchLinks()
         setEditingLink(null)
@@ -83,7 +83,7 @@ export function LinksManager({ campaignId }: LinksManagerProps) {
   const handleDeleteLink = async (link: TrackedLink) => {
     if (!confirm('Are you sure you want to delete this link?')) return
     try {
-      const response = await deleteLink(link.id)
+      const response = await deleteLink(link.id, campaignId)
       if (response.data) {
         await fetchLinks()
         return { success: true }
@@ -175,14 +175,14 @@ export function LinksManager({ campaignId }: LinksManagerProps) {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Click-through Rate
+              Unique Clicks
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {links.length > 0 ? '...' : '0%'}
+              {links.reduce((sum, link) => sum + (link.unique_clicks || 0), 0).toLocaleString()}
             </div>
-            <p className="text-xs text-muted-foreground">Est. conversion rate</p>
+            <p className="text-xs text-muted-foreground">Unique recipients</p>
           </CardContent>
         </Card>
       </div>
@@ -229,6 +229,7 @@ export function LinksManager({ campaignId }: LinksManagerProps) {
       {showStats && selectedLink && (
         <LinkStatsDashboard 
           link={selectedLink}
+          campaignId={campaignId}
           onClose={() => setShowStats(false)}
         />
       )}

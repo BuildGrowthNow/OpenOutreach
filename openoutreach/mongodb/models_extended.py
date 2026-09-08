@@ -859,7 +859,10 @@ class MailboxManager:
 
 class CampaignTemplate:
     """
-    MongoDB CampaignTemplate model - predefined campaign settings.
+    Versioned reusable campaign workflow blueprint.
+
+    ``created_by_id`` and ``is_public`` remain readable for old documents,
+    but new writes use the tenant-safe owner/visibility contract.
     """
 
     def __init__(
@@ -877,6 +880,18 @@ class CampaignTemplate:
         created_by_id: str = "",
         created_at: Optional[datetime] = None,
         updated_at: Optional[datetime] = None,
+        owner_user_id: Optional[str] = None,
+        category: str = "general",
+        channels: Optional[List[str]] = None,
+        sequence_schema_version: int = 1,
+        sequence_steps: Optional[List[Dict[str, Any]]] = None,
+        sequence_edges: Optional[List[Dict[str, Any]]] = None,
+        campaign_defaults: Optional[Dict[str, Any]] = None,
+        link_definitions: Optional[List[Dict[str, Any]]] = None,
+        safety_defaults: Optional[Dict[str, Any]] = None,
+        visibility: str = "private",
+        team_member_ids: Optional[List[str]] = None,
+        version: int = 1,
     ):
         self._id = _id or str(uuid4())
         self.name = name
@@ -891,6 +906,18 @@ class CampaignTemplate:
         self.created_by_id = created_by_id
         self.created_at = created_at or datetime.now(timezone.utc)
         self.updated_at = updated_at or datetime.now(timezone.utc)
+        self.owner_user_id = owner_user_id or created_by_id
+        self.category = category
+        self.channels = channels or []
+        self.sequence_schema_version = sequence_schema_version
+        self.sequence_steps = sequence_steps or []
+        self.sequence_edges = sequence_edges or []
+        self.campaign_defaults = campaign_defaults or {}
+        self.link_definitions = link_definitions or []
+        self.safety_defaults = safety_defaults or {}
+        self.visibility = visibility if visibility in {"private", "team", "system"} else "private"
+        self.team_member_ids = team_member_ids or []
+        self.version = version
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -907,6 +934,18 @@ class CampaignTemplate:
             "created_by_id": self.created_by_id,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
+            "owner_user_id": self.owner_user_id,
+            "category": self.category,
+            "channels": self.channels,
+            "sequence_schema_version": self.sequence_schema_version,
+            "sequence_steps": self.sequence_steps,
+            "sequence_edges": self.sequence_edges,
+            "campaign_defaults": self.campaign_defaults,
+            "link_definitions": self.link_definitions,
+            "safety_defaults": self.safety_defaults,
+            "visibility": self.visibility,
+            "team_member_ids": self.team_member_ids,
+            "version": self.version,
         }
 
     @classmethod
@@ -925,6 +964,18 @@ class CampaignTemplate:
             created_by_id=data.get("created_by_id", ""),
             created_at=data.get("created_at"),
             updated_at=data.get("updated_at"),
+            owner_user_id=data.get("owner_user_id") or data.get("created_by_id"),
+            category=data.get("category", "general"),
+            channels=data.get("channels", []),
+            sequence_schema_version=data.get("sequence_schema_version", 1),
+            sequence_steps=data.get("sequence_steps", []),
+            sequence_edges=data.get("sequence_edges", []),
+            campaign_defaults=data.get("campaign_defaults", {}),
+            link_definitions=data.get("link_definitions", []),
+            safety_defaults=data.get("safety_defaults", {}),
+            visibility=data.get("visibility", "public" if data.get("is_public") else "private"),
+            team_member_ids=data.get("team_member_ids", []),
+            version=data.get("version", 1),
         )
 
     def save(self) -> str:

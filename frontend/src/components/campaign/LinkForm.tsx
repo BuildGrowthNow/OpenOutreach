@@ -37,8 +37,9 @@ import {
 } from "@/lib/modal-styles";
 
 const formSchema = z.object({
-  original_url: z.string().url("Must be a valid URL").min(1, "URL is required"),
-  campaign_id: z.string().optional(),
+  key: z.string().regex(/^[A-Za-z0-9_-]+$/, "Use letters, numbers, underscores, or hyphens").min(1, "Key is required"),
+  name: z.string().min(1, "Name is required"),
+  destination_url: z.string().url("Must be a valid URL").min(1, "URL is required"),
   is_active: z.boolean(),
   utm_source: z.string().optional().or(z.literal("")),
   utm_medium: z.string().optional().or(z.literal("")),
@@ -71,8 +72,9 @@ export function LinkForm({
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      original_url: "",
-      campaign_id: "",
+      key: "",
+      name: "",
+      destination_url: "",
       is_active: true,
       utm_source: "",
       utm_medium: "",
@@ -85,8 +87,9 @@ export function LinkForm({
   useEffect(() => {
     if (link) {
       form.reset({
-        original_url: link.original_url,
-        campaign_id: link.campaign?.id ?? campaignId ?? "",
+        key: link.key ?? link.short_code ?? "",
+        name: link.name ?? "Tracked link",
+        destination_url: link.destination_url ?? link.original_url,
         is_active: link.is_active ?? true,
         utm_source: link.utm_source ?? "",
         utm_medium: link.utm_medium ?? "",
@@ -96,8 +99,9 @@ export function LinkForm({
       });
     } else {
       form.reset({
-        original_url: "",
-        campaign_id: campaignId ?? "",
+        key: "",
+        name: "",
+        destination_url: "",
         is_active: true,
         utm_source: "",
         utm_medium: "",
@@ -111,7 +115,18 @@ export function LinkForm({
   const handleSubmit = async (values: FormValues) => {
     setLoading(true);
     try {
-      await onSubmit(values);
+      await onSubmit({
+        ...values,
+        default_utm: Object.fromEntries(
+          Object.entries({
+            source: values.utm_source,
+            medium: values.utm_medium,
+            campaign: values.utm_campaign,
+            term: values.utm_term,
+            content: values.utm_content,
+          }).filter((entry): entry is [string, string] => Boolean(entry[1])),
+        ) as Record<string, string>,
+      });
       form.reset();
       onOpenChange(false);
     } catch (error) {
@@ -166,10 +181,39 @@ export function LinkForm({
                 >
                   <FormField
                     control={form.control}
-                    name="original_url"
+                    name="key"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Original URL</FormLabel>
+                        <FormLabel>Link key</FormLabel>
+                        <FormControl>
+                          <Input className={zincInputClassName} placeholder="booking" {...field} />
+                        </FormControl>
+                        <FormDescription>Stable key used in message templates, for example <code>{"{{link.booking}}"}</code></FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Name</FormLabel>
+                        <FormControl>
+                          <Input className={zincInputClassName} placeholder="Booking page" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="destination_url"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Destination URL</FormLabel>
                         <FormControl>
                           <Input
                             className={zincInputClassName}
@@ -178,7 +222,7 @@ export function LinkForm({
                           />
                         </FormControl>
                         <FormDescription>
-                          The destination URL where visitors will be directed
+                          The HTTPS destination URL where visitors will be directed
                         </FormDescription>
                         <FormMessage />
                       </FormItem>

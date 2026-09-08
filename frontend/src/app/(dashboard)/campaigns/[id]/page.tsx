@@ -57,6 +57,7 @@ import { DailyProgress } from "@/components/campaigns/daily-progress";
 import { CsvImportModal } from "@/components/campaigns/csv-import-modal";
 import { CoverageBars } from "@/components/campaigns/coverage-bars";
 import { SequenceBuilder } from "@/components/campaigns/sequence-builder";
+import { LinksManager } from "@/components/campaign/LinksManager";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
@@ -912,6 +913,7 @@ export default function CampaignDetailsPage() {
         {/* Sequence Tab */}
         <TabsContent value="sequence" className="space-y-6">
           <SequenceBuilder campaignId={campaignId} isActive={activeTab === "sequence"} />
+          <LinksManager campaignId={campaignId} />
         </TabsContent>
 
         {/* Analytics Tab */}

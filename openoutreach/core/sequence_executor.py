@@ -10,6 +10,7 @@ to sequence campaigns are owned by the sequence — existing planners exclude th
 """
 
 import logging
+import copy
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -26,6 +27,10 @@ def _record_sequence_event(campaign_id: str, deal_id: str, step_id: str, event: 
     if events is None:
         return
     try:
+        if event in {"action_completed", "action_failed", "reply_received", "sequence_stopped"} and events.find_one({
+            "campaign_id": str(campaign_id), "deal_id": str(deal_id), "step_id": str(step_id), "event": event,
+        }):
+            return
         events.insert_one({
             "campaign_id": str(campaign_id), "deal_id": str(deal_id),
             "step_id": str(step_id), "event": event, "reason": reason,
@@ -91,6 +96,28 @@ def _get_step(campaign: Campaign, step_id: str) -> Optional[dict]:
     return None
 
 
+def _step_message_config(campaign: Campaign, step_id: str) -> dict:
+    from openoutreach.core.sequence_message import message_config
+    return message_config(_get_step(campaign, step_id))
+
+
+def _effective_stop_on_reply(campaign: Campaign, step_id: str) -> bool:
+    """Resolve the node policy once so every executor (including cloud) agrees."""
+    config = _step_message_config(campaign, step_id)
+    safety_defaults = getattr(campaign, "safety_defaults", {}) or {}
+    return bool(config.get("stop_on_reply", True) or safety_defaults.get("stop_on_reply", False))
+
+
+def _stop_on_reply_for_step(deal: Deal, step_type: str, message_config: dict, safety_defaults: dict) -> bool:
+    """Use the previous send's policy until the next message is delivered."""
+    persisted_policy = getattr(deal, "sequence_stop_on_reply", None)
+    if persisted_policy is not None and (
+        step_type != "action" or getattr(deal, "sequence_last_message_at", None) is not None
+    ):
+        return bool(persisted_policy)
+    return message_config.get("stop_on_reply", safety_defaults.get("stop_on_reply", True)) is not False
+
+
 def _check_wait(deal: Deal, step: dict) -> bool:
     """True if enough time has elapsed since sequence_last_step_at.
 
@@ -111,35 +138,103 @@ def _check_wait(deal: Deal, step: dict) -> bool:
     return elapsed >= timedelta(days=wait_days, hours=wait_hours)
 
 
-def _check_condition(deal: Deal, step: dict) -> bool:
-    """True if step's condition is satisfied."""
-    condition = (step.get("data") or {}).get("condition", "always")
-    if condition == "always":
-        return True
+def _check_condition(deal: Deal, step: dict, lead_data: Optional[dict] = None) -> str:
+    """Return ``yes``, ``no`` or ``waiting`` for a condition node."""
+    step_data = step.get("data") or {}
+    condition = step_data.get("condition")
+    if condition in (None, "always"):
+        return "yes"
+    # An event may happen after the action sends but before reconciliation
+    # advances the graph. Prefer the actual message timestamp for the window.
+    since = deal.sequence_last_message_at or deal.sequence_last_step_at
+    if since and since.tzinfo is None:
+        since = since.replace(tzinfo=timezone.utc)
+    now = datetime.now(timezone.utc)
+    observation_end = None
+    if since and step_data.get("observation_window_hours"):
+        observation_end = since + timedelta(hours=float(step_data["observation_window_hours"]))
+
+    if lead_data is None:
+        leads = get_mongodb_collection("leads")
+        lead_data = leads.find_one({"_id": deal.lead_id}) if leads is not None else {}
+    contact = lead_data.get("contact_info") if isinstance(lead_data, dict) else {}
+    has_email = bool(lead_data.get("api_email") or (contact or {}).get("email"))
+    has_phone = bool(lead_data.get("phone") or (contact or {}).get("phone"))
+    if condition == "lead_has_email":
+        return "yes" if has_email else "no"
+    if condition == "lead_has_phone":
+        return "yes" if has_phone else "no"
+
     messages_col = get_mongodb_collection("chat_messages")
-    if messages_col is None:
-        return True
-    since = deal.sequence_last_step_at
-    query: dict = {"deal_id": deal._id, "is_outgoing": False}
+    reply_query: dict = {"deal_id": deal._id, "is_outgoing": False}
     if since:
-        ts = since if since.tzinfo else since.replace(tzinfo=timezone.utc)
-        query["creation_date"] = {"$gt": ts}
-    has_reply = messages_col.count_documents(query) > 0
+        reply_query["creation_date"] = {"$gte": since}
+    if observation_end:
+        reply_query["creation_date"]["$lte"] = observation_end
+    has_reply = bool(messages_col and messages_col.count_documents(reply_query) > 0)
+    # Keep old persisted graphs executable while new writes use the explicit
+    # condition names. They are intentionally not accepted by the validator.
+    if condition in {"replied", "reply_received"}:
+        if has_reply:
+            return "yes"
+        return "waiting" if observation_end and now < observation_end else "no"
     if condition == "no_reply":
-        return not has_reply
-    if condition == "replied":
-        return has_reply
+        if has_reply:
+            return "no"
+        return "waiting" if observation_end and now < observation_end else "yes"
+
+    events = get_mongodb_collection("tracking_events")
+    event_query: dict = {"deal_id": str(deal._id)}
+    if since:
+        event_query["created_at"] = {"$gte": since}
+    if observation_end:
+        event_query["created_at"]["$lte"] = observation_end
+    event_query["event"] = "open"
+    has_open = bool(events and events.count_documents(event_query) > 0)
+    if not has_open:
+        deals = get_mongodb_collection("deals")
+        current = deals.find_one({"_id": deal._id}, {"email_opened_at": 1}) if deals is not None else None
+        opened_at = (current or {}).get("email_opened_at")
+        has_open = bool(
+            opened_at
+            and (not since or opened_at >= since)
+            and (not observation_end or opened_at <= observation_end)
+        )
+    if condition == "email_opened":
+        if has_open:
+            return "yes"
+        return "waiting" if observation_end and now < observation_end else "no"
+    if condition == "email_not_opened":
+        if has_open:
+            return "no"
+        return "waiting" if observation_end and now < observation_end else "yes"
     if condition == "no_open":
-        # Email open tracking: proceed if email was NOT opened.
-        # Deal.email_opened_at is stamped by the tracking worker when the pixel fires.
-        # Fall back to treating as not-opened if field absent (pre-tracking deals).
-        from openoutreach.mongodb.connection import get_mongodb_collection as _gcol
-        deals_col_inner = _gcol("deals")
-        if deals_col_inner is None:
-            return True
-        deal_doc = deals_col_inner.find_one({"_id": deal._id}, projection={"email_opened_at": 1})
-        return not (deal_doc or {}).get("email_opened_at")
-    return True
+        return "no" if has_open else "yes"
+
+    link_key = (step.get("data") or {}).get("link_key")
+    link_id = (step.get("data") or {}).get("link_asset_id")
+    links = get_mongodb_collection("tracked_links")
+    if not link_id and link_key and links is not None:
+        link = links.find_one({"campaign_id": deal.campaign_id, "key": link_key}, {"_id": 1})
+        link_id = (link or {}).get("_id")
+    click_query: dict = {"deal_id": str(deal._id), "event": "click"}
+    if link_id:
+        click_query["tracked_link_id"] = str(link_id)
+    if since:
+        click_query["created_at"] = {"$gte": since}
+    if observation_end:
+        click_query["created_at"]["$lte"] = observation_end
+    has_click = bool(events and events.count_documents(click_query) > 0)
+    if condition == "link_clicked":
+        if has_click:
+            return "yes"
+        return "waiting" if observation_end and now < observation_end else "no"
+    if condition == "link_not_clicked":
+        if has_click:
+            return "no"
+        return "waiting" if observation_end and now < observation_end else "yes"
+    # Invalid conditions are rejected before activation; fail closed at runtime.
+    return "no"
 
 
 def _check_requires(lead_data: dict, step: dict) -> bool:
@@ -197,12 +292,19 @@ def _create_task(campaign: Campaign, deal: Deal, task_type: str, step_id: str, u
     # Deterministic IDs make reconciliation idempotent even if two daemon
     # workers race between the existence check and creation.
     task_id = f"sequence:{campaign._id}:{deal._id}:{step_id}"
+    stop_on_reply = _effective_stop_on_reply(campaign, step_id)
     tasks_col.update_one({"_id": task_id}, {"$setOnInsert": {
         "_id": task_id,
         "task_type": task_type,
         "status": Task.STATUS_PENDING,
         "scheduled_at": now,
-        "payload": {"campaign_id": campaign._id, "deal_id": deal._id, "step_id": step_id},
+        "payload": {
+            "campaign_id": campaign._id,
+            "deal_id": deal._id,
+            "step_id": step_id,
+            "message": _step_message_config(campaign, step_id),
+            "stop_on_reply": stop_on_reply,
+        },
         "user_id": user_id,
         # Task.claim_next uses this field as the session owner.  WhatsApp
         # sessions are keyed by whatsapp_profile_id (not the LinkedIn profile
@@ -215,6 +317,34 @@ def _create_task(campaign: Campaign, deal: Deal, task_type: str, step_id: str, u
         "channel": channel,
         "created_at": now,
     }}, upsert=True)
+
+
+def _run_internal_action(campaign: Campaign, deal: Deal, step: dict, user_id: str) -> bool:
+    """Deliver an internal notification exactly once per recipient and step."""
+    notifications = get_mongodb_collection("notifications")
+    if notifications is None:
+        return False
+    from openoutreach.mongodb.dal import NotificationDAL
+    from openoutreach.mongodb.models_extended import Notification
+
+    data = step.get("data") or {}
+    message = data.get("message") or data
+    action_key = f"sequence:{campaign._id}:{deal._id}:{data.get('step_id') or step.get('id')}"
+    body = str(message.get("body") or message.get("prompt") or data.get("label") or "Campaign workflow notification")
+    title = str(data.get("label") or "Campaign workflow notification")
+    for recipient_id in campaign.get_all_user_ids() or [user_id]:
+        if notifications.find_one({"recipient_id": recipient_id, "data.sequence_action_key": action_key}):
+            continue
+        NotificationDAL.create_notification(
+            recipient_id=recipient_id,
+            notification_type=Notification.TYPE_SYSTEM_ANNOUNCEMENT,
+            title=title,
+            message=body,
+            campaign_id=campaign._id,
+            deal_id=deal._id,
+            data={"sequence_action_key": action_key},
+        )
+    return True
 
 
 def resolve_sequence_tasks(campaign: Campaign, user_id: str) -> int:
@@ -282,29 +412,67 @@ def resolve_sequence_tasks(campaign: Campaign, user_id: str) -> int:
         deal = Deal.from_dict(deals_col.find_one({"_id": doc["_id"]}) or doc)
         lead_data = leads_col.find_one({"_id": deal.lead_id}) or {}
 
+        # A lead keeps the graph revision it entered. Campaign edits therefore
+        # affect new leads without orphaning an in-flight lead on a changed
+        # node or edge.
+        deal_campaign = copy.copy(campaign)
+        if deal.sequence_graph_snapshot:
+            deal_campaign.sequence_steps = deal.sequence_graph_snapshot.get("steps", [])
+            deal_campaign.sequence_edges = deal.sequence_graph_snapshot.get("edges", [])
+        else:
+            snapshot = {
+                "steps": copy.deepcopy(campaign.sequence_steps),
+                "edges": copy.deepcopy(campaign.sequence_edges),
+                "revision": getattr(campaign, "sequence_revision", 1),
+            }
+            deals_col.update_one(
+                {"_id": deal._id},
+                {"$set": {"sequence_graph_snapshot": snapshot, "sequence_revision": snapshot["revision"]}},
+            )
+            deal.sequence_graph_snapshot = snapshot
+            deal.sequence_revision = snapshot["revision"]
+
         if deal.state in (DealState.EMAIL_REPLIED, DealState.EMAIL_BOUNCED):
+            _record_sequence_event(campaign._id, deal._id, deal.sequence_position or "", "sequence_stopped", str(deal.state.value))
             deals_col.update_one(
                 {"_id": deal._id},
                 {"$set": {"sequence_done": True, "sequence_terminal_reason": str(deal.state.value)}},
             )
             continue
 
+        if lead_data.get("email_unsubscribed"):
+            _record_sequence_event(campaign._id, deal._id, deal.sequence_position or "", "sequence_stopped", "unsubscribe")
+            deals_col.update_one(
+                {"_id": deal._id},
+                {"$set": {"sequence_done": True, "sequence_terminal_reason": "unsubscribe"}},
+            )
+            continue
+
+        first_step_id = _get_first_step_id(deal_campaign)
         current_step_id = deal.sequence_position or first_step_id
-        step = _get_step(campaign, current_step_id)
+        step = _get_step(deal_campaign, current_step_id)
         if step is None:
             logger.warning("sequence: step %s not found in campaign %s", current_step_id, campaign._id)
             continue
 
         step_type = step.get("type")
+        _record_sequence_event(campaign._id, deal._id, current_step_id, "node_entered")
 
-        # Give reply/no-reply condition nodes a chance to route first.  A
-        # global stop-on-reply check here made every `replied` branch
-        # unreachable.  For all other nodes, an inbound reply ends outreach.
+        # Give reply/no-reply condition nodes a chance to route first. The
+        # stop policy belongs to the sending action that created the current
+        # observation window, not to this wait/condition node.
         inbound_reply = _has_inbound_reply(deal)
-        if inbound_reply and not (
-            step_type == "condition"
-            and (step.get("data") or {}).get("condition") in ("replied", "no_reply")
-        ):
+        step_data = step.get("data") or {}
+        message_config = step_data.get("message") or step_data
+        safety_defaults = getattr(campaign, "safety_defaults", {}) or {}
+        stop_on_reply = _stop_on_reply_for_step(deal, step_type, message_config, safety_defaults)
+        reply_condition = step_type == "condition" and step_data.get("condition") in (
+            "replied", "no_reply", "reply_received"
+        )
+        if inbound_reply:
+            _record_sequence_event(campaign._id, deal._id, current_step_id, "reply_received")
+        if inbound_reply and stop_on_reply and not reply_condition:
+            _record_sequence_event(campaign._id, deal._id, current_step_id, "sequence_stopped", "reply_received")
             deals_col.update_one(
                 {"_id": deal._id},
                 {"$set": {"sequence_done": True}},
@@ -313,14 +481,43 @@ def resolve_sequence_tasks(campaign: Campaign, user_id: str) -> int:
             continue
 
         if step_type == "end":
+            _record_sequence_event(campaign._id, deal._id, current_step_id, "sequence_stopped", "end_node")
             deals_col.update_one({"_id": deal._id}, {"$set": {"sequence_done": True}})
             continue
 
-        if step_type in ("wait", "condition"):
+        if step_type == "wait":
             if not _check_wait(deal, step):
                 continue
-            condition_met = _check_condition(deal, step)
-            next_id = _get_next_step_id(campaign, current_step_id, condition_met)
+            # A wait is always linear. Any stray legacy condition field on a
+            # wait node must not turn a timing node into an implicit branch.
+            next_id = _get_next_step_id(deal_campaign, current_step_id, True)
+            now = datetime.now(timezone.utc)
+            deals_col.update_one(
+                {"_id": deal._id},
+                {"$set": {
+                    "sequence_position": next_id,
+                    "sequence_last_step_at": now,
+                    "sequence_done": next_id is None,
+                }},
+            )
+            continue
+
+        if step_type == "condition":
+            if not _check_wait(deal, step):
+                continue
+            condition_result = _check_condition(deal, step, lead_data)
+            if condition_result == "waiting":
+                _record_sequence_event(
+                    campaign._id, deal._id, current_step_id, "condition_waiting",
+                    str((step.get("data") or {}).get("condition")),
+                )
+                continue
+            condition_met = condition_result == "yes"
+            _record_sequence_event(
+                campaign._id, deal._id, current_step_id, "condition_evaluated",
+                f"{(step.get('data') or {}).get('condition')}:{condition_result}",
+            )
+            next_id = _get_next_step_id(deal_campaign, current_step_id, condition_met)
             now = datetime.now(timezone.utc)
             deals_col.update_one(
                 {"_id": deal._id},
@@ -334,15 +531,19 @@ def resolve_sequence_tasks(campaign: Campaign, user_id: str) -> int:
 
         task_type = _task_type_for_step(step)
         if task_type is None:
-            next_id = _get_next_step_id(campaign, current_step_id, True)
-            deals_col.update_one({"_id": deal._id}, {"$set": {"sequence_position": next_id}})
-            continue
-
-        # WhatsApp's sender requires a qualified deal (the pre-flight and
-        # cross-campaign safety checks depend on that state).  Hold the
-        # sequence here until qualification completes instead of creating a
-        # task that can never send.
-        if task_type == Task.TaskType.WHATSAPP_MESSAGE and deal.state != DealState.QUALIFIED:
+            if step_type == "action" and step_data.get("action") in {"notify_internal", "internal_notification"}:
+                _record_sequence_event(campaign._id, deal._id, current_step_id, "action_scheduled", "internal_notification")
+                try:
+                    completed = _run_internal_action(deal_campaign, deal, step, user_id)
+                except Exception:
+                    logger.exception("sequence: internal action failed for deal %s step %s", deal._id, current_step_id)
+                    completed = False
+                if not completed:
+                    _record_sequence_event(campaign._id, deal._id, current_step_id, "action_failed", "internal_notification")
+                    continue
+                _record_sequence_event(campaign._id, deal._id, current_step_id, "action_completed", "internal_notification")
+            next_id = _get_next_step_id(deal_campaign, current_step_id, True)
+            deals_col.update_one({"_id": deal._id}, {"$set": {"sequence_position": next_id, "sequence_last_step_at": datetime.now(timezone.utc), "sequence_done": next_id is None}})
             continue
 
         if not _check_wait(deal, step):
@@ -359,7 +560,7 @@ def resolve_sequence_tasks(campaign: Campaign, user_id: str) -> int:
                 deal._id, step_label, ", ".join(missing) or "unknown",
             )
             _record_sequence_event(campaign._id, deal._id, current_step_id, "skipped", "missing_required_data")
-            next_id = _get_next_step_id(campaign, current_step_id, True)
+            next_id = _get_next_step_id(deal_campaign, current_step_id, True)
             now = datetime.now(timezone.utc)
             deals_col.update_one(
                 {"_id": deal._id},
@@ -379,9 +580,26 @@ def resolve_sequence_tasks(campaign: Campaign, user_id: str) -> int:
             status = existing.get("status")
             if status in (Task.STATUS_PENDING, Task.STATUS_RUNNING):
                 continue  # wait for execution
+            if status == Task.STATUS_CANCELLED:
+                # Deactivation cancels pending sequence work so it cannot run
+                # while the graph is being edited.  Cancellation is not a
+                # completed outreach action: when the sequence is activated
+                # again, put the deterministic task back in the queue and
+                # leave the lead on this node.
+                tasks_col.update_one(
+                    {"_id": existing.get("_id")},
+                    {"$set": {
+                        "status": Task.STATUS_PENDING,
+                        "scheduled_at": datetime.now(timezone.utc),
+                        "cancel_reason": "",
+                    }},
+                )
+                _record_sequence_event(campaign._id, deal._id, current_step_id, "action_requeued", "sequence_reactivated")
+                continue
             if status == Task.STATUS_FAILED:
                 retries = int(existing.get("retry_count", 0) or 0)
                 if retries < 3:
+                    _record_sequence_event(campaign._id, deal._id, current_step_id, "action_failed", "retry_pending")
                     tasks_col.update_one(
                         {"_id": existing.get("_id")},
                         {"$set": {"status": Task.STATUS_PENDING, "scheduled_at": datetime.now(timezone.utc)}, "$inc": {"retry_count": 1}},
@@ -389,16 +607,22 @@ def resolve_sequence_tasks(campaign: Campaign, user_id: str) -> int:
                     logger.warning("sequence: retrying failed task for deal %s step %s (%d/3)", deal._id, current_step_id, retries + 1)
                     continue
                 logger.error("sequence: task for deal %s step %s exhausted retries", deal._id, current_step_id)
+                _record_sequence_event(campaign._id, deal._id, current_step_id, "action_failed", "retries_exhausted")
+                _record_sequence_event(campaign._id, deal._id, current_step_id, "sequence_stopped", "task_retries_exhausted")
                 deals_col.update_one({"_id": deal._id}, {"$set": {"sequence_done": True, "sequence_error": "task_retries_exhausted"}})
                 continue
             # Completed: advance to next step.
-            next_id = _get_next_step_id(campaign, current_step_id, True)
+            _record_sequence_event(campaign._id, deal._id, current_step_id, "action_completed", task_type)
+            next_id = _get_next_step_id(deal_campaign, current_step_id, True)
             now = datetime.now(timezone.utc)
+            # Senders stamp the real delivery time. Falling back to now keeps
+            # old tasks executable while avoiding a narrowed click window.
+            transition_at = getattr(deal, "sequence_last_message_at", None) or now
             deals_col.update_one(
                 {"_id": deal._id},
                 {"$set": {
                     "sequence_position": next_id,
-                    "sequence_last_step_at": now,
+                    "sequence_last_step_at": transition_at,
                     "sequence_done": next_id is None,
                 }},
             )
@@ -406,8 +630,9 @@ def resolve_sequence_tasks(campaign: Campaign, user_id: str) -> int:
 
         # No task exists yet for this step — create it. Position stays at current step
         # until the task completes (checked above on the next reconcile cycle).
-        _create_task(campaign, deal, task_type, current_step_id, user_id, tasks_col)
+        _create_task(deal_campaign, deal, task_type, current_step_id, user_id, tasks_col)
         _record_sequence_event(campaign._id, deal._id, current_step_id, "task_created", task_type)
+        _record_sequence_event(campaign._id, deal._id, current_step_id, "action_scheduled", task_type)
         tasks_created += 1
 
     return tasks_created

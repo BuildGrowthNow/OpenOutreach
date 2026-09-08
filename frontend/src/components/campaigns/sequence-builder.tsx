@@ -43,6 +43,7 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -82,6 +83,8 @@ import {
   getSequenceMetrics,
   SequenceMetrics,
 } from "@/lib/api/campaigns";
+import { getCampaignTemplates, saveCampaignAsTemplate, getLinks } from "@/lib/api/dashboard";
+import type { TrackedLink } from "@/lib/api/dashboard";
 import { useToast } from "@/components/ui/use-toast";
 import { Network, Mail, Smartphone, Clock, GitBranch, Flag, Plus, X, Undo2 } from "lucide-react";
 
@@ -92,6 +95,7 @@ const STEP_COLORS: Record<string, { border: string; bg: string; text: string; ri
   follow_up:     { border: "border-blue-500/40",    bg: "bg-blue-500/10",    text: "text-blue-300",    ring: "ring-blue-500" },
   send_email:    { border: "border-amber-500/40",   bg: "bg-amber-500/10",   text: "text-amber-300",   ring: "ring-amber-500" },
   send_whatsapp: { border: "border-emerald-500/40", bg: "bg-emerald-500/10", text: "text-emerald-300", ring: "ring-emerald-500" },
+  notify_internal: { border: "border-cyan-500/40", bg: "bg-cyan-500/10", text: "text-cyan-300", ring: "ring-cyan-500" },
   wait:          { border: "border-zinc-600/40",    bg: "bg-zinc-800/50",    text: "text-zinc-400",    ring: "ring-zinc-500" },
   condition:     { border: "border-purple-500/40",  bg: "bg-purple-500/10",  text: "text-purple-300",  ring: "ring-purple-500" },
   end:           { border: "border-rose-500/40",    bg: "bg-rose-500/10",    text: "text-rose-300",    ring: "ring-rose-500" },
@@ -102,16 +106,20 @@ const STEP_KEY_LABELS: Record<string, string> = {
   follow_up:     "LinkedIn Follow-up",
   send_email:    "Send Email",
   send_whatsapp: "Send WhatsApp",
+  notify_internal: "Internal notification",
   wait:          "Wait",
   condition:     "Branch / Gate",
   end:           "End",
 };
 
 const CONDITION_OPTIONS = [
-  { value: "always",   label: "Always proceed" },
-  { value: "no_reply", label: "If no reply" },
-  { value: "replied",  label: "If replied" },
-  { value: "no_open",  label: "If not opened" },
+  { value: "lead_has_email", label: "Lead has email" },
+  { value: "lead_has_phone", label: "Lead has phone" },
+  { value: "reply_received", label: "Reply received" },
+  { value: "email_opened", label: "Email opened" },
+  { value: "email_not_opened", label: "Email not opened" },
+  { value: "link_clicked", label: "Link clicked" },
+  { value: "link_not_clicked", label: "Link not clicked" },
 ];
 
 const EDGE_BRANCH_LABELS: Record<string, string> = {
@@ -149,6 +157,7 @@ interface SeqNodeData {
   coverage: number | null;
   totalLeads: number;
   hasBypass: boolean;
+  validationErrors?: string[];
   onDelete: (id: string) => void;
   onEdit: (id: string) => void;
   [key: string]: unknown;
@@ -171,6 +180,11 @@ function SeqNode({ id, data, selected }: NodeProps) {
         colors.bg,
         selected && `ring-2 ring-offset-1 ring-offset-zinc-950 ${colors.ring}`,
       )}
+      role="button"
+      tabIndex={0}
+      aria-label={`Edit ${step.data.label || STEP_KEY_LABELS[key] || key}`}
+      onClick={() => d.onEdit(id)}
+      onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); d.onEdit(id); } }}
     >
       <Handle
         type="target"
@@ -206,6 +220,11 @@ function SeqNode({ id, data, selected }: NodeProps) {
             )}
             {step.data.requires && step.data.requires.length > 0 && (
               <div className="text-xs text-zinc-600 mt-0.5">needs: {step.data.requires.join(", ")}</div>
+            )}
+            {d.validationErrors && d.validationErrors.length > 0 && (
+              <div role="alert" className="mt-2 rounded border border-red-500/30 bg-red-500/10 px-2 py-1 text-[10px] leading-tight text-red-300">
+                {d.validationErrors[0]}
+              </div>
             )}
           </div>
         </div>
@@ -362,6 +381,7 @@ function stepsToNodes(
   totalLeads: number,
   onDelete: (id: string) => void,
   onEdit: (id: string) => void,
+  validationByNode: Record<string, string[]> = {},
 ): RFNode[] {
   // Build minimal RFNode array for hasBypassPath (positions don't matter here)
   const minNodes: RFNode[] = steps.map((s) => ({
@@ -377,6 +397,7 @@ function stepsToNodes(
       coverage: coverage[step.id] ?? null,
       totalLeads,
       hasBypass: hasBypassPath(step.id, minNodes, minEdges),
+      validationErrors: validationByNode[step.id] ?? [],
       onDelete,
       onEdit,
     },
@@ -413,7 +434,6 @@ function rfEdgesToSeq(edges: RFEdge[]): SequenceEdge[] {
       id: e.id,
       source: e.source,
       target: e.target,
-      label: typeof e.label === "string" ? e.label : undefined,
     };
     if (raw?.condition) seqEdge.data = { condition: raw.condition };
     return seqEdge;
@@ -440,6 +460,35 @@ function validateSequence(steps: SequenceStep[], edges: SequenceEdge[]): string[
     );
   }
   return warnings;
+}
+
+function validateNodeErrors(steps: SequenceStep[], edges: SequenceEdge[]): Record<string, string[]> {
+  const errors: Record<string, string[]> = {};
+  const add = (id: string, message: string) => { errors[id] = [...(errors[id] ?? []), message]; };
+  const outgoing = new Map<string, SequenceEdge[]>();
+  const incoming = new Set(edges.map((edge) => edge.target));
+  for (const edge of edges) outgoing.set(edge.source, [...(outgoing.get(edge.source) ?? []), edge]);
+
+  for (const step of steps) {
+    const data = step.data;
+    if (step.type !== "end" && !(outgoing.get(step.id)?.length)) add(step.id, "Connect this node to its next step.");
+    if (step.type === "wait" && !(data.wait_days || data.wait_hours)) add(step.id, "Set a positive wait duration.");
+    if (step.type === "condition") {
+      if (!data.condition || data.condition === "always") add(step.id, "Choose a supported condition.");
+      const branches = new Set((outgoing.get(step.id) ?? []).map((edge) => edge.data?.condition));
+      if (!branches.has("yes") || !branches.has("no")) add(step.id, "Connect both Yes and No branches.");
+      if ((data.condition === "link_clicked" || data.condition === "link_not_clicked") && !data.link_key) add(step.id, "Add a logical link key.");
+    }
+    if (step.type === "action") {
+      const message = data.message;
+      if (["follow_up", "send_email", "send_whatsapp"].includes(data.action ?? "") && (!message || ((message.content_mode === "static" && !message.body?.trim()) || (message.content_mode === "ai_prompt" && !message.prompt?.trim() && !message.body?.trim())))) {
+        add(step.id, "Add a static body or AI prompt.");
+      }
+    }
+  }
+  const roots = steps.filter((step) => !incoming.has(step.id));
+  roots.slice(1).forEach((step) => add(step.id, "Connect this extra entry point to the workflow."));
+  return errors;
 }
 
 // ─── coverage helpers ─────────────────────────────────────────────────────────
@@ -483,104 +532,16 @@ function hasBypassPath(stepId: string, nodes: RFNode[], edges: RFEdge[]): boolea
   return false;
 }
 
-// ─── templates ────────────────────────────────────────────────────────────────
-
-function makeStep(
-  id: string,
-  type: SequenceStep["type"],
-  action: SequenceStep["data"]["action"],
-  channel: SequenceStep["data"]["channel"],
-  label: string,
-  waitDays = 0,
-  requires: string[] = [],
-  condition: SequenceStep["data"]["condition"] = "always",
-  waitHours = 0,
-): SequenceStep {
-  return { id, type, data: { channel, action, label, wait_days: waitDays, wait_hours: waitHours, condition, requires }, position: { x: 0, y: 0 } };
-}
-
-function makeSeqEdge(source: string, target: string, branch?: string): SequenceEdge {
-  return {
-    id: `e_${source}_${target}${branch ? `_${branch}` : ""}`,
-    source,
-    target,
-    data: branch ? { condition: branch } : undefined,
-  };
-}
-
-type Template = { name: string; description: string; steps: SequenceStep[]; edges: SequenceEdge[] };
-
-const TEMPLATES: Template[] = [
-  {
-    name: "LinkedIn Only",
-    description: "Connect → 3d → Follow-up → 7d → Follow-up → End",
-    steps: [
-      makeStep("t1", "action",  "connect",   "linkedin", "LinkedIn Connect"),
-      makeStep("t2", "wait",    null,          null,      "Wait 3 days", 3),
-      makeStep("t3", "action",  "follow_up",  "linkedin", "LinkedIn Follow-up"),
-      makeStep("t4", "wait",    null,          null,      "Wait 7 days", 7),
-      makeStep("t5", "action",  "follow_up",  "linkedin", "LinkedIn Follow-up #2"),
-      makeStep("t6", "end",     null,          null,      "End"),
-    ],
-    edges: [
-      makeSeqEdge("t1","t2"), makeSeqEdge("t2","t3"), makeSeqEdge("t3","t4"),
-      makeSeqEdge("t4","t5"), makeSeqEdge("t5","t6"),
-    ],
-  },
-  {
-    name: "LinkedIn + Email",
-    description: "Connect → 3d → Branch (no reply → Email, replied → End) → Follow-up → End",
-    steps: [
-      makeStep("t1", "action",    "connect",   "linkedin", "LinkedIn Connect"),
-      makeStep("t2", "wait",      null,          null,     "Wait 3 days", 3),
-      makeStep("t3", "condition", null,          null,     "Got a reply?", 0, [], "replied"),
-      makeStep("t4", "action",    "send_email", "email",   "Send Email", 0, ["api_email"]),
-      makeStep("t5", "wait",      null,          null,     "Wait 5 days", 5),
-      makeStep("t6", "action",    "follow_up",  "linkedin","LinkedIn Follow-up"),
-      makeStep("t7", "end",       null,          null,     "End"),
-      makeStep("t8", "end",       null,          null,     "End (replied)"),
-    ],
-    edges: [
-      makeSeqEdge("t1","t2"),
-      makeSeqEdge("t2","t3"),
-      makeSeqEdge("t3","t8","yes"),
-      makeSeqEdge("t3","t4","no"),
-      makeSeqEdge("t4","t5"),
-      makeSeqEdge("t5","t6"),
-      makeSeqEdge("t6","t7"),
-    ],
-  },
-  {
-    name: "Full Multichannel",
-    description: "Connect → Branch → Email path + WhatsApp path → Follow-up → End",
-    steps: [
-      makeStep("t1", "action",    "connect",       "linkedin",  "LinkedIn Connect"),
-      makeStep("t2", "wait",      null,             null,        "Wait 3 days", 3),
-      makeStep("t3", "condition", null,             null,        "Has email?", 0, [], "no_reply"),
-      makeStep("t4", "action",    "send_email",    "email",     "Send Email", 0, ["api_email"]),
-      makeStep("t5", "action",    "send_whatsapp", "whatsapp",  "Send WhatsApp", 0, ["phone"]),
-      makeStep("t6", "wait",      null,             null,        "Wait 5 days", 5),
-      makeStep("t7", "action",    "follow_up",     "linkedin",  "LinkedIn Follow-up"),
-      makeStep("t8", "end",       null,             null,        "End"),
-    ],
-    edges: [
-      makeSeqEdge("t1","t2"),
-      makeSeqEdge("t2","t3"),
-      makeSeqEdge("t3","t4","yes"),
-      makeSeqEdge("t3","t5","no"),
-      makeSeqEdge("t4","t6"),
-      makeSeqEdge("t5","t6"),
-      makeSeqEdge("t6","t7"),
-      makeSeqEdge("t7","t8"),
-    ],
-  },
-];
+// Templates are supplied by the backend so the canvas and campaign creation
+// flow cannot drift into separate workflow definitions.
+type Template = { name: string; description: string; sequence_steps: SequenceStep[]; sequence_edges: SequenceEdge[]; channels?: string[]; required_data?: string[] };
 
 const ADD_STEP_OPTIONS = [
   { type: "action"    as const, action: "connect"        as const, channel: "linkedin"  as const, label: "LinkedIn Connect",   requires: [] as string[] },
   { type: "action"    as const, action: "follow_up"      as const, channel: "linkedin"  as const, label: "LinkedIn Follow-up", requires: [] as string[] },
   { type: "action"    as const, action: "send_email"     as const, channel: "email"     as const, label: "Send Email",         requires: ["api_email"] as string[] },
   { type: "action"    as const, action: "send_whatsapp"  as const, channel: "whatsapp"  as const, label: "Send WhatsApp",      requires: ["phone"] as string[] },
+  { type: "action"    as const, action: "notify_internal" as const, channel: "internal" as const, label: "Internal notification", requires: [] as string[] },
   { type: "wait"      as const, action: null,                       channel: null,                 label: "Wait",               requires: [] as string[] },
   { type: "condition" as const, action: null,                       channel: null,                 label: "Branch / Gate",      requires: [] as string[] },
   { type: "end"       as const, action: null,                       channel: null,                 label: "End",                requires: [] as string[] },
@@ -588,9 +549,11 @@ const ADD_STEP_OPTIONS = [
 
 // ─── ConfigPanel ──────────────────────────────────────────────────────────────
 
-function ConfigPanel({ step, onChange, onClose }: { step: SequenceStep; onChange: (u: SequenceStep) => void; onClose: () => void }) {
+function ConfigPanel({ step, onChange, onClose, links }: { step: SequenceStep; onChange: (u: SequenceStep) => void; onClose: () => void; links: TrackedLink[] }) {
   const [label, setLabel] = useState(step.data.label);
-  const [condition, setCondition] = useState(step.data.condition ?? "always");
+  const [condition, setCondition] = useState(step.data.condition ?? "lead_has_email");
+  const [linkKey, setLinkKey] = useState(step.data.link_key ?? "");
+  const [observationWindowHours, setObservationWindowHours] = useState(step.data.observation_window_hours ?? 24);
   // waitMode: "days" shows a days input, "hours" shows an hours input, "both" shows both.
   // Detect initial mode from existing data.
   const initMode = (() => {
@@ -604,33 +567,57 @@ function ConfigPanel({ step, onChange, onClose }: { step: SequenceStep; onChange
   const [waitDays, setWaitDays] = useState(step.data.wait_days || 0);
   const [waitHours, setWaitHours] = useState(step.data.wait_hours || 0);
   const [requires, setRequires] = useState<string[]>(step.data.requires ?? []);
+  const [message, setMessage] = useState(step.data.message ?? { content_mode: "ai_prompt" as const, prompt: "", subject: "", body: "", link_refs: [] as string[], stop_on_reply: true, fallback_mode: "continue" as const, fallback_body: "" });
 
   useEffect(() => {
     setLabel(step.data.label);
-    setCondition(step.data.condition ?? "always");
+    setCondition(step.data.condition ?? "lead_has_email");
+    setLinkKey(step.data.link_key ?? "");
+    setObservationWindowHours(step.data.observation_window_hours ?? 24);
     const d = step.data.wait_days || 0;
     const h = step.data.wait_hours || 0;
     setWaitDays(d);
     setWaitHours(h);
     setWaitMode(d > 0 && h > 0 ? "both" : h > 0 ? "hours" : "days");
     setRequires(step.data.requires ?? []);
-  }, [step.id, step.data.label, step.data.condition, step.data.wait_days, step.data.wait_hours, step.data.requires]);
+    setMessage(step.data.message ?? { content_mode: "ai_prompt", prompt: "", subject: "", body: "", link_refs: [], stop_on_reply: true, fallback_mode: "continue", fallback_body: "" });
+  }, [step.id, step.data.label, step.data.condition, step.data.link_key, step.data.observation_window_hours, step.data.wait_days, step.data.wait_hours, step.data.requires, step.data.message]);
 
   const save = () => {
     const waitUpdate = step.type === "wait" ? {
       wait_days: waitMode !== "hours" ? Math.max(0, waitDays) : 0,
       wait_hours: waitMode !== "days" ? Math.max(0, waitHours) : 0,
     } : {};
-    onChange({ ...step, data: { ...step.data, label, condition, requires, ...waitUpdate } });
+    const eventCondition = ["reply_received", "email_opened", "email_not_opened", "link_clicked", "link_not_clicked"].includes(condition);
+    const {
+      condition: _oldCondition,
+      link_key: _oldLinkKey,
+      observation_window_hours: _oldObservationWindow,
+      message: _oldMessage,
+      ...sharedData
+    } = step.data;
+    const nodeData = {
+      ...sharedData,
+      label,
+      ...(step.type === "action" ? { requires, message } : {}),
+      ...(step.type === "condition" ? {
+        condition,
+        link_key: linkKey || undefined,
+        observation_window_hours: eventCondition && observationWindowHours > 0 ? observationWindowHours : undefined,
+      } : {}),
+      ...waitUpdate,
+    };
+    onChange({ ...step, data: nodeData });
     onClose();
   };
 
   return (
-    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="sm:max-w-[400px] bg-zinc-950 border-zinc-800 text-zinc-100">
-        <DialogHeader>
-          <DialogTitle>Configure Step</DialogTitle>
-          <DialogDescription className="text-zinc-400">
+    <Card className="h-full min-h-[580px] border-zinc-800 bg-zinc-950 text-zinc-100">
+        <CardHeader className="border-b border-zinc-800">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <CardTitle>Configure step</CardTitle>
+              <CardDescription className="text-zinc-400">
             {step.type === "action" && step.data.action === "connect"       && "Sends a LinkedIn connection request."}
             {step.type === "action" && step.data.action === "follow_up"     && "Sends a LinkedIn follow-up message via the campaign AI agent."}
             {step.type === "action" && step.data.action === "send_email"    && "Sends an email to the lead's work address."}
@@ -638,9 +625,14 @@ function ConfigPanel({ step, onChange, onClose }: { step: SequenceStep; onChange
             {step.type === "wait"      && "Pauses the sequence before proceeding to the next step."}
             {step.type === "condition" && "Routes leads down two paths. Drag from the green handle (Yes/left) and red handle (No/right) to connect both branches."}
             {step.type === "end"       && "Marks the end of this path."}
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4 py-2">
+              </CardDescription>
+            </div>
+            <Button variant="ghost" size="icon" aria-label="Close step inspector" onClick={onClose} className="text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200">
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="max-h-[480px] space-y-4 overflow-y-auto py-4">
           <div className="space-y-1.5">
             <Label className="text-zinc-300">Label</Label>
             <Input
@@ -716,10 +708,33 @@ function ConfigPanel({ step, onChange, onClose }: { step: SequenceStep; onChange
               <p className="text-xs text-zinc-500">
                 Green handle (left) = Yes / condition met. Red handle (right) = No / not met.
               </p>
-              {condition === "no_open" && (
-                <p className="text-xs text-amber-400/80 mt-1">
-                  Requires email open tracking (TRACKING_BASE_URL + CF Worker). Without it the condition always passes as &quot;not opened&quot;.
-                </p>
+              {(condition === "link_clicked" || condition === "link_not_clicked") && (
+                <div className="space-y-1.5 mt-2">
+                  <Label className="text-xs text-zinc-400">Tracked link</Label>
+                  <Select value={linkKey || "__none"} onValueChange={(value) => setLinkKey(value === "__none" ? "" : value || "")}>
+                    <SelectTrigger className="bg-zinc-900 border-zinc-700 text-zinc-100"><SelectValue placeholder="Select a campaign link" /></SelectTrigger>
+                    <SelectContent className="bg-zinc-900 border-zinc-700 text-zinc-100">
+                      <SelectItem value="__none">Select a campaign link</SelectItem>
+                      {links.filter((link) => !!link.key).map((link) => <SelectItem key={link.id} value={link.key || ""}>{link.name} ({link.key})</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  {links.length === 0 && <p className="text-xs text-amber-400/80">Create a tracked link below the sequence first.</p>}
+                </div>
+              )}
+              {["reply_received", "email_opened", "email_not_opened", "link_clicked", "link_not_clicked"].includes(condition) && (
+                <div className="space-y-1.5 mt-2">
+                  <Label className="text-xs text-zinc-400">Observation window (hours)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={87600}
+                    step={0.25}
+                    value={observationWindowHours}
+                    onChange={(event) => setObservationWindowHours(Math.max(0, Math.min(87600, Number(event.target.value) || 0)))}
+                    className="bg-zinc-900 border-zinc-700 text-zinc-100"
+                  />
+                  <p className="text-xs text-zinc-500">The branch stays in Waiting until this window closes, unless the event is observed sooner.</p>
+                </div>
               )}
             </div>
           )}
@@ -758,13 +773,54 @@ function ConfigPanel({ step, onChange, onClose }: { step: SequenceStep; onChange
               </p>
             </div>
           )}
-        </div>
-        <DialogFooter>
+          {step.type === "action" && step.data.action !== "connect" && (
+            <div className="space-y-3 rounded-md border border-zinc-800 p-3">
+              <Label className="text-zinc-300">Message configuration</Label>
+              <Select value={message.content_mode} onValueChange={(value) => setMessage((prev) => ({ ...prev, content_mode: value as "ai_prompt" | "static" }))}>
+                <SelectTrigger className="bg-zinc-900 border-zinc-700 text-zinc-100"><SelectValue /></SelectTrigger>
+                <SelectContent className="bg-zinc-900 border-zinc-700 text-zinc-100"><SelectItem value="ai_prompt">AI prompt</SelectItem><SelectItem value="static">Static message</SelectItem></SelectContent>
+              </Select>
+              {message.content_mode === "ai_prompt" ? <Textarea value={message.prompt} onChange={(event) => setMessage((prev) => ({ ...prev, prompt: event.target.value }))} placeholder="Writing guidance for this message" className="bg-zinc-900 border-zinc-700 text-zinc-100" /> : <Textarea value={message.body} onChange={(event) => setMessage((prev) => ({ ...prev, body: event.target.value }))} placeholder="Message body; use {{link.demo}} for a tracked link" className="bg-zinc-900 border-zinc-700 text-zinc-100" />}
+              {(step.data.channel === "email") && <Input value={message.subject} onChange={(event) => setMessage((prev) => ({ ...prev, subject: event.target.value }))} placeholder="Subject (email)" className="bg-zinc-900 border-zinc-700 text-zinc-100" />}
+              <div className="space-y-1.5">
+                <Label className="text-xs text-zinc-400">Insert tracked link</Label>
+                <Select value="__add_link" onValueChange={(value) => {
+                  if (value === "__add_link") return;
+                  setMessage((prev) => ({
+                    ...prev,
+                    link_refs: Array.from(new Set([...prev.link_refs, value || ""])).filter(Boolean),
+                    body: prev.body?.includes(`{{link.${value}}}`) ? prev.body : `${prev.body || ""}${prev.body ? " " : ""}{{link.${value}}}`,
+                  }));
+                }}>
+                  <SelectTrigger className="bg-zinc-900 border-zinc-700 text-zinc-100"><SelectValue placeholder={links.length ? "Choose a campaign link" : "Create a campaign link below"} /></SelectTrigger>
+                  <SelectContent className="bg-zinc-900 border-zinc-700 text-zinc-100">
+                    <SelectItem value="__add_link">Choose a link</SelectItem>
+                    {links.filter((link) => !!link.key).map((link) => <SelectItem key={link.id} value={link.key || ""}>{link.name} ({link.key})</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                {message.link_refs.length > 0 && <p className="text-xs text-emerald-400">Tracked: {message.link_refs.join(", ")}</p>}
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-zinc-400">Fallback if generation fails</Label>
+                <Select value={message.fallback_mode ?? "continue"} onValueChange={(value) => setMessage((prev) => ({ ...prev, fallback_mode: value as "skip" | "static" | "continue" }))}>
+                  <SelectTrigger className="bg-zinc-900 border-zinc-700 text-zinc-100"><SelectValue /></SelectTrigger>
+                  <SelectContent className="bg-zinc-900 border-zinc-700 text-zinc-100">
+                    <SelectItem value="continue">Use campaign default message</SelectItem>
+                    <SelectItem value="skip">Skip this step</SelectItem>
+                    <SelectItem value="static">Use fallback text</SelectItem>
+                  </SelectContent>
+                </Select>
+                {message.fallback_mode === "static" && <Textarea value={message.fallback_body ?? ""} onChange={(event) => setMessage((prev) => ({ ...prev, fallback_body: event.target.value }))} placeholder="Fallback message body" className="bg-zinc-900 border-zinc-700 text-zinc-100" />}
+              </div>
+              <label className="flex items-center gap-2 text-xs text-zinc-400"><input type="checkbox" checked={message.stop_on_reply} onChange={(event) => setMessage((prev) => ({ ...prev, stop_on_reply: event.target.checked }))} /> Stop this sequence when the lead replies</label>
+            </div>
+          )}
+        </CardContent>
+        <div className="flex items-center justify-end gap-2 border-t border-zinc-800 p-4">
           <Button variant="outline" className="border-zinc-700 text-zinc-300 hover:bg-zinc-800" onClick={onClose}>Cancel</Button>
-          <Button onClick={save} className="bg-blue-600 hover:bg-blue-700">Save</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          <Button onClick={save} className="bg-blue-600 hover:bg-blue-700">Apply</Button>
+        </div>
+    </Card>
   );
 }
 
@@ -791,7 +847,10 @@ function SequenceCanvas({ campaignId, isActive }: { campaignId: string; isActive
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [showActivateDialog, setShowActivateDialog] = useState(false);
   const [showResetDialog, setShowResetDialog] = useState(false);
+  const [showReplaceDialog, setShowReplaceDialog] = useState(false);
   const [showSaveWhileActiveDialog, setShowSaveWhileActiveDialog] = useState(false);
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [campaignLinks, setCampaignLinks] = useState<TrackedLink[]>([]);
 
   const addMenuRef = useRef<HTMLDivElement>(null);
   const savedSnapshotRef = useRef<string>("");
@@ -809,6 +868,20 @@ function SequenceCanvas({ campaignId, isActive }: { campaignId: string; isActive
   const edgesRef = useRef<RFEdge[]>([]);
   useEffect(() => { nodesRef.current = nodes; }, [nodes]);
   useEffect(() => { edgesRef.current = edges; }, [edges]);
+
+  useEffect(() => {
+    void getCampaignTemplates().then((response) => {
+      const rows = response.data?.data ?? [];
+      setTemplates(rows.map((template) => ({
+        name: template.name,
+        description: template.description ?? "",
+        sequence_steps: template.sequence_steps,
+        sequence_edges: template.sequence_edges,
+        channels: template.channels,
+        required_data: template.required_data,
+      })));
+    });
+  }, []);
 
   const pushSnapshot = useCallback(() => {
     setHistory((prev) => [...prev.slice(-19), { nodes: nodesRef.current, edges: edgesRef.current }]);
@@ -865,7 +938,19 @@ function SequenceCanvas({ campaignId, isActive }: { campaignId: string; isActive
     if (suppressDirty.current) return;
     const currentSteps = nodesRef.current.map((n) => ({ ...(n.data as SeqNodeData).step, position: n.position }));
     setValidationWarnings(validateSequence(currentSteps, rfEdgesToSeq(edgesRef.current)));
-  }, [nodes, edges]);
+    const nodeErrors = validateNodeErrors(currentSteps, rfEdgesToSeq(edgesRef.current));
+    setNodes((prev) => {
+      let changed = false;
+      const next = prev.map((node) => {
+        const current = (node.data as SeqNodeData).validationErrors ?? [];
+        const updated = nodeErrors[node.id] ?? [];
+        if (JSON.stringify(current) === JSON.stringify(updated)) return node;
+        changed = true;
+        return { ...node, data: { ...(node.data as SeqNodeData), validationErrors: updated } };
+      });
+      return changed ? next : prev;
+    });
+  }, [nodes, edges, setNodes]);
 
   // G1: Ctrl+Z undo (skip when focus is inside text input)
   useEffect(() => {
@@ -906,7 +991,7 @@ function SequenceCanvas({ campaignId, isActive }: { campaignId: string; isActive
       savedSnapshotRef.current = JSON.stringify({ steps: loadedSteps, edges: loadedEdges });
       if (loadedSteps.length > 0) {
         setShowCanvas(true);
-        setNodes(stepsToNodes(loadedSteps, cov, loadedEdges, total, handleDeleteNode, handleEditNode));
+        setNodes(stepsToNodes(loadedSteps, cov, loadedEdges, total, handleDeleteNode, handleEditNode, validateNodeErrors(loadedSteps, loadedEdges)));
         setEdges(edgesToRF(loadedEdges));
         // B1: suppressDirty cleared in onInit callback, not setTimeout
       } else {
@@ -921,6 +1006,12 @@ function SequenceCanvas({ campaignId, isActive }: { campaignId: string; isActive
   }, [campaignId, setNodes, setEdges, handleDeleteNode, handleEditNode]);
 
   useEffect(() => { void fetchSequence(); }, [fetchSequence]);
+
+  useEffect(() => {
+    void getLinks(campaignId).then((response) => {
+      if (response.data) setCampaignLinks(response.data.data || []);
+    });
+  }, [campaignId]);
 
   useEffect(() => {
     if (prevIsActiveRef.current === false && isActive === true && !isDirty && !loading) {
@@ -955,7 +1046,7 @@ function SequenceCanvas({ campaignId, isActive }: { campaignId: string; isActive
       const newStep: SequenceStep = {
         id,
         type: opt.type,
-        data: { channel: opt.channel, action: opt.action, label: opt.label, wait_days: opt.type === "wait" ? 3 : 0, wait_hours: 0, condition: "always", requires: [...opt.requires] },
+        data: { channel: opt.channel, action: opt.action, label: opt.label, wait_days: opt.type === "wait" ? 3 : 0, wait_hours: 0, condition: opt.type === "condition" ? "lead_has_email" : undefined, requires: [...opt.requires] },
         position: { x: 300, y: maxY + 160 },
       };
       const instantCov = instantCoverageForStep(newStep, channelCoverage);
@@ -1060,6 +1151,17 @@ function SequenceCanvas({ campaignId, isActive }: { campaignId: string; isActive
     toast({ title: "Deactivate sequence first", description: "Graph edits are blocked while a sequence is active to protect in-progress deals.", variant: "destructive" });
   };
 
+  const handleSaveAsTemplate = async () => {
+    const name = window.prompt("Template name", "My campaign workflow");
+    if (!name?.trim()) return;
+    const response = await saveCampaignAsTemplate(campaignId, { name: name.trim() });
+    if (response.error) {
+      toast({ title: "Could not save template", description: response.error, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Template saved" });
+  };
+
   const handleActivateClick = () => setShowActivateDialog(true);
 
   const handleConfirmActivate = async () => {
@@ -1090,9 +1192,9 @@ function SequenceCanvas({ campaignId, isActive }: { campaignId: string; isActive
 
   const applyTemplate = (tpl: Template) => {
     const idMap = new Map<string, string>();
-    tpl.steps.forEach((s) => idMap.set(s.id, makeId()));
-    const freshSteps = autoLayout(tpl.steps.map((s) => ({ ...s, id: idMap.get(s.id)! })));
-    const freshEdges = tpl.edges.map((e) => ({
+    tpl.sequence_steps.forEach((s) => idMap.set(s.id, makeId()));
+    const freshSteps = autoLayout(tpl.sequence_steps.map((s) => ({ ...s, id: idMap.get(s.id)! })));
+    const freshEdges = tpl.sequence_edges.map((e) => ({
       ...e,
       id: `edge_${idMap.get(e.source)}_${idMap.get(e.target)}${e.data?.condition ? `_${e.data.condition}` : ""}`,
       source: idMap.get(e.source) ?? e.source,
@@ -1100,7 +1202,7 @@ function SequenceCanvas({ campaignId, isActive }: { campaignId: string; isActive
     }));
     suppressDirty.current = false;
     setSeqSteps(freshSteps);
-    setNodes(stepsToNodes(freshSteps, {}, freshEdges, totalLeads, handleDeleteNode, handleEditNode));
+    setNodes(stepsToNodes(freshSteps, {}, freshEdges, totalLeads, handleDeleteNode, handleEditNode, validateNodeErrors(freshSteps, freshEdges)));
     setEdges(edgesToRF(freshEdges));
     setShowCanvas(true);
     setIsDirty(true);
@@ -1156,14 +1258,14 @@ function SequenceCanvas({ campaignId, isActive }: { campaignId: string; isActive
         <CardContent className="py-6 space-y-6">
           <p className="text-sm text-zinc-400">
             Build a multi-step, multi-path outreach sequence. Use{" "}
-            <strong className="text-zinc-200">Branch / Gate</strong> nodes to route leads down different paths (e.g. replied vs. no reply).
+            <strong className="text-zinc-200">Branch / Gate</strong> nodes to route leads down different paths (for example, email availability or link engagement).
             Drag from a node handle to connect steps.
           </p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {TEMPLATES.map((tpl) => {
+            {templates.map((tpl) => {
               // Compute which channels this template uses
-              const usesEmail = tpl.steps.some((s) => s.data.requires?.includes("api_email"));
-              const usesWhatsApp = tpl.steps.some((s) => s.data.requires?.includes("phone"));
+              const usesEmail = tpl.channels?.includes("email") || tpl.required_data?.includes("api_email");
+              const usesWhatsApp = tpl.channels?.includes("whatsapp") || tpl.required_data?.includes("phone");
               const emailPct = channelCoverage?.email.pct ?? null;
               const whatsappPct = channelCoverage?.whatsapp.pct ?? null;
               const hasZeroCoverage =
@@ -1323,7 +1425,7 @@ function SequenceCanvas({ campaignId, isActive }: { campaignId: string; isActive
                     <div className="absolute top-full left-0 mt-1 z-50 rounded-md border border-zinc-800 bg-zinc-950 shadow-lg py-1 min-w-[220px]">
                       {ADD_STEP_OPTIONS.map((opt) => {
                         const cov = instantCoverageForStep(
-                          { id: "", type: opt.type, data: { channel: opt.channel, action: opt.action, label: opt.label, wait_days: 0, wait_hours: 0, condition: "always", requires: opt.requires }, position: { x: 0, y: 0 } },
+                          { id: "", type: opt.type, data: { channel: opt.channel, action: opt.action, label: opt.label, wait_days: 0, wait_hours: 0, condition: opt.type === "condition" ? "lead_has_email" : undefined, requires: opt.requires }, position: { x: 0, y: 0 } },
                           channelCoverage,
                         );
                         const hasZeroCov = cov !== null && cov === 0;
@@ -1390,6 +1492,14 @@ function SequenceCanvas({ campaignId, isActive }: { campaignId: string; isActive
                   Save
                 </Button>
 
+                <Button variant="outline" size="sm" className="border-zinc-700 text-zinc-300 hover:bg-zinc-800" onClick={() => void handleSaveAsTemplate()} disabled={saving || toggling}>
+                  Save as template
+                </Button>
+
+                <Button variant="outline" size="sm" className="border-zinc-700 text-zinc-300 hover:bg-zinc-800" onClick={() => setShowReplaceDialog(true)} disabled={active || saving || toggling}>
+                  Replace from template
+                </Button>
+
                 <Button
                   size="sm"
                   className={cn(active ? "bg-zinc-700 hover:bg-zinc-600 text-zinc-200" : "bg-blue-600 hover:bg-blue-700")}
@@ -1410,9 +1520,10 @@ function SequenceCanvas({ campaignId, isActive }: { campaignId: string; isActive
           </CardContent>
         </Card>
 
-        {/* Canvas */}
-        <div className="rounded-xl border border-zinc-800 overflow-hidden" style={{ height: 580 }}>
-          <ReactFlow
+        {/* Canvas and persistent node inspector */}
+        <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_360px]">
+          <div className="rounded-xl border border-zinc-800 overflow-hidden" style={{ height: 580 }}>
+            <ReactFlow
             nodes={nodes}
             edges={edges}
             onNodesChange={(changes) => {
@@ -1458,12 +1569,20 @@ function SequenceCanvas({ campaignId, isActive }: { campaignId: string; isActive
                 Drag to pan · Scroll to zoom · Drag handle to connect · Del/Backspace removes selected
               </p>
             </Panel>
-          </ReactFlow>
-        </div>
+            </ReactFlow>
+          </div>
 
-        {editingStep && (
-          <ConfigPanel key={editingStep.id} step={editingStep} onChange={handleUpdateStep} onClose={() => setEditingStepId(null)} />
-        )}
+          {editingStep ? (
+            <ConfigPanel key={editingStep.id} step={editingStep} links={campaignLinks} onChange={handleUpdateStep} onClose={() => setEditingStepId(null)} />
+          ) : (
+            <Card className="flex min-h-[220px] items-center justify-center border-zinc-800 bg-zinc-950 text-center">
+              <CardContent className="space-y-2 py-8">
+                <p className="text-sm font-medium text-zinc-300">Node inspector</p>
+                <p className="max-w-[240px] text-xs text-zinc-500">Select a workflow node to edit its timing, conditions, message, links, and stop rules.</p>
+              </CardContent>
+            </Card>
+          )}
+        </div>
 
         <AlertDialog open={showActivateDialog} onOpenChange={setShowActivateDialog}>
           <AlertDialogContent className="bg-zinc-950 border-zinc-800 text-zinc-100">
@@ -1517,6 +1636,36 @@ function SequenceCanvas({ campaignId, isActive }: { campaignId: string; isActive
             <AlertDialogFooter>
               <AlertDialogCancel className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 bg-zinc-900">Cancel</AlertDialogCancel>
               <AlertDialogAction onClick={handleConfirmReset} className="bg-red-600 hover:bg-red-700">Reset</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <AlertDialog open={showReplaceDialog} onOpenChange={setShowReplaceDialog}>
+          <AlertDialogContent className="bg-zinc-950 border-zinc-800 text-zinc-100">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Replace workflow from a template?</AlertDialogTitle>
+              <AlertDialogDescription className="text-zinc-400">
+                This replaces the current workflow and discards unsaved graph changes. The selected template will be copied into this campaign as an unsaved draft.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="max-h-64 space-y-2 overflow-y-auto py-2">
+              {templates.map((tpl) => (
+                <Button
+                  key={tpl.name}
+                  variant="outline"
+                  className="h-auto w-full justify-start border-zinc-700 bg-zinc-900 text-left text-zinc-200 hover:bg-zinc-800"
+                  onClick={() => { setShowReplaceDialog(false); applyTemplate(tpl); }}
+                >
+                  <span>
+                    <span className="block text-sm font-medium">{tpl.name}</span>
+                    <span className="block text-xs font-normal text-zinc-500">{tpl.description}</span>
+                  </span>
+                </Button>
+              ))}
+              {templates.length === 0 && <p className="text-sm text-zinc-500">No templates are available.</p>}
+            </div>
+            <AlertDialogFooter>
+              <AlertDialogCancel className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 bg-zinc-900">Cancel</AlertDialogCancel>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>

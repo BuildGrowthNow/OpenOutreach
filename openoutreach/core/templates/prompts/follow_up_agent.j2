@@ -243,7 +243,11 @@ Follow these unless they conflict with the hard constraints above.
 {% endif %}{% if ai_avoid_rules %}### Avoid Saying / Promising
 {{ ai_avoid_rules }}
 
-{% endif %}{% endif %}{% if channel == "whatsapp" %}
+{% endif %}{% endif %}{% if node_prompt %}
+## Sequence Node Instruction
+Follow this campaign-node instruction for this message while preserving the hard safety constraints above:
+{{ node_prompt }}
+{% endif %}{% if channel == "whatsapp" %}
 ## Channel: WhatsApp
 
 You are texting a stranger on their personal phone. The first message (identity + context) was already sent before you joined — do not repeat it.

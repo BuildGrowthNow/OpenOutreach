@@ -1,6 +1,8 @@
 "use client";
 
 import { apiClient } from "../apiClientV2";
+import type { SequenceEdge, SequenceStep } from "@/lib/types/components";
+export type { SequenceEdge, SequenceStep } from "@/lib/types/components";
 
 export interface ImportResult {
   imported: number;
@@ -20,32 +22,10 @@ export async function importLeadsCSV(
   return apiClient.upload<ImportResult>(`/campaigns/${campaignId}/leads/import`, formData);
 }
 
-export interface SequenceStep {
-  id: string;
-  type: "action" | "wait" | "condition" | "end";
-  data: {
-    channel: "linkedin" | "email" | "whatsapp" | null;
-    action: "connect" | "follow_up" | "send_email" | "send_whatsapp" | null;
-    label: string;
-    wait_days: number;
-    wait_hours: number;
-    condition: "always" | "no_reply" | "no_open" | "replied";
-    requires: string[];
-  };
-  position: { x: number; y: number };
-}
-
-export interface SequenceEdge {
-  id: string;
-  source: string;
-  target: string;
-  label?: string;
-  data?: { condition: string };
-}
-
 export interface SequenceResponse {
   steps: SequenceStep[];
   edges: SequenceEdge[];
+  schema_version?: number;
   active: boolean;
   coverage_per_step: Record<string, number>;
 }

@@ -3,7 +3,7 @@
  *
  * Routes:
  *   GET  /open/:token.gif   → 1×1 transparent GIF; log open event; POST webhook
- *   GET  /click/:token      → decode dest URL; log click event; 302 redirect
+ *   GET  /click/:short/:token → resolve compact click token; log; 302 redirect
  *   GET  /unsub/:token      → render one-click unsubscribe confirmation page
  *   POST /unsub/:token      → suppress email in KV; POST webhook
  *
@@ -37,15 +37,22 @@ interface TokenPayload {
   dest_url: string;
   iat?: number;
   exp?: number;
+  tracked_link_id?: string;
+  lead_id?: string;
+  step_id?: string;
+  message_id?: string;
+  channel?: string;
+  short_code?: string;
 }
 
 const MAX_ID_LENGTH = 256;
 const MAX_EVENT_LENGTH = 16;
 const MAX_DESTINATION_LENGTH = 2048;
+const MAX_SHORT_CODE_LENGTH = 128;
 const MAX_TOKEN_LENGTH = 8192;
 const VALID_EVENTS = new Set(["open", "click", "unsub"]);
 
-function b64url(buf: ArrayBuffer): string {
+function b64url(buf: ArrayBufferLike): string {
   const bytes = new Uint8Array(buf);
   let s = "";
   for (const b of bytes) s += String.fromCharCode(b);
@@ -95,7 +102,9 @@ async function verifyToken(token: string, secret: string): Promise<TokenPayload 
       typeof payload.deal_id !== "string" || payload.deal_id.length === 0 || payload.deal_id.length > MAX_ID_LENGTH ||
       typeof payload.campaign_id !== "string" || payload.campaign_id.length > MAX_ID_LENGTH ||
       typeof payload.event !== "string" || payload.event.length > MAX_EVENT_LENGTH || !VALID_EVENTS.has(payload.event) ||
-      typeof payload.dest_url !== "string" || payload.dest_url.length > MAX_DESTINATION_LENGTH
+      typeof payload.dest_url !== "string" || payload.dest_url.length > MAX_DESTINATION_LENGTH ||
+      (payload.short_code !== undefined && (typeof payload.short_code !== "string" || payload.short_code.length > MAX_SHORT_CODE_LENGTH)) ||
+      (payload.event === "click" && !payload.dest_url && (typeof payload.short_code !== "string" || !payload.short_code))
     ) return null;
     for (const timestamp of [payload.iat, payload.exp]) {
       if (timestamp !== undefined && (typeof timestamp !== "number" || !Number.isFinite(timestamp))) return null;
@@ -115,7 +124,7 @@ async function verifyToken(token: string, secret: string): Promise<TokenPayload 
 
 async function postWebhook(
   env: Env,
-  payload: { deal_id: string; campaign_id: string; event: string; ts: number }
+  payload: { deal_id: string; campaign_id: string; event: string; ts: number; event_id: string; tracked_link_id?: string; lead_id?: string; step_id?: string; message_id?: string; channel?: string }
 ): Promise<void> {
   const url = `${env.BACKEND_URL}/api/email-tracking/event`;
   const body = JSON.stringify(payload);
@@ -143,6 +152,57 @@ async function postWebhook(
   }
 }
 
+async function eventId(token: string, event: string): Promise<string> {
+  if (event === "click") {
+    const bytes = crypto.getRandomValues(new Uint8Array(16));
+    return `${Date.now().toString(36)}-${b64url(bytes.buffer as ArrayBuffer)}`;
+  }
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`${event}:${token}`));
+  return b64url(digest);
+}
+
+async function resolveDestination(env: Env, payload: TokenPayload, shortCode: string): Promise<string | null> {
+  if (payload.dest_url) return payload.dest_url;
+  if (!shortCode || payload.short_code !== shortCode) return null;
+  try {
+    const response = await fetch(
+      `${env.BACKEND_URL}/api/email-tracking/resolve/${encodeURIComponent(payload.campaign_id)}/${encodeURIComponent(shortCode)}?channel=${encodeURIComponent(payload.channel || "email")}&step_id=${encodeURIComponent(payload.step_id || "")}`,
+      { headers: { "X-Tracking-Resolver-Secret": env.WORKER_WEBHOOK_SECRET } },
+    );
+    if (!response.ok) return null;
+    const result = await response.json() as { destination_url?: string };
+    return result.destination_url || null;
+  } catch {
+    return null;
+  }
+}
+
+async function resolveOpaqueClick(env: Env, shortCode: string, tokenId: string): Promise<TokenPayload | null> {
+  try {
+    const response = await fetch(
+      `${env.BACKEND_URL}/api/email-tracking/resolve-click/${encodeURIComponent(tokenId)}`,
+      { headers: { "X-Tracking-Resolver-Secret": env.WORKER_WEBHOOK_SECRET } },
+    );
+    if (!response.ok) return null;
+    const result = await response.json() as Partial<TokenPayload> & { destination_url?: string; short_code?: string };
+    if (result.short_code !== shortCode || !result.destination_url || !result.deal_id || !result.campaign_id) return null;
+    return {
+      deal_id: result.deal_id,
+      campaign_id: result.campaign_id,
+      event: "click",
+      dest_url: result.destination_url,
+      tracked_link_id: result.tracked_link_id,
+      lead_id: result.lead_id,
+      step_id: result.step_id,
+      message_id: result.message_id,
+      channel: result.channel,
+      short_code: result.short_code,
+    };
+  } catch {
+    return null;
+  }
+}
+
 function isSafeRedirect(destination: string): boolean {
   if (destination.length > 2048) return false;
   try {
@@ -158,9 +218,26 @@ function isSafeRedirect(destination: string): boolean {
   }
 }
 
+async function isRateLimited(request: Request, env: Env, route: string): Promise<boolean> {
+  // Keep only a keyed visitor fingerprint in KV; never persist the raw IP.
+  const address = request.headers.get("CF-Connecting-IP") || "unknown";
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(`${env.SECRET_KEY}:${address}`),
+  );
+  const bucket = Math.floor(Date.now() / 60_000);
+  const key = `rate:${route}:${b64url(digest)}:${bucket}`;
+  const parsed = Number(await env.EMAIL_EVENTS.get(key) || "0");
+  const current = Number.isFinite(parsed) ? parsed : 0;
+  if (current >= 120) return true;
+  await env.EMAIL_EVENTS.put(key, String(current + 1), { expirationTtl: 120 });
+  return false;
+}
+
 // ── Route handlers ────────────────────────────────────────────────
 
 async function handleOpen(request: Request, env: Env, ctx: ExecutionContext, tokenRaw: string): Promise<Response> {
+  if (await isRateLimited(request, env, "open")) return new Response(null, { status: 429, headers: { "Retry-After": "60" } });
   const token = tokenRaw.replace(/\.gif$/, "");
   const payload = await verifyToken(token, env.SECRET_KEY);
   if (!payload || payload.event !== "open") {
@@ -170,7 +247,8 @@ async function handleOpen(request: Request, env: Env, ctx: ExecutionContext, tok
   // Always return the pixel — suppress tracking only if already unsubscribed.
   const suppressed = await env.EMAIL_SUPPRESSED.get(payload.deal_id);
   if (!suppressed) {
-    const key = `${payload.deal_id}:open:${Date.now()}`;
+    const id = await eventId(token, "open");
+    const key = `${payload.deal_id}:open:${id}`;
     await env.EMAIL_EVENTS.put(key, JSON.stringify({ ...payload, ts: Date.now() }), {
       expirationTtl: 60 * 60 * 24 * 90, // 90 days
     });
@@ -179,6 +257,12 @@ async function handleOpen(request: Request, env: Env, ctx: ExecutionContext, tok
       campaign_id: payload.campaign_id,
       event: "open",
       ts: Math.floor(Date.now() / 1000),
+      event_id: id,
+      tracked_link_id: payload.tracked_link_id,
+      lead_id: payload.lead_id,
+      step_id: payload.step_id,
+      message_id: payload.message_id,
+      channel: payload.channel,
     }));
   }
 
@@ -191,16 +275,21 @@ async function handleOpen(request: Request, env: Env, ctx: ExecutionContext, tok
   });
 }
 
-async function handleClick(request: Request, env: Env, ctx: ExecutionContext, token: string): Promise<Response> {
-  const payload = await verifyToken(token, env.SECRET_KEY);
-  if (!payload || payload.event !== "click" || !payload.dest_url || !isSafeRedirect(payload.dest_url)) {
+async function handleClick(request: Request, env: Env, ctx: ExecutionContext, token: string, shortCode = "", opaque = false): Promise<Response> {
+  if (await isRateLimited(request, env, "click")) return new Response(null, { status: 429, headers: { "Retry-After": "60" } });
+  const payload = opaque
+    ? await resolveOpaqueClick(env, shortCode, token)
+    : await verifyToken(token, env.SECRET_KEY);
+  const destination = payload ? await resolveDestination(env, payload, shortCode) : null;
+  if (!payload || payload.event !== "click" || !destination || !isSafeRedirect(destination)) {
     return new Response(null, { status: 400 });
   }
 
   // Suppress tracking if already unsubscribed — still redirect the user.
   const suppressed = await env.EMAIL_SUPPRESSED.get(payload.deal_id);
   if (!suppressed) {
-    const key = `${payload.deal_id}:click:${Date.now()}`;
+    const id = await eventId(token, "click");
+    const key = `${payload.deal_id}:click:${id}`;
     await env.EMAIL_EVENTS.put(key, JSON.stringify({ ...payload, ts: Date.now() }), {
       expirationTtl: 60 * 60 * 24 * 90,
     });
@@ -209,10 +298,16 @@ async function handleClick(request: Request, env: Env, ctx: ExecutionContext, to
       campaign_id: payload.campaign_id,
       event: "click",
       ts: Math.floor(Date.now() / 1000),
+      event_id: id,
+      tracked_link_id: payload.tracked_link_id,
+      lead_id: payload.lead_id,
+      step_id: payload.step_id,
+      message_id: payload.message_id,
+      channel: payload.channel,
     }));
   }
 
-  return Response.redirect(payload.dest_url, 302);
+  return Response.redirect(destination, 302);
 }
 
 function unsubscribePage(_token: string): Response {
@@ -253,7 +348,8 @@ p{color:#16a34a;font-size:18px}</style>
   });
 }
 
-async function handleUnsubGet(_request: Request, env: Env, token: string): Promise<Response> {
+async function handleUnsubGet(request: Request, env: Env, token: string): Promise<Response> {
+  if (await isRateLimited(request, env, "unsub")) return new Response(null, { status: 429, headers: { "Retry-After": "60" } });
   const payload = await verifyToken(token, env.SECRET_KEY);
   if (!payload || payload.event !== "unsub") {
     return new Response("Invalid or expired unsubscribe link.", {
@@ -265,6 +361,7 @@ async function handleUnsubGet(_request: Request, env: Env, token: string): Promi
 }
 
 async function handleUnsubPost(request: Request, env: Env, ctx: ExecutionContext, token: string): Promise<Response> {
+  if (await isRateLimited(request, env, "unsub")) return new Response(null, { status: 429, headers: { "Retry-After": "60" } });
   const payload = await verifyToken(token, env.SECRET_KEY);
   if (!payload || payload.event !== "unsub") {
     return new Response(null, { status: 400 });
@@ -277,6 +374,11 @@ async function handleUnsubPost(request: Request, env: Env, ctx: ExecutionContext
     campaign_id: payload.campaign_id,
     event: "unsub",
     ts: Math.floor(Date.now() / 1000),
+    event_id: await eventId(token, "unsub"),
+    lead_id: payload.lead_id,
+    step_id: payload.step_id,
+    message_id: payload.message_id,
+    channel: payload.channel,
   }));
 
   return unsubscribeDonePage();
@@ -296,7 +398,10 @@ export default {
 
     const clickMatch = pathname.match(/^\/click\/(.+)$/);
     if (clickMatch && request.method === "GET") {
-      return handleClick(request, env, ctx, clickMatch[1]);
+      const parts = clickMatch[1].split("/");
+      return parts.length >= 2
+        ? handleClick(request, env, ctx, parts.slice(1).join("/"), parts[0], !parts.slice(1).join("/").includes("."))
+        : handleClick(request, env, ctx, parts[0]);
     }
 
     const unsubMatch = pathname.match(/^\/unsub\/(.+)$/);

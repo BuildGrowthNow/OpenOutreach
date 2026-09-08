@@ -771,6 +771,12 @@ class Campaign:
         sequence_steps: Optional[List[Dict[str, Any]]] = None,
         sequence_edges: Optional[List[Dict[str, Any]]] = None,
         sequence_active: bool = False,
+        sequence_schema_version: int = 1,
+        sequence_revision: int = 1,
+        source_template_id: Optional[str] = None,
+        source_template_version: Optional[int] = None,
+        template_snapshot: Optional[Dict[str, Any]] = None,
+        safety_defaults: Optional[Dict[str, Any]] = None,
     ):
         self._id = _id or str(uuid4())
         self.name = name
@@ -807,6 +813,12 @@ class Campaign:
         self.sequence_steps: List[Dict[str, Any]] = sequence_steps if sequence_steps is not None else []
         self.sequence_edges: List[Dict[str, Any]] = sequence_edges if sequence_edges is not None else []
         self.sequence_active: bool = sequence_active
+        self.sequence_schema_version = sequence_schema_version
+        self.sequence_revision = sequence_revision
+        self.source_template_id = source_template_id
+        self.source_template_version = source_template_version
+        self.template_snapshot = template_snapshot
+        self.safety_defaults = safety_defaults or {}
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert model instance to dictionary for MongoDB storage."""
@@ -856,6 +868,15 @@ class Campaign:
         data["sequence_steps"] = self.sequence_steps
         data["sequence_edges"] = self.sequence_edges
         data["sequence_active"] = self.sequence_active
+        data["sequence_schema_version"] = self.sequence_schema_version
+        data["sequence_revision"] = self.sequence_revision
+        if self.source_template_id is not None:
+            data["source_template_id"] = self.source_template_id
+        if self.source_template_version is not None:
+            data["source_template_version"] = self.source_template_version
+        if self.template_snapshot is not None:
+            data["template_snapshot"] = self.template_snapshot
+        data["safety_defaults"] = self.safety_defaults
         return data
 
     @classmethod
@@ -897,6 +918,12 @@ class Campaign:
             sequence_steps=data.get("sequence_steps"),
             sequence_edges=data.get("sequence_edges"),
             sequence_active=data.get("sequence_active", False),
+            sequence_schema_version=data.get("sequence_schema_version", 1),
+            sequence_revision=data.get("sequence_revision", 1),
+            source_template_id=data.get("source_template_id"),
+            source_template_version=data.get("source_template_version"),
+            template_snapshot=data.get("template_snapshot"),
+            safety_defaults=data.get("safety_defaults", {}),
         )
 
     def has_access(self, user_id: str) -> bool:
@@ -1140,6 +1167,11 @@ class Deal:
         email_clicked_at: Optional[datetime] = None,
         sequence_position: Optional[str] = None,
         sequence_last_step_at: Optional[datetime] = None,
+        sequence_last_message_at: Optional[datetime] = None,
+        sequence_last_action_skipped_at: Optional[datetime] = None,
+        sequence_stop_on_reply: Optional[bool] = None,
+        sequence_revision: Optional[int] = None,
+        sequence_graph_snapshot: Optional[Dict[str, Any]] = None,
         sequence_done: bool = False,
         sequence_last_step_id: Optional[str] = None,
     ):
@@ -1170,6 +1202,11 @@ class Deal:
         self.email_clicked_at = email_clicked_at
         self.sequence_position: Optional[str] = sequence_position
         self.sequence_last_step_at: Optional[datetime] = sequence_last_step_at
+        self.sequence_last_message_at: Optional[datetime] = sequence_last_message_at
+        self.sequence_last_action_skipped_at: Optional[datetime] = sequence_last_action_skipped_at
+        self.sequence_stop_on_reply: Optional[bool] = sequence_stop_on_reply
+        self.sequence_revision: Optional[int] = sequence_revision
+        self.sequence_graph_snapshot = sequence_graph_snapshot
         self.sequence_done: bool = sequence_done
         self.sequence_last_step_id: Optional[str] = sequence_last_step_id
         self._lead: Optional["Lead"] = None
@@ -1246,6 +1283,16 @@ class Deal:
             data["sequence_position"] = self.sequence_position
         if self.sequence_last_step_at is not None:
             data["sequence_last_step_at"] = self.sequence_last_step_at
+        if self.sequence_last_message_at is not None:
+            data["sequence_last_message_at"] = self.sequence_last_message_at
+        if self.sequence_last_action_skipped_at is not None:
+            data["sequence_last_action_skipped_at"] = self.sequence_last_action_skipped_at
+        if self.sequence_stop_on_reply is not None:
+            data["sequence_stop_on_reply"] = self.sequence_stop_on_reply
+        if self.sequence_revision is not None:
+            data["sequence_revision"] = self.sequence_revision
+        if self.sequence_graph_snapshot is not None:
+            data["sequence_graph_snapshot"] = self.sequence_graph_snapshot
         data["sequence_done"] = self.sequence_done
         if self.sequence_last_step_id is not None:
             data["sequence_last_step_id"] = self.sequence_last_step_id
@@ -1282,6 +1329,11 @@ class Deal:
             email_clicked_at=data.get("email_clicked_at"),
             sequence_position=data.get("sequence_position"),
             sequence_last_step_at=data.get("sequence_last_step_at"),
+            sequence_last_message_at=data.get("sequence_last_message_at"),
+            sequence_last_action_skipped_at=data.get("sequence_last_action_skipped_at"),
+            sequence_stop_on_reply=data.get("sequence_stop_on_reply"),
+            sequence_revision=data.get("sequence_revision"),
+            sequence_graph_snapshot=data.get("sequence_graph_snapshot"),
             sequence_done=data.get("sequence_done", False),
             sequence_last_step_id=data.get("sequence_last_step_id"),
         )
@@ -2480,11 +2532,19 @@ class TrackedLink:
         last_clicked_at: Optional[datetime] = None,
         last_ip: Optional[str] = None,
         last_user_agent: str = "",
+        key: str = "",
+        name: str = "",
+        destination_url: Optional[str] = None,
+        default_utm: Optional[Dict[str, str]] = None,
+        updated_at: Optional[datetime] = None,
     ):
         self._id = _id or str(uuid4())
         self.campaign_id = campaign_id
         self.user_id = user_id
         self.original_url = original_url
+        self.destination_url = destination_url or original_url
+        self.key = key or short_code
+        self.name = name or self.key
         self.short_code = short_code
         self.is_active = is_active
         self.utm_source = utm_source
@@ -2498,6 +2558,8 @@ class TrackedLink:
         self.last_clicked_at = last_clicked_at
         self.last_ip = last_ip
         self.last_user_agent = last_user_agent
+        self.default_utm = default_utm or {}
+        self.updated_at = updated_at or self.created_at
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert model instance to dictionary for MongoDB storage."""
@@ -2505,6 +2567,9 @@ class TrackedLink:
             "_id": self._id,
             "campaign_id": self.campaign_id,
             "original_url": self.original_url,
+            "destination_url": self.destination_url,
+            "key": self.key,
+            "name": self.name,
             "short_code": self.short_code,
             "is_active": self.is_active,
             "utm_source": self.utm_source,
@@ -2518,6 +2583,8 @@ class TrackedLink:
             "last_clicked_at": self.last_clicked_at,
             "last_ip": self.last_ip,
             "last_user_agent": self.last_user_agent,
+            "default_utm": self.default_utm,
+            "updated_at": self.updated_at,
         }
         if self.user_id:
             data["user_id"] = self.user_id
@@ -2531,6 +2598,9 @@ class TrackedLink:
             campaign_id=data.get("campaign_id"),
             user_id=data.get("user_id"),
             original_url=data.get("original_url", ""),
+            destination_url=data.get("destination_url", data.get("original_url", "")),
+            key=data.get("key", data.get("short_code", "")),
+            name=data.get("name", data.get("key", data.get("short_code", ""))),
             short_code=data.get("short_code", ""),
             is_active=data.get("is_active", True),
             utm_source=data.get("utm_source", ""),
@@ -2544,6 +2614,8 @@ class TrackedLink:
             last_clicked_at=data.get("last_clicked_at"),
             last_ip=data.get("last_ip"),
             last_user_agent=data.get("last_user_agent", ""),
+            default_utm=data.get("default_utm", {}),
+            updated_at=data.get("updated_at"),
         )
 
     def save(self) -> str:
@@ -2552,6 +2624,7 @@ class TrackedLink:
         if collection is None:
             raise RuntimeError("MongoDB collection 'tracked_links' not available")
 
+        self.updated_at = datetime.now(tz.utc)
         doc = self.to_dict()
         result = collection.update_one({"_id": self._id}, {"$set": doc}, upsert=True)
         return str(result.upserted_id or self._id)

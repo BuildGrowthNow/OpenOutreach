@@ -5,6 +5,10 @@ from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List
 from uuid import uuid4
 
+# Re-export the canonical versioned template model from the historical module
+# path. The legacy implementation below remains private for old manager code.
+from openoutreach.mongodb.models_extended import CampaignTemplate
+
 
 def _as_utc(dt: datetime) -> datetime:
     """Return *dt* as an aware UTC datetime; treats naive as UTC."""
@@ -195,7 +199,7 @@ class SiteConfigManager:
         return config, False
 
 
-class CampaignTemplate:
+class _LegacyCampaignTemplate:
     """Template for creating campaigns with predefined settings."""
 
     def __init__(

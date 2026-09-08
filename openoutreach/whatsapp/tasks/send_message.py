@@ -39,6 +39,30 @@ def _substitute_template(template: str, lead) -> str:
     )
 
 
+def _generate_node_message(prompt: str, lead, campaign, user_id: str) -> str:
+    """Generate a WhatsApp message from a sequence-node instruction."""
+    from pydantic import BaseModel, Field
+    from pydantic_ai import Agent
+    from openoutreach.core.llm import get_llm_model, run_agent_sync
+
+    class MessageOutput(BaseModel):
+        message: str = Field(min_length=1, max_length=4000)
+
+    context = (
+        f"Lead: {getattr(lead, 'full_name', '') or 'there'}\n"
+        f"Company: {getattr(lead, 'company', '') or 'unknown'}\n"
+        f"Offer: {campaign.product_pitch or ''}\n"
+        f"Campaign objective: {campaign.campaign_objective or ''}\n\n"
+        f"Node instruction: {prompt}\n"
+        "Write one concise WhatsApp message. Return only the message."
+    )
+    agent = Agent(get_llm_model(user_id=user_id), output_type=MessageOutput, model_settings={"temperature": 0.7, "timeout": 60})
+    result = run_agent_sync(agent.run(context)).output
+    if result is None or not result.message.strip():
+        raise RuntimeError("LLM returned an empty WhatsApp message")
+    return result.message.strip()
+
+
 def _lead_active_in_other_campaign(lead_id: str, current_campaign_id: str) -> bool:
     """Return True if the lead has a PENDING/CONNECTED WA deal in any other campaign."""
     deals_col = get_mongodb_collection("deals")
@@ -51,6 +75,21 @@ def _lead_active_in_other_campaign(lead_id: str, current_campaign_id: str) -> bo
         "active_channel": "whatsapp",
         "state": {"$in": [Deal.DealState.PENDING, Deal.DealState.CONNECTED]},
     }, limit=1) > 0
+
+
+def _message_action_log_query(campaign_id: str, deal_id: str, step_id: str | None) -> dict:
+    """Build an idempotency query for legacy and sequence WhatsApp sends."""
+    query = {
+        "campaign_id": campaign_id,
+        "action_type": "whatsapp_message",
+        "details.deal_id": deal_id,
+    }
+    # A sequence can deliberately contain several WhatsApp nodes.  Scope the
+    # dedupe marker to its node, while preserving the old one-message-per-deal
+    # behavior for legacy tasks that do not carry a step id.
+    if step_id:
+        query["details.step_id"] = step_id
+    return query
 
 
 def handle_whatsapp_message(task, wa_session, qualifiers):  # noqa: ARG001
@@ -81,15 +120,25 @@ def handle_whatsapp_message(task, wa_session, qualifiers):  # noqa: ARG001
         return
 
     # Find QUALIFIED WA deals oldest-first
-    eligibility = {
-            "campaign_id": campaign_id,
-            "state": Deal.DealState.QUALIFIED,
-            "active_channel": "whatsapp",
-        }
     target_deal_id = (getattr(task, "payload", None) or {}).get("deal_id")
+    eligibility = {
+        "campaign_id": campaign_id,
+        "state": Deal.DealState.QUALIFIED,
+        "active_channel": "whatsapp",
+    }
     if target_deal_id:
         # Sequence tasks must address the deal they were created for.
         eligibility["_id"] = str(target_deal_id)
+        eligibility.pop("active_channel", None)
+        # A sequence may switch into WhatsApp after another channel has
+        # already moved the deal out of QUALIFIED.
+        eligibility["state"] = {"$in": [
+            Deal.DealState.QUALIFIED,
+            Deal.DealState.PENDING,
+            Deal.DealState.CONNECTED,
+            Deal.DealState.EMAIL_SENT,
+            Deal.DealState.EMAIL_OPENED,
+        ]}
     deal_docs = list(deals_col.find(
         eligibility,
         sort=[("creation_date", 1)],
@@ -113,12 +162,12 @@ def handle_whatsapp_message(task, wa_session, qualifiers):  # noqa: ARG001
             continue
 
         # Skip if already messaged on WhatsApp
+        target_step_id = (getattr(task, "payload", None) or {}).get("step_id")
         if action_logs_col is not None:
-            already_sent = action_logs_col.count_documents({
-                "campaign_id": campaign_id,
-                "action_type": "whatsapp_message",
-                "details.deal_id": str(deal._id),
-            }, limit=1)
+            already_sent = action_logs_col.count_documents(
+                _message_action_log_query(campaign_id, str(deal._id), target_step_id),
+                limit=1,
+            )
             if already_sent:
                 continue
 
@@ -139,15 +188,58 @@ def handle_whatsapp_message(task, wa_session, qualifiers):  # noqa: ARG001
             logger.info("WA send_message [%s]: lead not on WA - skipping", campaign)
             continue
 
-        message_template = (
-            campaign.channel_settings.get("whatsapp", {}).get("message_template", "")
-            if campaign.channel_settings else ""
+        target_step = next(
+            (step for step in (campaign.sequence_steps or []) if step.get("id") == target_step_id),
+            None,
         )
-        if not message_template:
-            logger.warning("WA send_message [%s]: no message_template in channel_settings", campaign)
-            return
+        from openoutreach.core.sequence_message import fallback_config, message_config
+        payload_message = (getattr(task, "payload", None) or {}).get("message")
+        node_message = message_config({"data": payload_message}) if isinstance(payload_message, dict) else message_config(target_step)
+        # The task payload is the immutable contract for an in-flight lead.
+        # Do not require the node to still exist in the editable campaign
+        # graph: an old graph snapshot may legitimately reference it.
+        is_sequence_node = bool(target_step_id)
+        try:
+            if is_sequence_node and node_message.get("content_mode") == "static":
+                message_template = str(node_message.get("body") or "").strip()
+            elif is_sequence_node and str(node_message.get("prompt") or "").strip():
+                message_template = _generate_node_message(str(node_message["prompt"]), lead, campaign, wa_profile.user_id)
+            else:
+                message_template = (
+                    campaign.channel_settings.get("whatsapp", {}).get("message_template", "")
+                    if campaign.channel_settings else ""
+                )
+            if not message_template:
+                raise ValueError("WhatsApp message is empty")
+        except Exception as exc:
+            mode, fallback_body = fallback_config(node_message, exc) if is_sequence_node else ("continue", "")
+            if is_sequence_node and mode == "static" and fallback_body:
+                message_template = fallback_body
+            elif is_sequence_node and mode == "skip":
+                deal.sequence_last_step_id = target_step_id
+                deal.sequence_last_action_skipped_at = datetime.now(timezone.utc)
+                deal.save(update_fields=["sequence_last_step_id", "sequence_last_action_skipped_at"])
+                logger.warning("WA send_message: skipping node %s after generation failure", target_step_id)
+                return
+            elif is_sequence_node and mode == "continue":
+                message_template = (campaign.channel_settings or {}).get("whatsapp", {}).get("message_template", "")
+                if not message_template:
+                    logger.warning("WA send_message [%s]: no fallback WhatsApp template", campaign)
+                    return
+            else:
+                logger.warning("WA send_message [%s]: no message configured", campaign)
+                return
 
         message = _substitute_template(message_template, lead)
+        from openoutreach.emails.tracking import render_link_placeholders
+        message = render_link_placeholders(
+            message,
+            deal_id=str(deal._id),
+            campaign_id=str(campaign_id),
+            lead_id=str(deal.lead_id),
+            step_id=str(target_step_id or ""),
+            channel="whatsapp",
+        )
         success = wa_session.send_message(lead.phone, message)
         if not success:
             logger.warning(
@@ -178,7 +270,12 @@ def handle_whatsapp_message(task, wa_session, qualifiers):  # noqa: ARG001
         deal.last_outgoing_at = now
         if target_step_id:
             deal.sequence_last_step_id = target_step_id
-            deal.save(update_fields=["state", "last_outgoing_at", "sequence_last_step_id"])
+            deal.sequence_last_message_at = now
+            deal.sequence_stop_on_reply = bool(
+                node_message.get("stop_on_reply", True)
+                or (getattr(campaign, "safety_defaults", {}) or {}).get("stop_on_reply", False)
+            )
+            deal.save(update_fields=["state", "last_outgoing_at", "sequence_last_step_id", "sequence_last_message_at", "sequence_stop_on_reply"])
         else:
             deal.save(update_fields=["state", "last_outgoing_at"])
 
@@ -206,6 +303,7 @@ def handle_whatsapp_message(task, wa_session, qualifiers):  # noqa: ARG001
                 "phone": lead.phone,
                 "message_preview": message[:100],
                 "wa_profile_id": wa_session.wa_profile._id,
+                "step_id": str(target_step_id or ""),
             },
         ).save()
 

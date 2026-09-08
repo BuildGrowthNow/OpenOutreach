@@ -17,7 +17,13 @@ from openoutreach.core.llm import get_llm_model, run_agent_sync
 logger = logging.getLogger(__name__)
 
 
-def generate_email(deal, user_id: str, campaign, sequence_step: int) -> tuple[str, str]:
+def generate_email(
+    deal,
+    user_id: str,
+    campaign,
+    sequence_step: int,
+    node_prompt: str | None = None,
+) -> tuple[str, str]:
     """Return (subject, body) for the given deal and sequence step.
 
     Args:
@@ -45,6 +51,7 @@ def generate_email(deal, user_id: str, campaign, sequence_step: int) -> tuple[st
         config=config,
         seller_name=_seller_name(user_id),
         sequence_step=sequence_step,
+        node_prompt=node_prompt or "",
     )
 
     agent = Agent(
@@ -67,7 +74,14 @@ def generate_email(deal, user_id: str, campaign, sequence_step: int) -> tuple[st
     return result.subject, result.body
 
 
-def _render_prompt(deal, campaign, config, seller_name: str, sequence_step: int) -> str:
+def _render_prompt(
+    deal,
+    campaign,
+    config,
+    seller_name: str,
+    sequence_step: int,
+    node_prompt: str = "",
+) -> str:
     env = jinja2.Environment(loader=jinja2.FileSystemLoader(str(PROMPTS_DIR)))
     template = env.get_template("email_agent.j2")
     return template.render(
@@ -81,6 +95,7 @@ def _render_prompt(deal, campaign, config, seller_name: str, sequence_step: int)
         ai_writing_style=config.ai_writing_style or "",
         ai_say_rules=config.ai_say_rules or "",
         ai_avoid_rules=config.ai_avoid_rules or "",
+        node_prompt=node_prompt,
     )
 
 

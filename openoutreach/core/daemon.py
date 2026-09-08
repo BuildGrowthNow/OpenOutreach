@@ -35,7 +35,9 @@ timezone = _TimezoneCompat()
 from termcolor import colored
 
 from openoutreach.core.conf import CAMPAIGN_CONFIG
-from openoutreach.mongodb.models import Campaign, SiteConfig, Task
+from linkedin_cli.exceptions import AuthenticationError, CheckpointChallengeError
+
+from openoutreach.mongodb.models import Campaign, Task
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +60,9 @@ def _sequence_task_succeeded(task: Task, before: Optional[dict]) -> bool:
     if deals is None:
         return False
     after = deals.find_one({"_id": str(deal_id)}) or {}
+    message_policy = (task.payload or {}).get("message") or {}
+    if message_policy.get("fallback_mode") == "skip":
+        return after.get("sequence_last_action_skipped_at") != (before or {}).get("sequence_last_action_skipped_at")
     if task.task_type == Task.TaskType.EMAIL_FOLLOW_UP:
         return after.get("email_sequence_step", 0) > (before or {}).get("email_sequence_step", 0)
     if task.task_type == Task.TaskType.WHATSAPP_MESSAGE:
@@ -632,7 +637,6 @@ def run_daemon():
 
     from pydantic_ai.exceptions import ModelHTTPError
     from openoutreach.linkedin.diagnostics import failure_diagnostics
-    from linkedin_cli.exceptions import AuthenticationError, CheckpointChallengeError
 
     _SHUTDOWN_EVENT.clear()
     signal.signal(signal.SIGTERM, _request_shutdown)

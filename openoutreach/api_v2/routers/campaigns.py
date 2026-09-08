@@ -8,7 +8,7 @@ and team access control.
 import logging
 import os
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from pydantic import BaseModel, ConfigDict
@@ -17,6 +17,7 @@ from openoutreach.api_v2.dependencies_v2 import get_current_user, get_campaign_w
 from openoutreach.mongodb.connection import get_mongodb_collection
 from openoutreach.mongodb import models
 from openoutreach.crm.models.deal import DealState
+from openoutreach.core.sequence_schema import validate_sequence_graph
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -45,6 +46,7 @@ class CampaignCreate(BaseModel):
     maps_backends: Optional[List[str]] = None
     maps_location: Optional[str] = None
     classified_sites: Optional[List[str]] = None
+    safety_defaults: Optional[Dict[str, Any]] = None
 
     model_config = ConfigDict(json_schema_extra={
             "example": {
@@ -86,6 +88,7 @@ class CampaignUpdate(BaseModel):
     maps_backends: Optional[List[str]] = None
     maps_location: Optional[str] = None
     classified_sites: Optional[List[str]] = None
+    safety_defaults: Optional[Dict[str, Any]] = None
 
 
 class CampaignStats(BaseModel):
@@ -131,6 +134,9 @@ class CampaignResponse(BaseModel):
     maps_backends: List[str] = []
     maps_location: Optional[str] = None
     classified_sites: List[str] = []
+    sequence_schema_version: int = 1
+    source_template_id: Optional[str] = None
+    source_template_version: Optional[int] = None
 
 
 class PaginationInfo(BaseModel):
@@ -479,6 +485,7 @@ async def create_campaign(
             maps_backends=data.maps_backends or [],
             maps_location=data.maps_location,
             classified_sites=data.classified_sites or [],
+            safety_defaults=data.safety_defaults or {},
             status="draft",  # New campaigns start as draft
             is_paused=True,  # Keep is_paused in sync with draft status
         )
@@ -665,6 +672,8 @@ async def update_campaign(
             updates["maps_location"] = data.maps_location
         if data.classified_sites is not None:
             updates["classified_sites"] = data.classified_sites
+        if data.safety_defaults is not None:
+            updates["safety_defaults"] = data.safety_defaults
 
         # Handle status/is_paused synchronization
         # Priority: if status is provided, use it; otherwise use is_paused
@@ -2163,93 +2172,9 @@ class SequencePatch(BaseModel):
 
 def _validate_sequence_graph(steps: List[Dict[str, Any]], edges: List[Dict[str, Any]], *, require_launchable: bool = False) -> List[str]:
     """Validate and return human-readable graph errors before persisting."""
-    errors: List[str] = []
-    ids = [str(s.get("id", "")) for s in steps]
-    known = set(ids)
-    if len(ids) != len(set(ids)):
-        errors.append("Step IDs must be unique.")
-    valid_types = {"action", "wait", "condition", "end"}
-    for s in steps:
-        if not s.get("id") or s.get("type") not in valid_types:
-            errors.append(f"Invalid step type or ID: {s.get('id', '<missing>')}.")
-        data = s.get("data") or {}
-        if s.get("type") == "action":
-            if data.get("action") not in {"connect", "follow_up", "send_email", "send_whatsapp"}:
-                errors.append(f"Action step {s.get('id')} has an invalid action.")
-            expected = {"connect": "linkedin", "follow_up": "linkedin", "send_email": "email", "send_whatsapp": "whatsapp"}.get(cast(str, data.get("action")))
-            if expected and data.get("channel") != expected:
-                errors.append(f"Action step {s.get('id')} has an incompatible channel.")
-        if s.get("type") == "wait":
-            try:
-                if float(data.get("wait_days", 0) or 0) < 0 or float(data.get("wait_hours", 0) or 0) < 0:
-                    errors.append(f"Wait step {s.get('id')} cannot be negative.")
-                if require_launchable and float(data.get("wait_days", 0) or 0) + float(data.get("wait_hours", 0) or 0) <= 0:
-                    errors.append(f"Wait step {s.get('id')} must have a positive duration.")
-            except (TypeError, ValueError):
-                errors.append(f"Wait step {s.get('id')} has an invalid duration.")
-    outgoing: Dict[str, List[Dict[str, Any]]] = {sid: [] for sid in known}
-    incoming: Dict[str, int] = {sid: 0 for sid in known}
-    edge_keys = set()
-    for e in edges:
-        source, target = cast(str, e.get("source")), cast(str, e.get("target"))
-        if source not in known or target not in known or source == target:
-            errors.append(f"Edge {e.get('id', '<missing>')} references an invalid node.")
-            continue
-        key = (source, target, (e.get("data") or {}).get("condition", "always"))
-        if key in edge_keys:
-            errors.append(f"Duplicate edge from {source} to {target}.")
-        edge_keys.add(key)
-        outgoing[source].append(e)
-        incoming[target] += 1
-    roots = [sid for sid, count in incoming.items() if count == 0]
-    if steps and len(roots) != 1:
-        errors.append("Sequence must have exactly one entry point.")
-    if steps:
-        reachable = set()
-        stack = roots[:1]
-        while stack:
-            cur = stack.pop()
-            if cur in reachable:
-                continue
-            reachable.add(cur)
-            stack.extend(cast(str, e.get("target")) for e in outgoing.get(cur, []) if e.get("target"))
-        if len(reachable) != len(known):
-            errors.append("All steps must be reachable from the entry point.")
-        visiting: set[str] = set()
-        visited: set[str] = set()
-        def visit(node: str) -> None:
-            if node in visiting:
-                errors.append("Sequence graph contains a cycle.")
-                return
-            if node in visited:
-                return
-            visiting.add(node)
-            for child in outgoing.get(node, []):
-                visit(cast(str, child.get("target")))
-            visiting.remove(node)
-            visited.add(node)
-        for root in (roots or list(known)):
-            visit(root)
-    for s in steps:
-        sid, typ = cast(str, s.get("id")), s.get("type")
-        outs = outgoing.get(sid, [])
-        if typ != "end" and not outs:
-            errors.append(f"Step {sid} has no outgoing connection.")
-        if typ == "condition":
-            branches = {(e.get("data") or {}).get("condition") for e in outs}
-            if branches != {"yes", "no"}:
-                errors.append(f"Condition step {sid} must have exactly Yes and No paths.")
-    if require_launchable:
-        if not steps:
-            errors.append("Sequence has no steps.")
-        if not any(s.get("type") == "action" for s in steps):
-            errors.append("Sequence needs at least one action step.")
-        if not any(s.get("type") == "end" for s in steps):
-            errors.append("Sequence needs an End step.")
-        if sum(1 for s in steps if s.get("type") == "action" and (s.get("data") or {}).get("action") == "send_email") > 3:
-            errors.append("A sequence supports at most three email actions.")
-    return errors
-
+    # Keep this historical helper's string return type for existing callers;
+    # all actual validation is owned by the shared sequence contract.
+    return [error["message"] for error in validate_sequence_graph(steps, edges, require_launchable=require_launchable)]
 
 @router.get("/{campaign_id}/sequence")
 async def get_sequence(
@@ -2289,6 +2214,7 @@ async def get_sequence(
     return {
         "steps": campaign.sequence_steps,
         "edges": campaign.sequence_edges,
+        "schema_version": getattr(campaign, "sequence_schema_version", 1),
         "active": campaign.sequence_active,
         "coverage_per_step": coverage_per_step,
     }
@@ -2376,13 +2302,25 @@ async def patch_sequence(
     update: Dict[str, Any] = {}
     candidate_steps = body.steps if body.steps is not None else (campaign.sequence_steps or [])
     candidate_edges = body.edges if body.edges is not None else (campaign.sequence_edges or [])
-    graph_errors = _validate_sequence_graph(candidate_steps, candidate_edges, require_launchable=body.active is True)
+    link_collection = get_mongodb_collection("tracked_links")
+    available_links = set()
+    if link_collection is not None:
+        available_links = {str(doc.get("key")) for doc in link_collection.find({"campaign_id": campaign_id}, {"key": 1}) if doc.get("key")}
+    graph_errors = validate_sequence_graph(
+        candidate_steps,
+        candidate_edges,
+        require_launchable=body.active is True,
+        available_links=available_links,
+    )
     if graph_errors:
         raise HTTPException(status_code=422, detail=graph_errors)
     if body.steps is not None:
         update["sequence_steps"] = body.steps
     if body.edges is not None:
         update["sequence_edges"] = body.edges
+    if body.steps is not None or body.edges is not None:
+        update["sequence_schema_version"] = 1
+        update["sequence_revision"] = int(getattr(campaign, "sequence_revision", 1) or 1) + 1
     if body.active is not None:
         if body.active:
             # Validate before activating (graph validation above is canonical).
@@ -2459,8 +2397,8 @@ async def patch_sequence(
                     readiness_errors.append("WhatsApp steps require a message template.")
             if readiness_errors:
                 raise HTTPException(status_code=422, detail=readiness_errors)
-            if any((s.get("data") or {}).get("condition") == "no_open" for s in steps_to_check) and not os.getenv("TRACKING_BASE_URL"):
-                raise HTTPException(status_code=422, detail="A no-open condition requires TRACKING_BASE_URL to be configured")
+            if any((s.get("data") or {}).get("condition") in {"email_opened", "email_not_opened"} for s in steps_to_check) and not os.getenv("TRACKING_BASE_URL"):
+                raise HTTPException(status_code=422, detail="Email-open conditions require TRACKING_BASE_URL to be configured")
         update["sequence_active"] = body.active
 
     if update:
@@ -2484,3 +2422,61 @@ async def patch_sequence(
             )
 
     return {"ok": True}
+
+
+class SaveAsTemplateRequest(BaseModel):
+    name: str
+    description: str = ""
+    visibility: str = "private"
+
+
+@router.post("/{campaign_id}/save-as-template", status_code=status.HTTP_201_CREATED)
+async def save_campaign_as_template(
+    campaign_id: str,
+    data: SaveAsTemplateRequest,
+    user_id: str = Depends(get_current_user),
+):
+    """Snapshot a campaign graph into the existing campaign_templates collection."""
+    campaign = models.Campaign.get(campaign_id)
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    if campaign.user_id != user_id:
+        raise HTTPException(status_code=403, detail="Only the campaign owner can save a template")
+    if data.visibility not in {"private", "team"}:
+        raise HTTPException(status_code=422, detail="visibility must be private or team")
+    link_keys = set()
+    for step in campaign.sequence_steps or []:
+        step_data = step.get("data") or {}
+        message = step_data.get("message") or step_data
+        link_keys.update(str(key) for key in (message.get("link_refs") or []) if key)
+    graph_errors = validate_sequence_graph(campaign.sequence_steps or [], campaign.sequence_edges or [], available_links=link_keys)
+    if graph_errors:
+        raise HTTPException(status_code=422, detail=graph_errors)
+    from openoutreach.mongodb.models_extended import CampaignTemplate
+    from uuid import uuid4
+    links = [{"key": key, "name": key.replace("_", " ").title(), "destination_mode": "campaign_booking_link", "default_destination_url": None, "default_utm": {"source": "{{channel}}", "medium": "outreach", "campaign": "{{campaign_id}}", "content": "{{step_id}}"}} for key in sorted(link_keys)]
+    template = CampaignTemplate(
+        _id=str(uuid4()), owner_user_id=user_id, created_by_id=user_id,
+        name=data.name, description=data.description, visibility=data.visibility,
+        channels=campaign.channel_sequence or [], sequence_schema_version=getattr(campaign, "sequence_schema_version", 1),
+        sequence_steps=campaign.sequence_steps or [], sequence_edges=campaign.sequence_edges or [],
+        campaign_defaults={
+            "product_pitch": campaign.product_pitch,
+            "campaign_objective": campaign.campaign_objective,
+            "booking_link": campaign.booking_link,
+            "icp_titles": campaign.icp_titles,
+            "target_company_size": campaign.target_company_size,
+            "lead_source": campaign.lead_source,
+            "maps_query": campaign.maps_query,
+            "maps_country_code": campaign.maps_country_code,
+            "maps_backends": campaign.maps_backends,
+            "maps_location": campaign.maps_location,
+            "classified_sites": campaign.classified_sites,
+            "channel_settings": campaign.channel_settings,
+        },
+        link_definitions=links,
+        safety_defaults=campaign.safety_defaults or {},
+        team_member_ids=[],
+    )
+    template.save()
+    return {"template": template.to_dict()}

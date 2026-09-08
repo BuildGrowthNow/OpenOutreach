@@ -19,10 +19,6 @@ interface SidebarItem {
   icon: SidebarIcon
 }
 
-// Phase 6: Feature flags for deferred secondary surfaces
-// These surfaces exist but are hidden from nav until post-launch
-const ENABLE_LINKS = false // Phase 6: hidden; link tracking is post-launch
-const ENABLE_TEMPLATES = false // Phase 6: hidden; templates are post-launch
 
 const dashboardItems: SidebarItem[] = [
   {
@@ -50,13 +46,6 @@ const dashboardItems: SidebarItem[] = [
     href: '/analytics',
     icon: 'BarChartBig'
   },
-  // Links hidden until post-launch (Phase 6)
-  // Users can track via UTM parameters; full link tracking deferred
-  ...(ENABLE_LINKS ? [{
-    title: 'Links',
-    href: '/links',
-    icon: 'Link' as SidebarIcon
-  }] : []),
   {
     title: 'Settings',
     href: '/settings',

@@ -114,6 +114,7 @@ def ensure_all_indexes():
         # Tracked Links
         ('tracked_links', [
             ({'short_code': 1}, {'name': 'link_shortcode_unique', 'unique': True}),
+            ({'campaign_id': 1, 'user_id': 1, 'key': 1}, {'name': 'link_campaign_key_unique', 'unique': True, 'partialFilterExpression': {'key': {'$exists': True, '$ne': ''}}}),
             ({'campaign_id': 1}, {'name': 'link_campaign_idx'}),
             ({'user_id': 1}, {'name': 'link_user_idx'}),
             ({'is_active': 1}, {'name': 'link_active_idx'}),
@@ -252,6 +253,8 @@ def ensure_all_indexes():
 
         # Campaign Templates
         ('campaign_templates', [
+            ({'owner_user_id': 1, 'updated_at': -1}, {'name': 'template_owner_updated_idx'}),
+            ({'visibility': 1, 'updated_at': -1}, {'name': 'template_visibility_updated_idx'}),
             ({'created_by_id': 1}, {'name': 'template_creator_idx'}),
             ({'is_public': 1}, {'name': 'template_public_idx'}),
         ]),
@@ -259,6 +262,22 @@ def ensure_all_indexes():
         ('sequence_events', [
             ({'campaign_id': 1, 'created_at': -1}, {'name': 'sequence_event_campaign_time_idx'}),
             ({'deal_id': 1, 'step_id': 1, 'created_at': -1}, {'name': 'sequence_event_deal_step_idx'}),
+        ]),
+
+        ('tracking_events', [
+            ({'idempotency_key': 1}, {'name': 'tracking_event_idempotency_unique', 'unique': True}),
+            ({'campaign_id': 1, 'tracked_link_id': 1, 'created_at': -1}, {'name': 'tracking_event_link_time_idx'}),
+            ({'deal_id': 1, 'event': 1, 'created_at': -1}, {'name': 'tracking_event_deal_time_idx'}),
+        ]),
+
+        ('tracking_click_uniques', [
+            ({'_id': 1}, {'name': 'tracking_click_unique_marker_id', 'unique': True}),
+            ({'deal_id': 1, 'tracked_link_id': 1}, {'name': 'tracking_click_unique_marker_idx', 'unique': True}),
+        ]),
+
+        ('tracking_link_tokens', [
+            ({'expires_at': 1}, {'name': 'tracking_link_token_expiry_idx', 'expireAfterSeconds': 0}),
+            ({'campaign_id': 1, 'short_code': 1}, {'name': 'tracking_link_token_campaign_idx'}),
         ]),
 
         # Ghost Mode

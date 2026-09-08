@@ -183,8 +183,41 @@ def handle_email_follow_up(task, user_id: str, campaign) -> None:
         )
         return
 
-    from openoutreach.emails.email_agent import generate_email
-    subject, body = generate_email(deal, user_id, campaign, deal.email_sequence_step)
+    step_data = next((step.get("data") or {} for step in (campaign.sequence_steps or []) if step.get("id") == target_step_id), {})
+    from openoutreach.core.sequence_message import fallback_config, message_config as get_message_config
+    payload_message = (getattr(task, "payload", None) or {}).get("message")
+    message = get_message_config({"data": payload_message}) if isinstance(payload_message, dict) else get_message_config({"data": step_data})
+    if message.get("content_mode") == "static" and str(message.get("body", "")).strip():
+        subject = str(message.get("subject", ""))
+        body = str(message["body"])
+    else:
+        from openoutreach.emails.email_agent import generate_email
+        try:
+            subject, body = generate_email(
+                deal,
+                user_id,
+                campaign,
+                deal.email_sequence_step,
+                node_prompt=str(message.get("prompt") or "") or None,
+            )
+        except Exception as exc:
+            mode, fallback_body = fallback_config(message, exc)
+            if mode == "static" and fallback_body:
+                subject, body = str(message.get("subject") or ""), fallback_body
+            elif mode == "skip":
+                deals_col.update_one(
+                    {"_id": deal._id},
+                    {"$set": {
+                        "sequence_last_step_id": target_step_id,
+                        "sequence_last_action_skipped_at": datetime.now(timezone.utc),
+                    }},
+                )
+                logger.warning("email_follow_up: skipping node %s after generation failure", target_step_id)
+                return
+            elif mode == "continue":
+                subject, body = generate_email(deal, user_id, campaign, deal.email_sequence_step)
+            else:
+                raise
 
     # Build threading headers.
     # step 0: no in_reply_to
@@ -207,6 +240,8 @@ def handle_email_follow_up(task, user_id: str, campaign) -> None:
             references=references,
             deal_id=str(deal._id),
             campaign_id=str(campaign.pk),
+            lead_id=str(deal.lead_id),
+            step_id=str(target_step_id or ""),
         )
     except Exception as exc:
         outcome = classify(exc)
@@ -252,6 +287,11 @@ def handle_email_follow_up(task, user_id: str, campaign) -> None:
         db_update["email_first_sent_at"] = now
     if target_step_id:
         db_update["sequence_last_step_id"] = target_step_id
+        db_update["sequence_last_message_at"] = now
+        db_update["sequence_stop_on_reply"] = bool(
+            message.get("stop_on_reply", True)
+            or (getattr(campaign, "safety_defaults", {}) or {}).get("stop_on_reply", False)
+        )
 
     deals_col.update_one({"_id": deal._id}, {"$set": db_update})
 

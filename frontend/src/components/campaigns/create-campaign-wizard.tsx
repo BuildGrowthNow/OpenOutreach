@@ -13,6 +13,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Loader2, ArrowRight, ArrowLeft, Sparkles, X, Plus } from 'lucide-react';
 import { apiClient } from '@/lib/apiClientV2';
 import { WA_MESSAGE_TEMPLATES } from '@/lib/campaign-templates';
+import type { CampaignTemplate } from '@/lib/types/components';
+import { getCampaignTemplates, createCampaignFromTemplate } from '@/lib/api/dashboard';
 
 interface LinkedInProfile {
   id: string;
@@ -56,7 +58,8 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
   const [waProfiles, setWaProfiles] = useState<WhatsAppProfile[]>([]);
   const [enableEmail, setEnableEmail] = useState(false);
   const [hasMailboxes, setHasMailboxes] = useState(false);
-  const [openSequenceBuilder, setOpenSequenceBuilder] = useState(false);
+  const [templates, setTemplates] = useState<CampaignTemplate[]>([]);
+  const [selectedTemplate, setSelectedTemplate] = useState<CampaignTemplate | null>(null);
 
   // Step 3 fields - Lead Source
   const [leadSource, setLeadSource] = useState('linkedin_search');
@@ -80,6 +83,22 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
     }
     void load()
   }, [])
+
+  useEffect(() => {
+    void getCampaignTemplates().then((response) => setTemplates(response.data?.data ?? []));
+  }, []);
+
+  const chooseTemplate = (template: CampaignTemplate | null) => {
+    setSelectedTemplate(template);
+    if (!template) return;
+    const defaults = template.campaign_defaults ?? {};
+    setProductPitch(String(defaults.product_pitch ?? template.product_pitch ?? ''));
+    setCampaignObjective(String(defaults.campaign_objective ?? template.campaign_objective ?? ''));
+    setBookingLink(String(defaults.booking_link ?? template.booking_link ?? ''));
+    setIcpTitles((defaults.icp_titles as string[] | undefined) ?? template.icp_titles ?? []);
+    setEnableEmail(template.channels.includes('email'));
+    setEnableWhatsApp(template.channels.includes('whatsapp'));
+  };
 
   useEffect(() => {
     const load = async () => {
@@ -200,7 +219,32 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
     try {
       setSubmitting(true);
 
-      const res = await apiClient.post<{ id: string }>('/campaigns', {
+      let campaignId: string;
+      if (selectedTemplate) {
+        const templateResponse = await createCampaignFromTemplate(selectedTemplate.id.toString(), {
+          name: name.trim(),
+          product_pitch: productPitch.trim(),
+          campaign_objective: campaignObjective.trim(),
+          booking_link: bookingLink.trim() || undefined,
+          linkedin_profile_id: profileId || undefined,
+          whatsapp_profile_id: enableWhatsApp ? waProfileId : undefined,
+          channel_sequence: channelSequence,
+          channel_settings: channelSettings,
+          lead_source: leadSource,
+          icp_titles: icpTitles,
+          target_company_size: targetCompanySize.trim() || undefined,
+          maps_query: QUERY_SOURCES.includes(leadSource) ? mapsQuery.trim() || undefined : undefined,
+          maps_country_code: QUERY_SOURCES.includes(leadSource) ? mapsCountryCode : undefined,
+          maps_backends:
+            leadSource === 'yellow_pages' ? ['yellow_pages'] :
+            leadSource === 'yelp' ? ['yelp'] :
+            leadSource === 'google_maps' ? mapsBackends :
+            undefined,
+        });
+        if (templateResponse.error || !templateResponse.data) throw new Error(templateResponse.error || 'Failed to create campaign from template');
+        campaignId = String((templateResponse.data.campaign as { _id?: string; id?: string }).id ?? (templateResponse.data.campaign as { _id?: string })._id);
+      } else {
+        const res = await apiClient.post<{ id: string }>('/campaigns', {
         name: name.trim(),
         product_pitch: productPitch.trim(),
         campaign_objective: campaignObjective.trim(),
@@ -220,29 +264,20 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
           leadSource === 'yelp' ? ['yelp'] :
           leadSource === 'google_maps' ? mapsBackends :
           undefined,
-      });
+        });
 
-      if (res.error || !res.data) {
-        throw new Error(res.error || 'Failed to create campaign');
-      }
-
-      const campaign = res.data;
-
-      // Activate the campaign immediately
-      const activation = await apiClient.patch(`/campaigns/${campaign.id}`, {
-        status: 'active',
-        is_paused: false,
-      });
-      if (activation.error) {
-        throw new Error(`Campaign was created but could not be activated: ${activation.error}`);
+        if (res.error || !res.data) {
+          throw new Error(res.error || 'Failed to create campaign');
+        }
+        campaignId = res.data.id;
       }
 
       localStorage.setItem('first_campaign_banner_dismissed', '1');
 
       if (onSuccess) {
-        onSuccess(campaign.id);
+        onSuccess(campaignId);
       } else {
-        router.push(`/campaigns/${campaign.id}${openSequenceBuilder ? '?tab=sequence' : ''}`);
+        router.push(`/campaigns/${campaignId}?tab=sequence`);
       }
     } catch (err) {
       console.error('Failed to create campaign:', err);
@@ -258,6 +293,38 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
         <Alert variant="destructive">
           <AlertDescription>{error}</AlertDescription>
         </Alert>
+      )}
+
+      {step === 1 && (
+        <div className="space-y-3">
+          <div>
+            <h3 className="font-medium">Choose a starting point</h3>
+            <p className="text-sm text-muted-foreground">Templates provide a reusable workflow snapshot. Campaign-specific settings are filled in below.</p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <button type="button" onClick={() => chooseTemplate(null)} className={`rounded-lg border p-3 text-left ${!selectedTemplate ? 'border-emerald-500' : 'border-border'}`}>
+              <span className="font-medium">Start blank</span>
+              <span className="block text-xs text-muted-foreground">Build the sequence in the campaign editor.</span>
+            </button>
+            {templates.map((template) => (
+              <button type="button" key={String(template.id)} onClick={() => chooseTemplate(template)} className={`rounded-lg border p-3 text-left ${selectedTemplate?.id === template.id ? 'border-emerald-500' : 'border-border'}`}>
+                <span className="font-medium">{template.name}</span>
+                <span className="block text-xs text-muted-foreground">{template.description}</span>
+                <span className="mt-2 flex flex-wrap gap-1.5 text-[11px] text-muted-foreground">
+                  <Badge variant="outline">{template.visibility === 'system' ? 'Recommended' : 'My template'}</Badge>
+                  <Badge variant="outline">{template.channels.join(' · ') || 'custom'}</Badge>
+                  <Badge variant="outline">{template.action_count ?? template.sequence_steps.filter((s) => s.type === 'action').length} actions</Badge>
+                  <Badge variant="outline">~{template.approximate_duration_days ?? 0} days</Badge>
+                </span>
+                <span className="mt-2 block text-[11px] text-muted-foreground" aria-label={`${template.name} workflow preview`}>
+                  {template.sequence_steps.slice(0, 5).map((step) => step.data.label || step.type).join(' → ')}
+                  {template.sequence_steps.length > 5 ? ' → …' : ''}
+                </span>
+                {template.required_data && template.required_data.length > 0 && <span className="mt-1 block text-[11px] text-amber-600 dark:text-amber-400">Needs: {template.required_data.join(', ')}</span>}
+              </button>
+            ))}
+          </div>
+        </div>
       )}
 
       {/* Header */}
@@ -478,6 +545,29 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
       {/* Step 3: Channels */}
       {step === 3 && (
         <form onSubmit={handleSubmit} className="space-y-5">
+          {selectedTemplate && (
+            <div className="space-y-3 rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-4" aria-label="Workflow review">
+              <div>
+                <h3 className="font-medium">Review workflow: {selectedTemplate.name}</h3>
+                <p className="text-sm text-muted-foreground">The campaign will be created as a draft. Review and activate it from the Sequence tab.</p>
+              </div>
+              <div className="flex flex-wrap gap-1.5 text-xs">
+                {(selectedTemplate.channels.length ? selectedTemplate.channels : ['custom']).map((channel) => <Badge key={channel} variant="outline">{channel}</Badge>)}
+                <Badge variant="outline">{selectedTemplate.action_count ?? selectedTemplate.sequence_steps.filter((s) => s.type === 'action').length} actions</Badge>
+                <Badge variant="outline">~{selectedTemplate.approximate_duration_days ?? 0} days</Badge>
+              </div>
+              <p className="text-xs text-muted-foreground" aria-label="Selected workflow preview">
+                {selectedTemplate.sequence_steps.map((sequenceStep) => sequenceStep.data.label || sequenceStep.type).join(' → ')}
+              </p>
+              <div className="space-y-1 text-xs">
+                <p className={profileId ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}>{profileId ? '✓ LinkedIn profile ready' : '⚠ LinkedIn profile required before activation'}</p>
+                {enableEmail && <p className={hasMailboxes ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}>{hasMailboxes ? '✓ Email mailbox ready' : '⚠ Active email mailbox required before activation'}</p>}
+                {enableWhatsApp && <p className={waProfileId && waMessageTemplate.trim() ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}>{waProfileId && waMessageTemplate.trim() ? '✓ WhatsApp configuration ready' : '⚠ WhatsApp profile and message template required before activation'}</p>}
+                <p className="text-emerald-600 dark:text-emerald-400">✓ Tracking links resolve per recipient at send time</p>
+                <p className="text-xs text-muted-foreground">Safety limits: maximum 100 workflow nodes and 3 email actions; active edits require deactivation.</p>
+              </div>
+            </div>
+          )}
           <div className="space-y-4">
             <div className="flex items-center gap-3 p-3 rounded-lg border bg-muted/30">
               <Checkbox id="ch-linkedin" checked disabled />
@@ -574,19 +664,6 @@ export function CreateCampaignWizard({ onSuccess, onCancel }: CreateCampaignWiza
                 </div>
               </div>
             )}
-          </div>
-
-          <div className="flex items-start gap-3 rounded-lg border p-3 bg-muted/20">
-            <Checkbox
-              id="open-sequence-builder"
-              checked={openSequenceBuilder}
-              onCheckedChange={(checked) => setOpenSequenceBuilder(Boolean(checked))}
-              className="mt-0.5"
-            />
-            <div>
-              <Label htmlFor="open-sequence-builder" className="text-sm font-medium cursor-pointer">Configure a visual sequence after creation</Label>
-              <p className="text-xs text-muted-foreground">The campaign is created active with the default behavior; you can review and activate the sequence separately.</p>
-            </div>
           </div>
 
           {/* Lead Source */}

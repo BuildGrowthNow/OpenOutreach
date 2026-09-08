@@ -378,7 +378,14 @@ def handle_follow_up(task, session, qualifiers):
         # Sequence tasks are per-deal; do not let the legacy campaign-wide
         # picker execute a task against a different contact.
         deal = models.Deal.get(str(target_deal_id))
-        if not deal or str(deal.campaign_id) != str(campaign.pk) or deal.state != DealState.CONNECTED:
+        sequence_states = {
+            DealState.CONNECTED,
+            DealState.PENDING,
+            DealState.QUALIFIED,
+            DealState.EMAIL_SENT,
+            DealState.EMAIL_OPENED,
+        }
+        if not deal or str(deal.campaign_id) != str(campaign.pk) or deal.state not in sequence_states:
             logger.info("[%s] follow_up: target deal %s is not eligible", campaign, target_deal_id)
             return
         if _too_soon_to_nudge(deal):
@@ -449,7 +456,43 @@ def handle_follow_up(task, session, qualifiers):
     # sending a single word. If that happens, skip this cycle - the deal stays
     # CONNECTED and the operator can review it manually.
     never_messaged = not deal.last_outgoing_at
-    decision = run_follow_up_agent(session, deal)
+    target_step_id = (getattr(task, "payload", None) or {}).get("step_id")
+    target_step = next(
+        (step for step in (campaign.sequence_steps or []) if step.get("id") == target_step_id),
+        None,
+    )
+    from openoutreach.core.sequence_message import fallback_config, message_config
+    payload_message = (getattr(task, "payload", None) or {}).get("message")
+    node_message = message_config({"data": payload_message}) if isinstance(payload_message, dict) else message_config(target_step)
+    if target_step and node_message.get("content_mode") == "static":
+        static_body = str(node_message.get("body") or "").strip()
+        if not static_body:
+            logger.warning("[%s] follow_up: static node %s has no body", campaign, target_step_id)
+            return
+        from openoutreach.core.agents.follow_up import FollowUpDecision
+        decision = FollowUpDecision(action="send_message", message=static_body, timing_class="next_day")
+    else:
+        try:
+            decision = run_follow_up_agent(
+                session,
+                deal,
+                node_prompt=str(node_message.get("prompt") or "") or None,
+            )
+        except Exception as exc:
+            mode, fallback_body = fallback_config(node_message, exc)
+            if mode == "static" and fallback_body:
+                from openoutreach.core.agents.follow_up import FollowUpDecision
+                decision = FollowUpDecision(action="send_message", message=fallback_body, timing_class="next_day")
+            elif mode == "skip":
+                deal.sequence_last_step_id = target_step_id
+                deal.sequence_last_action_skipped_at = datetime.now(timezone.utc)
+                deal.save(update_fields=["sequence_last_step_id", "sequence_last_action_skipped_at"])
+                logger.warning("[%s] follow_up: skipping node %s after generation failure", campaign, target_step_id)
+                return
+            elif mode == "continue":
+                decision = run_follow_up_agent(session, deal)
+            else:
+                raise
     if decision.action == "mark_completed" and never_messaged:
         logger.warning(
             "[%s] follow_up: agent tried to close %s before sending any message "
@@ -479,6 +522,12 @@ def handle_follow_up(task, session, qualifiers):
         message = decision.message or ""
         # Replace any placeholders the LLM may have generated
         message = _replace_placeholders(message, deal)
+        from openoutreach.emails.tracking import render_link_placeholders
+        message = render_link_placeholders(
+            message, deal_id=str(deal._id), campaign_id=str(campaign.pk),
+            lead_id=str(deal.lead_id), step_id=str((getattr(task, "payload", None) or {}).get("step_id", "")),
+            channel="linkedin",
+        )
         # Strip em-dashes - the LLM occasionally ignores the hard constraint
         message = message.replace("—", "-").replace("–", "-")
         logger.info("[%s] follow_up message prepared for profile", campaign)
@@ -486,6 +535,8 @@ def handle_follow_up(task, session, qualifiers):
         # Pre-stamp last_outgoing_at BEFORE sending so the duplicate guard survives
         # a crash between send and save. If send fails we clear it and save again.
         now = datetime.now(timezone.utc)
+        previous_sequence_message_at = deal.sequence_last_message_at
+        previous_sequence_stop_on_reply = deal.sequence_stop_on_reply
         deal.last_outgoing_at = now
         deal.follow_up_cycled_at = now
         if decision.explicit_follow_up_date:
@@ -496,7 +547,15 @@ def handle_follow_up(task, session, qualifiers):
                 deal.next_follow_up_at = now + timedelta(hours=decision.to_hours())
         else:
             deal.next_follow_up_at = now + timedelta(hours=decision.to_hours())
-        deal.save(update_fields=["last_outgoing_at", "follow_up_cycled_at", "next_follow_up_at"])
+        if target_step_id:
+            deal.sequence_last_message_at = now
+            deal.sequence_stop_on_reply = bool(
+                node_message.get("stop_on_reply", True)
+                or (getattr(campaign, "safety_defaults", {}) or {}).get("stop_on_reply", False)
+            )
+            deal.save(update_fields=["last_outgoing_at", "follow_up_cycled_at", "next_follow_up_at", "sequence_last_message_at", "sequence_stop_on_reply"])
+        else:
+            deal.save(update_fields=["last_outgoing_at", "follow_up_cycled_at", "next_follow_up_at"])
         _last_send_times[str(deal._id)] = now
 
         sent = send_raw_message(session, profile, message)
@@ -508,7 +567,15 @@ def handle_follow_up(task, session, qualifiers):
             # Clear pre-stamp so the next cycle retries instead of waiting MIN_DAYS
             deal.last_outgoing_at = None
             deal.next_follow_up_at = None
-            deal.save(update_fields=["last_outgoing_at", "next_follow_up_at"])
+            if target_step_id:
+                deal.sequence_last_message_at = previous_sequence_message_at
+                deal.sequence_stop_on_reply = previous_sequence_stop_on_reply
+                deal.save(update_fields=[
+                    "last_outgoing_at", "next_follow_up_at",
+                    "sequence_last_message_at", "sequence_stop_on_reply",
+                ])
+            else:
+                deal.save(update_fields=["last_outgoing_at", "next_follow_up_at"])
             _last_send_times.pop(str(deal._id), None)
             return
         # Record action with smart rate limiter

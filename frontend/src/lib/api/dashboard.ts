@@ -607,6 +607,7 @@ export async function sendMessageToLead(
 // Tracked Link API
 export interface TrackedLink {
   id: string;
+  user_id?: string;
   campaign_id?: string;
   campaign?: {
     id: string;
@@ -614,6 +615,10 @@ export interface TrackedLink {
   };
   original_url: string;
   short_code: string;
+  key?: string;
+  name?: string;
+  destination_url?: string;
+  default_utm?: Record<string, string>;
   is_active: boolean;
   total_clicks: number;
   unique_clicks?: number;
@@ -656,20 +661,21 @@ export async function getLinks(
   return get("/api/links", params);
 }
 
-export async function getLinkAnalytics(id: string): Promise<
+export async function getLinkAnalytics(id: string, campaignId?: string): Promise<
   ApiResponse<{
     status: string;
     link: TrackedLink;
     breakdown: LinkBreakdown;
+    analytics?: { total_clicks: number; unique_clicks: number };
   }>
 > {
-  return get(`/api/links/${id}/analytics`);
+  return campaignId ? get(`/api/campaigns/${campaignId}/links/${id}/analytics`) : get(`/api/links/${id}/analytics`);
 }
 
 export async function createLink(data: Partial<TrackedLink>): Promise<
   ApiResponse<{
     status: string;
-    id: number;
+    id: string;
     short_code: string;
     url: string;
   }>
@@ -680,24 +686,25 @@ export async function createLink(data: Partial<TrackedLink>): Promise<
 export async function updateLink(
   id: string,
   data: Partial<TrackedLink>,
+  campaignId?: string,
 ): Promise<
   ApiResponse<{
     status: string;
-    id: number;
+    id: string;
     short_code: string;
     is_active: boolean;
   }>
 > {
-  return patch(`/api/links/${id}`, data);
+  return campaignId ? patch(`/api/campaigns/${campaignId}/links/${id}`, data) : patch(`/api/links/${id}`, data);
 }
 
-export async function deleteLink(id: string): Promise<
+export async function deleteLink(id: string, campaignId?: string): Promise<
   ApiResponse<{
     status: string;
     message: string;
   }>
 > {
-  return del(`/api/links/${id}`);
+  return campaignId ? del(`/api/campaigns/${campaignId}/links/${id}`) : del(`/api/links/${id}`);
 }
 
 export async function getLinkClicks(linkId: string): Promise<
@@ -1254,7 +1261,7 @@ export async function getCampaignTemplates(
   publicParam?: string,
   page?: number,
   limit?: number,
-): Promise<ApiResponse<{ data: CampaignTemplate[]; pagination: Pagination }>> {
+): Promise<ApiResponse<{ data: CampaignTemplate[]; count: number }>> {
   const params: Record<string, string> = {};
   if (publicParam) params.public = publicParam;
   if (page) params.page = page.toString();
@@ -1295,16 +1302,23 @@ export async function deleteCampaignTemplate(
 
 export async function cloneCampaignTemplate(
   id: string,
-  data?: { name?: string; is_public?: boolean },
+  data?: { name?: string },
 ): Promise<ApiResponse<CampaignTemplate>> {
   return post(`/api/campaign-templates/${id}/clone`, data || {});
 }
 
 export async function createCampaignFromTemplate(
   id: string,
-  data: { name?: string; description?: string },
-): Promise<ApiResponse<{ id: number; name: string; description: string }>> {
+  data: { name: string; product_pitch?: string; campaign_objective?: string; booking_link?: string; linkedin_profile_id?: string; whatsapp_profile_id?: string; channel_sequence?: string[]; channel_settings?: Record<string, unknown>; lead_source?: string; icp_titles?: string[]; target_company_size?: string; maps_query?: string; maps_country_code?: string; maps_backends?: string[]; maps_location?: string; classified_sites?: string[]; links?: Record<string, string> },
+): Promise<ApiResponse<{ campaign: Record<string, unknown>; readiness: string[]; validation_errors: unknown[] }>> {
   return post(`/api/campaign-templates/${id}/create-campaign`, data);
+}
+
+export async function saveCampaignAsTemplate(
+  campaignId: string,
+  data: { name: string; description?: string; visibility?: "private" | "team" },
+): Promise<ApiResponse<{ template: CampaignTemplate }>> {
+  return post(`/api/campaigns/${campaignId}/save-as-template`, data);
 }
 
 // MongoDB Profile API

@@ -246,7 +246,13 @@ def _load_recent_messages(deal, limit: int = RECENT_MESSAGES_WINDOW) -> list:
     return list(reversed(messages))
 
 
-def _render_system_prompt(session, deal, recent_messages: list, channel: str = "linkedin") -> str:
+def _render_system_prompt(
+    session,
+    deal,
+    recent_messages: list,
+    channel: str = "linkedin",
+    node_prompt: str = "",
+) -> str:
     """Render the agent system prompt from the Jinja2 template."""
     from datetime import datetime, timezone as tz
     from openoutreach.mongodb.models import Campaign
@@ -290,10 +296,16 @@ def _render_system_prompt(session, deal, recent_messages: list, channel: str = "
         ai_writing_style=config.ai_writing_style,
         ai_say_rules=config.ai_say_rules,
         ai_avoid_rules=config.ai_avoid_rules,
+        node_prompt=node_prompt,
     )
 
 
-def run_follow_up_agent(session, deal, channel: str = "linkedin") -> FollowUpDecision:
+def run_follow_up_agent(
+    session,
+    deal,
+    channel: str = "linkedin",
+    node_prompt: str | None = None,
+) -> FollowUpDecision:
     """Read conversation and return a structured follow-up decision.
 
     Sync chat first (which folds new messages into ``deal.chat_summary``),
@@ -314,7 +326,9 @@ def run_follow_up_agent(session, deal, channel: str = "linkedin") -> FollowUpDec
     _log_chat_facts(public_id, deal)
 
     recent = _load_recent_messages(deal)
-    system_prompt = _render_system_prompt(session, deal, recent, channel=channel)
+    system_prompt = _render_system_prompt(
+        session, deal, recent, channel=channel, node_prompt=node_prompt or ""
+    )
 
     agent = Agent(
         get_llm_model(user_id=session.user_id),

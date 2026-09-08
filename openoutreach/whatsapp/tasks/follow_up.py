@@ -272,6 +272,12 @@ def handle_whatsapp_follow_up(task, wa_session, qualifiers):  # noqa: ARG001
 
     if decision.action == "send_message":
         message = (decision.message or "").replace("—", "-").replace("–", "-")
+        from openoutreach.emails.tracking import render_link_placeholders
+        message = render_link_placeholders(
+            message, deal_id=str(deal._id), campaign_id=str(campaign_id),
+            lead_id=str(deal.lead_id), step_id=str((getattr(task, "payload", None) or {}).get("step_id", "")),
+            channel="whatsapp",
+        )
         if not message:
             logger.warning("WA follow_up: empty message for deal %s", deal._id)
             return

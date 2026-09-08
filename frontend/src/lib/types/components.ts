@@ -440,25 +440,74 @@ export interface LinkedInProfileHealthResponse {
   needsAttentionCount: number;
 }
 
+// Canonical campaign sequence contract (mirrors openoutreach.core.sequence_schema)
+export interface SequenceMessage {
+  content_mode: "ai_prompt" | "static";
+  prompt?: string;
+  subject?: string;
+  body?: string;
+  link_refs: string[];
+  stop_on_reply: boolean;
+  fallback_mode?: "skip" | "static" | "continue";
+  fallback_body?: string;
+}
+
+export interface SequenceStep {
+  id: string;
+  type: "action" | "wait" | "condition" | "end";
+  data: {
+    label: string;
+    channel: "linkedin" | "email" | "whatsapp" | "internal" | null;
+    action: "connect" | "follow_up" | "send_email" | "send_whatsapp" | "notify_internal" | "internal_notification" | null;
+    wait_days: number;
+    wait_hours: number;
+    condition?: "always" | "lead_has_email" | "lead_has_phone" | "reply_received" | "email_opened" | "email_not_opened" | "link_clicked" | "link_not_clicked";
+    link_key?: string;
+    link_asset_id?: string;
+    observation_window_hours?: number;
+    requires: string[];
+    message?: SequenceMessage;
+    [key: string]: unknown;
+  };
+  position: { x: number; y: number };
+}
+
+export interface SequenceEdge {
+  id: string;
+  source: string;
+  target: string;
+  data?: { condition?: string } & Record<string, unknown>;
+  [key: string]: unknown;
+}
+
 // Campaign Template types
 export interface CampaignTemplate {
-  id: number;
+  id: string | number;
   name: string;
   description?: string;
+  category: string;
+  channels: string[];
+  sequence_schema_version: number;
+  sequence_steps: SequenceStep[];
+  sequence_edges: SequenceEdge[];
+  campaign_defaults: Record<string, unknown>;
+  link_definitions: LinkDefinition[];
+  safety_defaults: Record<string, unknown>;
+  visibility: "private" | "team" | "system";
+  version: number;
+  action_count?: number;
+  approximate_duration_days?: number;
+  required_data?: string[];
+  // Read-only compatibility aliases for older template screens.
   product_pitch?: string;
   campaign_objective?: string;
   booking_link?: string;
-  search_keywords?: string[];
   icp_titles?: string[];
   follow_up_strategy?: string;
-  ghost_mode_enabled: boolean;
-  velocity: number;
-  cooldown_minutes: number;
-  is_public: boolean;
-  created_by: {
-    id: number;
-    username: string;
-  };
+  ghost_mode_enabled?: boolean;
+  velocity?: number;
+  cooldown_minutes?: number;
+  is_public?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -466,16 +515,28 @@ export interface CampaignTemplate {
 export interface CampaignTemplateCreateData {
   name: string;
   description?: string;
+  category?: string;
+  channels?: string[];
+  sequence_schema_version?: number;
+  sequence_steps?: SequenceStep[];
+  sequence_edges?: SequenceEdge[];
+  campaign_defaults?: Record<string, unknown>;
+  link_definitions?: LinkDefinition[];
+  safety_defaults?: Record<string, unknown>;
+  visibility?: "private" | "team";
   product_pitch?: string;
   campaign_objective?: string;
   booking_link?: string;
-  search_keywords?: string[];
   icp_titles?: string[];
   follow_up_strategy?: string;
-  ghost_mode_enabled?: boolean;
-  velocity?: number;
-  cooldown_minutes?: number;
-  is_public?: boolean;
+}
+
+export interface LinkDefinition {
+  key: string;
+  name: string;
+  destination_mode: "campaign_booking_link" | "custom";
+  default_destination_url?: string | null;
+  default_utm?: Record<string, string>;
 }
 
 // LinkedIn Setup Status types

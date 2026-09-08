@@ -37,6 +37,9 @@ def send_email(
     references: str | None = None,
     deal_id: str = "",
     campaign_id: str = "",
+    lead_id: str = "",
+    step_id: str = "",
+    channel: str = "email",
 ) -> str:
     """Send *body* from *mailbox* to *to_address*; return the Message-ID.
 
@@ -46,7 +49,7 @@ def send_email(
     if deal_id:
         message = _build_tracked_message(
             mailbox, to_address, subject, body,
-            in_reply_to, references, deal_id, campaign_id,
+            in_reply_to, references, deal_id, campaign_id, lead_id, step_id, channel,
         )
     else:
         message = _build_plain_message(mailbox, to_address, subject, body, in_reply_to, references)
@@ -77,12 +80,17 @@ def _build_plain_message(
 
 def _build_tracked_message(
     mailbox, to_address, subject, body,
-    in_reply_to, references, deal_id, campaign_id,
+    in_reply_to, references, deal_id, campaign_id, lead_id, step_id, channel,
 ) -> MIMEMultipart:
     from openoutreach.emails.tracking import open_pixel_url, click_redirect_url, unsubscribe_url
 
     msg_id = _mint_message_id(mailbox.from_address)
     unsub_link = unsubscribe_url(deal_id, campaign_id)
+    from openoutreach.emails.tracking import render_link_placeholders
+    body = render_link_placeholders(
+        body, deal_id=deal_id, campaign_id=campaign_id, lead_id=lead_id,
+        step_id=step_id, message_id=msg_id, channel=channel,
+    )
 
     message = MIMEMultipart("alternative")
     message["Message-ID"] = msg_id
@@ -118,6 +126,11 @@ def _build_html(
         # Escape the plain text between the previous match and this one
         segments.append(html.escape(body[last:m.start()]))
         orig_url = m.group(0)
+        from openoutreach.emails.tracking import TRACKING_BASE_URL
+        if orig_url.startswith(TRACKING_BASE_URL):
+            segments.append(html.escape(orig_url))
+            last = m.end()
+            continue
         tracking_url = click_redirect_url_fn(deal_id, orig_url, campaign_id)
         segments.append(
             f'<a href="{html.escape(tracking_url)}">{html.escape(orig_url)}</a>'

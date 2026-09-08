@@ -59,6 +59,11 @@ Write email step {{ sequence_step }} (0 = cold outreach, 1 = first follow-up, 2 
 ## Avoid Saying / Promising
 {{ ai_avoid_rules }}
 {% endif %}
+{% if node_prompt %}
+## Sequence Node Instruction
+Follow this campaign-node instruction while preserving the safety and formatting rules above:
+{{ node_prompt }}
+{% endif %}
 
 ## Output Format
 

@@ -781,6 +781,7 @@ async def execute_email_v2(
                 return {"status": "rate_limited", "reason": "mailbox_daily_limit"}
             deal_id = str((task.get("payload") or {}).get("deal_id", ""))
             campaign_id = str((task.get("payload") or {}).get("campaign_id", ""))
+            task_step_id = str((task.get("payload") or {}).get("step_id", ""))
             deals = get_mongodb_collection("deals")
             deal_doc = deals.find_one(
                 {"_id": deal_id, "user_id": context.tenant_id},
@@ -814,6 +815,11 @@ async def execute_email_v2(
                 mailbox, request.recipient, request.subject, request.body,
                 in_reply_to=in_reply_to, references=references,
                 deal_id=deal_id, campaign_id=campaign_id,
+                lead_id=str((deal_doc or {}).get("lead_id") or ""),
+                # The task is the source of truth for the current sequence
+                # node. The deal still points at the previous node until the
+                # send is durably acknowledged.
+                step_id=task_step_id,
             )
         except Exception as exc:
             effects.update_one({"user_id": context.tenant_id, "effect_key": expected_key},
@@ -831,6 +837,14 @@ async def execute_email_v2(
             if current_step == 0:
                 update_fields["email_first_message_id"] = str(message_id)[:256]
                 update_fields["email_first_sent_at"] = now
+            if task_step_id:
+                update_fields.update({
+                    "sequence_last_step_id": task_step_id,
+                    "sequence_last_message_at": now,
+                    "sequence_stop_on_reply": bool(
+                        (task.get("payload") or {}).get("stop_on_reply", True)
+                    ),
+                })
             deals.update_one(
                 {"_id": deal_id, "user_id": context.tenant_id,
                  "state": {"$nin": ["email_replied", "email_bounced"]}},

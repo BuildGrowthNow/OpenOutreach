@@ -208,7 +208,7 @@ app.include_router(analytics.router, prefix="/api/analytics", tags=["analytics"]
 # Admin is API-only; no UI for launch phase. See PLATFORM_REMEDIATION_PLAN.md Phase 6 for full rationale.
 
 # Link tracking (Phase 6: deferred; stub returns 501 if called)
-app.include_router(links.router, prefix="/api/links", tags=["links"])
+app.include_router(links.router, prefix="/api", tags=["links"])
 
 # State machine (Phase 6: gated behind NEXT_PUBLIC_ENABLE_STATE_MACHINE=false; daemon ignores state graphs)
 app.include_router(state_machine.router, prefix="/api/state-machines", tags=["state-machine"])
