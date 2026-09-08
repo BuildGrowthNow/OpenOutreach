@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Self
 from uuid import uuid4
 
 # Re-export the canonical versioned template model from the historical module
@@ -266,7 +266,7 @@ class _LegacyCampaignTemplate:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "CampaignTemplate":
+    def from_dict(cls, data: Dict[str, Any]) -> Self:
         """Create CampaignTemplate instance from MongoDB document."""
         return cls(
             _id=str(data.get("_id")),

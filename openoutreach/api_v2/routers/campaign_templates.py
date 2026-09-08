@@ -238,14 +238,24 @@ async def delete_campaign_template(template_id: str, user_id: str = Depends(get_
 async def clone_campaign_template(template_id: str, data: dict[str, Any] | None = None, user_id: str = Depends(get_current_user)):
     source = _get_template(template_id, user_id)
     source_doc = _document(source)
-    payload = {key: source_doc.get(key) for key in ("name", "description", "category", "channels", "sequence_schema_version", "sequence_steps", "sequence_edges", "campaign_defaults", "link_definitions", "safety_defaults")}
-    payload["name"] = (data or {}).get("name") or f"{payload['name']} (copy)"
-    payload["visibility"] = "private"
-    payload["team_member_ids"] = []
     collection = get_mongodb_collection("campaign_templates")
     if collection is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
-    template = CampaignTemplate(_id=str(uuid4()), owner_user_id=user_id, created_by_id=user_id, **payload)
+    source_name = str(source_doc.get("name") or "Template")
+    template = CampaignTemplate(
+        _id=str(uuid4()), owner_user_id=user_id, created_by_id=user_id,
+        name=str((data or {}).get("name") or f"{source_name} (copy)"),
+        description=str(source_doc.get("description") or ""),
+        category=str(source_doc.get("category") or "general"),
+        channels=list(source_doc.get("channels") or []),
+        sequence_schema_version=int(source_doc.get("sequence_schema_version") or SEQUENCE_SCHEMA_VERSION),
+        sequence_steps=copy.deepcopy(source_doc.get("sequence_steps") or []),
+        sequence_edges=copy.deepcopy(source_doc.get("sequence_edges") or []),
+        campaign_defaults=copy.deepcopy(source_doc.get("campaign_defaults") or {}),
+        link_definitions=copy.deepcopy(source_doc.get("link_definitions") or []),
+        safety_defaults=copy.deepcopy(source_doc.get("safety_defaults") or {}),
+        visibility="private", team_member_ids=[],
+    )
     template.save()
     return _document(template)
 
@@ -258,9 +268,14 @@ async def create_campaign_from_template(template_id: str, data: CreateCampaignFr
     edges = copy.deepcopy(source_doc.get("sequence_edges") or [])
     defaults = _clean_defaults(source_doc.get("campaign_defaults") or {})
     booking_link = data.booking_link or defaults.get("booking_link") or ""
-    channels = data.channel_sequence or source_doc.get("channels") or sorted({(step.get("data") or {}).get("channel") for step in steps if (step.get("data") or {}).get("channel")})
+    channels = data.channel_sequence or source_doc.get("channels") or sorted({
+        channel for step in steps
+        if isinstance(step, dict)
+        for channel in [(step.get("data") or {}).get("channel")]
+        if isinstance(channel, str) and channel
+    })
     link_definitions = source_doc.get("link_definitions") or []
-    link_keys = {item.get("key") for item in link_definitions if item.get("key")}
+    link_keys = {str(item["key"]) for item in link_definitions if isinstance(item, dict) and item.get("key")}
     errors = validate_sequence_graph(steps, edges, available_links=link_keys)
     if errors:
         raise HTTPException(status_code=422, detail={"validation_errors": errors})

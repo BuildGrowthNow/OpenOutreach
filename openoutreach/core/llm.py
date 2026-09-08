@@ -32,7 +32,7 @@ import asyncio
 import logging
 import threading
 from contextlib import asynccontextmanager
-from typing import Awaitable, Callable, TypeVar
+from typing import Any, Awaitable, Callable, TypeVar
 
 from pydantic_ai.models import Model
 from pydantic_ai.models.openai import OpenAIChatModel
@@ -187,7 +187,7 @@ def _build_cloudflare_workers_ai(cfg):
     if not api_token:
         raise ValueError("CLOUDFLARE_API_TOKEN is required for cloudflare_workers_ai.")
 
-    def build_model(model_name: str):
+    def build_model(model_name: str) -> Model[Any]:
         client = AsyncOpenAI(
             base_url=f"https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1",
             api_key=api_token,
@@ -218,7 +218,7 @@ def _is_transient_model_error(error: Exception) -> bool:
 class _FallbackModel(Model):
     """Try configured models in order when a provider has a transient failure."""
 
-    def __init__(self, models: list[Model]):
+    def __init__(self, models: list[Model[Any]]):
         super().__init__(profile=models[0].profile)
         self._models = models
 
@@ -253,7 +253,9 @@ class _FallbackModel(Model):
                     len(self._models),
                     type(error).__name__,
                 )
-        raise last_error  # pragma: no cover
+        if last_error is not None:
+            raise last_error  # pragma: no cover
+        raise RuntimeError("No fallback model was configured")  # pragma: no cover
 
     @asynccontextmanager
     async def request_stream(self, messages, model_settings, model_request_parameters, run_context=None):
@@ -275,7 +277,9 @@ class _FallbackModel(Model):
                     len(self._models),
                     type(error).__name__,
                 )
-        raise last_error  # pragma: no cover
+        if last_error is not None:
+            raise last_error  # pragma: no cover
+        raise RuntimeError("No fallback model was configured")  # pragma: no cover
 
 
 _PROVIDER_BUILDERS: dict[str, Callable] = {

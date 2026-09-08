@@ -121,7 +121,7 @@ async def update_campaign_link(campaign_id: str, link_id: str, request: LinkUpda
     updates = request.model_dump(exclude_unset=True)
     if "key" in updates:
         links = get_mongodb_collection("tracked_links")
-        if links.find_one({"campaign_id": campaign_id, "user_id": link.user_id, "key": updates["key"], "_id": {"$ne": link_id}}):
+        if links is not None and links.find_one({"campaign_id": campaign_id, "user_id": link.user_id, "key": updates["key"], "_id": {"$ne": link_id}}):
             raise HTTPException(status_code=409, detail="A link with this key already exists in the campaign")
     for key, value in updates.items():
         if key == "destination_url":

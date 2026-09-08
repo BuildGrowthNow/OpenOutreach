@@ -29,20 +29,10 @@ from .rate_limits import (
     SmartRateLimitContext,
 )
 
-# State machine models (MongoDB)
-from .state_machine import (
-    CampaignExecutionLog,
-    CampaignState,
-    CampaignStateGraph,
-    StateNode,
-    StateTransition,
-)
-
 __all__ = [
     "Campaign",
     "CampaignHealthMetric", "HealthAlert", "RecoveryAction",
     "EngagementLevel", "LinkedInDetectability", "RateLimitWarning", "SmartRateLimitContext",
-    "CampaignExecutionLog", "CampaignState", "CampaignStateGraph", "StateNode", "StateTransition",
 ]
 
 logger = logging.getLogger(__name__)

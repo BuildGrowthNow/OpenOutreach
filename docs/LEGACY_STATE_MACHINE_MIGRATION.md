@@ -1,4 +1,9 @@
-# Legacy state-machine migration
+# Retired state-machine migration
+
+The legacy state-machine API, models, and execution service have been removed.
+Campaign sequences are the only supported workflow runtime. These scripts are
+retained solely to audit and explicitly migrate existing legacy MongoDB data;
+they do not expose or reactivate the retired feature.
 
 `scripts/audit_legacy_state_machine.py` is read-only and reports collection
 counts without documents. `scripts/migrate_legacy_state_machine.py` is also

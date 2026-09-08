@@ -153,7 +153,6 @@ from openoutreach.api_v2.routers import (
     messages,
     analytics,
     links,
-    state_machine,
     linkedin_credentials,
     linkedin_profiles,
     linkedin_setup,
@@ -202,16 +201,8 @@ app.include_router(messages.router, prefix="/api/messages", tags=["messages"])
 # Analytics
 app.include_router(analytics.router, prefix="/api/analytics", tags=["analytics"])
 
-# Phase 6 Secondary Surfaces (deferred features - hidden from launch)
-# These routers are included but not exposed via frontend nav or public CTAs.
-# Features exist in API but are unsupported post-launch: links, templates, ghost mode, email channel, state machine UI.
-# Admin is API-only; no UI for launch phase. See PLATFORM_REMEDIATION_PLAN.md Phase 6 for full rationale.
-
-# Link tracking (Phase 6: deferred; stub returns 501 if called)
+# Campaign-scoped tracked links power message attribution and workflow branches.
 app.include_router(links.router, prefix="/api", tags=["links"])
-
-# State machine (Phase 6: gated behind NEXT_PUBLIC_ENABLE_STATE_MACHINE=false; daemon ignores state graphs)
-app.include_router(state_machine.router, prefix="/api/state-machines", tags=["state-machine"])
 
 # Rate limiting
 app.include_router(rate_limits.router, prefix="/api", tags=["rate-limiting"])

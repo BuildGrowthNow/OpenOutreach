@@ -141,18 +141,6 @@ class TestMessageEndpoints:
         assert response.status_code in [401, 403, 422]
 
 
-class TestStateMachineEndpoints:
-    """Test state machine endpoints (disabled feature)."""
-
-    def test_state_machine_endpoints_exist(self, client):
-        """Test that state machine endpoints exist but are disabled."""
-        # State machine is a disabled feature
-        # Just verify routes are registered
-        response = client.get("/api/state-machine/workflows")
-        # May return 404, 401, or data depending on implementation
-        assert response.status_code in [200, 401, 403, 404, 422]
-
-
 class TestLinkedInProfileEndpoints:
     """Test LinkedIn profile endpoints."""
 

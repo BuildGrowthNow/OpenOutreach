@@ -157,6 +157,8 @@ def _check_condition(deal: Deal, step: dict, lead_data: Optional[dict] = None) -
     if lead_data is None:
         leads = get_mongodb_collection("leads")
         lead_data = leads.find_one({"_id": deal.lead_id}) if leads is not None else {}
+    if not isinstance(lead_data, dict):
+        lead_data = {}
     contact = lead_data.get("contact_info") if isinstance(lead_data, dict) else {}
     has_email = bool(lead_data.get("api_email") or (contact or {}).get("email"))
     has_phone = bool(lead_data.get("phone") or (contact or {}).get("phone"))
@@ -449,13 +451,16 @@ def resolve_sequence_tasks(campaign: Campaign, user_id: str) -> int:
             continue
 
         first_step_id = _get_first_step_id(deal_campaign)
-        current_step_id = deal.sequence_position or first_step_id
+        current_step_id = str(deal.sequence_position or first_step_id or "")
+        if not current_step_id:
+            logger.warning("sequence: campaign %s has no entry step", campaign._id)
+            continue
         step = _get_step(deal_campaign, current_step_id)
         if step is None:
             logger.warning("sequence: step %s not found in campaign %s", current_step_id, campaign._id)
             continue
 
-        step_type = step.get("type")
+        step_type = str(step.get("type") or "")
         _record_sequence_event(campaign._id, deal._id, current_step_id, "node_entered")
 
         # Give reply/no-reply condition nodes a chance to route first. The

@@ -139,33 +139,6 @@ def ensure_all_indexes():
             ({'campaign_id': 1, 'used': 1}, {'name': 'keyword_unused_idx'}),
         ]),
 
-        # State Machine
-        ('campaign_state_graphs', [
-            ({'campaign_id': 1}, {'name': 'graph_campaign_unique', 'unique': True}),
-            ({'is_active': 1}, {'name': 'graph_active_idx'}),
-        ]),
-
-        ('state_nodes', [
-            ({'state_graph_id': 1}, {'name': 'node_graph_idx'}),
-            ({'node_type': 1}, {'name': 'node_type_idx'}),
-        ]),
-
-        ('state_transitions', [
-            ({'state_graph_id': 1}, {'name': 'transition_graph_idx'}),
-            ({'source_node_id': 1}, {'name': 'transition_source_idx'}),
-            ({'target_node_id': 1}, {'name': 'transition_target_idx'}),
-        ]),
-
-        ('campaign_states', [
-            ({'deal_id': 1, 'status': 1}, {'name': 'state_deal_status_idx'}),
-            ({'state_graph_id': 1, 'status': 1}, {'name': 'state_graph_status_idx'}),
-            ({'wait_until': 1}, {'name': 'state_wait_idx', 'sparse': True}),
-        ]),
-
-        ('campaign_execution_logs', [
-            ({'state_machine_id': 1, 'timestamp': -1}, {'name': 'exec_log_machine_time_idx'}),
-        ]),
-
         # Health
         ('campaign_health_metrics', [
             ({'campaign_id': 1, 'timestamp': -1}, {'name': 'health_campaign_time_idx'}),
@@ -302,30 +275,6 @@ def ensure_all_indexes():
 
         ('rate_limit_warnings', [
             ({'resolved': 1, 'warning_level': 1}, {'name': 'rate_warn_status_idx'}),
-        ]),
-
-        # State Machine (additional indexes)
-        ('campaign_state_graphs', [
-            ({'is_active': 1, 'is_valid': 1}, {'name': 'state_graph_active_valid_idx'}),
-        ]),
-
-        ('state_nodes', [
-            ({'state_graph_id': 1, 'x': 1}, {'name': 'state_node_graph_x_idx'}),
-            ({'node_type': 1, 'is_active': 1}, {'name': 'state_node_type_active_idx'}),
-        ]),
-
-        ('state_transitions', [
-            ({'state_graph_id': 1, 'order': 1}, {'name': 'state_trans_graph_order_idx'}),
-        ]),
-
-        ('campaign_states', [
-            ({'deal_id': 1, 'is_active': 1}, {'name': 'campaign_state_deal_idx'}),
-            ({'state_graph_id': 1, 'completed': 1}, {'name': 'campaign_state_graph_complete_idx'}),
-        ]),
-
-        ('campaign_execution_logs', [
-            ({'campaign_state_id': 1, 'executed_at': -1}, {'name': 'exec_log_state_time_idx'}),
-            ({'node_id': 1, 'result': 1}, {'name': 'exec_log_node_result_idx'}),
         ]),
 
         # Campaign Health Monitoring (additional indexes)

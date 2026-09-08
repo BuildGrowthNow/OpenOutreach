@@ -1,4 +1,12 @@
-# Platform Remediation Plan
+# Platform Remediation Plan (historical record)
+
+> **Superseded for operational status.** This July 2026 remediation record is
+> retained for history, not as a description of the running product. Campaign
+> sequences, templates, tracked links, email, and admin surfaces are now
+> implemented. The old state-machine API and runtime were retired in September
+> 2026. Use `docs/CAMPAIGN_WORKFLOW_TEMPLATES.md` and the current source code
+> for active behavior; do not treat Phase 6's deferral/stub statements below
+> as current requirements.
 
 **Status:** Phases 0–6 Complete (Phase 0 ✅ 2026-07-19 | Phase 1 ✅ 2026-07-19)  
 **Goal:** Make the full product path work end-to-end - signup → plan → LinkedIn connect → campaign → leads → follow-up - on web and desktop, with one auth system, one API contract, and hard billing enforcement.  
@@ -465,7 +473,7 @@ Implement at minimum:
 
 ---
 
-## Phase 6 - Secondary surfaces (post-launch or parallel track)
+## Phase 6 - Secondary surfaces (historical; superseded)
 
 **Goal:** Hide/defer links, templates, ghost mode, email, state machine, admin UI until core is stable and production-ready.  
 **Depends on:** Phase 3–5 stable (core funnel proven green)  
@@ -542,8 +550,7 @@ Implement at minimum:
 
 - [x] Confirm `NEXT_PUBLIC_ENABLE_STATE_MACHINE` defaults to `false` in `.env.local` / `.env.production`
 - [x] Verify state-machine routes NOT in sidebar nav when flag is OFF (checked: conditional rendering on flag)
-- [x] Verify state-machine API endpoints registered (they exist in `api_v2/routers/state_machine.py`)
-- [x] Confirm daemon does NOT read state graphs for campaign execution (daemon uses `campaign.status`, not state graph)
+- [x] Retired the unfinished state-machine API, models, and service; campaign sequences are canonical.
 
 **Implementation details:**
 - Feature flag: `NEXT_PUBLIC_ENABLE_STATE_MACHINE` (default OFF)

@@ -277,29 +277,6 @@ class CampaignDAL:
             except Exception as e:
                 logger.error("Failed to delete deals for campaign '%s': %s", campaign_id, type(e).__name__)
 
-        # Delete state graph + nodes + transitions
-        graph_collection = get_mongodb_collection('campaign_state_graphs')
-        if graph_collection is not None:
-            try:
-                graph = graph_collection.find_one({"campaign_id": campaign_id})
-                if graph:
-                    graph_id = str(graph["_id"])
-
-                    # Delete nodes
-                    nodes_collection = get_mongodb_collection('state_nodes')
-                    if nodes_collection is not None:
-                        nodes_collection.delete_many({"state_graph_id": graph_id})
-
-                    # Delete transitions
-                    transitions_collection = get_mongodb_collection('state_transitions')
-                    if transitions_collection is not None:
-                        transitions_collection.delete_many({"state_graph_id": graph_id})
-
-                    # Delete graph
-                    graph_collection.delete_one({"_id": graph["_id"]})
-            except Exception as e:
-                logger.error("Failed to delete state graph for campaign '%s': %s", campaign_id, type(e).__name__)
-
         # Delete search keywords
         keywords_collection = get_mongodb_collection('search_keywords')
         if keywords_collection is not None:

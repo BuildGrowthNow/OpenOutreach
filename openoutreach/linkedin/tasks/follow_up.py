@@ -654,7 +654,3 @@ def handle_follow_up(task, session, qualifiers):
                 "reason": "AI decided to wait before next message",
             },
         )
-
-    # State Machine Integration - Execute state machine if campaign has one
-    # Note: State machine is disabled feature, skipping for now
-    # _try_execute_state_machine(deal, session)

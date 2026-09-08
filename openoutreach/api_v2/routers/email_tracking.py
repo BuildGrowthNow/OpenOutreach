@@ -248,7 +248,9 @@ def _persist_click_transaction(body: TrackingEvent, event_id: str, deals_col, ev
             )
 
     try:
-        with start_session() as session:
+        # PyMongo's dynamically exposed session factory is intentionally
+        # duck-typed here; production clients return a context manager.
+        with start_session() as session:  # type: ignore[reportGeneralTypeIssues]
             session.with_transaction(callback)
         return True
     except DuplicateKeyError:
