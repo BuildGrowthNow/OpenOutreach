@@ -34,3 +34,17 @@ def test_windows_installer_build_is_fail_closed():
     assert "name: Lengrowth-Windows-MSIX-${{ steps.version.outputs.version }}" in text
     assert "Download Windows MSIX artifact" in text
     assert "./release/windows/Lengrowth-${{ steps.version.outputs.version }}.msix" in text
+
+
+def test_release_keeps_legacy_updater_bootstrap_aliases():
+    text = WORKFLOW.read_text(encoding="utf-8")
+    evidence = text.split("- name: Inspect artifacts and generate release evidence", 1)[1].split(
+        "- name: Create release on Lengrowth/outbound", 1
+    )[0]
+
+    assert "cp ./release/macos/Lengrowth-macOS.dmg ./release/macos/OpenOutreach-${{ steps.version.outputs.version }}.dmg" in evidence
+    assert "cp ./release/windows/Lengrowth.exe ./release/windows/OpenOutreach-${{ steps.version.outputs.version }}-Setup.exe" in evidence
+    assert "sha256sum ./release/macos/OpenOutreach-${{ steps.version.outputs.version }}.dmg" in evidence
+    assert "sha256sum ./release/windows/OpenOutreach-${{ steps.version.outputs.version }}-Setup.exe" in evidence
+    assert "./release/macos/OpenOutreach-${{ steps.version.outputs.version }}.dmg" in text
+    assert "./release/windows/OpenOutreach-${{ steps.version.outputs.version }}-Setup.exe" in text

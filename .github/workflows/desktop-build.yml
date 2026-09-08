@@ -207,9 +207,16 @@ jobs:
           test -f ./release/windows/Lengrowth-Windows-Setup.exe
           python scripts/inspect_release_artifact.py ./release/windows/Lengrowth-Windows-Setup.exe
           python scripts/inspect_release_artifact.py ./release/windows/Lengrowth-${{ steps.version.outputs.version }}.msix
+          # Keep versioned legacy aliases so pre-2.1.4 clients can bootstrap
+          # to the hardened updater. These aliases must contain the standalone
+          # app, never the NSIS installer (the updater replaces its own exe).
+          cp ./release/macos/Lengrowth-macOS.dmg ./release/macos/OpenOutreach-${{ steps.version.outputs.version }}.dmg
+          cp ./release/windows/Lengrowth.exe ./release/windows/OpenOutreach-${{ steps.version.outputs.version }}-Setup.exe
           sha256sum ./release/macos/Lengrowth-macOS.dmg ./release/windows/Lengrowth.exe > ./release/SHA256SUMS.txt
           sha256sum ./release/windows/Lengrowth-Windows-Setup.exe >> ./release/SHA256SUMS.txt
           sha256sum ./release/windows/Lengrowth-${{ steps.version.outputs.version }}.msix >> ./release/SHA256SUMS.txt
+          sha256sum ./release/macos/OpenOutreach-${{ steps.version.outputs.version }}.dmg >> ./release/SHA256SUMS.txt
+          sha256sum ./release/windows/OpenOutreach-${{ steps.version.outputs.version }}-Setup.exe >> ./release/SHA256SUMS.txt
           python scripts/generate_sbom.py --output ./release/SBOM.cyclonedx.json
 
       - name: Create release on Lengrowth/outbound
@@ -254,8 +261,10 @@ jobs:
             - Your LinkedIn credentials never leave your machine
           files: |
             ./release/macos/Lengrowth-macOS.dmg
+            ./release/macos/OpenOutreach-${{ steps.version.outputs.version }}.dmg
             ./release/windows/Lengrowth.exe
             ./release/windows/Lengrowth-Windows-Setup.exe
+            ./release/windows/OpenOutreach-${{ steps.version.outputs.version }}-Setup.exe
             ./release/windows/Lengrowth-${{ steps.version.outputs.version }}.msix
             ./release/SHA256SUMS.txt
             ./release/SBOM.cyclonedx.json
