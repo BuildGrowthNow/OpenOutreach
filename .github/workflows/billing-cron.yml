@@ -1,100 +1,16 @@
-name: Billing Cron Jobs
+name: Billing Cron Jobs (retired)
 
+# Billing jobs are owned by Scalingo Scheduler. The schedules and commands
+# live in the repository's cron.json and run in the production API app.
+# Keep this workflow as a manually-invokable marker so the old workflow is not
+# silently mistaken for the production scheduler.
 on:
-  schedule:
-    # Run trial expiry check every 6 hours
-    - cron: '0 */6 * * *'
-    # Run cleanup of expired deletions once daily at 3 AM UTC
-    - cron: '0 3 * * *'
-  workflow_dispatch:  # Allow manual trigger
+  workflow_dispatch:
 
 jobs:
-  trial-expiry:
-    name: Expire Trials
+  retired:
+    name: Scalingo owns billing scheduling
     runs-on: ubuntu-latest
-    if: github.event.schedule == '0 */6 * * *' || github.event_name == 'workflow_dispatch'
-
     steps:
-      - name: Set up SSH
-        env:
-          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
-        run: |
-          mkdir -p ~/.ssh
-          echo "$EC2_SSH_KEY" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
-
-      - name: Execute trial expiry on server
-        env:
-          EC2_HOST: ${{ secrets.EC2_HOST }}
-          EC2_USER: ${{ secrets.EC2_USER }}
-        run: |
-          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o IdentitiesOnly=yes "${EC2_USER}@${EC2_HOST}" "
-            set -e
-            cd ~/OpenOutreach
-            docker compose exec -T openoutreach python -m openoutreach.cli expire-trials
-          "
-
-      - name: Cleanup SSH
-        if: always()
-        run: rm -f ~/.ssh/id_rsa ~/.ssh/known_hosts
-
-  cleanup-deletions:
-    name: Cleanup Expired Deletions
-    runs-on: ubuntu-latest
-    if: github.event.schedule == '0 3 * * *' || github.event_name == 'workflow_dispatch'
-
-    steps:
-      - name: Set up SSH
-        env:
-          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
-        run: |
-          mkdir -p ~/.ssh
-          echo "$EC2_SSH_KEY" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
-
-      - name: Execute deletion cleanup on server
-        env:
-          EC2_HOST: ${{ secrets.EC2_HOST }}
-          EC2_USER: ${{ secrets.EC2_USER }}
-        run: |
-          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o IdentitiesOnly=yes "${EC2_USER}@${EC2_HOST}" "
-            set -e
-            cd ~/OpenOutreach
-            docker compose exec -T openoutreach python -m openoutreach.cli cleanup-deleted-accounts
-          "
-
-      - name: Cleanup SSH
-        if: always()
-        run: rm -f ~/.ssh/id_rsa ~/.ssh/known_hosts
-
-  trial-warnings:
-    name: Send Trial Warnings
-    runs-on: ubuntu-latest
-    if: github.event.schedule == '0 */6 * * *' || github.event_name == 'workflow_dispatch'
-
-    steps:
-      - name: Set up SSH
-        env:
-          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
-        run: |
-          mkdir -p ~/.ssh
-          echo "$EC2_SSH_KEY" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
-
-      - name: Execute trial warning emails on server
-        env:
-          EC2_HOST: ${{ secrets.EC2_HOST }}
-          EC2_USER: ${{ secrets.EC2_USER }}
-        run: |
-          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o IdentitiesOnly=yes "${EC2_USER}@${EC2_HOST}" "
-            set -e
-            cd ~/OpenOutreach
-            docker compose exec -T openoutreach python -m openoutreach.cli send-trial-warnings
-          "
-
-      - name: Cleanup SSH
-        if: always()
-        run: rm -f ~/.ssh/id_rsa ~/.ssh/known_hosts
+      - name: Report scheduler ownership
+        run: echo "Billing jobs run via Scalingo Scheduler from cron.json; no GitHub Actions job is required."
