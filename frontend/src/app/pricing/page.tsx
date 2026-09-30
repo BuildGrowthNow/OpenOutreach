@@ -39,7 +39,7 @@ const plans: Plan[] = [
     maxLinkedInAccounts: 1,
     maxCampaigns: 3,
     features: [
-      '1 LinkedIn + 1 WhatsApp account',
+      'LinkedIn, email & WhatsApp outreach',
       '3 active campaigns',
       'AI-written messages',
       'AI follow-up sequences',
@@ -110,7 +110,7 @@ const plans: Plan[] = [
 ];
 
 const comparisonFeatures: ComparisonFeature[] = [
-  { name: 'LinkedIn + WhatsApp Outreach', starter: true, pro: true, business: true, agency: true, cloud: true },
+  { name: 'LinkedIn + Email + WhatsApp Outreach', starter: true, pro: true, business: true, agency: true, cloud: true },
   { name: 'LinkedIn + WhatsApp Accounts', starter: true, pro: true, business: true, agency: true, cloud: true },
   { name: 'Active Campaigns', starter: true, pro: true, business: true, agency: true, cloud: true },
   { name: 'AI-Written Messages', starter: true, pro: true, business: true, agency: true, cloud: true },

@@ -13,7 +13,7 @@ const BASELINE_SPOTS = 23; // pre-launch buyers shown for social proof
 
 const features = [
   'Unlimited campaigns',
-  'LinkedIn & WhatsApp outreach channels',
+  'LinkedIn, email & WhatsApp outreach channels',
   'AI-written messages per prospect',
   'Automated follow-up sequences',
   'Unified conversation inbox',

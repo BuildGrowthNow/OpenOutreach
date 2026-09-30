@@ -45,7 +45,7 @@ export function CtaSection() {
                 Your next 10 qualified leads{' '}
                 <br className="hidden sm:block" />
                 <span className="bg-gradient-to-r from-emerald-400 via-emerald-300 to-teal-300 bg-clip-text text-transparent">
-                  are on LinkedIn or WhatsApp.
+                  are on LinkedIn, email, or WhatsApp.
                 </span>
               </h2>
 

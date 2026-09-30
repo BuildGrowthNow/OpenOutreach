@@ -17,7 +17,7 @@ import { motion } from 'framer-motion';
 
 function Capabilities() {
   const items = [
-    { value: '2 channels', label: 'LinkedIn & WhatsApp' },
+    { value: '3 channels', label: 'LinkedIn, email & WhatsApp' },
     { value: 'AI-written', label: 'Personalized messages' },
     { value: 'Smart', label: 'Automated follow-ups' },
     { value: 'Desktop or Cloud', label: 'Your choice of execution' },

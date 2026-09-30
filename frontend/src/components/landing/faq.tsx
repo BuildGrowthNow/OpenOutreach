@@ -15,8 +15,12 @@ const faqs = [
     answer: "Lengrowth finds leads with phone numbers from Google Maps, Facebook, classified listings, and other sources - then messages them directly on WhatsApp. Same AI personalization, same follow-up sequences, same unified inbox as LinkedIn. You scan a QR code once to connect your WhatsApp account, and the desktop app handles the rest.",
   },
   {
+    question: "Can I reach prospects by email too?",
+    answer: "Yes. Add email steps to your campaign sequences. Lengrowth can use a prospect's work email when one is available; connect a sending mailbox in the app to send messages and track replies alongside your other outreach.",
+  },
+  {
     question: "How is this different from other outreach tools?",
-    answer: "Most tools are LinkedIn-only and run on shared cloud IPs that platforms already flag. Lengrowth runs two independent channels - LinkedIn and WhatsApp - on your own machine and IP, so activity looks exactly like normal browsing. No proxy costs, no shared infrastructure. Plus the AI writes genuinely personalized messages, not template swaps.",
+    answer: "Most tools focus on one channel. Lengrowth brings LinkedIn, email, and WhatsApp campaigns together with a unified inbox. Plus the AI writes personalized messages, not template swaps.",
   },
   {
     question: "Do the AI messages actually sound good?",
