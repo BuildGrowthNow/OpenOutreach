@@ -54,7 +54,7 @@ def _generate_node_message(prompt: str, lead, campaign, user_id: str) -> str:
         f"Offer: {campaign.product_pitch or ''}\n"
         f"Campaign objective: {campaign.campaign_objective or ''}\n\n"
         f"Node instruction: {prompt}\n"
-        "Write one concise WhatsApp message. Return only the message."
+        "Write one concise WhatsApp message in English, regardless of the lead's language or the node instruction. Return only the message."
     )
     agent = Agent(get_llm_model(user_id=user_id), output_type=MessageOutput, model_settings={"temperature": 0.7, "timeout": 60})
     result = run_agent_sync(agent.run(context)).output

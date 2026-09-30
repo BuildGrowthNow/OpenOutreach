@@ -90,10 +90,10 @@ class Settings(BaseSettings):
     # =========================================================================
     # LLM Configuration
     # =========================================================================
-    LLM_PROVIDER: str = "openai"
+    LLM_PROVIDER: str = "openai_compatible"
     LLM_API_KEY: str = ""
-    LLM_API_BASE: Optional[str] = None
-    AI_MODEL: str = "gpt-4o-mini"
+    LLM_API_BASE: Optional[str] = "https://bedrock-runtime.eu-north-1.amazonaws.com/openai/v1"
+    AI_MODEL: str = "deepseek.v3.2"
     AI_MODEL_FALLBACKS: str = ""
     CLOUDFLARE_ACCOUNT_ID: str = ""
     CLOUDFLARE_API_TOKEN: str = ""
