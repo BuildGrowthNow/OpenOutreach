@@ -71,9 +71,10 @@ jobs:
           # The API app expects the repository root (root Procfile and Python files).
           git archive --format=tar.gz --output=/tmp/openoutreach-api.tgz "$DEPLOY_SHA"
           scalingo --app outreach-api --region "$SCALINGO_REGION" deploy /tmp/openoutreach-api.tgz "$DEPLOY_SHA"
-          # The web app has PROJECT_DIR=frontend, so it also needs the repository
-          # root; Scalingo selects frontend/package.json and frontend/Procfile.
-          scalingo --app outreach-web --region "$SCALINGO_REGION" deploy /tmp/openoutreach-api.tgz "$DEPLOY_SHA"
+          # Archive frontend/ as the web root. Its explicit Node buildpack keeps
+          # custom archive deployments independent of monorepo app settings.
+          git archive --format=tar.gz --output=/tmp/openoutreach-web.tgz "${DEPLOY_SHA}:frontend"
+          scalingo --app outreach-web --region "$SCALINGO_REGION" deploy /tmp/openoutreach-web.tgz "$DEPLOY_SHA"
 
   rollback:
     if: ${{ inputs.rollback_sha != '' }}
