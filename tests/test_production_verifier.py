@@ -66,8 +66,18 @@ def test_cloud_check_requires_no_store_and_expected_version(monkeypatch):
             ),
         ]
     )
-    monkeypatch.setattr(verifier, "urlopen", lambda request, timeout: next(responses))
+    requests = []
+
+    def open_response(request, timeout):
+        requests.append(request)
+        return next(responses)
+
+    monkeypatch.setattr(verifier, "urlopen", open_response)
     assert verifier.check_cloud_deployment("https://example.invalid", "2.1.2", "abc123") is True
+    assert all(
+        request.get_header("User-agent") == verifier._VERIFIER_USER_AGENT
+        for request in requests
+    )
 
     responses = iter(
         [
@@ -118,14 +128,14 @@ def test_frontend_check_requires_http_200_and_content(monkeypatch):
             return False
 
         def read(self):
-            return b"<html>Lengrowth</html>"
+            return b'<html><head><meta name="build-commit" content="abc123"></head>Lengrowth</html>'
 
     monkeypatch.setattr(verifier, "urlopen", lambda request, timeout: Response())
-    assert verifier.check_frontend_deployment("https://example.invalid") is True
+    assert verifier.check_frontend_deployment("https://example.invalid", "abc123") is True
 
     class EmptyResponse(Response):
         def read(self):
             return b""
 
     monkeypatch.setattr(verifier, "urlopen", lambda request, timeout: EmptyResponse())
-    assert verifier.check_frontend_deployment("https://example.invalid") is False
+    assert verifier.check_frontend_deployment("https://example.invalid", "abc123") is False

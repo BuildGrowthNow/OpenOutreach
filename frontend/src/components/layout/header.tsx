@@ -32,7 +32,7 @@ const Header = ({ onMenuClick, className }: HeaderProps) => {
   const router = useRouter()
 
   const userName = user?.full_name || (user?.email ? user.email.split('@')[0] : 'User')
-  const userEmail = user?.email || 'user@example.com'
+  const userEmail = user?.email || ''
   const [linkedinHealth, setLinkedinHealth] = useState<LinkedInProfileHealthResponse | null>(null)
   const [loadingHealth, setLoadingHealth] = useState(true)
   const [isDesktop, setIsDesktop] = useState(false)
@@ -470,7 +470,7 @@ const Header = ({ onMenuClick, className }: HeaderProps) => {
               </div>
               <div className="flex flex-col overflow-hidden">
                 <span className="text-sm font-medium truncate">{userName}</span>
-                <span className="text-xs text-muted-foreground truncate">{userEmail}</span>
+                {userEmail && <span className="text-xs text-muted-foreground truncate">{userEmail}</span>}
               </div>
             </div>
             <DropdownMenuSeparator className="bg-zinc-200/20 my-2" />

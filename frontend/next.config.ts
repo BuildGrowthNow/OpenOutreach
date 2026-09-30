@@ -2,6 +2,10 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: 'standalone',
+  env: {
+    NEXT_PUBLIC_BUILD_COMMIT:
+      process.env.BUILD_COMMIT || process.env.SOURCE_VERSION || process.env.CONTAINER_VERSION || 'unknown',
+  },
   turbopack: {
     root: process.cwd(),
   },

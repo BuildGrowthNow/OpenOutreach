@@ -201,14 +201,13 @@ def _send_billing_email(user: User, subject: str, html: str, text: str) -> bool:
     return provider.send(user.email, subject, html, text)
 
 
-def _settings_ctx() -> tuple[str, str, str, str]:
-    """Return (brand_name, app_url, support_email, docs_url) from settings."""
+def _settings_ctx() -> tuple[str, str, str]:
+    """Return (brand_name, app_url, support_email) from settings."""
     s = _settings
     brand = s.EMAIL_FROM_NAME or "Lengrowth Outreach"
     app_url = s.APP_URL or "http://localhost:3000"
     support = s.SUPPORT_EMAIL or "support@lengrowth.com"
-    docs_url = f"https://docs.{brand.lower().replace(' ', '')}.com"
-    return brand, app_url, support, docs_url
+    return brand, app_url, support
 
 
 # ---------------------------------------------------------------------------
@@ -311,7 +310,7 @@ def send_welcome_email(user: User) -> bool:
     """Send welcome email on signup with trial info."""
     s = _settings
     trial_days = s.TRIAL_DURATION_DAYS
-    brand, app_url, support, _ = _settings_ctx()
+    brand, app_url, support = _settings_ctx()
 
     body = (
         _h1(f"Welcome to {brand}!")
@@ -360,7 +359,7 @@ Questions? Reply to this email or contact us at {support}
 
 def send_trial_expiry_warning(user: User, days_remaining: int) -> bool:
     """Send trial expiry warning email (1 day before expiry)."""
-    brand, app_url, support, _ = _settings_ctx()
+    brand, app_url, support = _settings_ctx()
 
     body = (
         _h1("Your trial ends tomorrow")
@@ -402,7 +401,7 @@ Questions? Reply to this email or contact {support}
 
 def send_trial_expired(user: User) -> bool:
     """Send trial expired notification."""
-    brand, app_url, support, _ = _settings_ctx()
+    brand, app_url, support = _settings_ctx()
 
     body = (
         _h1("Your trial has ended")
@@ -437,7 +436,7 @@ Your data will be preserved for 30 days. After that, it will be permanently dele
 
 def send_plan_upgraded(user: User, old_plan: str, new_plan: str) -> bool:
     """Send plan upgrade confirmation email."""
-    brand, app_url, support, _ = _settings_ctx()
+    brand, app_url, support = _settings_ctx()
     plan_names = {
         "starter": "Starter",
         "pro": "Pro",
@@ -484,7 +483,7 @@ Questions? {support}
 
 def send_plan_downgraded(user: User, old_plan: str, new_plan: str, effective_date: datetime) -> bool:
     """Send plan downgrade notification email."""
-    brand, app_url, support, _ = _settings_ctx()
+    brand, app_url, support = _settings_ctx()
     plan_names = {
         "starter": "Starter",
         "pro": "Pro",
@@ -536,7 +535,7 @@ Changed your mind? You can upgrade anytime from your billing settings.
 
 def send_payment_failed(user: User, retry_count: int = 1) -> bool:
     """Send payment failed notification with retry information."""
-    brand, app_url, support, _ = _settings_ctx()
+    brand, app_url, support = _settings_ctx()
 
     body = (
         _h1("Payment failed")
@@ -582,7 +581,7 @@ Need help? {support}
 
 def send_account_blocked(user: User, reason: str = "violation of our terms of service") -> bool:
     """Send account blocked notification."""
-    brand, _, support, _ = _settings_ctx()
+    brand, _, support = _settings_ctx()
 
     body = (
         _h1("Your account has been suspended")
@@ -612,7 +611,7 @@ If you believe this is a mistake, contact {support} with your account email and 
 
 def send_lifetime_deal_purchase(user: User) -> bool:
     """Send lifetime deal purchase confirmation email."""
-    brand, app_url, support, docs_url = _settings_ctx()
+    brand, app_url, support = _settings_ctx()
 
     body = (
         _h1("Lifetime Deal activated!")
@@ -632,7 +631,7 @@ def send_lifetime_deal_purchase(user: User) -> bool:
         + _note("The lifetime deal uses the desktop daemon for campaign execution - automation runs on your computer using your own residential IP. The Cloud tier ($299/month) is not included. Download the desktop app from the dashboard to get started.")
         + _btn(app_url, "Go to Dashboard")
         + _divider()
-        + _p(f'Need help? Check our <a href="{docs_url}" style="color:#10b981;text-decoration:none;">documentation</a> or reach out to <a href="mailto:{support}" style="color:#10b981;text-decoration:none;">{support}</a>.', "font-size:13px;color:#71717a;")
+        + _p(f'Need help? Reply to this email or reach out to <a href="mailto:{support}" style="color:#10b981;text-decoration:none;">{support}</a>.', "font-size:13px;color:#71717a;")
         + _p("Your receipt has been sent to your email. If you didn't receive it, reply to this email.", "font-size:13px;color:#71717a;")
     )
 
@@ -658,7 +657,7 @@ Note: The lifetime deal uses the desktop daemon for execution. The Cloud tier ($
 
 Go to dashboard: {app_url}
 
-Need help? {docs_url} or {support}
+Need help? Reply to this email or contact {support}
 
 Your receipt has been sent to your email. If you didn't receive it, reply to this email.
 """
@@ -668,7 +667,7 @@ Your receipt has been sent to your email. If you didn't receive it, reply to thi
 
 def send_email_verification(user: User, verification_url: str) -> bool:
     """Send email verification link to new user."""
-    brand, _, support, _ = _settings_ctx()
+    brand, _, support = _settings_ctx()
 
     body = (
         _h1("Verify your email")
@@ -701,7 +700,7 @@ If you didn't create an account, you can safely ignore this email.
 
 def send_password_reset(user: User, reset_url: str) -> bool:
     """Send password reset link to user."""
-    brand, _, support, _ = _settings_ctx()
+    brand, _, support = _settings_ctx()
 
     body = (
         _h1("Reset your password")

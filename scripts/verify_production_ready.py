@@ -13,12 +13,29 @@ import sys
 import os
 import re
 import json
+from html.parser import HTMLParser
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 from pathlib import Path
 
 
 _DJANGO_IMPORT = re.compile(r"^\s*(?:from|import)\s+django(?:\.|\s|$)", re.MULTILINE)
+_VERIFIER_USER_AGENT = "Mozilla/5.0 (compatible; LengrowthProductionVerifier/1.0; +https://outreach.lengrowth.com)"
+
+
+class _BuildCommitParser(HTMLParser):
+    """Read the build identity meta tag emitted by the Next.js frontend."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.commit = ""
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag.lower() != "meta":
+            return
+        values = dict(attrs)
+        if values.get("name") == "build-commit":
+            self.commit = values.get("content") or ""
 
 
 def run_command(cmd: list[str], description: str) -> tuple[bool, str]:
@@ -187,7 +204,9 @@ def check_cloud_deployment(
     print(f"\n7. Checking deployed cloud API ({base_url})...")
     base_url = base_url.rstrip("/")
     try:
-        health_request = Request(f"{base_url}/api/health", method="GET")
+        health_request = Request(
+            f"{base_url}/api/health", headers={"User-Agent": _VERIFIER_USER_AGENT}, method="GET"
+        )
         with urlopen(health_request, timeout=10) as response:
             health = json.loads(response.read())
             health_cache_control = response.headers.get("Cache-Control", "")
@@ -199,12 +218,16 @@ def check_cloud_deployment(
             print(f"   [FAIL] /api/health Cache-Control is {health_cache_control!r}, expected 'no-store'")
             return False
 
-        openapi_request = Request(f"{base_url}/openapi.json", method="GET")
+        openapi_request = Request(
+            f"{base_url}/openapi.json", headers={"User-Agent": _VERIFIER_USER_AGENT}, method="GET"
+        )
         with urlopen(openapi_request, timeout=10) as response:
             openapi = json.loads(response.read())
 
         compatibility_request = Request(
-            f"{base_url}/api/daemon/v2/compatibility", method="GET"
+            f"{base_url}/api/daemon/v2/compatibility",
+            headers={"User-Agent": _VERIFIER_USER_AGENT},
+            method="GET",
         )
         with urlopen(compatibility_request, timeout=10) as response:
             compatibility = json.loads(response.read())
@@ -246,11 +269,15 @@ def check_cloud_deployment(
     return True
 
 
-def check_frontend_deployment(base_url: str) -> bool:
+def check_frontend_deployment(base_url: str, expected_commit: str | None = None) -> bool:
     """Perform a read-only smoke check against the public frontend."""
     print(f"\n8. Checking deployed frontend ({base_url})...")
     try:
-        request = Request(base_url.rstrip("/") + "/", method="GET")
+        request = Request(
+            base_url.rstrip("/") + "/",
+            headers={"User-Agent": _VERIFIER_USER_AGENT},
+            method="GET",
+        )
         with urlopen(request, timeout=10) as response:
             status = getattr(response, "status", 200)
             body = response.read()
@@ -261,7 +288,16 @@ def check_frontend_deployment(base_url: str) -> bool:
     if status != 200 or not body:
         print(f"   [FAIL] Frontend returned status={status} with content={bool(body)}")
         return False
-    print(f"   [PASS] Frontend returned HTTP 200 with {len(body)} bytes")
+    build_identity = _BuildCommitParser()
+    build_identity.feed(body.decode("utf-8", errors="replace"))
+    deployed_commit = build_identity.commit
+    if not deployed_commit or deployed_commit == "unknown":
+        print("   [FAIL] Frontend build identity is missing")
+        return False
+    if expected_commit and deployed_commit != expected_commit:
+        print(f"   [FAIL] Frontend commit {deployed_commit!r} != expected {expected_commit!r}")
+        return False
+    print(f"   [PASS] Frontend returned HTTP 200 ({len(body)} bytes), build {deployed_commit}")
     return True
 
 
@@ -302,7 +338,12 @@ def main():
             )
         )
     if args.frontend_url:
-        checks.append(("Frontend Deployment", lambda: check_frontend_deployment(args.frontend_url)))
+        checks.append(
+            (
+                "Frontend Deployment",
+                lambda: check_frontend_deployment(args.frontend_url, args.expected_cloud_commit),
+            )
+        )
 
     results = {}
 

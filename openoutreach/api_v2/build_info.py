@@ -5,4 +5,7 @@ import os
 
 
 APP_VERSION = os.getenv("APP_VERSION", "2.1.2")
-BUILD_COMMIT = os.getenv("BUILD_COMMIT", os.getenv("GIT_COMMIT", "unknown"))
+BUILD_COMMIT = os.getenv(
+    "BUILD_COMMIT",
+    os.getenv("GIT_COMMIT", os.getenv("CONTAINER_VERSION", "unknown")),
+)

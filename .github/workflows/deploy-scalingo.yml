@@ -17,10 +17,22 @@ env:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      mongodb:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand(\"ping\").ok'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     env:
       # Tests only need a deterministic non-production signing key for settings import.
       SECRET_KEY: ci-test-only-not-for-production
-      MONGODB_ENABLED: "false"
+      MONGODB_ENABLED: "true"
+      MONGODB_URI: mongodb://localhost:27017
+      MONGODB_NAME: openoutreach_ci
     steps:
       - uses: actions/checkout@v4
         with:

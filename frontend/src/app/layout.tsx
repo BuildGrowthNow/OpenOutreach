@@ -32,6 +32,9 @@ const lato = Lato({
 export const metadata: Metadata = {
   title: "Lengrowth Outreach - LinkedIn Growth Automation",
   description: "Scale your LinkedIn presence with AI-powered automation and smart workflows",
+  other: {
+    "build-commit": process.env.NEXT_PUBLIC_BUILD_COMMIT || "unknown",
+  },
   icons: {
     icon: [
       { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
