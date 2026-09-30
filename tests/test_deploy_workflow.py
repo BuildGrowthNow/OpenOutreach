@@ -21,12 +21,16 @@ def test_deploy_targets_scalingo_apps_in_production_region():
     assert "--app outreach-api --region \"$SCALINGO_REGION\" deploy" in workflow
     assert "--app outreach-web --region \"$SCALINGO_REGION\" deploy" in workflow
     assert "SCALINGO_API_TOKEN: ${{ secrets.SCALINGO_API_TOKEN }}" in workflow
+    assert "git archive --format=tar \"$DEPLOY_SHA\" | tar -xf - -C /tmp/openoutreach-api-source" in workflow
+    assert "rm -rf /tmp/openoutreach-api-source/frontend" in workflow
+    assert "rm -f /tmp/openoutreach-api-source/package.json /tmp/openoutreach-api-source/package-lock.json" in workflow
 
 
 def test_deploy_validates_public_health_and_web_root():
     workflow = WORKFLOW.read_text(encoding="utf-8")
     assert "https://outreach-api.lengrowth.com/api/health" in workflow
     assert "https://outreach.lengrowth.com/" in workflow
+    assert "HOSTNAME=0.0.0.0 node .next/standalone/server.js" in (WORKFLOW.parents[2] / "frontend" / "Procfile").read_text(encoding="utf-8")
 
 
 def test_deploy_does_not_reference_retired_aws_infrastructure():
