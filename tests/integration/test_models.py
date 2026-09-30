@@ -16,7 +16,7 @@ class TestModelManagers:
         """Test Campaign.objects manager."""
         campaign = Campaign(
             name="Manager Test",
-            user_id=test_user.pk,
+            user_id=test_user._id,
             status="active",
 
         )
@@ -88,7 +88,7 @@ class TestModelManagers:
         assert found.pk == lead.pk
 
         # Test get_by_public_identifier
-        found_by_pid = Lead.get_by_public_identifier("method-test")
+        found_by_pid = Lead.find_by_public_identifier("method-test")
         assert found_by_pid is not None
         assert found_by_pid.pk == lead.pk
 
@@ -135,17 +135,17 @@ class TestModelFields:
         """Test Campaign multi-tenant fields."""
         campaign = Campaign(
             name="Multi-tenant Test",
-            user_id=test_user.pk,
+            user_id=test_user._id,
             linkedin_profile_id="profile123",
             team_member_ids=["user1", "user2"],
 
         )
         campaign.save()
 
-        assert campaign.user_id == test_user.pk
+        assert campaign.user_id == test_user._id
         assert campaign.linkedin_profile_id == "profile123"
         assert "user1" in campaign.team_member_ids
-        assert campaign.has_access(test_user.pk)
+        assert campaign.has_access(test_user._id)
         assert campaign.has_access("user1")
 
 
@@ -213,7 +213,7 @@ class TestModelMethods:
         assert found.pk == lead.pk
 
         # Test get by public_identifier
-        found_by_pid = Lead.get_by_public_identifier("get-test")
+        found_by_pid = Lead.find_by_public_identifier("get-test")
         assert found_by_pid is not None
         assert found_by_pid.pk == lead.pk
 

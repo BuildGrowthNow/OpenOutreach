@@ -31,11 +31,13 @@ def clean_test_db(mongodb_available):
         pytest.skip("Integration tests require a MongoDB database ending in _test")
 
     collections = ["campaigns", "tasks", "deals", "leads", "users", "site_config"]
+    SiteConfig.invalidate()
 
     # Clean before test
     for collection_name in collections:
         collection = get_mongodb_collection(collection_name)
         collection.delete_many({})
+    SiteConfig.invalidate()
 
     yield
 
@@ -63,7 +65,7 @@ def test_campaign(test_user, clean_test_db) -> Campaign:
     """Create a test campaign."""
     campaign = Campaign(
         name="Test Campaign",
-        user_id=test_user.pk,
+        user_id=test_user._id,
         status="active",
 
     )
