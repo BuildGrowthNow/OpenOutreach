@@ -76,7 +76,7 @@ function ResetPasswordInner() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token, new_password: newPassword }),
       })
-      const data = await response.json()
+      const data = await response.json() as { detail?: string }
       if (!response.ok) {
         setConfirmError(data.detail || "Failed to reset password. The link may have expired.")
         setConfirmStatus("idle")

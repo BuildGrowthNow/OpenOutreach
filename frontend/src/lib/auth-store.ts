@@ -54,11 +54,11 @@ export const useAuthStore = create<AuthState>()(
           });
 
           if (!response.ok) {
-            const error = await response.json();
+            const error = await response.json() as { detail?: string };
             throw new Error(error.detail || 'Login failed');
           }
 
-          const data = await response.json();
+          const data = await response.json() as { access_token: string };
           const token = data.access_token;
 
           set({ token });
@@ -88,7 +88,7 @@ export const useAuthStore = create<AuthState>()(
           });
 
           if (!response.ok) {
-            const error = await response.json();
+            const error = await response.json() as { detail?: string };
             throw new Error(error.detail || 'Registration failed');
           }
 
@@ -132,7 +132,7 @@ export const useAuthStore = create<AuthState>()(
             throw new Error('Failed to fetch user');
           }
 
-          const user = await response.json();
+          const user = await response.json() as User;
           set({ user });
         } catch (error) {
           console.error('Failed to fetch user:', error);

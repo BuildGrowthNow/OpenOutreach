@@ -15,7 +15,7 @@ export async function requestAccountDeletion(accessToken: string) {
   })
 
   if (!response.ok) {
-    const error = await response.json()
+    const error = await response.json() as { detail?: string }
     throw new Error(error.detail || 'Failed to request account deletion')
   }
 
@@ -33,7 +33,7 @@ export async function cancelAccountDeletion(accessToken: string) {
   })
 
   if (!response.ok) {
-    const error = await response.json()
+    const error = await response.json() as { detail?: string }
     throw new Error(error.detail || 'Failed to cancel account deletion')
   }
 
@@ -51,7 +51,7 @@ export async function exportUserData(accessToken: string) {
   })
 
   if (!response.ok) {
-    const error = await response.json()
+    const error = await response.json() as { detail?: string }
     throw new Error(error.detail || 'Failed to export data')
   }
 

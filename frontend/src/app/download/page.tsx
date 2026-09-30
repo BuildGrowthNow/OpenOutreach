@@ -105,7 +105,7 @@ export default function DownloadPage() {
   useEffect(() => {
     setDetectedOS(detectOS())
     fetch(GITHUB_API_LATEST, { headers: { Accept: "application/vnd.github+json" } })
-      .then((r) => r.json())
+      .then((r) => r.json() as Promise<{ tag_name?: string }>)
       .then((data) => {
         // tag_name is like "v1.2.2-abc1234" - extract the semver part
         const tag: string = data?.tag_name ?? ""

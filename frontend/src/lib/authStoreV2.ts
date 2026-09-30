@@ -110,7 +110,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           },
         })
         if (response.ok) {
-          const user = await response.json()
+          const user = await response.json() as User
           set({ isAuthenticated: true, user, isLoading: false, isInitialized: true, error: null })
           notifyDesktopAuth(user.id)
           // Bootstrap the refresh_token cookie so subsequent page navigations
@@ -138,7 +138,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       })
 
       if (response.ok) {
-        const user = await response.json()
+        const user = await response.json() as User
         set({ isAuthenticated: true, user, isLoading: false, isInitialized: true, error: null })
         notifyDesktopAuth(user.id)
       } else {
@@ -170,7 +170,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         }),
       })
 
-      const data = await response.json()
+      const data = await response.json() as { detail?: string }
 
       if (!response.ok) {
         const errorMessage = data.detail || 'Registration failed'
@@ -205,7 +205,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         body: JSON.stringify({ email, password }),
       })
 
-      const data = await response.json()
+      const data = await response.json() as {
+        detail?: string
+        access_token: string
+        refresh_token?: string | null
+      }
 
       if (!response.ok) {
         const errorMessage = data.detail || 'Login failed'
@@ -227,7 +231,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       })
 
       if (userResponse.ok) {
-        const user = await userResponse.json()
+        const user = await userResponse.json() as User
 
         set({
           isAuthenticated: true,
@@ -359,7 +363,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         return false
       }
 
-      const data = await response.json()
+      const data = await response.json() as { access_token: string }
       const accessToken = data.access_token
 
       // Update access token

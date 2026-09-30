@@ -34,7 +34,7 @@ export default function VerifyEmailPage() {
           body: JSON.stringify({ token }),
         })
 
-        const data = await response.json()
+        const data = await response.json() as { message?: string; detail?: string }
 
         if (response.ok) {
           setStatus("success")

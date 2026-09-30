@@ -75,7 +75,7 @@ export default function LifetimeDealPage() {
 
   useEffect(() => {
     fetch('/api/billing/lifetime-deal-active')
-      .then((r) => r.json())
+      .then((r) => r.json() as Promise<{ buyer_count?: unknown }>)
       .then((data) => {
         if (typeof data.buyer_count === 'number') {
           setSpotsTaken(BASELINE_SPOTS + data.buyer_count);
