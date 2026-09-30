@@ -195,7 +195,7 @@ class TestSignupRateLimit:
             allowed, error_msg = SignupRateLimiter.check_ip_limit(test_ip)
             assert not allowed, "4th signup should be blocked"
             assert error_msg is not None
-            assert "rate limit" in error_msg.lower()
+            assert "too many signup attempts" in error_msg.lower()
         finally:
             # Cleanup
             if rate_limit_coll is not None:

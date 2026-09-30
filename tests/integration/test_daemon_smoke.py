@@ -149,7 +149,7 @@ class TestTaskClaiming:
             payload={"campaign_id": test_campaign.pk},
             status="PENDING",
             scheduled_at=datetime.now(tz.utc),
-            test=True
+
         )
         task.save()
 
@@ -170,7 +170,7 @@ class TestTaskClaiming:
             payload={"campaign_id": test_campaign.pk},
             status="PENDING",
             scheduled_at=datetime.now(tz.utc),
-            test=True
+
         )
         task.save()
 
@@ -191,7 +191,7 @@ class TestDealQueries:
             campaign_id=test_campaign.pk,
             lead_id=test_lead.pk,
             state=DealState.QUALIFIED,
-            test=True
+
         )
         deal.save()
 
@@ -209,7 +209,7 @@ class TestDealQueries:
             campaign_id=test_campaign.pk,
             lead_id=test_lead.pk,
             state=DealState.QUALIFIED,
-            test=True
+
         )
         deal.save()
 
@@ -230,7 +230,7 @@ class TestActionLog:
             campaign_id=test_campaign.pk,
             lead_id=test_lead.pk,
             action_type=ActionLog.ActionType.CONNECTION_SENT,
-            test=True
+
         )
         log.save()
 
@@ -244,7 +244,7 @@ class TestActionLog:
             campaign_id=test_campaign.pk,
             lead_id=test_lead.pk,
             action_type=ActionLog.ActionType.CONNECTION_SENT,
-            test=True
+
         )
         log.save()
 

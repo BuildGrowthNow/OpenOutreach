@@ -18,7 +18,7 @@ class TestModelManagers:
             name="Manager Test",
             user_id=test_user.pk,
             status="active",
-            test=True
+
         )
         campaign.save()
 
@@ -42,7 +42,7 @@ class TestModelManagers:
             campaign_id=test_campaign.pk,
             lead_id=test_lead.pk,
             state=DealState.QUALIFIED,
-            test=True
+
         )
         deal.save()
 
@@ -61,7 +61,7 @@ class TestModelManagers:
             task_type="connect",
             payload={"campaign_id": test_campaign.pk},
             status="PENDING",
-            test=True
+
         )
         task.save()
 
@@ -78,7 +78,7 @@ class TestModelManagers:
         lead = Lead(
             public_identifier="method-test",
             full_name="Method Test",
-            test=True
+
         )
         lead.save()
 
@@ -102,7 +102,7 @@ class TestModelFields:
             task_type="connect",
             payload={"campaign_id": test_campaign.pk},
             status="PENDING",
-            test=True
+
         )
         task.save()
 
@@ -121,7 +121,7 @@ class TestModelFields:
             state=DealState.QUALIFIED,
             outcome=Outcome.UNKNOWN,
             reason="Test reason",
-            test=True
+
         )
         deal.save()
 
@@ -138,7 +138,7 @@ class TestModelFields:
             user_id=test_user.pk,
             linkedin_profile_id="profile123",
             team_member_ids=["user1", "user2"],
-            test=True
+
         )
         campaign.save()
 
@@ -158,7 +158,7 @@ class TestModelMethods:
             task_type="connect",
             payload={"campaign_id": test_campaign.pk},
             status="PENDING",
-            test=True
+
         )
         task.save()
 
@@ -175,7 +175,7 @@ class TestModelMethods:
             task_type="connect",
             payload={"campaign_id": test_campaign.pk},
             status="PENDING",
-            test=True
+
         )
         task2.save()
         task2.mark_running()
@@ -190,7 +190,7 @@ class TestModelMethods:
             campaign_id=test_campaign.pk,
             lead_id=test_lead.pk,
             state=DealState.QUALIFIED,
-            test=True
+
         )
         deal.save()
 
@@ -203,7 +203,7 @@ class TestModelMethods:
         lead = Lead(
             public_identifier="get-test",
             full_name="Get Test",
-            test=True
+
         )
         lead.save()
 

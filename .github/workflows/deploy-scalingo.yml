@@ -32,7 +32,7 @@ jobs:
       SECRET_KEY: ci-test-only-not-for-production
       MONGODB_ENABLED: "true"
       MONGODB_URI: mongodb://localhost:27017
-      MONGODB_NAME: openoutreach_ci
+      MONGODB_NAME: openoutreach_test
     steps:
       - uses: actions/checkout@v4
         with:
@@ -75,6 +75,10 @@ jobs:
           # The explicit Node buildpack keeps archive deployments deterministic.
           git archive --format=tar.gz --output=/tmp/openoutreach-web.tgz "$DEPLOY_SHA" frontend
           scalingo --app outreach-web --region "$SCALINGO_REGION" deploy /tmp/openoutreach-web.tgz "$DEPLOY_SHA"
+      - name: Validate production endpoints
+        run: |
+          curl --fail --silent --show-error --retry 10 --retry-connrefused --retry-delay 6 https://outreach-api.lengrowth.com/api/health >/dev/null
+          curl --fail --silent --show-error --retry 10 --retry-connrefused --retry-delay 6 https://outreach.lengrowth.com/ >/dev/null
 
   rollback:
     if: ${{ inputs.rollback_sha != '' }}

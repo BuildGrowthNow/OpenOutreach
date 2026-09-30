@@ -26,7 +26,7 @@ class TestScheduler:
             lead = Lead(
                 public_identifier=f"lead-{i}",
                 full_name=f"Lead {i}",
-                test=True
+
             )
             lead.save()
 
@@ -34,7 +34,7 @@ class TestScheduler:
                 campaign_id=test_campaign.pk,
                 lead_id=lead.pk,
                 state=DealState.QUALIFIED,
-                test=True
+
             )
             deal.save()
 
@@ -58,7 +58,7 @@ class TestScheduler:
             lead = Lead(
                 public_identifier=f"connected-{i}",
                 full_name=f"Connected {i}",
-                test=True
+
             )
             lead.save()
 
@@ -66,7 +66,7 @@ class TestScheduler:
                 campaign_id=test_campaign.pk,
                 lead_id=lead.pk,
                 state=DealState.CONNECTED,
-                test=True
+
             )
             deal.save()
 
@@ -90,7 +90,7 @@ class TestScheduler:
             lead = Lead(
                 public_identifier=f"pending-{i}",
                 full_name=f"Pending {i}",
-                test=True
+
             )
             lead.save()
 
@@ -99,7 +99,7 @@ class TestScheduler:
                 lead_id=lead.pk,
                 state=DealState.PENDING,
                 next_check_pending_at=datetime.now(tz.utc),
-                test=True
+
             )
             deal.save()
 
@@ -123,7 +123,7 @@ class TestScheduler:
             lead = Lead(
                 public_identifier=f"smart-{i}",
                 full_name=f"Smart {i}",
-                test=True
+
             )
             lead.save()
 
@@ -131,7 +131,7 @@ class TestScheduler:
                 campaign_id=test_campaign.pk,
                 lead_id=lead.pk,
                 state=DealState.QUALIFIED,
-                test=True
+
             )
             deal.save()
 
@@ -155,7 +155,7 @@ class TestTaskLifecycle:
             payload={"campaign_id": test_campaign.pk},
             status="PENDING",
             scheduled_at=datetime.now(tz.utc),
-            test=True
+
         )
         task.save()
 
@@ -176,7 +176,7 @@ class TestTaskLifecycle:
             payload={"campaign_id": test_campaign.pk},
             status="PENDING",
             scheduled_at=datetime.now(tz.utc),
-            test=True
+
         )
         task.save()
 
@@ -231,7 +231,7 @@ class TestDealStateTransitions:
             campaign_id=test_campaign.pk,
             lead_id=test_lead.pk,
             state=DealState.DISCOVERED,
-            test=True
+
         )
         deal.save()
 
@@ -249,7 +249,7 @@ class TestDealStateTransitions:
             campaign_id=test_campaign.pk,
             lead_id=test_lead.pk,
             state=DealState.QUALIFIED,
-            test=True
+
         )
         deal.save()
 
@@ -269,7 +269,7 @@ class TestDealStateTransitions:
             campaign_id=test_campaign.pk,
             lead_id=test_lead.pk,
             state=DealState.PENDING,
-            test=True
+
         )
         deal.save()
 
