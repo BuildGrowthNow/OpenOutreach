@@ -434,7 +434,7 @@ def resolve_sequence_tasks(campaign: Campaign, user_id: str) -> int:
             deal.sequence_graph_snapshot = snapshot
             deal.sequence_revision = snapshot["revision"]
 
-        if deal.state in (DealState.EMAIL_REPLIED, DealState.EMAIL_BOUNCED):
+        if deal.state == DealState.EMAIL_BOUNCED:
             _record_sequence_event(campaign._id, deal._id, deal.sequence_position or "", "sequence_stopped", str(deal.state.value))
             deals_col.update_one(
                 {"_id": deal._id},
@@ -474,6 +474,29 @@ def resolve_sequence_tasks(campaign: Campaign, user_id: str) -> int:
         reply_condition = step_type == "condition" and step_data.get("condition") in (
             "replied", "no_reply", "reply_received"
         )
+        # A reply status is terminal unless the saved graph is currently
+        # waiting on an explicit reply condition. Visual graphs commonly put
+        # a wait immediately before that condition; a reply should bypass that
+        # delay so the configured reply branch can be evaluated promptly.
+        if deal.state == DealState.EMAIL_REPLIED and not reply_condition and step_type == "wait":
+            next_id = _get_next_step_id(deal_campaign, current_step_id, True)
+            next_step = _get_step(deal_campaign, next_id) if next_id else None
+            next_data = (next_step or {}).get("data") or {}
+            if (next_step or {}).get("type") == "condition" and next_data.get("condition") in {
+                "replied", "reply_received", "no_reply"
+            }:
+                deals_col.update_one(
+                    {"_id": deal._id},
+                    {"$set": {"sequence_position": next_id, "sequence_last_step_at": datetime.now(timezone.utc)}},
+                )
+                continue
+        if deal.state == DealState.EMAIL_REPLIED and not reply_condition:
+            _record_sequence_event(campaign._id, deal._id, current_step_id, "sequence_stopped", "reply_received")
+            deals_col.update_one(
+                {"_id": deal._id},
+                {"$set": {"sequence_done": True, "sequence_terminal_reason": "email_replied"}},
+            )
+            continue
         if inbound_reply:
             _record_sequence_event(campaign._id, deal._id, current_step_id, "reply_received")
         if inbound_reply and stop_on_reply and not reply_condition:

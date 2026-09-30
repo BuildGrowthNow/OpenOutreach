@@ -57,6 +57,19 @@ export async function getSequenceMetrics(campaignId: string) {
   return apiClient.get<SequenceMetrics>(`/campaigns/${campaignId}/sequence/metrics`);
 }
 
+export interface SequenceReadiness {
+  channels: Record<string, { configured: boolean; healthy: boolean | null; execution_enabled: boolean; status: string }>;
+  channel_coverage: Record<string, { count: number; total: number; pct: number }>;
+  step_coverage: Array<{ step_id: string; label: string; count: number; total: number; pct: number }>;
+  blockers: string[];
+  warnings: string[];
+  affected_deals: number;
+}
+
+export async function getSequenceReadiness(campaignId: string) {
+  return apiClient.get<SequenceReadiness>(`/campaigns/${campaignId}/sequence/readiness`);
+}
+
 export async function previewSequence(campaignId: string, dealIds: string[] = []) {
   return apiClient.post<{ dry_run: boolean; results: Array<{ deal_id: string; path: string[]; labels: string[] }> }>(
     `/campaigns/${campaignId}/sequence/preview`, { deal_ids: dealIds },
@@ -89,6 +102,7 @@ export interface SequenceTimelineEntry {
   waitDays: number;
   waitHours: number;
   status: "completed" | "active" | "pending";
+  branchStatus?: "resolved" | "unresolved" | null;
   completedAt: string | null;
 }
 

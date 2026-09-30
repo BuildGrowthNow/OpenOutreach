@@ -87,9 +87,9 @@ export function LeadSequenceTimeline({ campaignId, leadId }: LeadSequenceTimelin
           </Badge>
         )}
       </div>
-      <div className="flex items-start gap-0">
+      <div className="flex items-start gap-0 overflow-x-auto pb-2" aria-label="Sequence steps">
         {timeline.map((entry, i) => (
-          <div key={entry.stepId} className="flex flex-col items-center flex-1 min-w-0">
+          <div key={entry.stepId} className="flex w-[88px] shrink-0 flex-col items-center">
             <div className="flex items-center w-full">
               {i > 0 && (
                 <div
@@ -113,9 +113,14 @@ export function LeadSequenceTimeline({ campaignId, leadId }: LeadSequenceTimelin
                 />
               )}
             </div>
-            <span className="text-[10px] text-muted-foreground mt-1 text-center truncate w-full px-0.5">
+            <span className="mt-1 w-full whitespace-normal break-words px-1 text-center text-[10px] leading-tight text-muted-foreground">
               {entry.label}
             </span>
+            {entry.branchStatus === "unresolved" && (
+              <span className="mt-1 rounded border border-amber-500/30 px-1 text-[9px] leading-4 text-amber-500">
+                Branch pending
+              </span>
+            )}
           </div>
         ))}
       </div>

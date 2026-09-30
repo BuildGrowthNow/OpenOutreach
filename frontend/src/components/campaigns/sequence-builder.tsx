@@ -82,6 +82,8 @@ import {
   SequenceEdge,
   getSequenceMetrics,
   SequenceMetrics,
+  getSequenceReadiness,
+  SequenceReadiness,
 } from "@/lib/api/campaigns";
 import { getCampaignTemplates, saveCampaignAsTemplate, getLinks } from "@/lib/api/dashboard";
 import type { TrackedLink } from "@/lib/api/dashboard";
@@ -835,6 +837,7 @@ function SequenceCanvas({ campaignId, isActive }: { campaignId: string; isActive
   const [totalLeads, setTotalLeads] = useState(0);
   const [channelCoverage, setChannelCoverage] = useState<CampaignChannelCoverage | null>(null);
   const [sequenceMetrics, setSequenceMetrics] = useState<SequenceMetrics | null>(null);
+  const [readiness, setReadiness] = useState<SequenceReadiness | null>(null);
   const [active, setActive] = useState(false);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState(false);
@@ -970,12 +973,14 @@ function SequenceCanvas({ campaignId, isActive }: { campaignId: string; isActive
     setLoading(true);
     setFetchError(false);
     setHistory([]);
-    const [res, covRes, metricsRes] = await Promise.all([
+    const [res, covRes, metricsRes, readinessRes] = await Promise.all([
       getSequence(campaignId),
       getCampaignCoverage(campaignId),
       getSequenceMetrics(campaignId),
+      getSequenceReadiness(campaignId),
     ]);
     if (metricsRes.data) setSequenceMetrics(metricsRes.data);
+    if (readinessRes.data) setReadiness(readinessRes.data);
     const total = covRes.data?.total ?? 0;
     if (covRes.data) {
       setTotalLeads(total);
@@ -1162,7 +1167,12 @@ function SequenceCanvas({ campaignId, isActive }: { campaignId: string; isActive
     toast({ title: "Template saved" });
   };
 
-  const handleActivateClick = () => setShowActivateDialog(true);
+  const handleActivateClick = () => {
+    setShowActivateDialog(true);
+    void getSequenceReadiness(campaignId).then((res) => {
+      if (res.data) setReadiness(res.data);
+    });
+  };
 
   const handleConfirmActivate = async () => {
     setShowActivateDialog(false);
@@ -1186,8 +1196,13 @@ function SequenceCanvas({ campaignId, isActive }: { campaignId: string; isActive
   };
 
   const handleConfirmReset = () => {
+    if (active) {
+      setShowResetDialog(false);
+      toast({ title: "Deactivate sequence first", description: "The saved sequence remains active until you deactivate it.", variant: "destructive" });
+      return;
+    }
     setNodes([]); setEdges([]); setSeqSteps([]);
-    setShowCanvas(false); setIsDirty(false); setShowResetDialog(false); setValidationWarnings([]); setHistory([]);
+    setShowCanvas(false); setIsDirty(true); setShowResetDialog(false); setValidationWarnings([]); setHistory([]);
   };
 
   const applyTemplate = (tpl: Template) => {
@@ -1253,7 +1268,11 @@ function SequenceCanvas({ campaignId, isActive }: { campaignId: string; isActive
       <Card className="border-zinc-800">
         <CardHeader>
           <CardTitle>Sequence Builder</CardTitle>
-          <CardDescription>No sequence configured — campaign uses default single-channel behavior.</CardDescription>
+          <CardDescription>
+            {isDirty
+              ? "Editor draft cleared. The saved sequence is unchanged until you replace it and save."
+              : "No sequence configured — campaign uses default single-channel behavior."}
+          </CardDescription>
         </CardHeader>
         <CardContent className="py-6 space-y-6">
           <p className="text-sm text-zinc-400">
@@ -1474,11 +1493,13 @@ function SequenceCanvas({ campaignId, isActive }: { campaignId: string; isActive
                       size="sm"
                       className="border-zinc-700 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300"
                       onClick={() => setShowResetDialog(true)}
+                      disabled={active || saving || toggling}
+                      title={active ? "Deactivate the sequence before clearing its draft" : "Reset the editor draft"}
                     >
                       <Icons.RotateCcw className="h-3.5 w-3.5" />
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent className="text-xs">Reset to templates</TooltipContent>
+                  <TooltipContent className="text-xs">{active ? "Deactivate sequence to reset its draft" : "Reset editor draft to templates"}</TooltipContent>
                 </Tooltip>
 
                 <Button
@@ -1589,12 +1610,52 @@ function SequenceCanvas({ campaignId, isActive }: { campaignId: string; isActive
             <AlertDialogHeader>
               <AlertDialogTitle>{active ? "Deactivate sequence?" : "Activate sequence?"}</AlertDialogTitle>
               <AlertDialogDescription className="text-zinc-400 space-y-1">
-                {!active && isDirty && <span className="block text-amber-400 text-sm">Unsaved changes will be saved first.</span>}
+                {!active && isDirty && <span className="block text-amber-400 text-sm">Readiness below reflects the saved graph. Unsaved changes will be saved first and checked by the server before activation.</span>}
                 <span className="block">
                   {active
                     ? "The daemon stops executing steps. Deals in progress pause at their current position."
-                    : "The daemon starts executing steps for all active deals in this campaign."}
+                    : `The daemon starts executing steps for ${readiness?.affected_deals ?? "eligible"} active deals in this campaign.`}
                 </span>
+                {!active && readiness && (
+                  <div className="mt-3 space-y-3 text-xs">
+                    <div>
+                      <p className="mb-1 font-medium text-zinc-200">Required channels</p>
+                      <div className="space-y-1">
+                        {Object.entries(readiness.channels).map(([channel, result]) => (
+                          <p key={channel} className={result.healthy === false ? "text-red-400" : result.healthy === null || !result.execution_enabled ? "text-amber-400" : "text-emerald-400"}>
+                            {channel}: {result.status} · cloud execution {result.execution_enabled ? "enabled" : "disabled"}
+                          </p>
+                        ))}
+                        {Object.keys(readiness.channels).length === 0 && <p className="text-zinc-500">No action channels found.</p>}
+                      </div>
+                    </div>
+                    <div>
+                      <p className="mb-1 font-medium text-zinc-200">Channel lead coverage</p>
+                      <div className="space-y-1">
+                        {Object.keys(readiness.channels).map((channel) => {
+                          const coverage = readiness.channel_coverage[channel];
+                          return coverage ? (
+                            <p key={channel} className={coverage.total > 0 && coverage.count === 0 ? "text-amber-400" : "text-zinc-400"}>
+                              {channel}: {coverage.count}/{coverage.total} leads ({coverage.pct}%)
+                            </p>
+                          ) : null;
+                        })}
+                      </div>
+                    </div>
+                    <div>
+                      <p className="mb-1 font-medium text-zinc-200">Lead coverage</p>
+                      <div className="space-y-1">
+                        {readiness.step_coverage.map((step) => (
+                          <p key={step.step_id} className={step.total > 0 && step.count === 0 ? "text-amber-400" : "text-zinc-400"}>
+                            {step.label}: {step.count}/{step.total} leads ({step.pct}%)
+                          </p>
+                        ))}
+                      </div>
+                    </div>
+                    {readiness.blockers.length > 0 && <div className="space-y-1 text-red-400">{readiness.blockers.map((item) => <p key={item}>Blocker: {item}</p>)}</div>}
+                    {readiness.warnings.length > 0 && <div className="space-y-1 text-amber-400">{readiness.warnings.map((item) => <p key={item}>Warning: {item}</p>)}</div>}
+                  </div>
+                )}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -1629,13 +1690,14 @@ function SequenceCanvas({ campaignId, isActive }: { campaignId: string; isActive
             <AlertDialogHeader>
               <AlertDialogTitle>Reset sequence?</AlertDialogTitle>
               <AlertDialogDescription className="text-zinc-400">
-                All steps will be cleared and you&apos;ll return to the template picker.
-                {isDirty && " Unsaved changes will be lost."}
+                This clears only the editor draft and returns to the template picker. The saved sequence is unchanged; choose a template and save to replace it.
+                {isDirty && " Current unsaved graph changes will be discarded."}
+                {active && " Deactivate the sequence before resetting its draft."}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 bg-zinc-900">Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={handleConfirmReset} className="bg-red-600 hover:bg-red-700">Reset</AlertDialogAction>
+              <AlertDialogAction onClick={handleConfirmReset} disabled={active} className="bg-red-600 hover:bg-red-700">Clear draft</AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>

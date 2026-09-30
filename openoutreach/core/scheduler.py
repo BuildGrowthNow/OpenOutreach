@@ -739,7 +739,7 @@ def _auto_qualify_wa_leads(campaign) -> None:
         ):
             deals_col.update_one(
                 {"_id": deal_doc["_id"]},
-                {"$set": {"state": "Qualified", "active_channel": "whatsapp"}},
+                {"$set": {"state": "Qualified"}},
             )
             promoted += 1
 
@@ -751,12 +751,16 @@ def _route_deal_channels(campaign) -> None:
     """Set Deal.active_channel based on campaign.channel_sequence and lead availability.
 
     Called on every reconcile pass before task planning.
-    - Email: QUALIFIED deals with api_email → state=email_queued, active_channel=email
-    - WhatsApp: QUALIFIED deals (linkedin/null) where WA precedes linkedin
-      and lead.phone is set → active_channel=whatsapp
+    - Select the first configured channel for which a lead has usable data.
+    - Email routes to state=email_queued; WhatsApp and LinkedIn keep Qualified.
     - WA→LinkedIn fallback: FAILED WA deals with linkedin_url → QUALIFIED + linkedin
     """
     from openoutreach.mongodb.connection import get_mongodb_collection
+
+    # Visual sequences own channel selection through their graph. Legacy
+    # routing must not rewrite active_channel or state for those deals.
+    if getattr(campaign, "sequence_active", False):
+        return
 
     channel_sequence = getattr(campaign, "channel_sequence", None) or ["linkedin"]
 
@@ -765,57 +769,48 @@ def _route_deal_channels(campaign) -> None:
     if deals_col is None or leads_col is None:
         return
 
-    has_email = "email" in channel_sequence
-    has_wa = "whatsapp" in channel_sequence
+    wa_profile_id = getattr(campaign, "whatsapp_profile_id", None)
+    wa_profiles = get_mongodb_collection("whatsapp_profiles") if wa_profile_id else None
+    wa_profile = wa_profiles.find_one({"_id": wa_profile_id}) if wa_profiles is not None else None
+    wa_available = bool(wa_profile and wa_profile.get("status") in {"connected", "active"})
+    routed_email = 0
+    routed_whatsapp = 0
+    for deal_doc in deals_col.find(
+        {
+            "campaign_id": campaign.pk,
+            "state": "Qualified",
+            "active_channel": {"$in": ["linkedin", None]},
+        },
+        {"_id": 1, "lead_id": 1},
+    ):
+        lead = leads_col.find_one({"_id": deal_doc["lead_id"]}) or {}
+        contact = lead.get("contact_info") if isinstance(lead.get("contact_info"), dict) else {}
+        selected = None
+        for channel in channel_sequence:
+            if channel == "email" and (lead.get("api_email") or contact.get("email")):
+                selected = "email"
+                break
+            if channel == "whatsapp" and wa_available and lead.get("phone") and lead.get("phone_on_whatsapp") is not False:
+                selected = "whatsapp"
+                break
+            if channel == "linkedin" and (lead.get("linkedin_url") or lead.get("url")):
+                selected = "linkedin"
+                break
+        if selected == "email":
+            deals_col.update_one(
+                {"_id": deal_doc["_id"]},
+                {"$set": {"state": "email_queued", "active_channel": "email"}},
+            )
+            routed_email += 1
+        elif selected:
+            deals_col.update_one({"_id": deal_doc["_id"]}, {"$set": {"active_channel": selected}})
+            routed_whatsapp += selected == "whatsapp"
+    if routed_email:
+        logger.info("Channel route [%s]: %d deals → email_queued", campaign.pk, routed_email)
+    if routed_whatsapp:
+        logger.info("Channel route [%s]: %d deals → whatsapp", campaign.pk, routed_whatsapp)
+
     has_li = "linkedin" in channel_sequence
-
-    # Email routing — works for single-channel ["email"] and multi-channel campaigns.
-    if has_email:
-        routed = 0
-        for deal_doc in deals_col.find(
-            {
-                "campaign_id": campaign.pk,
-                "state": "Qualified",
-                "active_channel": {"$in": ["linkedin", None]},
-            },
-            {"_id": 1, "lead_id": 1},
-        ):
-            if leads_col.find_one(
-                {"_id": deal_doc["lead_id"], "api_email": {"$nin": [None, ""]}},
-                {"_id": 1},
-            ):
-                deals_col.update_one(
-                    {"_id": deal_doc["_id"]},
-                    {"$set": {"state": "email_queued", "active_channel": "email"}},
-                )
-                routed += 1
-        if routed:
-            logger.info("Channel route [%s]: %d deals → email_queued", campaign.pk, routed)
-
-    # WhatsApp routing (unchanged)
-    if len(channel_sequence) <= 1:
-        return
-
-    wa_before_li = (
-        has_wa and has_li
-        and channel_sequence.index("whatsapp") < channel_sequence.index("linkedin")
-    ) or (has_wa and not has_li)
-
-    if wa_before_li:
-        for deal_doc in deals_col.find(
-            {
-                "campaign_id": campaign.pk,
-                "state": "Qualified",
-                "active_channel": {"$in": ["linkedin", None]},
-            },
-            {"_id": 1, "lead_id": 1},
-        ):
-            if leads_col.find_one(
-                {"_id": deal_doc["lead_id"], "phone": {"$exists": True, "$ne": None}},
-                {"_id": 1},
-            ):
-                deals_col.update_one({"_id": deal_doc["_id"]}, {"$set": {"active_channel": "whatsapp"}})
-
     if has_li:
         for deal_doc in deals_col.find(
             {
@@ -886,9 +881,6 @@ def reconcile(session) -> None:
     _scan_email_replies_once(profile.user_id)
 
     for campaign in campaigns:
-        _auto_qualify_wa_leads(campaign)
-        _route_deal_channels(campaign)
-
         if getattr(campaign, "sequence_active", False):
             from openoutreach.core.sequence_executor import resolve_sequence_tasks
             created = resolve_sequence_tasks(campaign, profile.user_id)
@@ -903,6 +895,8 @@ def reconcile(session) -> None:
             if wa_profile_id and "whatsapp" in (getattr(campaign, "channel_sequence", None) or []):
                 plan_whatsapp_sync_window(campaign, wa_profile_id, profile.user_id)
         else:
+            _auto_qualify_wa_leads(campaign)
+            _route_deal_channels(campaign)
             plan_connect_window(session, campaign, connect_cap=connect_cap)
             plan_follow_up_window(session, campaign, follow_up_cap=follow_up_cap)
             plan_check_pending_window(session, campaign)

@@ -4,22 +4,39 @@ Cold-email outreach via user-supplied SMTP credentials. No platform email cost �
 bring their own Gmail / Outlook / custom SMTP. Cloudflare Workers handle open/click
 tracking and unsubscribe at the edge.
 
+## Current implementation status
+
+Email is implemented across mailbox settings, campaign scheduling, sequence and
+legacy task handling, message generation, tracked SMTP delivery, IMAP reply
+detection, backend tracking events, and lead/campaign UI. Desktop and cloud
+execution paths have channel-specific gates; implementation does not imply a
+production execution flag is enabled. See `AGENTS.md` for deployment ownership
+and production boundaries.
+
 ## What already exists
 
 | File | Status |
 |------|--------|
 | `openoutreach/emails/smtp.py` | SMTP auth-only verify (`verify_auth`) |
-| `openoutreach/emails/sender.py` | `send_email` — MIME, threading headers, STARTTLS, plaintext only |
+| `openoutreach/emails/sender.py` | `send_email` — STARTTLS, threaded replies, tracked multipart messages, unsubscribe headers |
 | `openoutreach/emails/models.py` | `Mailbox` model — host/port/creds/daily_limit, `sent_today`, `headroom_today`, `MailboxManager.least_loaded_under_cap` |
 | ~~`openoutreach/emails/icemail.py`~~ | Removed (IceMail service no longer used) |
 | ~~`openoutreach/emails/nudge.py`~~ | Removed (no callers; onboarding handled via Settings UI) |
 | `openoutreach/emails/finder.py` | Free waterfall email enrichment (domain/WHOIS/SMTP/web) |
+| `openoutreach/emails/tasks/handle_email_follow_up.py` | Email task handler with delivery policy and reply/bounce stops |
+| `openoutreach/emails/imap_checker.py` | IMAP reply detection and deal/message updates |
+| `openoutreach/emails/email_agent.py` | Subject and body generation for email touches |
+| `openoutreach/api_v2/routers/mailboxes.py` | User-owned mailbox CRUD and verification endpoints |
+| `frontend/src/components/settings/email-tab.tsx` | Mailbox settings UI |
 
-## Reference: eracle/OpenOutSend
+The campaign wizard, lead status views, visual sequence actions, scheduler, and
+tracking Worker are also implemented. Cloud WhatsApp execution remains opt-in
+through `DAEMON_V2_WHATSAPP_ENABLED` and defaults to disabled.
 
-Audited https://github.com/eracle/OpenOutSend — incomplete orchestration (no daemon driver),
-but 4 lower-level modules are worth porting as pure-Python utilities. Django models/migrations
-are incompatible with MongoDB; ignore them.
+## Optional reference: eracle/OpenOutSend
+
+The external project is retained as a source of optional enhancement ideas.
+Django models/migrations are incompatible with MongoDB and are not used here.
 
 | Source file | Port to | When | What to take |
 |---|---|---|---|
@@ -28,15 +45,8 @@ are incompatible with MongoDB; ignore them.
 | `emails/sync.py` | `openoutreach/emails/sync.py` | Phase 5 | IMAP mirror with UID cursor + 4-criteria reply detection (threading headers, from-address, `+unsub` alias, bounce classification). Saves 1–2 days vs rolling our own. |
 | `emails/warmth.py` | `openoutreach/emails/warmth.py` | v2 | IMAP Sent-folder scan → 75th-percentile daily volume → auto-reduce on bounce rate. Replaces static `daily_limit` with a dynamic ceiling. |
 
-**Gaps before email can run end-to-end:**
-- No generic SMTP import UI (use Settings → Email tab to add mailboxes individually)
-- No `email_follow_up` task type or handler
-- No email scheduler (`plan_email_follow_up_window`)
-- No LLM email writer (subject + body)
-- No Deal states for email (EMAIL_SENT / EMAIL_OPENED / EMAIL_REPLIED / EMAIL_BOUNCED)
-- `sender.py` sends plain text only — no HTML, no tracking pixel, no List-Unsubscribe
-- No Cloudflare Worker for open/click/unsubscribe tracking
-- No frontend UI (mailbox settings, campaign toggle, lead email status)
+The optional `threads.py`, `sync.py`, and `warmth.py` ideas below are possible
+future enhancements, not prerequisites for the implemented email workflow.
 
 ---
 
@@ -254,7 +264,8 @@ Handler logic:
 
 ### 4.3 `sender.py` upgrades
 
-Current `sender.py` is plaintext only. Additions:
+Tracked delivery uses multipart messages with tracking and unsubscribe headers.
+The original plaintext-only path remains available when no deal is associated.
 
 **1. Tracking token utility**
 
@@ -311,7 +322,7 @@ npx wrangler secret put BACKEND_URL   # https://outreach-api.lengrowth.com
 
 ---
 
-## Phase 5 — Multi-Step Sequence + Reply Detection
+## Phase 5 — Multi-Step Sequence + Reply Detection (implemented)
 
 **Goal:** 3-touch sequence; sequence stops automatically on reply.
 
@@ -327,9 +338,9 @@ past expected state (lead replied between task creation and execution), skip sil
 
 Configurable delays (`SiteConfig` fields): `email_followup_day1: int = 3`, `email_followup_day2: int = 7`.
 
-### 5.2 Reply detection via IMAP (v2 — after Phase 5.1 ships)
+### 5.2 Reply detection via IMAP
 
-File: `openoutreach/emails/inbox.py`
+File: `openoutreach/emails/imap_checker.py`
 
 Poll IMAP inbox at daemon idle cycle. Match inbound messages by `In-Reply-To` or
 `References` header against `deal.email_message_id`. On match: promote Deal to
@@ -434,5 +445,5 @@ Add sequence configuration section:
 - [x] Phase 2 — Deal states + email task handler + scheduler integration
 - [x] Phase 3 — LLM email writer (`email_agent.py` + `email_agent.j2`)
 - [x] Phase 4 — Cloudflare Worker (tracking pixel, click redirect, unsubscribe, backend webhook)
-- [x] Phase 5 — Multi-step sequence (3-touch, day1/day2 configurable via SiteConfig); IMAP reply detection deferred to v2
+- [x] Phase 5 — Multi-step sequence (3-touch, day1/day2 configurable via SiteConfig) and IMAP reply detection
 - [x] Phase 6 — Frontend: campaign wizard, leads list email column, Settings email tab

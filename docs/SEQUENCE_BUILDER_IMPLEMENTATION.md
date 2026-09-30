@@ -156,9 +156,10 @@ Response:
   }
   ```
   `type` values: `"action"` | `"wait"` | `"condition"` | `"end"`  
-  `channel` values: `"linkedin"` | `"email"` | `"whatsapp"` | `null`  
+  `channel` values: `"linkedin"` | `"email"` | `"whatsapp"` | `"internal"` | `null`
   `action` values: `"connect"` | `"follow_up"` | `"send_email"` | `"send_whatsapp"`  
-  `condition` values: `"always"` | `"no_reply"` | `"no_open"` | `"replied"`  
+  `condition` values include `"lead_has_email"`, `"lead_has_phone"`, `"reply_received"`,
+  `"email_opened"`, `"email_not_opened"`, `"link_clicked"`, and `"link_not_clicked"`.
   `requires` values: subset of `["api_email", "phone"]`
 
   Edge dict schema (React Flow compatible):
@@ -224,7 +225,7 @@ Extend existing `canvas.tsx` / `node.tsx` / `edge.tsx`:
   ```python
   sequence_position: str | None = None       # step_id of current step
   sequence_last_step_at: datetime | None = None
-  sequence_done: bool = False                # True on end node reached or any-channel reply
+  sequence_done: bool = False                # True when the graph reaches a stop outcome
   ```
 
 ### 4.2 Sequence executor module (backend)
@@ -248,14 +249,18 @@ Extend existing `canvas.tsx` / `node.tsx` / `edge.tsx`:
 
 ### 5.1 Stop on reply (backend)
 
-- [x] `sequence_executor.py`: at start of each deal's resolution, check for any inbound
-  `ChatMessage`. If found → `deal.sequence_done = True`.
+- [x] `sequence_executor.py`: by default, an inbound `ChatMessage` stops the sequence.
+  If the saved graph is waiting at a `reply_received` condition (directly or after a
+  wait node), evaluate it and follow its configured branch before applying the
+  default stop behavior.
 
 ### 5.2 Sequence timeline on lead detail (frontend)
 
-- [x] Backend: `GET /api/campaigns/{id}/leads/{lead_id}/sequence-timeline` returning step history.
+- [x] Backend: `GET /api/campaigns/{id}/leads/{lead_id}/sequence-timeline` uses the
+  deal's graph snapshot and recorded condition outcomes; unresolved future branches
+  remain unresolved rather than choosing an arbitrary edge.
 - [x] Lead detail page Campaigns tab: per-deal `LeadSequenceTimeline` component showing step progress
-  as a horizontal stepper (completed / active / pending states).
+  in a horizontally scrollable stepper with readable labels on narrow screens.
 
 ### 5.3 Sequence templates (frontend)
 
@@ -266,7 +271,10 @@ Extend existing `canvas.tsx` / `node.tsx` / `edge.tsx`:
 
 - [x] Backend `PATCH /campaigns/{id}/sequence` with `active: true`: validate sequence has
   ≥1 action step, ≥1 end node, no disconnected nodes. Return 400 with error list if invalid.
-- [x] Frontend: confirm modal when activating — handled via `window.confirm` in sequence builder.
+- [x] Frontend: activation confirmation summarizes required channel readiness,
+  channel and step lead coverage, blockers, warnings, and the eligible deal count.
+- [x] Reset clears only the local draft; it cannot be used while active and does
+  not imply that a saved sequence was removed.
 
 ### 5.5 Production hardening (backend + desktop + cloud)
 
@@ -316,5 +324,6 @@ Extend existing `canvas.tsx` / `node.tsx` / `edge.tsx`:
 4. **Phase 4** Execution engine (cloud + desktop daemon)
 5. **Phase 5** Templates, timeline, activation guard
 
-Do not enable `sequence_active` in production until Phase 4 is complete and tested end-to-end
-on a real campaign with all three channels.
+Activation remains operator-controlled. The readiness summary reports the
+current server-side channel execution gates; it does not assert that any
+unverified production channel flag is enabled.

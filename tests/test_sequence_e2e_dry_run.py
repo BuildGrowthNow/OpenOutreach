@@ -169,3 +169,63 @@ def test_reactivation_requeues_cancelled_sequence_task_without_advancing(monkeyp
     assert resolve_sequence_tasks(campaign, "owner") == 0
     assert tasks.docs[0]["status"] == "pending"
     assert deals.docs[0].get("sequence_position") is None
+
+
+def test_email_reply_routes_through_saved_reply_branch_and_bypasses_wait(monkeypatch):
+    steps = [
+        {"id": "wait", "type": "wait", "data": {"wait_days": 3}},
+        {"id": "reply", "type": "condition", "data": {"condition": "reply_received"}},
+        {"id": "replied", "type": "action", "data": {"channel": "linkedin", "action": "follow_up"}},
+        {"id": "stop", "type": "end", "data": {}},
+    ]
+    edges = [
+        {"id": "wait-reply", "source": "wait", "target": "reply", "data": {}},
+        {"id": "reply-yes", "source": "reply", "target": "replied", "data": {"condition": "yes"}},
+        {"id": "reply-no", "source": "reply", "target": "stop", "data": {"condition": "no"}},
+    ]
+    campaign = Campaign(_id="reply-campaign", user_id="owner", sequence_active=True, sequence_steps=steps, sequence_edges=edges)
+    deal = Deal(
+        _id="reply-deal", lead_id="reply-lead", campaign_id=campaign._id, user_id="owner",
+        state=Deal.DealState.EMAIL_REPLIED, sequence_position="wait",
+        sequence_last_step_at=datetime.now(timezone.utc),
+    ).to_dict()
+    deals = _Collection([deal])
+    tasks = _Collection()
+    collections = {
+        "deals": deals,
+        "leads": _Collection([{"_id": "reply-lead"}]),
+        "tasks": tasks,
+        "sequence_events": _Collection(),
+        "chat_messages": _Collection([{"deal_id": "reply-deal", "is_outgoing": False}]),
+    }
+    monkeypatch.setattr("openoutreach.core.sequence_executor.get_mongodb_collection", lambda name: collections.get(name))
+
+    assert resolve_sequence_tasks(campaign, "owner") == 0
+    assert deals.docs[0]["sequence_position"] == "reply"
+    deals.docs[0].pop("sequence_lock_until", None)
+    assert resolve_sequence_tasks(campaign, "owner") == 0
+    assert deals.docs[0]["sequence_position"] == "replied"
+    assert not deals.docs[0].get("sequence_done", False)
+
+
+def test_email_reply_without_reply_branch_stops_by_default(monkeypatch):
+    campaign = Campaign(
+        _id="reply-stop-campaign", user_id="owner", sequence_active=True,
+        sequence_steps=[{"id": "end", "type": "end", "data": {}}], sequence_edges=[],
+    )
+    deals = _Collection([Deal(
+        _id="reply-stop-deal", lead_id="lead", campaign_id=campaign._id,
+        state=Deal.DealState.EMAIL_REPLIED,
+    ).to_dict()])
+    collections = {
+        "deals": deals,
+        "leads": _Collection([{"_id": "lead"}]),
+        "tasks": _Collection(),
+        "sequence_events": _Collection(),
+        "chat_messages": _Collection([{"deal_id": "reply-stop-deal", "is_outgoing": False}]),
+    }
+    monkeypatch.setattr("openoutreach.core.sequence_executor.get_mongodb_collection", lambda name: collections.get(name))
+
+    assert resolve_sequence_tasks(campaign, "owner") == 0
+    assert deals.docs[0]["sequence_done"] is True
+    assert deals.docs[0]["sequence_terminal_reason"] == "email_replied"

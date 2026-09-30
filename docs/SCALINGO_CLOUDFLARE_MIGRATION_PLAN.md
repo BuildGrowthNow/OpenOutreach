@@ -6,6 +6,12 @@ Confirmed AWS source: `Linkedin-auth`, instance `i-027c586e0728aaded`, `t3.large
 Confirmed root volume: `vol-0d7f16cbe367284fd`, 35 GiB gp3, unencrypted, `DeleteOnTermination=true`  
 Cloudflare zone hostnames: `outreach.lengrowth.com`, `outreach-api.lengrowth.com`, `track.lengrowth.com`
 
+Current repository operations guidance: production deploys use the protected
+Scalingo workflow or authenticated Scalingo CLI. The manual EC2 application
+deployment workflow has been retired; the former EC2 host remains intact during
+the observation period. This repository change does not modify AWS, DNS, or
+Cloudflare resources.
+
 Execution evidence: local, timestamped, Git-ignored records are under
 `.migration-evidence/20260901-201741/`. No production infrastructure or DNS
 state has been changed. Phase 2 provisioning is intentionally paused until a
@@ -114,7 +120,7 @@ Implement on a migration branch and keep the AWS deployment functional during th
 ### CI/CD
 
 1. Add a Scalingo deployment workflow that deploys the same tested commit to production only, behind a protected production environment approval.
-2. Replace EC2 SSH deployment and billing workflows. Do not delete the old workflows yet; disable their schedules only at the production cutover gate.
+2. Replace EC2 SSH deployment and billing workflows. At the production cutover gate, disable their schedules. The obsolete manual EC2 application deployment workflow is now retired; preserve the former EC2 host and its address until all observation gates and explicit deletion approval are complete.
 3. Add rollback jobs that select the previous Scalingo deployment. Database changes must remain backward-compatible through the observation window.
 
 Gate 1:

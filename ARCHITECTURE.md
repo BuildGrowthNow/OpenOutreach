@@ -19,7 +19,7 @@ Detailed module documentation for OpenOutreach. See `CLAUDE.md` for rules and qu
 OpenOutreach automates LinkedIn outreach through a persistent task queue executed by one of two daemon modes:
 
 1. **Desktop daemon** (default): runs `openoutreach/desktop/secure_daemon.py` on the user's own machine using their residential IP and the `/api/daemon/v2` gateway.
-2. **Cloud daemon** (paid add-on): runs `openoutreach/core/daemon.py` server-side in Docker on EC2, using proxies.
+2. **Cloud daemon** (paid add-on): runs `openoutreach/core/daemon.py` as the single `daemon` process in the Scalingo `outreach-api` app.
 
 The server-side daemon uses MongoDB. The legacy desktop daemon is cut off
 from bootstrap, provider secrets, and MongoDB; it fails closed until the
@@ -27,27 +27,28 @@ API-only v2 gateway is deployed. Desktop requests are HTTPS-only and must use
 server-owned task APIs.
 
 ```
-┌────────────────────────────────────────┐
-│              AWS EC2                    │
-│  ┌─────────────┐  ┌─────────────┐      │
-│  │  Next.js    │  │  FastAPI    │      │
-│  │  Frontend   │  │  API v2     │      │
-│  └─────────────┘  └──────┬──────┘      │
-│                          │              │
-│                    ┌─────┘              │
-│                    ▼                    │
-│              ┌──────────┐              │
-│              │  MongoDB │              │
-│              │  Atlas   │              │
-│              └──────────┘              │
-└───────────────────▲────────────────────┘
-                    │ HTTPS
-        ┌───────────┴──────────────┐
-        │     User's Desktop App   │
-        │  pystray + Playwright    │
-        │  (residential IP)        │
-        └──────────────────────────┘
+┌─────────────────────────────────┐       ┌─────────────────────────────────┐
+│ Scalingo app: outreach-web       │       │ Scalingo app: outreach-api       │
+│ ┌─────────────────────────────┐ │       │ ┌────────────┐ ┌──────────────┐ │
+│ │ Next.js frontend            │ │ HTTPS │ │ FastAPI v2 │ │ one daemon   │ │
+│ └─────────────────────────────┘ │◀─────▶│ └─────┬──────┘ └──────┬───────┘ │
+└─────────────────────────────────┘       └───────┼────────────────┼───────┘
+                                                   │                │
+                                                   ▼                ▼
+                                             ┌────────────────────────┐
+                                             │ MongoDB Atlas          │
+                                             └────────────────────────┘
+
+        ┌──────────────────────────────────┐
+        │ User's Desktop App                │
+        │ pystray + Playwright              │
+        │ (residential IP; HTTPS to API)    │
+        └──────────────────────────────────┘
 ```
+
+The API and daemon use MongoDB Atlas as their system of record. The former AWS
+EC2 deployment is retained intact during the observation period; it is not an
+active deployment target.
 
 ## Project Layout
 
@@ -217,7 +218,7 @@ Signature: `handle_*(task, session, qualifiers)`
 See `CLAUDE.md` "Execution Modes" section for the authoritative description and critical code constraints.
 
 - **Desktop**: `desktop/secure_daemon.py` with the v2-only desktop client; it receives typed snapshots and receipts through `/api/daemon/v2` and never receives server credentials or database access.
-- **Cloud**: `core/daemon.py` in Docker on EC2; full `.env` file, no bootstrap needed.
+- **Cloud**: `core/daemon.py` runs as the single `daemon` process in Scalingo app `outreach-api`; desktop-enrolled profiles remain owned by the desktop daemon.
 - Both share MongoDB Atlas, task handlers, `SiteConfig`, and `authenticate()` from `linkedin_cli`.
 
 ## Key Modules
@@ -337,7 +338,8 @@ When `ENABLE_VNC=true`: x11vnc on port 5900, noVNC websockify on port 6080. Fron
 ## CI/CD
 
 - `tests.yml` - pytest in Docker on push to `main` and PRs.
-- `deploy.yml` - Tests → build + push to `ghcr.io`. Tags: `latest`, `sha-<commit>`.
+- `deploy-scalingo.yml` - protected production workflow for Scalingo deployment.
+- The former manual EC2 deployment workflow is retired. The EC2 host remains intact during the observation period.
 - `desktop-build.yml` - triggered on `desktop-v*` tags; builds Lengrowth.exe via PyInstaller, creates GitHub Release on `Lengrowth/outbound` repo.
 
 ## Analytics Contract

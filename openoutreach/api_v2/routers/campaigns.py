@@ -1448,8 +1448,9 @@ async def get_lead_sequence_timeline(
     if not deal_doc:
         raise HTTPException(status_code=404, detail="Deal not found")
 
-    steps = campaign.sequence_steps or []
-    edges = campaign.sequence_edges or []
+    snapshot = deal_doc.get("sequence_graph_snapshot") or {}
+    steps = snapshot.get("steps", campaign.sequence_steps or []) or []
+    edges = snapshot.get("edges", campaign.sequence_edges or []) or []
     current_position = deal_doc.get("sequence_position")
     sequence_done = deal_doc.get("sequence_done", False)
 
@@ -1458,19 +1459,41 @@ async def get_lead_sequence_timeline(
     root_ids = [s["id"] for s in steps if s["id"] not in edge_targets]
     root_id = root_ids[0] if root_ids else (steps[0]["id"] if steps else None)
 
-    # Find the path actually taken by this deal: BFS from root to current_position.
-    # This correctly handles branching — only the branch the deal traversed is shown.
+    events_col = get_mongodb_collection("sequence_events")
+    condition_outcomes: Dict[str, str] = {}
+    if events_col is not None:
+        for event_doc in events_col.find(
+            {"campaign_id": campaign_id, "deal_id": str(deal_doc["_id"]), "event": "condition_evaluated"},
+            {"step_id": 1, "reason": 1},
+        ):
+            reason = str(event_doc.get("reason") or "")
+            outcome = reason.rsplit(":", 1)[-1]
+            if outcome in {"yes", "no"}:
+                condition_outcomes[str(event_doc.get("step_id"))] = outcome
+
+    def _outgoing(node_id: str) -> List[Dict[str, Any]]:
+        choices = [e for e in edges if e["source"] == node_id]
+        step = step_by_id.get(node_id) or {}
+        if step.get("type") == "condition":
+            outcome = condition_outcomes.get(node_id)
+            if outcome is None:
+                return []
+            branch_edges = [e for e in choices if (e.get("data") or {}).get("condition") == outcome]
+            return branch_edges[:1]
+        return choices[:1]
+
+    # Follow evaluated condition edges only. A pending branch has no known
+    # outcome yet, so the timeline stops there instead of selecting an edge.
     def _find_path(from_id: str, to_id: Optional[str]) -> List[str]:
-        """BFS returning shortest path from from_id to to_id (inclusive)."""
+        """Return the path to the current node, or the known path to a branch."""
         if to_id is None:
-            # Deal not started yet — walk main path (first edge at each branch)
             path: List[str] = []
             cursor_inner = from_id
             visited_inner: set = set()
             while cursor_inner and cursor_inner not in visited_inner:
                 path.append(cursor_inner)
                 visited_inner.add(cursor_inner)
-                out = [e for e in edges if e["source"] == cursor_inner]
+                out = _outgoing(cursor_inner)
                 cursor_inner = out[0]["target"] if out else None
             return path
         if from_id == to_id:
@@ -1484,39 +1507,38 @@ async def get_lead_sequence_timeline(
             if node in visited_bfs:
                 continue
             visited_bfs.add(node)
-            for e in edges:
-                if e["source"] == node:
-                    new_path = path + [e["target"]]
-                    if e["target"] == to_id:
-                        return new_path
-                    queue.append(new_path)
-        # target not reachable from root via any path — fall back to linear walk
-        fallback: List[str] = []
-        c = from_id
-        vis: set = set()
-        while c and c not in vis:
-            fallback.append(c)
-            vis.add(c)
-            if c == to_id:
-                break
-            out = [e for e in edges if e["source"] == c]
-            c = out[0]["target"] if out else None
-        return fallback
+            for e in _outgoing(node):
+                new_path = path + [e["target"]]
+                if e["target"] == to_id:
+                    return new_path
+                queue.append(new_path)
+        return [from_id] if from_id == to_id else []
 
     ordered = _find_path(root_id, current_position) if root_id else []
 
-    # Append pending steps after current_position (follow first edge from here)
+    unresolved_branch_id = None
+    # Append the known future path. Stop at the first unevaluated condition.
     if current_position and not sequence_done:
         cursor = current_position
         visited_tail: set = set(ordered)
-        out = [e for e in edges if e["source"] == cursor]
+        if (step_by_id.get(cursor) or {}).get("type") == "condition" and cursor not in condition_outcomes:
+            unresolved_branch_id = cursor
+        out = _outgoing(cursor)
         nxt = out[0]["target"] if out else None
         while nxt and nxt not in visited_tail:
             ordered.append(nxt)
             visited_tail.add(nxt)
             cursor = nxt
-            out = [e for e in edges if e["source"] == cursor]
+            if (step_by_id.get(cursor) or {}).get("type") == "condition" and cursor not in condition_outcomes:
+                unresolved_branch_id = cursor
+                break
+            out = _outgoing(cursor)
             nxt = out[0]["target"] if out else None
+    elif current_position is None and not sequence_done:
+        unresolved_branch_id = next(
+            (sid for sid in ordered if (step_by_id.get(sid) or {}).get("type") == "condition" and sid not in condition_outcomes),
+            None,
+        )
 
     completed_ids: set = set()
     if current_position:
@@ -1567,6 +1589,7 @@ async def get_lead_sequence_timeline(
             "waitDays": data.get("wait_days", 0),
             "waitHours": data.get("wait_hours", 0),
             "status": status_val,
+            "branchStatus": "unresolved" if sid == unresolved_branch_id else ("resolved" if sid in condition_outcomes else None),
             "completedAt": step_completed_at.get(sid),
         }
         timeline.append(entry)
@@ -2217,6 +2240,175 @@ async def get_sequence(
         "schema_version": getattr(campaign, "sequence_schema_version", 1),
         "active": campaign.sequence_active,
         "coverage_per_step": coverage_per_step,
+    }
+
+
+@router.get("/{campaign_id}/sequence/readiness")
+async def get_sequence_readiness(campaign_id: str, user_id: str = Depends(get_current_user)):
+    """Summarize launch prerequisites and lead reach without exposing settings."""
+    campaign = models.Campaign.get(campaign_id)
+    if not campaign or not campaign.has_access(user_id):
+        raise HTTPException(status_code=404, detail="Campaign not found")
+
+    from openoutreach.config import settings
+
+    steps = campaign.sequence_steps or []
+    action_steps = [step for step in steps if step.get("type") == "action"]
+    required_channels = list(dict.fromkeys(
+        str((step.get("data") or {}).get("channel"))
+        for step in action_steps if (step.get("data") or {}).get("channel") in {"linkedin", "email", "whatsapp"}
+    ))
+    blockers: List[str] = []
+    warnings: List[str] = []
+    channels: Dict[str, Dict[str, Any]] = {}
+    links_col = get_mongodb_collection("tracked_links")
+    available_links = {
+        str(row.get("key")) for row in links_col.find({"campaign_id": campaign_id}, {"key": 1})
+        if row.get("key")
+    } if links_col is not None else set()
+    blockers.extend(
+        str(error.get("message") or "Sequence graph is not launchable.")
+        for error in validate_sequence_graph(steps, campaign.sequence_edges or [], require_launchable=True, available_links=available_links)
+    )
+
+    for channel in required_channels:
+        configured = False
+        healthy = False
+        execution_enabled = True
+        status_text = "Not configured"
+        if channel == "linkedin":
+            profiles = get_mongodb_collection("linkedin_profiles")
+            credentials = get_mongodb_collection("linkedin_credentials")
+            profile = profiles.find_one(
+                {"_id": campaign.linkedin_profile_id, "user_id": user_id},
+                {"active": 1, "cookie_data_encrypted": 1, "execution_mode": 1},
+            ) if profiles is not None and campaign.linkedin_profile_id else None
+            credential = credentials.find_one(
+                {"linkedin_profile_id": campaign.linkedin_profile_id, "user_id": user_id},
+                {"status": 1},
+            ) if credentials is not None and campaign.linkedin_profile_id else None
+            configured = profile is not None
+            desktop_owned = bool(profile and profile.get("execution_mode", "desktop") == "desktop")
+            healthy: Optional[bool] = None if desktop_owned else bool(
+                profile and profile.get("active", True) and profile.get("cookie_data_encrypted")
+            )
+            if credential and credential.get("status") in {"invalid", "expired", "locked"}:
+                healthy = False
+            status_text = (
+                "Desktop-owned; live daemon health is not available here" if desktop_owned and healthy is None
+                else "Ready" if healthy
+                else "Profile needs attention" if configured
+                else "No profile assigned"
+            )
+            execution_enabled = settings.DAEMON_V2_LINKEDIN_ENABLED
+            if desktop_owned and healthy is None:
+                warnings.append("LinkedIn profile is desktop-owned; this summary cannot verify whether its desktop daemon is online.")
+        elif channel == "email":
+            mailboxes = get_mongodb_collection("mailboxes")
+            count = mailboxes.count_documents({"user_id": user_id, "paused": {"$ne": True}}) if mailboxes is not None else 0
+            configured = count > 0
+            healthy = configured
+            status_text = "Ready" if healthy else "No active mailbox"
+            execution_enabled = settings.DAEMON_V2_EMAIL_ENABLED
+        elif channel == "whatsapp":
+            profiles = get_mongodb_collection("whatsapp_profiles")
+            profile = profiles.find_one(
+                {"_id": campaign.whatsapp_profile_id, "user_id": user_id},
+                {"status": 1},
+            ) if profiles is not None and campaign.whatsapp_profile_id else None
+            whatsapp = (campaign.channel_settings or {}).get("whatsapp", {})
+            if not isinstance(whatsapp, dict):
+                whatsapp = {}
+            configured = bool(profile and str(whatsapp.get("message_template", "")).strip())
+            healthy = bool(profile and profile.get("status") in {"connected", "active"} and configured)
+            status_text = "Ready" if healthy else "Profile or message template unavailable"
+            execution_enabled = settings.DAEMON_V2_WHATSAPP_ENABLED
+            if not execution_enabled:
+                warnings.append("WhatsApp cloud execution is disabled; WhatsApp steps will not run on the cloud daemon.")
+        else:
+            status_text = "Unsupported channel"
+
+        channels[channel] = {
+            "configured": configured,
+            "healthy": healthy,
+            "execution_enabled": execution_enabled,
+            "status": status_text,
+        }
+        if not configured or healthy is False:
+            blockers.append(f"{channel.title()} channel: {status_text}.")
+        if configured and healthy and not execution_enabled and channel != "whatsapp":
+            warnings.append(f"{channel.title()} cloud execution is disabled.")
+
+    deals_col = get_mongodb_collection("deals")
+    leads_col = get_mongodb_collection("leads")
+    deal_docs = list(deals_col.find({"campaign_id": campaign_id}, {"lead_id": 1})) if deals_col is not None else []
+    lead_ids = [row.get("lead_id") for row in deal_docs if row.get("lead_id")]
+    lead_docs = list(leads_col.find({"_id": {"$in": lead_ids}})) if leads_col is not None and lead_ids else []
+    leads_by_id = {str(row.get("_id")): row for row in lead_docs}
+    total = len(deal_docs)
+
+    channel_counts = {channel: 0 for channel in ("linkedin", "email", "whatsapp")}
+    step_coverage = []
+    zero_reach_steps = []
+    for lead in lead_docs:
+        contact = lead.get("contact_info") if isinstance(lead.get("contact_info"), dict) else {}
+        channel_counts["linkedin"] += bool(lead.get("linkedin_url") or lead.get("url"))
+        channel_counts["email"] += bool(lead.get("api_email") or contact.get("email"))
+        channel_counts["whatsapp"] += bool(lead.get("phone") and lead.get("phone_on_whatsapp") is not False)
+    for step in action_steps:
+        data = step.get("data") or {}
+        required_fields = data.get("requires") or []
+        channel = data.get("channel")
+        reached = 0
+        for lead_id in lead_ids:
+            lead = leads_by_id.get(str(lead_id), {})
+            contact = lead.get("contact_info") if isinstance(lead.get("contact_info"), dict) else {}
+            if required_fields:
+                has_coverage = all(
+                    lead.get(field) or (field == "api_email" and contact.get("email"))
+                    for field in required_fields
+                )
+            elif channel == "linkedin":
+                has_coverage = bool(lead.get("linkedin_url") or lead.get("url"))
+            elif channel == "email":
+                has_coverage = bool(lead.get("api_email") or contact.get("email"))
+            elif channel == "whatsapp":
+                has_coverage = bool(lead.get("phone") and lead.get("phone_on_whatsapp") is not False)
+            else:
+                has_coverage = True
+            if has_coverage:
+                reached += 1
+        pct = round(reached * 100 / total) if total else 0
+        entry = {"step_id": step.get("id"), "label": data.get("label") or step.get("id"), "count": reached, "total": total, "pct": pct}
+        step_coverage.append(entry)
+        if total and reached == 0:
+            zero_reach_steps.append(entry["label"])
+    if zero_reach_steps:
+        warnings.append("Zero lead coverage for: " + ", ".join(zero_reach_steps) + ".")
+    if total == 0:
+        warnings.append("No campaign deals currently have leads to process.")
+
+    active_states = [state.value for state in (
+        DealState.DISCOVERED, DealState.QUALIFIED, DealState.READY_TO_CONNECT,
+        DealState.PENDING, DealState.CONNECTED, DealState.EMAIL_QUEUED,
+        DealState.EMAIL_SENT, DealState.EMAIL_OPENED, DealState.EMAIL_REPLIED,
+        DealState.EMAIL_BOUNCED,
+    )]
+    affected_deals = deals_col.count_documents({
+        "campaign_id": campaign_id,
+        "state": {"$in": active_states},
+        "sequence_done": {"$ne": True},
+    }) if deals_col is not None else 0
+    return {
+        "channels": channels,
+        "channel_coverage": {
+            channel: {"count": int(count), "total": total, "pct": round(count * 100 / total) if total else 0}
+            for channel, count in channel_counts.items()
+        },
+        "step_coverage": step_coverage,
+        "blockers": blockers,
+        "warnings": warnings,
+        "affected_deals": affected_deals,
     }
 
 
