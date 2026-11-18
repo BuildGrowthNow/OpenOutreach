@@ -11,11 +11,20 @@ from openoutreach.mongodb.models_user import User
 logger = logging.getLogger(__name__)
 
 
-def pause_excess_linkedin_profiles(user_id: str, new_limit: int) -> dict[str, int]:
+def pause_excess_linkedin_profiles(
+    user_id: str,
+    new_limit: int,
+    *,
+    prefer_execution_mode: str | None = None,
+) -> dict[str, int]:
     """Pause LinkedIn profiles above the account limit.
 
     Pausing (not deleting) keeps data and cookies. A used proxy stays assigned
     to its original LinkedIn account and is never recycled.
+
+    ``prefer_execution_mode`` selects which profiles to pause first. Seat
+    reductions pass ``"cloud"`` so a Cloud customer never loses a desktop
+    profile merely because it was created later.
     """
     collection = get_mongodb_collection("linkedin_profiles")
     if collection is None:
@@ -28,6 +37,21 @@ def pause_excess_linkedin_profiles(user_id: str, new_limit: int) -> dict[str, in
             sort=[("created_at", 1)],
         )
     )
+
+    if prefer_execution_mode:
+        preferred = [
+            profile
+            for profile in active_profiles
+            if profile.get("execution_mode") == prefer_execution_mode
+        ]
+        others = [
+            profile
+            for profile in active_profiles
+            if profile.get("execution_mode") != prefer_execution_mode
+        ]
+        # Excess profiles are taken from the tail, so preferred-mode profiles
+        # must be last to pause them before unrelated desktop profiles.
+        active_profiles = others + preferred
 
     current_count = len(active_profiles)
     if current_count <= new_limit:
@@ -75,18 +99,28 @@ def _notify_seat_removed(user_id: str, profile: dict) -> None:
         logger.debug("Could not create seat notification: %s", type(e).__name__)
 
 
-def handle_plan_downgrade(user: User, new_limit: int) -> dict[str, int]:
+def handle_plan_downgrade(
+    user: User,
+    new_limit: int,
+    *,
+    prefer_execution_mode: str | None = None,
+) -> dict[str, int]:
     """
     Pause excess LinkedIn profiles when user downgrades plan.
 
     Args:
         user: The user object
         new_limit: New LinkedIn account limit
+        prefer_execution_mode: Optional execution mode to pause first
 
     Returns:
         {"paused": count, "error": False/True}
     """
-    return pause_excess_linkedin_profiles(user._id, new_limit)
+    return pause_excess_linkedin_profiles(
+        user._id,
+        new_limit,
+        prefer_execution_mode=prefer_execution_mode,
+    )
 
 
 def handle_wa_plan_downgrade(user: User, new_limit: int) -> dict[str, int]:

@@ -357,6 +357,11 @@ async def create_checkout(
             )
     elif request.billing_period not in ("monthly", "annual"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid billing period")
+    if request.plan_name == "cloud" and request.billing_period != "monthly":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cloud is billed monthly only",
+        )
 
     try:
         customer = create_or_get_customer(
@@ -411,7 +416,14 @@ async def create_checkout(
             config = get_site_config()
             trial_days = None
             # Cloud requires a paid subscription and never starts a trial.
-            if user.subscription_status == "none" and request.plan_name != "cloud":
+            # A Cloud-intent signup keeps that promise even if the user
+            # switches to another plan before checking out.
+            cloud_intent = user.intended_plan == "cloud"
+            if (
+                user.subscription_status == "none"
+                and request.plan_name != "cloud"
+                and not cloud_intent
+            ):
                 # Base trial duration
                 trial_days = config.trial_duration_days
                 # Add referral extension if user was referred
@@ -563,6 +575,7 @@ async def change_plan(
                 detail="Failed to update subscription",
             )
 
+        old_plan = user.plan
         old_linkedin_limit = user.linkedin_account_limit
         old_wa_limit = user.whatsapp_account_limit
         user.plan = request.plan_name
@@ -573,7 +586,12 @@ async def change_plan(
         user.save()
 
         if not is_upgrade and new_linkedin_limit < old_linkedin_limit:
-            handle_plan_downgrade(user, new_linkedin_limit)
+            prefer_cloud = old_plan == "cloud" or request.plan_name == "cloud"
+            handle_plan_downgrade(
+                user,
+                new_linkedin_limit,
+                prefer_execution_mode="cloud" if prefer_cloud else None,
+            )
         if not is_upgrade and new_wa_limit < old_wa_limit:
             handle_wa_plan_downgrade(user, new_wa_limit)
 
@@ -653,7 +671,11 @@ async def update_cloud_addon(
         user.save()
 
         if user.cloud_profiles < previous_cloud_profiles:
-            handle_plan_downgrade(user, user.linkedin_account_limit)
+            handle_plan_downgrade(
+                user,
+                user.linkedin_account_limit,
+                prefer_execution_mode="cloud",
+            )
 
         return {"cloud_profiles": user.cloud_profiles}
     except HTTPException:

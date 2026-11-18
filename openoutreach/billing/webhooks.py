@@ -65,6 +65,7 @@ def handle_checkout_session_completed(event: dict[str, Any]) -> None:
             user.billing_period = "lifetime"
             user.current_period_end = None
             user.trial_ends_at = None
+            user.intended_plan = None
             _sync_plan_limits(user)
             user.save()
             try:
@@ -91,12 +92,12 @@ def handle_checkout_session_completed(event: dict[str, Any]) -> None:
 
                 if getattr(sub, "current_period_end", None):
                     user.current_period_end = datetime.fromtimestamp(sub.current_period_end, tz=tz.utc)  # type: ignore
-
-                # Cloud checkout is complete; clear the signup intent.
-                user.intended_plan = None
         else:
             user.subscription_status = "active"
 
+        # Checkout is complete; clear the signup intent even when Stripe
+        # returns a subscription object without expanded items.
+        user.intended_plan = None
         user.save()
         try:
             send_welcome_email(user)
@@ -133,6 +134,7 @@ def handle_customer_subscription_created(event: dict[str, Any]) -> None:
 
     user.stripe_subscription_id = subscription.get("id")
     user.subscription_status = "trialing" if subscription.get("status") == "trialing" else "active"
+    user.intended_plan = None
 
     if subscription.get("trial_end"):
         user.trial_ends_at = datetime.fromtimestamp(subscription["trial_end"], tz=tz.utc)
@@ -165,6 +167,7 @@ def handle_customer_subscription_updated(event: dict[str, Any]) -> None:
     if plan_name:
         user.plan = plan_name
 
+    user.intended_plan = None
     status = subscription.get("status")
     if status == "trialing":
         user.subscription_status = "trialing"
@@ -186,7 +189,12 @@ def handle_customer_subscription_updated(event: dict[str, Any]) -> None:
     plan_changed = old_plan != plan_name and bool(plan_name)
     seats_reduced = user.cloud_profiles < old_cloud_profiles
     if plan_changed or seats_reduced:
-        _enforce_linkedin_account_limit(user._id, user.linkedin_account_limit)
+        prefer_cloud = old_plan == "cloud" or user.plan == "cloud"
+        _enforce_linkedin_account_limit(
+            user._id,
+            user.linkedin_account_limit,
+            prefer_execution_mode="cloud" if prefer_cloud else None,
+        )
     if plan_changed:
         _enforce_wa_account_limit(user._id, user.whatsapp_account_limit)
 
@@ -557,8 +565,17 @@ def _enforce_wa_account_limit(user_id: str, limit: int) -> None:
         logger.error("Failed to enforce WA account limits; user_id=%s exception_type=%s", user_id, type(e).__name__)
 
 
-def _enforce_linkedin_account_limit(user_id: str, limit: int) -> None:
+def _enforce_linkedin_account_limit(
+    user_id: str,
+    limit: int,
+    *,
+    prefer_execution_mode: str | None = None,
+) -> None:
     """Pause excess LinkedIn profiles beyond the account limit."""
     from openoutreach.billing.downgrade_handler import pause_excess_linkedin_profiles
 
-    pause_excess_linkedin_profiles(user_id, limit)
+    pause_excess_linkedin_profiles(
+        user_id,
+        limit,
+        prefer_execution_mode=prefer_execution_mode,
+    )

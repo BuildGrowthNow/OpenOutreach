@@ -44,7 +44,15 @@ export function PlanCard({
   const { amount, suffix } = getDisplayPrice();
 
   const handleSelect = () => {
-    const period = isLifetime ? "lifetime" : isAnnual ? "annual" : "monthly";
+    // Cloud is monthly-only; passing "annual" would request a price that does
+    // not exist and fail the checkout before Stripe is reached.
+    const period = isLifetime
+      ? "lifetime"
+      : isCloud
+        ? "monthly"
+        : isAnnual
+          ? "annual"
+          : "monthly";
     onSelectPlan(plan.name, period);
   };
 
