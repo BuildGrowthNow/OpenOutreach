@@ -28,6 +28,8 @@ from openoutreach.mongodb.models_user import User
 from openoutreach.linkedin.models import LinkedInProfile
 from openoutreach.billing.credential_validator import LinkedInCredentialValidator
 from openoutreach.billing.enforcement import PlanEnforcer
+from openoutreach.billing.plans import effective_linkedin_account_limit
+from openoutreach.billing.seats import release_linkedin_seat, reserve_linkedin_seat
 from openoutreach.proxies import (
     ProxyError,
     ProxyUnavailableError,
@@ -215,6 +217,7 @@ async def create_credential(
     Encrypts email and password, creates or attaches to a LinkedIn profile,
     and logs the creation event.
     """
+    seat_reserved = False
     try:
         user = User.get(user_id)
         if not user:
@@ -227,23 +230,6 @@ async def create_credential(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid execution_mode. Must be 'desktop' or 'cloud'"
             )
-
-        # If cloud execution requested, validate access
-        if execution_mode == "cloud":
-            can_use_cloud, error_msg = PlanEnforcer.can_use_cloud_execution(user)
-            if not can_use_cloud:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail={
-                        "error": error_msg,
-                        "upgrade_required": True,
-                        "recommended_action": "use_desktop",
-                    }
-                )
-
-        can_create, error_msg = PlanEnforcer.can_create_linkedin_account(user)
-        if not can_create:
-            raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail=error_msg)
 
         region: Optional[tuple[str, Optional[str], Optional[str]]] = None
         if execution_mode == "cloud":
@@ -269,9 +255,11 @@ async def create_credential(
         email_encrypted = LinkedInCredentials.encrypt(data.email)
         password_encrypted = LinkedInCredentials.encrypt(data.password)
 
-        # Get or create LinkedIn profile
+        # Resolve an existing profile first so a backup credential on an
+        # existing account does not consume another seat.
         profile = None
         created_profile = False
+        is_new_account = True
         if data.linkedin_profile_id:
             profile = LinkedInProfile.get(data.linkedin_profile_id)
             if not profile:
@@ -284,8 +272,57 @@ async def create_credential(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="LinkedIn profile belongs to another user"
                 )
-        else:
-            # Auto-create profile for this user
+            existing_credentials = list(
+                LinkedInCredentials.objects().filter(
+                    linkedin_profile_id=profile._id
+                )
+            )
+            is_new_account = not existing_credentials
+
+        if execution_mode == "cloud":
+            # A backup on an already-cloud profile must not count that profile
+            # against the cloud seat check a second time.
+            exclude_profile_id = (
+                profile._id
+                if profile and profile.execution_mode == "cloud"
+                else None
+            )
+            can_use_cloud, error_msg = PlanEnforcer.can_use_cloud_execution(
+                user,
+                exclude_profile_id=exclude_profile_id,
+            )
+            if not can_use_cloud:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail={
+                        "error": error_msg,
+                        "upgrade_required": True,
+                        "recommended_action": "use_desktop",
+                    }
+                )
+
+        if is_new_account:
+            can_create, error_msg = PlanEnforcer.can_create_linkedin_account(user)
+            if not can_create:
+                raise HTTPException(
+                    status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                    detail=error_msg,
+                )
+            seat_limit = effective_linkedin_account_limit(
+                user.plan,
+                user.cloud_profiles,
+                user.linkedin_account_limit,
+            )
+            reserved, seat_error = reserve_linkedin_seat(user_id, seat_limit)
+            if not reserved:
+                raise HTTPException(
+                    status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                    detail=seat_error or "LinkedIn account limit reached",
+                )
+            seat_reserved = True
+
+        # Create the profile only after the seat is reserved.
+        if not profile:
             profile = LinkedInProfile(
                 user_id=user_id,
                 active=True,
@@ -300,6 +337,14 @@ async def create_credential(
             created_profile = True
 
         needs_proxy = execution_mode == "cloud" and not profile.proxy_server
+        if needs_proxy:
+            from openoutreach.config import settings
+
+            if not getattr(settings, "MANAGED_PROXIES_ENABLED", True):
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Managed proxy provisioning is disabled",
+                )
         if needs_proxy and region and not find_available_proxy(
             region[0], region[1], region[2]
         ):
@@ -332,6 +377,8 @@ async def create_credential(
             rotation_required_days=data.rotation_required_days,
         )
         credential.save()
+        # The account now exists; do not release the seat on later failures.
+        seat_reserved = False
 
         # Sync login credentials and execution mode to profile.
         # Pre-populate linkedin_username with the email address so the UI shows something
@@ -367,13 +414,16 @@ async def create_credential(
                     region[2],
                 )
             except (ProxyUnavailableError, ProxyError) as exc:
-                LinkedInCredentials.delete(credential._id)
-                if created_profile:
-                    profiles_collection = get_mongodb_collection("linkedin_profiles")
-                    if profiles_collection is not None:
-                        profiles_collection.delete_one(
-                            {"_id": profile._id, "user_id": user_id}
-                        )
+                try:
+                    LinkedInCredentials.delete(credential._id)
+                    if created_profile:
+                        profiles_collection = get_mongodb_collection("linkedin_profiles")
+                        if profiles_collection is not None:
+                            profiles_collection.delete_one(
+                                {"_id": profile._id, "user_id": user_id}
+                            )
+                finally:
+                    release_linkedin_seat(user_id)
                 logger.warning("Proxy assignment failed; exception_type=%s", type(exc).__name__)
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
@@ -393,8 +443,12 @@ async def create_credential(
 
         return _build_credential_response(credential, profile)
     except HTTPException:
+        if seat_reserved:
+            release_linkedin_seat(user_id)
         raise
     except Exception as e:
+        if seat_reserved:
+            release_linkedin_seat(user_id)
         logger.error("Failed to create credential; exception_type=%s", type(e).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -594,6 +648,7 @@ async def delete_credential(
             detail="Access denied"
         )
 
+    release_seat = False
     try:
         # Clear synced fields from the owned profile; deactivate if no credentials remain.
         if credential.linkedin_profile_id:
@@ -632,6 +687,7 @@ async def delete_credential(
                     from openoutreach.proxies.service import retire_proxy_for_profile
 
                     retire_proxy_for_profile(profile_id_str)
+                    release_seat = True
 
         # Log deletion
         log_entry = LinkedInCredentialLog(
@@ -643,8 +699,10 @@ async def delete_credential(
         )
         log_entry.save()
 
-        # Delete credential
+        # Delete credential, then release the account seat.
         LinkedInCredentials.delete(credential_id)
+        if release_seat:
+            release_linkedin_seat(user_id)
 
         return None
     except Exception as e:
