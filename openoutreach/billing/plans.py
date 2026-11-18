@@ -98,6 +98,7 @@ PLANS: list[PlanDefinition] = [
             "ai_messages",
             "api_access",
             "Fully managed execution",
+            "1 LinkedIn account + managed proxy included",
             "AI included (no API key needed)",
             "No desktop app needed",
             "All Pro plan features",

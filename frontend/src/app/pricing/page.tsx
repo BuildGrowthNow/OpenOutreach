@@ -99,6 +99,7 @@ const plans: Plan[] = [
     maxCampaigns: null,
     features: [
       'Fully managed execution',
+      '1 LinkedIn account + managed proxy included',
       'AI included (no API key needed)',
       'No desktop app needed',
       'All Pro plan features',
