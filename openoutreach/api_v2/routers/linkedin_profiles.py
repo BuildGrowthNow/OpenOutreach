@@ -962,6 +962,7 @@ async def test_proxy(
             or profile_doc.get("proxy_password")
             or ""
         )
+        stored_username = profile_doc.get("proxy_username")
         if not proxy_password and stored_password:
             stored_server = (profile_doc.get("proxy_server") or "").strip()
             try:
@@ -973,6 +974,8 @@ async def test_proxy(
                 same_server = False
             if same_server:
                 proxy_password = stored_password
+                if not proxy_username or "…" in proxy_username or "***" in proxy_username:
+                    proxy_username = stored_username
 
         from openoutreach.proxies.service import check_proxy_connection
 
@@ -1028,6 +1031,11 @@ async def get_proxy_config(
 
         proxy_server = profile_doc.get("proxy_server")
         proxy_username = profile_doc.get("proxy_username")
+        proxy_mode = profile_doc.get("proxy_mode", "none")
+        if proxy_mode == "managed" and proxy_username:
+            proxy_username = (
+                f"{proxy_username[:4]}…" if len(proxy_username) > 4 else "***"
+            )
         has_proxy_password = bool(
             profile_doc.get("proxy_password_encrypted")
             or profile_doc.get("proxy_password")
@@ -1039,7 +1047,7 @@ async def get_proxy_config(
             "proxy_username": proxy_username,
             "proxy_password": "********" if has_proxy_password else None,
             "has_proxy": proxy_server is not None,
-            "proxy_mode": profile_doc.get("proxy_mode", "none"),
+            "proxy_mode": proxy_mode,
             "proxy_id": profile_doc.get("proxy_id"),
             "proxy_region_country": profile_doc.get("proxy_region_country"),
             "proxy_region_subdivision": profile_doc.get("proxy_region_subdivision"),
