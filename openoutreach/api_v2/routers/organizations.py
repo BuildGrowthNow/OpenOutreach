@@ -47,6 +47,7 @@ from openoutreach.organizations.service import (
     SeatLimitError,
     accept_invite,
     activate_org,
+    assign_desktop_profile,
     assign_seat,
     change_member_role,
     get_invite_by_token,
@@ -531,6 +532,24 @@ async def assign(
     org = _load_org(org_id, user)
     try:
         profile = assign_seat(org, user_id, body.profile_id, body.assigned_user_id)
+    except OrganizationError as exc:
+        raise _org_error(exc)
+    return _profile_response(profile)
+
+
+@router.post("/{org_id}/seats/assign-desktop", response_model=SeatProfileResponse)
+async def assign_desktop(
+    org_id: str,
+    body: SeatAssignRequest,
+    user_id: str = Depends(get_current_user),
+):
+    _require_team_enabled()
+    user = _load_user(user_id)
+    org = _load_org(org_id, user)
+    try:
+        profile = assign_desktop_profile(
+            org, user_id, body.profile_id, body.assigned_user_id
+        )
     except OrganizationError as exc:
         raise _org_error(exc)
     return _profile_response(profile)

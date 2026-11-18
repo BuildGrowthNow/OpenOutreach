@@ -746,6 +746,60 @@ def assign_seat(
     return profile
 
 
+def assign_desktop_profile(
+    org: Organization,
+    actor_user_id: str,
+    profile_id: str,
+    assigned_user_id: str,
+) -> dict[str, Any]:
+    """Assign an org-owned desktop profile to a member.
+
+    Desktop profiles run on the member's device with the local IP. They do not
+    consume a cloud seat and never receive a proxy.
+    """
+    actor = _require_actor(org, actor_user_id)
+    if not can_assign_seats(actor.role):
+        raise OrganizationPermissionError("Only owners and admins can assign desktop profiles")
+    target = get_membership(org._id, assigned_user_id)
+    if not target:
+        raise MemberNotFoundError("Assigned member not found in this workspace")
+    profile = _org_profile(org, profile_id)
+    if not profile:
+        raise SeatAssignmentError("LinkedIn profile not found in this workspace")
+    if profile.get("execution_mode") == "cloud":
+        raise SeatAssignmentError("Cloud profiles use cloud seats")
+    if profile.get("execution_mode", "desktop") != "desktop":
+        raise SeatAssignmentError("Only desktop LinkedIn profiles use desktop assignment")
+
+    profiles = get_mongodb_collection(_PROFILES_COLLECTION)
+    if profiles is None:
+        raise OrganizationError("LinkedIn profile storage is unavailable")
+    profiles.update_one(
+        {"_id": profile_id, "org_id": org._id},
+        {
+            "$set": {
+                "assigned_user_id": assigned_user_id,
+                "org_id": org._id,
+                "updated_at": utc_now(),
+            }
+        },
+    )
+    profile["assigned_user_id"] = assigned_user_id
+    audit.record_org_audit(
+        audit.EVENT_SEAT_ASSIGN,
+        org_id=org._id,
+        actor_user_id=actor_user_id,
+        target_user_id=assigned_user_id,
+        target_email=target.email,
+        metadata={
+            "profile_id": profile_id,
+            "linkedin_username": profile.get("linkedin_username"),
+            "seat_type": "desktop",
+        },
+    )
+    return profile
+
+
 def unassign_seat(
     org: Organization,
     actor_user_id: str,

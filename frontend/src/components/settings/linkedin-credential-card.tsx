@@ -322,6 +322,11 @@ export default function LinkedInCredentialCard({
                       Backup
                     </span>
                   ) : null}
+                  <span className="rounded-full border border-zinc-700 px-2 py-0.5 text-xs text-zinc-300">
+                    {credential.executionMode === "cloud"
+                      ? "Cloud · Managed proxy"
+                      : "Desktop · Local IP · No proxy"}
+                  </span>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 text-sm text-zinc-400">
                   {hasRealUsername && (

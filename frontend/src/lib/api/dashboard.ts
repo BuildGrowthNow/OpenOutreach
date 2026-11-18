@@ -1049,6 +1049,10 @@ export interface LinkedInProfile {
   active: boolean;
   connectDailyLimit: number;
   followUpDailyLimit: number;
+  execution_mode?: string;
+  proxy_mode?: string;
+  org_id?: string | null;
+  assigned_user_id?: string | null;
 }
 
 export async function getLinkedInProfiles(): Promise<

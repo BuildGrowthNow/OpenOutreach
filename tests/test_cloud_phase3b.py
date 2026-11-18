@@ -195,6 +195,34 @@ def test_mailbox_org_access(fake, team_enabled):
         asyncio.run(mailboxes_router.update_mailbox(box._id, mailboxes_router.MailboxUpdate(from_name="x"), user_id="other"))
 
 
+def test_owner_assigns_desktop_profile_without_consuming_cloud_seat(fake, team_enabled):
+    from openoutreach.organizations.service import assign_desktop_profile
+
+    owner = make_user(fake, "owner", "owner@example.com")
+    org = ensure_personal_org(owner)
+    member = make_user(
+        fake, "member", "member@example.com", plan="starter", cloud_profiles=0, org_id=org._id
+    )
+    add_member(fake, org._id, member, ROLE_MEMBER)
+    fake.collection("linkedin_profiles").insert_one(
+        {
+            "_id": "desktop-p",
+            "user_id": "owner",
+            "org_id": org._id,
+            "execution_mode": "desktop",
+            "assigned_user_id": "owner",
+            "active": True,
+        }
+    )
+    profile = assign_desktop_profile(org, "owner", "desktop-p", "member")
+    assert profile["assigned_user_id"] == "member"
+    stored = fake.collection("linkedin_profiles").find_one({"_id": "desktop-p"})
+    assert stored["assigned_user_id"] == "member"
+    assert stored["execution_mode"] == "desktop"
+    # Desktop assignment does not change the cloud seat counter.
+    assert fake.collection("linkedin_seat_usage").count_documents({}) == 0
+
+
 def test_desktop_enrollment_rejects_cloud_and_other_member(fake, team_enabled):
     owner = make_user(fake, "owner", "owner@example.com")
     org = ensure_personal_org(owner)

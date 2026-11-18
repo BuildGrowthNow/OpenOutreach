@@ -24,6 +24,8 @@ type Device = {
   channels: string[];
   revoked: boolean;
   last_seen_at: string | null;
+  org_id?: string | null;
+  local_ip?: string | null;
 };
 
 export function DesktopConnectionTab() {
@@ -31,6 +33,9 @@ export function DesktopConnectionTab() {
   const [mailboxes, setMailboxes] = useState<Mailbox[]>([]);
   const [whatsapp, setWhatsapp] = useState<WhatsAppProfile[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);
+  const desktopLinkedIn = linkedin.filter(
+    (profile) => (profile.execution_mode ?? "desktop") !== "cloud"
+  );
   const [selectedLinkedIn, setSelectedLinkedIn] = useState<string[]>([]);
   const [selectedMailboxes, setSelectedMailboxes] = useState<string[]>([]);
   const [selectedWhatsApp, setSelectedWhatsApp] = useState<string[]>([]);
@@ -93,14 +98,17 @@ export function DesktopConnectionTab() {
         {loading ? <p className="text-sm text-muted-foreground">Loading owned profiles…</p> : (
           <div className="grid gap-5 md:grid-cols-3">
             <div className="space-y-3">
-              <Label>LinkedIn profiles</Label>
-              {linkedin.length ? linkedin.map((profile) => {
+              <Label>LinkedIn profiles (desktop only)</Label>
+              {desktopLinkedIn.length ? desktopLinkedIn.map((profile) => {
                 const id = String(profile.id);
                 return <label key={id} className="flex items-center gap-2 text-sm">
                   <Checkbox checked={selectedLinkedIn.includes(id)} onCheckedChange={() => toggle(id, selectedLinkedIn, setSelectedLinkedIn)} />
-                  {profile.linkedinUsername || id}
+                  <span>
+                    {profile.linkedinUsername || id}
+                    <span className="ml-2 text-xs text-muted-foreground">Local IP · No proxy</span>
+                  </span>
                 </label>;
-              }) : <p className="text-sm text-muted-foreground">No LinkedIn profiles connected.</p>}
+              }) : <p className="text-sm text-muted-foreground">No desktop LinkedIn profiles. Cloud profiles run on the server.</p>}
             </div>
             <div className="space-y-3">
               <Label>WhatsApp numbers</Label>
@@ -134,7 +142,7 @@ export function DesktopConnectionTab() {
           {devices.length ? devices.map((device) => <div key={device.device_id} className="flex items-center justify-between rounded-md border p-3 text-sm">
             <div>
               <p className="font-medium">{device.name || device.device_id}</p>
-              <p className="text-muted-foreground">{device.platform} · v{device.version} · {device.channels.join(", ") || "no channels"}</p>
+              <p className="text-muted-foreground">{device.platform} · v{device.version} · {device.channels.join(", ") || "no channels"}{device.local_ip ? ` · Local IP ${device.local_ip}` : ""}</p>
             </div>
             {device.revoked ? <span className="text-muted-foreground">Revoked</span> : <Button variant="destructive" size="sm" onClick={async () => {
               const response = await apiClient.delete(`/daemon/v2/devices/${encodeURIComponent(device.device_id)}`);

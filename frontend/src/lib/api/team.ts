@@ -176,6 +176,20 @@ export async function assignSeat(
   });
 }
 
+export async function assignDesktopSeat(
+  orgId: string,
+  profileId: string,
+  assignedUserId: string
+): Promise<ApiResponse<OrgProfile>> {
+  return apiClient.post<OrgProfile>(
+    `/organizations/${orgId}/seats/assign-desktop`,
+    {
+      profile_id: profileId,
+      assigned_user_id: assignedUserId,
+    }
+  );
+}
+
 export async function unassignSeat(
   orgId: string,
   profileId: string

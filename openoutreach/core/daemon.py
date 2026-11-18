@@ -665,6 +665,13 @@ def _get_all_active_profiles() -> list:
             continue
         if not p.is_active:
             continue
+        if not p.proxy_server:
+            # Cloud profiles must never run on the server IP.
+            logger.warning(
+                "Cloud profile %s has no managed proxy; skipping until one is assigned",
+                p.pk,
+            )
+            continue
 
         user = p.user
         if not user:
