@@ -55,14 +55,7 @@ def validate_proxy_host(host: str) -> None:
             ip = ipaddress.ip_address(address)
         except ValueError:
             raise ProxyError("Proxy host is invalid")
-        if (
-            ip.is_private
-            or ip.is_loopback
-            or ip.is_link_local
-            or ip.is_reserved
-            or ip.is_multicast
-            or ip.is_unspecified
-        ):
+        if not ip.is_global:
             raise ProxyError("Proxy host must be a public address")
 
 

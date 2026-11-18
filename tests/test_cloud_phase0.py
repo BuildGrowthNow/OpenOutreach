@@ -31,10 +31,14 @@ from openoutreach.linkedin.exceptions import CloudProxyRequiredError
 from openoutreach.linkedin.models import LinkedInProfile
 from openoutreach.mongodb.models import LinkedInCredentials
 from openoutreach.mongodb.models_user import User
-from openoutreach.proxies.models import ProxyReuseError, ProxyUnavailableError
+from openoutreach.proxies.models import ProxyError, ProxyReuseError, ProxyUnavailableError
 from openoutreach.proxies.parser import parse_bulk_proxies
 from openoutreach.proxies.region import RegionError, normalize_region
-from openoutreach.proxies.service import assign_proxy_to_profile, import_proxies
+from openoutreach.proxies.service import (
+    assign_proxy_to_profile,
+    import_proxies,
+    validate_proxy_host,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -399,6 +403,17 @@ def test_webhook_syncs_addon_item_before_base_plan():
     assert user.plan == "cloud"
     assert user.cloud_profiles == 2
     assert user.linkedin_account_limit == 3
+
+
+def test_proxy_host_validation_blocks_private_addresses():
+    validate_proxy_host("8.8.8.8")
+
+    with pytest.raises(ProxyError):
+        validate_proxy_host("127.0.0.1")
+    with pytest.raises(ProxyError):
+        validate_proxy_host("10.0.0.1")
+    with pytest.raises(ProxyError):
+        validate_proxy_host("169.254.169.254")
 
 
 def test_proxy_parser_keeps_two_letter_password():
