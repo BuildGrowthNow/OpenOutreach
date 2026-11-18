@@ -127,11 +127,29 @@ class _Collection:
         self.documents = documents
         self.updates = []
 
+    @staticmethod
+    def _matches(document, query):
+        if "$or" in query:
+            return any(
+                _Collection._matches(document, clause)
+                for clause in query["$or"]
+            )
+        for key, condition in query.items():
+            value = document.get(key)
+            if isinstance(condition, dict):
+                if condition.get("$exists") and key not in document:
+                    return False
+                if "$nin" in condition and value in condition["$nin"]:
+                    return False
+            elif value != condition:
+                return False
+        return True
+
     def count_documents(self, query):
         return sum(
             1
             for document in self.documents
-            if document.get("proxy_password") not in (None, "")
+            if self._matches(document, query)
         )
 
     def find(self, query, projection=None):
@@ -139,7 +157,7 @@ class _Collection:
             [
                 dict(document)
                 for document in self.documents
-                if document.get("proxy_password") not in (None, "")
+                if self._matches(document, query)
             ]
         )
 
@@ -210,6 +228,31 @@ def test_migration_replaces_plaintext_in_encrypted_column(monkeypatch):
     document = collection.documents[0]
     assert "proxy_password" not in document
     assert decrypt_text(document["proxy_password_encrypted"]) == "legacy-secret"
+
+
+def test_migration_encrypts_plaintext_only_in_encrypted_column(monkeypatch):
+    from openoutreach.migrations import encrypt_proxy_passwords as migration
+
+    collection = _Collection(
+        [
+            {
+                "_id": "profile-1",
+                "user_id": "user-1",
+                "proxy_password_encrypted": "plain-text-secret",
+            }
+        ]
+    )
+
+    monkeypatch.setattr(migration, "initialize_mongodb_connection", lambda: True)
+    monkeypatch.setattr(
+        migration, "get_mongodb_collection", lambda _name: collection
+    )
+
+    assert migration.migrate_proxy_passwords(dry_run=False) is True
+
+    document = collection.documents[0]
+    assert "proxy_password" not in document
+    assert decrypt_text(document["proxy_password_encrypted"]) == "plain-text-secret"
 
 
 def test_migration_dry_run_does_not_write(monkeypatch):
