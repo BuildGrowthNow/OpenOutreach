@@ -610,14 +610,16 @@ remain gated on two-account E2E validation, a production migration dry-run, and 
 **Duration:** ~2 weeks  
 **Goal:** The admin can run a proxy pool at scale without touching MongoDB.
 
-Status (2026-11-18): implementation complete on branch
-`feature/cloud-phase1-proxy-ops`; full inventory filters/pagination, masked CSV
-export, import preview and per-line errors, bulk lifecycle actions, assignment
-history, manual and scheduled health checks, Massive fallback credentials with
-Reporting API `group_by=subuser` sync, admin usage views, audit events, and
-import/test rate limits are included. Marketing region/security copy and the
-customer managed-proxy health card are also updated. Production deploy remains
-gated on review and explicit approval.
+Status (2026-11-18): deployed to production from commit `3447ea7e` on
+`outreach-api` and `outreach-web`; `/api/health` and the web root returned 200,
+the postdeploy index hook ran, and both new proxy cron tasks are registered.
+Phase 1 includes full inventory filters/pagination, masked CSV export, import
+preview and per-line errors, bulk lifecycle actions, assignment history, manual
+and scheduled health checks, Massive fallback credentials with Reporting API
+`group_by=subuser` sync, admin usage views, audit events, and import/test rate
+limits. Marketing region/security copy and the customer managed-proxy health
+card are also updated. The Phase 0 proxy-password encryption migration remains
+pending.
 
 ### 6.1 Scope
 
