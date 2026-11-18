@@ -610,6 +610,14 @@ remain gated on two-account E2E validation, a production migration dry-run, and 
 **Duration:** ~2 weeks  
 **Goal:** The admin can run a proxy pool at scale without touching MongoDB.
 
+Status (2026-11-18): implementation complete on branch
+`feature/cloud-phase0-proxy-seats`; full inventory filters/pagination, masked CSV
+export, import preview and per-line errors, bulk lifecycle actions, assignment
+history, manual and scheduled health checks, Massive fallback credentials with
+Reporting API `group_by=subuser` sync, admin usage views, audit events, and
+import/test rate limits are included. Production deploy remains gated on review
+and explicit approval.
+
 ### 6.1 Scope
 
 1. Full admin proxy inventory:
@@ -1064,11 +1072,11 @@ send a surprise bill. Publish a fair-use clause, not a GB number.
 ### 11.4 Admin checklist
 
 - [x] Proxy inventory.
-- [ ] Bulk import/preview.
-- [ ] Test/assign/unassign/disable/retire.
+- [x] Bulk import/preview.
+- [x] Test/assign/unassign/disable/retire.
 - [ ] Massive sync/usage.
 - [ ] Org/seat view.
-- [ ] Audit log.
+- [x] Audit log.
 - [ ] Alerts.
 - [ ] Support runbook.
 
@@ -1094,8 +1102,8 @@ send a surprise bill. Publish a fair-use clause, not a GB number.
 - [x] Admin-only proxy routes.
 - [x] Tenant isolation on assignment.
 - [x] No secrets in logs/responses.
-- [ ] Audit log.
-- [ ] Rate limits on import/test.
+- [x] Audit log.
+- [x] Rate limits on import/test.
 - [x] SSRF validation for proxy URLs.
 - [ ] Device revocation.
 - [x] No proxy reuse across LinkedIn accounts.
@@ -1103,6 +1111,7 @@ send a surprise bill. Publish a fair-use clause, not a GB number.
 ### 11.7 Testing checklist
 
 - [x] Unit: seat enforcement, region builder, parser, encryption.
+- [x] Unit: proxy assignment rules, lifecycle, masked export, usage aggregation.
 - [ ] Integration: checkout/webhooks, seat sync, proxy assignment.
 - [ ] E2E cloud: signup → checkout → add account → region → proxy → verify → campaign.
 - [ ] E2E desktop: org invite → enroll → local IP → task.

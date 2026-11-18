@@ -552,6 +552,8 @@ def test_proxy_assignment_releases_claim_when_profile_races():
 
     assert proxies.release_update is not None
     assert proxies.release_update[1]["$set"]["status"] == "available"
+    assert proxies.release_update[1]["$set"]["ever_assigned"] is False
+    assert proxies.release_update[1]["$set"]["last_assigned_profile_id"] is None
 
 
 def test_profile_delete_retires_proxy():

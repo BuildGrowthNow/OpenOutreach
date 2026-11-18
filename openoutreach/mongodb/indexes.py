@@ -180,6 +180,57 @@ def ensure_all_indexes():
             ({'linkedin_profile_id': 1}, {'name': 'proxy_profile_idx', 'sparse': True}),
             ({'host': 1, 'port': 1, 'username': 1}, {'name': 'proxy_endpoint_idx'}),
             ({'assigned_user_id': 1}, {'name': 'proxy_user_idx', 'sparse': True}),
+            ({'identity_id': 1}, {'name': 'proxy_identity_idx', 'sparse': True}),
+            ({'assigned_org_id': 1}, {'name': 'proxy_org_idx', 'sparse': True}),
+            (
+                {'status': 1, 'ever_assigned': 1, 'country': 1},
+                {'name': 'proxy_available_idx'},
+            ),
+            ({'massive_subuser': 1}, {'name': 'proxy_massive_subuser_idx', 'sparse': True}),
+        ]),
+
+        ('proxy_assignments', [
+            (
+                {'proxy_id': 1, 'unassigned_at': 1},
+                {'name': 'proxy_assignment_active_idx'},
+            ),
+            (
+                {'profile_id': 1, 'unassigned_at': 1},
+                {'name': 'proxy_assignment_profile_idx'},
+            ),
+        ]),
+
+        ('proxy_health_checks', [
+            (
+                {'proxy_id': 1, 'checked_at': -1},
+                {'name': 'proxy_health_proxy_time_idx'},
+            ),
+            (
+                {'country_match': 1, 'checked_at': -1},
+                {'name': 'proxy_health_mismatch_idx', 'sparse': True},
+            ),
+        ]),
+
+        ('proxy_usage_snapshots', [
+            (
+                {'proxy_id': 1, 'period_start': -1},
+                {'name': 'proxy_usage_proxy_period_idx'},
+            ),
+            (
+                {'profile_id': 1, 'period_start': -1},
+                {'name': 'proxy_usage_profile_period_idx'},
+            ),
+        ]),
+
+        ('admin_rate_limit_events', [
+            (
+                {'admin_user_id': 1, 'action': 1, 'created_at': -1},
+                {'name': 'admin_rate_limit_idx'},
+            ),
+            (
+                {'created_at': 1},
+                {'name': 'admin_rate_limit_ttl', 'expireAfterSeconds': 604800},
+            ),
         ]),
 
 

@@ -15,6 +15,9 @@ import { adminApi, AdminAuditLog } from '@/lib/api/admin'
 const ACTIONS = [
   'delete_user', 'restore_user', 'extend_trial', 'cancel_subscription',
   'set_plan', 'force_verify_email', 'send_password_reset', 'impersonate_user',
+  'proxy.import', 'proxy.export', 'proxy.test', 'proxy.assign',
+  'proxy.unassign', 'proxy.disable', 'proxy.enable', 'proxy.retire',
+  'proxy.rotate', 'proxy.usage_sync',
 ]
 
 function timeAgo(dateStr: string) {
@@ -39,6 +42,16 @@ const ACTION_BADGE: Record<string, string> = {
   extend_trial: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30',
   force_verify_email: 'bg-purple-500/10 text-purple-400 border-purple-500/30',
   send_password_reset: 'bg-zinc-500/10 text-zinc-300 border-zinc-600',
+  'proxy.import': 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30',
+  'proxy.export': 'bg-zinc-500/10 text-zinc-300 border-zinc-600',
+  'proxy.test': 'bg-blue-500/10 text-blue-400 border-blue-500/30',
+  'proxy.assign': 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30',
+  'proxy.unassign': 'bg-amber-500/10 text-amber-400 border-amber-500/30',
+  'proxy.disable': 'bg-red-500/10 text-red-400 border-red-500/30',
+  'proxy.enable': 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30',
+  'proxy.retire': 'bg-red-500/10 text-red-400 border-red-500/30',
+  'proxy.rotate': 'bg-purple-500/10 text-purple-400 border-purple-500/30',
+  'proxy.usage_sync': 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30',
 }
 
 function AuditRow({ log }: { log: AdminAuditLog }) {

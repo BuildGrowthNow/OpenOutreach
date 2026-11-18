@@ -284,14 +284,32 @@ export interface AdminProxy {
   kind: string
   device_type: string
   status: string
+  identity_id: string | null
   linkedin_profile_id: string | null
   assigned_user_id: string | null
+  assigned_org_id: string | null
   assigned_at: string | null
+  assigned_by: string | null
+  ever_assigned: boolean
+  last_assigned_profile_id: string | null
+  last_assigned_user_id: string | null
+  last_assigned_org_id: string | null
+  massive_account_id: string | null
+  massive_subuser: string | null
+  traffic_limit_bytes: number | null
+  used_bytes: number
+  limit_reached: boolean
   last_tested_at: string | null
   last_test_ip: string | null
   last_test_country: string | null
+  last_test_city: string | null
   last_test_latency_ms: number | null
+  last_test_error_type: string | null
+  country_mismatch: boolean | null
   last_error: string | null
+  retired_at: string | null
+  disabled_at: string | null
+  rotated_at: string | null
   created_at: string | null
   updated_at: string | null
 }
@@ -303,6 +321,15 @@ export interface AdminProxyListResponse {
   proxies: AdminProxy[]
 }
 
+export interface AdminProxyStats {
+  total: number
+  status: Record<string, number>
+  provider: Record<string, number>
+  country: Record<string, number>
+  cloud_profiles_total: number
+  cloud_profiles_without_proxy: number
+}
+
 export interface AdminProxyImportResponse {
   created: number
   skipped: number
@@ -311,14 +338,148 @@ export interface AdminProxyImportResponse {
   proxies: AdminProxy[]
 }
 
+export interface AdminProxyPreviewRow {
+  line: number
+  label: string
+  protocol: string
+  host: string
+  port: number
+  username_masked: string
+  has_username: boolean
+  has_password: boolean
+  country: string
+  subdivision: string | null
+  city: string | null
+  kind: string
+  provider: string
+  region_mode: string
+  device_type: string
+}
+
+export interface AdminProxyPreviewResponse {
+  entries: number
+  valid: number
+  duplicates: number
+  failed: number
+  errors: { line: number; error: string }[]
+  preview: AdminProxyPreviewRow[]
+}
+
 export interface AdminProxyTestResponse {
   success: boolean
   message: string
   ip?: string | null
   country?: string | null
+  city?: string | null
+  expected_country?: string | null
+  country_match?: boolean | null
   status_code?: number | null
   latency_ms?: number | null
   error?: string
+  error_type?: string | null
+}
+
+export interface AdminProxyBulkTestResponse {
+  tested: number
+  passed: number
+  failed: number
+  results: { proxy_id: string; success: boolean; error?: string }[]
+}
+
+export interface AdminProxyBulkResponse {
+  action: string
+  processed: number
+  failed: number
+  results: { proxy_id: string; ok: boolean; status?: string; error?: string }[]
+}
+
+export interface AdminProxyHealthCheck {
+  id: string
+  proxy_id: string
+  checked_at: string | null
+  success: boolean
+  egress_ip: string | null
+  egress_country: string | null
+  egress_city: string | null
+  expected_country: string | null
+  country_match: boolean | null
+  latency_ms: number | null
+  error_type: string | null
+  error: string | null
+}
+
+export interface AdminProxyAssignment {
+  id: string
+  proxy_id: string
+  identity_id: string | null
+  profile_id: string | null
+  channel: string | null
+  user_id: string | null
+  org_id: string | null
+  assigned_by: string | null
+  assigned_at: string | null
+  unassigned_at: string | null
+  reason: string | null
+}
+
+export interface AdminProxyUsageEntry {
+  proxy_id?: string
+  profile_id?: string
+  workspace_id?: string | null
+  label?: string | null
+  status?: string | null
+  provider?: string | null
+  bytes: number
+  profile_ids?: string[]
+  proxy_ids?: string[]
+  workspace_ids?: string[]
+}
+
+export interface AdminProxyUsageResponse {
+  total_bytes: number
+  period_start: string | null
+  period_end: string | null
+  per_proxy: AdminProxyUsageEntry[]
+  per_profile: AdminProxyUsageEntry[]
+  per_workspace: AdminProxyUsageEntry[]
+  per_channel: { channel: string; bytes: number; proxy_ids: string[]; profile_ids: string[] }[]
+}
+
+export interface AdminMassiveStatus {
+  configured: boolean
+  parent_username_set: boolean
+  proxy_password_set: boolean
+  reporting_enabled: boolean
+  reporting_key_set: boolean
+  reporting_configured: boolean
+  host: string
+  port: number
+}
+
+export interface AdminCloudProfile {
+  id: string
+  username: string | null
+  user_id: string | null
+  email: string
+  identity_id: string | null
+  org_id: string | null
+  proxy_id: string | null
+  proxy_mode: string
+  has_proxy: boolean
+  is_active: boolean
+}
+
+export interface AdminProxyFilters {
+  status?: string
+  country?: string
+  provider?: string
+  kind?: string
+  assignment?: string
+  identity_id?: string
+  org_id?: string
+  search?: string
+  skip?: number
+  limit?: number
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -355,20 +516,28 @@ export const adminApi = {
   setPlan: (userId: string, body: SetPlanRequest) =>
     post<AdminUserDetail>(`/api/admin/users/${userId}/set-plan`, body),
 
-  getProxies: (params: {
-    status?: string
-    country?: string
-    provider?: string
-    skip?: number
-    limit?: number
-  }) =>
+  getProxies: (params: AdminProxyFilters) =>
     get<AdminProxyListResponse>('/api/admin/proxies', {
       status: params.status,
       country: params.country,
       provider: params.provider,
+      kind: params.kind,
+      assignment: params.assignment,
+      identity_id: params.identity_id,
+      org_id: params.org_id,
+      search: params.search,
       skip: params.skip?.toString(),
       limit: params.limit?.toString(),
     }),
+
+  getProxyStats: () => get<AdminProxyStats>('/api/admin/proxies/stats'),
+
+  parseProxies: (body: {
+    text: string
+    provider?: string
+    kind?: string
+    default_country?: string
+  }) => post<AdminProxyPreviewResponse>('/api/admin/proxies/parse', body),
 
   importProxies: (body: {
     text: string
@@ -376,6 +545,106 @@ export const adminApi = {
     kind?: string
     default_country?: string
   }) => post<AdminProxyImportResponse>('/api/admin/proxies/import', body),
+
+  exportProxies: (params: AdminProxyFilters) =>
+    get<string>('/api/admin/proxies/export', {
+      status: params.status,
+      country: params.country,
+      provider: params.provider,
+      kind: params.kind,
+      assignment: params.assignment,
+      identity_id: params.identity_id,
+      org_id: params.org_id,
+      search: params.search,
+    }),
+
+  getCloudProfiles: (params: { search?: string; limit?: number }) =>
+    get<{ profiles: AdminCloudProfile[] }>('/api/admin/proxies/cloud-profiles', {
+      search: params.search,
+      limit: params.limit?.toString(),
+    }),
+
+  getProxyAssignments: (params: {
+    active?: boolean
+    proxy_id?: string
+    profile_id?: string
+    skip?: number
+    limit?: number
+  }) =>
+    get<{ total: number; skip: number; limit: number; assignments: AdminProxyAssignment[] }>(
+      '/api/admin/proxies/assignments',
+      {
+        active: params.active === undefined ? undefined : String(params.active),
+        proxy_id: params.proxy_id,
+        profile_id: params.profile_id,
+        skip: params.skip?.toString(),
+        limit: params.limit?.toString(),
+      }
+    ),
+
+  getProxyHealth: (params: {
+    proxy_id?: string
+    only_failures?: boolean
+    only_mismatch?: boolean
+    skip?: number
+    limit?: number
+  }) =>
+    get<{ total: number; skip: number; limit: number; checks: AdminProxyHealthCheck[] }>(
+      '/api/admin/proxies/health',
+      {
+        proxy_id: params.proxy_id,
+        only_failures: params.only_failures === undefined ? undefined : String(params.only_failures),
+        only_mismatch: params.only_mismatch === undefined ? undefined : String(params.only_mismatch),
+        skip: params.skip?.toString(),
+        limit: params.limit?.toString(),
+      }
+    ),
+
+  getProxyUsage: (params: { period_start?: string; period_end?: string; limit?: number }) =>
+    get<AdminProxyUsageResponse>('/api/admin/proxies/usage', {
+      period_start: params.period_start,
+      period_end: params.period_end,
+      limit: params.limit?.toString(),
+    }),
+
+  getMassiveStatus: () => get<AdminMassiveStatus>('/api/admin/proxies/massive/status'),
+
+  syncMassiveUsage: (body: { from_date?: string; to_date?: string }) =>
+    post<{ matched: number; skipped: number; total_bytes: number }>(
+      '/api/admin/proxies/sync-massive',
+      body
+    ),
+
+  bulkTestProxies: (body: {
+    proxy_ids?: string[]
+    all?: boolean
+    provider?: string
+    country?: string
+    status?: string
+    assignment?: string
+    identity_id?: string
+    org_id?: string
+    kind?: string
+    search?: string
+  }) =>
+    post<AdminProxyBulkTestResponse>('/api/admin/proxies/test', {
+      action: 'test',
+      ...body,
+    }),
+
+  bulkProxyAction: (body: {
+    action: 'unassign' | 'enable' | 'disable' | 'retire'
+    proxy_ids?: string[]
+    all?: boolean
+    provider?: string
+    country?: string
+    status?: string
+    assignment?: string
+    identity_id?: string
+    org_id?: string
+    kind?: string
+    search?: string
+  }) => post<AdminProxyBulkResponse>('/api/admin/proxies/bulk', body),
 
   testProxy: (proxyId: string) =>
     post<AdminProxyTestResponse>(`/api/admin/proxies/${proxyId}/test`),
@@ -386,8 +655,26 @@ export const adminApi = {
       { profile_id: profileId }
     ),
 
+  unassignProxy: (proxyId: string, reason?: string) =>
+    post<{ proxy: AdminProxy }>(`/api/admin/proxies/${proxyId}/unassign`, { reason }),
+
   disableProxy: (proxyId: string) =>
     post<{ proxy: AdminProxy }>(`/api/admin/proxies/${proxyId}/disable`),
+
+  enableProxy: (proxyId: string) =>
+    post<{ proxy: AdminProxy }>(`/api/admin/proxies/${proxyId}/enable`),
+
+  retireProxy: (proxyId: string) =>
+    post<{ proxy: AdminProxy }>(`/api/admin/proxies/${proxyId}/retire`),
+
+  rotateProxy: (proxyId: string, password: string) =>
+    post<{ proxy: AdminProxy }>(`/api/admin/proxies/${proxyId}/rotate`, { password }),
+
+  provisionFallbackProxy: (profileId: string) =>
+    post<{ proxy: AdminProxy; profile_id: string }>(
+      '/api/admin/proxies/provision-fallback',
+      { profile_id: profileId }
+    ),
 
   extendTrial: (userId: string, days: number) =>
     post<{ ok: boolean; trial_ends_at: string }>(`/api/admin/users/${userId}/extend-trial`, { days }),

@@ -373,6 +373,56 @@ def cleanup_deleted_accounts():
 
 
 @cli.command()
+def check_proxy_health():
+    """Run daily managed-proxy health checks and store the results."""
+    import asyncio
+
+    from openoutreach.mongodb.connection import initialize_mongodb_connection
+    from openoutreach.billing.scheduled_lock import scheduled_job_lock
+    from openoutreach.proxies.service import run_health_checks
+
+    initialize_mongodb_connection()
+    with scheduled_job_lock("proxy-health-checks") as acquired:
+        if not acquired:
+            click.echo("Another proxy-health-checks job is active; exiting")
+            return
+        result = asyncio.run(run_health_checks(include_all=True))
+    click.echo(
+        f"Tested {result['tested']} proxies: "
+        f"{result['passed']} passed, {result['failed']} failed"
+    )
+
+
+@cli.command()
+@click.option('--from-date', default=None, help='Start date (YYYY-MM-DD, UTC)')
+@click.option('--to-date', default=None, help='End date (YYYY-MM-DD, UTC)')
+def sync_proxy_usage(from_date, to_date):
+    """Sync Massive Reporting API usage with group_by=subuser."""
+    import asyncio
+
+    from openoutreach.mongodb.connection import initialize_mongodb_connection
+    from openoutreach.billing.scheduled_lock import scheduled_job_lock
+    from openoutreach.proxies.massive_client import (
+        default_usage_period,
+        sync_massive_usage,
+    )
+
+    initialize_mongodb_connection()
+    default_start, default_end = default_usage_period()
+    start = from_date or default_start
+    end = to_date or default_end
+    with scheduled_job_lock("proxy-usage-sync") as acquired:
+        if not acquired:
+            click.echo("Another proxy-usage-sync job is active; exiting")
+            return
+        result = asyncio.run(sync_massive_usage(start, end))
+    click.echo(
+        f"Synced {result['matched']} proxies "
+        f"({result['skipped']} unmatched, {result['total_bytes']} bytes)"
+    )
+
+
+@cli.command()
 @click.option('--code', required=True, help='Coupon code (e.g., LAUNCH20)')
 @click.option('--type', 'discount_type', type=click.Choice(['percent', 'fixed']), required=True, help='Discount type')
 @click.option('--value', type=int, required=True, help='Discount value (percentage or cents)')

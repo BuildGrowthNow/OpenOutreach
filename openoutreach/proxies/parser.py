@@ -20,11 +20,18 @@ import re
 from typing import Any, Optional
 from urllib.parse import unquote, urlparse
 
+from openoutreach.proxies.models import (
+    DEVICE_TYPES,
+    KINDS,
+    PROVIDERS,
+    REGION_MODES,
+)
 from openoutreach.proxies.region import RegionError, normalize_country
 
 _ALLOWED_PROTOCOLS = {"http", "https", "socks5", "socks5h"}
 _HOST_RE = re.compile(r"^[A-Za-z0-9.\-_:\[\]]+$")
 _MAX_PORT = 65535
+_MAX_LABEL = 120
 
 
 class ProxyParseError(ValueError):
@@ -52,6 +59,41 @@ def _validate_host(host: str) -> str:
     return value
 
 
+def _parse_label(value: Any) -> str:
+    label = _clean(value)
+    if len(label) > _MAX_LABEL:
+        raise ProxyParseError(f"Label must be at most {_MAX_LABEL} characters")
+    return label
+
+
+def _parse_kind(value: Any, default: str = "residential") -> str:
+    kind = (_clean(value) or default).lower()
+    if kind not in KINDS:
+        raise ProxyParseError("Type must be residential, isp, mobile, or datacenter")
+    return kind
+
+
+def _parse_provider(value: Any, default: str = "manual") -> str:
+    provider = (_clean(value) or default).lower()
+    if provider not in PROVIDERS:
+        raise ProxyParseError("Provider must be manual, massive_residential, or massive_isp")
+    return provider
+
+
+def _parse_region_mode(value: Any, default: str = "targeted") -> str:
+    mode = (_clean(value) or default).lower()
+    if mode not in REGION_MODES:
+        raise ProxyParseError("Region mode must be fixed or targeted")
+    return mode
+
+
+def _parse_device_type(value: Any, default: str = "common") -> str:
+    device_type = (_clean(value) or default).lower()
+    if device_type not in DEVICE_TYPES:
+        raise ProxyParseError("Device type must be common, mobile, or tv")
+    return device_type
+
+
 def _entry(
     *,
     host: str,
@@ -62,6 +104,11 @@ def _entry(
     protocol: str = "http",
     subdivision: Optional[str] = None,
     city: Optional[str] = None,
+    label: Optional[str] = None,
+    kind: Optional[str] = None,
+    provider: Optional[str] = None,
+    region_mode: Optional[str] = None,
+    device_type: Optional[str] = None,
 ) -> dict[str, Any]:
     protocol_value = _clean(protocol).lower() or "http"
     if protocol_value not in _ALLOWED_PROTOCOLS:
@@ -85,6 +132,11 @@ def _entry(
         "country": country_value,
         "subdivision": _clean(subdivision).upper() or None,
         "city": _clean(city) or None,
+        "label": _parse_label(label),
+        "kind": _parse_kind(kind) if _clean(kind) else None,
+        "provider": _parse_provider(provider) if _clean(provider) else None,
+        "region_mode": _parse_region_mode(region_mode) if _clean(region_mode) else None,
+        "device_type": _parse_device_type(device_type) if _clean(device_type) else None,
     }
 
 
@@ -186,6 +238,11 @@ def _parse_delimited(
                         protocol=row.get(fields.get("protocol", ""), "") or "http",
                         subdivision=row.get(fields.get("subdivision", ""), ""),
                         city=row.get(fields.get("city", ""), ""),
+                        label=row.get(fields.get("label", ""), ""),
+                        kind=row.get(fields.get("type", fields.get("kind", "")), ""),
+                        provider=row.get(fields.get("provider", ""), ""),
+                        region_mode=row.get(fields.get("region_mode", ""), ""),
+                        device_type=row.get(fields.get("device_type", ""), ""),
                     ),
                 )
             )
@@ -234,6 +291,7 @@ def parse_bulk_proxies(
                 errors.append({"line": index, "error": "Duplicate proxy"})
                 continue
             seen.add(key)
+            entry["line"] = index
             entries.append(entry)
         return entries, errors
 
@@ -248,5 +306,32 @@ def parse_bulk_proxies(
             errors.append({"line": index, "error": "Duplicate proxy"})
             continue
         seen.add(key)
+        entry["line"] = index
         entries.append(entry)
     return entries, errors
+
+
+def masked_preview_entry(
+    entry: dict[str, Any],
+    *,
+    default_provider: str = "manual",
+    default_kind: str = "residential",
+) -> dict[str, Any]:
+    """Return a preview row that never contains the password or raw username."""
+    return {
+        "line": entry.get("line", 0),
+        "label": entry.get("label", ""),
+        "protocol": entry.get("protocol", "http"),
+        "host": entry.get("host", ""),
+        "port": entry.get("port", 0),
+        "username_masked": "***",
+        "has_username": bool(entry.get("username")),
+        "has_password": bool(entry.get("password")),
+        "country": entry.get("country", ""),
+        "subdivision": entry.get("subdivision"),
+        "city": entry.get("city"),
+        "kind": entry.get("kind") or default_kind,
+        "provider": entry.get("provider") or default_provider,
+        "region_mode": entry.get("region_mode") or "targeted",
+        "device_type": entry.get("device_type") or "common",
+    }

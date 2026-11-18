@@ -60,6 +60,23 @@ class Settings(BaseSettings):
     CLOUD_SEATS_ENABLED: bool = True
     MANAGED_PROXIES_ENABLED: bool = True
 
+    # Massive fallback credentials (Phase 1). These values are server-side
+    # only and must never be logged, returned by an API, or exposed to the
+    # frontend. Reseller API access is intentionally not part of Phase 1.
+    MASSIVE_PARENT_USERNAME: Optional[str] = None
+    MASSIVE_PROXY_PASSWORD: Optional[str] = None
+    MASSIVE_PROXY_HOST: str = "network.joinmassive.com"
+    MASSIVE_PROXY_PORT: int = 65534
+    MASSIVE_REPORTING_ENABLED: bool = False
+    MASSIVE_REPORTING_API_KEY: Optional[str] = None
+    MASSIVE_REPORTING_BASE_URL: str = "https://api-network.joinmassive.com/reporting"
+
+    # Admin proxy-operation rate limits (window seconds, max attempts).
+    PROXY_IMPORT_RATE_LIMIT: int = 10
+    PROXY_IMPORT_RATE_WINDOW_SECONDS: int = 3600
+    PROXY_TEST_RATE_LIMIT: int = 120
+    PROXY_TEST_RATE_WINDOW_SECONDS: int = 3600
+
     @model_validator(mode="after")
     def load_daemon_key_variants(self):
         for plain_name, encoded_name in (
