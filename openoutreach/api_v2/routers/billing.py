@@ -243,33 +243,16 @@ async def get_current_usage(
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
 
+    from openoutreach.billing.seats import count_credentialed_profiles
     from openoutreach.mongodb.connection import get_mongodb_collection
 
     try:
-        profiles_coll = get_mongodb_collection("linkedin_profiles")
         campaigns_coll = get_mongodb_collection("campaigns")
         wa_profiles_coll = get_mongodb_collection("whatsapp_profiles")
 
-        linkedin_accounts_used = 0
+        linkedin_accounts_used = count_credentialed_profiles(user_id)
         campaigns_used = 0
         whatsapp_accounts_used = 0
-
-        if profiles_coll is not None:
-            creds_coll = get_mongodb_collection("linkedin_credentials")
-            active_profile_ids = [
-                doc["_id"]
-                for doc in profiles_coll.find({"user_id": user_id, "is_active": True}, {"_id": 1})
-            ]
-            if active_profile_ids and creds_coll is not None:
-                linkedin_accounts_used = len(set(
-                    doc["linkedin_profile_id"]
-                    for doc in creds_coll.find(
-                        {"user_id": user_id, "linkedin_profile_id": {"$in": active_profile_ids}},
-                        {"linkedin_profile_id": 1},
-                    )
-                ))
-            else:
-                linkedin_accounts_used = 0
 
         if campaigns_coll is not None:
             # Count active (non-paused) campaigns - must match PlanEnforcer.can_create_campaign
@@ -536,6 +519,11 @@ async def change_plan(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cloud add-on seats are managed separately from plans",
         )
+    if request.plan_name == "lifetime":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Lifetime is purchased through checkout, not a plan change",
+        )
 
     if request.billing_period not in ("monthly", "annual"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid billing period")
@@ -623,6 +611,17 @@ async def update_cloud_addon(
     user = User.get(user_id)
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+
+    if not getattr(settings, "CLOUD_SEATS_ENABLED", True):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cloud seat management is disabled",
+        )
+    if user.plan != "cloud":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cloud seats are only available on the Cloud plan",
+        )
 
     if request.quantity < 0:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Quantity must be >= 0")
