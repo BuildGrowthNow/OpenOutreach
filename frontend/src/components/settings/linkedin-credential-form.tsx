@@ -160,6 +160,7 @@ export default function LinkedInCredentialForm({
         success?: boolean;
         error?: string;
         details?: { errorType?: string; message?: string };
+        linkedinProfileId?: string | null;
         credentials?: LinkedInCredentials;
       } | undefined;
 
@@ -177,8 +178,11 @@ export default function LinkedInCredentialForm({
       const errorType = verifyData?.details?.errorType;
       if (errorType === "awaiting_challenge") {
         setChallengeCredentialId(credentialId);
-        // Get profile ID from the credentials response
-        const profileId = verifyData?.credentials?.linkedinProfileId?.toString() || null;
+        // The verification response carries the profile ID for the VNC viewer.
+        const profileId =
+          verifyData?.linkedinProfileId?.toString() ||
+          verifyData?.credentials?.linkedinProfileId?.toString() ||
+          null;
         setChallengeProfileId(profileId);
         setShowChallengeModal(true);
         return;

@@ -122,6 +122,8 @@ class VerifyResponse(BaseModel):
     message: str
     status: str
     error: Optional[str] = None
+    details: Optional[dict] = None
+    linkedinProfileId: Optional[str] = None
 
 
 class ConfirmRequest(BaseModel):
@@ -696,7 +698,8 @@ async def verify_credential(
         return VerifyResponse(
             success=True,
             message="Credentials saved and active",
-            status=LinkedInCredentials.STATUS_ACTIVE
+            status=LinkedInCredentials.STATUS_ACTIVE,
+            linkedinProfileId=credential.linkedin_profile_id,
         )
 
     # Actual browser-based verification - cloud profiles only. Desktop profiles
@@ -857,7 +860,8 @@ async def verify_credential(
             return VerifyResponse(
                 success=True,
                 message="Credentials verified successfully",
-                status=credential.status
+                status=credential.status,
+                linkedinProfileId=profile._id,
             )
         finally:
             session.close()
@@ -889,7 +893,9 @@ async def verify_credential(
             success=False,
             message="LinkedIn requires verification. Please complete the challenge.",
             status=credential.status,
-            error=json.dumps({"errorType": "awaiting_challenge", "message": "challenge_required"})
+            error=json.dumps({"errorType": "awaiting_challenge", "message": "challenge_required"}),
+            details={"errorType": "awaiting_challenge", "message": "challenge_required"},
+            linkedinProfileId=profile._id,
         )
 
     except Exception as e:
@@ -912,7 +918,9 @@ async def verify_credential(
             success=False,
             message="Verification failed",
             status=credential.status,
-            error="Verification failed"
+            error="Verification failed",
+            details={"errorType": "verification_failed", "message": "Verification failed"},
+            linkedinProfileId=profile._id if profile else credential.linkedin_profile_id,
         )
 
 
@@ -979,7 +987,8 @@ async def confirm_credential(
         return VerifyResponse(
             success=True,
             message="Credentials confirmed",
-            status=credential.status
+            status=credential.status,
+            linkedinProfileId=profile._id if profile else credential.linkedin_profile_id,
         )
     else:
         # Check if challenge is still incomplete (user hasn't finished yet)
@@ -988,7 +997,9 @@ async def confirm_credential(
                 success=False,
                 message="Challenge not complete yet",
                 status=credential.status,
-                error=json.dumps({"errorType": "challenge_incomplete"})
+                error=json.dumps({"errorType": "challenge_incomplete"}),
+                details={"errorType": "challenge_incomplete"},
+                linkedinProfileId=profile._id,
             )
 
         # User explicitly marked as failed
@@ -1007,7 +1018,9 @@ async def confirm_credential(
         return VerifyResponse(
             success=False,
             message="Credentials marked as failed",
-            status=credential.status
+            status=credential.status,
+            details={"errorType": "verification_failed", "message": "Credentials marked as failed"},
+            linkedinProfileId=profile._id if profile else credential.linkedin_profile_id,
         )
 
 

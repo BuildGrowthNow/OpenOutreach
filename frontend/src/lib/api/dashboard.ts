@@ -949,10 +949,11 @@ export async function createLinkedInCredentials(
   data: CreateLinkedInCredentialsData,
 ): Promise<
   ApiResponse<{
-    success: boolean;
+    success?: boolean;
     id: number;
-    message: string;
-    credentials: LinkedInCredentials;
+    message?: string;
+    linkedinProfileId?: number | null;
+    credentials?: LinkedInCredentials;
   }>
 > {
   return post(
