@@ -949,6 +949,8 @@ def backfill_personal_orgs(*, dry_run: bool = True) -> dict[str, int]:
     members_collection = get_mongodb_collection(MEMBERS_COLLECTION)
     profiles_collection = get_mongodb_collection(_PROFILES_COLLECTION)
     campaigns_collection = get_mongodb_collection(_CAMPAIGNS_COLLECTION)
+    whatsapp_collection = get_mongodb_collection("whatsapp_profiles")
+    mailboxes_collection = get_mongodb_collection("mailboxes")
     if users_collection is None or orgs_collection is None or members_collection is None:
         raise OrganizationError("Organization storage is unavailable")
 
@@ -959,6 +961,7 @@ def backfill_personal_orgs(*, dry_run: bool = True) -> dict[str, int]:
         "members_created": 0,
         "profiles_backfilled": 0,
         "campaigns_backfilled": 0,
+        "channels_backfilled": 0,
     }
 
     for user_doc in users_collection.find({}):
@@ -1045,6 +1048,33 @@ def backfill_personal_orgs(*, dry_run: bool = True) -> dict[str, int]:
                 campaigns_collection.update_many(
                     campaign_filter,
                     {"$set": {"org_id": org._id}},
+                )
+
+        # Org-owned WhatsApp numbers and mailboxes. Keep the row owner as the
+        # accounting owner (the workspace owner) while preserving the creator
+        # as the assignee so member visibility stays narrow.
+        for channel_collection in (whatsapp_collection, mailboxes_collection):
+            if channel_collection is None:
+                continue
+            channel_filter = {
+                "user_id": user._id,
+                "$or": [
+                    {"org_id": {"$exists": False}},
+                    {"org_id": None},
+                ],
+            }
+            count = channel_collection.count_documents(channel_filter)
+            summary["channels_backfilled"] += count
+            if count and not dry_run:
+                channel_collection.update_many(
+                    channel_filter,
+                    {
+                        "$set": {
+                            "org_id": org._id,
+                            "assigned_user_id": user._id,
+                            "user_id": org.owner_user_id,
+                        }
+                    },
                 )
 
     logger.info(

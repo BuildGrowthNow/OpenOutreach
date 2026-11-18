@@ -12,6 +12,13 @@ from pydantic import BaseModel, Field
 from openoutreach.api_v2.dependencies_v2 import get_current_user
 from openoutreach.emails.models import Mailbox
 from openoutreach.emails.smtp import verify_auth, verify_imap_auth
+from openoutreach.mongodb.connection import get_mongodb_collection
+from openoutreach.mongodb.models_user import User
+from openoutreach.organizations.access import (
+    can_access_channel_doc,
+    channel_access_query,
+    resolve_org_context,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -65,6 +72,10 @@ class MailboxResponse(BaseModel):
     imap_port: int
     imap_username: str
     paused: bool
+    org_id: str | None = None
+    assigned_user_id: str | None = None
+    seat_id: str | None = None
+    managed: bool = False
 
 
 class MailboxTestResponse(BaseModel):
@@ -87,7 +98,21 @@ def _to_response(box: Mailbox) -> MailboxResponse:
         imap_port=box.imap_port,
         imap_username=box.imap_username,
         paused=box.paused,
+        org_id=box.org_id,
+        assigned_user_id=box.assigned_user_id,
+        seat_id=box.seat_id,
+        managed=box.managed,
     )
+
+
+def _authorized_mailbox(mailbox_id: str, user_id: str) -> Mailbox:
+    user = User.get(user_id)
+    box = Mailbox.get(mailbox_id)
+    if user is None or box is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Mailbox not found")
+    if not can_access_channel_doc(user, box.to_dict()):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Mailbox not found")
+    return box
 
 
 # ── Endpoints ─────────────────────────────────────────────────────
@@ -95,7 +120,14 @@ def _to_response(box: Mailbox) -> MailboxResponse:
 
 @router.get("", response_model=List[MailboxResponse])
 async def list_mailboxes(user_id: str = Depends(get_current_user)):
-    return [_to_response(b) for b in Mailbox.objects.all(user_id=user_id)]
+    user = User.get(user_id)
+    collection = get_mongodb_collection("mailboxes")
+    if user is None or collection is None:
+        return []
+    return [
+        _to_response(Mailbox.from_dict(doc))
+        for doc in collection.find(channel_access_query(user))
+    ]
 
 
 @router.post("/test", response_model=MailboxTestResponse)
@@ -117,8 +149,15 @@ async def create_mailbox(data: MailboxCreate, user_id: str = Depends(get_current
         if not imap_ok:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=imap_message)
 
+    user = User.get(user_id)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    ctx = resolve_org_context(user)
+
     existing = Mailbox.find_by_username(data.username)
-    if existing and existing.user_id == user_id:
+    if existing and (
+        existing.org_id == ctx.org_id or existing.user_id == user_id
+    ):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Mailbox for {data.username} already exists",
@@ -133,7 +172,11 @@ async def create_mailbox(data: MailboxCreate, user_id: str = Depends(get_current
         from_address=from_address,
         from_name=data.from_name,
         daily_limit=data.daily_limit,
-        user_id=user_id,
+        # The workspace owner is the accounting/data owner; the creator keeps
+        # the assignment so members see only their own mailboxes.
+        user_id=ctx.accounting_owner_id,
+        org_id=ctx.org_id,
+        assigned_user_id=user_id,
         imap_host=data.imap_host,
         imap_port=data.imap_port,
         imap_username=data.imap_username,
@@ -146,11 +189,7 @@ async def create_mailbox(data: MailboxCreate, user_id: str = Depends(get_current
 
 @router.patch("/{mailbox_id}", response_model=MailboxResponse)
 async def update_mailbox(mailbox_id: str, data: MailboxUpdate, user_id: str = Depends(get_current_user)):
-    box = Mailbox.get(mailbox_id)
-    if not box:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Mailbox not found")
-    if box.user_id != user_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+    box = _authorized_mailbox(mailbox_id, user_id)
     if data.from_name is not None:
         box.from_name = data.from_name
     if data.daily_limit is not None:
@@ -184,11 +223,7 @@ async def update_mailbox(mailbox_id: str, data: MailboxUpdate, user_id: str = De
 @router.patch("/{mailbox_id}/unpause", response_model=MailboxResponse)
 async def unpause_mailbox(mailbox_id: str, user_id: str = Depends(get_current_user)):
     """Clear the paused flag set by auth-failure error handling."""
-    box = Mailbox.get(mailbox_id)
-    if not box:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Mailbox not found")
-    if box.user_id != user_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+    box = _authorized_mailbox(mailbox_id, user_id)
     box.paused = False
     box.save()
     logger.info("mailboxes: unpaused %s for user %s", box.from_address, user_id)
@@ -197,11 +232,7 @@ async def unpause_mailbox(mailbox_id: str, user_id: str = Depends(get_current_us
 
 @router.delete("/{mailbox_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_mailbox(mailbox_id: str, user_id: str = Depends(get_current_user)):
-    box = Mailbox.get(mailbox_id)
-    if not box:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Mailbox not found")
-    if box.user_id != user_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
-    Mailbox.delete(mailbox_id)
+    box = _authorized_mailbox(mailbox_id, user_id)
+    Mailbox.delete(box._id)
     logger.info("mailboxes: deleted %s for user %s", mailbox_id, user_id)
     return None

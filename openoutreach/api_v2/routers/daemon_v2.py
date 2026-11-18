@@ -10,7 +10,7 @@ import secrets
 import json
 import hashlib
 from datetime import datetime, timedelta, timezone
-from typing import Any, Literal
+from typing import Any, Literal, Optional
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
@@ -212,6 +212,13 @@ class DeviceEnrollRequest(BaseModel):
     version: str = Field(min_length=1, max_length=30)
     platform: Literal["win32", "darwin", "linux"]
     capabilities: list[str] = Field(default_factory=list, max_length=30)
+    local_ip: str | None = Field(default=None, max_length=64)
+
+
+class DeviceHeartbeatRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    local_ip: str | None = Field(default=None, max_length=64)
 
 
 class DeviceEnrollResponse(BaseModel):
@@ -256,6 +263,8 @@ class DeviceResponse(BaseModel):
     channels: list[str]
     revoked: bool
     last_seen_at: datetime | None = None
+    org_id: str | None = None
+    local_ip: str | None = None
 
 
 class DaemonEvent(BaseModel):
@@ -355,11 +364,17 @@ async def create_enrollment_code(
     collection = get_mongodb_collection("daemon_enrollment_codes")
     if collection is None:
         raise HTTPException(503, "Database unavailable")
+    from openoutreach.mongodb.models_user import User
+    from openoutreach.organizations.access import resolve_org_context
+
+    enrolling_user = User.get(user_id)
+    org_id = resolve_org_context(enrolling_user).org_id if enrolling_user else None
     collection.insert_one(
         {
             "_id": str(uuid4()),
             "code_hash": code_hash,
             "user_id": user_id,
+            "org_id": org_id,
             "profile_ids": profile_ids,
             "channels": channels,
             "channel_profile_ids": bindings,
@@ -408,6 +423,8 @@ async def enroll_device(request: DeviceEnrollRequest, response: Response) -> Dev
         {
             "_id": device_id,
             "user_id": code_doc["user_id"],
+            "org_id": code_doc.get("org_id"),
+            "local_ip": request.local_ip,
             "name": code_doc["device_name"],
             "platform": request.platform,
             "version": request.version,
@@ -514,11 +531,31 @@ async def exchange_device_token(request: TokenExchangeRequest, response: Respons
     )
 
 
+def _device_scope(user_id: str) -> tuple[dict[str, Any], Optional[str]]:
+    """Return the device query for the caller's org role.
+
+    Owners/admins see every device in the active workspace. Members see only
+    their own devices. With team workspaces disabled, every user is scoped to
+    their own devices.
+    """
+    from openoutreach.mongodb.models_user import User
+    from openoutreach.organizations.access import resolve_org_context
+
+    user = User.get(user_id)
+    if user is None:
+        return {"user_id": user_id}, None
+    ctx = resolve_org_context(user)
+    if ctx.team_enabled and ctx.can_view_all_profiles:
+        return {"org_id": ctx.org_id}, ctx.org_id
+    return {"user_id": user_id}, ctx.org_id
+
+
 @router.get("/devices", response_model=list[DeviceResponse])
 async def list_devices(user_id: str = Depends(get_current_user)) -> list[DeviceResponse]:
     collection = get_mongodb_collection("daemon_devices")
     if collection is None:
         raise HTTPException(503, "Database unavailable")
+    query, _org_id = _device_scope(user_id)
     return [
         DeviceResponse(
             device_id=str(doc["_id"]),
@@ -529,9 +566,39 @@ async def list_devices(user_id: str = Depends(get_current_user)) -> list[DeviceR
             channels=[str(value) for value in doc.get("channels", [])],
             revoked=bool(doc.get("revoked", False)),
             last_seen_at=doc.get("last_seen_at"),
+            org_id=doc.get("org_id"),
+            local_ip=doc.get("local_ip"),
         )
-        for doc in collection.find({"user_id": user_id})
+        for doc in collection.find(query)
     ]
+
+
+@router.post("/devices/heartbeat")
+async def device_heartbeat(
+    body: DeviceHeartbeatRequest,
+    context: TenantContext = Depends(get_daemon_context),
+) -> dict[str, str]:
+    """Record the desktop device's last-seen time and local egress IP.
+
+    Cloud profiles never reach this endpoint; their egress is the managed
+    proxy. The local IP is for support/display only and is never used for
+    authorization.
+    """
+    collection = get_mongodb_collection("daemon_devices")
+    if collection is None:
+        raise HTTPException(503, "Database unavailable")
+    if not context.device_id:
+        raise HTTPException(401, "Device context required")
+    updates: dict[str, Any] = {"last_seen_at": datetime.now(timezone.utc)}
+    if body.local_ip:
+        updates["local_ip"] = body.local_ip
+    result = collection.update_one(
+        {"_id": context.device_id, "user_id": context.tenant_id, "revoked": False},
+        {"$set": updates},
+    )
+    if result.matched_count == 0:
+        raise HTTPException(404, "Device not found")
+    return {"status": "ok"}
 
 
 @router.delete("/devices/{device_id}")
@@ -540,10 +607,18 @@ async def revoke_device(device_id: str, user_id: str = Depends(get_current_user)
     families = get_mongodb_collection("daemon_refresh_families")
     if collection is None or families is None:
         raise HTTPException(503, "Database unavailable")
-    result = collection.update_one({"_id": device_id, "user_id": user_id}, {"$set": {"revoked": True, "revoked_at": datetime.now(timezone.utc)}})
-    if result.matched_count == 0:
+    query, _org_id = _device_scope(user_id)
+    device = collection.find_one({"_id": device_id, **query}, {"user_id": 1})
+    if not device:
         raise HTTPException(404, "Device not found")
-    families.update_many({"device_id": device_id, "user_id": user_id}, {"$set": {"revoked": True}})
+    collection.update_one(
+        {"_id": device_id},
+        {"$set": {"revoked": True, "revoked_at": datetime.now(timezone.utc)}},
+    )
+    families.update_many(
+        {"device_id": device_id, "user_id": device.get("user_id")},
+        {"$set": {"revoked": True}},
+    )
     return {"status": "revoked"}
 
 
@@ -749,6 +824,7 @@ async def execute_email_v2(
     if not task:
         raise HTTPException(status.HTTP_410_GONE, "Lease expired or no longer owned")
     expected_key = str(task.get("idempotency_key") or _snapshot(task).get("effect_key") or "")
+    task_owner = str(task.get("user_id") or context.tenant_id)
     if request.idempotency_key != expected_key:
         raise HTTPException(422, "Idempotency key does not match task effect")
     if request.mailbox_grant.task_id != request.task_id or request.mailbox_grant.mailbox_id != profile_id:
@@ -764,10 +840,19 @@ async def execute_email_v2(
             return {"status": "already_sent", "message_id": str(existing.get("message_id", ""))[:256]}
         if existing and existing.get("provider_state") == "sending":
             raise HTTPException(409, "Email send outcome is still being reconciled")
-        mailbox_collection = get_mongodb_collection("mailboxes")
-        mailbox_doc = mailbox_collection.find_one({"_id": profile_id, "user_id": context.tenant_id}) if mailbox_collection is not None else None
-        if not mailbox_doc:
+        from openoutreach.emails.models import Mailbox as MailboxModel
+        from openoutreach.mongodb.models_user import User as UserModel
+        from openoutreach.organizations.access import can_access_channel_doc
+
+        mailbox_obj = MailboxModel.get(profile_id)
+        mailbox_user = UserModel.get(context.tenant_id)
+        if (
+            mailbox_obj is None
+            or mailbox_user is None
+            or not can_access_channel_doc(mailbox_user, mailbox_obj.to_dict())
+        ):
             raise HTTPException(404, "Mailbox not found")
+        mailbox_doc = mailbox_obj.to_dict()
         try:
             from openoutreach.emails.models import Mailbox
             from openoutreach.emails.sender import send_email
@@ -789,14 +874,14 @@ async def execute_email_v2(
             task_step_id = str((task.get("payload") or {}).get("step_id", ""))
             deals = get_mongodb_collection("deals")
             deal_doc = deals.find_one(
-                {"_id": deal_id, "user_id": context.tenant_id},
+                {"_id": deal_id, "user_id": task_owner},
                 {"lead_id": 1, "email_message_id": 1, "email_first_message_id": 1,
                  "email_sequence_step": 1, "sequence_last_step_id": 1},
             ) if deal_id and deals is not None else None
             if deal_id:
                 leads = get_mongodb_collection("leads")
                 lead_doc = leads.find_one(
-                    {"_id": deal_doc.get("lead_id"), "user_id": context.tenant_id},
+                    {"_id": deal_doc.get("lead_id"), "user_id": task_owner},
                     {"email_unsubscribed": 1, "email_bounced": 1},
                 ) if leads is not None and deal_doc and deal_doc.get("lead_id") else None
                 if lead_doc and (lead_doc.get("email_unsubscribed") or lead_doc.get("email_bounced")):
@@ -851,7 +936,7 @@ async def execute_email_v2(
                     ),
                 })
             deals.update_one(
-                {"_id": deal_id, "user_id": context.tenant_id,
+                {"_id": deal_id, "user_id": task_owner,
                  "state": {"$nin": ["email_replied", "email_bounced"]}},
                 {"$set": update_fields},
             )
@@ -864,15 +949,24 @@ async def execute_email_v2(
     if request.mailbox_grant.purpose != "reply_scan":
         raise HTTPException(422, "Mailbox grant purpose mismatch")
     deal_id = str((task.get("payload") or {}).get("deal_id", ""))
+    task_owner = str(task.get("user_id") or context.tenant_id)
     deals = get_mongodb_collection("deals")
-    deal = deals.find_one({"_id": deal_id, "user_id": context.tenant_id},
+    deal = deals.find_one({"_id": deal_id, "user_id": task_owner},
                           {"email_message_id": 1, "email_first_message_id": 1}) if deals is not None and deal_id else None
     if not deal:
         return {"status": "none", "replies": []}
     from openoutreach.emails.imap_checker import find_reply
     from openoutreach.emails.models import Mailbox
+    from openoutreach.mongodb.models_user import User as UserModel
+    from openoutreach.organizations.access import can_access_channel_doc
+
     mailbox = Mailbox.get(profile_id)
-    if mailbox is None or mailbox.user_id != context.tenant_id:
+    mailbox_user = UserModel.get(context.tenant_id)
+    if (
+        mailbox is None
+        or mailbox_user is None
+        or not can_access_channel_doc(mailbox_user, mailbox.to_dict())
+    ):
         raise HTTPException(404, "Mailbox not found")
     result = find_reply(mailbox, [str(value) for value in (
         deal.get("email_message_id"), deal.get("email_first_message_id")) if value])
@@ -881,7 +975,7 @@ async def execute_email_v2(
     text, received_at = result
     if deals is not None:
         changed = deals.update_one(
-            {"_id": deal_id, "user_id": context.tenant_id,
+            {"_id": deal_id, "user_id": task_owner,
              "state": {"$in": ["email_sent", "email_opened"]}},
             {"$set": {"state": "email_replied"}},
         )
@@ -890,7 +984,7 @@ async def execute_email_v2(
                 from openoutreach.mongodb.models_extended import ChatMessage
                 ChatMessage(
                     deal_id=deal_id, content=text[:2000], is_outgoing=False,
-                    channel="email", user_id=context.tenant_id,
+                    channel="email", user_id=task_owner,
                     creation_date=received_at,
                 ).save()
             except Exception:
@@ -1123,10 +1217,30 @@ def _snapshot_is_executable(snapshot: dict[str, Any], task_type: str, channel: s
     return False
 
 
+def _task_owner_scope(context: TenantContext) -> dict[str, Any]:
+    """Return the task ownership predicate for a daemon device.
+
+    A workspace member runs tasks whose ``user_id`` is the workspace owner.
+    The device/profile binding is the authorization source for those tasks, so
+    the user_id predicate is dropped only for non-owner org members. Personal
+    devices keep the strict user_id predicate.
+    """
+    from openoutreach.mongodb.models_user import User
+    from openoutreach.organizations.access import resolve_org_context
+
+    user = User.get(context.tenant_id)
+    if user is None:
+        return {"user_id": context.tenant_id}
+    ctx = resolve_org_context(user)
+    if ctx.team_enabled and ctx.org.owner_user_id != user._id:
+        return {}
+    return {"user_id": context.tenant_id}
+
+
 def _lease_query(context: TenantContext, task_id: str, lease_id: str) -> dict[str, Any]:
     return {
         "_id": task_id,
-        "user_id": context.tenant_id,
+        **_task_owner_scope(context),
         "leased_by_device_id": context.device_id,
         "lease_id": lease_id,
         "status": "running",
@@ -1192,6 +1306,7 @@ def _project_channel_effect(context: TenantContext, task: dict[str, Any],
     and is intentionally excluded here.
     """
     channel = str(task.get("channel", ""))
+    task_owner = str(task.get("user_id") or context.tenant_id)
     if channel not in {"linkedin", "whatsapp"}:
         return
     raw_payload = task.get("payload")
@@ -1212,7 +1327,7 @@ def _project_channel_effect(context: TenantContext, task: dict[str, Any],
     deals = get_mongodb_collection("deals")
     if deals is None:
         raise HTTPException(503, "Channel effect projection unavailable")
-    deal = deals.find_one({"_id": deal_id, "user_id": context.tenant_id},
+    deal = deals.find_one({"_id": deal_id, "user_id": task_owner},
                           {"lead_id": 1, "state": 1})
     if not deal:
         raise HTTPException(404, "Deal not found")
@@ -1247,7 +1362,7 @@ def _project_channel_effect(context: TenantContext, task: dict[str, Any],
     if logs is None:
         raise HTTPException(503, "Channel activity projection unavailable")
     logs.update_one(
-        {"_id": f"daemon-effect:{effect_key}", "user_id": context.tenant_id},
+        {"_id": f"daemon-effect:{effect_key}", "user_id": task_owner},
         {"$setOnInsert": {
             "_id": f"daemon-effect:{effect_key}",
             "linkedin_profile_id": profile_id,
@@ -1259,7 +1374,7 @@ def _project_channel_effect(context: TenantContext, task: dict[str, Any],
             "status": "completed",
             "error_message": "",
             "duration_ms": None,
-            "user_id": context.tenant_id,
+            "user_id": task_owner,
         }},
         upsert=True,
     )
@@ -1288,13 +1403,13 @@ def _project_channel_effect(context: TenantContext, task: dict[str, Any],
                 f"{deal_id}|{is_outgoing}|{content}|{message_key}".encode()
             ).hexdigest()
             messages.update_one(
-                {"_id": f"daemon-wa-message:{message_hash}", "user_id": context.tenant_id},
+                {"_id": f"daemon-wa-message:{message_hash}", "user_id": task_owner},
                 {"$setOnInsert": {
                     "_id": f"daemon-wa-message:{message_hash}",
                     "deal_id": deal_id, "content": content,
-                    "owner_id": context.tenant_id,
+                    "owner_id": task_owner,
                     "linkedin_urn": "", "is_outgoing": is_outgoing,
-                    "creation_date": now, "user_id": context.tenant_id,
+                    "creation_date": now, "user_id": task_owner,
                     "channel": "whatsapp", "wa_msg_hash": message_hash,
                     "wa_delivery_status": str(raw.get("delivery_status") or "") or None,
                 }},
@@ -1304,16 +1419,16 @@ def _project_channel_effect(context: TenantContext, task: dict[str, Any],
                 saw_inbound = True
                 if content.casefold() in opt_out_markers and leads is not None and lead_id:
                     leads.update_one(
-                        {"_id": lead_id, "user_id": context.tenant_id},
+                        {"_id": lead_id, "user_id": task_owner},
                         {"$set": {"whatsapp_opted_out": True}},
                     )
                     deals.update_one(
-                        {"_id": deal_id, "user_id": context.tenant_id},
+                        {"_id": deal_id, "user_id": task_owner},
                         {"$set": {"state": "Failed", "reason": "whatsapp_opted_out"}},
                     )
         if saw_inbound:
             deals.update_one(
-                {"_id": deal_id, "user_id": context.tenant_id, "state": "Pending"},
+                {"_id": deal_id, "user_id": task_owner, "state": "Pending"},
                 {"$set": {"state": "Connected", "next_follow_up_at": now + timedelta(minutes=30)}},
             )
         return
@@ -1326,11 +1441,11 @@ def _project_channel_effect(context: TenantContext, task: dict[str, Any],
             "_id": f"daemon-message:{effect_key}",
             "deal_id": deal_id,
             "content": message,
-            "owner_id": context.tenant_id,
+            "owner_id": task_owner,
             "linkedin_urn": target_key if message_channel == "linkedin" else "",
             "is_outgoing": True,
             "creation_date": now,
-            "user_id": context.tenant_id,
+            "user_id": task_owner,
             "channel": message_channel,
         }
         if message_channel == "whatsapp":
@@ -1339,7 +1454,7 @@ def _project_channel_effect(context: TenantContext, task: dict[str, Any],
             ).hexdigest()
             message_doc["wa_delivery_status"] = "sent"
         messages.update_one(
-            {"_id": message_doc["_id"], "user_id": context.tenant_id},
+            {"_id": message_doc["_id"], "user_id": task_owner},
             {"$setOnInsert": message_doc}, upsert=True,
         )
 
@@ -1347,7 +1462,7 @@ def _project_channel_effect(context: TenantContext, task: dict[str, Any],
     if action_type == "connect":
         deal_update["state"] = "Pending"
     deals.update_one(
-        {"_id": deal_id, "user_id": context.tenant_id,
+        {"_id": deal_id, "user_id": task_owner,
          "state": {"$nin": ["email_replied", "email_bounced"]}},
         {"$set": deal_update},
     )
@@ -1397,7 +1512,7 @@ async def claim_task_v2(
             {"email_profile_id": request.profile_id},
         ]}
     query: dict[str, Any] = {
-        "user_id": context.tenant_id,
+        **_task_owner_scope(context),
         **profile_predicate,
         "channel": request.channel,
         "status": "pending",
@@ -1434,7 +1549,7 @@ async def claim_task_v2(
     snapshot = _typed_snapshot(document)
     if snapshot is None:
         collection.update_one(
-            {"_id": document["_id"], "user_id": context.tenant_id,
+            {"_id": document["_id"], **_task_owner_scope(context),
              "leased_by_device_id": context.device_id, "lease_id": lease_id,
              "status": "running"},
             {"$set": {"status": "pending", "lease_id": None,
@@ -1518,7 +1633,7 @@ async def complete_task_v2(
     if collection is None:
         raise HTTPException(503, "Database unavailable")
     now = datetime.now(timezone.utc)
-    prior = collection.find_one({"_id": task_id, "user_id": context.tenant_id})
+    prior = collection.find_one({"_id": task_id, **_task_owner_scope(context)})
     if prior:
         _require_task_binding(context, prior)
         expected_key = str(prior.get("idempotency_key") or _snapshot(prior).get("effect_key") or "")
@@ -1600,7 +1715,7 @@ async def fail_task_v2(
     if collection is None:
         raise HTTPException(503, "Database unavailable")
     now = datetime.now(timezone.utc)
-    prior = collection.find_one({"_id": task_id, "user_id": context.tenant_id,
+    prior = collection.find_one({"_id": task_id, **_task_owner_scope(context),
                                  "leased_by_device_id": context.device_id})
     if prior:
         _require_task_binding(context, prior)

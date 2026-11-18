@@ -435,10 +435,12 @@ def ensure_all_indexes():
             ({'code_hash': 1}, {'name': 'daemon_enrollment_code_hash_unique', 'unique': True}),
             ({'expires_at': 1}, {'name': 'daemon_enrollment_expiry_ttl', 'expireAfterSeconds': 0}),
             ({'user_id': 1, 'used': 1}, {'name': 'daemon_enrollment_user_used_idx'}),
+            ({'org_id': 1, 'used': 1}, {'name': 'daemon_enrollment_org_used_idx', 'sparse': True}),
         ]),
         ('daemon_devices', [
             ({'user_id': 1, 'revoked': 1}, {'name': 'daemon_device_user_status_idx'}),
             ({'user_id': 1, 'last_seen_at': -1}, {'name': 'daemon_device_user_seen_idx'}),
+            ({'org_id': 1, 'revoked': 1}, {'name': 'daemon_device_org_status_idx', 'sparse': True}),
         ]),
         ('daemon_refresh_families', [
             ({'device_id': 1, 'token_hash': 1}, {'name': 'daemon_refresh_device_hash_unique', 'unique': True}),

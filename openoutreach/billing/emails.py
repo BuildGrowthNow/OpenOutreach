@@ -369,8 +369,8 @@ def send_trial_expiry_warning(user: User, days_remaining: int) -> bool:
         + _ul([
             "<strong style=\"color:#f4f4f5;\">Starter - $19/month:</strong> 1 LinkedIn account, 3 campaigns",
             "<strong style=\"color:#f4f4f5;\">Pro - $49/month:</strong> 1 LinkedIn account, unlimited campaigns, voice notes, API access",
-            "<strong style=\"color:#f4f4f5;\">Business - $99/month:</strong> 3 LinkedIn accounts, team members, priority support",
-            "<strong style=\"color:#f4f4f5;\">Agency - $249/month:</strong> 10 LinkedIn accounts, white-label branding, unlimited team members",
+            "<strong style=\"color:#f4f4f5;\">Business - $99/month:</strong> 3 LinkedIn accounts, shared team workspace (rollout), priority support",
+            "<strong style=\"color:#f4f4f5;\">Agency - $249/month:</strong> 10 LinkedIn accounts, white-label branding, shared team workspace (rollout)",
         ])
         + _btn(f"{app_url}/settings/plan", "Choose a Plan")
         + _divider()
@@ -388,8 +388,8 @@ Your {brand} trial expires tomorrow. After that, your campaigns will pause.
 Available plans:
 - Starter - $19/month: 1 LinkedIn account, 3 campaigns
 - Pro - $49/month: 1 LinkedIn account, unlimited campaigns, voice notes, API access
-- Business - $99/month: 3 LinkedIn accounts, team members, priority support
-- Agency - $249/month: 10 LinkedIn accounts, white-label branding, unlimited team members
+- Business - $99/month: 3 LinkedIn accounts, shared team workspace (rollout), priority support
+- Agency - $249/month: 10 LinkedIn accounts, white-label branding, shared team workspace (rollout)
 
 Choose a plan: {app_url}/settings/plan
 

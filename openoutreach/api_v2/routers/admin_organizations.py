@@ -66,6 +66,8 @@ class AdminOrgDetailResponse(BaseModel):
     organization: OrganizationAdminResponse
     members: list[AdminMemberResponse]
     profiles: list[dict]
+    proxies: list[dict] = Field(default_factory=list)
+    usage: dict = Field(default_factory=dict)
     audit_events: list[dict]
 
 
@@ -164,6 +166,51 @@ async def get_organization(org_id: str) -> AdminOrgDetailResponse:
             }
             for doc in profiles.find({"org_id": org._id})
         ]
+    proxies_collection = get_mongodb_collection("proxies")
+    proxy_docs: list[dict] = []
+    if proxies_collection is not None:
+        proxy_docs = [
+            {
+                "id": str(doc.get("_id")),
+                "provider": doc.get("provider"),
+                "status": doc.get("status"),
+                "country": doc.get("country"),
+                "subdivision": doc.get("subdivision"),
+                "city": doc.get("city"),
+                "profile_id": doc.get("linkedin_profile_id"),
+                "assigned_user_id": doc.get("assigned_user_id"),
+                "massive_status": doc.get("massive_status"),
+                "massive_used_bytes": doc.get("massive_used_bytes") or doc.get("used_bytes") or 0,
+                "massive_limit_bytes": doc.get("massive_limit_bytes") or doc.get("traffic_limit_bytes"),
+                "massive_limit_reached": bool(
+                    doc.get("massive_limit_reached") or doc.get("limit_reached")
+                ),
+                "proxy_access": doc.get("massive_proxy_access"),
+                "last_test_country": doc.get("last_test_country"),
+                "country_mismatch": (
+                    str(doc.get("country") or "").upper()
+                    != str(doc.get("last_test_country") or "").upper()
+                    if doc.get("country") and doc.get("last_test_country")
+                    else None
+                ),
+            }
+            for doc in proxies_collection.find(
+                {"$or": [
+                    {"assigned_org_id": org._id},
+                    {"last_assigned_org_id": org._id},
+                ]}
+            )
+        ]
+    usage_collection = get_mongodb_collection("proxy_usage_snapshots")
+    usage_bytes = 0
+    per_channel: dict[str, int] = {}
+    if usage_collection is not None:
+        for doc in usage_collection.find({"org_id": org._id}):
+            amount = int(doc.get("bytes") or 0)
+            usage_bytes += amount
+            channel = str(doc.get("channel") or "linkedin")
+            per_channel[channel] = per_channel.get(channel, 0) + amount
+
     return AdminOrgDetailResponse(
         organization=_admin_org_response(org),
         members=[
@@ -178,6 +225,21 @@ async def get_organization(org_id: str) -> AdminOrgDetailResponse:
             for member in members
         ],
         profiles=profile_docs,
+        proxies=proxy_docs,
+        usage={
+            "total_bytes": usage_bytes,
+            "per_channel": per_channel,
+            "proxies": len(proxy_docs),
+            "limit_reached": sum(
+                1 for proxy in proxy_docs if proxy.get("massive_limit_reached")
+            ),
+            "access_revoked": sum(
+                1 for proxy in proxy_docs if proxy.get("proxy_access") is False
+            ),
+            "country_mismatch": sum(
+                1 for proxy in proxy_docs if proxy.get("country_mismatch")
+            ),
+        },
         audit_events=[
             {
                 "id": str(event.get("_id")),

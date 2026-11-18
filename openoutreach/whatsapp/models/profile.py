@@ -25,6 +25,15 @@ class WhatsAppProfile:
         self,
         _id: Optional[str] = None,
         user_id: str = "",
+        org_id: Optional[str] = None,
+        assigned_user_id: Optional[str] = None,
+        identity_id: Optional[str] = None,
+        execution_mode: str = "desktop",
+        proxy_id: Optional[str] = None,
+        proxy_mode: str = "none",
+        proxy_region_country: Optional[str] = None,
+        proxy_region_subdivision: Optional[str] = None,
+        proxy_region_city: Optional[str] = None,
         phone_number: Optional[str] = None,
         display_name: Optional[str] = None,
         session_data_encrypted: Optional[str] = None,
@@ -36,6 +45,15 @@ class WhatsAppProfile:
     ):
         self._id = _id or str(uuid4())
         self.user_id = user_id
+        self.org_id = org_id
+        self.assigned_user_id = assigned_user_id or user_id
+        self.identity_id = identity_id
+        self.execution_mode = execution_mode if execution_mode in {"desktop", "cloud"} else "desktop"
+        self.proxy_id = proxy_id
+        self.proxy_mode = proxy_mode
+        self.proxy_region_country = proxy_region_country
+        self.proxy_region_subdivision = proxy_region_subdivision
+        self.proxy_region_city = proxy_region_city
         self.phone_number = phone_number
         self.display_name = display_name
         self.session_data_encrypted = session_data_encrypted
@@ -86,6 +104,15 @@ class WhatsAppProfile:
         data: dict = {
             "_id": self._id,
             "user_id": self.user_id,
+            "org_id": self.org_id,
+            "assigned_user_id": self.assigned_user_id,
+            "identity_id": self.identity_id,
+            "execution_mode": self.execution_mode,
+            "proxy_id": self.proxy_id,
+            "proxy_mode": self.proxy_mode,
+            "proxy_region_country": self.proxy_region_country,
+            "proxy_region_subdivision": self.proxy_region_subdivision,
+            "proxy_region_city": self.proxy_region_city,
             "status": self.status,
             "created_at": self.created_at,
         }
@@ -108,6 +135,15 @@ class WhatsAppProfile:
         return cls(
             _id=str(data.get("_id")),
             user_id=data.get("user_id", ""),
+            org_id=data.get("org_id"),
+            assigned_user_id=data.get("assigned_user_id"),
+            identity_id=data.get("identity_id"),
+            execution_mode=data.get("execution_mode", "desktop"),
+            proxy_id=data.get("proxy_id"),
+            proxy_mode=data.get("proxy_mode", "none"),
+            proxy_region_country=data.get("proxy_region_country"),
+            proxy_region_subdivision=data.get("proxy_region_subdivision"),
+            proxy_region_city=data.get("proxy_region_city"),
             phone_number=data.get("phone_number"),
             display_name=data.get("display_name"),
             session_data_encrypted=data.get("session_data_encrypted"),
@@ -149,6 +185,19 @@ class WhatsAppProfile:
         if collection is None:
             return []
         return [cls.from_dict(d) for d in collection.find({"user_id": user_id})]
+
+    @classmethod
+    def find_for_user(cls, user) -> List["WhatsAppProfile"]:
+        """Return org-scoped profiles visible to one authenticated user."""
+        from openoutreach.organizations.access import channel_access_query
+
+        collection = get_mongodb_collection("whatsapp_profiles")
+        if collection is None:
+            return []
+        return [
+            cls.from_dict(d)
+            for d in collection.find(channel_access_query(user))
+        ]
 
     @classmethod
     def delete(cls, profile_id: str) -> bool:

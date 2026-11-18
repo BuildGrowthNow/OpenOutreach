@@ -205,7 +205,12 @@ def profile_authorized_for_tenant(
         doc = collection.find_one({"_id": profile_id})
         if doc is None:
             return not require_exists
-        return doc.get("user_id") == tenant_id
+        if user is None:
+            return False
+        if channel == "whatsapp" and doc.get("execution_mode") == "cloud":
+            # Cloud WhatsApp has no proxy support until Phase 4.
+            return False
+        return can_access_channel_doc(user, doc)
     collection = get_mongodb_collection(_PROFILES_COLLECTION)
     if collection is None:
         return not require_exists
@@ -213,6 +218,10 @@ def profile_authorized_for_tenant(
     if profile is None:
         return not require_exists
     if user is None:
+        return False
+    # The desktop daemon must never enroll a cloud profile: cloud profiles
+    # are owned by the server daemon and carry a managed proxy.
+    if profile.get("execution_mode") == "cloud":
         return False
     return can_access_profile_doc(user, profile)
 
@@ -225,6 +234,42 @@ def org_member_user_ids(org_id: str) -> set[str]:
         str(doc["user_id"])
         for doc in collection.find({"org_id": org_id, "status": STATUS_ACTIVE})
     }
+
+
+def channel_access_query(user: User) -> dict[str, Any]:
+    """Return the Mongo predicate for org-scoped WhatsApp/mailbox rows.
+
+    Owners and admins see every channel in the workspace; members see only the
+    rows assigned to them. Legacy personal rows without ``org_id`` stay visible
+    to their owner during rollout.
+    """
+    ctx = resolve_org_context(user)
+    if not ctx.team_enabled:
+        return {
+            "$or": [
+                {"org_id": ctx.org_id},
+                {"org_id": {"$exists": False}, "user_id": user._id},
+                {"org_id": None, "user_id": user._id},
+            ]
+        }
+    if ctx.can_view_all_profiles:
+        return {"org_id": ctx.org_id}
+    return {"org_id": ctx.org_id, "assigned_user_id": user._id}
+
+
+def can_access_channel_doc(user: User, doc: Optional[dict[str, Any]]) -> bool:
+    """Return whether the user may read or mutate one channel row."""
+    if not doc:
+        return False
+    ctx = resolve_org_context(user)
+    doc_org = doc.get("org_id")
+    if doc_org == ctx.org_id:
+        if ctx.can_view_all_profiles:
+            return True
+        return doc.get("assigned_user_id") == user._id
+    if not doc_org and doc.get("user_id") == user._id:
+        return True
+    return False
 
 
 def campaign_access_query(user: User) -> dict[str, Any]:
