@@ -1023,7 +1023,7 @@ send a surprise bill. Publish a fair-use clause, not a GB number.
 ### 11.1 Marketing website checklist
 
 - [ ] Pricing page matches the current phase’s actual features.
-- [ ] Cloud CTA carries `?plan=cloud`.
+- [x] Cloud CTA carries `?plan=cloud`.
 - [ ] Cloud vs Desktop comparison.
 - [ ] “What’s in a seat?” table.
 - [ ] Proxy/region FAQ.
@@ -1036,7 +1036,7 @@ send a surprise bill. Publish a fair-use clause, not a GB number.
 
 ### 11.2 Desktop app checklist
 
-- [ ] Desktop profiles never receive proxy credentials.
+- [x] Desktop profiles never receive proxy credentials.
 - [ ] Local IP badge.
 - [ ] Cloud vs desktop account display.
 - [ ] Org-aware login/workspace.
@@ -1049,20 +1049,20 @@ send a surprise bill. Publish a fair-use clause, not a GB number.
 
 ### 11.3 Cloud app checklist
 
-- [ ] Cloud execution selector.
-- [ ] Region selection.
-- [ ] Managed proxy status.
-- [ ] Seat usage.
+- [x] Cloud execution selector.
+- [x] Region selection.
+- [x] Managed proxy status.
+- [x] Seat usage.
 - [ ] Team/org pages.
-- [ ] Billing seat management.
+- [x] Billing seat management.
 - [ ] Channel bundle onboarding.
 - [ ] Role-based UI.
 - [ ] Health/usage alerts.
-- [ ] No credentials exposed.
+- [x] No credentials exposed.
 
 ### 11.4 Admin checklist
 
-- [ ] Proxy inventory.
+- [x] Proxy inventory.
 - [ ] Bulk import/preview.
 - [ ] Test/assign/unassign/disable/retire.
 - [ ] Massive sync/usage.
@@ -1073,14 +1073,14 @@ send a surprise bill. Publish a fair-use clause, not a GB number.
 
 ### 11.5 Onboarding checklist
 
-- [ ] Signup with intended plan.
-- [ ] Email verification.
+- [x] Signup with intended plan.
+- [x] Email verification.
 - [ ] Checkout.
 - [ ] Workspace creation.
 - [ ] Team invite (optional).
 - [ ] Add channel accounts.
-- [ ] Choose desktop/cloud.
-- [ ] Choose region for cloud.
+- [x] Choose desktop/cloud.
+- [x] Choose region for cloud.
 - [ ] Proxy auto-provision/test.
 - [ ] Verify account (VNC/QR).
 - [ ] Create first campaign.
@@ -1090,23 +1090,23 @@ send a surprise bill. Publish a fair-use clause, not a GB number.
 
 - [ ] Proxy passwords encrypted at rest.
 - [ ] Massive keys server-only.
-- [ ] Admin-only proxy routes.
-- [ ] Tenant isolation on assignment.
-- [ ] No secrets in logs/responses.
+- [x] Admin-only proxy routes.
+- [x] Tenant isolation on assignment.
+- [x] No secrets in logs/responses.
 - [ ] Audit log.
 - [ ] Rate limits on import/test.
 - [ ] SSRF validation for proxy URLs.
 - [ ] Device revocation.
-- [ ] No proxy reuse across LinkedIn accounts.
+- [x] No proxy reuse across LinkedIn accounts.
 
 ### 11.7 Testing checklist
 
-- [ ] Unit: seat enforcement, region builder, parser, encryption.
+- [x] Unit: seat enforcement, region builder, parser, encryption.
 - [ ] Integration: checkout/webhooks, seat sync, proxy assignment.
 - [ ] E2E cloud: signup → checkout → add account → region → proxy → verify → campaign.
 - [ ] E2E desktop: org invite → enroll → local IP → task.
 - [ ] E2E team: invite → accept → seat assignment → role permissions.
-- [ ] Security: cross-tenant access, admin auth, secret redaction.
+- [x] Security: cross-tenant access, admin auth, secret redaction.
 - [ ] Migration: dry-run, idempotency, rollback.
 - [ ] Load: bulk import 1,000 proxies, usage sync.
 
