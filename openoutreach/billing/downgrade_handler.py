@@ -101,6 +101,18 @@ def pause_excess_linkedin_profiles(
     )
 
     for profile in profiles_to_pause:
+        # Phase 2: disable the provider sub-account; keep it bound to this
+        # profile so the same identity can resume when a seat is re-added.
+        try:
+            from openoutreach.proxies.provisioning import disable_massive_for_profile
+
+            disable_massive_for_profile(
+                str(profile.get("_id")), reason="seat_limit_reduced"
+            )
+        except Exception as exc:  # pragma: no cover - pause must still complete
+            logger.debug(
+                "Could not disable Massive sub-account: %s", type(exc).__name__
+            )
         _notify_seat_removed(
             str(profile.get("assigned_user_id") or user_id), profile
         )

@@ -17,7 +17,14 @@ class AdminActionRateLimiter:
     API workers. Import and test are the two expensive proxy operations.
     """
 
-    ACTIONS = {"proxy_import", "proxy_test"}
+    ACTIONS = {
+        "proxy_import",
+        "proxy_test",
+        "proxy_massive_provision",
+        "proxy_massive_sync",
+        "proxy_massive_rotate",
+        "proxy_massive_allocate",
+    }
 
     @staticmethod
     def _limit(action: str) -> tuple[int, int]:
@@ -25,6 +32,26 @@ class AdminActionRateLimiter:
             return (
                 max(1, int(getattr(settings, "PROXY_IMPORT_RATE_LIMIT", 10))),
                 max(1, int(getattr(settings, "PROXY_IMPORT_RATE_WINDOW_SECONDS", 3600))),
+            )
+        if action == "proxy_massive_provision":
+            return (
+                max(1, int(getattr(settings, "MASSIVE_PROVISION_RATE_LIMIT", 30))),
+                max(1, int(getattr(settings, "MASSIVE_PROVISION_RATE_WINDOW_SECONDS", 3600))),
+            )
+        if action == "proxy_massive_sync":
+            return (
+                max(1, int(getattr(settings, "MASSIVE_SYNC_RATE_LIMIT", 12))),
+                max(1, int(getattr(settings, "MASSIVE_SYNC_RATE_WINDOW_SECONDS", 3600))),
+            )
+        if action == "proxy_massive_rotate":
+            return (
+                max(1, int(getattr(settings, "MASSIVE_ROTATE_RATE_LIMIT", 30))),
+                max(1, int(getattr(settings, "MASSIVE_ROTATE_RATE_WINDOW_SECONDS", 3600))),
+            )
+        if action == "proxy_massive_allocate":
+            return (
+                max(1, int(getattr(settings, "MASSIVE_ALLOCATE_RATE_LIMIT", 30))),
+                max(1, int(getattr(settings, "MASSIVE_ALLOCATE_RATE_WINDOW_SECONDS", 3600))),
             )
         return (
             max(1, int(getattr(settings, "PROXY_TEST_RATE_LIMIT", 120))),

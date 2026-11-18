@@ -521,6 +521,12 @@ def _pause_profile_for_seat_removal(profile_id: str) -> bool:
             }
         },
     )
+    if getattr(result, "modified_count", 0):
+        # Phase 2: disable the Massive sub-account but keep it bound to this
+        # profile so the same identity can resume later.
+        from openoutreach.proxies.provisioning import disable_massive_for_profile
+
+        disable_massive_for_profile(profile_id, reason="member_removed")
     return bool(getattr(result, "modified_count", 0))
 
 
@@ -695,6 +701,13 @@ def assign_seat(
     profiles.update_one({"_id": profile_id, "org_id": org._id}, {"$set": updates})
     profile.update(updates)
 
+    # Phase 2: a re-added seat re-enables only the same profile's disabled
+    # sub-account. Budget-disabled accounts stay disabled until the budget
+    # review re-enables them.
+    from openoutreach.proxies.provisioning import enable_massive_for_profile
+
+    enable_massive_for_profile(profile_id, actor_user_id=actor_user_id)
+
     # Keep the proxy's assignment metadata aligned with the seat holder. The
     # proxy itself stays attached to this profile and is never recycled.
     proxy_id = profile.get("proxy_id")
@@ -776,6 +789,11 @@ def unassign_seat(
             # retires it.
             "proxy_retained": bool(profile.get("proxy_id") or profile.get("proxy_mode")),
         },
+    )
+    from openoutreach.proxies.provisioning import disable_massive_for_profile
+
+    disable_massive_for_profile(
+        profile_id, actor_user_id=actor_user_id, reason=reason
     )
     profile["assigned_user_id"] = None
     profile["active"] = False

@@ -1,9 +1,22 @@
 """Managed proxy inventory and provisioning helpers."""
+from openoutreach.proxies.massive_reseller import (
+    MassivePoolStatsClient,
+    MassiveResellerClient,
+    MassiveResellerError,
+)
 from openoutreach.proxies.models import (
     Proxy,
     ProxyError,
     ProxyReuseError,
     ProxyUnavailableError,
+)
+from openoutreach.proxies.provisioning import (
+    disable_massive_for_profile,
+    enable_massive_for_profile,
+    provision_managed_proxy,
+    provision_reseller_proxy,
+    retire_massive_for_profile,
+    sync_massive_accounts,
 )
 from openoutreach.proxies.region import RegionError, normalize_country, normalize_region
 from openoutreach.proxies.service import (
@@ -29,6 +42,9 @@ from openoutreach.proxies.service import (
 )
 
 __all__ = [
+    "MassivePoolStatsClient",
+    "MassiveResellerClient",
+    "MassiveResellerError",
     "Proxy",
     "ProxyError",
     "ProxyReuseError",
@@ -38,6 +54,12 @@ __all__ = [
     "normalize_region",
     "assign_proxy_for_new_profile",
     "assign_proxy_to_profile",
+    "disable_massive_for_profile",
+    "enable_massive_for_profile",
+    "provision_managed_proxy",
+    "provision_reseller_proxy",
+    "retire_massive_for_profile",
+    "sync_massive_accounts",
     "check_proxy_connection",
     "disable_proxy",
     "enable_proxy",

@@ -397,7 +397,7 @@ def check_proxy_health():
 @click.option('--from-date', default=None, help='Start date (YYYY-MM-DD, UTC)')
 @click.option('--to-date', default=None, help='End date (YYYY-MM-DD, UTC)')
 def sync_proxy_usage(from_date, to_date):
-    """Sync Massive Reporting API usage with group_by=subuser."""
+    """Sync Massive sub-account usage, reporting usage, and internal budgets."""
     import asyncio
 
     from openoutreach.mongodb.connection import initialize_mongodb_connection
@@ -405,6 +405,11 @@ def sync_proxy_usage(from_date, to_date):
     from openoutreach.proxies.massive_client import (
         default_usage_period,
         sync_massive_usage,
+    )
+    from openoutreach.proxies.provisioning import (
+        reseller_available,
+        sync_massive_accounts,
+        sync_massive_reporting,
     )
 
     initialize_mongodb_connection()
@@ -414,6 +419,17 @@ def sync_proxy_usage(from_date, to_date):
     with scheduled_job_lock("proxy-usage-sync") as acquired:
         if not acquired:
             click.echo("Another proxy-usage-sync job is active; exiting")
+            return
+        if reseller_available():
+            cumulative = sync_massive_accounts()
+            reporting = sync_massive_reporting(start, end)
+            click.echo(
+                f"Reseller accounts: {cumulative['accounts']} "
+                f"({cumulative['matched']} matched, {cumulative['unmatched']} unmatched); "
+                f"reporting: {reporting['matched']} proxies "
+                f"({reporting['skipped']} unmatched, {reporting['total_bytes']} bytes); "
+                f"budget: {cumulative['budget']}"
+            )
             return
         result = asyncio.run(sync_massive_usage(start, end))
     click.echo(

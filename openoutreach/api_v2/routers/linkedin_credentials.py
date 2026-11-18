@@ -39,8 +39,6 @@ from openoutreach.organizations.enforcement import resolve_effective_plan
 from openoutreach.proxies import (
     ProxyError,
     ProxyUnavailableError,
-    assign_proxy_for_new_profile,
-    find_available_proxy,
     normalize_region,
 )
 
@@ -414,22 +412,6 @@ async def create_credential(
                     status_code=status.HTTP_409_CONFLICT,
                     detail="Managed proxy provisioning is disabled",
                 )
-        if needs_proxy and region and not find_available_proxy(
-            region[0], region[1], region[2]
-        ):
-            if created_profile:
-                profiles_collection = get_mongodb_collection("linkedin_profiles")
-                if profiles_collection is not None:
-                    profiles_collection.delete_one(
-                        {"_id": profile._id, "user_id": user_id}
-                    )
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=(
-                    f"No managed proxy is available for {region[0]}. "
-                    "Contact support so we can add capacity for this region."
-                ),
-            )
 
         # Create credential
         credential = LinkedInCredentials(
@@ -472,15 +454,21 @@ async def create_credential(
             )
         profile.save(update_fields=profile_fields)
 
-        # Assign a managed proxy before verification can start.
+        # Assign a managed proxy before verification can start. Phase 2
+        # prefers a Reseller sub-account and falls back to the Phase 1 parent
+        # credentials when Reseller is disabled or unavailable.
         if needs_proxy and region:
             try:
-                assign_proxy_for_new_profile(
+                from openoutreach.proxies.provisioning import provision_managed_proxy
+
+                provision_managed_proxy(
                     profile._id,
                     user_id,
+                    profile.org_id,
                     region[0],
                     region[1],
                     region[2],
+                    created_by=user_id,
                 )
             except (ProxyUnavailableError, ProxyError) as exc:
                 try:

@@ -947,6 +947,19 @@ def retire_proxy_for_profile(profile_id: str) -> None:
     collection = _collection(_PROXIES)
     if collection is None:
         return
+    # Phase 2: disable the provider sub-account before clearing the local
+    # profile link. Disabling is reversible for audit; the record is never
+    # deleted or reused.
+    try:
+        from openoutreach.proxies.provisioning import retire_massive_for_profile
+
+        retire_massive_for_profile(profile_id)
+    except Exception as exc:  # pragma: no cover - deletion must still complete
+        logger.warning(
+            "massive_retire_for_profile_failed profile_id=%s exception_type=%s",
+            profile_id,
+            type(exc).__name__,
+        )
     collection.update_many(
         {
             "$or": [

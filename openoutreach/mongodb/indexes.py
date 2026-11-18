@@ -218,6 +218,14 @@ def ensure_all_indexes():
                 {'name': 'proxy_available_idx'},
             ),
             ({'massive_subuser': 1}, {'name': 'proxy_massive_subuser_idx', 'sparse': True}),
+            (
+                {'massive_account_id': 1},
+                {'name': 'proxy_massive_account_idx', 'sparse': True},
+            ),
+            (
+                {'massive_status': 1, 'massive_last_sync_at': -1},
+                {'name': 'proxy_massive_status_idx', 'sparse': True},
+            ),
         ]),
 
         ('proxy_assignments', [
@@ -250,6 +258,22 @@ def ensure_all_indexes():
             (
                 {'profile_id': 1, 'period_start': -1},
                 {'name': 'proxy_usage_profile_period_idx'},
+            ),
+        ]),
+
+        # Phase 2 cumulative Reseller usage snapshots (internal cost control).
+        ('massive_usage_snapshots', [
+            (
+                {'proxy_id': 1, 'captured_at': -1},
+                {'name': 'massive_usage_proxy_time_idx'},
+            ),
+            (
+                {'org_id': 1, 'captured_at': -1},
+                {'name': 'massive_usage_org_time_idx', 'sparse': True},
+            ),
+            (
+                {'massive_account_id': 1, 'captured_at': -1},
+                {'name': 'massive_usage_account_time_idx', 'sparse': True},
             ),
         ]),
 

@@ -93,6 +93,15 @@ class Proxy:
         massive_account_id: Optional[str] = None,
         massive_parent_username: Optional[str] = None,
         massive_subuser: Optional[str] = None,
+        massive_status: str = "unmanaged",
+        massive_limit_bytes: Optional[int] = None,
+        massive_used_bytes: int = 0,
+        massive_limit_reached: bool = False,
+        massive_proxy_access: Optional[bool] = None,
+        massive_last_sync_at: Optional[datetime] = None,
+        massive_last_error: Optional[str] = None,
+        massive_budget_disabled_at: Optional[datetime] = None,
+        massive_provisioned_at: Optional[datetime] = None,
         traffic_limit_bytes: Optional[int] = None,
         used_bytes: int = 0,
         limit_reached: bool = False,
@@ -138,6 +147,15 @@ class Proxy:
         self.massive_account_id = massive_account_id
         self.massive_parent_username = massive_parent_username
         self.massive_subuser = massive_subuser
+        self.massive_status = massive_status
+        self.massive_limit_bytes = massive_limit_bytes
+        self.massive_used_bytes = max(0, int(massive_used_bytes or 0))
+        self.massive_limit_reached = bool(massive_limit_reached)
+        self.massive_proxy_access = massive_proxy_access
+        self.massive_last_sync_at = massive_last_sync_at
+        self.massive_last_error = massive_last_error
+        self.massive_budget_disabled_at = massive_budget_disabled_at
+        self.massive_provisioned_at = massive_provisioned_at
         self.traffic_limit_bytes = traffic_limit_bytes
         self.used_bytes = used_bytes
         self.limit_reached = limit_reached
@@ -202,6 +220,15 @@ class Proxy:
             "massive_account_id": self.massive_account_id,
             "massive_parent_username": self.massive_parent_username,
             "massive_subuser": self.massive_subuser,
+            "massive_status": self.massive_status,
+            "massive_limit_bytes": self.massive_limit_bytes,
+            "massive_used_bytes": self.massive_used_bytes,
+            "massive_limit_reached": self.massive_limit_reached,
+            "massive_proxy_access": self.massive_proxy_access,
+            "massive_last_sync_at": self.massive_last_sync_at,
+            "massive_last_error": self.massive_last_error,
+            "massive_budget_disabled_at": self.massive_budget_disabled_at,
+            "massive_provisioned_at": self.massive_provisioned_at,
             "traffic_limit_bytes": self.traffic_limit_bytes,
             "used_bytes": self.used_bytes,
             "limit_reached": self.limit_reached,
@@ -251,6 +278,15 @@ class Proxy:
             massive_account_id=data.get("massive_account_id"),
             massive_parent_username=data.get("massive_parent_username"),
             massive_subuser=data.get("massive_subuser"),
+            massive_status=data.get("massive_status", "unmanaged"),
+            massive_limit_bytes=data.get("massive_limit_bytes"),
+            massive_used_bytes=data.get("massive_used_bytes", 0),
+            massive_limit_reached=bool(data.get("massive_limit_reached", False)),
+            massive_proxy_access=data.get("massive_proxy_access"),
+            massive_last_sync_at=data.get("massive_last_sync_at"),
+            massive_last_error=data.get("massive_last_error"),
+            massive_budget_disabled_at=data.get("massive_budget_disabled_at"),
+            massive_provisioned_at=data.get("massive_provisioned_at"),
             traffic_limit_bytes=data.get("traffic_limit_bytes"),
             used_bytes=data.get("used_bytes", 0),
             limit_reached=data.get("limit_reached", False),
@@ -309,6 +345,15 @@ class Proxy:
             "last_assigned_org_id": self.last_assigned_org_id,
             "massive_account_id": self.massive_account_id,
             "massive_subuser": self.massive_subuser,
+            "massive_status": self.massive_status,
+            "massive_limit_bytes": self.massive_limit_bytes,
+            "massive_used_bytes": self.massive_used_bytes,
+            "massive_limit_reached": self.massive_limit_reached,
+            "massive_proxy_access": self.massive_proxy_access,
+            "massive_last_sync_at": self.massive_last_sync_at.isoformat() if self.massive_last_sync_at else None,
+            "massive_last_error": self.massive_last_error,
+            "massive_budget_disabled_at": self.massive_budget_disabled_at.isoformat() if self.massive_budget_disabled_at else None,
+            "massive_provisioned_at": self.massive_provisioned_at.isoformat() if self.massive_provisioned_at else None,
             "traffic_limit_bytes": self.traffic_limit_bytes,
             "used_bytes": self.used_bytes,
             "limit_reached": self.limit_reached,
@@ -362,6 +407,15 @@ def create_proxy(
     identity_id: Optional[str] = None,
     massive_parent_username: Optional[str] = None,
     massive_subuser: Optional[str] = None,
+    massive_account_id: Optional[str] = None,
+    massive_status: str = "unmanaged",
+    massive_limit_bytes: Optional[int] = None,
+    massive_used_bytes: int = 0,
+    massive_limit_reached: bool = False,
+    massive_proxy_access: Optional[bool] = None,
+    massive_last_sync_at: Optional[datetime] = None,
+    massive_last_error: Optional[str] = None,
+    massive_provisioned_at: Optional[datetime] = None,
     created_by: Optional[str] = None,
 ) -> Proxy:
     """Create and persist one proxy with an encrypted password."""
@@ -388,6 +442,15 @@ def create_proxy(
         identity_id=identity_id,
         massive_parent_username=massive_parent_username,
         massive_subuser=massive_subuser,
+        massive_account_id=massive_account_id,
+        massive_status=massive_status,
+        massive_limit_bytes=massive_limit_bytes,
+        massive_used_bytes=massive_used_bytes,
+        massive_limit_reached=massive_limit_reached,
+        massive_proxy_access=massive_proxy_access,
+        massive_last_sync_at=massive_last_sync_at,
+        massive_last_error=massive_last_error,
+        massive_provisioned_at=massive_provisioned_at,
         created_by=created_by,
     )
     proxy.save()
