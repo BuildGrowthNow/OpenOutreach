@@ -184,8 +184,6 @@ def assign_proxy_to_profile(
     proxy_id: str,
     profile_id: str,
     user_id: str,
-    *,
-    region: Optional[tuple[str, Optional[str], Optional[str]]] = None,
 ) -> Proxy:
     """Atomically assign a proxy to a cloud profile.
 
@@ -243,7 +241,8 @@ def assign_proxy_to_profile(
         raise ProxyUnavailableError("Proxy is not available")
 
     proxy = Proxy.from_dict(claimed)
-    country, subdivision, city = region or (proxy.country, proxy.subdivision, proxy.city)
+    # Persist the proxy's real region, not the requested fallback target.
+    country, subdivision, city = proxy.country, proxy.subdivision, proxy.city
     updated = profiles.update_one(
         {
             "_id": profile_id,
@@ -450,12 +449,7 @@ def assign_proxy_for_new_profile(
         if not proxy:
             break
         try:
-            return assign_proxy_to_profile(
-                proxy._id,
-                profile_id,
-                user_id,
-                region=(country_value, subdivision_value, city_value),
-            )
+            return assign_proxy_to_profile(proxy._id, profile_id, user_id)
         except ProxyUnavailableError:
             continue
     raise ProxyUnavailableError(

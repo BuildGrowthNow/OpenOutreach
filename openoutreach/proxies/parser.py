@@ -132,7 +132,9 @@ def _parse_colon_line(line: str, default_country: Optional[str]) -> dict[str, An
     host, port, username = parts[0], parts[1], parts[2]
     remainder = parts[3:]
     country = default_country
-    if remainder and re.fullmatch(r"[A-Za-z]{2}", remainder[-1]):
+    # A five-part line may carry a country suffix. Do not treat a two-letter
+    # password in the four-part form as a country.
+    if len(parts) >= 5 and remainder and re.fullmatch(r"[A-Za-z]{2}", remainder[-1]):
         country = remainder[-1]
         remainder = remainder[:-1]
     password = ":".join(remainder)

@@ -358,6 +358,75 @@ def test_webhook_syncs_addon_item_before_base_plan():
     assert user.linkedin_account_limit == 3
 
 
+def test_proxy_parser_keeps_two_letter_password():
+    entries, errors = parse_bulk_proxies(
+        "proxy.example.com:8080:user:ab",
+        default_country="US",
+    )
+
+    assert errors == []
+    assert entries[0]["password"] == "ab"
+    assert entries[0]["country"] == "US"
+
+
+def test_proxy_assignment_records_actual_proxy_region():
+    class _ProxyCollection:
+        def find_one(self, query, projection=None):
+            if query == {"_id": "proxy-1"}:
+                return {
+                    "_id": "proxy-1",
+                    "status": "available",
+                    "linkedin_profile_id": None,
+                    "protocol": "http",
+                    "host": "proxy.example.com",
+                    "port": 8080,
+                    "password_encrypted": "encrypted",
+                    "country": "US",
+                    "subdivision": "NY",
+                    "city": "Buffalo",
+                }
+            return None
+
+        def find_one_and_update(self, query, update, return_document=True):
+            return {**self.find_one({"_id": "proxy-1"}), **update["$set"]}
+
+        def update_one(self, query, update):
+            return None
+
+    class _Profiles:
+        def __init__(self):
+            self.profile_update = None
+
+        def find_one(self, query, projection=None):
+            return {
+                "_id": "profile-1",
+                "user_id": "user-1",
+                "proxy_id": None,
+                "proxy_server": None,
+            }
+
+        def update_one(self, query, update):
+            self.profile_update = update
+            return SimpleNamespace(modified_count=1)
+
+    proxies = _ProxyCollection()
+    profiles = _Profiles()
+
+    def _collection(name):
+        return proxies if name == "proxies" else profiles
+
+    with patch(
+        "openoutreach.proxies.service.get_mongodb_collection",
+        side_effect=_collection,
+    ):
+        assign_proxy_to_profile("proxy-1", "profile-1", "user-1")
+
+    assert profiles.profile_update is not None
+    assert profiles.profile_update["$set"]["proxy_region_country"] == "US"
+    assert profiles.profile_update["$set"]["proxy_region_subdivision"] == "NY"
+    assert profiles.profile_update["$set"]["proxy_region_city"] == "Buffalo"
+
+
 def test_proxy_parser_csv_keeps_valid_rows_and_reports_bad_row():
     text = "\n".join([
         "host,port,username,password,country",
