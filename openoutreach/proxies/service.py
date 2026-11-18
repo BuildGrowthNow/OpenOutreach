@@ -1079,6 +1079,18 @@ async def check_proxy_connection(
                     country = None
                     city = None
 
+            # ipapi.co can rate-limit or omit fields. Fall back to ipinfo.io so
+            # the admin test still reports the egress country for mismatch checks.
+            if ip and not country:
+                try:
+                    info = await client.get("https://ipinfo.io/json")
+                    if info.status_code == 200:
+                        info_data = info.json() or {}
+                        country = info_data.get("country")
+                        city = city or info_data.get("city")
+                except Exception:
+                    pass
+
             try:
                 response = await client.get("https://www.linkedin.com/")
                 linkedin_status = response.status_code
