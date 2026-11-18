@@ -191,10 +191,10 @@ MongoDB (except encrypted sub-account credentials), logs, or this repository.
 | Key | Where it comes from | Where it goes in our system | Used by |
 |---|---|---|---|
 | Proxy username | Massive dashboard → Profile | `MASSIVE_PARENT_USERNAME` | Proxy credential builder |
-| Proxy password / API key | Massive dashboard → Profile | `MASSIVE_PROXY_PASSWORD` | Proxy auth, Reporting API |
-| Reseller API key | Massive support (must be enabled) | `MASSIVE_RESELLER_API_KEY` | Sub-account create/disable/usage |
+| Proxy password / API key | Massive dashboard → Profile | `MASSIVE_PROXY_PASSWORD` | Proxy auth, Reporting API, Reseller API, Pool Stats API |
+| Reseller API key | Same account API key; access enabled on 2026-11-18 | Reuse `MASSIVE_PROXY_PASSWORD`; `MASSIVE_RESELLER_API_KEY` is an optional alias | Sub-account create/disable/usage |
 | Reporting API key | Same as proxy password (auto-enabled) | `MASSIVE_REPORTING_API_KEY` or reuse `MASSIVE_PROXY_PASSWORD` | Usage sync |
-| Pool Stats API key | Massive support | `MASSIVE_POOL_STATS_API_KEY` | Region availability |
+| Pool Stats API key | Same account API key; access enabled on 2026-11-18 | Reuse `MASSIVE_PROXY_PASSWORD`; `MASSIVE_POOL_STATS_API_KEY` is an optional alias | Region availability |
 | Web Render / MCP token | Dashboard → Developer → API Keys | `MASSIVE_WEB_RENDER_TOKEN` (optional, separate feature) | Lead enrichment only |
 
 Default endpoint variables:
@@ -222,7 +222,7 @@ Create one Reseller sub-account per cloud seat / browser account:
 
 ```http
 POST /resellers/accounts
-x-api-key: <MASSIVE_RESELLER_API_KEY>
+x-api-key: <MASSIVE_PROXY_PASSWORD>
 Content-Type: application/json
 
 {
@@ -242,12 +242,16 @@ password: <generated-secret>
 
 Rules:
 
+- The existing account API key (`MASSIVE_PROXY_PASSWORD`) authenticates the Reseller
+  API; no separate key is required. `MASSIVE_RESELLER_API_KEY` is an optional alias.
 - Use hyphens in the sub-username, not underscores; the parent/sub separator is `_`.
 - Maximum 255 characters; unique within the parent.
 - Generate the password server-side; encrypt at rest; never show it to the client.
 - `GET /accounts` returns passwords — treat the response as secret; never log it.
-- `limit` is a **cumulative lifetime allowance**, not monthly. Set a generous lifetime
-  limit and track monthly usage in our app.
+- `limit` is a **cumulative lifetime allowance**, not monthly. It can be raised but not
+  lowered, so start conservatively and top up. Track monthly usage in our app.
+- A `409` on create means the sub-username already exists. Fetch/update the existing
+  account instead of retrying the same create.
 - Disable on seat cancellation/unassignment; re-enable only for the same LinkedIn
   account. Never assign the same sub-account to a different LinkedIn account.
 
@@ -705,8 +709,12 @@ control.
 
 ### 7.1 Prerequisite
 
-Request Proxy Resellers API access from Massive support. The normal Network API key is
-not enabled for this API. Request Pool Stats API access at the same time.
+Reseller and Pool Stats API access was enabled on 2026-11-18. The existing account API
+key (`MASSIVE_PROXY_PASSWORD`) authenticates both APIs through the `x-api-key` header;
+no separate key is required. `MASSIVE_RESELLER_API_KEY` and
+`MASSIVE_POOL_STATS_API_KEY` remain optional aliases for deployments that prefer
+separate names. Sub-accounts have no count cap and draw from the parent plan’s
+bandwidth.
 
 ### 7.2 Scope
 
