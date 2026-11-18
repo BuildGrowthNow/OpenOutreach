@@ -208,9 +208,7 @@ class Proxy:
     def public_dict(self) -> dict[str, Any]:
         """Serialize for API responses without credentials."""
         username = self.username or None
-        masked_username = None
-        if username:
-            masked_username = f"{username[:4]}…" if len(username) > 4 else "***"
+        masked_username = "***" if username else None
         return {
             "id": self._id,
             "provider": self.provider,
@@ -273,6 +271,9 @@ def create_proxy(
     created_by: Optional[str] = None,
 ) -> Proxy:
     """Create and persist one proxy with an encrypted password."""
+    from openoutreach.proxies.service import validate_proxy_host
+
+    validate_proxy_host(host)
     encrypted = safe_encrypt(password)
     if not encrypted:
         raise ProxyError("Failed to encrypt proxy password")
