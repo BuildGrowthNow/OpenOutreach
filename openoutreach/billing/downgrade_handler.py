@@ -5,6 +5,7 @@ Ensures users comply with new plan limits after downgrade.
 
 import logging
 
+from openoutreach.billing.seats import credentialed_profile_ids
 from openoutreach.mongodb.connection import get_mongodb_collection
 from openoutreach.mongodb.models_user import User
 
@@ -37,6 +38,16 @@ def pause_excess_linkedin_profiles(
             sort=[("created_at", 1)],
         )
     )
+
+    # Orphan profiles without a credential do not consume an account seat and
+    # must not be chosen ahead of a real account.
+    credentialed_ids = credentialed_profile_ids(user_id)
+    if credentialed_ids is not None:
+        active_profiles = [
+            profile
+            for profile in active_profiles
+            if profile.get("_id") in credentialed_ids
+        ]
 
     if prefer_execution_mode:
         preferred = [
