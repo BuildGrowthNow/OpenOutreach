@@ -206,6 +206,19 @@ def assign_proxy_to_profile(
             "This proxy was already used by another LinkedIn account and cannot be recycled"
         )
 
+    profile_doc = profiles.find_one(
+        {"_id": profile_id, "user_id": user_id},
+        {"proxy_id": 1, "proxy_server": 1},
+    )
+    if not profile_doc:
+        raise ProxyUnavailableError("LinkedIn profile not found")
+    current_proxy_id = profile_doc.get("proxy_id")
+    if current_proxy_id and current_proxy_id != proxy_id:
+        raise ProxyError("This profile already has a different proxy")
+    if profile_doc.get("proxy_server") and not current_proxy_id:
+        raise ProxyError("This profile already has a BYO proxy")
+
+    previous_owner = existing.get("linkedin_profile_id")
     claimed = collection.find_one_and_update(
         {
             "_id": proxy_id,
@@ -231,8 +244,13 @@ def assign_proxy_to_profile(
 
     proxy = Proxy.from_dict(claimed)
     country, subdivision, city = region or (proxy.country, proxy.subdivision, proxy.city)
-    profiles.update_one(
-        {"_id": profile_id, "user_id": user_id},
+    updated = profiles.update_one(
+        {
+            "_id": profile_id,
+            "user_id": user_id,
+            # A concurrent assignment must not leave this proxy orphaned.
+            "proxy_id": {"$in": [None, proxy_id]},
+        },
         {
             "$set": {
                 "proxy_server": proxy.proxy_server,
@@ -251,6 +269,23 @@ def assign_proxy_to_profile(
             }
         },
     )
+    if getattr(updated, "modified_count", 0) == 0:
+        if previous_owner is None:
+            collection.update_one(
+                {"_id": proxy_id, "linkedin_profile_id": profile_id},
+                {
+                    "$set": {
+                        "status": STATUS_AVAILABLE,
+                        "linkedin_profile_id": None,
+                        "assigned_user_id": None,
+                        "assigned_at": None,
+                        "updated_at": Proxy.now(),
+                    }
+                },
+            )
+        raise ProxyUnavailableError(
+            "Profile was assigned a different proxy concurrently"
+        )
     logger.info("Assigned proxy %s to profile %s", proxy._id, profile_id)
     return proxy
 
@@ -403,17 +438,27 @@ def assign_proxy_for_new_profile(
     subdivision: Optional[str] = None,
     city: Optional[str] = None,
 ) -> Proxy:
-    """Find and assign a matching proxy, raising a clear error when none exists."""
+    """Find and assign a matching proxy, raising a clear error when none exists.
+
+    Two concurrent account creations may discover the same candidate. The
+    proxy claim itself is atomic, so retry a few times with a fresh candidate
+    instead of failing the customer's account creation.
+    """
     country_value, subdivision_value, city_value = normalize_region(country, subdivision, city)
-    proxy = find_available_proxy(country_value, subdivision_value, city_value)
-    if not proxy:
-        raise ProxyUnavailableError(
-            f"No managed proxy is available for {country_value}. "
-            "Contact support so we can add capacity for this region."
-        )
-    return assign_proxy_to_profile(
-        proxy._id,
-        profile_id,
-        user_id,
-        region=(country_value, subdivision_value, city_value),
+    for _ in range(5):
+        proxy = find_available_proxy(country_value, subdivision_value, city_value)
+        if not proxy:
+            break
+        try:
+            return assign_proxy_to_profile(
+                proxy._id,
+                profile_id,
+                user_id,
+                region=(country_value, subdivision_value, city_value),
+            )
+        except ProxyUnavailableError:
+            continue
+    raise ProxyUnavailableError(
+        f"No managed proxy is available for {country_value}. "
+        "Contact support so we can add capacity for this region."
     )

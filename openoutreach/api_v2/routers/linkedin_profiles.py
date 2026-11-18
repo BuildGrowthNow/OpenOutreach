@@ -8,7 +8,7 @@ and checking profile health status.
 import json
 import logging
 from typing import Dict, List, Optional
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlunparse
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status, Body
@@ -47,6 +47,28 @@ def _normalize_proxy_server(proxy_server: str) -> str:
             ),
         )
     return value
+
+
+def _mask_proxy_username(username: Optional[str], proxy_mode: str) -> Optional[str]:
+    """Never return a full managed-proxy username to the client."""
+    if proxy_mode == "managed" and username:
+        return f"{username[:4]}…" if len(username) > 4 else "***"
+    return username
+
+
+def _public_proxy_server(proxy_server: Optional[str]) -> Optional[str]:
+    """Strip embedded userinfo so a BYO password never appears in a response."""
+    if not proxy_server:
+        return proxy_server
+    parsed = urlparse(proxy_server)
+    if parsed.username is None and parsed.password is None:
+        return proxy_server
+    netloc = parsed.hostname or ""
+    if parsed.port:
+        netloc += f":{parsed.port}"
+    return urlunparse(
+        (parsed.scheme, netloc, parsed.path, parsed.params, parsed.query, parsed.fragment)
+    )
 
 
 def _encrypt_proxy_password(proxy_password: str) -> str:
@@ -726,17 +748,14 @@ async def update_profile(
     active: Optional[bool] = Body(None),
     connect_daily_limit: Optional[int] = Body(None),
     follow_up_daily_limit: Optional[int] = Body(None),
-    proxy_server: Optional[str] = Body(None),
-    proxy_username: Optional[str] = Body(None),
-    proxy_password: Optional[str] = Body(None),
     user_id: str = Depends(get_current_user),
 ):
     """
     Update a LinkedIn profile.
 
     Multi-tenant: verifies user owns the profile before updating.
-    Only provided fields are updated.
-    Supports proxy configuration (pass empty string to clear proxy).
+    Only provided fields are updated. Proxy changes go through the dedicated
+    ``PUT /{profile_id}/proxy`` endpoint so managed proxies stay read-only.
     """
     collection = get_mongodb_collection("linkedin_profiles")
     if collection is None:
@@ -765,17 +784,6 @@ async def update_profile(
             updates["connect_daily_limit"] = connect_daily_limit
         if follow_up_daily_limit is not None:
             updates["follow_up_daily_limit"] = follow_up_daily_limit
-        # Proxy fields - support clearing with empty string. The password is
-        # encrypted at rest; clear the legacy plaintext column on every write.
-        if proxy_server is not None:
-            updates["proxy_server"] = proxy_server if proxy_server else None
-        if proxy_username is not None:
-            updates["proxy_username"] = proxy_username if proxy_username else None
-        if proxy_password is not None:
-            updates["proxy_password"] = None
-            updates["proxy_password_encrypted"] = (
-                _encrypt_proxy_password(proxy_password) if proxy_password else None
-            )
 
         if not updates:
             raise HTTPException(
@@ -859,6 +867,15 @@ async def update_proxy_config(
         stored_proxy_id = profile_doc.get("proxy_id")
         stored_proxy_mode = profile_doc.get("proxy_mode")
 
+        if stored_proxy_mode == "managed" or stored_proxy_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=(
+                    "Managed proxies are read-only. Contact support to change "
+                    "or remove the proxy for this account."
+                ),
+            )
+
         if not proxy_server or not proxy_server.strip():
             updates: dict[str, Optional[str]] = {
                 "proxy_server": None,
@@ -907,11 +924,14 @@ async def update_proxy_config(
                 detail="Profile not found after update",
             )
 
+        updated_mode = updated_doc.get("proxy_mode", "none")
         return {
             "success": True,
             "has_proxy": bool(updated_doc.get("proxy_server")),
-            "proxy_server": updated_doc.get("proxy_server"),
-            "proxy_username": updated_doc.get("proxy_username"),
+            "proxy_server": _public_proxy_server(updated_doc.get("proxy_server")),
+            "proxy_username": _mask_proxy_username(
+                updated_doc.get("proxy_username"), updated_mode
+            ),
         }
 
     except HTTPException:
@@ -964,7 +984,7 @@ async def test_proxy(
         )
         stored_username = profile_doc.get("proxy_username")
         if not proxy_password and stored_password:
-            stored_server = (profile_doc.get("proxy_server") or "").strip()
+            stored_server = _public_proxy_server(profile_doc.get("proxy_server")) or ""
             try:
                 same_server = bool(stored_server) and (
                     _normalize_proxy_server(stored_server)
@@ -1029,13 +1049,11 @@ async def get_proxy_config(
                 detail="Profile not found or access denied"
             )
 
-        proxy_server = profile_doc.get("proxy_server")
-        proxy_username = profile_doc.get("proxy_username")
+        proxy_server = _public_proxy_server(profile_doc.get("proxy_server"))
         proxy_mode = profile_doc.get("proxy_mode", "none")
-        if proxy_mode == "managed" and proxy_username:
-            proxy_username = (
-                f"{proxy_username[:4]}…" if len(proxy_username) > 4 else "***"
-            )
+        proxy_username = _mask_proxy_username(
+            profile_doc.get("proxy_username"), proxy_mode
+        )
         has_proxy_password = bool(
             profile_doc.get("proxy_password_encrypted")
             or profile_doc.get("proxy_password")
@@ -1122,6 +1140,12 @@ async def delete_profile(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Profile not found or access denied"
             )
+
+        # Never recycle a used proxy identity. Retiring keeps the record for
+        # audit and blocks assignment to a different LinkedIn account.
+        from openoutreach.proxies.service import retire_proxy_for_profile
+
+        retire_proxy_for_profile(profile_id)
 
         logger.info(f"Deleted LinkedIn profile {profile_id} for user {user_id}")
         return None
