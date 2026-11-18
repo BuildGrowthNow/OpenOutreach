@@ -84,6 +84,23 @@ class Settings(BaseSettings):
     MASSIVE_REPORTING_API_KEY: Optional[str] = None
     MASSIVE_REPORTING_BASE_URL: str = "https://api-network.joinmassive.com/reporting"
 
+    # Massive Reseller and Pool Stats (Phase 2). Reseller/Pool Stats use the
+    # account API key (MASSIVE_PROXY_PASSWORD); the dedicated variables are
+    # optional aliases. All values stay server-side.
+    MASSIVE_RESELLER_ENABLED: bool = False
+    MASSIVE_RESELLER_API_KEY: Optional[str] = None
+    MASSIVE_RESELLER_BASE_URL: str = "https://api-network.joinmassive.com/resellers"
+    MASSIVE_POOL_STATS_ENABLED: bool = False
+    MASSIVE_POOL_STATS_API_KEY: Optional[str] = None
+    MASSIVE_POOL_STATS_BASE_URL: str = "https://api-network.joinmassive.com/pool-stats"
+    # Conservative lifetime sub-account allowance. `limit` is cumulative, so
+    # start small and top up from the admin Massive tab.
+    MASSIVE_RESELLER_DEFAULT_LIMIT_BYTES: int = 5_000_000_000
+    # Internal monthly review thresholds. Never exposed as a customer meter.
+    MASSIVE_MONTHLY_SOFT_LIMIT_BYTES: int = 25_000_000_000
+    MASSIVE_MONTHLY_HARD_LIMIT_BYTES: int = 40_000_000_000
+    MASSIVE_POOL_STATS_MIN_NODES: int = 1_000
+
     # Admin proxy-operation rate limits (window seconds, max attempts).
     PROXY_IMPORT_RATE_LIMIT: int = 10
     PROXY_IMPORT_RATE_WINDOW_SECONDS: int = 3600

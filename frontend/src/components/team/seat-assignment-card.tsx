@@ -66,6 +66,10 @@ export function SeatAssignmentCard({
     }
   };
 
+  const cloudProfiles = profiles.filter(
+    (profile) => profile.execution_mode === "cloud"
+  );
+
   return (
     <Card>
       <CardHeader>
@@ -75,12 +79,12 @@ export function SeatAssignmentCard({
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
-        {profiles.length === 0 && (
+        {cloudProfiles.length === 0 && (
           <p className="text-sm text-muted-foreground">
             No cloud profiles in this workspace yet.
           </p>
         )}
-        {profiles.map((profile) => {
+        {cloudProfiles.map((profile) => {
           const assigned = members.find((member) => member.user_id === profile.assigned_user_id);
           const value = selected[profile.profile_id] ?? profile.assigned_user_id ?? "";
           return (

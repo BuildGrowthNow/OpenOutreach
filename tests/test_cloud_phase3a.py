@@ -42,16 +42,20 @@ from openoutreach.organizations.permissions import (
     can_view_billing,
 )
 from openoutreach.organizations.service import (
+    InviteEmailMismatchError,
     InviteInvalidError,
     MemberAlreadyExistsError,
+    OrganizationPermissionError,
     accept_invite,
     assign_seat,
     backfill_personal_orgs,
     ensure_personal_org,
+    get_invite_by_token,
     invite_member,
     list_active_members,
     remove_member,
     remove_seat,
+    revoke_invite,
     seat_summary,
     unassign_seat,
 )
@@ -505,6 +509,105 @@ def test_owner_invites_assigns_and_member_sees_only_assigned(fake, team_enabled)
     events = [doc["event"] for doc in fake.collection(audit.AUDIT_COLLECTION).find({})]
     assert "seat.remove" in events
     assert "org.remove" in events
+
+
+def test_invite_preview_returns_workspace_without_consuming_token(fake, team_enabled):
+    owner = make_user(fake, "owner", "owner@example.com")
+    org = ensure_personal_org(owner)
+    invite, token = invite_member(org, owner._id, "member@example.com", ROLE_MEMBER)
+
+    import asyncio
+
+    from starlette.requests import Request
+
+    request = Request(
+        {"type": "http", "method": "GET", "path": "/", "headers": [], "client": ("127.0.0.1", 1234)}
+    )
+    preview = asyncio.run(organizations_router.preview_invite(token, request))
+    assert preview.org_id == org._id
+    assert preview.org_name == org.name
+    assert preview.email == "member@example.com"
+    assert preview.role == ROLE_MEMBER
+    # Preview is read-only.
+    assert fake.collection(INVITES_COLLECTION).find_one({"_id": invite._id})[
+        "accepted_at"
+    ] is None
+
+
+def test_invite_expiry_rejects_preview_and_acceptance(fake, team_enabled):
+    owner = make_user(fake, "owner", "owner@example.com")
+    org = ensure_personal_org(owner)
+    invite, token = invite_member(org, owner._id, "member@example.com", ROLE_MEMBER)
+    fake.collection(INVITES_COLLECTION).update_one(
+        {"_id": invite._id},
+        {"$set": {"expires_at": datetime.now(timezone.utc) - timedelta(minutes=1)}},
+    )
+
+    with pytest.raises(InviteInvalidError):
+        get_invite_by_token(token)
+
+    member = make_user(
+        fake, "member", "member@example.com", plan="starter", cloud_profiles=0
+    )
+    with pytest.raises(InviteInvalidError):
+        accept_invite(token, member)
+    assert fake.collection(INVITES_COLLECTION).find_one({"_id": invite._id})[
+        "accepted_at"
+    ] is None
+
+
+def test_invite_email_mismatch_does_not_consume_token(fake, team_enabled):
+    owner = make_user(fake, "owner", "owner@example.com")
+    org = ensure_personal_org(owner)
+    invite, token = invite_member(org, owner._id, "member@example.com", ROLE_MEMBER)
+    other = make_user(fake, "other", "other@example.com", plan="starter", cloud_profiles=0)
+
+    with pytest.raises(InviteEmailMismatchError):
+        accept_invite(token, other)
+
+    assert fake.collection(INVITES_COLLECTION).find_one({"_id": invite._id})[
+        "accepted_at"
+    ] is None
+    assert fake.collection(MEMBERS_COLLECTION).find_one(
+        {"org_id": org._id, "user_id": "other"}
+    ) is None
+
+    member = make_user(
+        fake, "member", "member@example.com", plan="starter", cloud_profiles=0
+    )
+    accepted_org, _ = accept_invite(token, member)
+    assert accepted_org._id == org._id
+
+
+def test_revoked_invite_cannot_be_accepted(fake, team_enabled):
+    owner = make_user(fake, "owner", "owner@example.com")
+    org = ensure_personal_org(owner)
+    invite, token = invite_member(org, owner._id, "member@example.com", ROLE_MEMBER)
+
+    revoke_invite(org, owner._id, invite._id)
+    assert fake.collection(INVITES_COLLECTION).find_one({"_id": invite._id})[
+        "revoked_at"
+    ] is not None
+
+    member = make_user(
+        fake, "member", "member@example.com", plan="starter", cloud_profiles=0
+    )
+    with pytest.raises(InviteInvalidError):
+        accept_invite(token, member)
+
+
+def test_admin_cannot_invite_admin_or_owner(fake, team_enabled):
+    owner = make_user(fake, "owner", "owner@example.com")
+    org = ensure_personal_org(owner)
+    admin = make_user(fake, "admin", "admin@example.com", plan="starter", cloud_profiles=0)
+    add_member(fake, org._id, admin, ROLE_ADMIN)
+
+    with pytest.raises(OrganizationPermissionError):
+        invite_member(org, admin._id, "second-admin@example.com", ROLE_ADMIN)
+    with pytest.raises(OrganizationPermissionError):
+        invite_member(org, admin._id, "owner2@example.com", ROLE_OWNER)
+    invite, _ = invite_member(org, admin._id, "member@example.com", ROLE_MEMBER)
+    assert invite.role == ROLE_MEMBER
 
 
 def test_router_member_only_lists_assigned_profiles(fake, team_enabled):
