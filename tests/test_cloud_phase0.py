@@ -16,6 +16,7 @@ from openoutreach.api_v2.routers.billing import CheckoutSessionRequest, create_c
 from openoutreach.api_v2.routers.daemon import bootstrap_daemon, get_profile_details
 from openoutreach.api_v2.routers.daemon_v2 import _snapshot
 from openoutreach.api_v2.schemas.linkedin import LinkedInCredentialUpdate
+from openoutreach.billing import seats as seat_accounting
 from openoutreach.billing import stripe_service, webhooks
 from openoutreach.billing.downgrade_handler import pause_excess_linkedin_profiles
 from openoutreach.billing.enforcement import PlanEnforcer
@@ -65,7 +66,7 @@ def test_cloud_plan_includes_one_base_seat():
 
 def test_non_cloud_plan_keeps_plan_limit():
     assert effective_linkedin_account_limit("pro", 3, 1) == 1
-    assert effective_cloud_seat_limit("pro", 3) == 3
+    assert effective_cloud_seat_limit("pro", 3) == 0
 
 
 def test_apply_plan_entitlements_raises_cloud_limit():
@@ -139,7 +140,16 @@ def test_seat_reduction_pauses_excess_profiles():
     collection.find.return_value = profiles
     collection.update_many.return_value.modified_count = 2
 
-    with patch("openoutreach.billing.downgrade_handler.get_mongodb_collection", return_value=collection):
+    with (
+        patch(
+            "openoutreach.billing.downgrade_handler.get_mongodb_collection",
+            return_value=collection,
+        ),
+        patch(
+            "openoutreach.billing.downgrade_handler.credentialed_profile_ids",
+            return_value=None,
+        ),
+    ):
         result = pause_excess_linkedin_profiles("u1", 1)
 
     assert result == {"deactivated": 2, "error": False}
@@ -203,7 +213,7 @@ def test_proxy_import_encrypts_password_and_never_returns_it():
     with patch("openoutreach.proxies.service.get_mongodb_collection", return_value=collection), patch(
         "openoutreach.proxies.models.get_mongodb_collection", return_value=collection
     ):
-        result = import_proxies("proxy.example.com:8080:user:super-secret:US")
+        result = import_proxies("8.8.8.8:8080:user:super-secret:US")
 
     assert result["created"] == 1
     stored = collection.update_one.call_args.args[1]["$set"]
@@ -294,9 +304,15 @@ def test_seat_reduction_pauses_cloud_profiles_before_desktop():
     collection.find.return_value = profiles
     collection.update_many.return_value.modified_count = 2
 
-    with patch(
-        "openoutreach.billing.downgrade_handler.get_mongodb_collection",
-        return_value=collection,
+    with (
+        patch(
+            "openoutreach.billing.downgrade_handler.get_mongodb_collection",
+            return_value=collection,
+        ),
+        patch(
+            "openoutreach.billing.downgrade_handler.credentialed_profile_ids",
+            return_value=None,
+        ),
     ):
         result = pause_excess_linkedin_profiles(
             "u1",
@@ -307,6 +323,33 @@ def test_seat_reduction_pauses_cloud_profiles_before_desktop():
     assert result == {"deactivated": 2, "error": False}
     paused_ids = collection.update_many.call_args.args[0]["_id"]["$in"]
     assert paused_ids == ["cloud-old", "cloud-new"]
+
+
+def test_seat_reduction_ignores_orphan_profiles():
+    profiles = [
+        {"_id": "orphan", "execution_mode": "cloud", "linkedin_username": "orphan"},
+        {"_id": "account-1", "execution_mode": "cloud", "linkedin_username": "one"},
+        {"_id": "account-2", "execution_mode": "cloud", "linkedin_username": "two"},
+    ]
+    collection = MagicMock()
+    collection.find.return_value = profiles
+    collection.update_many.return_value.modified_count = 1
+
+    with (
+        patch(
+            "openoutreach.billing.downgrade_handler.get_mongodb_collection",
+            return_value=collection,
+        ),
+        patch(
+            "openoutreach.billing.downgrade_handler.credentialed_profile_ids",
+            return_value={"account-1", "account-2"},
+        ),
+    ):
+        result = pause_excess_linkedin_profiles("u1", 1)
+
+    assert result == {"deactivated": 1, "error": False}
+    paused_ids = collection.update_many.call_args.args[0]["_id"]["$in"]
+    assert paused_ids == ["account-2"]
 
 
 def test_webhook_seat_reduction_pauses_when_plan_is_unchanged():
@@ -378,7 +421,7 @@ def test_proxy_assignment_records_actual_proxy_region():
                     "status": "available",
                     "linkedin_profile_id": None,
                     "protocol": "http",
-                    "host": "proxy.example.com",
+                    "host": "8.8.8.8",
                     "port": 8080,
                     "password_encrypted": "encrypted",
                     "country": "US",
@@ -454,7 +497,7 @@ def test_proxy_assignment_releases_claim_when_profile_races():
                     "status": "available",
                     "linkedin_profile_id": None,
                     "protocol": "http",
-                    "host": "proxy.example.com",
+                    "host": "8.8.8.8",
                     "port": 8080,
                     "password_encrypted": "encrypted",
                     "country": "US",
@@ -563,7 +606,7 @@ def test_managed_proxy_config_masks_username():
             profiles_router.get_proxy_config("profile-1", user_id="u1")
         )
 
-    assert result["proxy_username"] == "mass…"
+    assert result["proxy_username"] == "***"
     assert result["proxy_password"] == "********"
     assert result["proxy_server"] == "http://proxy.example.com:8080"
 
@@ -675,11 +718,143 @@ def test_admin_plan_change_applies_cloud_seat_limit():
             admin_router.update_user(
                 "u1",
                 admin_router.UserUpdateRequest(plan="cloud"),
+                current_admin="admin-1",
             )
         )
 
     assert user.plan == "cloud"
     assert user.linkedin_account_limit == 3
+
+
+class _SeatCollection:
+    def __init__(self):
+        self.document = None
+
+    def _matches(self, query):
+        if self.document is None:
+            return False
+        for key, condition in query.items():
+            if key == "_id":
+                continue
+            value = self.document.get(key)
+            if isinstance(condition, dict):
+                if "$lt" in condition and not value < condition["$lt"]:
+                    return False
+                if "$gt" in condition and not value > condition["$gt"]:
+                    return False
+            elif value != condition:
+                return False
+        return True
+
+    def update_one(self, query, update, upsert=False):
+        if self.document is None and upsert:
+            self.document = {
+                "_id": query["_id"],
+                "count": update.get("$setOnInsert", {}).get("count", 0),
+            }
+            return
+        if not self._matches(query):
+            return
+        if "count" in update.get("$set", {}):
+            self.document["count"] = update["$set"]["count"]
+        if "count" in update.get("$inc", {}):
+            self.document["count"] += update["$inc"]["count"]
+
+    def find_one_and_update(self, query, update, return_document=True):
+        if not self._matches(query):
+            return None
+        self.document["count"] += update.get("$inc", {}).get("count", 0)
+        return dict(self.document)
+
+
+def test_seat_reservation_is_atomic_at_the_limit():
+    collection = _SeatCollection()
+
+    with (
+        patch.object(
+            seat_accounting,
+            "get_mongodb_collection",
+            return_value=collection,
+        ),
+        patch.object(seat_accounting, "count_credentialed_profiles", return_value=0),
+    ):
+        first, first_error = seat_accounting.reserve_linkedin_seat("u1", 1)
+        second, second_error = seat_accounting.reserve_linkedin_seat("u1", 1)
+
+    assert first is True
+    assert first_error is None
+    assert second is False
+    assert second_error is not None
+    assert collection.document["count"] == 1
+
+
+def test_seat_release_returns_a_slot():
+    collection = _SeatCollection()
+
+    with (
+        patch.object(
+            seat_accounting,
+            "get_mongodb_collection",
+            return_value=collection,
+        ),
+        patch.object(seat_accounting, "count_credentialed_profiles", return_value=0),
+    ):
+        assert seat_accounting.reserve_linkedin_seat("u1", 1)[0] is True
+        seat_accounting.release_linkedin_seat("u1")
+
+    assert collection.document["count"] == 0
+
+
+def test_credentialed_profile_count_includes_paused_profiles():
+    profiles = MagicMock()
+    profiles.find.return_value = [{"_id": "p1"}, {"_id": "p2"}]
+    credentials = MagicMock()
+    credentials.find.return_value = [
+        {"linkedin_profile_id": "p1"},
+        {"linkedin_profile_id": "p1"},
+        {"linkedin_profile_id": "p2"},
+    ]
+
+    def _collection(name):
+        return profiles if name == "linkedin_profiles" else credentials
+
+    with patch.object(
+        seat_accounting,
+        "get_mongodb_collection",
+        side_effect=_collection,
+    ):
+        count = seat_accounting.count_credentialed_profiles("u1")
+
+    assert count == 2
+    profiles.find.assert_called_once_with({"user_id": "u1"}, {"_id": 1})
+
+
+def test_profile_delete_releases_seat_when_credentials_exist():
+    profiles_collection = MagicMock()
+    profiles_collection.find_one.return_value = {"_id": "profile-1", "user_id": "u1"}
+    profiles_collection.delete_one.return_value.deleted_count = 1
+    campaigns_collection = MagicMock()
+    campaigns_collection.count_documents.return_value = 0
+    credentials_collection = MagicMock()
+    credentials_collection.count_documents.return_value = 1
+    rate_collection = MagicMock()
+
+    def _collection(name):
+        return {
+            "linkedin_profiles": profiles_collection,
+            "linkedin_credentials": credentials_collection,
+            "campaigns": campaigns_collection,
+            "smart_rate_limit_contexts": rate_collection,
+        }.get(name)
+
+    with (
+        patch.object(profiles_router, "get_mongodb_collection", side_effect=_collection),
+        patch.object(profiles_router, "release_linkedin_seat") as release,
+        patch("openoutreach.proxies.service.retire_proxy_for_profile"),
+    ):
+        asyncio.run(profiles_router.delete_profile("profile-1", user_id="u1"))
+
+    release.assert_called_once_with("u1")
 
 
 def test_v2_snapshot_never_contains_proxy_fields():
