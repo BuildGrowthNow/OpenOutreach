@@ -34,9 +34,9 @@ from openoutreach.api_v2.daemon_v2_auth import get_daemon_context, require_profi
 from openoutreach.api_v2.tenant_security import TenantContext
 from openoutreach.api_v2.dependencies_v2 import get_current_user
 from openoutreach.config import settings
-from openoutreach.linkedin.models import LinkedInProfile
 from openoutreach.mongodb.connection import get_mongodb_collection
 from openoutreach.api_v2.security_events import append_security_event
+from openoutreach.organizations.access import profile_authorized_for_tenant
 from openoutreach.api_v2.daemon_channel_contracts import (
     EmailReceipt, EmailTaskSnapshot, LinkedInActionReceipt, LinkedInObservation,
     LinkedInTaskSnapshot, MailboxGrant, SessionState, WhatsAppState,
@@ -341,17 +341,12 @@ async def create_enrollment_code(
         raise HTTPException(422, "Every enrollment channel requires an explicit profile binding")
     for channel in channels:
         channel_ids = bindings[channel]
-        if channel == "linkedin":
-            valid = all(LinkedInProfile.objects.get(_id=profile_id, user_id=user_id)
-                        for profile_id in channel_ids)
-        else:
-            collection = get_mongodb_collection(
-                "whatsapp_profiles" if channel == "whatsapp" else "mailboxes"
+        valid = all(
+            profile_authorized_for_tenant(
+                user_id, profile_id, channel, require_exists=True
             )
-            valid = collection is not None and all(
-                collection.find_one({"_id": profile_id, "user_id": user_id})
-                for profile_id in channel_ids
-            )
+            for profile_id in channel_ids
+        )
         if not valid:
             raise HTTPException(404, f"{channel.title()} profile not found")
     profile_ids = sorted({profile_id for ids in bindings.values() for profile_id in ids})
@@ -562,6 +557,10 @@ async def configuration(
     if requested_channel not in {"linkedin", "whatsapp", "email"}:
         raise HTTPException(422, "Unsupported channel")
     require_profile(context, profile_id, requested_channel)
+    if not profile_authorized_for_tenant(
+        context.tenant_id, profile_id, requested_channel
+    ):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Resource not found")
     configs = get_mongodb_collection("site_config")
     if configs is None:
         raise HTTPException(503, "Database unavailable")
@@ -633,6 +632,10 @@ async def ingest_events_v2(
         if event.channel not in context.scopes:
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Channel not authorized")
         require_profile(context, event.profile_id, event.channel)
+        if not profile_authorized_for_tenant(
+            context.tenant_id, event.profile_id, event.channel
+        ):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Resource not found")
     now = datetime.now(timezone.utc)
     accepted = 0
     duplicates = 0
@@ -661,6 +664,8 @@ async def ingest_events_v2(
 def _store_typed_event(context: TenantContext, event_type: str, profile_id: str,
                        channel: str, payload: dict[str, Any], event_id: str) -> TypedEventResponse:
     require_profile(context, profile_id, channel)
+    if not profile_authorized_for_tenant(context.tenant_id, profile_id, channel):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Resource not found")
     collection = get_mongodb_collection("daemon_events")
     if collection is None:
         raise HTTPException(503, "Database unavailable")
@@ -1135,6 +1140,8 @@ def _require_task_binding(context: TenantContext, document: dict[str, Any]) -> N
     if channel not in {"linkedin", "whatsapp", "email"} or not profile_id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Task not found")
     require_profile(context, profile_id, channel)
+    if not profile_authorized_for_tenant(context.tenant_id, profile_id, channel):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Task not found")
 
 
 def _validate_completion_result(document: dict[str, Any], result: dict[str, Any],
@@ -1357,6 +1364,18 @@ async def claim_task_v2(
     if not settings.DAEMON_TASK_CLAIM_ENABLED or not channel_flags[request.channel]:
         return None
     require_profile(context, request.profile_id, request.channel)
+    if not profile_authorized_for_tenant(
+        context.tenant_id, request.profile_id, request.channel
+    ):
+        append_security_event(
+            "daemon_task_claim_denied",
+            outcome="denied",
+            actor_type="daemon",
+            tenant_id=context.tenant_id,
+            device_id=context.device_id,
+            metadata={"reason": "profile_not_assigned"},
+        )
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Resource not found")
     collection = get_mongodb_collection("tasks")
     if collection is None:
         raise HTTPException(503, "Database unavailable")

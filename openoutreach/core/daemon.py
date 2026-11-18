@@ -646,10 +646,13 @@ def _get_all_active_profiles() -> list:
     desktop daemon owns those sessions.  Filtering at the database query
     boundary prevents a server daemon restart/refresh from accidentally
     claiming a desktop account.
+
+    Seat accounting is organization-scoped: every cloud profile in a workspace
+    counts against the workspace owner's pool, active or paused.
     """
     from openoutreach.linkedin.models import LinkedInProfile
     from openoutreach.billing.enforcement import PlanEnforcer
-    from openoutreach.billing.plans import effective_cloud_seat_limit
+    from openoutreach.organizations.enforcement import resolve_effective_plan
 
     active_profiles = LinkedInProfile.objects.filter(
         active=True,
@@ -671,18 +674,20 @@ def _get_all_active_profiles() -> list:
         if not can_run:
             continue
 
-        seat_limit = effective_cloud_seat_limit(user.plan, user.cloud_profiles)
-        used = seats_used.get(user._id, 0)
+        effective = resolve_effective_plan(user)
+        seat_limit = effective.cloud_seat_limit
+        billing_owner = effective.billing_owner_id
+        used = seats_used.get(billing_owner, 0)
         if seat_limit <= 0 or used >= seat_limit:
             logger.warning(
-                "Cloud profile %s exceeds the cloud seat limit for user %s (%s/%s); skipping",
+                "Cloud profile %s exceeds the cloud seat limit for workspace %s (%s/%s); skipping",
                 p.pk,
-                user._id,
+                billing_owner,
                 used,
                 seat_limit,
             )
             continue
-        seats_used[user._id] = used + 1
+        seats_used[billing_owner] = used + 1
         result.append(p)
 
     return result

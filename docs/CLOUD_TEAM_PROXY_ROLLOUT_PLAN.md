@@ -798,6 +798,16 @@ bandwidth.
 **Goal:** A workspace owner can invite members, buy seats, and let each member use
 desktop or cloud execution under one billing relationship.
 
+Status (2026-11-18): **Phase 3A implemented** on branch
+`feature/cloud-phase3a-orgs-team-seats` behind `TEAM_WORKSPACES_ENABLED`
+(default off). It covers organizations, personal-org backfill, invites, roles,
+effective plan/seat inheritance, cloud seat assignment, org-aware profile/
+campaign/proxy/daemon authorization, audit events, a minimal admin org view, and
+the Settings → Team + org switcher UI. Team-member pricing, desktop enrollment,
+device revocation, and desktop daemon parity remain Phase 3B/Phase 4. See
+`docs/CLOUD_PHASE3A_ORGS_TEAMS.md`. No production deploy or migration has been
+run.
+
 ### 8.1 Scope
 
 1. Organizations, members, invites, roles.
@@ -1076,10 +1086,10 @@ send a surprise bill. Publish a fair-use clause, not a GB number.
 - [x] Region selection.
 - [x] Managed proxy status.
 - [x] Seat usage.
-- [ ] Team/org pages.
+- [x] Team/org pages (Phase 3A: Settings → Team, org switcher).
 - [x] Billing seat management.
 - [ ] Channel bundle onboarding.
-- [ ] Role-based UI.
+- [x] Role-based UI (Phase 3A).
 - [ ] Health/usage alerts.
 - [x] No credentials exposed.
 
@@ -1089,7 +1099,7 @@ send a surprise bill. Publish a fair-use clause, not a GB number.
 - [x] Bulk import/preview.
 - [x] Test/assign/unassign/disable/retire.
 - [ ] Massive sync/usage.
-- [ ] Org/seat view.
+- [x] Org/seat view (Phase 3A minimal admin org page + audited seat override).
 - [x] Audit log.
 - [ ] Alerts.
 - [ ] Support runbook.
@@ -1126,10 +1136,11 @@ send a surprise bill. Publish a fair-use clause, not a GB number.
 
 - [x] Unit: seat enforcement, region builder, parser, encryption.
 - [x] Unit: proxy assignment rules, lifecycle, masked export, usage aggregation.
+- [x] Unit: Phase 3A personal-org backfill, invite lifecycle, role matrix, effective plan, org seat accounting, cross-tenant denial, seat-removal retention, feature-flag rollback.
 - [ ] Integration: checkout/webhooks, seat sync, proxy assignment.
 - [ ] E2E cloud: signup → checkout → add account → region → proxy → verify → campaign.
 - [ ] E2E desktop: org invite → enroll → local IP → task.
-- [ ] E2E team: invite → accept → seat assignment → role permissions.
+- [x] E2E team (service/API level): invite → accept → seat assignment → member visibility → removal pause/proxy retention.
 - [x] Security: cross-tenant access, admin auth, secret redaction.
 - [ ] Migration: dry-run, idempotency, rollback.
 - [ ] Load: bulk import 1,000 proxies, usage sync.

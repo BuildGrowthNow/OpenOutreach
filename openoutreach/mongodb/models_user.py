@@ -31,6 +31,7 @@ class User:
         is_superuser: bool = False,
         org_id: Optional[str] = None,
         intended_plan: Optional[str] = None,
+        pending_org_invite_hash: Optional[str] = None,
         created_at: Optional[datetime] = None,
         updated_at: Optional[datetime] = None,
         last_login: Optional[datetime] = None,
@@ -73,6 +74,7 @@ class User:
         self.is_superuser = is_superuser
         self.org_id = org_id
         self.intended_plan = intended_plan
+        self.pending_org_invite_hash = pending_org_invite_hash
         self.created_at = created_at or datetime.now(tz.utc)
         self.updated_at = updated_at or datetime.now(tz.utc)
         self.last_login = last_login
@@ -118,6 +120,7 @@ class User:
             "is_superuser": self.is_superuser,
             "org_id": self.org_id,
             "intended_plan": self.intended_plan,
+            "pending_org_invite_hash": self.pending_org_invite_hash,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
             "last_login": self.last_login,
@@ -166,6 +169,7 @@ class User:
             is_superuser=data.get("is_superuser", False),
             org_id=data.get("org_id"),
             intended_plan=data.get("intended_plan"),
+            pending_org_invite_hash=data.get("pending_org_invite_hash"),
             created_at=data.get("created_at"),
             updated_at=data.get("updated_at"),
             last_login=data.get("last_login"),

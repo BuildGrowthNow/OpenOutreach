@@ -525,15 +525,37 @@ def handle_customer_subscription_trial_will_end(event: dict[str, Any]) -> None:
 
 
 def _deactivate_user_profiles(user_id: str) -> None:
-    """Deactivate all LinkedIn profiles for a user on subscription cancel/expire."""
+    """Deactivate LinkedIn profiles on subscription cancel/expire.
+
+    For a workspace owner this includes profiles owned by active members, so a
+    cancelled workspace cannot keep running accounts on the owner's plan.
+    """
     profiles_collection = get_mongodb_collection("linkedin_profiles")
     if profiles_collection is None:
         logger.warning("Could not deactivate profiles: collection not available")
         return
 
+    query: dict = {"user_id": user_id, "is_active": True}
+    try:
+        from openoutreach.billing.seats import org_ids_owned_by
+        from openoutreach.organizations.service import team_workspaces_enabled
+
+        if team_workspaces_enabled():
+            org_ids = org_ids_owned_by(user_id)
+            if org_ids:
+                query = {
+                    "$or": [
+                        {"org_id": {"$in": org_ids}},
+                        {"user_id": user_id},
+                    ],
+                    "is_active": True,
+                }
+    except Exception:
+        pass
+
     try:
         result = profiles_collection.update_many(
-            {"user_id": user_id, "is_active": True},
+            query,
             {"$set": {"is_active": False}},
         )
         logger.info(f"Deactivated {result.modified_count} profiles for user {user_id}")

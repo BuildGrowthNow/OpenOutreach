@@ -5,9 +5,14 @@ Ensures users comply with new plan limits after downgrade.
 
 import logging
 
-from openoutreach.billing.seats import credentialed_profile_ids
+from openoutreach.billing.seats import (
+    credentialed_profile_ids,
+    credentialed_profile_ids_for_scope,
+    org_ids_owned_by,
+)
 from openoutreach.mongodb.connection import get_mongodb_collection
 from openoutreach.mongodb.models_user import User
+from openoutreach.organizations.service import team_workspaces_enabled
 
 logger = logging.getLogger(__name__)
 
@@ -32,16 +37,30 @@ def pause_excess_linkedin_profiles(
         logger.error("LinkedIn profiles collection not available")
         return {"deactivated": 0, "error": True}
 
-    active_profiles = list(
-        collection.find(
-            {"user_id": user_id, "is_active": True},
-            sort=[("created_at", 1)],
+    if team_workspaces_enabled():
+        org_ids = org_ids_owned_by(user_id)
+        profile_query: dict = {
+            "$or": [
+                {"org_id": {"$in": org_ids}},
+                {"user_id": user_id},
+            ],
+            "is_active": True,
+        }
+        active_profiles = list(
+            collection.find(profile_query, sort=[("created_at", 1)])
         )
-    )
+        credentialed_ids = credentialed_profile_ids_for_scope(user_id)
+    else:
+        active_profiles = list(
+            collection.find(
+                {"user_id": user_id, "is_active": True},
+                sort=[("created_at", 1)],
+            )
+        )
+        credentialed_ids = credentialed_profile_ids(user_id)
 
     # Orphan profiles without a credential do not consume an account seat and
     # must not be chosen ahead of a real account.
-    credentialed_ids = credentialed_profile_ids(user_id)
     if credentialed_ids is not None:
         active_profiles = [
             profile
@@ -82,7 +101,9 @@ def pause_excess_linkedin_profiles(
     )
 
     for profile in profiles_to_pause:
-        _notify_seat_removed(user_id, profile)
+        _notify_seat_removed(
+            str(profile.get("assigned_user_id") or user_id), profile
+        )
 
     count = result.modified_count
     logger.info("Paused %s LinkedIn profiles for user %s above the account limit", count, user_id)

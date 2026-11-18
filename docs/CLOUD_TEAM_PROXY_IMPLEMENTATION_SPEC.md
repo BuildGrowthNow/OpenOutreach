@@ -917,12 +917,12 @@ Incident runbook:
 
 ### Phase 3
 
-- [ ] Owner invites member; member joins org.
-- [ ] Seat assignment cloud/desktop.
+- [x] Owner invites member; member joins org (Phase 3A).
+- [x] Seat assignment cloud/desktop (Phase 3A: cloud seat assignment; desktop is 3B).
 - [ ] Desktop enrollment for org-owned profiles.
-- [ ] Cloud/desktop daemon filtering.
-- [ ] Member removal reassigns seats and revokes devices.
-- [ ] No cross-tenant access.
+- [ ] Cloud/desktop daemon filtering (Phase 3A covers cloud daemon org seat limits and daemon v2 claim authorization).
+- [x] Member removal reassigns seats and revokes devices (Phase 3A: seat pause/proxy retention; device revocation is 3B).
+- [x] No cross-tenant access.
 
 ### Phase 4
 

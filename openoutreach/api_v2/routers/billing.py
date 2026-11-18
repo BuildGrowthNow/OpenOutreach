@@ -23,8 +23,6 @@ from openoutreach.billing.stripe_service import (
 from openoutreach.billing.models import StripePlan
 from openoutreach.billing.plans import (
     apply_plan_entitlements,
-    effective_cloud_seat_limit,
-    effective_linkedin_account_limit,
     get_plan,
     get_all_plans,
 )
@@ -41,6 +39,8 @@ from openoutreach.billing.coupons import (
     validate_coupon_for_checkout,
 )
 from openoutreach.config import settings
+from openoutreach.organizations.access import resolve_org_context
+from openoutreach.organizations.enforcement import resolve_effective_plan
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +57,16 @@ def _is_plan_upgrade(current_plan: str, new_plan: str) -> bool:
         return new_idx > current_idx
     except ValueError:
         return False
+
+
+def _require_billing_owner(user: User) -> None:
+    """Only the workspace owner may change billing or open the Stripe portal."""
+    effective = resolve_effective_plan(user)
+    if effective.billing_owner_id != user._id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Billing is managed by the workspace owner",
+        )
 
 
 class PlanResponse(BaseModel):
@@ -87,6 +97,12 @@ class BillingStatusResponse(BaseModel):
     user_status: str
     admin_notes: Optional[str] = None
     stripe_subscription_id: Optional[str] = None
+    org_id: Optional[str] = None
+    org_name: Optional[str] = None
+    org_role: Optional[str] = None
+    team_workspaces_enabled: bool = False
+    is_billing_owner: bool = True
+    billing_owner_email: Optional[str] = None
 
 
 class CheckoutSessionRequest(BaseModel):
@@ -212,25 +228,37 @@ async def billing_status(
         user.save()
         subscription_status = "active"
 
+    effective = resolve_effective_plan(user)
+    ctx = resolve_org_context(user)
+    is_billing_owner = effective.billing_owner_id == user._id
+
     return BillingStatusResponse(
-        plan=user.plan,
-        subscription_status=subscription_status,
-        billing_period=user.billing_period,
-        trial_ends_at=user.trial_ends_at.isoformat() if user.trial_ends_at else None,
-        current_period_end=user.current_period_end.isoformat() if user.current_period_end else None,
-        linkedin_account_limit=effective_linkedin_account_limit(
-            user.plan,
-            user.cloud_profiles,
-            user.linkedin_account_limit,
+        plan=effective.plan,
+        subscription_status=effective.subscription_status,
+        billing_period=user.billing_period if is_billing_owner else None,
+        trial_ends_at=(
+            effective.trial_ends_at.isoformat() if effective.trial_ends_at else None
         ),
-        whatsapp_account_limit=user.whatsapp_account_limit,
-        campaign_limit=user.campaign_limit,
-        cloud_profiles=user.cloud_profiles,
-        cloud_seat_limit=effective_cloud_seat_limit(user.plan, user.cloud_profiles),
+        current_period_end=(
+            user.current_period_end.isoformat()
+            if is_billing_owner and user.current_period_end
+            else None
+        ),
+        linkedin_account_limit=effective.linkedin_account_limit,
+        whatsapp_account_limit=effective.whatsapp_account_limit,
+        campaign_limit=effective.campaign_limit,
+        cloud_profiles=effective.cloud_profiles,
+        cloud_seat_limit=effective.cloud_seat_limit,
         cloud_seats_enabled=bool(getattr(settings, "CLOUD_SEATS_ENABLED", True)),
         user_status=user.status,
         admin_notes=user.admin_notes,
-        stripe_subscription_id=user.stripe_subscription_id,
+        stripe_subscription_id=user.stripe_subscription_id if is_billing_owner else None,
+        org_id=ctx.org_id,
+        org_name=ctx.org.name,
+        org_role=ctx.role,
+        team_workspaces_enabled=ctx.team_enabled,
+        is_billing_owner=is_billing_owner,
+        billing_owner_email=effective.billing_owner_email,
     )
 
 
@@ -246,6 +274,7 @@ async def get_current_usage(
     from openoutreach.billing.seats import count_credentialed_profiles
     from openoutreach.mongodb.connection import get_mongodb_collection
 
+    effective = resolve_effective_plan(user)
     try:
         campaigns_coll = get_mongodb_collection("campaigns")
         wa_profiles_coll = get_mongodb_collection("whatsapp_profiles")
@@ -267,29 +296,21 @@ async def get_current_usage(
 
         return {
             "linkedin_accounts_used": linkedin_accounts_used,
-            "linkedin_accounts_limit": effective_linkedin_account_limit(
-                user.plan,
-                user.cloud_profiles,
-                user.linkedin_account_limit,
-            ),
+            "linkedin_accounts_limit": effective.linkedin_account_limit,
             "whatsapp_accounts_used": whatsapp_accounts_used,
-            "whatsapp_accounts_limit": user.whatsapp_account_limit,
+            "whatsapp_accounts_limit": effective.whatsapp_account_limit,
             "campaigns_used": campaigns_used,
-            "campaigns_limit": user.campaign_limit,
+            "campaigns_limit": effective.campaign_limit,
         }
     except Exception as e:
         logger.error("Failed to get usage; exception_type=%s", type(e).__name__)
         return {
             "linkedin_accounts_used": 0,
-            "linkedin_accounts_limit": effective_linkedin_account_limit(
-                user.plan,
-                user.cloud_profiles,
-                user.linkedin_account_limit,
-            ),
+            "linkedin_accounts_limit": effective.linkedin_account_limit,
             "whatsapp_accounts_used": 0,
-            "whatsapp_accounts_limit": user.whatsapp_account_limit,
+            "whatsapp_accounts_limit": effective.whatsapp_account_limit,
             "campaigns_used": 0,
-            "campaigns_limit": user.campaign_limit,
+            "campaigns_limit": effective.campaign_limit,
         }
 
 
@@ -310,6 +331,7 @@ async def create_checkout(
     user = User.get(user_id)
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    _require_billing_owner(user)
 
     # Enforce email verification before checkout
     if not user.email_verified:
@@ -460,6 +482,7 @@ async def create_portal(
     user = User.get(user_id)
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    _require_billing_owner(user)
 
     if not user.stripe_customer_id:
         raise HTTPException(
@@ -504,6 +527,7 @@ async def change_plan(
     user = User.get(user_id)
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    _require_billing_owner(user)
 
     if not user.stripe_subscription_id:
         raise HTTPException(
@@ -611,6 +635,7 @@ async def update_cloud_addon(
     user = User.get(user_id)
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    _require_billing_owner(user)
 
     if not getattr(settings, "CLOUD_SEATS_ENABLED", True):
         raise HTTPException(
@@ -700,6 +725,7 @@ async def cancel_sub(
     user = User.get(user_id)
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    _require_billing_owner(user)
 
     if not user.stripe_subscription_id:
         raise HTTPException(
@@ -726,6 +752,7 @@ async def reactivate_sub(
     user = User.get(user_id)
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    _require_billing_owner(user)
 
     if not user.stripe_subscription_id:
         raise HTTPException(
@@ -752,6 +779,7 @@ async def get_invoices(
     user = User.get(user_id)
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    _require_billing_owner(user)
 
     if not user.stripe_customer_id:
         return []

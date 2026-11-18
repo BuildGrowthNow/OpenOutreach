@@ -10,6 +10,7 @@ import { LinkedInSetupModal } from '@/components/layout/linkedin-setup-modal'
 import { DashboardBillingWrapper } from '@/components/billing/dashboard-billing-wrapper'
 import { FirstCampaignBanner } from '@/components/layout/first-campaign-banner'
 import { useAuthStore } from '@/lib/authStoreV2'
+import { useBilling } from '@/lib/contexts/billing-context'
 
 type SidebarIcon = keyof typeof Icons
 
@@ -61,6 +62,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [isDesktop, setIsDesktop] = useState<boolean | null>(null)
   const { isAdmin } = useAuthStore()
+  const { billingStatus } = useBilling()
 
   useEffect(() => {
     const check = () => !!(window as unknown as Record<string, unknown>)['__LENGROWTH_DESKTOP__']
@@ -72,6 +74,11 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
 
   const navItems = [
     ...dashboardItems,
+    ...(billingStatus?.team_workspaces_enabled ? [{
+      title: 'Team',
+      href: '/settings/team',
+      icon: 'Users' as SidebarIcon,
+    }] : []),
     // Only show "Get Desktop App" once we've confirmed we're NOT in the desktop app.
     // null = not yet detected (suppress to avoid flash); false = web browser (show it).
     ...(isDesktop === false ? [{

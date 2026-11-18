@@ -21,11 +21,45 @@ from openoutreach.api_v2.schemas.linkedin import (
 from openoutreach.billing.seats import release_linkedin_seat
 from openoutreach.mongodb.connection import get_mongodb_collection
 from openoutreach.mongodb.crypto import safe_decrypt, safe_encrypt
+from openoutreach.mongodb.models_user import User
+from openoutreach.organizations.access import (
+    can_delete_profile,
+    profile_access_query,
+    resolve_org_context,
+)
+from openoutreach.organizations.permissions import can_manage_proxies
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 _ALLOWED_PROXY_SCHEMES = {"http", "https", "socks5", "socks5h"}
+
+
+def _profile_query(user_id: str) -> dict:
+    """Return the org-aware profile predicate for an authenticated user."""
+    user = User.get(user_id)
+    if user is None:
+        # Unit tests and legacy callers without a user row fall back to the
+        # original user-owned predicate. Production authentication always
+        # resolves a real user before this helper is reached.
+        return {"user_id": user_id}
+    return profile_access_query(user)
+
+
+def _load_accessible_profile(user_id: str, profile_id: str) -> dict:
+    collection = get_mongodb_collection("linkedin_profiles")
+    if collection is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="LinkedIn profiles database unavailable",
+        )
+    profile_doc = collection.find_one({"_id": profile_id, **_profile_query(user_id)})
+    if not profile_doc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Profile not found or access denied",
+        )
+    return profile_doc
 
 
 def _normalize_proxy_server(proxy_server: str) -> str:
@@ -209,22 +243,26 @@ async def list_linkedin_profiles(
         )
 
     try:
-        # Query profiles for this user
-        cursor = collection.find(
-            {"user_id": user_id}
-        ).skip(skip).limit(limit)
+        # Query profiles in the caller's active organization scope.
+        query = _profile_query(user_id)
+        cursor = collection.find(query).skip(skip).limit(limit)
+        docs = list(cursor)
+        profile_ids = [str(doc.get("_id")) for doc in docs]
 
         # Build a profile_id -> credential email map for fallback display label
         creds_collection = get_mongodb_collection("linkedin_credentials")
         cred_email_by_profile: dict = {}
-        if creds_collection is not None:
-            for cred in creds_collection.find({"user_id": user_id}, {"linkedin_profile_id": 1, "email": 1}):
+        if creds_collection is not None and profile_ids:
+            for cred in creds_collection.find(
+                {"linkedin_profile_id": {"$in": profile_ids}},
+                {"linkedin_profile_id": 1, "email": 1},
+            ):
                 pid = cred.get("linkedin_profile_id")
                 if pid and "email" in cred:
                     cred_email_by_profile[str(pid)] = cred["email"]
 
         profiles = []
-        for doc in cursor:
+        for doc in docs:
             profile_id = str(doc.get("_id"))
             username = doc.get("linkedin_username") or cred_email_by_profile.get(profile_id, "")
             profiles.append({
@@ -234,9 +272,13 @@ async def list_linkedin_profiles(
                 "has_cookies": bool(doc.get("cookie_data_encrypted")),
                 "connect_daily_limit": doc.get("connect_daily_limit", 20),
                 "follow_up_daily_limit": doc.get("follow_up_daily_limit", 25),
+                "org_id": doc.get("org_id"),
+                "assigned_user_id": doc.get("assigned_user_id"),
+                "execution_mode": doc.get("execution_mode", "desktop"),
+                "proxy_mode": doc.get("proxy_mode", "none"),
             })
 
-        count = collection.count_documents({"user_id": user_id})
+        count = collection.count_documents(query)
 
         return ProfileListResponse(profiles=profiles, count=count)
 
@@ -276,9 +318,10 @@ async def upload_profile_cookies(
             detail="LinkedIn profiles database unavailable"
         )
 
-    # Verify profile exists and user owns it
+    # Verify profile exists and user has org-scoped access
     try:
-        profile = collection.find_one({"_id": profile_id, "user_id": user_id})
+        access_query = _profile_query(user_id)
+        profile = collection.find_one({"_id": profile_id, **access_query})
         if not profile:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -365,7 +408,7 @@ async def upload_profile_cookies(
         encrypted_data = encrypt_cookie_data(storage_state)
 
         result = collection.update_one(
-            {"_id": profile_id, "user_id": user_id},
+            {"_id": profile_id, **access_query},
             {"$set": {"cookie_data_encrypted": encrypted_data}}
         )
 
@@ -435,9 +478,12 @@ async def create_profile(
         )
 
     try:
+        ctx = resolve_org_context(user)
         # Create profile
         profile = LinkedInProfile(
             user_id=user_id,
+            org_id=ctx.org_id,
+            assigned_user_id=user_id,
             linkedin_username=linkedin_username,
             connect_daily_limit=connect_daily_limit,
             follow_up_daily_limit=follow_up_daily_limit,
@@ -512,8 +558,8 @@ async def get_profile_health(
         )
 
     try:
-        # Get all profiles for this user
-        profiles_cursor = profiles_collection.find({"user_id": user_id})
+        # Get all profiles in the caller's organization scope
+        profiles_cursor = profiles_collection.find(_profile_query(user_id))
         profiles = list(profiles_cursor)
         total_profiles = len(profiles)
 
@@ -638,7 +684,16 @@ async def get_daemon_status(user_id: str = Depends(get_current_user)):
     from openoutreach.linkedin.models import LinkedInProfile
 
     try:
-        profiles = LinkedInProfile.objects.filter(user_id=user_id, active=True)
+        collection = get_mongodb_collection("linkedin_profiles")
+        if collection is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="LinkedIn profiles database unavailable",
+            )
+        profiles = [
+            LinkedInProfile.from_dict(doc)
+            for doc in collection.find({**_profile_query(user_id), "active": True})
+        ]
 
         if not profiles:
             return {
@@ -720,7 +775,7 @@ async def get_profile(
         )
 
     try:
-        profile_doc = collection.find_one({"_id": profile_id, "user_id": user_id})
+        profile_doc = collection.find_one({"_id": profile_id, **_profile_query(user_id)})
         if not profile_doc:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -776,7 +831,7 @@ async def update_profile(
 
     try:
         # Verify ownership
-        profile_doc = collection.find_one({"_id": profile_id, "user_id": user_id})
+        profile_doc = collection.find_one({"_id": profile_id, **_profile_query(user_id)})
         if not profile_doc:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -803,7 +858,7 @@ async def update_profile(
 
         # Apply update
         collection.update_one(
-            {"_id": profile_id, "user_id": user_id},
+            {"_id": profile_id, **_profile_query(user_id)},
             {"$set": updates}
         )
 
@@ -867,7 +922,7 @@ async def update_proxy_config(
         )
 
     try:
-        profile_doc = collection.find_one({"_id": profile_id, "user_id": user_id})
+        profile_doc = collection.find_one({"_id": profile_id, **_profile_query(user_id)})
         if not profile_doc:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -876,6 +931,13 @@ async def update_proxy_config(
 
         stored_proxy_id = profile_doc.get("proxy_id")
         stored_proxy_mode = profile_doc.get("proxy_mode")
+
+        user = User.get(user_id)
+        if user is not None and not can_manage_proxies(resolve_org_context(user).role):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only workspace owners and admins can manage proxies",
+            )
 
         if stored_proxy_mode == "managed" or stored_proxy_id:
             raise HTTPException(
@@ -922,16 +984,15 @@ async def update_proxy_config(
                     proxy_password
                 )
             if profile_doc.get("execution_mode") == "cloud":
-                from openoutreach.billing.plans import effective_cloud_seat_limit
-                from openoutreach.mongodb.models_user import User
+                from openoutreach.organizations.enforcement import resolve_effective_plan
 
                 user = User.get(user_id)
                 if user:
-                    seat_limit = effective_cloud_seat_limit(
-                        user.plan, user.cloud_profiles
-                    )
+                    effective = resolve_effective_plan(user)
+                    seat_limit = effective.cloud_seat_limit
+                    ctx = resolve_org_context(user)
                     other_active = collection.count_documents({
-                        "user_id": user_id,
+                        "org_id": ctx.org_id,
                         "is_active": True,
                         "execution_mode": "cloud",
                         "_id": {"$ne": profile_id},
@@ -942,11 +1003,11 @@ async def update_proxy_config(
                         updates["daemon_status"] = "proxy_ready"
 
         collection.update_one(
-            {"_id": profile_id, "user_id": user_id},
+            {"_id": profile_id, **_profile_query(user_id)},
             {"$set": updates},
         )
 
-        updated_doc = collection.find_one({"_id": profile_id, "user_id": user_id})
+        updated_doc = collection.find_one({"_id": profile_id, **_profile_query(user_id)})
         if not updated_doc:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -996,11 +1057,18 @@ async def test_proxy(
 
     try:
         # Verify ownership
-        profile_doc = collection.find_one({"_id": profile_id, "user_id": user_id})
+        profile_doc = collection.find_one({"_id": profile_id, **_profile_query(user_id)})
         if not profile_doc:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Profile not found or access denied"
+            )
+
+        user = User.get(user_id)
+        if user is not None and not can_manage_proxies(resolve_org_context(user).role):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only workspace owners and admins can manage proxies",
             )
 
         # Test proxy connectivity. The neutral IP check is the primary signal;
@@ -1071,7 +1139,7 @@ async def get_proxy_config(
         )
 
     try:
-        profile_doc = collection.find_one({"_id": profile_id, "user_id": user_id})
+        profile_doc = collection.find_one({"_id": profile_id, **_profile_query(user_id)})
         if not profile_doc:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -1154,12 +1222,19 @@ async def delete_profile(
         )
 
     try:
-        # Verify ownership
-        profile_doc = profiles_collection.find_one({"_id": profile_id, "user_id": user_id})
+        # Verify org-scoped access
+        profile_doc = profiles_collection.find_one({"_id": profile_id, **_profile_query(user_id)})
         if not profile_doc:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Profile not found or access denied"
+            )
+
+        deleting_user = User.get(user_id)
+        if deleting_user is not None and not can_delete_profile(deleting_user, profile_doc):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only workspace owners and admins can delete a profile",
             )
 
         # Check for active campaigns
@@ -1188,13 +1263,13 @@ async def delete_profile(
         had_credentials = bool(
             credentials_collection is not None
             and credentials_collection.count_documents(
-                {"linkedin_profile_id": profile_id, "user_id": user_id}
+                {"linkedin_profile_id": profile_id}
             )
             > 0
         )
 
         # Delete profile
-        result = profiles_collection.delete_one({"_id": profile_id, "user_id": user_id})
+        result = profiles_collection.delete_one({"_id": profile_id})
         if result.deleted_count == 0:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,

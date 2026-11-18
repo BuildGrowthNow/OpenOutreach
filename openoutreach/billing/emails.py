@@ -729,3 +729,49 @@ If you didn't request a password reset, you can safely ignore this email. Your p
 """
 
     return _send_billing_email(user, f"Reset your {brand} password", html, text)
+
+
+def send_organization_invite(
+    to_email: str,
+    org_name: str,
+    inviter_name: str,
+    role: str,
+    invite_url: str,
+    expires_at: Optional[datetime] = None,
+) -> bool:
+    """Send a workspace invitation link. The raw token is never logged."""
+    brand, _, support = _settings_ctx()
+    recipient = User(email=to_email, full_name="")
+    role_label = "administrator" if role == "admin" else "member"
+    expires_label = _format_date(expires_at) if expires_at else "in 7 days"
+
+    body = (
+        _h1(f"You're invited to {org_name}")
+        + _p(f"Hi,")
+        + _p(
+            f"{inviter_name or 'A workspace owner'} invited you to join "
+            f"<strong>{org_name}</strong> on {brand} as a {role_label}."
+        )
+        + _p("Accept the invitation to see the LinkedIn profiles and campaigns assigned to you.")
+        + _btn(invite_url, "Accept Invitation")
+        + _divider()
+        + _p(
+            f'Or copy this link into your browser:<br><a href="{invite_url}" '
+            f'style="color:#10b981;text-decoration:none;word-break:break-all;font-size:13px;">{invite_url}</a>',
+            "font-size:13px;color:#71717a;",
+        )
+        + _p(f"This invitation expires {expires_label}.", "font-size:13px;color:#71717a;")
+        + _p("If you weren't expecting this invitation, you can ignore this email.", "font-size:13px;color:#71717a;")
+    )
+
+    html = _html_wrap(brand, support, body)
+    text = f"""You're invited to {org_name}
+
+{inviter_name or 'A workspace owner'} invited you to join {org_name} on {brand} as a {role_label}.
+
+Accept the invitation: {invite_url}
+
+This invitation expires {expires_label}.
+If you weren't expecting this invitation, you can ignore this email.
+"""
+    return _send_billing_email(recipient, f"Join {org_name} on {brand}", html, text)

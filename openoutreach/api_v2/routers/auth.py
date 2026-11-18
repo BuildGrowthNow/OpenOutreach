@@ -35,9 +35,38 @@ from openoutreach.billing.account_lifecycle import (
     export_user_data,
 )
 from openoutreach.billing.emails import send_email_verification, send_password_reset
+from openoutreach.organizations.access import resolve_org_context
+from openoutreach.organizations.enforcement import resolve_effective_plan
+from openoutreach.organizations.service import (
+    InviteEmailMismatchError,
+    InviteInvalidError,
+    accept_invite_by_hash,
+    ensure_personal_org,
+    get_invite_by_token,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+def _user_response(user: User) -> UserResponse:
+    """Build the public user response with active organization context."""
+    ctx = resolve_org_context(user)
+    return UserResponse(
+        id=user._id,
+        email=user.email,
+        full_name=user.full_name,
+        is_active=user.is_active,
+        created_at=user.created_at or datetime.now(tz.utc),
+        status=user.status,
+        admin_notes=user.admin_notes,
+        is_admin=user.is_admin,
+        admin_role=user.admin_role,
+        org_id=ctx.org._id,
+        org_name=ctx.org.name,
+        org_role=ctx.role,
+        team_workspaces_enabled=ctx.team_enabled,
+    )
 
 
 def _extract_client_ip(request: Request) -> Optional[str]:
@@ -133,6 +162,26 @@ async def register(data: RegisterRequest, request: Request):
             detail="Email already registered"
         )
 
+    pending_invite_hash = None
+    if data.invite_token:
+        try:
+            invite = get_invite_by_token(data.invite_token)
+        except InviteInvalidError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="This invitation is invalid or has expired",
+            )
+        if invite.email != data.email.lower().strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="This invitation was sent to a different email address",
+            )
+        import hashlib
+
+        pending_invite_hash = hashlib.sha256(
+            data.invite_token.encode("utf-8")
+        ).hexdigest()
+
     # Create user with subscription_status=none (no subscription until checkout)
     # Email verification required before trial
     verification_token = jwt.encode(
@@ -153,12 +202,23 @@ async def register(data: RegisterRequest, request: Request):
         subscription_status="none",
         email_verified=False,
         intended_plan=data.intended_plan,
+        pending_org_invite_hash=pending_invite_hash,
         email_verification_token=verification_token,
         email_verification_expires=datetime.now(tz.utc) + timedelta(hours=24),
         signup_ip=signup_ip,
     )
     user.set_password(data.password)
     user.save()
+
+    # Every user owns a personal organization. It is created immediately so
+    # org-scoped profile/seat queries have a stable owner before first login.
+    try:
+        ensure_personal_org(user)
+    except Exception as exc:
+        logger.warning(
+            "Failed to create personal organization; exception_type=%s",
+            type(exc).__name__,
+        )
 
     # Record signup attempt for IP tracking
     from openoutreach.billing.rate_limiter import SignupRateLimiter
@@ -185,17 +245,7 @@ async def register(data: RegisterRequest, request: Request):
 
     logger.info("New user registered")
 
-    return UserResponse(
-        id=user._id,
-        email=user.email,
-        full_name=user.full_name,
-        is_active=user.is_active,
-        created_at=user.created_at or datetime.now(tz.utc),
-        status=user.status,
-        admin_notes=user.admin_notes,
-        is_admin=user.is_admin,
-        admin_role=user.admin_role,
-    )
+    return _user_response(user)
 
 
 # ==================== LOGIN ====================
@@ -256,6 +306,15 @@ async def login(credentials: LoginRequest, response: Response, request: Request)
     # Update last login and capture IP
     user.update_last_login(ip=_extract_client_ip(request))
 
+    # Heal missing personal organizations for accounts created before Phase 3A.
+    try:
+        ensure_personal_org(user)
+    except Exception as exc:
+        logger.warning(
+            "Failed to ensure personal organization on login; exception_type=%s",
+            type(exc).__name__,
+        )
+
     # Create tokens
     access_token = create_access_token(user._id, user.email)
     refresh_token = create_refresh_token(user._id)
@@ -273,9 +332,11 @@ async def login(credentials: LoginRequest, response: Response, request: Request)
 
     # Set readable billing_status cookie so Next.js middleware can gate pages
     # without a network round-trip. Not HTTP-only - intentionally readable by JS.
+    # Team members inherit the workspace owner's subscription status.
+    effective_status = resolve_effective_plan(user).subscription_status or "none"
     response.set_cookie(
         key="billing_status",
-        value=user.subscription_status or "none",
+        value=effective_status,
         httponly=False,
         secure=not settings.DEBUG,
         samesite="lax",
@@ -369,10 +430,11 @@ async def refresh_token(request: Request, response: Response):
                 path="/",
             )
 
-        # Keep billing_status cookie in sync with current subscription state
+        # Keep billing_status cookie in sync with the effective subscription state
+        effective_status = resolve_effective_plan(user).subscription_status or "none"
         response.set_cookie(
             key="billing_status",
-            value=user.subscription_status or "none",
+            value=effective_status,
             httponly=False,
             secure=not settings.DEBUG,
             samesite="lax",
@@ -412,17 +474,7 @@ async def get_current_user_info(user_id: str = Depends(get_current_user)):
             detail="User not found"
         )
 
-    return UserResponse(
-        id=user._id,
-        email=user.email,
-        full_name=user.full_name,
-        is_active=user.is_active,
-        created_at=user.created_at or datetime.now(tz.utc),
-        status=user.status,
-        admin_notes=user.admin_notes,
-        is_admin=user.is_admin,
-        admin_role=user.admin_role,
-    )
+    return _user_response(user)
 
 
 # ==================== LOGOUT ====================
@@ -506,6 +558,23 @@ async def verify_email(body: EmailVerifyRequest):
             apply_plan_entitlements(user)
 
         user.save()
+
+        # A new invited user joins the workspace after verifying their email.
+        # Failure to consume the invite never blocks verification; the user can
+        # still accept from the invitation link after logging in.
+        if user.pending_org_invite_hash:
+            try:
+                accept_invite_by_hash(user.pending_org_invite_hash, user)
+                user.pending_org_invite_hash = None
+                user.save()
+            except (InviteInvalidError, InviteEmailMismatchError):
+                user.pending_org_invite_hash = None
+                user.save()
+            except Exception as exc:
+                logger.warning(
+                    "Invite acceptance after verification failed; exception_type=%s",
+                    type(exc).__name__,
+                )
 
         logger.info("Email verified for user")
 

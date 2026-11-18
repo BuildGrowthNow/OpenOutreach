@@ -125,6 +125,30 @@ export default function PlanPage() {
     return <PlanPageLoadingSkeleton />;
   }
 
+  if (billingStatus?.is_billing_owner === false) {
+    return (
+      <div className="space-y-6">
+        <Breadcrumb
+          items={[
+            { label: "Dashboard", href: "/dashboard" },
+            { label: "Settings", href: "/settings" },
+            { label: "Plan", href: "/settings/plan", isActive: true },
+          ]}
+        />
+        <Alert>
+          <Icons.Info className="h-4 w-4" />
+          <AlertDescription>
+            Your workspace owner manages the plan and cloud seats. You inherit the
+            workspace plan; contact {billingStatus.billing_owner_email || "the owner"} for changes.
+          </AlertDescription>
+        </Alert>
+        <Button variant="outline" onClick={() => router.push("/settings/billing")}>
+          View billing status
+        </Button>
+      </div>
+    );
+  }
+
   const currentPlan = billingStatus?.plan || "starter";
 
   // Separate lifetime from regular plans; exclude cloud_addon from display

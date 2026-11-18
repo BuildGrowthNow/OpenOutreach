@@ -2,7 +2,10 @@
 Billing plans as the single source of truth.
 All plan definitions centralized here, synced to Stripe dynamically.
 """
+import logging
 from typing import TypedDict
+
+logger = logging.getLogger(__name__)
 
 
 class PlanDefinition(TypedDict):
@@ -206,3 +209,15 @@ def apply_plan_entitlements(user) -> None:
     )
     user.whatsapp_account_limit = plan_def.get("max_whatsapp_accounts", 1)
     user.campaign_limit = plan_def.get("max_campaigns")
+    # Keep the organization mirror in sync with the billing owner. This is
+    # additive and best-effort: a mirror failure must never break billing.
+    try:
+        from openoutreach.organizations.service import sync_org_billing_from_user
+
+        sync_org_billing_from_user(user)
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.debug(
+            "organization_billing_mirror_skipped user_id=%s exception_type=%s",
+            getattr(user, "_id", ""),
+            type(exc).__name__,
+        )

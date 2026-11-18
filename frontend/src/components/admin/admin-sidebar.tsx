@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { BarChart2, Users, DollarSign, FileText, Server, ShieldCheck, Network, LogOut, ArrowLeft } from 'lucide-react'
+import { BarChart2, Users, DollarSign, FileText, Server, ShieldCheck, Network, Building2, LogOut, ArrowLeft } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Logo } from '@/components/ui/logo'
@@ -11,6 +11,7 @@ import { useAuthStore } from '@/lib/authStoreV2'
 const NAV = [
   { href: '/admin', label: 'Dashboard', icon: BarChart2, exact: true },
   { href: '/admin/users', label: 'Users', icon: Users, exact: false },
+  { href: '/admin/organizations', label: 'Organizations', icon: Building2, exact: false },
   { href: '/admin/finance', label: 'Finance', icon: DollarSign, exact: false },
   { href: '/admin/audit', label: 'Audit Log', icon: FileText, exact: false },
   { href: '/admin/proxies', label: 'Proxies', icon: Network, exact: false },

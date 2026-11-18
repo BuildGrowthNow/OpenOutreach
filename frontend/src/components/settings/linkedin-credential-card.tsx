@@ -16,6 +16,7 @@ import {
   type LinkedInCredentialsLogsResponse,
 } from "@/lib/api/dashboard";
 import { useToast } from "@/components/ui/use-toast";
+import { useBilling } from "@/lib/contexts/billing-context";
 import LinkedInCredentialForm from "./linkedin-credential-form";
 import { ProxyConfigForm } from "./proxy-config-form";
 import VncViewer from "./vnc-viewer";
@@ -137,6 +138,9 @@ export default function LinkedInCredentialCard({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showProxyDialog, setShowProxyDialog] = useState(false);
   const { toast } = useToast();
+  const { billingStatus } = useBilling();
+  const orgRole = billingStatus?.org_role;
+  const canManageWorkspace = orgRole !== "member";
 
   const healthStatus: HealthStatusWithDetails =
     credential.healthStatus && typeof credential.healthStatus === "object"
@@ -507,7 +511,7 @@ export default function LinkedInCredentialCard({
               {isLoadingLogs ? "Loading..." : "View Logs"}
             </Button>
 
-            {credential.executionMode === "cloud" && credential.linkedinProfileId ? (
+            {canManageWorkspace && credential.executionMode === "cloud" && credential.linkedinProfileId ? (
               <Button
                 variant="outline"
                 size="sm"
@@ -518,15 +522,17 @@ export default function LinkedInCredentialCard({
               </Button>
             ) : null}
 
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => setShowDeleteConfirm(true)}
-              disabled={isDeleting}
-            >
-              <Icons.Trash2 className="mr-2 h-3 w-3" />
-              Delete
-            </Button>
+            {canManageWorkspace && (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => setShowDeleteConfirm(true)}
+                disabled={isDeleting}
+              >
+                <Icons.Trash2 className="mr-2 h-3 w-3" />
+                Delete
+              </Button>
+            )}
           </div>
         </div>
 

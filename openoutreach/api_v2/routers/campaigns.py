@@ -16,11 +16,41 @@ from pydantic import BaseModel, ConfigDict
 from openoutreach.api_v2.dependencies_v2 import get_current_user, get_campaign_with_access
 from openoutreach.mongodb.connection import get_mongodb_collection
 from openoutreach.mongodb import models
+from openoutreach.mongodb.models_user import User
 from openoutreach.crm.models.deal import DealState
 from openoutreach.core.sequence_schema import validate_sequence_graph
+from openoutreach.organizations.access import (
+    campaign_access_query,
+    campaign_has_access,
+    campaign_manage_allowed,
+    profile_access_query,
+    resolve_org_context,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+def _campaign_access(user_id: str, campaign) -> bool:
+    user = User.get(user_id)
+    if user is None:
+        # Legacy unit-test path without a user row; production auth resolves one.
+        return campaign.has_access(user_id)
+    return campaign_has_access(user, campaign)
+
+
+def _campaign_manage(user_id: str, campaign) -> bool:
+    user = User.get(user_id)
+    if user is None:
+        return getattr(campaign, "user_id", None) == user_id
+    return campaign_manage_allowed(user, campaign)
+
+
+def _profile_access_query(user_id: str) -> dict:
+    user = User.get(user_id)
+    if user is None:
+        return {"user_id": user_id}
+    return profile_access_query(user)
 
 
 # Request/Response schemas
@@ -216,13 +246,14 @@ async def list_campaigns(
         )
 
     try:
-        # Query campaigns where user is owner OR in team_member_ids
-        query = {
-            "$or": [
-                {"user_id": user_id},
-                {"team_member_ids": user_id}
-            ]
-        }
+        # Query campaigns in the caller's organization scope.
+        user = User.get(user_id)
+        if user is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User not found",
+            )
+        query = campaign_access_query(user)
         cursor = collection.find(query).skip(skip).limit(limit)
         docs = list(cursor)
 
@@ -363,6 +394,8 @@ async def list_campaigns(
             pagination=PaginationInfo(total=count, page=page, limit=limit, pages=pages),
         )
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Failed to list campaigns; exception_type=%s", type(e).__name__)
         raise HTTPException(
@@ -420,7 +453,7 @@ async def create_campaign(
         if data.linkedin_profile_id and profiles_collection is not None:
             profile_doc = profiles_collection.find_one({
                 "_id": data.linkedin_profile_id,
-                "user_id": user_id
+                **_profile_access_query(user_id),
             })
             if not profile_doc:
                 raise HTTPException(
@@ -449,9 +482,25 @@ async def create_campaign(
             if mailbox_col is None or mailbox_col.count_documents({"user_id": user_id, "paused": {"$ne": True}}) == 0:
                 raise HTTPException(status_code=400, detail="Connect an active mailbox before enabling email")
 
-        # Verify team members exist
+        # Verify team members exist and belong to the same workspace.
         team_ids = data.team_member_ids or []
+        ctx = resolve_org_context(user)
         if team_ids:
+            if ctx.team_enabled:
+                if not ctx.can_view_all_profiles:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Only workspace owners and admins can share a campaign with members",
+                    )
+                from openoutreach.organizations.access import org_member_user_ids
+
+                allowed_ids = org_member_user_ids(ctx.org_id)
+                invalid = [tid for tid in team_ids if tid not in allowed_ids]
+                if invalid:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Campaign can only be shared with members of this workspace",
+                    )
             users_collection = get_mongodb_collection("users")
             if users_collection is not None:
                 for tid in team_ids:
@@ -471,6 +520,7 @@ async def create_campaign(
             booking_link=data.booking_link or "",
             velocity=data.velocity,
             user_id=user_id,
+            org_id=ctx.org_id,
             team_member_ids=team_ids,
             icp_titles=data.icp_titles or [],
             target_company_size=data.target_company_size,
@@ -598,7 +648,7 @@ async def update_campaign(
                 detail="Campaign not found"
             )
 
-        if not campaign.has_access(user_id):
+        if not _campaign_access(user_id, campaign):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied"
@@ -634,7 +684,7 @@ async def update_campaign(
             if profiles_collection is not None:
                 profile_doc = profiles_collection.find_one({
                     "_id": data.linkedin_profile_id,
-                    "user_id": user_id
+                    **_profile_access_query(user_id),
                 })
                 if not profile_doc:
                     raise HTTPException(
@@ -694,11 +744,23 @@ async def update_campaign(
 
         if data.team_member_ids is not None:
             # Only campaign owner can update team members
-            if user_id != campaign.user_id:
+            if not _campaign_manage(user_id, campaign):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Only campaign owner can update team members"
                 )
+            updating_user = User.get(user_id)
+            if updating_user is not None:
+                ctx = resolve_org_context(updating_user)
+                if ctx.team_enabled:
+                    from openoutreach.organizations.access import org_member_user_ids
+
+                    allowed_ids = org_member_user_ids(ctx.org_id)
+                    if any(tid not in allowed_ids for tid in data.team_member_ids):
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="Campaign can only be shared with members of this workspace",
+                        )
             updates["team_member_ids"] = data.team_member_ids
 
         if not updates:
@@ -798,7 +860,7 @@ async def delete_campaign(
                 detail="Campaign not found"
             )
 
-        if user_id != campaign.user_id:
+        if not _campaign_manage(user_id, campaign):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Only campaign owner can delete campaigns"
@@ -847,7 +909,7 @@ async def clear_campaign_errors(
     campaign = models.Campaign.get(campaign_id)
     if not campaign:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
-    if user_id != campaign.user_id:
+    if not _campaign_manage(user_id, campaign):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
     action_logs_collection = get_mongodb_collection("action_logs")
@@ -886,7 +948,7 @@ async def pause_campaign(
                 detail="Campaign not found"
             )
 
-        if not campaign.has_access(user_id):
+        if not _campaign_access(user_id, campaign):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied"
@@ -992,7 +1054,7 @@ async def resume_campaign(
                 detail="Campaign not found"
             )
 
-        if not campaign.has_access(user_id):
+        if not _campaign_access(user_id, campaign):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied"
@@ -1132,7 +1194,7 @@ async def get_campaign_leads(
             detail="Campaign not found"
         )
 
-    if not campaign.has_access(user_id):
+    if not _campaign_access(user_id, campaign):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied"
@@ -1362,7 +1424,7 @@ async def manual_qualify_lead(
       "retry"   — clear qualification_hold so the daemon re-evaluates with AI
     """
     campaign = models.Campaign.get(campaign_id)
-    if not campaign or not campaign.has_access(user_id):
+    if not campaign or not _campaign_access(user_id, campaign):
         raise HTTPException(status_code=403, detail="Access denied")
 
     deals_col = get_mongodb_collection("deals")
@@ -1437,7 +1499,7 @@ async def get_lead_sequence_timeline(
     user_id: str = Depends(get_current_user),
 ):
     campaign = models.Campaign.get(campaign_id)
-    if not campaign or not campaign.has_access(user_id):
+    if not campaign or not _campaign_access(user_id, campaign):
         raise HTTPException(status_code=403, detail="Access denied")
 
     deals_col = get_mongodb_collection("deals")
@@ -1614,7 +1676,7 @@ async def get_campaign_status(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Campaign not found"
         )
-    if not campaign.has_access(user_id):
+    if not _campaign_access(user_id, campaign):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied"
@@ -1656,7 +1718,7 @@ async def get_campaign_analytics(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Campaign not found"
         )
-    if not campaign.has_access(user_id):
+    if not _campaign_access(user_id, campaign):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied"
@@ -1863,7 +1925,7 @@ async def get_campaign_activity(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Campaign not found"
         )
-    if not campaign.has_access(user_id):
+    if not _campaign_access(user_id, campaign):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied"
@@ -2000,7 +2062,7 @@ async def import_leads_with_column_map(
     from uuid import uuid4
 
     campaign = models.Campaign.get(campaign_id)
-    if not campaign or not campaign.has_access(user_id):
+    if not campaign or not _campaign_access(user_id, campaign):
         raise HTTPException(status_code=404, detail="Campaign not found")
 
     try:
@@ -2137,7 +2199,7 @@ async def get_campaign_coverage(
 ):
     """Return per-channel lead coverage counts for a campaign."""
     campaign = models.Campaign.get(campaign_id)
-    if not campaign or not campaign.has_access(user_id):
+    if not campaign or not _campaign_access(user_id, campaign):
         raise HTTPException(status_code=404, detail="Campaign not found")
 
     leads_col = get_mongodb_collection("leads")
@@ -2206,7 +2268,7 @@ async def get_sequence(
 ):
     """Return the campaign's sequence steps, edges, active flag, and per-step coverage."""
     campaign = models.Campaign.get(campaign_id)
-    if not campaign or not campaign.has_access(user_id):
+    if not campaign or not _campaign_access(user_id, campaign):
         raise HTTPException(status_code=404, detail="Campaign not found")
 
     leads_col = get_mongodb_collection("leads")
@@ -2247,7 +2309,7 @@ async def get_sequence(
 async def get_sequence_readiness(campaign_id: str, user_id: str = Depends(get_current_user)):
     """Summarize launch prerequisites and lead reach without exposing settings."""
     campaign = models.Campaign.get(campaign_id)
-    if not campaign or not campaign.has_access(user_id):
+    if not campaign or not _campaign_access(user_id, campaign):
         raise HTTPException(status_code=404, detail="Campaign not found")
 
     from openoutreach.config import settings
@@ -2280,11 +2342,11 @@ async def get_sequence_readiness(campaign_id: str, user_id: str = Depends(get_cu
             profiles = get_mongodb_collection("linkedin_profiles")
             credentials = get_mongodb_collection("linkedin_credentials")
             profile = profiles.find_one(
-                {"_id": campaign.linkedin_profile_id, "user_id": user_id},
+                {"_id": campaign.linkedin_profile_id, **_profile_access_query(user_id)},
                 {"active": 1, "cookie_data_encrypted": 1, "execution_mode": 1},
             ) if profiles is not None and campaign.linkedin_profile_id else None
             credential = credentials.find_one(
-                {"linkedin_profile_id": campaign.linkedin_profile_id, "user_id": user_id},
+                {"linkedin_profile_id": campaign.linkedin_profile_id},
                 {"status": 1},
             ) if credentials is not None and campaign.linkedin_profile_id else None
             configured = profile is not None
@@ -2416,7 +2478,7 @@ async def get_sequence_readiness(campaign_id: str, user_id: str = Depends(get_cu
 async def get_sequence_metrics(campaign_id: str, user_id: str = Depends(get_current_user)):
     """Operational sequence health: per-step outcomes and stuck/error counts."""
     campaign = models.Campaign.get(campaign_id)
-    if not campaign or not campaign.has_access(user_id):
+    if not campaign or not _campaign_access(user_id, campaign):
         raise HTTPException(status_code=404, detail="Campaign not found")
     events = get_mongodb_collection("sequence_events")
     deals = get_mongodb_collection("deals")
@@ -2440,7 +2502,7 @@ async def get_sequence_metrics(campaign_id: str, user_id: str = Depends(get_curr
 async def preview_sequence(campaign_id: str, body: Dict[str, Any] = {}, user_id: str = Depends(get_current_user)):
     """Dry-run graph traversal for selected deals without creating tasks."""
     campaign = models.Campaign.get(campaign_id)
-    if not campaign or not campaign.has_access(user_id):
+    if not campaign or not _campaign_access(user_id, campaign):
         raise HTTPException(status_code=404, detail="Campaign not found")
     deals = get_mongodb_collection("deals")
     leads = get_mongodb_collection("leads")
@@ -2480,9 +2542,9 @@ async def patch_sequence(
 ):
     """Save sequence steps/edges and/or toggle the sequence active flag."""
     campaign = models.Campaign.get(campaign_id)
-    if not campaign or not campaign.has_access(user_id):
+    if not campaign or not _campaign_access(user_id, campaign):
         raise HTTPException(status_code=404, detail="Campaign not found")
-    if campaign.user_id != user_id:
+    if not _campaign_manage(user_id, campaign):
         raise HTTPException(status_code=403, detail="Only the campaign owner can edit or activate its sequence")
     if campaign.sequence_active and (body.steps is not None or body.edges is not None) and body.active is not False:
         raise HTTPException(status_code=409, detail="Deactivate the sequence before editing its graph; this protects in-progress deals from orphaned steps")
@@ -2632,7 +2694,7 @@ async def save_campaign_as_template(
     campaign = models.Campaign.get(campaign_id)
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
-    if campaign.user_id != user_id:
+    if not _campaign_manage(user_id, campaign):
         raise HTTPException(status_code=403, detail="Only the campaign owner can save a template")
     if data.visibility not in {"private", "team"}:
         raise HTTPException(status_code=422, detail="visibility must be private or team")

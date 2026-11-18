@@ -60,6 +60,19 @@ class Settings(BaseSettings):
     CLOUD_SEATS_ENABLED: bool = True
     MANAGED_PROXIES_ENABLED: bool = True
 
+    # =========================================================================
+    # Team workspaces (Phase 3A)
+    # =========================================================================
+    # The flag is intentionally closed by default. Personal organizations and
+    # org-scoped data remain available for rollback; disabling the flag makes
+    # every user fall back to personal billing and hides team surfaces.
+    TEAM_WORKSPACES_ENABLED: bool = False
+    ORGANIZATION_INVITE_EXPIRY_DAYS: int = 7
+    ORGANIZATION_INVITE_RATE_LIMIT: int = 30
+    ORGANIZATION_INVITE_RATE_WINDOW_SECONDS: int = 3600
+    ORGANIZATION_ACCEPT_RATE_LIMIT: int = 30
+    ORGANIZATION_ACCEPT_RATE_WINDOW_SECONDS: int = 3600
+
     # Massive fallback credentials (Phase 1). These values are server-side
     # only and must never be logged, returned by an API, or exposed to the
     # frontend. Reseller API access is intentionally not part of Phase 1.

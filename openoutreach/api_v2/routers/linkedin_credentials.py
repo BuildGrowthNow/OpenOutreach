@@ -28,8 +28,14 @@ from openoutreach.mongodb.models_user import User
 from openoutreach.linkedin.models import LinkedInProfile
 from openoutreach.billing.credential_validator import LinkedInCredentialValidator
 from openoutreach.billing.enforcement import PlanEnforcer
-from openoutreach.billing.plans import effective_linkedin_account_limit
 from openoutreach.billing.seats import release_linkedin_seat, reserve_linkedin_seat
+from openoutreach.organizations.access import (
+    can_access_profile_doc,
+    can_delete_profile,
+    profile_access_query,
+    resolve_org_context,
+)
+from openoutreach.organizations.enforcement import resolve_effective_plan
 from openoutreach.proxies import (
     ProxyError,
     ProxyUnavailableError,
@@ -57,13 +63,38 @@ def _owned_profile(
     credential: LinkedInCredentials,
     user_id: str,
 ) -> Optional[LinkedInProfile]:
-    """Return the credential's profile only when the caller owns it."""
+    """Return the credential's profile when the caller may access it.
+
+    Access is organization-aware: owners/admins may read every profile in
+    their workspace, members only the profiles assigned to them.
+    """
     if not credential.linkedin_profile_id:
         return None
     profile = LinkedInProfile.get(credential.linkedin_profile_id)
-    if not profile or profile.user_id != user_id:
+    if not profile:
+        return None
+    user = User.get(user_id)
+    if not user:
+        return None
+    if not can_access_profile_doc(user, profile.to_dict()):
         return None
     return profile
+
+
+def _require_credential_access(
+    credential: LinkedInCredentials,
+    user_id: str,
+) -> Optional[LinkedInProfile]:
+    """Raise 403 unless the caller may read/mutate the credential."""
+    profile = _owned_profile(credential, user_id)
+    if profile is not None:
+        return profile
+    if not credential.linkedin_profile_id and credential.user_id == user_id:
+        return None
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Access denied",
+    )
 
 
 def _build_credential_response(
@@ -161,7 +192,36 @@ async def list_credentials(
     Includes metadata, status, and recent audit logs.
     """
     try:
-        credentials = LinkedInCredentials.find_by_user_id(user_id)
+        user = User.get(user_id)
+        if user is None:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+        profiles_collection = get_mongodb_collection("linkedin_profiles")
+        credentials_collection = get_mongodb_collection("linkedin_credentials")
+        if profiles_collection is None or credentials_collection is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="LinkedIn credentials database unavailable",
+            )
+
+        accessible_profiles = list(
+            profiles_collection.find(profile_access_query(user), {"_id": 1})
+        )
+        profile_ids = [str(doc["_id"]) for doc in accessible_profiles]
+        credential_docs = list(
+            credentials_collection.find(
+                {
+                    "$or": [
+                        {"linkedin_profile_id": {"$in": profile_ids}},
+                        # Orphan credentials created before a profile existed.
+                        {
+                            "user_id": user_id,
+                            "linkedin_profile_id": {"$in": [None, ""]},
+                        },
+                    ]
+                }
+            )
+        )
+        credentials = [LinkedInCredentials.from_dict(doc) for doc in credential_docs]
 
         # Convert to response format
         credential_responses = []
@@ -197,6 +257,8 @@ async def list_credentials(
             credentials=credential_responses,
             count=len(credential_responses)
         )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Failed to list credentials; exception_type=%s", type(e).__name__)
         raise HTTPException(
@@ -267,10 +329,10 @@ async def create_credential(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="LinkedIn profile not found"
                 )
-            if profile.user_id != user_id:
+            if not can_access_profile_doc(user, profile.to_dict()):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail="LinkedIn profile belongs to another user"
+                    detail="LinkedIn profile belongs to another workspace"
                 )
             existing_credentials = list(
                 LinkedInCredentials.objects().filter(
@@ -316,11 +378,7 @@ async def create_credential(
                     status_code=status.HTTP_402_PAYMENT_REQUIRED,
                     detail=error_msg,
                 )
-            seat_limit = effective_linkedin_account_limit(
-                user.plan,
-                user.cloud_profiles,
-                user.linkedin_account_limit,
-            )
+            seat_limit = resolve_effective_plan(user).linkedin_account_limit
             reserved, seat_error = reserve_linkedin_seat(user_id, seat_limit)
             if not reserved:
                 raise HTTPException(
@@ -331,8 +389,11 @@ async def create_credential(
 
         # Create the profile only after the seat is reserved.
         if not profile:
+            ctx = resolve_org_context(user)
             profile = LinkedInProfile(
                 user_id=user_id,
+                org_id=ctx.org_id,
+                assigned_user_id=user_id,
                 active=True,
                 execution_mode=execution_mode,
             )
@@ -481,11 +542,7 @@ async def get_credential(
             detail="Credential not found"
         )
 
-    if credential.user_id != user_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied"
-        )
+    _require_credential_access(credential, user_id)
 
     # Get recent logs
     logs_collection = get_mongodb_collection("linkedin_credential_logs")
@@ -530,11 +587,7 @@ async def update_credential(
             detail="Credential not found"
         )
 
-    if credential.user_id != user_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied"
-        )
+    _require_credential_access(credential, user_id)
 
     try:
         update_fields = []
@@ -578,10 +631,15 @@ async def update_credential(
                     detail="linkedin_profile_id cannot be empty",
                 )
             target_profile = LinkedInProfile.get(data.linkedin_profile_id)
-            if not target_profile or target_profile.user_id != user_id:
+            target_user = User.get(user_id)
+            if (
+                not target_profile
+                or not target_user
+                or not can_access_profile_doc(target_user, target_profile.to_dict())
+            ):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail="LinkedIn profile belongs to another user",
+                    detail="LinkedIn profile belongs to another workspace",
                 )
             credential.linkedin_profile_id = data.linkedin_profile_id
             profile = target_profile
@@ -650,11 +708,7 @@ async def delete_credential(
             detail="Credential not found"
         )
 
-    if credential.user_id != user_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied"
-        )
+    _require_credential_access(credential, user_id)
 
     release_seat = False
     try:
@@ -672,6 +726,17 @@ async def delete_credential(
                     profile.cookie_data_encrypted = None
                     profile.save(update_fields=["linkedin_password", "cookie_data_encrypted"])
                 else:
+                    deleting_user = User.get(user_id)
+                    if deleting_user is not None and not can_delete_profile(
+                        deleting_user, profile.to_dict()
+                    ):
+                        raise HTTPException(
+                            status_code=status.HTTP_403_FORBIDDEN,
+                            detail=(
+                                "Only workspace owners and admins can delete the "
+                                "last credential for a profile"
+                            ),
+                        )
                     # Last credential - delete the profile entirely so it no longer
                     # counts toward the account limit and avoids the null unique-index conflict.
                     # Also cascade: delete all pending tasks and pause all campaigns for this profile
@@ -713,6 +778,8 @@ async def delete_credential(
             release_linkedin_seat(user_id)
 
         return None
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Failed to delete credential; exception_type=%s", type(e).__name__)
         raise HTTPException(
@@ -740,11 +807,7 @@ async def verify_credential(
             detail="Credential not found"
         )
 
-    if credential.user_id != user_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied"
-        )
+    _require_credential_access(credential, user_id)
 
     if not data.test_login:
         # Desktop mode: daemon handles real login - mark active immediately
@@ -1010,11 +1073,7 @@ async def confirm_credential(
             detail="Credential not found"
         )
 
-    if credential.user_id != user_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied"
-        )
+    _require_credential_access(credential, user_id)
 
     # Get the owned profile to check session state.
     profile = _owned_profile(credential, user_id)
@@ -1108,11 +1167,7 @@ async def rotate_credential(
             detail="Credential not found"
         )
 
-    if credential.user_id != user_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied"
-        )
+    _require_credential_access(credential, user_id)
 
     try:
         # Create backup using model method
@@ -1163,11 +1218,7 @@ async def get_credential_health(
             detail="Credential not found"
         )
 
-    if credential.user_id != user_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied"
-        )
+    _require_credential_access(credential, user_id)
 
     if not credential.linkedin_profile_id:
         raise HTTPException(
@@ -1331,11 +1382,7 @@ async def get_credential_logs(
             detail="Credential not found"
         )
 
-    if credential.user_id != user_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied"
-        )
+    _require_credential_access(credential, user_id)
 
     logs_collection = get_mongodb_collection("linkedin_credential_logs")
     if logs_collection is None:

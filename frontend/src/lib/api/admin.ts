@@ -745,4 +745,81 @@ export const adminApi = {
 
   getDaemons: (params?: { status?: string; execution_mode?: string }) =>
     get<DaemonsListResponse>('/api/admin/platform/daemons', params),
+
+  getOrganizations: (params?: { search?: string; skip?: number; limit?: number }) =>
+    get<AdminOrganizationsListResponse>('/api/admin/organizations', {
+      search: params?.search,
+      skip: params?.skip?.toString(),
+      limit: params?.limit?.toString(),
+    }),
+
+  getOrganization: (orgId: string) =>
+    get<AdminOrganizationDetail>(`/api/admin/organizations/${orgId}`),
+
+  overrideOrganizationSeats: (
+    orgId: string,
+    data: { cloud_seats: number; reason: string; plan?: string }
+  ) => patch<AdminOrganizationSummary>(`/api/admin/organizations/${orgId}/seats`, data),
+}
+
+export interface AdminOrganizationSummary {
+  id: string
+  name: string
+  owner_user_id: string
+  owner_email: string | null
+  plan: string
+  status: string
+  is_personal: boolean
+  seat_override: boolean
+  cloud_seats: number
+  linkedin_account_limit: number
+  whatsapp_account_limit: number
+  members_count: number
+  credentialed_profiles: number
+  assigned_profiles: number
+  stripe_customer_id: string | null
+  stripe_subscription_id: string | null
+  created_at: string | null
+  updated_at: string | null
+}
+
+export interface AdminOrganizationMember {
+  user_id: string
+  email: string
+  full_name: string | null
+  role: string
+  status: string
+  joined_at: string | null
+}
+
+export interface AdminOrganizationProfile {
+  id: string
+  linkedin_username: string | null
+  execution_mode: string | null
+  assigned_user_id: string | null
+  active: boolean
+  proxy_assigned: boolean
+  proxy_mode: string | null
+}
+
+export interface AdminOrganizationDetail {
+  organization: AdminOrganizationSummary
+  members: AdminOrganizationMember[]
+  profiles: AdminOrganizationProfile[]
+  audit_events: Array<{
+    id: string
+    event: string
+    actor_user_id: string | null
+    target_user_id: string | null
+    target_email: string | null
+    metadata: Record<string, unknown>
+    created_at: string | null
+  }>
+}
+
+export interface AdminOrganizationsListResponse {
+  total: number
+  skip: number
+  limit: number
+  organizations: AdminOrganizationSummary[]
 }

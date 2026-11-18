@@ -15,6 +15,11 @@ class RegisterRequest(BaseModel):
         None,
         description="Plan the user picked before signup (for example 'cloud')",
     )
+    invite_token: Optional[str] = Field(
+        None,
+        max_length=256,
+        description="Optional organization invite token from an invitation email",
+    )
 
     @field_validator('intended_plan')
     @classmethod
@@ -68,6 +73,12 @@ class UserResponse(BaseModel):
     admin_notes: Optional[str] = Field(None, description="Admin notes for the user")
     is_admin: bool = Field(default=False, description="Whether user has admin access")
     admin_role: Optional[str] = Field(None, description="Admin role (support/finance/superadmin)")
+    org_id: Optional[str] = Field(None, description="Active organization ID")
+    org_name: Optional[str] = Field(None, description="Active organization name")
+    org_role: Optional[str] = Field(None, description="Role in the active organization")
+    team_workspaces_enabled: bool = Field(
+        default=False, description="Whether team workspaces are enabled"
+    )
 
     model_config = ConfigDict(populate_by_name=True, from_attributes=True)
 

@@ -6,13 +6,21 @@ import Link from "next/link"
 import { useAuthStore } from "@/lib/authStoreV2"
 import { Logo } from "@/components/ui/logo"
 
-export function RegisterFormV2({ intendedPlan }: { intendedPlan?: string }) {
+export function RegisterFormV2({
+  intendedPlan,
+  inviteToken,
+  initialEmail,
+}: {
+  intendedPlan?: string
+  inviteToken?: string
+  initialEmail?: string
+}) {
   const router = useRouter()
   const { register, isLoading, error, clearError } = useAuthStore()
   const isCloudIntent = intendedPlan === "cloud"
 
   const [fullName, setFullName] = useState("")
-  const [email, setEmail] = useState("")
+  const [email, setEmail] = useState(initialEmail || "")
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
   const [localError, setLocalError] = useState("")
@@ -57,7 +65,7 @@ export function RegisterFormV2({ intendedPlan }: { intendedPlan?: string }) {
     }
 
     // Attempt registration
-    const result = await register(email, password, fullName, intendedPlan)
+    const result = await register(email, password, fullName, intendedPlan, inviteToken)
 
     if (result.error) {
       setLocalError(result.error)

@@ -53,6 +53,8 @@ class LinkedInProfile:
         self,
         _id: Optional[str] = None,
         user_id: Optional[str] = None,
+        org_id: Optional[str] = None,
+        assigned_user_id: Optional[str] = None,
         self_lead_id: Optional[str] = None,
         linkedin_username: Optional[str] = None,
         linkedin_password: Optional[str] = None,
@@ -96,6 +98,8 @@ class LinkedInProfile:
     ):
         self._id = _id or str(uuid4())
         self.user_id = user_id
+        self.org_id = org_id
+        self.assigned_user_id = assigned_user_id
         self.self_lead_id = self_lead_id
         self.linkedin_username = linkedin_username
         # Accept pre-encrypted value from DB or plaintext from caller.
@@ -261,6 +265,8 @@ class LinkedInProfile:
         return {
             "_id": self._id,
             "user_id": self.user_id,
+            "org_id": self.org_id,
+            "assigned_user_id": self.assigned_user_id,
             "self_lead_id": self.self_lead_id,
             "linkedin_username": self.linkedin_username,
             "linkedin_password_encrypted": self._linkedin_password_encrypted,
@@ -312,6 +318,8 @@ class LinkedInProfile:
         return cls(
             _id=str(data.get("_id")),
             user_id=data.get("user_id"),
+            org_id=data.get("org_id"),
+            assigned_user_id=data.get("assigned_user_id"),
             self_lead_id=data.get("self_lead_id"),
             linkedin_username=data.get("linkedin_username") or None,
             linkedin_password=pw_plaintext if not pw_encrypted else None,

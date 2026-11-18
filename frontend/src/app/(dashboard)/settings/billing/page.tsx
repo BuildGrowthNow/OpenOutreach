@@ -63,6 +63,7 @@ export default function BillingPage() {
   const [isSeatLoading, setIsSeatLoading] = useState(false);
   const [seatError, setSeatError] = useState<string | null>(null);
   const { refetch: refetchBilling } = useBilling();
+  const isBillingOwner = billingStatus?.is_billing_owner !== false;
 
   const loadData = useCallback(async () => {
     try {
@@ -215,25 +216,37 @@ export default function BillingPage() {
         <BillingStatusCard status={billingStatus} planDisplayName={currentPlan.display_name} />
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Quick Actions</CardTitle>
-          <CardDescription>Manage your subscription and payment method</CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-3 sm:flex-row">
-          <Button onClick={handleUpgradeClick} variant="default" className="flex-1">
-            Change Plan
-          </Button>
-          <Button
-            onClick={handleManageSubscription}
-            variant="outline"
-            className="flex-1"
-            disabled={isPortalLoading}
-          >
-            {isPortalLoading ? "Opening..." : "Manage Subscription"}
-          </Button>
-        </CardContent>
-      </Card>
+      {billingStatus && !isBillingOwner && (
+        <Alert>
+          <Icons.Info className="h-4 w-4" />
+          <AlertDescription>
+            Your workspace owner ({billingStatus.billing_owner_email || "the owner"}) manages billing.
+            You inherit the workspace plan and seat pool.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {isBillingOwner && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Quick Actions</CardTitle>
+            <CardDescription>Manage your subscription and payment method</CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3 sm:flex-row">
+            <Button onClick={handleUpgradeClick} variant="default" className="flex-1">
+              Change Plan
+            </Button>
+            <Button
+              onClick={handleManageSubscription}
+              variant="outline"
+              className="flex-1"
+              disabled={isPortalLoading}
+            >
+              {isPortalLoading ? "Opening..." : "Manage Subscription"}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {billingStatus && (
         <Card>
@@ -256,7 +269,7 @@ export default function BillingPage() {
         </Card>
       )}
 
-      {billingStatus?.plan === "cloud" && billingStatus.cloud_seats_enabled && (
+      {isBillingOwner && billingStatus?.plan === "cloud" && billingStatus.cloud_seats_enabled && (
         <Card>
           <CardHeader>
             <CardTitle>Cloud seats</CardTitle>
@@ -326,58 +339,60 @@ export default function BillingPage() {
         </Card>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Invoices</CardTitle>
-          <CardDescription>Your billing history</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {invoices.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No invoices yet</p>
-          ) : (
-            <div className="space-y-4">
-              {invoices.map((invoice) => (
-                <div
-                  key={invoice.id}
-                  className="flex items-center justify-between border-b pb-4 last:border-0"
-                >
-                  <div>
-                    <p className="font-medium">
-                      {invoice.number || `Invoice ${invoice.id.slice(0, 8)}`}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      {format(new Date(invoice.created * 1000), "MMM d, yyyy")}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <Badge
-                      variant={invoice.paid ? "outline" : "secondary"}
-                      className={invoice.paid ? "bg-green-50" : ""}
-                    >
-                      {invoice.status}
-                    </Badge>
-                    <div className="text-right">
+      {isBillingOwner && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Invoices</CardTitle>
+            <CardDescription>Your billing history</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {invoices.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No invoices yet</p>
+            ) : (
+              <div className="space-y-4">
+                {invoices.map((invoice) => (
+                  <div
+                    key={invoice.id}
+                    className="flex items-center justify-between border-b pb-4 last:border-0"
+                  >
+                    <div>
                       <p className="font-medium">
-                        ${(invoice.amount_paid / 100).toFixed(2)}
+                        {invoice.number || `Invoice ${invoice.id.slice(0, 8)}`}
                       </p>
-                      {invoice.pdf_url && (
-                        <a
-                          href={invoice.pdf_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-xs text-blue-600 hover:underline"
-                        >
-                          Download PDF
-                        </a>
-                      )}
+                      <p className="text-sm text-muted-foreground">
+                        {format(new Date(invoice.created * 1000), "MMM d, yyyy")}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <Badge
+                        variant={invoice.paid ? "outline" : "secondary"}
+                        className={invoice.paid ? "bg-green-50" : ""}
+                      >
+                        {invoice.status}
+                      </Badge>
+                      <div className="text-right">
+                        <p className="font-medium">
+                          ${(invoice.amount_paid / 100).toFixed(2)}
+                        </p>
+                        {invoice.pdf_url && (
+                          <a
+                            href={invoice.pdf_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-blue-600 hover:underline"
+                          >
+                            Download PDF
+                          </a>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

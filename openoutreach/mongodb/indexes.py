@@ -31,6 +31,34 @@ def ensure_all_indexes():
         ('users', [
             ({'email': 1}, {'name': 'user_email_idx', 'unique': True}),
             ({'is_active': 1}, {'name': 'user_active_idx'}),
+            ({'org_id': 1}, {'name': 'user_org_idx', 'sparse': True}),
+        ]),
+
+        # Organizations and team membership (Phase 3A)
+        ('organizations', [
+            ({'owner_user_id': 1}, {'name': 'organization_owner_idx'}),
+            ({'status': 1}, {'name': 'organization_status_idx'}),
+            ({'stripe_customer_id': 1}, {'name': 'organization_stripe_customer_idx', 'sparse': True}),
+            ({'stripe_subscription_id': 1}, {'name': 'organization_stripe_subscription_idx', 'sparse': True}),
+        ]),
+        ('organization_members', [
+            ({'org_id': 1, 'user_id': 1}, {'name': 'organization_member_unique', 'unique': True}),
+            ({'org_id': 1, 'email': 1}, {'name': 'organization_member_email_idx'}),
+            ({'user_id': 1, 'status': 1}, {'name': 'organization_member_user_status_idx'}),
+        ]),
+        ('organization_invites', [
+            ({'token_hash': 1}, {'name': 'organization_invite_token_unique', 'unique': True}),
+            ({'org_id': 1, 'email': 1}, {'name': 'organization_invite_org_email_idx'}),
+            ({'expires_at': 1}, {'name': 'organization_invite_expiry_idx'}),
+        ]),
+        ('organization_audit_logs', [
+            ({'org_id': 1, 'created_at': -1}, {'name': 'organization_audit_org_time_idx'}),
+            ({'event': 1, 'created_at': -1}, {'name': 'organization_audit_event_time_idx'}),
+            ({'actor_user_id': 1, 'created_at': -1}, {'name': 'organization_audit_actor_time_idx'}),
+        ]),
+        ('organization_rate_limit_events', [
+            ({'scope': 1, 'action': 1, 'created_at': -1}, {'name': 'organization_rate_limit_scope_idx'}),
+            ({'created_at': 1}, {'name': 'organization_rate_limit_ttl', 'expireAfterSeconds': 604800}),
         ]),
 
         # Tasks (critical for daemon)
@@ -47,6 +75,7 @@ def ensure_all_indexes():
         # Campaigns
         ('campaigns', [
             ({'user_id': 1}, {'name': 'campaign_user_idx'}),
+            ({'org_id': 1}, {'name': 'campaign_org_idx', 'sparse': True}),
             ({'linkedin_profile_id': 1}, {'name': 'campaign_profile_idx'}),
             ({'status': 1}, {'name': 'campaign_status_idx'}),
             ({'is_paused': 1}, {'name': 'campaign_paused_idx'}),
@@ -82,6 +111,8 @@ def ensure_all_indexes():
         # LinkedIn Profiles
         ('linkedin_profiles', [
             ({'user_id': 1}, {'name': 'profile_user_idx'}),
+            ({'org_id': 1}, {'name': 'profile_org_idx', 'sparse': True}),
+            ({'org_id': 1, 'assigned_user_id': 1}, {'name': 'profile_org_assignee_idx', 'sparse': True}),
             ({'linkedin_username': 1}, {'name': 'profile_username_unique_idx', 'unique': True, 'sparse': True}),
             ({'active': 1}, {'name': 'profile_active_idx'}),
             ({'user_id': 1, 'is_active': 1}, {'name': 'profile_user_active_idx'}),
