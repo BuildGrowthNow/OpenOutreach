@@ -146,6 +146,9 @@ class LinkedInCredentialResponse(BaseModel):
     linkedin_profile_username: Optional[str] = Field(None, alias="linkedinProfileUsername", description="LinkedIn username from the linked profile")
     daemon_ip: Optional[str] = Field(None, alias="daemonIp", description="IP address last reported by the desktop daemon")
     has_proxy: bool = Field(default=False, alias="hasProxy", description="Whether the linked profile has a proxy configured")
+    proxy_region_country: Optional[str] = Field(None, alias="proxyRegionCountry", description="Managed proxy country")
+    proxy_region_subdivision: Optional[str] = Field(None, alias="proxyRegionSubdivision", description="Managed proxy subdivision")
+    proxy_region_city: Optional[str] = Field(None, alias="proxyRegionCity", description="Managed proxy city")
 
     # Audit log entries (if included)
     logs: Optional[List[Dict[str, Any]]] = Field(None, description="Recent audit log entries")

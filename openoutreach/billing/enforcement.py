@@ -90,12 +90,18 @@ class PlanEnforcer:
         return True, None
 
     @staticmethod
-    def can_use_cloud_execution(user: User) -> tuple[bool, Optional[str]]:
+    def can_use_cloud_execution(
+        user: User,
+        *,
+        exclude_profile_id: Optional[str] = None,
+    ) -> tuple[bool, Optional[str]]:
         """
         Check if user can add a cloud-executed LinkedIn credential.
 
         Cloud execution means the server-side daemon will run the browser session.
         Users without cloud_execution access must use the desktop daemon instead.
+        ``exclude_profile_id`` lets verification of an already-created profile
+        count that profile's own seat without blocking the check.
         Returns (allowed, error_message).
         """
         if not PlanEnforcer._is_subscription_active(user):
@@ -109,11 +115,14 @@ class PlanEnforcer:
         collection = get_mongodb_collection("linkedin_profiles")
         if collection is None:
             return False, "Database error"
-        active_cloud = collection.count_documents({
+        query: dict = {
             "user_id": user._id,
             "is_active": True,
             "execution_mode": "cloud",
-        })
+        }
+        if exclude_profile_id:
+            query["_id"] = {"$ne": exclude_profile_id}
+        active_cloud = collection.count_documents(query)
         if active_cloud < seat_limit:
             return True, None
         return False, f"Cloud execution seat limit reached ({active_cloud}/{seat_limit})"
