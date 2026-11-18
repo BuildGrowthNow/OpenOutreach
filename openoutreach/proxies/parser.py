@@ -155,7 +155,11 @@ def _parse_line(line: str, default_country: Optional[str]) -> dict[str, Any]:
     return _parse_colon_line(line, default_country)
 
 
-def _parse_delimited(text: str, default_country: Optional[str]) -> list[dict[str, Any]]:
+def _parse_delimited(
+    text: str,
+    default_country: Optional[str],
+) -> tuple[list[tuple[int, dict[str, Any]]], list[dict[str, Any]]]:
+    """Parse CSV/TSV rows, reporting malformed rows without dropping valid ones."""
     delimiter = "\t" if "\t" in text.splitlines()[0] else ","
     reader = csv.DictReader(io.StringIO(text), delimiter=delimiter)
     if not reader.fieldnames:
@@ -164,21 +168,28 @@ def _parse_delimited(text: str, default_country: Optional[str]) -> list[dict[str
     if "host" not in fields or "port" not in fields:
         raise ProxyParseError("CSV header must include host and port")
 
-    entries: list[dict[str, Any]] = []
-    for row in reader:
-        entries.append(
-            _entry(
-                host=row.get(fields["host"], ""),
-                port=row.get(fields["port"], ""),
-                username=row.get(fields.get("username", ""), ""),
-                password=row.get(fields.get("password", ""), ""),
-                country=row.get(fields.get("country", ""), "") or default_country,
-                protocol=row.get(fields.get("protocol", ""), "") or "http",
-                subdivision=row.get(fields.get("subdivision", ""), ""),
-                city=row.get(fields.get("city", ""), ""),
+    entries: list[tuple[int, dict[str, Any]]] = []
+    errors: list[dict[str, Any]] = []
+    for index, row in enumerate(reader, start=2):
+        try:
+            entries.append(
+                (
+                    index,
+                    _entry(
+                        host=row.get(fields["host"], ""),
+                        port=row.get(fields["port"], ""),
+                        username=row.get(fields.get("username", ""), ""),
+                        password=row.get(fields.get("password", ""), ""),
+                        country=row.get(fields.get("country", ""), "") or default_country,
+                        protocol=row.get(fields.get("protocol", ""), "") or "http",
+                        subdivision=row.get(fields.get("subdivision", ""), ""),
+                        city=row.get(fields.get("city", ""), ""),
+                    ),
+                )
             )
-        )
-    return entries
+        except ProxyParseError as exc:
+            errors.append({"line": index, "error": str(exc)})
+    return entries, errors
 
 
 def parse_bulk_proxies(
@@ -209,10 +220,13 @@ def parse_bulk_proxies(
 
     if is_delimited:
         try:
-            parsed_rows = _parse_delimited("\n".join(content), default_country)
+            parsed_rows, row_errors = _parse_delimited(
+                "\n".join(content), default_country
+            )
         except (ProxyParseError, csv.Error) as exc:
             return [], [{"line": 1, "error": str(exc)}]
-        for index, entry in enumerate(parsed_rows, start=2):
+        errors.extend(row_errors)
+        for index, entry in parsed_rows:
             key = (entry["host"].lower(), entry["port"], entry["username"])
             if key in seen:
                 errors.append({"line": index, "error": "Duplicate proxy"})
