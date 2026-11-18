@@ -498,16 +498,12 @@ async def verify_email(body: EmailVerifyRequest):
         # must go straight to paid checkout; there is no cloud trial.
         if user.subscription_status == "none" and not cloud_intent:
             from openoutreach.billing.config import get_trial_duration_days
-            from openoutreach.billing.plans import get_plan
+            from openoutreach.billing.plans import apply_plan_entitlements
             trial_days = get_trial_duration_days()
             user.subscription_status = "trialing"
             user.plan = user.plan or "starter"
             user.trial_ends_at = datetime.now(tz.utc) + timedelta(days=trial_days)
-            plan_def = get_plan(user.plan)
-            if plan_def:
-                user.linkedin_account_limit = plan_def["max_linkedin_accounts"]
-                user.whatsapp_account_limit = plan_def["max_whatsapp_accounts"]
-                user.campaign_limit = plan_def["max_campaigns"]
+            apply_plan_entitlements(user)
 
         user.save()
 
