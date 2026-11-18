@@ -1,7 +1,9 @@
 """Managed proxy inventory operations: import, assign, test, disable."""
 from __future__ import annotations
 
+import ipaddress
 import logging
+import socket
 import time
 from typing import Any, Optional
 from urllib.parse import quote, urlparse, urlunparse
@@ -31,6 +33,39 @@ logger = logging.getLogger(__name__)
 _PROFILES = "linkedin_profiles"
 
 
+def validate_proxy_host(host: str) -> None:
+    """Reject localhost, private, link-local, and reserved proxy endpoints.
+
+    The admin test endpoint and the browser both make outbound requests through
+    this host, so an internal address would be an SSRF pivot.
+    """
+    value = (host or "").strip()
+    if not value:
+        raise ProxyError("Proxy host is required")
+    try:
+        addresses = {
+            info[4][0]
+            for info in socket.getaddrinfo(value, None)
+        }
+    except socket.gaierror:
+        raise ProxyError("Proxy host could not be resolved")
+
+    for address in addresses:
+        try:
+            ip = ipaddress.ip_address(address)
+        except ValueError:
+            raise ProxyError("Proxy host is invalid")
+        if (
+            ip.is_private
+            or ip.is_loopback
+            or ip.is_link_local
+            or ip.is_reserved
+            or ip.is_multicast
+            or ip.is_unspecified
+        ):
+            raise ProxyError("Proxy host must be a public address")
+
+
 def normalize_proxy_server(proxy_server: str) -> str:
     """Validate a proxy URL and default to HTTP when no scheme is supplied."""
     value = (proxy_server or "").strip()
@@ -41,6 +76,7 @@ def normalize_proxy_server(proxy_server: str) -> str:
     parsed = urlparse(value)
     if parsed.scheme.lower() not in {"http", "https", "socks5", "socks5h"} or not parsed.hostname:
         raise ProxyError("Invalid proxy URL")
+    validate_proxy_host(parsed.hostname)
     return value
 
 
@@ -203,6 +239,7 @@ def assign_proxy_to_profile(
         raise ProxyReuseError(
             "This proxy was already used by another LinkedIn account and cannot be recycled"
         )
+    validate_proxy_host(str(existing.get("host") or ""))
 
     profile_doc = profiles.find_one(
         {"_id": profile_id, "user_id": user_id},
@@ -443,6 +480,10 @@ def assign_proxy_for_new_profile(
     proxy claim itself is atomic, so retry a few times with a fresh candidate
     instead of failing the customer's account creation.
     """
+    from openoutreach.config import settings
+
+    if not getattr(settings, "MANAGED_PROXIES_ENABLED", True):
+        raise ProxyUnavailableError("Managed proxy provisioning is disabled")
     country_value, subdivision_value, city_value = normalize_region(country, subdivision, city)
     for _ in range(5):
         proxy = find_available_proxy(country_value, subdivision_value, city_value)
