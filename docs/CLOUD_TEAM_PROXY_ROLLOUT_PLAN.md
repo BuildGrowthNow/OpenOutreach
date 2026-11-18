@@ -1164,6 +1164,10 @@ response, not the raw flag values.
 10. **Seat accounting:** **Resolved for Phase 0:** a seat is consumed by an existing
     credentialed account, active or paused; deleting the account releases it. New accounts
     reserve a seat atomically. Pausing an account does not free its seat.
+11. **Proxy on pause/cancel:** **Resolved for Phase 0:** seat removal and cancellation
+    pause profiles but keep their proxies assigned so the same identity can resume if the
+    seat is re-added. Only profile deletion retires the proxy; a used proxy is never
+    recycled to a different LinkedIn account.
 
 ---
 
