@@ -278,6 +278,14 @@ async def create_credential(
                 )
             )
             is_new_account = not existing_credentials
+            if not is_new_account and execution_mode != profile.execution_mode:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        "Execution mode is a profile setting; adding a backup "
+                        "credential cannot switch it"
+                    ),
+                )
 
         if execution_mode == "cloud":
             # A backup on an already-cloud profile must not count that profile
