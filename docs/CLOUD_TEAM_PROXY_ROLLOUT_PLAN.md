@@ -550,7 +550,9 @@ remain gated on two-account E2E validation, a production migration dry-run, and 
 8. - [x] Add a minimal `proxies` collection and admin list/import/assign/test endpoints.
 9. - [x] Auto-assign an available proxy matching the region when a cloud account is created.
 10. - [x] Block cloud profile launch if no proxy; log and alert instead of using the server IP.
-11. - [ ] Deploy and run `python -m openoutreach.migrations.encrypt_proxy_passwords --apply`.
+11. - [x] Deploy and run `python -m openoutreach.migrations.encrypt_proxy_passwords --apply`.
+    Production deploy completed on 2026-11-18; the production dry-run found no
+    plaintext proxy passwords, so the apply step is a no-op.
 
 ### 5.2 Non-goals
 
@@ -618,8 +620,9 @@ preview and per-line errors, bulk lifecycle actions, assignment history, manual
 and scheduled health checks, Massive fallback credentials with Reporting API
 `group_by=subuser` sync, admin usage views, audit events, and import/test rate
 limits. Marketing region/security copy and the customer managed-proxy health
-card are also updated. The Phase 0 proxy-password encryption migration remains
-pending.
+card are also updated. The Phase 0 proxy-password encryption migration was
+verified in production: the dry-run found no plaintext passwords, so the apply
+step is a no-op.
 
 ### 6.1 Scope
 
