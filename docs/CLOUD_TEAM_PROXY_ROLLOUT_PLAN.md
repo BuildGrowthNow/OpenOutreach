@@ -707,6 +707,15 @@ step is a no-op.
 **Goal:** Provision and revoke Massive sub-accounts automatically, with usage and cost
 control.
 
+Status (2026-11-19): **implemented** on branch
+`feature/cloud-phase3a-orgs-team-seats` behind `MASSIVE_RESELLER_ENABLED` and
+`MASSIVE_POOL_STATS_ENABLED` (both default off). It covers the Reseller/Pool Stats
+clients, automatic sub-account provisioning with Phase 1 fallback, lifecycle
+disable/enable/retire, cumulative and Reporting usage sync, internal soft/hard
+budgets, admin Massive tab, and customer region-safety copy. No live Massive
+mutation or production deploy was performed. See
+`docs/CLOUD_PHASE2_MASSIVE_RESELLER.md`.
+
 ### 7.1 Prerequisite
 
 Reseller and Pool Stats API access was enabled on 2026-11-18. The existing account API
@@ -798,14 +807,17 @@ bandwidth.
 **Goal:** A workspace owner can invite members, buy seats, and let each member use
 desktop or cloud execution under one billing relationship.
 
-Status (2026-11-18): **Phase 3A implemented** on branch
+Status (2026-11-19): **Phase 3A and 3B implemented** on branch
 `feature/cloud-phase3a-orgs-team-seats` behind `TEAM_WORKSPACES_ENABLED`
-(default off). It covers organizations, personal-org backfill, invites, roles,
-effective plan/seat inheritance, cloud seat assignment, org-aware profile/
+(default off). Phase 3A covers organizations, personal-org backfill, invites,
+roles, effective plan/seat inheritance, cloud seat assignment, org-aware profile/
 campaign/proxy/daemon authorization, audit events, a minimal admin org view, and
-the Settings → Team + org switcher UI. Team-member pricing, desktop enrollment,
-device revocation, and desktop daemon parity remain Phase 3B/Phase 4. See
-`docs/CLOUD_PHASE3A_ORGS_TEAMS.md`. No production deploy or migration has been
+the Settings → Team + org switcher UI. Phase 3B adds org-owned desktop/WhatsApp/
+mailbox assignment, desktop-only enrollment, org device list/revocation, local-IP
+reporting, admin org proxies/usage, and the support runbook. Team-member pricing
+remains an explicit product decision and was not changed. See
+`docs/CLOUD_PHASE3A_ORGS_TEAMS.md` and
+`docs/SUPPORT_TEAM_PROXY_RUNBOOK.md`. No production deploy or migration has been
 run.
 
 ### 8.1 Scope

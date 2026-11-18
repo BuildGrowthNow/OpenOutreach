@@ -105,6 +105,47 @@ def full_massive_username(parent_username: str, subuser: str) -> str:
     return f"{parent}_{sub}"
 
 
+def build_reseller_proxy_username(
+    parent_username: str,
+    subuser: str,
+    country: str,
+    subdivision: Optional[str] = None,
+    city: Optional[str] = None,
+    *,
+    session_id: Optional[str] = None,
+    session_ttl: int = 1440,
+    session_mode: str = "flex",
+    device_type: str = "common",
+) -> str:
+    """Build the full proxy auth username for a Reseller sub-account.
+
+    The stable prefix remains ``<PARENT>_<SUB>``; region/session parameters are
+    appended in the same format as the Phase 1 fallback username.
+    """
+    from urllib.parse import quote
+
+    from openoutreach.proxies.region import normalize_region
+
+    country_value, subdivision_value, city_value = normalize_region(
+        country, subdivision, city
+    )
+    base = full_massive_username(parent_username, subuser)
+    session_token = _safe_token(session_id or subuser, limit=120)
+    parts = [base, f"-country-{country_value}"]
+    if subdivision_value:
+        parts.append(f"-subdivision-{subdivision_value}")
+    if city_value:
+        parts.append(f"-city-{quote(city_value, safe='')}")
+    parts.append(f"-session-{session_token}")
+    parts.append(f"-sessionttl-{max(1, min(int(session_ttl), 1440))}")
+    parts.append(f"-sessionmode-{_safe_token(session_mode) or 'flex'}")
+    parts.append(f"-type-{_safe_token(device_type) or 'common'}")
+    username = "".join(parts)
+    if len(username) > 255:
+        raise ProxyError("Massive proxy username exceeds 255 characters")
+    return username
+
+
 def _account_username_candidates(proxy: Proxy) -> set[str]:
     values = {
         str(proxy.massive_subuser or "").strip().lower(),
@@ -251,6 +292,19 @@ def provision_reseller_proxy(
     country_value, subdivision_value, city_value = normalize_region(
         country, subdivision, city
     )
+    # Idempotency: a profile may already have a proxy (for example a retried
+    # request). Never create a second sub-account or disable the active one.
+    profiles_collection = _collection(_PROFILES)
+    if profiles_collection is not None:
+        profile_doc = profiles_collection.find_one(
+            {"_id": profile_id}, {"proxy_id": 1, "proxy_server": 1}
+        )
+        if profile_doc and (profile_doc.get("proxy_id") or profile_doc.get("proxy_server")):
+            existing_proxy_id = profile_doc.get("proxy_id")
+            existing_proxy = Proxy.get(existing_proxy_id) if existing_proxy_id else None
+            if existing_proxy is not None:
+                return existing_proxy
+            raise ProxyError("This profile already has a proxy")
     subuser = build_reseller_username(org_id, profile_id)
     password = generate_subaccount_password()
     limit_bytes = int(
@@ -283,13 +337,45 @@ def provision_reseller_proxy(
         raise MassiveResellerError("Massive did not return a sub-account id")
     proxy_password = existing_password or password
 
+    proxies_collection = _collection(_PROXIES)
+    if proxies_collection is not None:
+        existing_doc = proxies_collection.find_one(
+            {
+                "$or": [
+                    {"massive_account_id": str(account_id)},
+                    {"massive_subuser": subuser},
+                ]
+            }
+        )
+        if existing_doc:
+            existing_proxy = Proxy.from_dict(existing_doc)
+            try:
+                return assign_proxy_to_profile(
+                    existing_proxy._id,
+                    profile_id,
+                    user_id,
+                    assigned_by=created_by,
+                )
+            except ProxyError:
+                # Already assigned to this same profile is fine.
+                if existing_proxy.linkedin_profile_id == profile_id:
+                    return existing_proxy
+                raise
+
     host = str(getattr(settings, "MASSIVE_PROXY_HOST", None) or "network.joinmassive.com")
     port = int(getattr(settings, "MASSIVE_PROXY_PORT", None) or 65534)
     validate_proxy_host(host)
     proxy = create_proxy(
         host=host,
         port=port,
-        username=full_massive_username(config.parent_username, subuser),
+        username=build_reseller_proxy_username(
+            config.parent_username,
+            subuser,
+            country_value,
+            subdivision_value,
+            city_value,
+            session_id=profile_id,
+        ),
         password=proxy_password,
         country=country_value,
         subdivision=subdivision_value,
@@ -338,6 +424,29 @@ def provision_reseller_proxy(
     return assigned
 
 
+def validate_city_pool(country: str, city: Optional[str]) -> None:
+    """Block city-level targeting when Pool Stats reports too few nodes."""
+    if not city:
+        return
+    client = pool_stats_client()
+    if client is None:
+        return
+    try:
+        safe = client.is_city_safe(country, city)
+    except Exception as exc:  # pragma: no cover - stats outage must not block
+        logger.warning(
+            "pool_stats_city_check_failed country=%s exception_type=%s",
+            country,
+            type(exc).__name__,
+        )
+        return
+    if not safe:
+        raise ProxyError(
+            f"City-level targeting for {city}, {country.upper()} has too few nodes; "
+            "use country-level targeting instead."
+        )
+
+
 def provision_managed_proxy(
     profile_id: str,
     user_id: str,
@@ -349,6 +458,7 @@ def provision_managed_proxy(
     created_by: Optional[str] = None,
 ) -> Proxy:
     """Provision a managed proxy: Reseller first, Phase 1 fallback second."""
+    validate_city_pool(country, city)
     if reseller_available():
         try:
             return provision_reseller_proxy(
@@ -932,6 +1042,7 @@ __all__ = [
     "MASSIVE_STATUS_DISABLED",
     "MASSIVE_STATUS_ERROR",
     "MASSIVE_STATUS_RETIRED",
+    "build_reseller_proxy_username",
     "build_reseller_username",
     "disable_massive_for_profile",
     "disable_massive_proxy",
@@ -952,4 +1063,5 @@ __all__ = [
     "rotate_massive_password",
     "sync_massive_accounts",
     "sync_massive_reporting",
+    "validate_city_pool",
 ]

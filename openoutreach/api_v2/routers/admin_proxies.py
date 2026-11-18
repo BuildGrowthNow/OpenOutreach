@@ -743,9 +743,13 @@ async def provision_massive_subaccount(
     user_id = str(profile.get("user_id") or "")
     if not user_id:
         raise HTTPException(status_code=400, detail="Profile has no workspace owner")
-    from openoutreach.proxies.provisioning import provision_reseller_proxy
+    from openoutreach.proxies.provisioning import (
+        provision_reseller_proxy,
+        validate_city_pool,
+    )
 
     try:
+        validate_city_pool(country, profile.get("proxy_region_city"))
         proxy = provision_reseller_proxy(
             body.profile_id,
             user_id,

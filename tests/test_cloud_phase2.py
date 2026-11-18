@@ -223,6 +223,17 @@ def test_full_massive_username_allows_parent_underscore():
     )
 
 
+def test_reseller_proxy_username_contains_region_and_session():
+    username = provisioning.build_reseller_proxy_username(
+        "parent", "outreach-org-li-p1", "US", "NY", "New York", session_id="p1"
+    )
+    assert username.startswith("parent_outreach-org-li-p1-country-US-subdivision-NY")
+    assert "-city-New%20York" in username
+    assert "-session-p1" in username
+    assert "-sessionttl-1440" in username
+    assert "-sessionmode-flex" in username
+
+
 class _FakeResellerClient:
     instances: list["_FakeResellerClient"] = []
 
@@ -313,12 +324,24 @@ def test_provision_reseller_proxy_encrypts_and_assigns(
 
     assert stored["massive_account_id"] == "acct-1"
     assert stored["massive_subuser"] == "outreach-org1-li-p1"
-    assert stored["username"] == "parent_outreach-org1-li-p1"
+    assert stored["username"].startswith("parent_outreach-org1-li-p1-country-US")
+    assert "-session-p1" in stored["username"]
     assert stored["massive_status"] == "active"
     assert stored["password_encrypted"] and plaintext not in stored["password_encrypted"]
     assert profile["proxy_id"] == proxy._id
     assert profile["proxy_mode"] == "managed"
     assert "password" not in stored
+
+
+def test_provision_reseller_is_idempotent_for_an_assigned_profile(
+    fake, reseller_settings, fake_reseller
+):
+    _add_cloud_profile(fake)
+    first = provisioning.provision_reseller_proxy("p1", "u1", "org1", "US")
+    second = provisioning.provision_reseller_proxy("p1", "u1", "org1", "US")
+    assert second._id == first._id
+    assert fake.collection("proxies").count_documents({}) == 1
+    assert len(fake_reseller.instances[0].created) == 1
 
 
 def test_provision_reseller_409_adopts_existing_account(
@@ -542,6 +565,20 @@ def test_provision_managed_proxy_falls_back_when_reseller_fails(
     )
     result = provisioning.provision_managed_proxy("p1", "u1", "org1", "US")
     assert result._id == "fallback-proxy"
+
+
+def test_city_targeting_is_blocked_when_pool_is_too_small(monkeypatch):
+    class _Stats:
+        def is_city_safe(self, country, city):
+            return False
+
+    monkeypatch.setattr(provisioning, "pool_stats_client", lambda: _Stats())
+    from openoutreach.proxies.models import ProxyError
+
+    with pytest.raises(ProxyError):
+        provisioning.validate_city_pool("US", "New York")
+    # Country-level is always allowed.
+    provisioning.validate_city_pool("US", None)
 
 
 def test_generated_password_is_long_enough():

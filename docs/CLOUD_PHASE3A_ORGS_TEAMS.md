@@ -207,7 +207,7 @@ PATCH /api/admin/organizations/{id}/seats
 
 ```text
 .venv\Scripts\python.exe -m pytest tests -q
-# 537 passed, 56 skipped
+# 573 passed, 56 skipped (includes Phase 2 and Phase 3B tests)
 
 .venv\Scripts\python.exe -m pytest tests/test_cloud_phase0.py tests/test_cloud_phase1.py -p no:asyncio -q
 # 64 passed
@@ -259,7 +259,7 @@ Mocked/test-only:
 - Admin seat overrides change the workspace entitlement only; they do not mutate
   Stripe and will appear as reconciliation drift until billing is aligned.
 - Desktop enrollment/device revocation and org-owned mailbox/WhatsApp ownership
-  are deferred to Phase 3B/Phase 4.
+  are completed in Phase 3B; see `docs/CLOUD_PHASE3B_TEAM_PARITY.md`.
 - Invite email delivery depends on the configured email provider. In local/dev
   (`DEBUG=true`) the invite URL is returned for testing; production never returns
   the raw token.

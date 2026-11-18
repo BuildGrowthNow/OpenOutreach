@@ -252,9 +252,18 @@ def channel_access_query(user: User) -> dict[str, Any]:
                 {"org_id": None, "user_id": user._id},
             ]
         }
+    legacy = [
+        {"org_id": {"$exists": False}, "user_id": user._id},
+        {"org_id": None, "user_id": user._id},
+    ]
     if ctx.can_view_all_profiles:
-        return {"org_id": ctx.org_id}
-    return {"org_id": ctx.org_id, "assigned_user_id": user._id}
+        return {"$or": [{"org_id": ctx.org_id}, *legacy]}
+    return {
+        "$or": [
+            {"org_id": ctx.org_id, "assigned_user_id": user._id},
+            *legacy,
+        ]
+    }
 
 
 def can_access_channel_doc(user: User, doc: Optional[dict[str, Any]]) -> bool:
