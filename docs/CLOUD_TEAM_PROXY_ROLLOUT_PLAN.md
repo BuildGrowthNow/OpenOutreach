@@ -532,8 +532,9 @@ working proxy.
 ### 5.1 Scope
 
 Status (2026-11-18): implementation complete on branch
-`feature/cloud-phase0-proxy-seats`; production deploy and the `--apply`
-migration remain gated on approval.
+`feature/cloud-phase0-proxy-seats`; review fixes, atomic seat reservation, and the
+runtime cloud-seat guard are included. Production deploy and the `--apply` migration
+remain gated on two-account E2E validation, a production migration dry-run, and approval.
 
 1. - [x] Fix the Cloud execution selector:
    `hasCloudAccess = plan === "cloud" || cloud_profiles > 0`.
@@ -1143,21 +1144,26 @@ response, not the raw flag values.
 ## 13. Open product decisions
 
 1. **Seat bundle:** one browser account per seat, or LinkedIn + WhatsApp + email per
-   seat? Recommendation: one browser account per seat for billing; a Cloud Duo bundle
-   may share one proxy identity when both channels belong to the same client. Price flat
-   per seat, not by proxy count or GB.
-2. **Team member pricing:** free up to 3, then $29/mo, or included per plan?
+   seat? **Resolved for Phase 0:** one browser account per seat; Cloud seats are a
+   Cloud-plan entitlement only. A Cloud Duo bundle may share one proxy identity when both
+   channels belong to the same client. Price flat per seat, not by proxy count or GB.
+2. **Team member pricing:** free up to 3, then $29/mo, or included per plan? Still Phase 3.
 3. **Managed-only vs BYO:** do Cloud customers get a managed proxy only, or can they
-   bring their own? Recommendation: managed by default; BYO on request.
-4. **US ISP pilot:** test 5–10 accounts before offering it broadly.
+   bring their own? **Resolved for Phase 0:** managed by default; managed proxies are
+   read-only in the client; BYO remains available only on profiles without a managed
+   proxy. Replacing a managed proxy requires support.
+4. **US ISP pilot:** test 5–10 accounts before offering it broadly. Phase 2.
 5. **Email:** BYO mailbox for Phase 4; managed mailbox later.
 6. **WhatsApp cloud:** sharing the same client’s LinkedIn proxy is allowed; two unrelated
-   clients must never share. Do not launch WhatsApp cloud without proxy support.
-7. **Agency workspaces:** single org with members now; client sub-workspaces later.
+   clients must never share. Do not launch WhatsApp cloud without proxy support. Phase 4.
+7. **Agency workspaces:** single org with members now; client sub-workspaces later. Phase 3.
 8. **Proxy sharing default:** one proxy identity per client/person/business; separate IPs
-   per channel are an opt-in configuration, not the default.
-9. **Fair-use policy:** flat seat pricing; define internal soft/hard review thresholds
-   and a customer-facing fair-use clause — no GB allowances or overage charges.
+   per channel are an opt-in configuration, not the default. Phase 3–4.
+9. **Fair-use policy:** **Resolved:** flat per-seat pricing; internal soft/hard review
+   thresholds only. No customer-facing GB allowance, meter, or overage charge.
+10. **Seat accounting:** **Resolved for Phase 0:** a seat is consumed by an existing
+    credentialed account, active or paused; deleting the account releases it. New accounts
+    reserve a seat atomically. Pausing an account does not free its seat.
 
 ---
 
