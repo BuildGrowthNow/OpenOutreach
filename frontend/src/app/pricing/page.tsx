@@ -121,6 +121,7 @@ const comparisonFeatures: ComparisonFeature[] = [
   { name: 'AI Follow-up Sequences', starter: true, pro: true, business: true, agency: true, cloud: true },
   { name: 'Priority Support', starter: false, pro: false, business: true, agency: true, cloud: true },
   { name: 'Managed Cloud Execution', starter: false, pro: false, business: false, agency: false, cloud: true },
+  { name: 'Managed Proxy + Region Selection', starter: false, pro: false, business: false, agency: false, cloud: true },
   { name: 'AI Included (no API key needed)', starter: false, pro: false, business: false, agency: false, cloud: true },
   { name: 'Campaign Performance Reviews', starter: false, pro: false, business: false, agency: false, cloud: true },
 ];
@@ -150,6 +151,16 @@ const faqs = [
     question: "Do I need a proxy for desktop?",
     answer:
       "No. Desktop execution uses your own computer and your local internet connection, so no proxy is involved. Cloud execution runs on our servers and always uses a managed proxy for each LinkedIn account.",
+  },
+  {
+    question: "Which country does my LinkedIn account use?",
+    answer:
+      "Cloud accounts use a managed proxy in the country you choose when you add the account. Country is required; state and city are optional. Desktop accounts use your local IP.",
+  },
+  {
+    question: "Can I see or edit my proxy credentials?",
+    answer:
+      "No. Managed proxy credentials are encrypted at rest and are never shown to you. If you need a different region or proxy, request a proxy change from Settings → LinkedIn. Support reviews it because changing region changes the egress IP.",
   },
   {
     question: "Do I need technical skills to set it up?",

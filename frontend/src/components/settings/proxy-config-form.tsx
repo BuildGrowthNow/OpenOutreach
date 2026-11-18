@@ -49,6 +49,16 @@ export function ProxyConfigForm({
   const [testResult, setTestResult] = useState<ProxyTestResult | null>(null);
   const [hasExistingProxy, setHasExistingProxy] = useState(false);
   const [proxyMode, setProxyMode] = useState<"none" | "managed" | "byo">("none");
+  const [proxyRegion, setProxyRegion] = useState("");
+  const [proxyHealth, setProxyHealth] = useState<{
+    status?: string | null;
+    testedAt?: string | null;
+    ip?: string | null;
+    country?: string | null;
+    latencyMs?: number | null;
+    error?: string | null;
+    mismatch?: boolean | null;
+  }>({});
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   const { toast } = useToast();
@@ -63,6 +73,24 @@ export function ProxyConfigForm({
         setProxyPassword("");
         setHasExistingProxy(response.data.hasProxy);
         setProxyMode(response.data.proxyMode ?? "none");
+        setProxyRegion(
+          [
+            response.data.proxyRegionCountry,
+            response.data.proxyRegionSubdivision,
+            response.data.proxyRegionCity,
+          ]
+            .filter(Boolean)
+            .join(" · ")
+        );
+        setProxyHealth({
+          status: response.data.proxyStatus,
+          testedAt: response.data.lastTestedAt,
+          ip: response.data.lastTestIp,
+          country: response.data.lastTestCountry,
+          latencyMs: response.data.lastTestLatencyMs,
+          error: response.data.lastError,
+          mismatch: response.data.countryMismatch,
+        });
         setShowAdvanced(!!response.data.proxyUsername);
       }
     } catch (error) {
@@ -204,6 +232,14 @@ export function ProxyConfigForm({
     }
   };
 
+  const requestProxyChange = () => {
+    const subject = encodeURIComponent(`Proxy change request - ${profileId}`);
+    const body = encodeURIComponent(
+      "Please describe the region or proxy change you need:\n\n"
+    );
+    window.location.href = `mailto:support@lengrowth.com?subject=${subject}&body=${body}`;
+  };
+
   if (loading) {
     const loader = (
       <div className="flex items-center justify-center py-8">
@@ -220,8 +256,33 @@ export function ProxyConfigForm({
           <Shield className="h-4 w-4" />
           <AlertTitle>Managed proxy</AlertTitle>
           <AlertDescription>
-            Lengrowth assigned this proxy automatically. It is encrypted and
+            Lengrowth assigned this proxy automatically
+            {proxyRegion ? ` · ${proxyRegion}` : ""}. It is encrypted and
             cannot be edited here. Use Test Connection to check the egress IP.
+            {(proxyHealth.status || proxyHealth.ip || proxyHealth.testedAt) && (
+              <div className="mt-2 text-xs text-muted-foreground">
+                {proxyHealth.status ? `Status: ${proxyHealth.status}` : null}
+                {proxyHealth.ip ? ` · Egress: ${proxyHealth.ip}` : null}
+                {proxyHealth.country ? ` · ${proxyHealth.country}` : null}
+                {typeof proxyHealth.latencyMs === "number"
+                  ? ` · ${proxyHealth.latencyMs} ms`
+                  : null}
+                {proxyHealth.mismatch ? " · country mismatch" : null}
+                {proxyHealth.testedAt
+                  ? ` · tested ${new Date(proxyHealth.testedAt).toLocaleString()}`
+                  : null}
+              </div>
+            )}
+            {proxyHealth.error && (
+              <div className="mt-1 text-xs text-destructive">
+                {proxyHealth.error}
+              </div>
+            )}
+            <div className="mt-3">
+              <Button size="sm" variant="outline" onClick={requestProxyChange}>
+                Request proxy change
+              </Button>
+            </div>
           </AlertDescription>
         </Alert>
       ) : (

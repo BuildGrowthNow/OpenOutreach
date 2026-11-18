@@ -31,7 +31,7 @@ from openoutreach.linkedin.exceptions import CloudProxyRequiredError
 from openoutreach.linkedin.models import LinkedInProfile
 from openoutreach.mongodb.models import LinkedInCredentials
 from openoutreach.mongodb.models_user import User
-from openoutreach.proxies.models import ProxyError, ProxyReuseError, ProxyUnavailableError
+from openoutreach.proxies.models import Proxy, ProxyError, ProxyReuseError, ProxyUnavailableError
 from openoutreach.proxies.parser import parse_bulk_proxies
 from openoutreach.proxies.region import RegionError, normalize_region
 from openoutreach.proxies.service import (
@@ -606,7 +606,7 @@ def test_managed_proxy_update_is_read_only():
     collection.update_one.assert_not_called()
 
 
-def test_managed_proxy_config_masks_username():
+def test_managed_proxy_config_masks_username_and_returns_health():
     collection = MagicMock()
     collection.find_one.return_value = {
         "_id": "profile-1",
@@ -616,16 +616,35 @@ def test_managed_proxy_config_masks_username():
         "proxy_server": "http://proxy.example.com:8080",
         "proxy_username": "massive-parent-subaccount",
         "proxy_password_encrypted": "encrypted",
+        "proxy_region_country": "US",
+        "proxy_region_city": "Yonkers",
     }
+    proxy = Proxy(
+        _id="proxy-1",
+        host="8.8.8.8",
+        port=8080,
+        country="US",
+        status="assigned",
+        last_test_ip="24.188.161.34",
+        last_test_country="US",
+        last_test_latency_ms=3203,
+    )
 
-    with patch.object(profiles_router, "get_mongodb_collection", return_value=collection):
+    with (
+        patch.object(profiles_router, "get_mongodb_collection", return_value=collection),
+        patch("openoutreach.proxies.models.Proxy.get", return_value=proxy),
+    ):
         result = asyncio.run(
             profiles_router.get_proxy_config("profile-1", user_id="u1")
         )
 
     assert result["proxy_username"] == "***"
     assert result["proxy_password"] == "********"
-    assert result["proxy_server"] == "http://proxy.example.com:8080"
+    assert result["proxy_region_country"] == "US"
+    assert result["proxy_status"] == "assigned"
+    assert result["last_test_ip"] == "24.188.161.34"
+    assert result["last_test_latency_ms"] == 3203
+    assert "encrypted" not in str(result)
 
 
 def test_credential_update_rejects_foreign_profile():

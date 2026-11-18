@@ -1224,6 +1224,13 @@ export interface ProxyConfig {
   proxyRegionCountry?: string | null;
   proxyRegionSubdivision?: string | null;
   proxyRegionCity?: string | null;
+  proxyStatus?: string | null;
+  lastTestedAt?: string | null;
+  lastTestIp?: string | null;
+  lastTestCountry?: string | null;
+  lastTestLatencyMs?: number | null;
+  lastError?: string | null;
+  countryMismatch?: boolean | null;
 }
 
 export interface ProxyTestResult {
@@ -1246,6 +1253,13 @@ interface ProxyConfigRaw {
   proxy_region_country?: string | null;
   proxy_region_subdivision?: string | null;
   proxy_region_city?: string | null;
+  proxy_status?: string | null;
+  last_tested_at?: string | null;
+  last_test_ip?: string | null;
+  last_test_country?: string | null;
+  last_test_latency_ms?: number | null;
+  last_error?: string | null;
+  country_mismatch?: boolean | null;
 }
 
 export async function getProxyConfig(
@@ -1268,6 +1282,13 @@ export async function getProxyConfig(
         proxyRegionCountry: response.data.proxy_region_country,
         proxyRegionSubdivision: response.data.proxy_region_subdivision,
         proxyRegionCity: response.data.proxy_region_city,
+        proxyStatus: response.data.proxy_status,
+        lastTestedAt: response.data.last_tested_at,
+        lastTestIp: response.data.last_test_ip,
+        lastTestCountry: response.data.last_test_country,
+        lastTestLatencyMs: response.data.last_test_latency_ms,
+        lastError: response.data.last_error,
+        countryMismatch: response.data.country_mismatch,
       },
     };
   }

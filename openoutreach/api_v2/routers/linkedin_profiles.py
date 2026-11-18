@@ -1087,6 +1087,26 @@ async def get_proxy_config(
             profile_doc.get("proxy_password_encrypted")
             or profile_doc.get("proxy_password")
         )
+        proxy_id = profile_doc.get("proxy_id")
+        proxy_health: dict = {}
+        if proxy_id:
+            from openoutreach.proxies.models import Proxy
+
+            proxy = Proxy.get(proxy_id)
+            if proxy:
+                proxy_health = {
+                    "proxy_status": proxy.status,
+                    "last_tested_at": (
+                        proxy.last_tested_at.isoformat()
+                        if proxy.last_tested_at
+                        else None
+                    ),
+                    "last_test_ip": proxy.last_test_ip,
+                    "last_test_country": proxy.last_test_country,
+                    "last_test_latency_ms": proxy.last_test_latency_ms,
+                    "last_error": proxy.last_error,
+                    "country_mismatch": proxy.country_mismatch,
+                }
 
         return {
             "profile_id": profile_id,
@@ -1095,10 +1115,11 @@ async def get_proxy_config(
             "proxy_password": "********" if has_proxy_password else None,
             "has_proxy": proxy_server is not None,
             "proxy_mode": proxy_mode,
-            "proxy_id": profile_doc.get("proxy_id"),
+            "proxy_id": proxy_id,
             "proxy_region_country": profile_doc.get("proxy_region_country"),
             "proxy_region_subdivision": profile_doc.get("proxy_region_subdivision"),
             "proxy_region_city": profile_doc.get("proxy_region_city"),
+            **proxy_health,
         }
 
     except HTTPException:
