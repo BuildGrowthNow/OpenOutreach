@@ -36,6 +36,7 @@ export default function AdminProxiesPage() {
   const [importText, setImportText] = useState('')
   const [defaultCountry, setDefaultCountry] = useState('')
   const [importing, setImporting] = useState(false)
+  const [importErrors, setImportErrors] = useState<{ line: number; error: string }[]>([])
   const [busyId, setBusyId] = useState<string | null>(null)
   const [assignProfileId, setAssignProfileId] = useState('')
 
@@ -65,6 +66,7 @@ export default function AdminProxiesPage() {
       setImporting(true)
       setError(null)
       setMessage(null)
+      setImportErrors([])
       const response = await adminApi.importProxies({
         text: importText,
         default_country: defaultCountry.trim().toUpperCase() || undefined,
@@ -73,6 +75,7 @@ export default function AdminProxiesPage() {
         setMessage(
           `Imported ${response.data.created}, skipped ${response.data.skipped}, failed ${response.data.failed}.`
         )
+        setImportErrors(response.data.errors ?? [])
         setImportText('')
         await load()
       } else if (response.error) {
@@ -167,6 +170,21 @@ export default function AdminProxiesPage() {
         <Alert>
           <CheckCircle2 className="h-4 w-4" />
           <AlertDescription>{message}</AlertDescription>
+        </Alert>
+      )}
+      {importErrors.length > 0 && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            <p className="font-medium">Import errors</p>
+            <ul className="mt-1 list-disc space-y-1 pl-4 text-xs">
+              {importErrors.map((item) => (
+                <li key={`${item.line}-${item.error}`}>
+                  Line {item.line}: {item.error}
+                </li>
+              ))}
+            </ul>
+          </AlertDescription>
         </Alert>
       )}
 
