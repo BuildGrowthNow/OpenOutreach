@@ -15,6 +15,16 @@ import {
   type AdminOrganizationSummary,
 } from '@/lib/api/admin'
 
+function formatBytes(bytes: number) {
+  if (!bytes) return '0 B'
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  const exponent = Math.min(
+    Math.max(0, Math.floor(Math.log(bytes) / Math.log(1000))),
+    units.length - 1
+  )
+  return `${(bytes / 1000 ** exponent).toFixed(exponent > 1 ? 2 : 0)} ${units[exponent]}`
+}
+
 export default function AdminOrganizationsPage() {
   const [organizations, setOrganizations] = useState<AdminOrganizationSummary[]>([])
   const [selected, setSelected] = useState<AdminOrganizationDetail | null>(null)
@@ -186,6 +196,21 @@ export default function AdminOrganizationsPage() {
                     <p className="text-xs text-muted-foreground">Usage</p>
                     <p>{selected.organization.credentialed_profiles} credentialed · {selected.organization.assigned_profiles} assigned</p>
                   </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Proxy usage</p>
+                    <p>
+                      {formatBytes(selected.usage?.total_bytes ?? 0)} ·{' '}
+                      {selected.usage?.proxies ?? 0} proxies
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Proxy alerts</p>
+                    <p>
+                      {selected.usage?.limit_reached ?? 0} limit ·{' '}
+                      {selected.usage?.access_revoked ?? 0} revoked ·{' '}
+                      {selected.usage?.country_mismatch ?? 0} mismatch
+                    </p>
+                  </div>
                 </div>
 
                 <div className="space-y-2">
@@ -208,6 +233,32 @@ export default function AdminOrganizationsPage() {
                           {profile.active ? 'Active' : 'Paused'}
                         </Badge>
                         {profile.proxy_assigned && <Badge variant="outline">Proxy</Badge>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Proxies</p>
+                  {(selected.proxies ?? []).length === 0 && (
+                    <p className="text-sm text-muted-foreground">No proxies assigned.</p>
+                  )}
+                  {(selected.proxies ?? []).map((proxy) => (
+                    <div key={proxy.id} className="flex items-center justify-between rounded-md border border-border/60 p-2 text-sm">
+                      <div className="min-w-0">
+                        <p className="truncate font-mono text-xs">{proxy.id}</p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {[proxy.country, proxy.subdivision, proxy.city].filter(Boolean).join(' · ') || '—'}
+                          {' · '}
+                          {formatBytes(proxy.massive_used_bytes)} / {formatBytes(proxy.massive_limit_bytes ?? 0)}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1">
+                        <Badge variant={proxy.status === 'assigned' ? 'default' : 'secondary'}>
+                          {proxy.status ?? 'unknown'}
+                        </Badge>
+                        {proxy.massive_status && <Badge variant="outline">{proxy.massive_status}</Badge>}
+                        {proxy.country_mismatch && <Badge variant="destructive">mismatch</Badge>}
                       </div>
                     </div>
                   ))}

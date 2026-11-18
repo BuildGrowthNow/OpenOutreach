@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Check, X, ChevronDown, Zap, ArrowRight } from 'lucide-react';
+import { Check, X, ChevronDown, Zap, ArrowRight, Users, Monitor, Cloud } from 'lucide-react';
 import { Navbar } from '@/components/landing/Navbar';
 import { Footer } from '@/components/landing/Footer';
 
@@ -422,6 +422,51 @@ export default function PricingPage() {
               </tbody>
             </table>
           </div>
+        </div>
+      </section>
+
+      {/* Team */}
+      <section className="py-16 sm:py-24 border-t border-zinc-800/60">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-5xl">
+          <div className="text-center mb-10">
+            <div className="inline-flex items-center gap-2 rounded-full border border-zinc-700 bg-zinc-900/60 px-3 py-1 text-xs font-semibold text-zinc-300">
+              <Users className="h-3.5 w-3.5" />
+              Team workspaces
+            </div>
+            <h2 className="mt-4 text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
+              Invite your team. Share one plan and seat pool.
+            </h2>
+            <p className="mt-3 text-zinc-400 max-w-2xl mx-auto">
+              Owners and admins assign cloud LinkedIn profiles to members. Members see only
+              their assigned profiles and campaigns, and never see proxy credentials.
+            </p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-6">
+              <div className="flex items-center gap-2 text-white font-semibold">
+                <Monitor className="h-5 w-5 text-emerald-400" />
+                Desktop seat
+              </div>
+              <p className="mt-2 text-sm text-zinc-400">
+                Runs on the member&apos;s computer with the local IP. No proxy, no
+                managed bandwidth. Included in team plans.
+              </p>
+            </div>
+            <div className="rounded-2xl border border-sky-500/30 bg-sky-900/10 p-6">
+              <div className="flex items-center gap-2 text-white font-semibold">
+                <Cloud className="h-5 w-5 text-sky-400" />
+                Cloud seat
+              </div>
+              <p className="mt-2 text-sm text-zinc-400">
+                Runs on our infrastructure with a managed residential proxy, region
+                selection, and health monitoring. $299/mo per seat; no GB meter.
+              </p>
+            </div>
+          </div>
+          <p className="mt-6 text-center text-xs text-zinc-500">
+            Team-member pricing is unchanged during rollout. A login alone does not
+            include a browser account or a proxy.
+          </p>
         </div>
       </section>
 

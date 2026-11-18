@@ -916,10 +916,39 @@ export interface AdminOrganizationProfile {
   proxy_mode: string | null
 }
 
+export interface AdminOrganizationProxy {
+  id: string
+  provider: string | null
+  status: string | null
+  country: string | null
+  subdivision: string | null
+  city: string | null
+  profile_id: string | null
+  assigned_user_id: string | null
+  massive_status: string | null
+  massive_used_bytes: number
+  massive_limit_bytes: number | null
+  massive_limit_reached: boolean
+  proxy_access: boolean | null
+  last_test_country: string | null
+  country_mismatch: boolean | null
+}
+
+export interface AdminOrganizationUsage {
+  total_bytes: number
+  per_channel: Record<string, number>
+  proxies: number
+  limit_reached: number
+  access_revoked: number
+  country_mismatch: number
+}
+
 export interface AdminOrganizationDetail {
   organization: AdminOrganizationSummary
   members: AdminOrganizationMember[]
   profiles: AdminOrganizationProfile[]
+  proxies?: AdminOrganizationProxy[]
+  usage?: AdminOrganizationUsage
   audit_events: Array<{
     id: string
     event: string
