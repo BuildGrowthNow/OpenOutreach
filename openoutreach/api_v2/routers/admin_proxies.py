@@ -9,6 +9,7 @@ from pydantic import BaseModel
 
 from openoutreach.api_v2.dependencies_v2 import get_admin_user
 from openoutreach.billing.admin_security import AdminSecurityPolicy
+from openoutreach.config import settings
 from openoutreach.mongodb.connection import get_mongodb_collection
 from openoutreach.proxies.models import (
     KIND_DATACENTER,
@@ -32,7 +33,21 @@ from openoutreach.proxies.service import (
 )
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/api/admin/proxies", tags=["admin-proxies"])
+
+
+def _require_managed_proxies_enabled() -> None:
+    if not getattr(settings, "MANAGED_PROXIES_ENABLED", True):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Managed proxy operations are disabled",
+        )
+
+
+router = APIRouter(
+    prefix="/api/admin/proxies",
+    tags=["admin-proxies"],
+    dependencies=[Depends(_require_managed_proxies_enabled)],
+)
 
 _PROVIDERS = {
     PROVIDER_MANUAL,
