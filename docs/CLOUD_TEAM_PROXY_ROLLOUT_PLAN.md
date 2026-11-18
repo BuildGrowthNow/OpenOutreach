@@ -611,12 +611,13 @@ remain gated on two-account E2E validation, a production migration dry-run, and 
 **Goal:** The admin can run a proxy pool at scale without touching MongoDB.
 
 Status (2026-11-18): implementation complete on branch
-`feature/cloud-phase0-proxy-seats`; full inventory filters/pagination, masked CSV
+`feature/cloud-phase1-proxy-ops`; full inventory filters/pagination, masked CSV
 export, import preview and per-line errors, bulk lifecycle actions, assignment
 history, manual and scheduled health checks, Massive fallback credentials with
 Reporting API `group_by=subuser` sync, admin usage views, audit events, and
-import/test rate limits are included. Production deploy remains gated on review
-and explicit approval.
+import/test rate limits are included. Marketing region/security copy and the
+customer managed-proxy health card are also updated. Production deploy remains
+gated on review and explicit approval.
 
 ### 6.1 Scope
 
@@ -1035,9 +1036,9 @@ send a surprise bill. Publish a fair-use clause, not a GB number.
 - [x] Cloud CTA carries `?plan=cloud`.
 - [ ] Cloud vs Desktop comparison.
 - [ ] “What’s in a seat?” table.
-- [ ] Proxy/region FAQ.
+- [x] Proxy/region FAQ.
 - [ ] Team/seat FAQ.
-- [ ] Security/encryption note.
+- [x] Security/encryption note.
 - [ ] No claims for features not shipped.
 - [ ] Signup → checkout → onboarding path tested.
 - [ ] SEO pages for cloud execution, managed proxy, team outreach.
