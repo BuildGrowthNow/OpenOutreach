@@ -74,9 +74,14 @@ export default function LinkedInCredentialForm({
   const { billingStatus } = useBilling();
   const hasCloudAccess =
     billingStatus?.plan === "cloud" || (billingStatus?.cloud_profiles ?? 0) > 0;
-  const [regionCountry, setRegionCountry] = useState("");
-  const [regionSubdivision, setRegionSubdivision] = useState("");
-  const [regionCity, setRegionCity] = useState("");
+  const [regionCountry, setRegionCountry] = useState(
+    initialData?.proxyRegionCountry ?? ""
+  );
+  const [regionSubdivision, setRegionSubdivision] = useState(
+    initialData?.proxyRegionSubdivision ?? ""
+  );
+  const [regionCity, setRegionCity] = useState(initialData?.proxyRegionCity ?? "");
+  const isEditing = Boolean(initialData);
 
   useEffect(() => {
     if (isSubmitting) {
@@ -121,12 +126,14 @@ export default function LinkedInCredentialForm({
 
       if (executionMode === "cloud") {
         const country = regionCountry.trim().toUpperCase();
-        if (!/^[A-Z]{2}$/.test(country)) {
+        if (!isEditing && !/^[A-Z]{2}$/.test(country)) {
           throw new Error("Enter the 2-letter country code for this LinkedIn account (for example US).");
         }
-        formData.proxy_region_country = country;
-        formData.proxy_region_subdivision = regionSubdivision.trim() || undefined;
-        formData.proxy_region_city = regionCity.trim() || undefined;
+        if (country) {
+          formData.proxy_region_country = country;
+          formData.proxy_region_subdivision = regionSubdivision.trim() || undefined;
+          formData.proxy_region_city = regionCity.trim() || undefined;
+        }
       }
 
       let credentialId = initialData?.id ?? null;
@@ -374,7 +381,8 @@ export default function LinkedInCredentialForm({
                       <button
                         type="button"
                         onClick={() => setExecutionMode("desktop")}
-                        className={`flex flex-1 items-center gap-2 rounded-lg border px-4 py-3 text-sm transition-colors ${
+                        disabled={isEditing}
+                        className={`flex flex-1 items-center gap-2 rounded-lg border px-4 py-3 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
                           executionMode === "desktop"
                             ? "border-blue-500/60 bg-blue-500/10 text-blue-300"
                             : "border-zinc-800 bg-zinc-900/40 text-zinc-400 hover:border-zinc-700"
@@ -389,7 +397,8 @@ export default function LinkedInCredentialForm({
                       <button
                         type="button"
                         onClick={() => setExecutionMode("cloud")}
-                        className={`flex flex-1 items-center gap-2 rounded-lg border px-4 py-3 text-sm transition-colors ${
+                        disabled={isEditing}
+                        className={`flex flex-1 items-center gap-2 rounded-lg border px-4 py-3 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
                           executionMode === "cloud"
                             ? "border-emerald-500/60 bg-emerald-500/10 text-emerald-300"
                             : "border-zinc-800 bg-zinc-900/40 text-zinc-400 hover:border-zinc-700"
@@ -411,6 +420,12 @@ export default function LinkedInCredentialForm({
                             We assign a managed proxy in this region. Country is required;
                             state and city are optional and narrow the pool.
                           </p>
+                          {isEditing ? (
+                            <p className="mt-1 text-xs text-amber-300">
+                              Execution mode and proxy region are fixed for an existing
+                              account. Contact support to change them.
+                            </p>
+                          ) : null}
                         </div>
                         <div className="grid gap-3 sm:grid-cols-3">
                           <div className="space-y-1">
@@ -423,6 +438,7 @@ export default function LinkedInCredentialForm({
                               onChange={(e) => setRegionCountry(e.target.value.toUpperCase())}
                               placeholder="US"
                               maxLength={2}
+                              disabled={isEditing}
                               className="border-zinc-800 bg-zinc-950/70 uppercase"
                             />
                           </div>
@@ -436,6 +452,7 @@ export default function LinkedInCredentialForm({
                               onChange={(e) => setRegionSubdivision(e.target.value.toUpperCase())}
                               placeholder="NY"
                               maxLength={8}
+                              disabled={isEditing}
                               className="border-zinc-800 bg-zinc-950/70"
                             />
                           </div>
@@ -448,6 +465,7 @@ export default function LinkedInCredentialForm({
                               value={regionCity}
                               onChange={(e) => setRegionCity(e.target.value)}
                               placeholder="New York"
+                              disabled={isEditing}
                               className="border-zinc-800 bg-zinc-950/70"
                             />
                           </div>

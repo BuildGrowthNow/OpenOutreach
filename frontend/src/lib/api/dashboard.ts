@@ -884,6 +884,9 @@ export interface LinkedInCredentials {
   linkedinProfileUsername?: string | null;
   daemonIp?: string | null;
   hasProxy?: boolean;
+  proxyRegionCountry?: string | null;
+  proxyRegionSubdivision?: string | null;
+  proxyRegionCity?: string | null;
 }
 
 export interface LinkedInCredentialsHealth {
