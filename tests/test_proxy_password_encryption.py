@@ -186,6 +186,32 @@ def test_migration_encrypts_plaintext_and_removes_the_column(monkeypatch):
     assert len(collection.updates) == 1
 
 
+def test_migration_replaces_plaintext_in_encrypted_column(monkeypatch):
+    from openoutreach.migrations import encrypt_proxy_passwords as migration
+
+    collection = _Collection(
+        [
+            {
+                "_id": "profile-1",
+                "user_id": "user-1",
+                "proxy_password": "legacy-secret",
+                "proxy_password_encrypted": "also-plaintext",
+            }
+        ]
+    )
+
+    monkeypatch.setattr(migration, "initialize_mongodb_connection", lambda: True)
+    monkeypatch.setattr(
+        migration, "get_mongodb_collection", lambda _name: collection
+    )
+
+    assert migration.migrate_proxy_passwords(dry_run=False) is True
+
+    document = collection.documents[0]
+    assert "proxy_password" not in document
+    assert decrypt_text(document["proxy_password_encrypted"]) == "legacy-secret"
+
+
 def test_migration_dry_run_does_not_write(monkeypatch):
     from openoutreach.migrations import encrypt_proxy_passwords as migration
 
