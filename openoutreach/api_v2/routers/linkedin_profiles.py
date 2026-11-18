@@ -18,6 +18,7 @@ from openoutreach.api_v2.dependencies_v2 import get_current_user
 from openoutreach.api_v2.schemas.linkedin import (
     LinkedInProfileResponse,
 )
+from openoutreach.billing.seats import release_linkedin_seat
 from openoutreach.mongodb.connection import get_mongodb_collection
 from openoutreach.mongodb.crypto import safe_decrypt, safe_encrypt
 
@@ -46,13 +47,22 @@ def _normalize_proxy_server(proxy_server: str) -> str:
                 "or socks5://host:port"
             ),
         )
+    from openoutreach.proxies.service import ProxyError, validate_proxy_host
+
+    try:
+        validate_proxy_host(parsed.hostname)
+    except ProxyError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Proxy host is invalid or not publicly routable",
+        )
     return value
 
 
 def _mask_proxy_username(username: Optional[str], proxy_mode: str) -> Optional[str]:
     """Never return a full managed-proxy username to the client."""
     if proxy_mode == "managed" and username:
-        return f"{username[:4]}…" if len(username) > 4 else "***"
+        return "***"
     return username
 
 
@@ -877,7 +887,7 @@ async def update_proxy_config(
             )
 
         if not proxy_server or not proxy_server.strip():
-            updates: dict[str, Optional[str]] = {
+            updates: dict[str, object] = {
                 "proxy_server": None,
                 "proxy_username": None,
                 "proxy_password": None,
@@ -911,6 +921,25 @@ async def update_proxy_config(
                 updates["proxy_password_encrypted"] = _encrypt_proxy_password(
                     proxy_password
                 )
+            if profile_doc.get("execution_mode") == "cloud":
+                from openoutreach.billing.plans import effective_cloud_seat_limit
+                from openoutreach.mongodb.models_user import User
+
+                user = User.get(user_id)
+                if user:
+                    seat_limit = effective_cloud_seat_limit(
+                        user.plan, user.cloud_profiles
+                    )
+                    other_active = collection.count_documents({
+                        "user_id": user_id,
+                        "is_active": True,
+                        "execution_mode": "cloud",
+                        "_id": {"$ne": profile_id},
+                    })
+                    if seat_limit > 0 and other_active < seat_limit:
+                        updates["active"] = True
+                        updates["is_active"] = True
+                        updates["daemon_status"] = "proxy_ready"
 
         collection.update_one(
             {"_id": profile_id, "user_id": user_id},
@@ -1133,6 +1162,16 @@ async def delete_profile(
         except Exception as e:
             logger.warning("Failed to delete SmartRateLimitContext; exception_type=%s", type(e).__name__)
 
+        # A seat is consumed only when the profile owns a credential.
+        credentials_collection = get_mongodb_collection("linkedin_credentials")
+        had_credentials = bool(
+            credentials_collection is not None
+            and credentials_collection.count_documents(
+                {"linkedin_profile_id": profile_id, "user_id": user_id}
+            )
+            > 0
+        )
+
         # Delete profile
         result = profiles_collection.delete_one({"_id": profile_id, "user_id": user_id})
         if result.deleted_count == 0:
@@ -1146,6 +1185,8 @@ async def delete_profile(
         from openoutreach.proxies.service import retire_proxy_for_profile
 
         retire_proxy_for_profile(profile_id)
+        if had_credentials:
+            release_linkedin_seat(user_id)
 
         logger.info(f"Deleted LinkedIn profile {profile_id} for user {user_id}")
         return None
