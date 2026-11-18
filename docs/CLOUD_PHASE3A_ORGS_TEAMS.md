@@ -207,7 +207,7 @@ PATCH /api/admin/organizations/{id}/seats
 
 ```text
 .venv\Scripts\python.exe -m pytest tests -q
-# 573 passed, 56 skipped (includes Phase 2 and Phase 3B tests)
+# 574 passed, 56 skipped (includes Phase 2 and Phase 3B tests)
 
 .venv\Scripts\python.exe -m pytest tests/test_cloud_phase0.py tests/test_cloud_phase1.py -p no:asyncio -q
 # 64 passed

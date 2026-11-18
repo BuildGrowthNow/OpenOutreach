@@ -590,6 +590,37 @@ def remove_member(
                     },
                 )
 
+    # Revoke the member's desktop devices and clear channel assignments. The
+    # data stays in the workspace for owner/admin reassignment; the removed
+    # member falls back to their personal workspace.
+    devices = get_mongodb_collection("daemon_devices")
+    families = get_mongodb_collection("daemon_refresh_families")
+    if devices is not None:
+        revoked_devices = list(
+            devices.find(
+                {"user_id": target_user_id, "org_id": org._id, "revoked": False},
+                {"_id": 1},
+            )
+        )
+        device_ids = [str(doc["_id"]) for doc in revoked_devices]
+        if device_ids:
+            devices.update_many(
+                {"_id": {"$in": device_ids}},
+                {"$set": {"revoked": True, "revoked_at": utc_now()}},
+            )
+            if families is not None:
+                families.update_many(
+                    {"device_id": {"$in": device_ids}},
+                    {"$set": {"revoked": True}},
+                )
+    for collection_name in ("whatsapp_profiles", "mailboxes"):
+        channel_collection = get_mongodb_collection(collection_name)
+        if channel_collection is not None:
+            channel_collection.update_many(
+                {"org_id": org._id, "assigned_user_id": target_user_id},
+                {"$set": {"assigned_user_id": None}},
+            )
+
     # Move the removed member back to their personal workspace so they keep a
     # valid billing context. Their org data is retained for audit/support.
     target_user = User.get(target_user_id)

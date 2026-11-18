@@ -461,7 +461,7 @@ async def create_credential(
             try:
                 from openoutreach.proxies.provisioning import provision_managed_proxy
 
-                provision_managed_proxy(
+                managed_proxy = provision_managed_proxy(
                     profile._id,
                     user_id,
                     profile.org_id,
@@ -470,6 +470,19 @@ async def create_credential(
                     region[2],
                     created_by=user_id,
                 )
+                # Best-effort egress check. A provider hiccup must not undo a
+                # successfully created account; admins can retest from the
+                # proxy health page.
+                try:
+                    from openoutreach.proxies.service import test_proxy
+
+                    await test_proxy(managed_proxy._id)
+                except Exception as exc:  # pragma: no cover - network/provider
+                    logger.warning(
+                        "managed_proxy_egress_test_failed profile_id=%s exception_type=%s",
+                        profile._id,
+                        type(exc).__name__,
+                    )
             except (ProxyUnavailableError, ProxyError) as exc:
                 try:
                     LinkedInCredentials.delete(credential._id)

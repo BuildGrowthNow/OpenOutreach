@@ -223,6 +223,54 @@ def test_owner_assigns_desktop_profile_without_consuming_cloud_seat(fake, team_e
     assert fake.collection("linkedin_seat_usage").count_documents({}) == 0
 
 
+def test_removing_member_revokes_devices_and_clears_channel_assignment(
+    fake, team_enabled
+):
+    from openoutreach.organizations.service import remove_member
+
+    owner = make_user(fake, "owner", "owner@example.com")
+    org = ensure_personal_org(owner)
+    member = make_user(
+        fake, "member", "member@example.com", plan="starter", cloud_profiles=0, org_id=org._id
+    )
+    add_member(fake, org._id, member, ROLE_MEMBER)
+    fake.collection("daemon_devices").insert_one(
+        {"_id": "d1", "user_id": "member", "org_id": org._id, "revoked": False}
+    )
+    fake.collection("daemon_refresh_families").insert_one(
+        {"_id": "f1", "device_id": "d1", "user_id": "member", "revoked": False}
+    )
+    fake.collection("whatsapp_profiles").insert_one(
+        {
+            "_id": "wa1",
+            "user_id": "owner",
+            "org_id": org._id,
+            "assigned_user_id": "member",
+        }
+    )
+    fake.collection("mailboxes").insert_one(
+        {
+            "_id": "m1",
+            "user_id": "owner",
+            "org_id": org._id,
+            "assigned_user_id": "member",
+        }
+    )
+
+    remove_member(org, owner._id, member._id)
+
+    assert fake.collection("daemon_devices").find_one({"_id": "d1"})["revoked"] is True
+    assert fake.collection("daemon_refresh_families").find_one({"_id": "f1"})[
+        "revoked"
+    ] is True
+    assert fake.collection("whatsapp_profiles").find_one({"_id": "wa1"})[
+        "assigned_user_id"
+    ] is None
+    assert fake.collection("mailboxes").find_one({"_id": "m1"})[
+        "assigned_user_id"
+    ] is None
+
+
 def test_desktop_enrollment_rejects_cloud_and_other_member(fake, team_enabled):
     owner = make_user(fake, "owner", "owner@example.com")
     org = ensure_personal_org(owner)

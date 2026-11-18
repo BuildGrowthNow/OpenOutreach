@@ -86,7 +86,7 @@ this requires explicit product approval.
 
 ```text
 .venv\Scripts\python.exe -m pytest tests -q
-# 573 passed, 56 skipped
+# 574 passed, 56 skipped
 
 ruff E9,F63,F7,F82, compileall, pyright
 # clean
