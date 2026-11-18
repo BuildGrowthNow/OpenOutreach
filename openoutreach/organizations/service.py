@@ -1036,6 +1036,7 @@ def backfill_personal_orgs(*, dry_run: bool = True) -> dict[str, int]:
     campaigns_collection = get_mongodb_collection(_CAMPAIGNS_COLLECTION)
     whatsapp_collection = get_mongodb_collection("whatsapp_profiles")
     mailboxes_collection = get_mongodb_collection("mailboxes")
+    devices_collection = get_mongodb_collection("daemon_devices")
     if users_collection is None or orgs_collection is None or members_collection is None:
         raise OrganizationError("Organization storage is unavailable")
 
@@ -1047,6 +1048,7 @@ def backfill_personal_orgs(*, dry_run: bool = True) -> dict[str, int]:
         "profiles_backfilled": 0,
         "campaigns_backfilled": 0,
         "channels_backfilled": 0,
+        "devices_backfilled": 0,
     }
 
     for user_doc in users_collection.find({}):
@@ -1160,6 +1162,29 @@ def backfill_personal_orgs(*, dry_run: bool = True) -> dict[str, int]:
                             "user_id": org.owner_user_id,
                         }
                     },
+                )
+
+        # Devices belong to the user's *active* workspace so owner/admin
+        # device lists and revocation work for pre-Phase-3B enrollments.
+        if devices_collection is not None:
+            active_org = org
+            if user.org_id and _active_org_for_user(user._id, user.org_id):
+                candidate = Organization.get(user.org_id)
+                if candidate is not None:
+                    active_org = candidate
+            device_filter = {
+                "user_id": user._id,
+                "$or": [
+                    {"org_id": {"$exists": False}},
+                    {"org_id": None},
+                ],
+            }
+            count = devices_collection.count_documents(device_filter)
+            summary["devices_backfilled"] += count
+            if count and not dry_run:
+                devices_collection.update_many(
+                    device_filter,
+                    {"$set": {"org_id": active_org._id}},
                 )
 
     logger.info(

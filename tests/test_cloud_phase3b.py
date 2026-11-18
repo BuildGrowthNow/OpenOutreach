@@ -223,6 +223,24 @@ def test_owner_assigns_desktop_profile_without_consuming_cloud_seat(fake, team_e
     assert fake.collection("linkedin_seat_usage").count_documents({}) == 0
 
 
+def test_backfill_assigns_legacy_devices_to_active_org(fake, team_enabled):
+    from openoutreach.organizations.service import backfill_personal_orgs
+
+    owner = make_user(fake, "owner", "owner@example.com")
+    org = ensure_personal_org(owner)
+    member = make_user(
+        fake, "member", "member@example.com", plan="starter", cloud_profiles=0, org_id=org._id
+    )
+    add_member(fake, org._id, member, ROLE_MEMBER)
+    fake.collection("daemon_devices").insert_one(
+        {"_id": "legacy-device", "user_id": "member", "revoked": False}
+    )
+    summary = backfill_personal_orgs(dry_run=False)
+    assert summary["devices_backfilled"] >= 1
+    device = fake.collection("daemon_devices").find_one({"_id": "legacy-device"})
+    assert device["org_id"] == org._id
+
+
 def test_removing_member_revokes_devices_and_clears_channel_assignment(
     fake, team_enabled
 ):

@@ -6,9 +6,10 @@ Additive and idempotent. Run the dry-run first:
     python -m openoutreach.migrations.backfill_personal_orgs --apply
 
 This migration never deletes data. It creates one personal organization per
-user, links ``User.org_id``, creates the owner membership row, and backfills
-``org_id`` / ``assigned_user_id`` on LinkedIn profiles and ``org_id`` on
-campaigns.
+user, links ``User.org_id``, creates the owner membership row, backfills
+``org_id`` / ``assigned_user_id`` on LinkedIn profiles, ``org_id`` on campaigns,
+org/assignee fields on WhatsApp profiles and mailboxes, and the active ``org_id``
+on daemon devices.
 """
 from __future__ import annotations
 

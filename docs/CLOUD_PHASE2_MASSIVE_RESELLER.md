@@ -164,7 +164,7 @@ alerts, and Pool Stats. Passwords and keys are never displayed.
 
 ```text
 .venv\Scripts\python.exe -m pytest tests -q
-# 574 passed, 56 skipped
+# 575 passed, 56 skipped
 
 .venv\Scripts\python.exe -m pytest tests/test_cloud_phase0.py tests/test_cloud_phase1.py -p no:asyncio -q
 # 64 passed
