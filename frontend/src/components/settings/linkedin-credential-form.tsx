@@ -73,7 +73,7 @@ export default function LinkedInCredentialForm({
   const countdownRef = useRef<NodeJS.Timeout | null>(null);
   const { billingStatus } = useBilling();
   const hasCloudAccess =
-    billingStatus?.plan === "cloud" || (billingStatus?.cloud_profiles ?? 0) > 0;
+    billingStatus?.plan === "cloud" || (billingStatus?.cloud_seat_limit ?? 0) > 0;
   const [regionCountry, setRegionCountry] = useState(
     initialData?.proxyRegionCountry ?? ""
   );
