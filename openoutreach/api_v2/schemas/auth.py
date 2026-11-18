@@ -22,7 +22,7 @@ class RegisterRequest(BaseModel):
         """Only sellable, non-add-on plans may be stored as intent."""
         if v is None:
             return None
-        allowed = {"starter", "pro", "business", "agency", "cloud", "lifetime"}
+        allowed = {"starter", "pro", "business", "agency", "cloud", "lifetime", "team", "desktop"}
         normalized = v.strip().lower()
         if normalized not in allowed:
             raise ValueError('Unsupported intended plan')
