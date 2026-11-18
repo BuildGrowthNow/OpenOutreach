@@ -539,6 +539,11 @@ async def change_plan(
 
     if request.billing_period not in ("monthly", "annual"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid billing period")
+    if request.plan_name == "cloud" and request.billing_period != "monthly":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cloud is billed monthly only",
+        )
 
     try:
         stripe_plan = StripePlan.get_by_plan(request.plan_name)
