@@ -18,7 +18,7 @@ from openoutreach.mongodb.connection import (
     get_mongodb_collection,
     initialize_mongodb_connection,
 )
-from openoutreach.mongodb.crypto import encrypt_text, is_encrypted
+from openoutreach.mongodb.crypto import decrypt_text, encrypt_text, is_encrypted
 
 logger = logging.getLogger(__name__)
 
@@ -56,9 +56,27 @@ def migrate_proxy_passwords(dry_run: bool = True) -> bool:
 
         try:
             existing_encrypted = doc.get("proxy_password_encrypted")
-            encrypted = existing_encrypted or (
-                plaintext if is_encrypted(plaintext) else encrypt_text(plaintext)
-            )
+            if existing_encrypted and is_encrypted(existing_encrypted):
+                # A valid encrypted value is authoritative; the plaintext field
+                # is the legacy duplicate this migration is removing.
+                encrypted = existing_encrypted
+                try:
+                    decrypt_text(encrypted)
+                except Exception:
+                    logger.warning(
+                        "Encrypted proxy password could not be decrypted for profile %s; "
+                        "re-encrypting the plaintext value",
+                        doc["_id"],
+                    )
+                    encrypted = encrypt_text(plaintext)
+            else:
+                if existing_encrypted:
+                    logger.warning(
+                        "proxy_password_encrypted was not encrypted for profile %s; "
+                        "replacing it with an encrypted value",
+                        doc["_id"],
+                    )
+                encrypted = plaintext if is_encrypted(plaintext) else encrypt_text(plaintext)
 
             if not dry_run:
                 collection.update_one(
