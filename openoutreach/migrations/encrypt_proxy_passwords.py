@@ -36,13 +36,18 @@ def migrate_proxy_passwords(dry_run: bool = True) -> bool:
         logger.error("Could not access linkedin_profiles collection")
         return False
 
-    query = {"proxy_password": {"$exists": True, "$nin": [None, ""]}}
+    query = {
+        "$or": [
+            {"proxy_password": {"$exists": True, "$nin": [None, ""]}},
+            {"proxy_password_encrypted": {"$exists": True, "$nin": [None, ""]}},
+        ]
+    }
     total = collection.count_documents(query)
     if total == 0:
-        logger.info("No plaintext proxy passwords to migrate.")
+        logger.info("No proxy passwords to migrate.")
         return True
 
-    logger.info("Found %s profiles with plaintext proxy passwords", total)
+    logger.info("Found %s profiles with proxy password fields to verify", total)
 
     migrated = 0
     failed = 0
@@ -51,32 +56,46 @@ def migrate_proxy_passwords(dry_run: bool = True) -> bool:
         {"_id": 1, "proxy_password": 1, "proxy_password_encrypted": 1},
     ):
         plaintext = doc.get("proxy_password")
-        if not plaintext:
+        existing_encrypted = doc.get("proxy_password_encrypted")
+        if not plaintext and (
+            not existing_encrypted or is_encrypted(existing_encrypted)
+        ):
             continue
 
         try:
-            existing_encrypted = doc.get("proxy_password_encrypted")
-            if existing_encrypted and is_encrypted(existing_encrypted):
-                # A valid encrypted value is authoritative; the plaintext field
-                # is the legacy duplicate this migration is removing.
-                encrypted = existing_encrypted
-                try:
-                    decrypt_text(encrypted)
-                except Exception:
-                    logger.warning(
-                        "Encrypted proxy password could not be decrypted for profile %s; "
-                        "re-encrypting the plaintext value",
-                        doc["_id"],
+            if plaintext:
+                if existing_encrypted and is_encrypted(existing_encrypted):
+                    # A valid encrypted value is authoritative; the plaintext
+                    # field is the legacy duplicate this migration removes.
+                    encrypted = existing_encrypted
+                    try:
+                        decrypt_text(encrypted)
+                    except Exception:
+                        logger.warning(
+                            "Encrypted proxy password could not be decrypted for profile %s; "
+                            "re-encrypting the plaintext value",
+                            doc["_id"],
+                        )
+                        encrypted = encrypt_text(plaintext)
+                else:
+                    if existing_encrypted:
+                        logger.warning(
+                            "proxy_password_encrypted was not encrypted for profile %s; "
+                            "replacing it with an encrypted value",
+                            doc["_id"],
+                        )
+                    encrypted = (
+                        plaintext if is_encrypted(plaintext) else encrypt_text(plaintext)
                     )
-                    encrypted = encrypt_text(plaintext)
             else:
-                if existing_encrypted:
-                    logger.warning(
-                        "proxy_password_encrypted was not encrypted for profile %s; "
-                        "replacing it with an encrypted value",
-                        doc["_id"],
-                    )
-                encrypted = plaintext if is_encrypted(plaintext) else encrypt_text(plaintext)
+                # A malformed plaintext value in the encrypted column with no
+                # legacy proxy_password field still needs to be encrypted.
+                logger.warning(
+                    "proxy_password_encrypted was not encrypted for profile %s; "
+                    "replacing it with an encrypted value",
+                    doc["_id"],
+                )
+                encrypted = encrypt_text(existing_encrypted)
 
             if not dry_run:
                 collection.update_one(
@@ -98,11 +117,28 @@ def migrate_proxy_passwords(dry_run: bool = True) -> bool:
     logger.info("Migration complete: %s migrated, %s failed", migrated, failed)
 
     if not dry_run:
-        remaining = collection.count_documents(query)
-        if remaining > 0:
+        remaining_plaintext = collection.count_documents(
+            {"proxy_password": {"$exists": True, "$nin": [None, ""]}}
+        )
+        remaining_unencrypted = sum(
+            1
+            for doc in collection.find(
+                {
+                    "proxy_password_encrypted": {
+                        "$exists": True,
+                        "$nin": [None, ""],
+                    }
+                },
+                {"proxy_password_encrypted": 1},
+            )
+            if not is_encrypted(doc.get("proxy_password_encrypted"))
+        )
+        if remaining_plaintext or remaining_unencrypted:
             logger.warning(
-                "Migration incomplete: %s profiles still have plaintext proxy passwords",
-                remaining,
+                "Migration incomplete: %s plaintext proxy_password fields and "
+                "%s unencrypted proxy_password_encrypted fields remain",
+                remaining_plaintext,
+                remaining_unencrypted,
             )
             return False
         logger.info("All proxy passwords are encrypted at rest.")
