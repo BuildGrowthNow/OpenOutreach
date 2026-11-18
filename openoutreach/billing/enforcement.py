@@ -15,6 +15,7 @@ from openoutreach.billing.plans import (
     effective_linkedin_account_limit,
     get_plan,
 )
+from openoutreach.billing.seats import count_credentialed_profiles
 
 logger = logging.getLogger(__name__)
 
@@ -31,27 +32,15 @@ class PlanEnforcer:
         if not PlanEnforcer._is_subscription_active(user):
             return False, "Subscription is not active"
 
-        profiles_col = get_mongodb_collection("linkedin_profiles")
-        creds_col = get_mongodb_collection("linkedin_credentials")
-        if profiles_col is None or creds_col is None:
+        if (
+            get_mongodb_collection("linkedin_profiles") is None
+            or get_mongodb_collection("linkedin_credentials") is None
+        ):
             return False, "Database error"
 
-        # Only count profiles that have at least one credential - orphaned profiles
-        # (auto-created but credential deleted after failed verification) must not consume a slot.
-        active_profile_ids = [
-            doc["_id"]
-            for doc in profiles_col.find({"user_id": user._id, "is_active": True}, {"_id": 1})
-        ]
-        if active_profile_ids:
-            count = len(set(
-                doc["linkedin_profile_id"]
-                for doc in creds_col.find(
-                    {"user_id": user._id, "linkedin_profile_id": {"$in": active_profile_ids}},
-                    {"linkedin_profile_id": 1},
-                )
-            ))
-        else:
-            count = 0
+        # Count every profile that owns a credential, active or paused. A seat
+        # is assigned to an account; pausing does not free the seat.
+        count = count_credentialed_profiles(user._id)
 
         limit = effective_linkedin_account_limit(
             user.plan,
@@ -167,12 +156,7 @@ class PlanEnforcer:
             "trial_days_remaining": PlanEnforcer._get_trial_days_remaining(user),
         }
 
-        profiles_collection = get_mongodb_collection("linkedin_profiles")
-        if profiles_collection is not None:
-            stats["linkedin_accounts_used"] = profiles_collection.count_documents({
-                "user_id": user._id,
-                "is_active": True,
-            })
+        stats["linkedin_accounts_used"] = count_credentialed_profiles(user._id)
 
         campaigns_collection = get_mongodb_collection("campaigns")
         if campaigns_collection is not None:
