@@ -146,6 +146,11 @@ const faqs = [
       "Desktop plans (Starter → Agency) run the automation software on your own computer using your own internet connection - giving you full control. Cloud runs it on our managed infrastructure with AI already configured. Cloud costs more but requires nothing from you.",
   },
   {
+    question: "Do I need a proxy for desktop?",
+    answer:
+      "No. Desktop execution uses your own computer and your local internet connection, so no proxy is involved. Cloud execution runs on our servers and always uses a managed proxy for each LinkedIn account.",
+  },
+  {
     question: "Do I need technical skills to set it up?",
     answer:
       "No. Desktop setup is a one-time install that takes about 5 minutes. You log in, describe your ideal customer, and the first campaign goes out the same day. No code, no configuration files.",
@@ -287,7 +292,7 @@ export default function PricingPage() {
                   ))}
                 </ul>
 
-                <Link href="/signup">
+                <Link href={`/signup?plan=${plan.name}`}>
                   <Button
                     className={`w-full font-semibold ${
                       plan.highlighted
@@ -317,8 +322,12 @@ export default function PricingPage() {
                 </div>
                 <p className="text-sm text-zinc-400 max-w-lg">
                   We run your campaigns on our infrastructure with AI already configured.
-                  No desktop app, no setup - just results. Optional hands-on campaign
-                  adjustments included on request.
+                  $299/mo includes 1 LinkedIn account and 1 managed proxy. Add more cloud
+                  seats anytime. No desktop app, no setup - just results. Optional hands-on
+                  campaign adjustments included on request.
+                </p>
+                <p className="mt-2 text-xs text-zinc-500">
+                  Cloud requires a paid subscription; there is no Cloud trial.
                 </p>
               </div>
               <ul className="lg:w-64 space-y-2">
@@ -330,7 +339,7 @@ export default function PricingPage() {
                 ))}
               </ul>
               <div className="lg:w-44 shrink-0">
-                <Link href="/signup">
+                <Link href="/signup?plan=cloud">
                   <Button className="w-full bg-sky-600 hover:bg-sky-500 text-white font-semibold">
                     Get Started
                     <ArrowRight className="ml-2 h-4 w-4" />

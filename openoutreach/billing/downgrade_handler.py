@@ -11,18 +11,11 @@ from openoutreach.mongodb.models_user import User
 logger = logging.getLogger(__name__)
 
 
-def handle_plan_downgrade(user: User, new_limit: int) -> dict[str, int]:
-    """
-    Deactivate excess LinkedIn profiles when user downgrades plan.
-    Deactivates oldest profiles first to minimize disruption.
-    Sets is_active=False to prevent daemon execution.
+def pause_excess_linkedin_profiles(user_id: str, new_limit: int) -> dict[str, int]:
+    """Pause LinkedIn profiles above the account limit.
 
-    Args:
-        user: The user object
-        new_limit: New LinkedIn account limit
-
-    Returns:
-        {"deactivated": count, "error": False/True}
+    Pausing (not deleting) keeps data and cookies. A used proxy stays assigned
+    to its original LinkedIn account and is never recycled.
     """
     collection = get_mongodb_collection("linkedin_profiles")
     if collection is None:
@@ -31,28 +24,69 @@ def handle_plan_downgrade(user: User, new_limit: int) -> dict[str, int]:
 
     active_profiles = list(
         collection.find(
-            {"user_id": user._id, "is_active": True},
+            {"user_id": user_id, "is_active": True},
             sort=[("created_at", 1)],
         )
     )
 
     current_count = len(active_profiles)
     if current_count <= new_limit:
-        logger.info(f"User has {current_count} profiles, limit is {new_limit}, no deactivation needed")
+        logger.info(
+            "User has %s profiles, limit is %s, no pause needed",
+            current_count,
+            new_limit,
+        )
         return {"deactivated": 0, "error": False}
 
-    profiles_to_deactivate = active_profiles[new_limit:]
-    profile_ids = [p["_id"] for p in profiles_to_deactivate]
+    profiles_to_pause = active_profiles[new_limit:]
+    profile_ids = [p["_id"] for p in profiles_to_pause]
 
     result = collection.update_many(
         {"_id": {"$in": profile_ids}},
-        {"$set": {"is_active": False}},
+        {"$set": {"is_active": False, "active": False, "daemon_status": "seat_required"}},
     )
 
+    for profile in profiles_to_pause:
+        _notify_seat_removed(user_id, profile)
+
     count = result.modified_count
-    logger.info(f"Deactivated {count} LinkedIn profiles for user {user._id} due to plan downgrade")
+    logger.info("Paused %s LinkedIn profiles for user %s above the account limit", count, user_id)
 
     return {"deactivated": count, "error": False}
+
+
+def _notify_seat_removed(user_id: str, profile: dict) -> None:
+    """Tell the customer which profile paused after a seat reduction."""
+    try:
+        from openoutreach.mongodb.models_extended import Notification
+
+        username = profile.get("linkedin_username") or "LinkedIn account"
+        Notification(
+            recipient_id=user_id,
+            notification_type="campaign_error",
+            title="Cloud seat removed",
+            message=(
+                f"{username} was paused because your cloud seat limit changed. "
+                "Add a cloud seat or move the account to desktop execution to resume."
+            ),
+            data={"profile_id": str(profile.get("_id")), "requires_action": True},
+        ).save()
+    except Exception as e:
+        logger.debug("Could not create seat notification: %s", type(e).__name__)
+
+
+def handle_plan_downgrade(user: User, new_limit: int) -> dict[str, int]:
+    """
+    Pause excess LinkedIn profiles when user downgrades plan.
+
+    Args:
+        user: The user object
+        new_limit: New LinkedIn account limit
+
+    Returns:
+        {"paused": count, "error": False/True}
+    """
+    return pause_excess_linkedin_profiles(user._id, new_limit)
 
 
 def handle_wa_plan_downgrade(user: User, new_limit: int) -> dict[str, int]:

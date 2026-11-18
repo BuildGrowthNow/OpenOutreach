@@ -34,7 +34,7 @@ interface AuthState {
 
   // Actions
   initialize: () => Promise<void>
-  register: (email: string, password: string, fullName: string) => Promise<{ error: string | null }>
+  register: (email: string, password: string, fullName: string, intendedPlan?: string) => Promise<{ error: string | null }>
   login: (email: string, password: string) => Promise<{ error: string | null }>
   adoptAccessToken: (accessToken: string) => Promise<boolean>
   logout: () => Promise<void>
@@ -153,7 +153,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   /**
    * Register new user
    */
-  register: async (email: string, password: string, fullName: string) => {
+  register: async (email: string, password: string, fullName: string, intendedPlan?: string) => {
     set({ isLoading: true, error: null })
 
     try {
@@ -167,6 +167,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           email,
           password,
           full_name: fullName,
+          intended_plan: intendedPlan,
         }),
       })
 

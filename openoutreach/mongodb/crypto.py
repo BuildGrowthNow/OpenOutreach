@@ -200,16 +200,21 @@ def is_encrypted(text: str) -> bool:
         return False
 
     try:
-        # Encrypted text should be base64-encoded
-        # Try to decode and check if it's valid Fernet token format
+        # encrypt_text() stores base64(Fernet token). Decoding once yields the
+        # inner base64 token; decoding twice yields the Fernet version byte.
         decoded = base64.urlsafe_b64decode(text.encode("utf-8"))
+        if not decoded:
+            return False
 
-        # Fernet tokens start with specific version bytes
-        # Version 0x80 (128) is current
-        if len(decoded) > 0 and decoded[0] == 0x80:
-            return True
+        try:
+            inner = base64.urlsafe_b64decode(decoded)
+            if inner and inner[0] == 0x80:
+                return True
+        except Exception:
+            pass
 
-        return False
+        # Also accept a raw Fernet token stored without the outer base64 layer.
+        return decoded[0] == 0x80
     except Exception:
         return False
 

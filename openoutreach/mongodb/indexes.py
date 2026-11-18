@@ -174,6 +174,14 @@ def ensure_all_indexes():
             ({'plan_name': 1}, {'name': 'stripe_plan_name_idx', 'unique': True}),
         ]),
 
+        # Managed proxy inventory
+        ('proxies', [
+            ({'status': 1, 'country': 1}, {'name': 'proxy_status_country_idx'}),
+            ({'linkedin_profile_id': 1}, {'name': 'proxy_profile_idx', 'sparse': True}),
+            ({'host': 1, 'port': 1, 'username': 1}, {'name': 'proxy_endpoint_idx'}),
+            ({'assigned_user_id': 1}, {'name': 'proxy_user_idx', 'sparse': True}),
+        ]),
+
 
         ('webhook_events', [
             ({'stripe_event_id': 1}, {'name': 'webhook_event_id_idx', 'unique': True}),

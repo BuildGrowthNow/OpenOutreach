@@ -6,9 +6,10 @@ import Link from "next/link"
 import { useAuthStore } from "@/lib/authStoreV2"
 import { Logo } from "@/components/ui/logo"
 
-export function RegisterFormV2() {
+export function RegisterFormV2({ intendedPlan }: { intendedPlan?: string }) {
   const router = useRouter()
   const { register, isLoading, error, clearError } = useAuthStore()
+  const isCloudIntent = intendedPlan === "cloud"
 
   const [fullName, setFullName] = useState("")
   const [email, setEmail] = useState("")
@@ -56,7 +57,7 @@ export function RegisterFormV2() {
     }
 
     // Attempt registration
-    const result = await register(email, password, fullName)
+    const result = await register(email, password, fullName, intendedPlan)
 
     if (result.error) {
       setLocalError(result.error)
@@ -85,8 +86,14 @@ export function RegisterFormV2() {
             We've sent a verification link to <strong className="text-foreground">{email}</strong>
           </p>
           <p className="text-sm text-zinc-400">
-            Click the link in your email to verify your account and start your trial.
+            Click the link in your email to verify your account
+            {isCloudIntent ? " and continue to Cloud checkout." : " and start your trial."}
           </p>
+          {isCloudIntent ? (
+            <p className="text-xs text-zinc-500">
+              Cloud requires a paid subscription. There is no Cloud trial.
+            </p>
+          ) : null}
           <div className="pt-4">
             <Link
               href="/login"

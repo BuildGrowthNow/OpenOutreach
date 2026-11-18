@@ -14,6 +14,7 @@ const get = <T>(path: string, params?: Record<string, string>) => {
   return apiClient.get<T>(url);
 };
 const post = <T>(path: string, data?: unknown) => apiClient.post<T>(stripApi(path), data);
+const put = <T>(path: string, data?: unknown) => apiClient.put<T>(stripApi(path), data);
 const patch = <T>(path: string, data?: unknown) => apiClient.patch<T>(stripApi(path), data);
 const del = <T>(path: string) => apiClient.delete<T>(stripApi(path));
 
@@ -882,6 +883,7 @@ export interface LinkedInCredentials {
   executionMode?: "desktop" | "cloud";
   linkedinProfileUsername?: string | null;
   daemonIp?: string | null;
+  hasProxy?: boolean;
 }
 
 export interface LinkedInCredentialsHealth {
@@ -935,6 +937,9 @@ export interface CreateLinkedInCredentialsData {
   username?: string;
   linkedin_profile_id?: number | null;
   execution_mode?: "desktop" | "cloud";
+  proxy_region_country?: string;
+  proxy_region_subdivision?: string;
+  proxy_region_city?: string;
 }
 
 export async function createLinkedInCredentials(
@@ -1210,19 +1215,73 @@ export interface ProxyConfig {
   proxyUsername: string | null;
   proxyPassword: string | null;
   hasProxy: boolean;
+  proxyMode?: "none" | "managed" | "byo";
+  proxyId?: string | null;
+  proxyRegionCountry?: string | null;
+  proxyRegionSubdivision?: string | null;
+  proxyRegionCity?: string | null;
 }
 
 export interface ProxyTestResult {
   success: boolean;
   message: string;
   statusCode?: number;
+  ip?: string | null;
+  latencyMs?: number;
   error?: string;
+}
+
+interface ProxyConfigRaw {
+  profile_id: string;
+  proxy_server: string | null;
+  proxy_username: string | null;
+  proxy_password: string | null;
+  has_proxy: boolean;
+  proxy_mode?: "none" | "managed" | "byo";
+  proxy_id?: string | null;
+  proxy_region_country?: string | null;
+  proxy_region_subdivision?: string | null;
+  proxy_region_city?: string | null;
 }
 
 export async function getProxyConfig(
   profileId: string,
 ): Promise<ApiResponse<ProxyConfig>> {
-  return get(`/api/linkedin-profiles/${profileId}/proxy`);
+  const response = await get<ProxyConfigRaw>(
+    `/api/linkedin-profiles/${profileId}/proxy`,
+  );
+  if (response.data) {
+    return {
+      ...response,
+      data: {
+        profileId: response.data.profile_id,
+        proxyServer: response.data.proxy_server,
+        proxyUsername: response.data.proxy_username,
+        proxyPassword: response.data.proxy_password,
+        hasProxy: response.data.has_proxy,
+        proxyMode: response.data.proxy_mode,
+        proxyId: response.data.proxy_id,
+        proxyRegionCountry: response.data.proxy_region_country,
+        proxyRegionSubdivision: response.data.proxy_region_subdivision,
+        proxyRegionCity: response.data.proxy_region_city,
+      },
+    };
+  }
+  return response as unknown as ApiResponse<ProxyConfig>;
+}
+
+interface ProxyUpdateRaw {
+  success: boolean;
+  has_proxy: boolean;
+  proxy_server: string | null;
+  proxy_username: string | null;
+}
+
+interface ProxyUpdateResult {
+  success: boolean;
+  hasProxy: boolean;
+  proxyServer: string | null;
+  proxyUsername: string | null;
 }
 
 export async function updateProxyConfig(
@@ -1230,12 +1289,36 @@ export async function updateProxyConfig(
   proxyServer: string | null,
   proxyUsername?: string | null,
   proxyPassword?: string | null,
-): Promise<ApiResponse<{ success: boolean }>> {
-  return patch(`/api/linkedin-profiles/${profileId}`, {
-    proxy_server: proxyServer,
-    proxy_username: proxyUsername,
-    proxy_password: proxyPassword,
-  });
+): Promise<ApiResponse<ProxyUpdateResult>> {
+  const response = await put<ProxyUpdateRaw>(
+    `/api/linkedin-profiles/${profileId}/proxy`,
+    {
+      proxy_server: proxyServer,
+      proxy_username: proxyUsername,
+      proxy_password: proxyPassword,
+    },
+  );
+  if (response.data) {
+    return {
+      ...response,
+      data: {
+        success: response.data.success,
+        hasProxy: response.data.has_proxy,
+        proxyServer: response.data.proxy_server,
+        proxyUsername: response.data.proxy_username,
+      },
+    };
+  }
+  return response as unknown as ApiResponse<ProxyUpdateResult>;
+}
+
+interface ProxyTestResultRaw {
+  success: boolean;
+  message: string;
+  status_code?: number;
+  ip?: string | null;
+  latency_ms?: number;
+  error?: string;
 }
 
 export async function testProxy(
@@ -1244,11 +1327,28 @@ export async function testProxy(
   proxyUsername?: string | null,
   proxyPassword?: string | null,
 ): Promise<ApiResponse<ProxyTestResult>> {
-  return post(`/api/linkedin-profiles/${profileId}/proxy/test`, {
-    proxy_server: proxyServer,
-    proxy_username: proxyUsername,
-    proxy_password: proxyPassword,
-  });
+  const response = await post<ProxyTestResultRaw>(
+    `/api/linkedin-profiles/${profileId}/proxy/test`,
+    {
+      proxy_server: proxyServer,
+      proxy_username: proxyUsername,
+      proxy_password: proxyPassword,
+    },
+  );
+  if (response.data) {
+    return {
+      ...response,
+      data: {
+        success: response.data.success,
+        message: response.data.message,
+        statusCode: response.data.status_code,
+        ip: response.data.ip,
+        latencyMs: response.data.latency_ms,
+        error: response.data.error,
+      },
+    };
+  }
+  return response as unknown as ApiResponse<ProxyTestResult>;
 }
 
 // Campaign Templates API

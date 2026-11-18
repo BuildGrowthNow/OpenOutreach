@@ -29,6 +29,13 @@ from openoutreach.mongodb.models_user import User
 from openoutreach.linkedin.models import LinkedInProfile
 from openoutreach.billing.credential_validator import LinkedInCredentialValidator
 from openoutreach.billing.enforcement import PlanEnforcer
+from openoutreach.proxies import (
+    ProxyError,
+    ProxyUnavailableError,
+    assign_proxy_to_profile,
+    find_available_proxy,
+    normalize_region,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -77,6 +84,7 @@ def _build_credential_response(
         executionMode=profile.execution_mode if profile else "desktop",
         linkedinProfileUsername=profile.linkedin_username if profile else None,
         daemonIp=getattr(profile, "daemon_ip", None) if profile else None,
+        hasProxy=bool(getattr(profile, "proxy_server", None)) if profile else False,
         logs=logs,
     )
 
@@ -220,6 +228,20 @@ async def create_credential(
         if not can_create:
             raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail=error_msg)
 
+        region: Optional[tuple[str, Optional[str], Optional[str]]] = None
+        if execution_mode == "cloud":
+            try:
+                region = normalize_region(
+                    data.proxy_region_country,
+                    data.proxy_region_subdivision,
+                    data.proxy_region_city,
+                )
+            except ValueError as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=str(exc),
+                )
+
         is_valid, error_msg = LinkedInCredentialValidator.validate_credential_for_user(
             user_id, data.email
         )
@@ -232,6 +254,7 @@ async def create_credential(
 
         # Get or create LinkedIn profile
         profile = None
+        created_profile = False
         if data.linkedin_profile_id:
             profile = LinkedInProfile.get(data.linkedin_profile_id)
             if not profile:
@@ -251,7 +274,32 @@ async def create_credential(
                 active=True,
                 execution_mode=execution_mode,
             )
+            if execution_mode == "cloud" and region:
+                profile.proxy_mode = "managed"
+                profile.proxy_region_country = region[0]
+                profile.proxy_region_subdivision = region[1]
+                profile.proxy_region_city = region[2]
             profile.save()
+            created_profile = True
+
+        needs_proxy = execution_mode == "cloud" and not profile.proxy_server
+        proxy_candidate = None
+        if needs_proxy and region:
+            proxy_candidate = find_available_proxy(region[0], region[1], region[2])
+            if not proxy_candidate:
+                if created_profile:
+                    profiles_collection = get_mongodb_collection("linkedin_profiles")
+                    if profiles_collection is not None:
+                        profiles_collection.delete_one(
+                            {"_id": profile._id, "user_id": user_id}
+                        )
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=(
+                        f"No managed proxy is available for {region[0]}. "
+                        "Contact support so we can add capacity for this region."
+                    ),
+                )
 
         # Create credential
         credential = LinkedInCredentials(
@@ -275,7 +323,45 @@ async def create_credential(
         profile.linkedin_username = data.email
         profile.linkedin_password = data.password
         profile.execution_mode = execution_mode
-        profile.save(update_fields=["linkedin_username", "linkedin_password", "execution_mode"])
+        profile_fields = ["linkedin_username", "linkedin_password", "execution_mode"]
+        if execution_mode == "cloud" and region:
+            profile.proxy_mode = "managed"
+            profile.proxy_region_country = region[0]
+            profile.proxy_region_subdivision = region[1]
+            profile.proxy_region_city = region[2]
+            profile_fields.extend(
+                [
+                    "proxy_mode",
+                    "proxy_region_country",
+                    "proxy_region_subdivision",
+                    "proxy_region_city",
+                ]
+            )
+        profile.save(update_fields=profile_fields)
+
+        # Assign a managed proxy before verification can start.
+        if needs_proxy and proxy_candidate:
+            try:
+                assign_proxy_to_profile(
+                    proxy_candidate._id,
+                    profile._id,
+                    user_id,
+                    region=region,
+                )
+            except (ProxyUnavailableError, ProxyError) as exc:
+                LinkedInCredentials.delete(credential._id)
+                if created_profile:
+                    profiles_collection = get_mongodb_collection("linkedin_profiles")
+                    if profiles_collection is not None:
+                        profiles_collection.delete_one(
+                            {"_id": profile._id, "user_id": user_id}
+                        )
+                logger.warning("Proxy assignment failed; exception_type=%s", type(exc).__name__)
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=str(exc),
+                )
+            profile.refresh_from_db()
 
         # Log creation
         log_entry = LinkedInCredentialLog(
@@ -515,6 +601,9 @@ async def delete_credential(
                     profiles_col = get_mongodb_collection("linkedin_profiles")
                     if profiles_col is not None:
                         profiles_col.delete_one({"_id": profile_id_str})
+                    from openoutreach.proxies.service import retire_proxy_for_profile
+
+                    retire_proxy_for_profile(profile_id_str)
 
         # Log deletion
         log_entry = LinkedInCredentialLog(
@@ -619,6 +708,15 @@ async def verify_credential(
             proxy_server = profile.proxy_server
             proxy_username = profile.proxy_username
             proxy_password = profile.proxy_password
+
+            if profile.execution_mode == "cloud" and not proxy_server:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=(
+                        "Cloud execution requires a managed proxy. "
+                        "Assign a proxy before verifying this account."
+                    ),
+                )
 
             # Get VNC display for this profile (web daemon only)
             try:
@@ -752,6 +850,8 @@ async def verify_credential(
         finally:
             session.close()
 
+    except HTTPException:
+        raise
     except IllegalPageTransition as e:
         # Challenge/verification detected
         logger.warning("Verification requires challenge; exception_type=%s", type(e).__name__)

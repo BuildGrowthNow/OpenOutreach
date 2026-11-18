@@ -17,6 +17,7 @@ import {
 } from "@/lib/api/dashboard";
 import { useToast } from "@/components/ui/use-toast";
 import LinkedInCredentialForm from "./linkedin-credential-form";
+import { ProxyConfigForm } from "./proxy-config-form";
 import VncViewer from "./vnc-viewer";
 import {
   Dialog,
@@ -134,6 +135,7 @@ export default function LinkedInCredentialCard({
   const [isLoadingHealth, setIsLoadingHealth] = useState(false);
   const [showChallengeModal, setShowChallengeModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showProxyDialog, setShowProxyDialog] = useState(false);
   const { toast } = useToast();
 
   const healthStatus: HealthStatusWithDetails =
@@ -391,6 +393,25 @@ export default function LinkedInCredentialCard({
             </div>
           ) : null}
 
+          {credential.executionMode === "cloud" &&
+          credential.hasProxy === false ? (
+            <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="mt-0.5 h-4 w-4 text-amber-400" />
+                <div className="min-w-0 space-y-1">
+                  <div className="text-sm font-semibold text-amber-300">
+                    No proxy configured
+                  </div>
+                  <p className="text-sm text-amber-200/80">
+                    Cloud execution requires a managed proxy. This account will
+                    be paused instead of using the server IP. Open Proxy and add
+                    a proxy before starting a campaign.
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
           {credential.status === "invalid" ||
           credential.status === "locked" ||
           credential.status === "expired" ? (
@@ -485,6 +506,17 @@ export default function LinkedInCredentialCard({
               <Icons.FileText className="mr-2 h-3 w-3" />
               {isLoadingLogs ? "Loading..." : "View Logs"}
             </Button>
+
+            {credential.executionMode === "cloud" && credential.linkedinProfileId ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowProxyDialog(true)}
+              >
+                <Shield className="mr-2 h-3 w-3" />
+                Proxy
+              </Button>
+            ) : null}
 
             <Button
               variant="destructive"
@@ -738,6 +770,25 @@ export default function LinkedInCredentialCard({
               </div>
             </DialogContent>
           )}
+        </Dialog>
+
+        <Dialog open={showProxyDialog} onOpenChange={setShowProxyDialog}>
+          <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto border border-zinc-800 bg-zinc-950 text-zinc-100 shadow-2xl">
+            <DialogHeader>
+              <DialogTitle>Proxy for {displayUsername}</DialogTitle>
+              <DialogDescription>
+                Cloud execution uses this proxy instead of the server IP. Use a
+                unique proxy or sticky session for every LinkedIn account.
+              </DialogDescription>
+            </DialogHeader>
+            {credential.linkedinProfileId ? (
+              <ProxyConfigForm
+                profileId={String(credential.linkedinProfileId)}
+                embedded
+                onConfigUpdate={onRefresh}
+              />
+            ) : null}
+          </DialogContent>
         </Dialog>
       </CardContent>
     </Card>

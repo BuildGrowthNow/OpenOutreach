@@ -85,7 +85,85 @@ BROWSER_PROXY_PASSWORD = "your-password"
 **With resource blocking enabled (default)  
 ***IPRoyal ($1.75/GB) to Smartproxy ($8.50/GB)
 
+## Massive Residential Proxies (Cloud Plans)
+
+Massive residential proxies are configured **per LinkedIn profile**, not
+globally. Each cloud account needs its own sticky session so LinkedIn always
+sees the same egress IP for that account.
+
+### Endpoint and credentials
+
+| Protocol | Proxy URL |
+|----------|-----------|
+| HTTP | `http://network.joinmassive.com:65534` |
+| HTTPS | `https://network.joinmassive.com:65535` |
+| SOCKS5 | `socks5h://network.joinmassive.com:65533` |
+
+- **Username**: your Massive proxy username plus sticky-session parameters.
+- **Password**: your Massive API key.
+- Use HTTP (`65534`) with the app. Playwright's proxy option expects an HTTP or
+  SOCKS5 endpoint; the HTTPS port is useful for `curl` checks.
+
+### One sticky session per account
+
+Generate one unique session ID per LinkedIn account and reuse it every time
+that account runs:
+
+```text
+Username: {MASSIVE_USERNAME}-session-{ACCOUNT_ID}-sessionttl-1440-sessionmode-flex-sessionerr-50-country-{CC}
+Password: {MASSIVE_API_KEY}
+```
+
+Example for two accounts:
+
+```text
+acme-session-li-001-sessionttl-1440-sessionmode-flex-sessionerr-50-country-US
+acme-session-li-002-sessionttl-1440-sessionmode-flex-sessionerr-50-country-US
+```
+
+Rules:
+
+- **Never reuse a session ID across accounts.** One session (one egress IP) per
+  LinkedIn account.
+- Keep every parameter identical on every request. `country` and `city` are part
+  of the session identity; changing them creates a different session.
+- `sessionttl-1440` is 24 hours, the maximum. TTL is fixed from session creation
+  and is **not extended by requests**, so a long-running browser gets a new
+  egress node at most once per day.
+- `sessionmode-flex-sessionerr-50` keeps the same node through transient errors.
+  The default (`strict`) rotates the IP on the first error.
+- `country-{CC}` should match the LinkedIn account's normal country (for example
+  `US`). Without it, Massive may pick any country.
+- Sticky sessions are best-effort, not a dedicated static IP. If you need a fixed
+  IP per account, use Massive ISP proxies or a mobile proxy instead.
+
+### Test from the server
+
+Run this twice; both requests should return the same IP:
+
+```bash
+curl -x http://network.joinmassive.com:65534 \
+  -U 'acme-session-li-001-sessionttl-1440-sessionmode-flex-sessionerr-50-country-US:API_KEY' \
+  https://api.ipify.org
+```
+
+Run it again with the second session and confirm it returns a different IP.
+
+In the app, open **Settings → LinkedIn → the account → Proxy → Test Connection**.
+The test runs from the API server (the same egress path as the cloud browser)
+and shows the egress IP, so you can confirm each account has its own.
+
 ## Configuration
+
+### Per-profile settings (recommended for cloud)
+
+Open **Settings → LinkedIn → the account card → Proxy** and enter the proxy URL,
+username, and password for that account. The cloud daemon reads this per-profile
+configuration when it launches the account's browser.
+
+Do **not** set a global `BROWSER_PROXY_*` for multi-account cloud: it gives every
+account the same IP. The global settings below are only a fallback for
+single-account/self-hosted deployments.
 
 ### Option 1: Environment Variables (Recommended)
 
@@ -261,6 +339,28 @@ monthly_cost = optimized_gb * cost_per_gb
 - Rotate proxy credentials regularly
 - Monitor for IP leaks: https://ipleak.net
 - Test proxy quality: https://whoer.net
+
+### Encryption at rest
+
+Proxy passwords are encrypted with the same Fernet key as LinkedIn passwords
+and cookies (`COOKIE_ENCRYPTION_KEY`, falling back to `SECRET_KEY`). The
+database stores `proxy_password_encrypted`; the plaintext `proxy_password`
+column is cleared on write.
+
+Deploy the application code first (it reads both formats), then upgrade existing
+plaintext values with:
+
+```bash
+# Report what would change
+python -m openoutreach.migrations.encrypt_proxy_passwords
+
+# Apply (run after a backup / during a maintenance window)
+python -m openoutreach.migrations.encrypt_proxy_passwords --apply
+```
+
+The migration is idempotent, never logs credential values, and leaves the
+profile readable if it is interrupted (the application still supports the
+legacy plaintext column until the migration completes).
 
 ## References
 

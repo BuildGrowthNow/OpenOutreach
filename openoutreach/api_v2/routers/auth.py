@@ -152,6 +152,7 @@ async def register(data: RegisterRequest, request: Request):
         is_active=True,
         subscription_status="none",
         email_verified=False,
+        intended_plan=data.intended_plan,
         email_verification_token=verification_token,
         email_verification_expires=datetime.now(tz.utc) + timedelta(hours=24),
         signup_ip=signup_ip,
@@ -480,14 +481,22 @@ async def verify_email(body: EmailVerifyRequest):
             )
 
         if user.email_verified:
-            return {"status": "success", "message": "Email already verified"}
+            return {
+                "status": "success",
+                "message": "Email already verified",
+                "intended_plan": user.intended_plan,
+                "next_step": "/settings/plan?plan=cloud" if user.intended_plan == "cloud" else None,
+            }
 
         user.email_verified = True
         user.email_verification_token = None
         user.email_verification_expires = None
 
-        # Auto-start trial so verified users can use the app immediately
-        if user.subscription_status == "none":
+        cloud_intent = user.intended_plan == "cloud"
+
+        # Auto-start the Starter trial for desktop intent only. Cloud intent
+        # must go straight to paid checkout; there is no cloud trial.
+        if user.subscription_status == "none" and not cloud_intent:
             from openoutreach.billing.config import get_trial_duration_days
             from openoutreach.billing.plans import get_plan
             trial_days = get_trial_duration_days()
@@ -504,7 +513,12 @@ async def verify_email(body: EmailVerifyRequest):
 
         logger.info("Email verified for user")
 
-        return {"status": "success", "message": "Email verified successfully"}
+        return {
+            "status": "success",
+            "message": "Email verified successfully",
+            "intended_plan": user.intended_plan,
+            "next_step": "/settings/plan?plan=cloud" if cloud_intent else None,
+        }
 
     except JWTError as e:
         logger.warning("Email verification failed; exception_type=%s", type(e).__name__)

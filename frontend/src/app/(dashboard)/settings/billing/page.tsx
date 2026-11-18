@@ -23,6 +23,7 @@ import {
   getUsage,
   isLifetimeDealActive,
   createPortalSession,
+  updateCloudAddon,
   Invoice,
   Plan,
   BillingStatus,
@@ -30,6 +31,9 @@ import {
 import { BillingStatusCard } from "@/components/billing/billing-status";
 import { TrialBanner } from "@/components/billing/trial-banner";
 import { UsageIndicator } from "@/components/billing/usage-indicator";
+import { useBilling } from "@/lib/contexts/billing-context";
+import { Input } from "@/components/ui/input";
+import { Minus, Plus } from "lucide-react";
 import { format } from "date-fns";
 
 function BillingLoadingSkeleton() {
@@ -55,6 +59,10 @@ export default function BillingPage() {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isPortalLoading, setIsPortalLoading] = useState(false);
+  const [seatQuantity, setSeatQuantity] = useState(0);
+  const [isSeatLoading, setIsSeatLoading] = useState(false);
+  const [seatError, setSeatError] = useState<string | null>(null);
+  const { refetch: refetchBilling } = useBilling();
 
   const loadData = useCallback(async () => {
     try {
@@ -70,6 +78,7 @@ export default function BillingPage() {
       ]);
 
       if (statusRes.data) setBillingStatus(statusRes.data);
+      if (statusRes.data) setSeatQuantity(statusRes.data.cloud_profiles ?? 0);
       if (plansRes.data) setPlans(plansRes.data);
       if (invoicesRes.data) setInvoices(invoicesRes.data);
       if (dealRes.data) setLifetimeDealActive(dealRes.data.active);
@@ -115,6 +124,35 @@ export default function BillingPage() {
 
   const handleUpgradeClick = () => {
     router.push("/settings/plan");
+  };
+
+  const handleUpdateSeats = async () => {
+    if (!billingStatus) return;
+    if (seatQuantity === billingStatus.cloud_profiles) return;
+    if (seatQuantity < billingStatus.cloud_profiles) {
+      const confirmed = window.confirm(
+        "Removing cloud seats pauses any LinkedIn accounts above the new limit. Continue?"
+      );
+      if (!confirmed) return;
+    }
+    try {
+      setIsSeatLoading(true);
+      setSeatError(null);
+      const response = await updateCloudAddon(seatQuantity);
+      if (response.error) {
+        throw new Error(response.error);
+      }
+      await loadData();
+      await refetchBilling();
+      setSuccessMessage("Cloud seats updated.");
+      setTimeout(() => setSuccessMessage(null), 5000);
+    } catch (err) {
+      setSeatError(
+        err instanceof Error ? err.message : "Failed to update cloud seats"
+      );
+    } finally {
+      setIsSeatLoading(false);
+    }
   };
 
   if (loading) {
@@ -214,6 +252,76 @@ export default function BillingPage() {
               used={usage.campaigns_used}
               limit={billingStatus.campaign_limit}
             />
+          </CardContent>
+        </Card>
+      )}
+
+      {billingStatus?.plan === "cloud" && billingStatus.cloud_seats_enabled && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Cloud seats</CardTitle>
+            <CardDescription>
+              Your Cloud plan includes 1 LinkedIn account and 1 managed proxy.
+              Add extra cloud seats to run more accounts on managed infrastructure.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="text-sm text-muted-foreground">
+                {billingStatus.cloud_seat_limit} cloud seat
+                {billingStatus.cloud_seat_limit === 1 ? "" : "s"} total
+                {" · "}
+                {billingStatus.cloud_profiles} extra
+              </div>
+              <div className="ml-auto flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setSeatQuantity((value) => Math.max(0, value - 1))}
+                  disabled={isSeatLoading || seatQuantity <= 0}
+                  aria-label="Remove a cloud seat"
+                >
+                  <Minus className="h-4 w-4" />
+                </Button>
+                <Input
+                  type="number"
+                  min={0}
+                  value={seatQuantity}
+                  onChange={(event) =>
+                    setSeatQuantity(Math.max(0, Number(event.target.value) || 0))
+                  }
+                  className="w-20 text-center"
+                  aria-label="Extra cloud seats"
+                />
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setSeatQuantity((value) => value + 1)}
+                  disabled={isSeatLoading}
+                  aria-label="Add a cloud seat"
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+                <Button
+                  onClick={handleUpdateSeats}
+                  disabled={
+                    isSeatLoading || seatQuantity === billingStatus.cloud_profiles
+                  }
+                >
+                  {isSeatLoading ? "Updating..." : "Update seats"}
+                </Button>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Each extra seat is $299/mo and adds one LinkedIn account plus one
+              managed proxy. Removing a seat pauses accounts above the new limit.
+            </p>
+            {seatError && (
+              <Alert variant="destructive">
+                <Icons.AlertCircle className="h-4 w-4" />
+                <AlertDescription>{seatError}</AlertDescription>
+              </Alert>
+            )}
           </CardContent>
         </Card>
       )}

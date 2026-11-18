@@ -21,7 +21,13 @@ from openoutreach.billing.stripe_service import (
     create_lifetime_checkout_session,
 )
 from openoutreach.billing.models import StripePlan
-from openoutreach.billing.plans import get_plan, get_all_plans
+from openoutreach.billing.plans import (
+    apply_plan_entitlements,
+    effective_cloud_seat_limit,
+    effective_linkedin_account_limit,
+    get_plan,
+    get_all_plans,
+)
 from openoutreach.billing.config import get_site_config, is_lifetime_deal_active
 from openoutreach.billing.webhooks import process_webhook_event
 from openoutreach.billing.enforcement import PlanEnforcer
@@ -76,6 +82,8 @@ class BillingStatusResponse(BaseModel):
     whatsapp_account_limit: int
     campaign_limit: Optional[int]
     cloud_profiles: int
+    cloud_seat_limit: int
+    cloud_seats_enabled: bool
     user_status: str
     admin_notes: Optional[str] = None
     stripe_subscription_id: Optional[str] = None
@@ -210,10 +218,16 @@ async def billing_status(
         billing_period=user.billing_period,
         trial_ends_at=user.trial_ends_at.isoformat() if user.trial_ends_at else None,
         current_period_end=user.current_period_end.isoformat() if user.current_period_end else None,
-        linkedin_account_limit=user.linkedin_account_limit,
+        linkedin_account_limit=effective_linkedin_account_limit(
+            user.plan,
+            user.cloud_profiles,
+            user.linkedin_account_limit,
+        ),
         whatsapp_account_limit=user.whatsapp_account_limit,
         campaign_limit=user.campaign_limit,
         cloud_profiles=user.cloud_profiles,
+        cloud_seat_limit=effective_cloud_seat_limit(user.plan, user.cloud_profiles),
+        cloud_seats_enabled=bool(getattr(settings, "CLOUD_SEATS_ENABLED", True)),
         user_status=user.status,
         admin_notes=user.admin_notes,
         stripe_subscription_id=user.stripe_subscription_id,
@@ -270,7 +284,11 @@ async def get_current_usage(
 
         return {
             "linkedin_accounts_used": linkedin_accounts_used,
-            "linkedin_accounts_limit": user.linkedin_account_limit,
+            "linkedin_accounts_limit": effective_linkedin_account_limit(
+                user.plan,
+                user.cloud_profiles,
+                user.linkedin_account_limit,
+            ),
             "whatsapp_accounts_used": whatsapp_accounts_used,
             "whatsapp_accounts_limit": user.whatsapp_account_limit,
             "campaigns_used": campaigns_used,
@@ -280,7 +298,11 @@ async def get_current_usage(
         logger.error("Failed to get usage; exception_type=%s", type(e).__name__)
         return {
             "linkedin_accounts_used": 0,
-            "linkedin_accounts_limit": user.linkedin_account_limit,
+            "linkedin_accounts_limit": effective_linkedin_account_limit(
+                user.plan,
+                user.cloud_profiles,
+                user.linkedin_account_limit,
+            ),
             "whatsapp_accounts_used": 0,
             "whatsapp_accounts_limit": user.whatsapp_account_limit,
             "campaigns_used": 0,
@@ -316,6 +338,11 @@ async def create_checkout(
     plan = get_plan(request.plan_name)
     if not plan:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid plan")
+    if request.plan_name == "cloud_addon":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cloud add-on seats are managed separately from plans",
+        )
 
     if request.plan_name == "lifetime":
         if request.billing_period != "lifetime":
@@ -383,7 +410,8 @@ async def create_checkout(
         else:
             config = get_site_config()
             trial_days = None
-            if user.subscription_status == "none":
+            # Cloud requires a paid subscription and never starts a trial.
+            if user.subscription_status == "none" and request.plan_name != "cloud":
                 # Base trial duration
                 trial_days = config.trial_duration_days
                 # Add referral extension if user was referred
@@ -491,6 +519,11 @@ async def change_plan(
     plan = get_plan(request.plan_name)
     if not plan:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid plan")
+    if request.plan_name == "cloud_addon":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cloud add-on seats are managed separately from plans",
+        )
 
     if request.billing_period not in ("monthly", "annual"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid billing period")
@@ -534,11 +567,9 @@ async def change_plan(
         old_wa_limit = user.whatsapp_account_limit
         user.plan = request.plan_name
         user.billing_period = request.billing_period
-        new_linkedin_limit = plan["max_linkedin_accounts"]
-        new_wa_limit = plan["max_whatsapp_accounts"]
-        user.linkedin_account_limit = new_linkedin_limit
-        user.whatsapp_account_limit = new_wa_limit
-        user.campaign_limit = plan["max_campaigns"]
+        apply_plan_entitlements(user)
+        new_linkedin_limit = user.linkedin_account_limit
+        new_wa_limit = user.whatsapp_account_limit
         user.save()
 
         if not is_upgrade and new_linkedin_limit < old_linkedin_limit:
@@ -616,8 +647,14 @@ async def update_cloud_addon(
                 proration_behavior="create_prorations",
             )
 
+        previous_cloud_profiles = user.cloud_profiles
         user.cloud_profiles = request.quantity
+        apply_plan_entitlements(user)
         user.save()
+
+        if user.cloud_profiles < previous_cloud_profiles:
+            handle_plan_downgrade(user, user.linkedin_account_limit)
+
         return {"cloud_profiles": user.cloud_profiles}
     except HTTPException:
         raise

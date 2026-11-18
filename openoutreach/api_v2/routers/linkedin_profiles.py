@@ -8,6 +8,7 @@ and checking profile health status.
 import json
 import logging
 from typing import Dict, List, Optional
+from urllib.parse import urlparse
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status, Body
@@ -18,9 +19,52 @@ from openoutreach.api_v2.schemas.linkedin import (
     LinkedInProfileResponse,
 )
 from openoutreach.mongodb.connection import get_mongodb_collection
+from openoutreach.mongodb.crypto import safe_decrypt, safe_encrypt
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+_ALLOWED_PROXY_SCHEMES = {"http", "https", "socks5", "socks5h"}
+
+
+def _normalize_proxy_server(proxy_server: str) -> str:
+    """Validate a proxy URL and default to HTTP when no scheme is supplied."""
+    value = (proxy_server or "").strip()
+    if not value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Proxy server URL is required",
+        )
+    if "://" not in value:
+        value = f"http://{value}"
+    parsed = urlparse(value)
+    if parsed.scheme.lower() not in _ALLOWED_PROXY_SCHEMES or not parsed.hostname:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Invalid proxy URL. Use http://host:port, https://host:port, "
+                "or socks5://host:port"
+            ),
+        )
+    return value
+
+
+def _encrypt_proxy_password(proxy_password: str) -> str:
+    """Encrypt a proxy password for storage, failing closed on crypto errors."""
+    try:
+        encrypted = safe_encrypt(proxy_password)
+    except Exception as e:
+        logger.error("Failed to encrypt proxy password; exception_type=%s", type(e).__name__)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to encrypt proxy credentials",
+        )
+    if not encrypted:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to encrypt proxy credentials",
+        )
+    return encrypted
 
 
 # Request/Response schemas
@@ -721,13 +765,17 @@ async def update_profile(
             updates["connect_daily_limit"] = connect_daily_limit
         if follow_up_daily_limit is not None:
             updates["follow_up_daily_limit"] = follow_up_daily_limit
-        # Proxy fields - support clearing with empty string
+        # Proxy fields - support clearing with empty string. The password is
+        # encrypted at rest; clear the legacy plaintext column on every write.
         if proxy_server is not None:
             updates["proxy_server"] = proxy_server if proxy_server else None
         if proxy_username is not None:
             updates["proxy_username"] = proxy_username if proxy_username else None
         if proxy_password is not None:
-            updates["proxy_password"] = proxy_password if proxy_password else None
+            updates["proxy_password"] = None
+            updates["proxy_password_encrypted"] = (
+                _encrypt_proxy_password(proxy_password) if proxy_password else None
+            )
 
         if not updates:
             raise HTTPException(
@@ -773,6 +821,109 @@ async def update_profile(
         )
 
 
+@router.put("/{profile_id}/proxy")
+async def update_proxy_config(
+    profile_id: str,
+    proxy_server: Optional[str] = Body(None),
+    proxy_username: Optional[str] = Body(None),
+    proxy_password: Optional[str] = Body(None),
+    user_id: str = Depends(get_current_user),
+):
+    """
+    Set or clear the proxy for one LinkedIn profile.
+
+    Each cloud-executed LinkedIn account should have its own proxy or sticky
+    session; the server daemon passes this configuration to Playwright when it
+    launches that profile's browser.
+
+    - Empty/null ``proxy_server`` clears the whole proxy configuration.
+    - An empty ``proxy_username`` clears the stored username.
+    - An empty ``proxy_password`` keeps the stored password, because the UI
+      never displays the existing secret.
+    """
+    collection = get_mongodb_collection("linkedin_profiles")
+    if collection is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="LinkedIn profiles database unavailable",
+        )
+
+    try:
+        profile_doc = collection.find_one({"_id": profile_id, "user_id": user_id})
+        if not profile_doc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Profile not found or access denied",
+            )
+
+        stored_proxy_id = profile_doc.get("proxy_id")
+        stored_proxy_mode = profile_doc.get("proxy_mode")
+
+        if not proxy_server or not proxy_server.strip():
+            updates: dict[str, Optional[str]] = {
+                "proxy_server": None,
+                "proxy_username": None,
+                "proxy_password": None,
+                "proxy_password_encrypted": None,
+                "proxy_id": None,
+                "proxy_mode": "none",
+            }
+            if stored_proxy_id:
+                from openoutreach.proxies.service import retire_proxy_for_profile
+
+                retire_proxy_for_profile(profile_id)
+        else:
+            normalized_server = _normalize_proxy_server(proxy_server)
+            unchanged_managed = bool(
+                stored_proxy_id
+                and profile_doc.get("proxy_server") == normalized_server
+            )
+            updates = {
+                "proxy_server": normalized_server,
+                "proxy_id": stored_proxy_id if unchanged_managed else None,
+                "proxy_mode": stored_proxy_mode if unchanged_managed else "byo",
+            }
+            if stored_proxy_id and not unchanged_managed:
+                from openoutreach.proxies.service import retire_proxy_for_profile
+
+                retire_proxy_for_profile(profile_id)
+            if proxy_username is not None:
+                updates["proxy_username"] = proxy_username.strip() or None
+            if proxy_password:
+                updates["proxy_password"] = None
+                updates["proxy_password_encrypted"] = _encrypt_proxy_password(
+                    proxy_password
+                )
+
+        collection.update_one(
+            {"_id": profile_id, "user_id": user_id},
+            {"$set": updates},
+        )
+
+        updated_doc = collection.find_one({"_id": profile_id, "user_id": user_id})
+        if not updated_doc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Profile not found after update",
+            )
+
+        return {
+            "success": True,
+            "has_proxy": bool(updated_doc.get("proxy_server")),
+            "proxy_server": updated_doc.get("proxy_server"),
+            "proxy_username": updated_doc.get("proxy_username"),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to update proxy config; exception_type=%s", type(e).__name__)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update proxy config",
+        )
+
+
 @router.post("/{profile_id}/proxy/test")
 async def test_proxy(
     profile_id: str,
@@ -803,63 +954,41 @@ async def test_proxy(
                 detail="Profile not found or access denied"
             )
 
-        # Test proxy connectivity
-        import httpx
+        # Test proxy connectivity. The neutral IP check is the primary signal;
+        # LinkedIn is a secondary check because it may block the request while
+        # the proxy itself is healthy.
+        stored_password = safe_decrypt(
+            profile_doc.get("proxy_password_encrypted")
+            or profile_doc.get("proxy_password")
+            or ""
+        )
+        if not proxy_password and stored_password:
+            stored_server = (profile_doc.get("proxy_server") or "").strip()
+            try:
+                same_server = bool(stored_server) and (
+                    _normalize_proxy_server(stored_server)
+                    == _normalize_proxy_server(proxy_server)
+                )
+            except HTTPException:
+                same_server = False
+            if same_server:
+                proxy_password = stored_password
 
-        proxy_url = proxy_server
-        if proxy_username and proxy_password:
-            # Inject auth into URL if provided
-            from urllib.parse import urlparse, urlunparse
-            parsed = urlparse(proxy_server)
-            netloc_with_auth = f"{proxy_username}:{proxy_password}@{parsed.hostname}"
-            if parsed.port:
-                netloc_with_auth += f":{parsed.port}"
-            proxy_url = urlunparse((
-                parsed.scheme,
-                netloc_with_auth,
-                parsed.path,
-                parsed.params,
-                parsed.query,
-                parsed.fragment
-            ))
+        from openoutreach.proxies.service import check_proxy_connection
 
-        try:
-            async with httpx.AsyncClient(proxy=proxy_url, timeout=10.0) as client:
-                # Test with a simple request to LinkedIn
-                response = await client.get("https://www.linkedin.com/")
-                if response.status_code in [200, 301, 302, 403]:
-                    # 403 is OK - it means proxy connected but LinkedIn blocked
-                    return {
-                        "success": True,
-                        "message": "Proxy connection successful",
-                        "status_code": response.status_code,
-                    }
-                else:
-                    return {
-                        "success": False,
-                        "message": f"Unexpected status code: {response.status_code}",
-                        "error": f"HTTP {response.status_code}",
-                    }
-        except httpx.ProxyError as e:
-            logger.warning("LinkedIn proxy test failed; exception_type=%s", type(e).__name__)
-            return {
-                "success": False,
-                "message": "Proxy connection failed",
-                "error": "Proxy connection failed",
-            }
-        except httpx.TimeoutException:
-            return {
-                "success": False,
-                "message": "Proxy connection timeout",
-                "error": "Request timed out after 10 seconds",
-            }
-        except Exception as e:
-            logger.error("LinkedIn proxy test failed; exception_type=%s", type(e).__name__)
-            return {
-                "success": False,
-                "message": "Proxy test failed",
-                "error": "Proxy test failed",
-            }
+        result = await check_proxy_connection(
+            _normalize_proxy_server(proxy_server),
+            proxy_username,
+            proxy_password,
+        )
+        return {
+            "success": result.get("success", False),
+            "message": result.get("message", "Proxy test failed"),
+            "ip": result.get("ip"),
+            "status_code": result.get("status_code"),
+            "latency_ms": result.get("latency_ms"),
+            "error": result.get("error"),
+        }
 
     except HTTPException:
         raise
@@ -899,14 +1028,22 @@ async def get_proxy_config(
 
         proxy_server = profile_doc.get("proxy_server")
         proxy_username = profile_doc.get("proxy_username")
-        proxy_password = profile_doc.get("proxy_password")
+        has_proxy_password = bool(
+            profile_doc.get("proxy_password_encrypted")
+            or profile_doc.get("proxy_password")
+        )
 
         return {
             "profile_id": profile_id,
             "proxy_server": proxy_server,
             "proxy_username": proxy_username,
-            "proxy_password": "********" if proxy_password else None,
+            "proxy_password": "********" if has_proxy_password else None,
             "has_proxy": proxy_server is not None,
+            "proxy_mode": profile_doc.get("proxy_mode", "none"),
+            "proxy_id": profile_doc.get("proxy_id"),
+            "proxy_region_country": profile_doc.get("proxy_region_country"),
+            "proxy_region_subdivision": profile_doc.get("proxy_region_subdivision"),
+            "proxy_region_city": profile_doc.get("proxy_region_city"),
         }
 
     except HTTPException:

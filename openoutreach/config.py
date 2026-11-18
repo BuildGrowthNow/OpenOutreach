@@ -54,6 +54,12 @@ class Settings(BaseSettings):
     DAEMON_V2_WHATSAPP_ENABLED: bool = False
     DAEMON_V2_EMAIL_ENABLED: bool = False
 
+    # =========================================================================
+    # Cloud seats and managed proxies
+    # =========================================================================
+    CLOUD_SEATS_ENABLED: bool = True
+    MANAGED_PROXIES_ENABLED: bool = True
+
     @model_validator(mode="after")
     def load_daemon_key_variants(self):
         for plain_name, encoded_name in (

@@ -36,6 +36,7 @@ from termcolor import colored
 
 from openoutreach.core.conf import CAMPAIGN_CONFIG
 from linkedin_cli.exceptions import AuthenticationError, CheckpointChallengeError
+from openoutreach.linkedin.exceptions import CloudProxyRequiredError
 
 from openoutreach.mongodb.models import Campaign, Task
 
@@ -303,6 +304,46 @@ def _notify_checkpoint_challenge(user_id: str, url: str) -> None:
         logger.debug("Could not create checkpoint notification: %s", type(e).__name__)
 
 
+def _pause_cloud_profile_for_missing_proxy(profile, user_id: str) -> None:
+    """Pause a cloud profile that has no proxy and alert the customer.
+
+    The daemon must never fall back to the server IP: LinkedIn links accounts
+    by IP, so a missing proxy is an account-safety incident.
+    """
+    from openoutreach.mongodb.connection import get_mongodb_collection
+
+    profile_id = str(profile.pk)
+    try:
+        collection = get_mongodb_collection("linkedin_profiles")
+        if collection is not None:
+            collection.update_one(
+                {"_id": profile_id},
+                {"$set": {
+                    "active": False,
+                    "is_active": False,
+                    "daemon_status": "proxy_required",
+                }},
+            )
+    except Exception as e:
+        logger.error("Failed to pause cloud profile without proxy; exception_type=%s", type(e).__name__)
+
+    logger.error("Cloud profile %s has no managed proxy; paused instead of using the server IP", profile_id)
+    try:
+        from openoutreach.mongodb.models_extended import Notification
+        Notification(
+            recipient_id=user_id,
+            notification_type="campaign_error",
+            title="Cloud profile paused: proxy required",
+            message=(
+                "This cloud LinkedIn account has no managed proxy. It was paused "
+                "instead of running on the server IP. Contact support to assign a proxy."
+            ),
+            data={"profile_id": profile_id, "requires_action": True},
+        ).save()
+    except Exception as e:
+        logger.debug("Could not create proxy notification: %s", type(e).__name__)
+
+
 # ── Heartbeat ──────────────────────────────────────────────────────────
 
 HEARTBEAT_INTERVAL = 300
@@ -548,6 +589,10 @@ class ProfileSession:
             logger.warning("Checkpoint for %s; challenge_url_present=%s", self.profile.linkedin_username, bool(exc.url))
             _notify_checkpoint_challenge(self.user_id, exc.url)
             self.pause(300)
+            return False
+        except CloudProxyRequiredError:
+            _pause_cloud_profile_for_missing_proxy(self.profile, self.user_id)
+            self.pause(3600)
             return False
         except AuthenticationError as exc:
             logger.error("Auth failed for %s: %s", self.profile.linkedin_username, type(exc).__name__)
@@ -806,6 +851,10 @@ def run_daemon():
                     _notify_checkpoint_challenge(ps.user_id, exc.url)
                     ps.close()
                     ps.pause(300)
+                except CloudProxyRequiredError:
+                    _pause_cloud_profile_for_missing_proxy(ps.profile, ps.user_id)
+                    ps.close()
+                    ps.pause(3600)
                 except Exception:
                     logger.exception("Re-auth failed for %s", ps.profile.linkedin_username)
                 task.mark_failed()
@@ -818,6 +867,12 @@ def run_daemon():
                     ps.profile.linkedin_username, type(e).__name__,
                 )
                 ps.pause(600)
+                continue
+            except CloudProxyRequiredError:
+                task.mark_failed()
+                _pause_cloud_profile_for_missing_proxy(ps.profile, ps.user_id)
+                ps.close()
+                ps.pause(3600)
                 continue
             except Exception:
                 import traceback

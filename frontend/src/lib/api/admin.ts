@@ -267,6 +267,60 @@ export interface UserUpdateRequest {
   full_name?: string
 }
 
+export interface AdminProxy {
+  id: string
+  provider: string
+  label: string
+  protocol: string
+  host: string
+  port: number
+  username: string | null
+  has_username: boolean
+  has_password: boolean
+  country: string
+  subdivision: string | null
+  city: string | null
+  region_mode: string
+  kind: string
+  device_type: string
+  status: string
+  linkedin_profile_id: string | null
+  assigned_user_id: string | null
+  assigned_at: string | null
+  last_tested_at: string | null
+  last_test_ip: string | null
+  last_test_country: string | null
+  last_test_latency_ms: number | null
+  last_error: string | null
+  created_at: string | null
+  updated_at: string | null
+}
+
+export interface AdminProxyListResponse {
+  total: number
+  skip: number
+  limit: number
+  proxies: AdminProxy[]
+}
+
+export interface AdminProxyImportResponse {
+  created: number
+  skipped: number
+  failed: number
+  errors: { line: number; error: string }[]
+  proxies: AdminProxy[]
+}
+
+export interface AdminProxyTestResponse {
+  success: boolean
+  message: string
+  ip?: string | null
+  country?: string | null
+  status_code?: number | null
+  latency_ms?: number | null
+  error?: string
+}
+
 // ──────────────────────────────────────────────────────────────────────────────
 // API functions
 // ──────────────────────────────────────────────────────────────────────────────
@@ -300,6 +354,40 @@ export const adminApi = {
 
   setPlan: (userId: string, body: SetPlanRequest) =>
     post<AdminUserDetail>(`/api/admin/users/${userId}/set-plan`, body),
+
+  getProxies: (params: {
+    status?: string
+    country?: string
+    provider?: string
+    skip?: number
+    limit?: number
+  }) =>
+    get<AdminProxyListResponse>('/api/admin/proxies', {
+      status: params.status,
+      country: params.country,
+      provider: params.provider,
+      skip: params.skip?.toString(),
+      limit: params.limit?.toString(),
+    }),
+
+  importProxies: (body: {
+    text: string
+    provider?: string
+    kind?: string
+    default_country?: string
+  }) => post<AdminProxyImportResponse>('/api/admin/proxies/import', body),
+
+  testProxy: (proxyId: string) =>
+    post<AdminProxyTestResponse>(`/api/admin/proxies/${proxyId}/test`),
+
+  assignProxy: (proxyId: string, profileId: string) =>
+    post<{ proxy: AdminProxy; profile_id: string }>(
+      `/api/admin/proxies/${proxyId}/assign`,
+      { profile_id: profileId }
+    ),
+
+  disableProxy: (proxyId: string) =>
+    post<{ proxy: AdminProxy }>(`/api/admin/proxies/${proxyId}/disable`),
 
   extendTrial: (userId: string, days: number) =>
     post<{ ok: boolean; trial_ends_at: string }>(`/api/admin/users/${userId}/extend-trial`, { days }),

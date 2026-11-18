@@ -321,7 +321,15 @@ def update_subscription_price(
             logger.error(f"Subscription {subscription_id} not found or has no items")
             return None
 
+        # Never replace the cloud add-on item when changing the base plan.
         item_id = subscription.items.data[0].id
+        for item in subscription.items.data:
+            metadata = getattr(item.price, "metadata", None)
+            price_key = metadata.get("price_key") if isinstance(metadata, dict) else None
+            if price_key != "cloud_addon":
+                item_id = item.id
+                break
+
         updated_sub = stripe.Subscription.modify(
             subscription_id,
             items=[

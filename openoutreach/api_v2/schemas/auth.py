@@ -11,6 +11,22 @@ class RegisterRequest(BaseModel):
     email: EmailStr = Field(..., description="User email")
     password: str = Field(..., min_length=8, description="User password (min 8 characters)")
     full_name: str = Field(..., min_length=1, max_length=100, description="Full name")
+    intended_plan: Optional[str] = Field(
+        None,
+        description="Plan the user picked before signup (for example 'cloud')",
+    )
+
+    @field_validator('intended_plan')
+    @classmethod
+    def validate_intended_plan(cls, v: Optional[str]) -> Optional[str]:
+        """Only sellable, non-add-on plans may be stored as intent."""
+        if v is None:
+            return None
+        allowed = {"starter", "pro", "business", "agency", "cloud", "lifetime"}
+        normalized = v.strip().lower()
+        if normalized not in allowed:
+            raise ValueError('Unsupported intended plan')
+        return normalized
 
     @field_validator('password')
     @classmethod

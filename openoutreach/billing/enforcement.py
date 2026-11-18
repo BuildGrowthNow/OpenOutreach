@@ -10,7 +10,11 @@ from typing import Optional
 
 from openoutreach.mongodb.models_user import User
 from openoutreach.mongodb.connection import get_mongodb_collection
-from openoutreach.billing.plans import get_plan
+from openoutreach.billing.plans import (
+    effective_cloud_seat_limit,
+    effective_linkedin_account_limit,
+    get_plan,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -49,8 +53,13 @@ class PlanEnforcer:
         else:
             count = 0
 
-        if count >= user.linkedin_account_limit:
-            return False, f"LinkedIn account limit reached ({count}/{user.linkedin_account_limit})"
+        limit = effective_linkedin_account_limit(
+            user.plan,
+            user.cloud_profiles,
+            user.linkedin_account_limit,
+        )
+        if count >= limit:
+            return False, f"LinkedIn account limit reached ({count}/{limit})"
 
         return True, None
 
@@ -92,26 +101,22 @@ class PlanEnforcer:
         if not PlanEnforcer._is_subscription_active(user):
             return False, "Subscription is not active"
 
-        # Cloud plan always has cloud execution included
-        if user.plan in ("cloud",):
+        # Cloud plan includes one seat; add-on seats add one each.
+        seat_limit = effective_cloud_seat_limit(user.plan, user.cloud_profiles)
+        if seat_limit <= 0:
+            return False, "Cloud execution requires a Cloud Add-on or eligible plan. Use the desktop app instead."
+
+        collection = get_mongodb_collection("linkedin_profiles")
+        if collection is None:
+            return False, "Database error"
+        active_cloud = collection.count_documents({
+            "user_id": user._id,
+            "is_active": True,
+            "execution_mode": "cloud",
+        })
+        if active_cloud < seat_limit:
             return True, None
-
-        # The cloud_addon purchase grants seats tracked in cloud_profiles
-        if user.cloud_profiles > 0:
-            # Count how many active profiles are already using cloud seats
-            collection = get_mongodb_collection("linkedin_profiles")
-            if collection is None:
-                return False, "Database error"
-            active_cloud = collection.count_documents({
-                "user_id": user._id,
-                "is_active": True,
-                "execution_mode": "cloud",
-            })
-            if active_cloud < user.cloud_profiles:
-                return True, None
-            return False, f"Cloud execution seat limit reached ({active_cloud}/{user.cloud_profiles})"
-
-        return False, "Cloud execution requires a Cloud Add-on or eligible plan. Use the desktop app instead."
+        return False, f"Cloud execution seat limit reached ({active_cloud}/{seat_limit})"
 
     @staticmethod
     def can_run_tasks(user: User) -> tuple[bool, Optional[str]]:
@@ -141,7 +146,11 @@ class PlanEnforcer:
         """Get user's current usage vs limits."""
         stats = {
             "linkedin_accounts_used": 0,
-            "linkedin_accounts_limit": user.linkedin_account_limit,
+            "linkedin_accounts_limit": effective_linkedin_account_limit(
+                user.plan,
+                user.cloud_profiles,
+                user.linkedin_account_limit,
+            ),
             "campaigns_used": 0,
             "campaigns_limit": user.campaign_limit,
             "subscription_status": user.subscription_status,

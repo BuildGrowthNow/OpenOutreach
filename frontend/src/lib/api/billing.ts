@@ -22,6 +22,8 @@ export interface BillingStatus {
   whatsapp_account_limit: number;
   campaign_limit: number | null;
   cloud_profiles: number;
+  cloud_seat_limit: number;
+  cloud_seats_enabled: boolean;
   user_status: string;
   admin_notes: string | null;
   stripe_subscription_id?: string;

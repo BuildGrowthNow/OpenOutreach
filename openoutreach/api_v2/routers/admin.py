@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from openoutreach.api_v2.dependencies_v2 import get_admin_user
 from openoutreach.mongodb.models_user import User
 from openoutreach.mongodb.connection import get_mongodb_collection
+from openoutreach.billing.plans import apply_plan_entitlements, effective_linkedin_account_limit
 
 logger = logging.getLogger(__name__)
 
@@ -192,7 +193,11 @@ def _build_user_detail_response(user: User) -> UserDetailResponse:
         billing_period=user.billing_period,
         trial_ends_at=_dt(user.trial_ends_at),
         current_period_end=_dt(user.current_period_end),
-        linkedin_account_limit=user.linkedin_account_limit,
+        linkedin_account_limit=effective_linkedin_account_limit(
+            user.plan,
+            user.cloud_profiles,
+            user.linkedin_account_limit,
+        ),
         whatsapp_account_limit=user.whatsapp_account_limit,
         campaign_limit=user.campaign_limit,
         cloud_profiles=user.cloud_profiles,
@@ -329,6 +334,11 @@ async def update_user(user_id: str, request: UserUpdateRequest) -> UserDetailRes
             raise HTTPException(
                 status_code=400,
                 detail="Invalid plan",
+            )
+        if request.plan == "cloud_addon":
+            raise HTTPException(
+                status_code=400,
+                detail="Cloud add-on seats are managed separately from plans",
             )
         user.plan = request.plan
         user.linkedin_account_limit = plan["max_linkedin_accounts"]
@@ -964,6 +974,11 @@ async def set_user_plan(
     valid, err = BillingAPISecurity.validate_plan_name(body.plan)
     if not valid:
         raise HTTPException(status_code=400, detail=err or "Invalid plan name")
+    if body.plan == "cloud_addon":
+        raise HTTPException(
+            status_code=400,
+            detail="Cloud add-on seats are managed separately from plans",
+        )
     if body.billing_period:
         valid_period, err_period = BillingAPISecurity.validate_billing_period(body.billing_period)
         if not valid_period:
@@ -973,27 +988,18 @@ async def set_user_plan(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    plan = _get_plan_limits(body.plan)
     user.plan = body.plan
     if body.billing_period:
         user.billing_period = body.billing_period
-    user.linkedin_account_limit = (
-        body.linkedin_account_limit
-        if body.linkedin_account_limit is not None
-        else (plan["max_linkedin_accounts"] if plan else user.linkedin_account_limit)
-    )
-    user.whatsapp_account_limit = (
-        body.whatsapp_account_limit
-        if body.whatsapp_account_limit is not None
-        else (plan["max_whatsapp_accounts"] if plan else user.whatsapp_account_limit)
-    )
-    user.campaign_limit = (
-        body.campaign_limit
-        if body.campaign_limit is not None
-        else (plan["max_campaigns"] if plan else user.campaign_limit)
-    )
     if body.cloud_profiles is not None:
         user.cloud_profiles = body.cloud_profiles
+    apply_plan_entitlements(user)
+    if body.linkedin_account_limit is not None:
+        user.linkedin_account_limit = body.linkedin_account_limit
+    if body.whatsapp_account_limit is not None:
+        user.whatsapp_account_limit = body.whatsapp_account_limit
+    if body.campaign_limit is not None:
+        user.campaign_limit = body.campaign_limit
     # Admin-assigned plans always put the user in active state - clear trial flags
     user.subscription_status = "active"
     user.trial_ends_at = None

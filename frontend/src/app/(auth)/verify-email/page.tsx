@@ -34,13 +34,23 @@ export default function VerifyEmailPage() {
           body: JSON.stringify({ token }),
         })
 
-        const data = await response.json() as { message?: string; detail?: string }
+        const data = await response.json() as {
+          message?: string;
+          detail?: string;
+          intended_plan?: string | null;
+          next_step?: string | null;
+        }
 
         if (response.ok) {
           setStatus("success")
           setMessage(data.message || "Email verified successfully!")
+          const nextStep =
+            data.next_step ||
+            (data.intended_plan === "cloud"
+              ? "/settings/plan?plan=cloud"
+              : "/download?welcome=1&success=email_verified")
           setTimeout(() => {
-            router.push("/login?returnUrl=" + encodeURIComponent("/download?welcome=1&success=email_verified"))
+            router.push("/login?returnUrl=" + encodeURIComponent(nextStep))
           }, 2000)
         } else {
           setStatus("error")
@@ -91,7 +101,12 @@ export default function VerifyEmailPage() {
           {status === "success" && (
             <div className="bg-green-500/10 border border-green-500/20 rounded-md p-4 flex items-start gap-3">
               <CheckCircle2 className="h-5 w-5 text-green-400 shrink-0 mt-0.5" />
-              <p className="text-green-400 text-sm">{message}</p>
+              <div className="space-y-1">
+                <p className="text-green-400 text-sm">{message}</p>
+                <p className="text-xs text-zinc-400">
+                  Taking you to sign in and continue setup…
+                </p>
+              </div>
             </div>
           )}
 

@@ -90,7 +90,12 @@ def start_browser_session(session: Any) -> None:
     logger.debug("Configuring browser for %s", session)
 
     session.linkedin_profile.refresh_from_db(
-        fields=["cookie_data_encrypted", "proxy_server", "proxy_username", "proxy_password"]
+        fields=[
+            "cookie_data_encrypted",
+            "proxy_server",
+            "proxy_username",
+            "proxy_password_encrypted",
+        ]
     )
     cookie_data = session.linkedin_profile.cookie_data
 
@@ -103,6 +108,11 @@ def start_browser_session(session: Any) -> None:
     proxy_server = profile.proxy_server
     proxy_username = profile.proxy_username
     proxy_password = profile.proxy_password
+
+    if not proxy_server and getattr(profile, "execution_mode", None) == "cloud":
+        from openoutreach.linkedin.exceptions import CloudProxyRequiredError
+
+        raise CloudProxyRequiredError(str(profile.pk))
 
     # Get the VNC display for this profile
     display_override = None

@@ -81,6 +81,13 @@ class LinkedInProfile:
         proxy_server: Optional[str] = None,
         proxy_username: Optional[str] = None,
         proxy_password: Optional[str] = None,
+        proxy_password_encrypted: Optional[str] = None,
+        proxy_id: Optional[str] = None,
+        proxy_mode: str = "none",
+        proxy_region_country: Optional[str] = None,
+        proxy_region_subdivision: Optional[str] = None,
+        proxy_region_city: Optional[str] = None,
+        proxy_session_id: Optional[str] = None,
         # Execution mode
         execution_mode: str = "desktop",
         last_heartbeat: Optional[datetime] = None,
@@ -120,10 +127,20 @@ class LinkedInProfile:
         self.verification_type = verification_type
         self.session_updated_at = session_updated_at
         self.cookies_updated_at = cookies_updated_at
-        # Proxy configuration
+        # Proxy configuration. Accept a pre-encrypted password from the DB or
+        # plaintext from an API caller; the setter encrypts plaintext.
         self.proxy_server = proxy_server
         self.proxy_username = proxy_username
-        self.proxy_password = proxy_password
+        self.proxy_id = proxy_id
+        self.proxy_mode = proxy_mode
+        self.proxy_region_country = proxy_region_country
+        self.proxy_region_subdivision = proxy_region_subdivision
+        self.proxy_region_city = proxy_region_city
+        self.proxy_session_id = proxy_session_id
+        if proxy_password_encrypted:
+            self._proxy_password_encrypted = proxy_password_encrypted
+        else:
+            self.proxy_password = proxy_password
         # Execution mode
         self.execution_mode = execution_mode
         self.last_heartbeat = last_heartbeat
@@ -192,6 +209,29 @@ class LinkedInProfile:
             self._linkedin_password_encrypted = None
 
     @property
+    def proxy_password(self) -> Optional[str]:
+        """Decrypt and return the proxy password. Returns None if not set."""
+        if not self._proxy_password_encrypted:
+            return None
+        try:
+            from openoutreach.mongodb.crypto import safe_decrypt
+            return safe_decrypt(self._proxy_password_encrypted) or None
+        except Exception:
+            return None
+
+    @proxy_password.setter
+    def proxy_password(self, value: Optional[str]) -> None:
+        """Encrypt and store the proxy password."""
+        if not value:
+            self._proxy_password_encrypted = None
+            return
+        try:
+            from openoutreach.mongodb.crypto import safe_encrypt
+            self._proxy_password_encrypted = safe_encrypt(value)
+        except Exception:
+            self._proxy_password_encrypted = None
+
+    @property
     def user(self):
         """Get the User object for this profile (lazy load)."""
         if not self.user_id:
@@ -248,7 +288,14 @@ class LinkedInProfile:
             # Proxy configuration
             "proxy_server": self.proxy_server,
             "proxy_username": self.proxy_username,
-            "proxy_password": self.proxy_password,
+            "proxy_password": None,
+            "proxy_password_encrypted": self._proxy_password_encrypted,
+            "proxy_id": self.proxy_id,
+            "proxy_mode": self.proxy_mode,
+            "proxy_region_country": self.proxy_region_country,
+            "proxy_region_subdivision": self.proxy_region_subdivision,
+            "proxy_region_city": self.proxy_region_city,
+            "proxy_session_id": self.proxy_session_id,
             # Execution mode
             "execution_mode": self.execution_mode,
             "last_heartbeat": self.last_heartbeat,
@@ -292,7 +339,18 @@ class LinkedInProfile:
             # Proxy configuration
             proxy_server=data.get("proxy_server"),
             proxy_username=data.get("proxy_username"),
-            proxy_password=data.get("proxy_password"),
+            proxy_password_encrypted=data.get("proxy_password_encrypted"),
+            proxy_password=(
+                data.get("proxy_password")
+                if not data.get("proxy_password_encrypted")
+                else None
+            ),
+            proxy_id=data.get("proxy_id"),
+            proxy_mode=data.get("proxy_mode", "none"),
+            proxy_region_country=data.get("proxy_region_country"),
+            proxy_region_subdivision=data.get("proxy_region_subdivision"),
+            proxy_region_city=data.get("proxy_region_city"),
+            proxy_session_id=data.get("proxy_session_id"),
             # Execution mode
             execution_mode=data.get("execution_mode", "desktop"),
             last_heartbeat=data.get("last_heartbeat"),
@@ -353,11 +411,33 @@ class LinkedInProfile:
         if data:
             if fields:
                 for field in fields:
+                    # The plaintext column is removed once the password is
+                    # encrypted; load the encrypted value instead.
+                    if field == "linkedin_password" and "linkedin_password_encrypted" in data:
+                        field = "linkedin_password_encrypted"
+                    if field == "proxy_password" and "proxy_password_encrypted" in data:
+                        field = "proxy_password_encrypted"
+                    if field in ("linkedin_password_encrypted", "proxy_password_encrypted"):
+                        setattr(self, f"_{field}", data[field])
+                        continue
                     if field in data:
                         setattr(self, field, data[field])
             else:
                 # Refresh all fields
                 for key, value in data.items():
+                    if key == "linkedin_password":
+                        if not data.get("linkedin_password_encrypted"):
+                            self.linkedin_password = value
+                        continue
+                    if key == "proxy_password":
+                        # Prefer the encrypted column; only fall back to legacy
+                        # plaintext when no encrypted value exists.
+                        if not data.get("proxy_password_encrypted"):
+                            self.proxy_password = value
+                        continue
+                    if key in ("linkedin_password_encrypted", "proxy_password_encrypted"):
+                        setattr(self, f"_{key}", value)
+                        continue
                     if hasattr(self, key):
                         setattr(self, key, value)
 
