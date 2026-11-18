@@ -1096,7 +1096,7 @@ send a surprise bill. Publish a fair-use clause, not a GB number.
 - [x] No secrets in logs/responses.
 - [ ] Audit log.
 - [ ] Rate limits on import/test.
-- [ ] SSRF validation for proxy URLs.
+- [x] SSRF validation for proxy URLs.
 - [ ] Device revocation.
 - [x] No proxy reuse across LinkedIn accounts.
 
