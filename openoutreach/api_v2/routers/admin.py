@@ -313,11 +313,17 @@ async def get_user_detail(user_id: str) -> UserDetailResponse:
 
 
 @router.patch("/users/{user_id}", dependencies=[Depends(get_admin_user)])
-async def update_user(user_id: str, request: UserUpdateRequest) -> UserDetailResponse:
+async def update_user(
+    user_id: str,
+    request: UserUpdateRequest,
+    current_admin: str = Depends(get_admin_user),
+) -> UserDetailResponse:
     """Update user status, plan, or admin role."""
     user = User.get(user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    old_plan = user.plan
+    old_linkedin_limit = user.linkedin_account_limit
 
     if request.status is not None:
         if request.status not in ["active", "blocked", "inactive"]:
@@ -364,6 +370,24 @@ async def update_user(user_id: str, request: UserUpdateRequest) -> UserDetailRes
         logger.info(f"Admin updated full_name for user {user_id}")
 
     user.save()
+
+    if request.plan is not None:
+        from openoutreach.billing.admin_security import AdminSecurityPolicy
+        from openoutreach.billing.downgrade_handler import handle_plan_downgrade
+
+        if user.linkedin_account_limit < old_linkedin_limit:
+            prefer_cloud = old_plan == "cloud" or user.plan == "cloud"
+            handle_plan_downgrade(
+                user,
+                user.linkedin_account_limit,
+                prefer_execution_mode="cloud" if prefer_cloud else None,
+            )
+        AdminSecurityPolicy.log_admin_action(
+            current_admin,
+            "set_plan",
+            user_id,
+            {"plan": user.plan, "source": "update_user"},
+        )
 
     return _build_user_detail_response(user)
 
@@ -986,6 +1010,8 @@ async def set_user_plan(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
+    old_plan = user.plan
+    old_linkedin_limit = user.linkedin_account_limit
     user.plan = body.plan
     if body.billing_period:
         user.billing_period = body.billing_period
@@ -1002,6 +1028,16 @@ async def set_user_plan(
     user.subscription_status = "active"
     user.trial_ends_at = None
     user.save()
+
+    if user.linkedin_account_limit < old_linkedin_limit:
+        from openoutreach.billing.downgrade_handler import handle_plan_downgrade
+
+        prefer_cloud = old_plan == "cloud" or user.plan == "cloud"
+        handle_plan_downgrade(
+            user,
+            user.linkedin_account_limit,
+            prefer_execution_mode="cloud" if prefer_cloud else None,
+        )
 
     AdminSecurityPolicy.log_admin_action(
         current_admin, "set_plan", user_id,
