@@ -6,6 +6,7 @@ Massive keys, cookies, and tokens are never returned or logged.
 from __future__ import annotations
 
 import re
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
@@ -131,6 +132,14 @@ class ProxyUsageSyncRequest(BaseModel):
 
 class ProxyFallbackRequest(BaseModel):
     profile_id: str = Field(min_length=1, max_length=128)
+
+
+class MassiveProvisionRequest(BaseModel):
+    profile_id: str = Field(min_length=1, max_length=128)
+
+
+class MassiveAllocateRequest(BaseModel):
+    bytes: int = Field(ge=1, le=1_000_000_000_000)
 
 
 def _error(exc: ProxyError) -> HTTPException:
@@ -451,10 +460,10 @@ async def proxy_usage(
 
 @router.get("/massive/status", dependencies=[Depends(get_admin_user)])
 async def massive_configuration_status() -> dict:
-    """Show whether Massive fallback/reporting is configured. No key values."""
-    from openoutreach.proxies.massive_client import massive_status
+    """Show Massive configuration presence and alerts. No key values."""
+    from openoutreach.proxies.provisioning import massive_admin_status
 
-    return massive_status()
+    return massive_admin_status()
 
 
 @router.post("/sync-massive", dependencies=[Depends(get_admin_user)])
@@ -640,6 +649,277 @@ async def provision_fallback_proxy(
         },
     )
     return {"proxy": proxy.public_dict(), "profile_id": body.profile_id}
+
+
+@router.get("/massive/accounts", dependencies=[Depends(get_admin_user)])
+async def massive_accounts() -> dict:
+    """List Reseller sub-accounts with local profile/org context."""
+    from openoutreach.proxies.provisioning import (
+        list_massive_subaccounts,
+        reseller_status,
+    )
+
+    accounts = list_massive_subaccounts()
+    return {
+        "configured": reseller_status().get("configured", False),
+        "accounts": accounts,
+        "parent_usage": {
+            "accounts": len(accounts),
+            "used_bytes": sum(int(row.get("used_bytes") or 0) for row in accounts),
+            "limit_bytes": sum(int(row.get("limit_bytes") or 0) for row in accounts),
+            "limit_reached": sum(1 for row in accounts if row.get("limit_reached")),
+            "proxy_access_revoked": sum(
+                1 for row in accounts if row.get("proxy_access") is False
+            ),
+        },
+    }
+
+
+@router.get("/massive/alerts", dependencies=[Depends(get_admin_user)])
+async def massive_internal_alerts() -> dict:
+    """Internal alerts: limit, proxy access, country mismatch, failures."""
+    from openoutreach.proxies.provisioning import massive_alerts
+
+    return {"alerts": massive_alerts()}
+
+
+@router.post("/massive/sync", dependencies=[Depends(get_admin_user)])
+async def sync_massive_reseller(
+    body: ProxyUsageSyncRequest,
+    current_admin: str = Depends(get_admin_user),
+) -> dict:
+    """Sync cumulative sub-account usage and enforce internal budgets."""
+    _require_rate_limit(current_admin, "proxy_massive_sync")
+    from openoutreach.proxies.massive_client import default_usage_period
+    from openoutreach.proxies.provisioning import (
+        sync_massive_accounts,
+        sync_massive_reporting,
+    )
+
+    try:
+        result = sync_massive_accounts(actor_user_id=current_admin)
+        if body.from_date or body.to_date:
+            default_start, default_end = default_usage_period()
+            result["reporting"] = sync_massive_reporting(
+                body.from_date or default_start,
+                body.to_date or default_end,
+                actor_user_id=current_admin,
+            )
+    except ProxyError as exc:
+        raise _error(exc)
+    _audit(
+        current_admin,
+        "proxy.massive_sync",
+        details={
+            "accounts": result.get("accounts"),
+            "matched": result.get("matched"),
+            "unmatched": result.get("unmatched"),
+            "budget": result.get("budget"),
+        },
+    )
+    return result
+
+
+@router.post("/massive/provision", dependencies=[Depends(get_admin_user)])
+async def provision_massive_subaccount(
+    body: MassiveProvisionRequest,
+    current_admin: str = Depends(get_admin_user),
+) -> dict:
+    """Provision a Reseller sub-account for one cloud profile."""
+    _require_rate_limit(current_admin, "proxy_massive_provision")
+    profiles = get_mongodb_collection("linkedin_profiles")
+    if profiles is None:
+        raise HTTPException(status_code=503, detail="LinkedIn profiles are unavailable")
+    profile = profiles.find_one({"_id": body.profile_id})
+    if not profile:
+        raise HTTPException(status_code=404, detail="LinkedIn profile not found")
+    if profile.get("execution_mode") != "cloud":
+        raise HTTPException(status_code=400, detail="Only cloud profiles use managed proxies")
+    if profile.get("proxy_server") or profile.get("proxy_id"):
+        raise HTTPException(status_code=409, detail="This profile already has a proxy")
+    country = profile.get("proxy_region_country")
+    if not country:
+        raise HTTPException(status_code=400, detail="Profile has no proxy region")
+    user_id = str(profile.get("user_id") or "")
+    if not user_id:
+        raise HTTPException(status_code=400, detail="Profile has no workspace owner")
+    from openoutreach.proxies.provisioning import provision_reseller_proxy
+
+    try:
+        proxy = provision_reseller_proxy(
+            body.profile_id,
+            user_id,
+            profile.get("org_id"),
+            country,
+            profile.get("proxy_region_subdivision"),
+            profile.get("proxy_region_city"),
+            created_by=current_admin,
+        )
+    except ProxyError as exc:
+        raise _error(exc)
+    _audit(
+        current_admin,
+        "proxy.provision",
+        target_user_id=user_id,
+        details={
+            "proxy_id": proxy._id,
+            "profile_id": body.profile_id,
+            "massive_account_id": proxy.massive_account_id,
+        },
+    )
+    return {"proxy": proxy.public_dict(), "profile_id": body.profile_id}
+
+
+@router.post("/massive/{proxy_id}/disable", dependencies=[Depends(get_admin_user)])
+async def disable_massive_subaccount(
+    proxy_id: str,
+    current_admin: str = Depends(get_admin_user),
+) -> dict:
+    from openoutreach.proxies.models import Proxy
+    from openoutreach.proxies.provisioning import disable_massive_proxy
+
+    proxy = Proxy.get(proxy_id)
+    if proxy is None:
+        raise HTTPException(status_code=404, detail="Proxy not found")
+    if not proxy.massive_account_id:
+        raise HTTPException(status_code=400, detail="Not a Reseller sub-account")
+    if not disable_massive_proxy(
+        proxy, reason="admin_disable", actor_user_id=current_admin
+    ):
+        raise HTTPException(status_code=409, detail="Massive disable failed")
+    _audit(
+        current_admin,
+        "proxy.massive_disable",
+        target_user_id=proxy.assigned_user_id,
+        details={"proxy_id": proxy_id, "massive_account_id": proxy.massive_account_id},
+    )
+    return {"proxy": proxy.public_dict()}
+
+
+@router.post("/massive/{proxy_id}/enable", dependencies=[Depends(get_admin_user)])
+async def enable_massive_subaccount(
+    proxy_id: str,
+    current_admin: str = Depends(get_admin_user),
+) -> dict:
+    from openoutreach.proxies.models import Proxy
+    from openoutreach.proxies.provisioning import enable_massive_proxy
+
+    proxy = Proxy.get(proxy_id)
+    if proxy is None:
+        raise HTTPException(status_code=404, detail="Proxy not found")
+    if not proxy.massive_account_id:
+        raise HTTPException(status_code=400, detail="Not a Reseller sub-account")
+    if not enable_massive_proxy(
+        proxy, reason="admin_enable", actor_user_id=current_admin
+    ):
+        raise HTTPException(status_code=409, detail="Massive enable failed")
+    _audit(
+        current_admin,
+        "proxy.massive_enable",
+        target_user_id=proxy.assigned_user_id,
+        details={"proxy_id": proxy_id, "massive_account_id": proxy.massive_account_id},
+    )
+    return {"proxy": proxy.public_dict()}
+
+
+@router.post("/massive/{proxy_id}/rotate", dependencies=[Depends(get_admin_user)])
+async def rotate_massive_subaccount(
+    proxy_id: str,
+    current_admin: str = Depends(get_admin_user),
+) -> dict:
+    """Rotate the provider password; the new secret is never returned."""
+    _require_rate_limit(current_admin, "proxy_massive_rotate")
+    from openoutreach.proxies.models import Proxy
+    from openoutreach.proxies.provisioning import rotate_massive_password
+
+    proxy = Proxy.get(proxy_id)
+    if proxy is None:
+        raise HTTPException(status_code=404, detail="Proxy not found")
+    try:
+        proxy = rotate_massive_password(proxy, actor_user_id=current_admin)
+    except ProxyError as exc:
+        raise _error(exc)
+    _audit(
+        current_admin,
+        "proxy.massive_rotate",
+        target_user_id=proxy.assigned_user_id,
+        details={"proxy_id": proxy_id, "massive_account_id": proxy.massive_account_id},
+    )
+    return {"proxy": proxy.public_dict()}
+
+
+@router.post("/massive/{proxy_id}/allocate", dependencies=[Depends(get_admin_user)])
+async def allocate_massive_traffic(
+    proxy_id: str,
+    body: MassiveAllocateRequest,
+    current_admin: str = Depends(get_admin_user),
+) -> dict:
+    """Top up the sub-account's cumulative lifetime allowance."""
+    _require_rate_limit(current_admin, "proxy_massive_allocate")
+    from openoutreach.proxies.massive_reseller import (
+        MassiveResellerClient,
+        MassiveResellerConfig,
+    )
+    from openoutreach.proxies.models import Proxy
+
+    proxy = Proxy.get(proxy_id)
+    if proxy is None:
+        raise HTTPException(status_code=404, detail="Proxy not found")
+    if not proxy.massive_account_id:
+        raise HTTPException(status_code=400, detail="Not a Reseller sub-account")
+    config = MassiveResellerConfig.from_settings()
+    if config is None:
+        raise HTTPException(status_code=503, detail="Massive Reseller is not configured")
+    try:
+        account = MassiveResellerClient(config).allocate_traffic(
+            proxy.massive_account_id, body.bytes
+        )
+    except ProxyError as exc:
+        raise _error(exc)
+    proxies = get_mongodb_collection("proxies")
+    if proxies is not None:
+        new_limit = account.get("limit_bytes") or (
+            (proxy.massive_limit_bytes or 0) + body.bytes
+        )
+        proxies.update_one(
+            {"_id": proxy_id},
+            {
+                "$set": {
+                    "massive_limit_bytes": new_limit,
+                    "traffic_limit_bytes": new_limit,
+                    "massive_last_sync_at": datetime.now(timezone.utc),
+                    "updated_at": datetime.now(timezone.utc),
+                }
+            },
+        )
+    _audit(
+        current_admin,
+        "proxy.massive_allocate",
+        target_user_id=proxy.assigned_user_id,
+        details={"proxy_id": proxy_id, "bytes": body.bytes},
+    )
+    return {"proxy": Proxy.get(proxy_id).public_dict()}  # type: ignore[union-attr]
+
+
+@router.get("/pool-stats", dependencies=[Depends(get_admin_user)])
+async def massive_pool_stats(country: Optional[str] = Query(None, max_length=2)) -> dict:
+    """Cached country/city node counts and region warnings."""
+    from openoutreach.proxies.provisioning import pool_stats_summary
+
+    return pool_stats_summary(country)
+
+
+@router.get("/pool-stats/regions", dependencies=[Depends(get_admin_user)])
+async def massive_pool_stats_regions() -> dict:
+    from openoutreach.proxies.provisioning import pool_stats_client
+
+    client = pool_stats_client()
+    if client is None:
+        raise HTTPException(status_code=503, detail="Massive Pool Stats is not configured")
+    try:
+        return {"regions": client.regions()}
+    except ProxyError as exc:
+        raise _error(exc)
 
 
 @router.post("/{proxy_id}/test", dependencies=[Depends(get_admin_user)])

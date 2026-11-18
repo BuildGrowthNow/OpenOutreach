@@ -445,6 +445,17 @@ export interface AdminProxyUsageResponse {
   per_channel: { channel: string; bytes: number; proxy_ids: string[]; profile_ids: string[] }[]
 }
 
+export interface AdminMassiveAlert {
+  proxy_id: string
+  profile_id: string | null
+  org_id: string | null
+  massive_account_id: string | null
+  massive_subuser?: string | null
+  status: string
+  reasons: string[]
+  last_error: string | null
+}
+
 export interface AdminMassiveStatus {
   configured: boolean
   parent_username_set: boolean
@@ -454,6 +465,77 @@ export interface AdminMassiveStatus {
   reporting_configured: boolean
   host: string
   port: number
+  reseller?: {
+    enabled: boolean
+    configured: boolean
+    parent_username_set: boolean
+    api_key_set: boolean
+    default_limit_bytes: number
+    monthly_soft_limit_bytes: number
+    monthly_hard_limit_bytes: number
+  }
+  pool_stats?: { enabled: boolean }
+  alerts?: AdminMassiveAlert[]
+}
+
+export interface AdminMassiveSubaccount {
+  proxy_id: string
+  massive_account_id: string
+  massive_subuser: string | null
+  massive_status: string
+  profile_id: string | null
+  linkedin_username: string | null
+  org_id: string | null
+  assigned_user_id: string | null
+  used_bytes: number
+  limit_bytes: number | null
+  limit_reached: boolean
+  proxy_access: boolean | null
+  country: string
+  last_sync_at: string | null
+  last_error: string | null
+}
+
+export interface AdminMassiveParentUsage {
+  accounts: number
+  used_bytes: number
+  limit_bytes: number
+  limit_reached: number
+  proxy_access_revoked: number
+}
+
+export interface AdminMassiveAccountsResponse {
+  configured: boolean
+  accounts: AdminMassiveSubaccount[]
+  parent_usage?: AdminMassiveParentUsage
+}
+
+export interface AdminMassiveSyncResponse {
+  accounts: number
+  matched: number
+  updated: number
+  unmatched: number
+  parent?: {
+    accounts: number
+    used_bytes: number
+    limit_bytes: number
+    limit_reached: number
+    proxy_access_revoked: number
+  }
+  budget?: { disabled: number; re_enabled: number; soft_alerts: number }
+  reporting?: {
+    group_by: string
+    matched: number
+    skipped: number
+    total_bytes: number
+  }
+}
+
+export interface AdminPoolStatsResponse {
+  configured: boolean
+  warnings: string[]
+  country_counts: Record<string, number>
+  min_nodes?: number
 }
 
 export interface AdminCloudProfile {
@@ -614,6 +696,38 @@ export const adminApi = {
       '/api/admin/proxies/sync-massive',
       body
     ),
+
+  getMassiveAccounts: () =>
+    get<AdminMassiveAccountsResponse>('/api/admin/proxies/massive/accounts'),
+
+  getMassiveAlerts: () =>
+    get<{ alerts: AdminMassiveAlert[] }>('/api/admin/proxies/massive/alerts'),
+
+  syncMassiveReseller: (body: { from_date?: string; to_date?: string }) =>
+    post<AdminMassiveSyncResponse>('/api/admin/proxies/massive/sync', body),
+
+  provisionMassiveSubaccount: (profileId: string) =>
+    post<{ proxy: AdminProxy; profile_id: string }>(
+      '/api/admin/proxies/massive/provision',
+      { profile_id: profileId }
+    ),
+
+  disableMassiveSubaccount: (proxyId: string) =>
+    post<{ proxy: AdminProxy }>(`/api/admin/proxies/massive/${proxyId}/disable`),
+
+  enableMassiveSubaccount: (proxyId: string) =>
+    post<{ proxy: AdminProxy }>(`/api/admin/proxies/massive/${proxyId}/enable`),
+
+  rotateMassiveSubaccount: (proxyId: string) =>
+    post<{ proxy: AdminProxy }>(`/api/admin/proxies/massive/${proxyId}/rotate`),
+
+  allocateMassiveTraffic: (proxyId: string, bytes: number) =>
+    post<{ proxy: AdminProxy }>(`/api/admin/proxies/massive/${proxyId}/allocate`, {
+      bytes,
+    }),
+
+  getPoolStats: (country?: string) =>
+    get<AdminPoolStatsResponse>('/api/admin/proxies/pool-stats', { country }),
 
   bulkTestProxies: (body: {
     proxy_ids?: string[]

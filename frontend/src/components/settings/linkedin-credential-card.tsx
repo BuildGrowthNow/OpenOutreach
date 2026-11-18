@@ -408,8 +408,10 @@ export default function LinkedInCredentialCard({
                   </div>
                   <p className="text-sm text-amber-200/80">
                     Cloud execution requires a managed proxy. This account will
-                    be paused instead of using the server IP. Open Proxy and add
-                    a proxy before starting a campaign.
+                    be paused instead of using the server IP.{" "}
+                    {canManageWorkspace
+                      ? "Open Proxy and add a proxy before starting a campaign."
+                      : "Ask a workspace owner or admin to assign a managed proxy."}
                   </p>
                 </div>
               </div>

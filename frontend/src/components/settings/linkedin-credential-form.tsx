@@ -422,7 +422,9 @@ export default function LinkedInCredentialForm({
                           <h4 className="text-sm font-semibold text-zinc-100">Proxy region</h4>
                           <p className="mt-1 text-xs text-zinc-400">
                             We assign a managed proxy in this region. Country is required;
-                            state and city are optional and narrow the pool.
+                            state and city are optional and narrow the pool. Changing the
+                            region changes the egress IP and may trigger a LinkedIn
+                            challenge. Proxy credentials are never shown.
                           </p>
                           {isEditing ? (
                             <p className="mt-1 text-xs text-amber-300">

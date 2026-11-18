@@ -100,6 +100,8 @@ const plans: Plan[] = [
     features: [
       'Fully managed execution',
       '1 LinkedIn account + managed proxy included',
+      '195+ countries with region selection',
+      'Powered by the Massive residential network',
       'AI included (no API key needed)',
       'No desktop app needed',
       'All Pro plan features',
@@ -161,6 +163,16 @@ const faqs = [
     question: "Can I see or edit my proxy credentials?",
     answer:
       "No. Managed proxy credentials are encrypted at rest and are never shown to you. If you need a different region or proxy, request a proxy change from Settings → LinkedIn. Support reviews it because changing region changes the egress IP.",
+  },
+  {
+    question: "What happens if my proxy changes IP?",
+    answer:
+      "Cloud accounts use a sticky residential session with a fixed TTL, so the egress IP stays stable during normal work. A new session or a region change can produce a new IP; that is expected and may trigger a one-time LinkedIn challenge. We test the egress country and show health status in Settings → LinkedIn. Credentials and GB usage are never shown.",
+  },
+  {
+    question: "Can my team use OpenOutreach together?",
+    answer:
+      "Team workspaces let an owner invite members, assign roles, and share one plan and cloud seat pool. Owners and admins assign cloud LinkedIn profiles to members. Desktop seats run on the member's local IP with no proxy. Team-member pricing is unchanged while the workspace feature is in rollout.",
   },
   {
     question: "Do I need technical skills to set it up?",

@@ -50,7 +50,10 @@ import { Textarea } from '@/components/ui/textarea'
 import {
   adminApi,
   AdminCloudProfile,
+  AdminMassiveAlert,
   AdminMassiveStatus,
+  AdminMassiveSubaccount,
+  AdminPoolStatsResponse,
   AdminProxy,
   AdminProxyAssignment,
   AdminProxyFilters,
@@ -195,6 +198,22 @@ export default function AdminProxiesPage() {
   const [syncing, setSyncing] = useState(false)
   const [fallbackProfileId, setFallbackProfileId] = useState('')
   const [provisioning, setProvisioning] = useState(false)
+  const [massiveAccounts, setMassiveAccounts] = useState<AdminMassiveSubaccount[]>([])
+  const [massiveParentUsage, setMassiveParentUsage] = useState<{
+    accounts: number
+    used_bytes: number
+    limit_bytes: number
+    limit_reached: number
+    proxy_access_revoked: number
+  } | null>(null)
+  const [massiveAlerts, setMassiveAlerts] = useState<AdminMassiveAlert[]>([])
+  const [massiveAccountsLoading, setMassiveAccountsLoading] = useState(false)
+  const [massiveBusyId, setMassiveBusyId] = useState<string | null>(null)
+  const [massiveProvisionProfileId, setMassiveProvisionProfileId] = useState('')
+  const [massiveProvisioning, setMassiveProvisioning] = useState(false)
+  const [massiveAllocateBytes, setMassiveAllocateBytes] = useState('')
+  const [poolStats, setPoolStats] = useState<AdminPoolStatsResponse | null>(null)
+  const [poolStatsCountry, setPoolStatsCountry] = useState('')
 
   const filters: AdminProxyFilters = useMemo(
     () => ({
@@ -322,9 +341,41 @@ export default function AdminProxiesPage() {
     }
   }, [])
 
+  const loadMassiveAccounts = useCallback(async () => {
+    try {
+      setMassiveAccountsLoading(true)
+      const [accountsResponse, alertsResponse] = await Promise.all([
+        adminApi.getMassiveAccounts(),
+        adminApi.getMassiveAlerts(),
+      ])
+      if (accountsResponse.error) throw new Error(accountsResponse.error)
+      setMassiveAccounts(accountsResponse.data?.accounts ?? [])
+      setMassiveParentUsage(accountsResponse.data?.parent_usage ?? null)
+      setMassiveAlerts(alertsResponse.data?.alerts ?? [])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load Massive sub-accounts')
+    } finally {
+      setMassiveAccountsLoading(false)
+    }
+  }, [])
+
+  const loadPoolStats = useCallback(async (country?: string) => {
+    try {
+      const response = await adminApi.getPoolStats(country?.trim().toUpperCase() || undefined)
+      if (response.error) throw new Error(response.error)
+      setPoolStats(response.data ?? null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load Pool Stats')
+    }
+  }, [])
+
   useEffect(() => {
-    if (tab === 'massive') void loadMassive()
-  }, [tab, loadMassive])
+    if (tab === 'massive') {
+      void loadMassive()
+      void loadMassiveAccounts()
+      void loadPoolStats()
+    }
+  }, [tab, loadMassive, loadMassiveAccounts, loadPoolStats])
 
   const selectedIds = useMemo(() => Array.from(selected), [selected])
 
@@ -611,6 +662,84 @@ export default function AdminProxiesPage() {
       setError(err instanceof Error ? err.message : 'Fallback provisioning failed')
     } finally {
       setProvisioning(false)
+    }
+  }
+
+  const handleSyncReseller = async () => {
+    try {
+      setSyncing(true)
+      setError(null)
+      const response = await adminApi.syncMassiveReseller({
+        from_date: syncFrom || undefined,
+        to_date: syncTo || undefined,
+      })
+      if (response.error) throw new Error(response.error)
+      const data = response.data
+      setMessage(
+        `Reseller sync: ${data?.accounts ?? 0} accounts, ${data?.matched ?? 0} matched, ` +
+          `${data?.unmatched ?? 0} unmatched. Budgets disabled ${data?.budget?.disabled ?? 0}, ` +
+          `re-enabled ${data?.budget?.re_enabled ?? 0}.`
+      )
+      await Promise.all([loadMassive(), loadMassiveAccounts(), loadUsage(usageFrom, usageTo)])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Reseller sync failed')
+    } finally {
+      setSyncing(false)
+    }
+  }
+
+  const handleProvisionMassive = async () => {
+    if (!massiveProvisionProfileId.trim()) return
+    try {
+      setMassiveProvisioning(true)
+      setError(null)
+      const response = await adminApi.provisionMassiveSubaccount(
+        massiveProvisionProfileId.trim()
+      )
+      if (response.error) throw new Error(response.error)
+      setMessage('Massive sub-account provisioned and assigned.')
+      setMassiveProvisionProfileId('')
+      await Promise.all([loadInventory(), loadMassiveAccounts()])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Massive provisioning failed')
+    } finally {
+      setMassiveProvisioning(false)
+    }
+  }
+
+  const handleMassiveAction = async (
+    proxyId: string,
+    action: 'disable' | 'enable' | 'rotate' | 'allocate'
+  ) => {
+    try {
+      setMassiveBusyId(proxyId)
+      setError(null)
+      let response
+      if (action === 'disable') response = await adminApi.disableMassiveSubaccount(proxyId)
+      else if (action === 'enable') response = await adminApi.enableMassiveSubaccount(proxyId)
+      else if (action === 'rotate') response = await adminApi.rotateMassiveSubaccount(proxyId)
+      else {
+        const raw = window.prompt(
+          'Top-up bytes to add to this sub-account (cumulative lifetime allowance):',
+          massiveAllocateBytes || '5000000000'
+        )
+        if (raw === null) return
+        const bytes = Number(raw)
+        if (!Number.isFinite(bytes) || bytes <= 0) {
+          setError('Enter a positive byte allowance to allocate.')
+          return
+        }
+        setMassiveAllocateBytes(String(Math.floor(bytes)))
+        response = await adminApi.allocateMassiveTraffic(proxyId, Math.floor(bytes))
+      }
+      if (response.error) throw new Error(response.error)
+      setMessage(`Massive ${action} completed.`)
+      setMassiveAllocateBytes('')
+      await loadMassiveAccounts()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : `Massive ${action} failed`)
+    } finally {
+      setMassiveBusyId(null)
     }
   }
 
@@ -1164,11 +1293,11 @@ export default function AdminProxiesPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
                 <Globe2 className="h-4 w-4" />
-                Massive fallback
+                Massive connection
               </CardTitle>
               <CardDescription>
-                Parent credentials with a per-profile <code>-subaccount-</code> suffix. Phase 1
-                does not provision Reseller sub-accounts.
+                Reseller sub-accounts, cumulative usage, internal budgets, and the Phase 1
+                parent-credential fallback. Keys and passwords stay server-side.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -1177,9 +1306,9 @@ export default function AdminProxiesPage() {
               ) : (
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                   {([
-                    { label: 'Fallback', configured: massiveStatus?.configured },
+                    { label: 'Reseller', configured: massiveStatus?.reseller?.configured },
                     { label: 'Parent username', configured: massiveStatus?.parent_username_set },
-                    { label: 'Proxy password', configured: massiveStatus?.proxy_password_set },
+                    { label: 'Reseller key', configured: massiveStatus?.reseller?.api_key_set },
                     { label: 'Reporting', configured: massiveStatus?.reporting_configured },
                   ] as { label: string; configured: boolean | undefined }[]).map((card) => (
                     <div key={card.label} className="rounded-lg border p-3">
@@ -1191,9 +1320,38 @@ export default function AdminProxiesPage() {
                   ))}
                 </div>
               )}
-              <div className="text-xs text-muted-foreground">
-                Endpoint: {massiveStatus?.host ?? '—'}:{massiveStatus?.port ?? '—'}
+              <div className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
+                <div>Endpoint: {massiveStatus?.host ?? '—'}:{massiveStatus?.port ?? '—'}</div>
+                <div>
+                  Default sub-account limit:{' '}
+                  {formatBytes(massiveStatus?.reseller?.default_limit_bytes ?? 0)} · Internal soft/hard:{' '}
+                  {formatBytes(massiveStatus?.reseller?.monthly_soft_limit_bytes ?? 0)} /{' '}
+                  {formatBytes(massiveStatus?.reseller?.monthly_hard_limit_bytes ?? 0)}
+                </div>
               </div>
+              {massiveParentUsage && (
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="rounded-lg border p-3">
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Sub-accounts</p>
+                    <p className="mt-1 text-sm font-medium">{massiveParentUsage.accounts}</p>
+                  </div>
+                  <div className="rounded-lg border p-3">
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Parent usage</p>
+                    <p className="mt-1 text-sm font-medium">
+                      {formatBytes(massiveParentUsage.used_bytes)} /{' '}
+                      {formatBytes(massiveParentUsage.limit_bytes)}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border p-3">
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Limit reached</p>
+                    <p className="mt-1 text-sm font-medium">{massiveParentUsage.limit_reached}</p>
+                  </div>
+                  <div className="rounded-lg border p-3">
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Access revoked</p>
+                    <p className="mt-1 text-sm font-medium">{massiveParentUsage.proxy_access_revoked}</p>
+                  </div>
+                </div>
+              )}
               <div className="flex flex-wrap items-end gap-2 border-t pt-4">
                 <Input
                   value={syncFrom}
@@ -1207,15 +1365,209 @@ export default function AdminProxiesPage() {
                   placeholder="To (YYYY-MM-DD)"
                   className="w-44"
                 />
-                <Button onClick={() => void handleSyncMassive()} disabled={syncing}>
+                <Button onClick={() => void handleSyncReseller()} disabled={syncing}>
                   {syncing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
-                  Sync usage
+                  Sync now
                 </Button>
                 <Button variant="outline" onClick={() => void loadMassive()} disabled={massiveLoading}>
                   Refresh status
                 </Button>
               </div>
-              <div className="flex flex-wrap items-end gap-2 border-t pt-4">
+            </CardContent>
+          </Card>
+
+          {massiveAlerts.length > 0 && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                {massiveAlerts.length} sub-account alert(s):{' '}
+                {massiveAlerts
+                  .slice(0, 4)
+                  .map((alert) => `${alert.massive_subuser ?? alert.massive_account_id}: ${alert.reasons.join(', ')}`)
+                  .join(' · ')}
+              </AlertDescription>
+            </Alert>
+          )}
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Reseller sub-accounts</CardTitle>
+              <CardDescription>
+                One sub-account per cloud seat. Used/limit is cumulative lifetime usage; monthly
+                budgets are enforced internally and are not shown to customers.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex flex-wrap items-end gap-2">
+                <Input
+                  value={massiveProvisionProfileId}
+                  onChange={(event) => setMassiveProvisionProfileId(event.target.value)}
+                  placeholder="Cloud profile ID to provision"
+                  className="w-96 font-mono text-xs"
+                />
+                <Button
+                  onClick={() => void handleProvisionMassive()}
+                  disabled={massiveProvisioning || !massiveProvisionProfileId.trim()}
+                >
+                  {massiveProvisioning ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
+                  Provision for profile
+                </Button>
+                <Button variant="outline" onClick={() => void loadMassiveAccounts()} disabled={massiveAccountsLoading}>
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Refresh accounts
+                </Button>
+              </div>
+              {massiveAccountsLoading ? (
+                <Skeleton className="h-48 w-full" />
+              ) : massiveAccounts.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No Reseller sub-accounts yet.</p>
+              ) : (
+                <div className="overflow-x-auto rounded-lg border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Sub-account</TableHead>
+                        <TableHead>Profile</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Used / limit</TableHead>
+                        <TableHead>Access</TableHead>
+                        <TableHead>Last sync</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {massiveAccounts.map((account) => (
+                        <TableRow key={account.proxy_id}>
+                          <TableCell className="font-mono text-xs">
+                            <div>{account.massive_subuser ?? account.massive_account_id}</div>
+                            <div className="text-muted-foreground">{account.massive_account_id}</div>
+                          </TableCell>
+                          <TableCell className="text-xs">
+                            <div>{account.linkedin_username ?? account.profile_id ?? '—'}</div>
+                            <div className="font-mono text-muted-foreground">{account.profile_id ?? '—'}</div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={account.massive_status === 'active' ? 'default' : 'secondary'}>
+                              {account.massive_status}
+                            </Badge>
+                            {account.limit_reached && (
+                              <Badge variant="destructive" className="ml-1">limit</Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-xs">
+                            {formatBytes(account.used_bytes)} / {formatBytes(account.limit_bytes ?? 0)}
+                          </TableCell>
+                          <TableCell className="text-xs">
+                            {account.proxy_access === false ? (
+                              <Badge variant="destructive">revoked</Badge>
+                            ) : account.proxy_access === true ? (
+                              <Badge variant="outline">ok</Badge>
+                            ) : (
+                              '—'
+                            )}
+                          </TableCell>
+                          <TableCell className="text-xs">{formatDate(account.last_sync_at)}</TableCell>
+                          <TableCell>
+                            <div className="flex flex-wrap justify-end gap-1">
+                              {account.massive_status === 'active' ? (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={massiveBusyId === account.proxy_id}
+                                  onClick={() => void handleMassiveAction(account.proxy_id, 'disable')}
+                                >
+                                  Disable
+                                </Button>
+                              ) : (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={massiveBusyId === account.proxy_id}
+                                  onClick={() => void handleMassiveAction(account.proxy_id, 'enable')}
+                                >
+                                  Enable
+                                </Button>
+                              )}
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={massiveBusyId === account.proxy_id}
+                                onClick={() => void handleMassiveAction(account.proxy_id, 'rotate')}
+                              >
+                                Rotate
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={massiveBusyId === account.proxy_id}
+                                onClick={() => void handleMassiveAction(account.proxy_id, 'allocate')}
+                              >
+                                Top up
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Pool Stats</CardTitle>
+              <CardDescription>
+                Cached country node counts. Below {massiveStatus?.pool_stats ? 'the configured threshold' : '1,000 nodes'} the
+                admin should use country-level targeting.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex flex-wrap items-end gap-2">
+                <Input
+                  value={poolStatsCountry}
+                  onChange={(event) => setPoolStatsCountry(event.target.value.toUpperCase().slice(0, 2))}
+                  placeholder="Country (US)"
+                  className="w-32"
+                />
+                <Button variant="outline" onClick={() => void loadPoolStats(poolStatsCountry)}>
+                  Check region
+                </Button>
+              </div>
+              {poolStats?.warnings?.length ? (
+                <Alert>
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{poolStats.warnings.join(' ')}</AlertDescription>
+                </Alert>
+              ) : null}
+              <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                {Object.entries(poolStats?.country_counts ?? {})
+                  .sort(([, a], [, b]) => b - a)
+                  .slice(0, 12)
+                  .map(([country, count]) => (
+                    <Badge key={country} variant="outline">
+                      {country}: {count.toLocaleString()}
+                    </Badge>
+                  ))}
+                {!poolStats?.configured && <span>Pool Stats is not configured.</span>}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Globe2 className="h-4 w-4" />
+                Phase 1 fallback
+              </CardTitle>
+              <CardDescription>
+                Parent credentials with a per-profile <code>-subaccount-</code> suffix. Used
+                when Reseller is disabled or unavailable.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex flex-wrap items-end gap-2">
                 <Input
                   value={fallbackProfileId}
                   onChange={(event) => setFallbackProfileId(event.target.value)}
@@ -1230,10 +1582,13 @@ export default function AdminProxiesPage() {
                   {provisioning ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                   Provision fallback
                 </Button>
+                <Button variant="outline" onClick={() => void handleSyncMassive()} disabled={syncing}>
+                  Sync reporting usage
+                </Button>
               </div>
               <p className="text-xs text-muted-foreground">
                 Provision fallback only for a cloud profile that has no proxy and has a region.
-                Keys and passwords stay server-side; this page only shows whether they are set.
+                The Reseller path is preferred whenever it is enabled.
               </p>
             </CardContent>
           </Card>
