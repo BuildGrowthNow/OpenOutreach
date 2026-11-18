@@ -169,12 +169,12 @@ def effective_cloud_seat_limit(plan_name: str, cloud_profiles: int) -> int:
     """Return how many browser accounts may run in the cloud.
 
     The Cloud plan includes one seat; every purchased cloud add-on seat adds
-    one more. Non-Cloud plans only get the add-on quantity.
+    one more. Cloud seats are a Cloud-plan entitlement; add-on quantities on
+    other plans are ignored so a seat always maps to one LinkedIn account.
     """
-    addon_seats = max(0, int(cloud_profiles or 0))
-    if plan_name == CLOUD_PLAN_NAME:
-        return 1 + addon_seats
-    return addon_seats
+    if plan_name != CLOUD_PLAN_NAME:
+        return 0
+    return 1 + max(0, int(cloud_profiles or 0))
 
 
 def effective_linkedin_account_limit(plan_name: str, cloud_profiles: int, fallback: int) -> int:
