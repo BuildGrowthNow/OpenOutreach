@@ -117,6 +117,35 @@ def build_proxy_url(
     ))
 
 
+def _massive_lifecycle(
+    doc: dict[str, Any], action: str, *, reason: Optional[str] = None
+) -> None:
+    """Best-effort provider lifecycle sync for admin inventory actions."""
+    if not doc.get("massive_account_id"):
+        return
+    try:
+        from openoutreach.proxies.provisioning import (
+            disable_massive_proxy,
+            enable_massive_proxy,
+            retire_massive_proxy,
+        )
+
+        proxy = Proxy.from_dict(doc)
+        if action == "disable":
+            disable_massive_proxy(proxy, reason=reason or "admin_disable")
+        elif action == "enable":
+            enable_massive_proxy(proxy, reason=reason or "admin_enable")
+        elif action == "retire":
+            retire_massive_proxy(proxy)
+    except Exception as exc:  # pragma: no cover - provider must not block admin
+        logger.warning(
+            "massive_lifecycle_failed proxy_id=%s action=%s exception_type=%s",
+            doc.get("_id"),
+            action,
+            type(exc).__name__,
+        )
+
+
 def _collection(name: str) -> Optional[Collection]:
     return get_mongodb_collection(name)
 
@@ -785,6 +814,8 @@ def unassign_proxy(
     if not profile_id:
         raise ProxyError("Proxy is not assigned to a profile")
 
+    _massive_lifecycle(existing, "disable", reason=reason or "admin_unassign")
+
     claimed = collection.find_one_and_update(
         {"_id": proxy_id, "linkedin_profile_id": profile_id},
         {
@@ -848,6 +879,7 @@ def disable_proxy(proxy_id: str) -> Proxy:
         raise ProxyError("Unassign the proxy before disabling it")
     if doc.get("status") == STATUS_RETIRED:
         raise ProxyError("Retired proxies cannot be disabled")
+    _massive_lifecycle(doc, "disable", reason="admin_disable")
     collection.update_one(
         {"_id": proxy_id},
         {"$set": {"status": STATUS_DISABLED, "disabled_at": _now(), "updated_at": _now()}},
@@ -867,6 +899,7 @@ def enable_proxy(proxy_id: str) -> Proxy:
         raise ProxyError("Retired proxies cannot be enabled")
     if doc.get("linkedin_profile_id"):
         raise ProxyError("Unassign the proxy before enabling it")
+    _massive_lifecycle(doc, "enable", reason="admin_enable")
     collection.update_one(
         {"_id": proxy_id},
         {"$set": {"status": STATUS_AVAILABLE, "disabled_at": None, "updated_at": _now()}},
@@ -886,6 +919,7 @@ def retire_proxy(proxy_id: str, *, reason: Optional[str] = None) -> Proxy:
         raise ProxyError("Unassign the proxy before retiring it")
     if doc.get("status") == STATUS_RETIRED:
         return Proxy.from_dict(doc)
+    _massive_lifecycle(doc, "retire")
     collection.update_one(
         {"_id": proxy_id},
         {

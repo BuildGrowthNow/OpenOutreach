@@ -940,6 +940,8 @@ def massive_alerts() -> list[dict[str, Any]]:
             reasons.append("country_mismatch")
         if proxy.massive_status == MASSIVE_STATUS_ERROR:
             reasons.append("repeated_failures")
+        if proxy.massive_status == MASSIVE_STATUS_BUDGET_DISABLED:
+            reasons.append("budget_disabled")
         if reasons:
             alerts.append(
                 {

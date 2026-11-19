@@ -698,13 +698,17 @@ async def sync_massive_reseller(
 
     try:
         result = sync_massive_accounts(actor_user_id=current_admin)
-        if body.from_date or body.to_date:
-            default_start, default_end = default_usage_period()
+        default_start, default_end = default_usage_period()
+        try:
             result["reporting"] = sync_massive_reporting(
                 body.from_date or default_start,
                 body.to_date or default_end,
                 actor_user_id=current_admin,
             )
+        except ProxyError as exc:
+            # Cumulative sync and budgets already succeeded; reporting is a
+            # separate provider surface and may be disabled independently.
+            result["reporting_error"] = type(exc).__name__
     except ProxyError as exc:
         raise _error(exc)
     _audit(
