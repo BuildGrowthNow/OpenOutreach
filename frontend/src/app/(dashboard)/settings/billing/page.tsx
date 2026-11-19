@@ -339,6 +339,25 @@ export default function BillingPage() {
         </Card>
       )}
 
+      {billingStatus?.team_workspaces_enabled && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Desktop seats</CardTitle>
+            <CardDescription>
+              Desktop seats are included in team plans. They run on the
+              member&apos;s computer with the local IP, use no proxy, and do not
+              consume a cloud seat.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">
+              Member logins are included during rollout. A login alone does not
+              include a browser account, proxy, or email slot.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
       {isBillingOwner && (
         <Card>
           <CardHeader>
