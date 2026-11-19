@@ -1014,8 +1014,20 @@ def pool_stats_summary(country: Optional[str] = None) -> dict[str, Any]:
             "warnings": [],
             "country_counts": {},
         }
-    counts = client.country_counts()
-    warnings = client.warnings(country) if country else []
+    try:
+        counts = client.country_counts()
+    except MassiveResellerError as exc:
+        logger.warning(
+            "pool_stats_country_counts_failed exception_type=%s", type(exc).__name__
+        )
+        counts = {}
+    try:
+        warnings = client.warnings(country) if country else []
+    except MassiveResellerError as exc:
+        logger.warning(
+            "pool_stats_warnings_failed exception_type=%s", type(exc).__name__
+        )
+        warnings = []
     return {
         "configured": True,
         "warnings": warnings,
