@@ -1193,7 +1193,10 @@ response, not the raw flag values.
    seat? **Resolved for Phase 0:** one browser account per seat; Cloud seats are a
    Cloud-plan entitlement only. A Cloud Duo bundle may share one proxy identity when both
    channels belong to the same client. Price flat per seat, not by proxy count or GB.
-2. **Team member pricing:** free up to 3, then $29/mo, or included per plan? Still Phase 3.
+2. **Team member pricing:** **Resolved for the Phase 3 rollout:** member logins
+   are included in the current plan; a login alone does not include a browser
+   account or proxy. No per-member charge or free-up-to-3 metering was added.
+   Revisit before Phase 4 with real workspace usage.
 3. **Managed-only vs BYO:** do Cloud customers get a managed proxy only, or can they
    bring their own? **Resolved for Phase 0:** managed by default; managed proxies are
    read-only in the client; BYO remains available only on profiles without a managed

@@ -172,7 +172,7 @@ const faqs = [
   {
     question: "Can my team use OpenOutreach together?",
     answer:
-      "Team workspaces let an owner invite members, assign roles, and share one plan and cloud seat pool. Owners and admins assign cloud LinkedIn profiles to members. Desktop seats run on the member's local IP with no proxy. Team-member pricing is unchanged while the workspace feature is in rollout.",
+      "Team workspaces let an owner invite members, assign roles, and share one plan and cloud seat pool. Owners and admins assign cloud LinkedIn profiles to members. Desktop seats run on the member's local IP with no proxy. Member logins are included in the current plan during rollout; a login alone does not include a browser account or proxy.",
   },
   {
     question: "Do I need technical skills to set it up?",
@@ -464,8 +464,9 @@ export default function PricingPage() {
             </div>
           </div>
           <p className="mt-6 text-center text-xs text-zinc-500">
-            Team-member pricing is unchanged during rollout. A login alone does not
-            include a browser account or a proxy.
+            Member logins are included in the current plan during rollout. A login
+            alone does not include a browser account or a proxy; those remain
+            seat-priced.
           </p>
         </div>
       </section>

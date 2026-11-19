@@ -78,9 +78,14 @@ Seat overrides remain audited and do not change Stripe.
 
 ## 7. Team-member pricing
 
-**Not implemented.** Free-up-to-3 vs $29/mo vs included is still undecided.
-No Stripe price, product, or customer-facing pricing was changed. Implementing
-this requires explicit product approval.
+**Decision (2026-11-19): member logins are included in the current plan during
+rollout.** A member login does not include a browser account, proxy, or email
+slot; those remain seat-priced. There is no per-member charge and no
+free-up-to-3 metering in this phase.
+
+No Stripe price, product, subscription item, or customer-facing price was
+changed. Revisit this decision before Phase 4 using real workspace usage; any
+future per-member price requires explicit product approval and Stripe work.
 
 ## 8. Validation
 
