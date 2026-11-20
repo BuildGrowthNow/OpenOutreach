@@ -83,23 +83,41 @@ def reseller_available() -> bool:
     return reseller_enabled() and MassiveResellerConfig.from_settings() is not None
 
 
+_RESELLER_USERNAME_RE = re.compile(r"[^A-Za-z0-9.@]+")
+
+
+def _reseller_username_token(value: str, *, limit: int) -> str:
+    """Sanitize a token to the Reseller API's allowed username characters.
+
+    The live Reseller API accepts only ``a-z A-Z 0-9 @ .`` in the account
+    username. Underscores and hyphens are rejected, so replace any other
+    character with a dot and collapse repeated dots.
+    """
+    cleaned = _RESELLER_USERNAME_RE.sub(".", (value or "").strip())
+    cleaned = re.sub(r"\.{2,}", ".", cleaned).strip(".")
+    return cleaned[:limit].strip(".")
+
+
 def build_reseller_username(org_id: Optional[str], profile_id: str) -> str:
-    """Build the unique sub-username (hyphens only; parent separator is `_`)."""
-    org_token = _safe_token(org_id or "personal", limit=60)
-    profile_token = _safe_token(profile_id, limit=80)
+    """Build the unique sub-username using only Reseller-allowed characters."""
+    org_token = _reseller_username_token(org_id or "personal", limit=60)
+    profile_token = _reseller_username_token(profile_id, limit=80)
     if not profile_token:
         raise ProxyError("A profile id is required for a Massive sub-account")
-    username = f"outreach-{org_token}-li-{profile_token}"
+    username = f"outreach.{org_token}.li.{profile_token}"
     if len(username) > 255:
         raise ProxyError("Massive sub-account username exceeds 255 characters")
     return username
 
 
 def full_massive_username(parent_username: str, subuser: str) -> str:
-    # The parent may legitimately contain underscores; only the separator
-    # between parent and sub-account is significant.
-    parent = re.sub(r"[^A-Za-z0-9_.-]+", "-", (parent_username or "").strip())[:120]
-    sub = _safe_token(subuser, limit=120)
+    # The parent may legitimately contain underscores, dots, or @; only the
+    # separator between parent and sub-account is significant. The sub-account
+    # itself must keep the Reseller API's allowed characters.
+    parent = re.sub(
+        r"[^A-Za-z0-9_.@-]+", ".", (parent_username or "").strip()
+    ).strip(".")[:120]
+    sub = _reseller_username_token(subuser, limit=120)
     if not parent or not sub:
         raise ProxyError("Massive parent username and sub-account are required")
     return f"{parent}_{sub}"

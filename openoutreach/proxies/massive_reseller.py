@@ -421,18 +421,15 @@ class MassiveResellerClient:
         )
 
     def set_account_status(self, account_id: str, enabled: bool) -> dict[str, Any]:
-        """Enable/disable a sub-account. Both status and boolean are sent for API compatibility."""
-        payload = self._request(
-            "PUT",
-            f"/accounts/{account_id}",
-            json_body={
-                "status": "active" if enabled else "disabled",
-                "enabled": bool(enabled),
-            },
-        )
-        return _normalize_account(
+        """Enable/disable a sub-account via the documented action endpoints."""
+        action = "enable" if enabled else "disable"
+        payload = self._request("POST", f"/accounts/{account_id}/{action}")
+        normalized = _normalize_account(
             _strip_secrets(_response_object(payload, ("account", "data", "result")))
         )
+        if not normalized.get("account_id"):
+            normalized["account_id"] = account_id
+        return normalized
 
     def enable_account(self, account_id: str) -> dict[str, Any]:
         return self.set_account_status(account_id, True)
@@ -442,34 +439,49 @@ class MassiveResellerClient:
 
     def allocate_traffic(self, account_id: str, bytes_: int) -> dict[str, Any]:
         """Top up a sub-account's cumulative lifetime allowance."""
+        amount = max(1, int(bytes_))  # the live API rejects a zero allocation
         payload = self._request(
             "POST",
             f"/accounts/{account_id}/allocations",
-            json_body={"bytes": max(0, int(bytes_))},
+            json_body={"limit": amount},
         )
-        return _normalize_account(
+        normalized = _normalize_account(
             _strip_secrets(_response_object(payload, ("account", "data", "result")))
         )
+        if not normalized.get("account_id"):
+            normalized["account_id"] = account_id
+        return normalized
 
     def set_session_limits(
         self,
         account_id: str,
         *,
-        max_sessions: Optional[int] = None,
-        bytes_per_session: Optional[int] = None,
+        session_traffic_limit: Optional[str] = None,
+        session_duration_limit: Optional[str] = None,
     ) -> dict[str, Any]:
-        """Set optional per-session limits for a sub-account."""
+        """Set per-session traffic and/or duration ceilings.
+
+        The live API accepts SI size strings such as ``100mb`` and duration
+        strings such as ``15m``. At least one field is required.
+        """
         body: dict[str, Any] = {}
-        if max_sessions is not None:
-            body["max_sessions"] = max(0, int(max_sessions))
-        if bytes_per_session is not None:
-            body["bytes_per_session"] = max(0, int(bytes_per_session))
+        if session_traffic_limit is not None:
+            body["session_traffic_limit"] = str(session_traffic_limit)
+        if session_duration_limit is not None:
+            body["session_duration_limit"] = str(session_duration_limit)
+        if not body:
+            raise MassiveResellerError(
+                "At least one session limit is required"
+            )
         payload = self._request(
-            "PUT", f"/accounts/{account_id}/session-limits", json_body=body
+            "PUT", f"/accounts/{account_id}/session-limit", json_body=body
         )
-        return _normalize_account(
+        normalized = _normalize_account(
             _strip_secrets(_response_object(payload, ("account", "data", "result")))
         )
+        if not normalized.get("account_id"):
+            normalized["account_id"] = account_id
+        return normalized
 
     def get_account_usage(
         self, account_id: str, *, daily: bool = False
