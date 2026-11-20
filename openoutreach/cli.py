@@ -396,7 +396,12 @@ def check_proxy_health():
 @cli.command()
 @click.option('--from-date', default=None, help='Start date (YYYY-MM-DD, UTC)')
 @click.option('--to-date', default=None, help='End date (YYYY-MM-DD, UTC)')
-def sync_proxy_usage(from_date, to_date):
+@click.option(
+    '--dry-run',
+    is_flag=True,
+    help='Sync usage and preview budget actions without disabling or re-enabling sub-accounts',
+)
+def sync_proxy_usage(from_date, to_date, dry_run):
     """Sync Massive sub-account usage, reporting usage, and internal budgets."""
     import asyncio
 
@@ -407,6 +412,7 @@ def sync_proxy_usage(from_date, to_date):
         sync_massive_usage,
     )
     from openoutreach.proxies.provisioning import (
+        preview_massive_budgets,
         reseller_available,
         sync_massive_accounts,
         sync_massive_reporting,
@@ -421,17 +427,35 @@ def sync_proxy_usage(from_date, to_date):
             click.echo("Another proxy-usage-sync job is active; exiting")
             return
         if reseller_available():
-            cumulative = sync_massive_accounts()
+            cumulative = sync_massive_accounts(apply_budgets=not dry_run)
             reporting = sync_massive_reporting(start, end)
             click.echo(
                 f"Reseller accounts: {cumulative['accounts']} "
                 f"({cumulative['matched']} matched, {cumulative['unmatched']} unmatched); "
                 f"reporting: {reporting['matched']} proxies "
                 f"({reporting['skipped']} unmatched, {reporting['total_bytes']} bytes); "
-                f"budget: {cumulative['budget']}"
+                f"budget: {'dry-run' if dry_run else cumulative['budget']}"
             )
+            if dry_run:
+                preview = preview_massive_budgets()
+                click.echo(
+                    "Budget dry-run: "
+                    f"{preview['proxies']} sub-accounts, "
+                    f"would disable {preview['counts']['disable']}, "
+                    f"would re-enable {preview['counts']['re_enable']}, "
+                    f"soft alerts {preview['counts']['soft_alert']}"
+                )
             return
         result = asyncio.run(sync_massive_usage(start, end))
+        if dry_run:
+            preview = preview_massive_budgets()
+            click.echo(
+                "Budget dry-run: "
+                f"{preview['proxies']} Reseller sub-accounts, "
+                f"would disable {preview['counts']['disable']}, "
+                f"would re-enable {preview['counts']['re_enable']}, "
+                f"soft alerts {preview['counts']['soft_alert']}"
+            )
     click.echo(
         f"Synced {result['matched']} proxies "
         f"({result['skipped']} unmatched, {result['total_bytes']} bytes)"

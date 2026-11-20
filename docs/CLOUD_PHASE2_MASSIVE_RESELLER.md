@@ -126,6 +126,18 @@ Cron: `python -m openoutreach.cli sync-proxy-usage` at 01:45 UTC. When Reseller
 is available it runs the cumulative sync + reporting sync + budget enforcement;
 otherwise it keeps the Phase 1 Reporting-only path.
 
+For a production threshold review without disabling or re-enabling a live
+sub-account, run the same sync with `--dry-run`:
+
+```text
+python -m openoutreach.cli sync-proxy-usage --dry-run
+```
+
+It updates cumulative/Reporting usage and prints projected `disable`,
+`re_enable`, and `soft_alert` counts. It never calls the provider enable/disable
+endpoints and never writes budget audit events. Use the normal command only
+after the projection is reviewed.
+
 ## 7. Admin
 
 `/api/admin/proxies` (admin only):
