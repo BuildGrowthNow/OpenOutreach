@@ -1,12 +1,14 @@
 # Phase 2 — Massive Reseller, Usage, and Internal Budgets
 
-Status: implemented on branch `feature/cloud-phase3a-orgs-team-seats`  
-Date: 2026-11-19  
+Status: implemented, merged, deployed, and live-pilot verified  
+Date: 2026-11-20  
 Scope owner: platform
 
 This document records the Phase 2 implementation. It is additive and gated by
-`MASSIVE_RESELLER_ENABLED` / `MASSIVE_POOL_STATS_ENABLED`. No production
-sub-account was created and no production deploy was performed.
+`MASSIVE_RESELLER_ENABLED` / `MASSIVE_POOL_STATS_ENABLED`. The code is deployed
+to production; both flags remain false. The 2026-11-20 pilot created only
+synthetic sub-accounts, all of which were disabled and verified, and did not
+assign a proxy to a production profile.
 
 ## 1. Goal
 
@@ -68,8 +70,10 @@ No response body is logged. HTTP failures report only the status code.
 
 - `provision_managed_proxy(...)` prefers Reseller, then falls back to the Phase 1
   parent `-subaccount` credentials when Reseller is disabled or unavailable.
-- Sub-username: `outreach-<org>-li-<profile>` (hyphens only; the parent/sub
-  separator is `_`).
+- Sub-username: `outreach.<org>.li.<profile>` (dot-separated). The live Reseller
+  API accepts only `a-z A-Z 0-9 @ .` in the account username; hyphens and
+  underscores are rejected with HTTP 400. The parent/sub separator in the proxy
+  auth username remains `_`.
 - Password: `secrets.token_urlsafe(36)`, encrypted in the proxy record.
 - Conservative default lifetime limit; top up from the admin Massive tab.
 - `409 already_exists`: fetch the existing account instead of retrying create.
@@ -164,7 +168,7 @@ alerts, and Pool Stats. Passwords and keys are never displayed.
 
 ```text
 .venv\Scripts\python.exe -m pytest tests -q
-# 575 passed, 56 skipped
+# 591 passed, 56 skipped
 
 .venv\Scripts\python.exe -m pytest tests/test_cloud_phase0.py tests/test_cloud_phase1.py -p no:asyncio -q
 # 64 passed
@@ -173,9 +177,43 @@ ruff E9,F63,F7,F82, compileall, pyright
 # clean
 ```
 
-Phase 2 unit tests use an in-memory Mongo fake and a fake HTTP client. No live
-Massive call was made. The protected workflow's pre-existing Mongo integration
-failures from `main` were not chased or masked.
+### 9.1 Live pilot — 2026-11-20
+
+Production had no cloud profiles at pilot time, so the operator approved a
+synthetic two-sub-account pilot rather than creating temporary profile fixtures.
+The pilot ran in a one-off `outreach-api` container with
+`MASSIVE_RESELLER_ENABLED=true` and `MASSIVE_POOL_STATS_ENABLED=true` injected
+only for that container; the persistent app flags stayed false.
+
+Verified live:
+
+- `POST /resellers/accounts` created two sub-accounts.
+- A duplicate create returned `409`; the full parent-prefixed username from
+  `GET /accounts` was matched back to the sub-account, and its password was
+  readable for adoption.
+- `POST /accounts/{id}/disable` and `POST /accounts/{id}/enable` changed the
+  provider state; the account list showed `disabled`/`proxy_access=false` and
+  then `enabled`/`proxy_access=true`.
+- `POST /accounts/{id}/allocations` with `{"limit": ...}` raised the cumulative
+  limit from 5 GB to 6 GB.
+- `PUT /accounts/{id}/session-limit` accepted
+  `session_traffic_limit="100mb"` and `session_duration_limit="15m"`.
+- `GET /accounts/{id}` and `/usage` returned cumulative usage and the updated
+  limit.
+- Reporting returned the same usage for `group_by=subaccount` and
+  `group_by=subuser` (fallback path works).
+- Pool Stats returned gzip-backed data, 223 countries, ~353k US nodes, ~4,957
+  US cities, and New York at ~3,093 nodes; city targeting was safe at the
+  1,000-node threshold.
+
+All four pilot sub-accounts (two from the first successful pass, two from the
+final pass) were verified `disabled` with `proxy_access=false` and zero usage.
+No key, password, cookie, or token was printed. The pilot did not assign a proxy
+to any production profile and did not enable customer-facing flags.
+
+Phase 2 unit tests use an in-memory Mongo fake and a fake HTTP client. The
+protected workflow's pre-existing Mongo integration failures from `main` were
+not chased or masked.
 
 ## 10. Rollback
 
@@ -189,8 +227,11 @@ failures from `main` were not chased or masked.
 
 Before production enablement:
 
-- approve a live Reseller pilot with two internal cloud profiles,
-- verify `409` adoption, disable/enable, rotate, and top-up on the live API,
+- live API-shape pilot completed on 2026-11-20 with two synthetic sub-accounts
+  (no production cloud profiles existed); real profile provisioning and
+  password rotation still need the first real cloud seat,
+- `409` adoption, disable/enable, allocation/top-up, session limits, usage,
+  Reporting, and Pool Stats are verified live,
 - confirm no password appears in API responses, logs, or audit metadata,
 - dry-run the usage sync and budget thresholds with internal accounts,
 - confirm `outreach-api` remains at exactly one daemon container,
