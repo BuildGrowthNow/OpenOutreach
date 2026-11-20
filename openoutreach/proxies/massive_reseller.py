@@ -368,7 +368,9 @@ class MassiveResellerClient:
                 _first(row, ("username", "subuser", "sub_username", "name", "login"))
                 or ""
             ).lower()
-            if row_username != target:
+            # The list endpoint returns the full ``<parent>_<sub>`` username,
+            # while the create call uses only the sub-username.
+            if row_username != target and not row_username.endswith(f"_{target}"):
                 continue
             normalized = _normalize_account(row)
             if include_password:
@@ -429,6 +431,8 @@ class MassiveResellerClient:
         )
         if not normalized.get("account_id"):
             normalized["account_id"] = account_id
+        if not normalized.get("status") or normalized.get("status") == "unknown":
+            normalized["status"] = "enabled" if enabled else "disabled"
         return normalized
 
     def enable_account(self, account_id: str) -> dict[str, Any]:
@@ -440,17 +444,15 @@ class MassiveResellerClient:
     def allocate_traffic(self, account_id: str, bytes_: int) -> dict[str, Any]:
         """Top up a sub-account's cumulative lifetime allowance."""
         amount = max(1, int(bytes_))  # the live API rejects a zero allocation
-        payload = self._request(
+        self._request(
             "POST",
             f"/accounts/{account_id}/allocations",
             json_body={"limit": amount},
         )
-        normalized = _normalize_account(
-            _strip_secrets(_response_object(payload, ("account", "data", "result")))
-        )
-        if not normalized.get("account_id"):
-            normalized["account_id"] = account_id
-        return normalized
+        # The allocation response contains the amount just added, not the new
+        # cumulative limit. Read the account back so callers can persist the
+        # correct total.
+        return self.get_account(account_id)
 
     def set_session_limits(
         self,
