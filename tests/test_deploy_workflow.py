@@ -21,7 +21,7 @@ def test_deploy_targets_scalingo_apps_in_production_region():
     assert "--app outreach-api --region \"$SCALINGO_REGION\" deploy" in workflow
     assert "--app outreach-web --region \"$SCALINGO_REGION\" deploy" in workflow
     assert "SCALINGO_API_TOKEN: ${{ secrets.SCALINGO_API_TOKEN }}" in workflow
-    assert "git archive --format=tar \"$DEPLOY_SHA\" -- . ':(exclude)frontend' ':(exclude)package.json' ':(exclude)package-lock.json' | gzip -c > /tmp/openoutreach-api.tgz" in workflow
+    assert "git archive --format=tar --prefix=app/ \"$DEPLOY_SHA\" -- . ':(exclude)frontend' ':(exclude)package.json' ':(exclude)package-lock.json' | gzip -c > /tmp/openoutreach-api.tgz" in workflow
 
 
 def test_deploy_validates_public_health_and_web_root():

@@ -70,7 +70,10 @@ jobs:
           scalingo whoami
           # The API slug is Python-only. Preserve executable file modes while
           # excluding the Node manifests and separately deployed frontend.
-          git archive --format=tar "$DEPLOY_SHA" -- . ':(exclude)frontend' ':(exclude)package.json' ':(exclude)package-lock.json' | gzip -c > /tmp/openoutreach-api.tgz
+          # Scalingo archive deploys require one top-level folder; without the
+          # prefix it can select desktop/ as the app root and fail to find the
+          # Procfile. Keep the app/ prefix.
+          git archive --format=tar --prefix=app/ "$DEPLOY_SHA" -- . ':(exclude)frontend' ':(exclude)package.json' ':(exclude)package-lock.json' | gzip -c > /tmp/openoutreach-api.tgz
           scalingo --app outreach-api --region "$SCALINGO_REGION" deploy /tmp/openoutreach-api.tgz "$DEPLOY_SHA"
           # Preserve the frontend/ prefix because outreach-web uses PROJECT_DIR=frontend.
           # The explicit Node buildpack keeps archive deployments deterministic.
