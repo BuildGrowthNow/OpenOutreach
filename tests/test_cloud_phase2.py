@@ -184,16 +184,50 @@ def test_enable_and_disable_use_documented_action_endpoints(
     assert enable_call["url"].endswith("/accounts/acct-1/enable")
 
 
-def test_allocate_traffic_sends_limit_field(reseller_settings, fake_http):
-    fake_http.responses = [_FakeResponse({"created_at": 1, "limit": 1_000_000_000})]
+def test_find_account_matches_parent_prefixed_username(reseller_settings, fake_http):
+    fake_http.responses = [
+        _FakeResponse(
+            {
+                "accounts": [
+                    {
+                        "id": "acct-1",
+                        "username": "parent_outreach.org.li.p1",
+                        "password": "sub-secret",
+                        "limit": 100,
+                    }
+                ]
+            }
+        )
+    ]
     client = MassiveResellerClient()
 
-    client.allocate_traffic("acct-1", 1_000_000_000)
+    account = client.find_account_by_username(
+        "outreach.org.li.p1", include_password=True
+    )
 
-    call = fake_http.calls[0]
-    assert call["method"] == "POST"
-    assert call["url"].endswith("/accounts/acct-1/allocations")
-    assert call["json"] == {"limit": 1_000_000_000}
+    assert account is not None
+    assert account["account_id"] == "acct-1"
+    assert account["password"] == "sub-secret"
+
+
+def test_allocate_traffic_sends_limit_field_and_reads_new_total(
+    reseller_settings, fake_http
+):
+    fake_http.responses = [
+        _FakeResponse({"created_at": 1, "limit": 1_000_000_000}),
+        _FakeResponse({"id": "acct-1", "limit": 6_000_000_000, "usage": 0}),
+    ]
+    client = MassiveResellerClient()
+
+    account = client.allocate_traffic("acct-1", 1_000_000_000)
+
+    allocation_call, account_call = fake_http.calls
+    assert allocation_call["method"] == "POST"
+    assert allocation_call["url"].endswith("/accounts/acct-1/allocations")
+    assert allocation_call["json"] == {"limit": 1_000_000_000}
+    assert account_call["method"] == "GET"
+    assert account_call["url"].endswith("/accounts/acct-1")
+    assert account["limit_bytes"] == 6_000_000_000
 
 
 def test_session_limits_use_documented_path_and_fields(reseller_settings, fake_http):
