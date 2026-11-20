@@ -30,6 +30,7 @@ from openoutreach.proxies.service import _proxy_for_subuser, record_usage_snapsh
 logger = logging.getLogger(__name__)
 
 _TOKEN_RE = re.compile(r"[^A-Za-z0-9_-]+")
+_PARENT_TOKEN_RE = re.compile(r"[^A-Za-z0-9_.@-]+")
 
 
 def _setting(name: str) -> Any:
@@ -38,6 +39,12 @@ def _setting(name: str) -> Any:
 
 def _safe_token(value: str, *, limit: int = 120) -> str:
     cleaned = _TOKEN_RE.sub("-", (value or "").strip()).strip("-")
+    return cleaned[:limit]
+
+
+def _safe_parent_token(value: str, *, limit: int = 120) -> str:
+    """Keep the parent's email-style characters in the proxy username."""
+    cleaned = _PARENT_TOKEN_RE.sub("-", (value or "").strip()).strip("-")
     return cleaned[:limit]
 
 
@@ -131,7 +138,7 @@ def build_massive_username(
         <PARENT>-subaccount-<profile>-country-US-session-<profile>
         -sessionttl-1440-sessionmode-flex-type-common
     """
-    parent = _safe_token(parent_username, limit=120)
+    parent = _safe_parent_token(parent_username, limit=120)
     token = _safe_token(profile_id)
     if not parent or not token:
         raise ProxyError("Massive parent username and profile id are required")

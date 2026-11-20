@@ -165,6 +165,56 @@ def test_reseller_409_maps_to_already_exists(reseller_settings, fake_http):
     assert "secret" not in str(exc_info.value)
 
 
+def test_enable_and_disable_use_documented_action_endpoints(
+    reseller_settings, fake_http
+):
+    fake_http.responses = [
+        _FakeResponse({"id": "acct-1"}),
+        _FakeResponse({"id": "acct-1"}),
+    ]
+    client = MassiveResellerClient()
+
+    client.disable_account("acct-1")
+    client.enable_account("acct-1")
+
+    disable_call, enable_call = fake_http.calls
+    assert disable_call["method"] == "POST"
+    assert disable_call["url"].endswith("/accounts/acct-1/disable")
+    assert enable_call["method"] == "POST"
+    assert enable_call["url"].endswith("/accounts/acct-1/enable")
+
+
+def test_allocate_traffic_sends_limit_field(reseller_settings, fake_http):
+    fake_http.responses = [_FakeResponse({"created_at": 1, "limit": 1_000_000_000})]
+    client = MassiveResellerClient()
+
+    client.allocate_traffic("acct-1", 1_000_000_000)
+
+    call = fake_http.calls[0]
+    assert call["method"] == "POST"
+    assert call["url"].endswith("/accounts/acct-1/allocations")
+    assert call["json"] == {"limit": 1_000_000_000}
+
+
+def test_session_limits_use_documented_path_and_fields(reseller_settings, fake_http):
+    fake_http.responses = [_FakeResponse({"id": "acct-1"})]
+    client = MassiveResellerClient()
+
+    client.set_session_limits(
+        "acct-1",
+        session_traffic_limit="100mb",
+        session_duration_limit="15m",
+    )
+
+    call = fake_http.calls[0]
+    assert call["method"] == "PUT"
+    assert call["url"].endswith("/accounts/acct-1/session-limit")
+    assert call["json"] == {
+        "session_traffic_limit": "100mb",
+        "session_duration_limit": "15m",
+    }
+
+
 def test_reseller_list_accounts_strips_passwords(reseller_settings, fake_http):
     fake_http.responses = [
         _FakeResponse(
@@ -210,24 +260,26 @@ def test_pool_stats_warns_below_threshold(reseller_settings, fake_http):
     assert client.is_country_safe("US") is False
 
 
-def test_build_reseller_username_is_hyphen_only():
+def test_build_reseller_username_uses_reseller_safe_characters():
     username = provisioning.build_reseller_username("org_1", "profile_1")
-    assert username == "outreach-org-1-li-profile-1"
+    assert username == "outreach.org.1.li.profile.1"
     assert "_" not in username
+    assert "-" not in username
+    assert all(char.isalnum() or char in ".@" for char in username)
 
 
 def test_full_massive_username_allows_parent_underscore():
     assert (
-        provisioning.full_massive_username("parent_account", "outreach-org-li-p1")
-        == "parent_account_outreach-org-li-p1"
+        provisioning.full_massive_username("parent_account", "outreach.org.li.p1")
+        == "parent_account_outreach.org.li.p1"
     )
 
 
 def test_reseller_proxy_username_contains_region_and_session():
     username = provisioning.build_reseller_proxy_username(
-        "parent", "outreach-org-li-p1", "US", "NY", "New York", session_id="p1"
+        "parent", "outreach.org.li.p1", "US", "NY", "New York", session_id="p1"
     )
-    assert username.startswith("parent_outreach-org-li-p1-country-US-subdivision-NY")
+    assert username.startswith("parent_outreach.org.li.p1-country-US-subdivision-NY")
     assert "-city-New%20York" in username
     assert "-session-p1" in username
     assert "-sessionttl-1440" in username
@@ -323,8 +375,8 @@ def test_provision_reseller_proxy_encrypts_and_assigns(
     profile = fake.collection("linkedin_profiles").find_one({"_id": "p1"})
 
     assert stored["massive_account_id"] == "acct-1"
-    assert stored["massive_subuser"] == "outreach-org1-li-p1"
-    assert stored["username"].startswith("parent_outreach-org1-li-p1-country-US")
+    assert stored["massive_subuser"] == "outreach.org1.li.p1"
+    assert stored["username"].startswith("parent_outreach.org1.li.p1-country-US")
     assert "-session-p1" in stored["username"]
     assert stored["massive_status"] == "active"
     assert stored["password_encrypted"] and plaintext not in stored["password_encrypted"]
