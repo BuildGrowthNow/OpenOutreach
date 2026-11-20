@@ -4,6 +4,7 @@ Supports Resend, AWS SES, and SMTP backends.
 """
 import logging
 from datetime import datetime
+from html import escape as html_escape
 from typing import Optional
 from abc import ABC, abstractmethod
 
@@ -369,8 +370,8 @@ def send_trial_expiry_warning(user: User, days_remaining: int) -> bool:
         + _ul([
             "<strong style=\"color:#f4f4f5;\">Starter - $19/month:</strong> 1 LinkedIn account, 3 campaigns",
             "<strong style=\"color:#f4f4f5;\">Pro - $49/month:</strong> 1 LinkedIn account, unlimited campaigns, voice notes, API access",
-            "<strong style=\"color:#f4f4f5;\">Business - $99/month:</strong> 3 LinkedIn accounts, team members, priority support",
-            "<strong style=\"color:#f4f4f5;\">Agency - $249/month:</strong> 10 LinkedIn accounts, white-label branding, unlimited team members",
+            "<strong style=\"color:#f4f4f5;\">Business - $99/month:</strong> 3 LinkedIn accounts, shared team workspace (rollout), priority support",
+            "<strong style=\"color:#f4f4f5;\">Agency - $249/month:</strong> 10 LinkedIn accounts, white-label branding, shared team workspace (rollout)",
         ])
         + _btn(f"{app_url}/settings/plan", "Choose a Plan")
         + _divider()
@@ -388,8 +389,8 @@ Your {brand} trial expires tomorrow. After that, your campaigns will pause.
 Available plans:
 - Starter - $19/month: 1 LinkedIn account, 3 campaigns
 - Pro - $49/month: 1 LinkedIn account, unlimited campaigns, voice notes, API access
-- Business - $99/month: 3 LinkedIn accounts, team members, priority support
-- Agency - $249/month: 10 LinkedIn accounts, white-label branding, unlimited team members
+- Business - $99/month: 3 LinkedIn accounts, shared team workspace (rollout), priority support
+- Agency - $249/month: 10 LinkedIn accounts, white-label branding, shared team workspace (rollout)
 
 Choose a plan: {app_url}/settings/plan
 
@@ -729,3 +730,58 @@ If you didn't request a password reset, you can safely ignore this email. Your p
 """
 
     return _send_billing_email(user, f"Reset your {brand} password", html, text)
+
+
+def send_organization_invite(
+    to_email: str,
+    org_name: str,
+    inviter_name: str,
+    role: str,
+    invite_url: str,
+    expires_at: Optional[datetime] = None,
+) -> bool:
+    """Send a workspace invitation link. The raw token is never logged."""
+    brand, _, support = _settings_ctx()
+    recipient = User(email=to_email, full_name="")
+    role_label = "administrator" if role == "admin" else "member"
+    expires_label = _format_date(expires_at) if expires_at else "in 7 days"
+
+    # The owner controls the workspace name and the inviter controls their
+    # display name. Escape both before they enter a platform-sent HTML email,
+    # and strip line breaks from the subject to prevent header injection.
+    safe_org = html_escape(org_name or "")
+    safe_inviter = html_escape(inviter_name or "A workspace owner")
+    text_org = " ".join((org_name or "").split())
+    text_inviter = " ".join((inviter_name or "A workspace owner").split())
+    subject_org = text_org or "a workspace"
+
+    body = (
+        _h1(f"You're invited to {safe_org}")
+        + _p(f"Hi,")
+        + _p(
+            f"{safe_inviter} invited you to join "
+            f"<strong>{safe_org}</strong> on {brand} as a {role_label}."
+        )
+        + _p("Accept the invitation to see the LinkedIn profiles and campaigns assigned to you.")
+        + _btn(invite_url, "Accept Invitation")
+        + _divider()
+        + _p(
+            f'Or copy this link into your browser:<br><a href="{html_escape(invite_url)}" '
+            f'style="color:#10b981;text-decoration:none;word-break:break-all;font-size:13px;">{html_escape(invite_url)}</a>',
+            "font-size:13px;color:#71717a;",
+        )
+        + _p(f"This invitation expires {expires_label}.", "font-size:13px;color:#71717a;")
+        + _p("If you weren't expecting this invitation, you can ignore this email.", "font-size:13px;color:#71717a;")
+    )
+
+    html = _html_wrap(brand, support, body)
+    text = f"""You're invited to {text_org}
+
+{text_inviter} invited you to join {text_org} on {brand} as a {role_label}.
+
+Accept the invitation: {invite_url}
+
+This invitation expires {expires_label}.
+If you weren't expecting this invitation, you can ignore this email.
+"""
+    return _send_billing_email(recipient, f"Join {subject_org} on {brand}", html, text)

@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Check, X, ChevronDown, Zap, ArrowRight } from 'lucide-react';
+import { Check, X, ChevronDown, Zap, ArrowRight, Users, Monitor, Cloud } from 'lucide-react';
 import { Navbar } from '@/components/landing/Navbar';
 import { Footer } from '@/components/landing/Footer';
 
@@ -99,6 +99,9 @@ const plans: Plan[] = [
     maxCampaigns: null,
     features: [
       'Fully managed execution',
+      '1 LinkedIn account + managed proxy included',
+      '195+ countries with region selection',
+      'Powered by the Massive residential network',
       'AI included (no API key needed)',
       'No desktop app needed',
       'All Pro plan features',
@@ -120,6 +123,7 @@ const comparisonFeatures: ComparisonFeature[] = [
   { name: 'AI Follow-up Sequences', starter: true, pro: true, business: true, agency: true, cloud: true },
   { name: 'Priority Support', starter: false, pro: false, business: true, agency: true, cloud: true },
   { name: 'Managed Cloud Execution', starter: false, pro: false, business: false, agency: false, cloud: true },
+  { name: 'Managed Proxy + Region Selection', starter: false, pro: false, business: false, agency: false, cloud: true },
   { name: 'AI Included (no API key needed)', starter: false, pro: false, business: false, agency: false, cloud: true },
   { name: 'Campaign Performance Reviews', starter: false, pro: false, business: false, agency: false, cloud: true },
 ];
@@ -144,6 +148,31 @@ const faqs = [
     question: "What's the difference between the desktop plans and Cloud?",
     answer:
       "Desktop plans (Starter → Agency) run the automation software on your own computer using your own internet connection - giving you full control. Cloud runs it on our managed infrastructure with AI already configured. Cloud costs more but requires nothing from you.",
+  },
+  {
+    question: "Do I need a proxy for desktop?",
+    answer:
+      "No. Desktop execution uses your own computer and your local internet connection, so no proxy is involved. Cloud execution runs on our servers and always uses a managed proxy for each LinkedIn account.",
+  },
+  {
+    question: "Which country does my LinkedIn account use?",
+    answer:
+      "Cloud accounts use a managed proxy in the country you choose when you add the account. Country is required; state and city are optional. Desktop accounts use your local IP.",
+  },
+  {
+    question: "Can I see or edit my proxy credentials?",
+    answer:
+      "No. Managed proxy credentials are encrypted at rest and are never shown to you. If you need a different region or proxy, request a proxy change from Settings → LinkedIn. Support reviews it because changing region changes the egress IP.",
+  },
+  {
+    question: "What happens if my proxy changes IP?",
+    answer:
+      "Cloud accounts use a sticky residential session with a fixed TTL, so the egress IP stays stable during normal work. A new session or a region change can produce a new IP; that is expected and may trigger a one-time LinkedIn challenge. We test the egress country and show health status in Settings → LinkedIn. Credentials and GB usage are never shown.",
+  },
+  {
+    question: "Can my team use OpenOutreach together?",
+    answer:
+      "Team workspaces let an owner invite members, assign roles, and share one plan and cloud seat pool. Owners and admins assign cloud LinkedIn profiles to members. Desktop seats run on the member's local IP with no proxy. Member logins are included in the current plan during rollout; a login alone does not include a browser account or proxy.",
   },
   {
     question: "Do I need technical skills to set it up?",
@@ -287,7 +316,7 @@ export default function PricingPage() {
                   ))}
                 </ul>
 
-                <Link href="/signup">
+                <Link href={`/signup?plan=${plan.name}`}>
                   <Button
                     className={`w-full font-semibold ${
                       plan.highlighted
@@ -317,8 +346,12 @@ export default function PricingPage() {
                 </div>
                 <p className="text-sm text-zinc-400 max-w-lg">
                   We run your campaigns on our infrastructure with AI already configured.
-                  No desktop app, no setup - just results. Optional hands-on campaign
-                  adjustments included on request.
+                  $299/mo includes 1 LinkedIn account and 1 managed proxy. Add more cloud
+                  seats anytime. No desktop app, no setup - just results. Optional hands-on
+                  campaign adjustments included on request.
+                </p>
+                <p className="mt-2 text-xs text-zinc-500">
+                  Cloud requires a paid subscription; there is no Cloud trial.
                 </p>
               </div>
               <ul className="lg:w-64 space-y-2">
@@ -330,7 +363,7 @@ export default function PricingPage() {
                 ))}
               </ul>
               <div className="lg:w-44 shrink-0">
-                <Link href="/signup">
+                <Link href="/signup?plan=cloud">
                   <Button className="w-full bg-sky-600 hover:bg-sky-500 text-white font-semibold">
                     Get Started
                     <ArrowRight className="ml-2 h-4 w-4" />
@@ -389,6 +422,52 @@ export default function PricingPage() {
               </tbody>
             </table>
           </div>
+        </div>
+      </section>
+
+      {/* Team */}
+      <section className="py-16 sm:py-24 border-t border-zinc-800/60">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-5xl">
+          <div className="text-center mb-10">
+            <div className="inline-flex items-center gap-2 rounded-full border border-zinc-700 bg-zinc-900/60 px-3 py-1 text-xs font-semibold text-zinc-300">
+              <Users className="h-3.5 w-3.5" />
+              Team workspaces
+            </div>
+            <h2 className="mt-4 text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
+              Invite your team. Share one plan and seat pool.
+            </h2>
+            <p className="mt-3 text-zinc-400 max-w-2xl mx-auto">
+              Owners and admins assign cloud LinkedIn profiles to members. Members see only
+              their assigned profiles and campaigns, and never see proxy credentials.
+            </p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-6">
+              <div className="flex items-center gap-2 text-white font-semibold">
+                <Monitor className="h-5 w-5 text-emerald-400" />
+                Desktop seat
+              </div>
+              <p className="mt-2 text-sm text-zinc-400">
+                Runs on the member&apos;s computer with the local IP. No proxy, no
+                managed bandwidth. Included in team plans.
+              </p>
+            </div>
+            <div className="rounded-2xl border border-sky-500/30 bg-sky-900/10 p-6">
+              <div className="flex items-center gap-2 text-white font-semibold">
+                <Cloud className="h-5 w-5 text-sky-400" />
+                Cloud seat
+              </div>
+              <p className="mt-2 text-sm text-zinc-400">
+                Runs on our infrastructure with a managed residential proxy, region
+                selection, and health monitoring. $299/mo per seat; no GB meter.
+              </p>
+            </div>
+          </div>
+          <p className="mt-6 text-center text-xs text-zinc-500">
+            Member logins are included in the current plan during rollout. A login
+            alone does not include a browser account or a proxy; those remain
+            seat-priced.
+          </p>
         </div>
       </section>
 

@@ -29,6 +29,10 @@ FORBIDDEN_RESPONSE_KEYS = frozenset(
         "provider_key",
         "stripe_secret_key",
         "server_env",
+        "proxy_password",
+        "proxy_password_encrypted",
+        "proxy_username",
+        "proxy_server",
     }
 )
 _SECRET_LIKE = re.compile(r"(?:mongodb(?:\+srv)?://|sk-[A-Za-z0-9]|-----BEGIN .* PRIVATE KEY-----)")

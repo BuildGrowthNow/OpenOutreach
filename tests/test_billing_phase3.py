@@ -179,8 +179,9 @@ class TestTrialExpiry:
 class TestDowngradeHandler:
     """Tests for plan downgrade profile deactivation."""
 
+    @patch("openoutreach.billing.downgrade_handler.credentialed_profile_ids")
     @patch("openoutreach.billing.downgrade_handler.get_mongodb_collection")
-    def test_deactivate_excess_profiles(self, mock_get_collection):
+    def test_deactivate_excess_profiles(self, mock_get_collection, mock_credentialed):
         """Test that excess profiles are deactivated on downgrade."""
         mock_collection = MagicMock()
         mock_collection.find.return_value = [
@@ -190,6 +191,7 @@ class TestDowngradeHandler:
         ]
         mock_collection.update_many.return_value = MagicMock(modified_count=2)
         mock_get_collection.return_value = mock_collection
+        mock_credentialed.return_value = {"p1", "p2", "p3"}
 
         user = User(_id="test_user", email="test@example.com")
         result = handle_plan_downgrade(user, new_limit=1)
@@ -197,14 +199,16 @@ class TestDowngradeHandler:
         assert result["deactivated"] == 2
         assert result["error"] is False
 
+    @patch("openoutreach.billing.downgrade_handler.credentialed_profile_ids")
     @patch("openoutreach.billing.downgrade_handler.get_mongodb_collection")
-    def test_no_deactivation_if_under_limit(self, mock_get_collection):
+    def test_no_deactivation_if_under_limit(self, mock_get_collection, mock_credentialed):
         """Test that no deactivation happens if under limit."""
         mock_collection = MagicMock()
         mock_collection.find.return_value = [
             {"_id": "p1", "created_at": datetime.now(tz.utc)},
         ]
         mock_get_collection.return_value = mock_collection
+        mock_credentialed.return_value = {"p1"}
 
         user = User(_id="test_user", email="test@example.com")
         result = handle_plan_downgrade(user, new_limit=1)

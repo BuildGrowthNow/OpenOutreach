@@ -12,6 +12,7 @@ from datetime import datetime
 from openoutreach.mongodb import models
 from openoutreach.mongodb.connection import get_mongodb_collection
 from openoutreach.api_v2.dependencies_v2 import get_current_user
+from openoutreach.organizations.access import user_can_access_campaign
 
 router = APIRouter()
 
@@ -71,7 +72,7 @@ async def list_leads(
     if campaign_id:
         # Verify campaign access
         campaign = models.Campaign.get(campaign_id)
-        if not campaign or not campaign.has_access(user_id):
+        if not campaign or not user_can_access_campaign(user_id, campaign):
             raise HTTPException(status_code=403, detail="Campaign access denied")
         query["campaign_id"] = campaign_id
     else:
@@ -246,7 +247,7 @@ async def export_leads(
 
     if campaign_id:
         campaign = models.Campaign.get(campaign_id)
-        if not campaign or not campaign.has_access(user_id):
+        if not campaign or not user_can_access_campaign(user_id, campaign):
             raise HTTPException(status_code=403, detail="Campaign access denied")
         query["campaign_id"] = campaign_id
     else:
@@ -371,7 +372,7 @@ async def get_lead(
     accessible_deal = None
     for deal in deals:
         campaign = models.Campaign.get(str(deal["campaign_id"]))
-        if campaign and campaign.has_access(user_id):
+        if campaign and user_can_access_campaign(user_id, campaign):
             if accessible_deal is None:
                 accessible_deal = deal
 
@@ -478,7 +479,7 @@ async def get_lead(
 
     for deal in deals:
         campaign_obj = models.Campaign.get(str(deal["campaign_id"]))
-        if campaign_obj and campaign_obj.has_access(user_id):
+        if campaign_obj and user_can_access_campaign(user_id, campaign_obj):
             all_deals.append({
                 "dealId": str(deal["_id"]),
                 "campaignId": str(deal["campaign_id"]),
@@ -552,7 +553,7 @@ async def list_campaign_leads(
     """List leads for a specific campaign (owner OR team member can access)."""
     # Verify campaign access
     campaign = models.Campaign.get(campaign_id)
-    if not campaign or not campaign.has_access(user_id):
+    if not campaign or not user_can_access_campaign(user_id, campaign):
         raise HTTPException(status_code=403, detail="Campaign access denied")
 
     # Use the main list endpoint logic
@@ -583,7 +584,7 @@ async def get_lead_messages(
     accessible_deal_ids = []
     for deal in deals:
         campaign = models.Campaign.get(str(deal["campaign_id"]))
-        if campaign and campaign.has_access(user_id):
+        if campaign and user_can_access_campaign(user_id, campaign):
             accessible_deal_ids.append(str(deal["_id"]))
 
     if not accessible_deal_ids:
@@ -641,7 +642,7 @@ async def send_message_to_lead(
     # If campaign_id specified, look for deal in that campaign; otherwise find any accessible deal
     if body.campaign_id:
         campaign = models.Campaign.get(body.campaign_id)
-        if not campaign or not campaign.has_access(user_id):
+        if not campaign or not user_can_access_campaign(user_id, campaign):
             raise HTTPException(status_code=403, detail="Campaign access denied")
         deal_doc = deals_collection.find_one({"lead_id": lead_id, "campaign_id": body.campaign_id})
         if not deal_doc:
@@ -655,7 +656,7 @@ async def send_message_to_lead(
         campaign = None
         for d in deals:
             c = models.Campaign.get(str(d["campaign_id"]))
-            if c and c.has_access(user_id):
+            if c and user_can_access_campaign(user_id, c):
                 deal_doc = d
                 campaign = c
                 break
@@ -724,7 +725,7 @@ async def update_deal_state(
 
     # Verify campaign access
     campaign = models.Campaign.get(campaign_id)
-    if not campaign or not campaign.has_access(user_id):
+    if not campaign or not user_can_access_campaign(user_id, campaign):
         raise HTTPException(status_code=403, detail="Campaign access denied")
 
     # Validate state
@@ -786,7 +787,7 @@ async def update_lead(
     has_access = False
     for deal in deals:
         campaign = models.Campaign.get(str(deal["campaign_id"]))
-        if campaign and campaign.has_access(user_id):
+        if campaign and user_can_access_campaign(user_id, campaign):
             has_access = True
             break
 
@@ -829,7 +830,7 @@ async def add_lead_to_campaign(
     from openoutreach.crm.models.deal import DealState
 
     campaign = models.Campaign.get(body.campaign_id)
-    if not campaign or not campaign.has_access(user_id):
+    if not campaign or not user_can_access_campaign(user_id, campaign):
         raise HTTPException(status_code=403, detail="Campaign access denied")
 
     leads_collection = get_mongodb_collection("leads")

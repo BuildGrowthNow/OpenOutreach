@@ -10,7 +10,6 @@ import logging
 from datetime import datetime, timezone as tz
 from openoutreach.core.tz_detect import user_day_bounds
 from typing import List, Optional
-from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from pydantic import BaseModel
@@ -29,6 +28,19 @@ from openoutreach.mongodb.models_user import User
 from openoutreach.linkedin.models import LinkedInProfile
 from openoutreach.billing.credential_validator import LinkedInCredentialValidator
 from openoutreach.billing.enforcement import PlanEnforcer
+from openoutreach.billing.seats import release_linkedin_seat, reserve_linkedin_seat
+from openoutreach.organizations.access import (
+    can_access_profile_doc,
+    can_delete_profile,
+    profile_access_query,
+    resolve_org_context,
+)
+from openoutreach.organizations.enforcement import resolve_effective_plan
+from openoutreach.proxies import (
+    ProxyError,
+    ProxyUnavailableError,
+    normalize_region,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -43,6 +55,44 @@ def _get_client_ip(request: Request) -> str:
     if real_ip:
         return real_ip.strip()
     return request.client.host if request.client else "unknown"
+
+
+def _owned_profile(
+    credential: LinkedInCredentials,
+    user_id: str,
+) -> Optional[LinkedInProfile]:
+    """Return the credential's profile when the caller may access it.
+
+    Access is organization-aware: owners/admins may read every profile in
+    their workspace, members only the profiles assigned to them.
+    """
+    if not credential.linkedin_profile_id:
+        return None
+    profile = LinkedInProfile.get(credential.linkedin_profile_id)
+    if not profile:
+        return None
+    user = User.get(user_id)
+    if not user:
+        return None
+    if not can_access_profile_doc(user, profile.to_dict()):
+        return None
+    return profile
+
+
+def _require_credential_access(
+    credential: LinkedInCredentials,
+    user_id: str,
+) -> Optional[LinkedInProfile]:
+    """Raise 403 unless the caller may read/mutate the credential."""
+    profile = _owned_profile(credential, user_id)
+    if profile is not None:
+        return profile
+    if not credential.linkedin_profile_id and credential.user_id == user_id:
+        return None
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Access denied",
+    )
 
 
 def _build_credential_response(
@@ -77,6 +127,10 @@ def _build_credential_response(
         executionMode=profile.execution_mode if profile else "desktop",
         linkedinProfileUsername=profile.linkedin_username if profile else None,
         daemonIp=getattr(profile, "daemon_ip", None) if profile else None,
+        hasProxy=bool(getattr(profile, "proxy_server", None)) if profile else False,
+        proxyRegionCountry=getattr(profile, "proxy_region_country", None) if profile else None,
+        proxyRegionSubdivision=getattr(profile, "proxy_region_subdivision", None) if profile else None,
+        proxyRegionCity=getattr(profile, "proxy_region_city", None) if profile else None,
         logs=logs,
     )
 
@@ -99,6 +153,8 @@ class VerifyResponse(BaseModel):
     message: str
     status: str
     error: Optional[str] = None
+    details: Optional[dict] = None
+    linkedinProfileId: Optional[str] = None
 
 
 class ConfirmRequest(BaseModel):
@@ -134,7 +190,36 @@ async def list_credentials(
     Includes metadata, status, and recent audit logs.
     """
     try:
-        credentials = LinkedInCredentials.find_by_user_id(user_id)
+        user = User.get(user_id)
+        if user is None:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+        profiles_collection = get_mongodb_collection("linkedin_profiles")
+        credentials_collection = get_mongodb_collection("linkedin_credentials")
+        if profiles_collection is None or credentials_collection is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="LinkedIn credentials database unavailable",
+            )
+
+        accessible_profiles = list(
+            profiles_collection.find(profile_access_query(user), {"_id": 1})
+        )
+        profile_ids = [str(doc["_id"]) for doc in accessible_profiles]
+        credential_docs = list(
+            credentials_collection.find(
+                {
+                    "$or": [
+                        {"linkedin_profile_id": {"$in": profile_ids}},
+                        # Orphan credentials created before a profile existed.
+                        {
+                            "user_id": user_id,
+                            "linkedin_profile_id": {"$in": [None, ""]},
+                        },
+                    ]
+                }
+            )
+        )
+        credentials = [LinkedInCredentials.from_dict(doc) for doc in credential_docs]
 
         # Convert to response format
         credential_responses = []
@@ -161,7 +246,7 @@ async def list_credentials(
                     for doc in log_docs
                 ]
 
-            profile = LinkedInProfile.objects.get(_id=cred.linkedin_profile_id) if cred.linkedin_profile_id else None
+            profile = _owned_profile(cred, user_id)
             credential_responses.append(
                 _build_credential_response(cred, profile, recent_logs or None)
             )
@@ -170,6 +255,8 @@ async def list_credentials(
             credentials=credential_responses,
             count=len(credential_responses)
         )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Failed to list credentials; exception_type=%s", type(e).__name__)
         raise HTTPException(
@@ -190,6 +277,7 @@ async def create_credential(
     Encrypts email and password, creates or attaches to a LinkedIn profile,
     and logs the creation event.
     """
+    seat_reserved = False
     try:
         user = User.get(user_id)
         if not user:
@@ -203,22 +291,35 @@ async def create_credential(
                 detail="Invalid execution_mode. Must be 'desktop' or 'cloud'"
             )
 
-        # If cloud execution requested, validate access
+        region: Optional[tuple[str, Optional[str], Optional[str]]] = None
         if execution_mode == "cloud":
-            can_use_cloud, error_msg = PlanEnforcer.can_use_cloud_execution(user)
-            if not can_use_cloud:
+            try:
+                region = normalize_region(
+                    data.proxy_region_country,
+                    data.proxy_region_subdivision,
+                    data.proxy_region_city,
+                )
+            except ValueError as exc:
                 raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail={
-                        "error": error_msg,
-                        "upgrade_required": True,
-                        "recommended_action": "use_desktop",
-                    }
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=str(exc),
                 )
 
-        can_create, error_msg = PlanEnforcer.can_create_linkedin_account(user)
-        if not can_create:
-            raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail=error_msg)
+        # A new cloud profile consumes a paid seat from the workspace pool.
+        # Only owners/admins may assign that pool; members request a seat and
+        # can still add a backup credential to a profile already assigned to
+        # them.
+        if execution_mode == "cloud" and not data.linkedin_profile_id:
+            ctx = resolve_org_context(user)
+            if ctx.team_enabled and ctx.is_shared and ctx.role == "member":
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=(
+                        "Ask a workspace owner or admin to assign a cloud seat. "
+                        "Members can create desktop profiles or add a backup "
+                        "credential to a profile assigned to them."
+                    ),
+                )
 
         is_valid, error_msg = LinkedInCredentialValidator.validate_credential_for_user(
             user_id, data.email
@@ -230,8 +331,11 @@ async def create_credential(
         email_encrypted = LinkedInCredentials.encrypt(data.email)
         password_encrypted = LinkedInCredentials.encrypt(data.password)
 
-        # Get or create LinkedIn profile
+        # Resolve an existing profile first so a backup credential on an
+        # existing account does not consume another seat.
         profile = None
+        created_profile = False
+        is_new_account = True
         if data.linkedin_profile_id:
             profile = LinkedInProfile.get(data.linkedin_profile_id)
             if not profile:
@@ -239,19 +343,91 @@ async def create_credential(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="LinkedIn profile not found"
                 )
-            if profile.user_id != user_id:
+            if not can_access_profile_doc(user, profile.to_dict()):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail="LinkedIn profile belongs to another user"
+                    detail="LinkedIn profile belongs to another workspace"
                 )
-        else:
-            # Auto-create profile for this user
+            existing_credentials = list(
+                LinkedInCredentials.objects().filter(
+                    linkedin_profile_id=profile._id
+                )
+            )
+            is_new_account = not existing_credentials
+            if not is_new_account and execution_mode != profile.execution_mode:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        "Execution mode is a profile setting; adding a backup "
+                        "credential cannot switch it"
+                    ),
+                )
+
+        if execution_mode == "cloud":
+            # A backup on an already-cloud profile must not count that profile
+            # against the cloud seat check a second time.
+            exclude_profile_id = (
+                profile._id
+                if profile and profile.execution_mode == "cloud"
+                else None
+            )
+            can_use_cloud, error_msg = PlanEnforcer.can_use_cloud_execution(
+                user,
+                exclude_profile_id=exclude_profile_id,
+            )
+            if not can_use_cloud:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail={
+                        "error": error_msg,
+                        "upgrade_required": True,
+                        "recommended_action": "use_desktop",
+                    }
+                )
+
+        if is_new_account:
+            can_create, error_msg = PlanEnforcer.can_create_linkedin_account(user)
+            if not can_create:
+                raise HTTPException(
+                    status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                    detail=error_msg,
+                )
+            seat_limit = resolve_effective_plan(user).linkedin_account_limit
+            reserved, seat_error = reserve_linkedin_seat(user_id, seat_limit)
+            if not reserved:
+                raise HTTPException(
+                    status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                    detail=seat_error or "LinkedIn account limit reached",
+                )
+            seat_reserved = True
+
+        # Create the profile only after the seat is reserved.
+        if not profile:
+            ctx = resolve_org_context(user)
             profile = LinkedInProfile(
                 user_id=user_id,
+                org_id=ctx.org_id,
+                assigned_user_id=user_id,
                 active=True,
                 execution_mode=execution_mode,
             )
+            if execution_mode == "cloud" and region:
+                profile.proxy_mode = "managed"
+                profile.proxy_region_country = region[0]
+                profile.proxy_region_subdivision = region[1]
+                profile.proxy_region_city = region[2]
             profile.save()
+            created_profile = True
+
+        needs_proxy = execution_mode == "cloud" and not profile.proxy_server
+        if needs_proxy:
+            from openoutreach.config import settings
+
+            if not getattr(settings, "MANAGED_PROXIES_ENABLED", True):
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Managed proxy provisioning is disabled",
+                )
 
         # Create credential
         credential = LinkedInCredentials(
@@ -268,6 +444,8 @@ async def create_credential(
             rotation_required_days=data.rotation_required_days,
         )
         credential.save()
+        # The account now exists; do not release the seat on later failures.
+        seat_reserved = False
 
         # Sync login credentials and execution mode to profile.
         # Pre-populate linkedin_username with the email address so the UI shows something
@@ -275,7 +453,69 @@ async def create_credential(
         profile.linkedin_username = data.email
         profile.linkedin_password = data.password
         profile.execution_mode = execution_mode
-        profile.save(update_fields=["linkedin_username", "linkedin_password", "execution_mode"])
+        profile_fields = ["linkedin_username", "linkedin_password", "execution_mode"]
+        if execution_mode == "cloud" and region:
+            if needs_proxy:
+                profile.proxy_mode = "managed"
+                profile_fields.append("proxy_mode")
+            profile.proxy_region_country = region[0]
+            profile.proxy_region_subdivision = region[1]
+            profile.proxy_region_city = region[2]
+            profile_fields.extend(
+                [
+                    "proxy_region_country",
+                    "proxy_region_subdivision",
+                    "proxy_region_city",
+                ]
+            )
+        profile.save(update_fields=profile_fields)
+
+        # Assign a managed proxy before verification can start. Phase 2
+        # prefers a Reseller sub-account and falls back to the Phase 1 parent
+        # credentials when Reseller is disabled or unavailable.
+        if needs_proxy and region:
+            try:
+                from openoutreach.proxies.provisioning import provision_managed_proxy
+
+                managed_proxy = provision_managed_proxy(
+                    profile._id,
+                    user_id,
+                    profile.org_id,
+                    region[0],
+                    region[1],
+                    region[2],
+                    created_by=user_id,
+                )
+                # Best-effort egress check. A provider hiccup must not undo a
+                # successfully created account; admins can retest from the
+                # proxy health page.
+                try:
+                    from openoutreach.proxies.service import test_proxy
+
+                    await test_proxy(managed_proxy._id)
+                except Exception as exc:  # pragma: no cover - network/provider
+                    logger.warning(
+                        "managed_proxy_egress_test_failed profile_id=%s exception_type=%s",
+                        profile._id,
+                        type(exc).__name__,
+                    )
+            except (ProxyUnavailableError, ProxyError) as exc:
+                try:
+                    LinkedInCredentials.delete(credential._id)
+                    if created_profile:
+                        profiles_collection = get_mongodb_collection("linkedin_profiles")
+                        if profiles_collection is not None:
+                            profiles_collection.delete_one(
+                                {"_id": profile._id, "user_id": user_id}
+                            )
+                finally:
+                    release_linkedin_seat(user_id)
+                logger.warning("Proxy assignment failed; exception_type=%s", type(exc).__name__)
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=str(exc),
+                )
+            profile.refresh_from_db()
 
         # Log creation
         log_entry = LinkedInCredentialLog(
@@ -289,8 +529,12 @@ async def create_credential(
 
         return _build_credential_response(credential, profile)
     except HTTPException:
+        if seat_reserved:
+            release_linkedin_seat(user_id)
         raise
     except Exception as e:
+        if seat_reserved:
+            release_linkedin_seat(user_id)
         logger.error("Failed to create credential; exception_type=%s", type(e).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -315,11 +559,7 @@ async def get_credential(
             detail="Credential not found"
         )
 
-    if credential.user_id != user_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied"
-        )
+    _require_credential_access(credential, user_id)
 
     # Get recent logs
     logs_collection = get_mongodb_collection("linkedin_credential_logs")
@@ -341,7 +581,7 @@ async def get_credential(
             for doc in log_docs
         ]
 
-    profile = LinkedInProfile.objects.get(_id=credential.linkedin_profile_id) if credential.linkedin_profile_id else None
+    profile = _owned_profile(credential, user_id)
     return _build_credential_response(credential, profile, recent_logs or None)
 
 
@@ -364,39 +604,32 @@ async def update_credential(
             detail="Credential not found"
         )
 
-    if credential.user_id != user_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied"
-        )
+    _require_credential_access(credential, user_id)
 
     try:
         update_fields = []
         changes = {}
+        profile = _owned_profile(credential, user_id)
 
         if data.email is not None:
             credential.email_encrypted = LinkedInCredentials.encrypt(data.email)
             update_fields.append("email_encrypted")
             changes["email"] = data.email
 
-            # Sync to profile
-            if credential.linkedin_profile_id:
-                profile = LinkedInProfile.get(credential.linkedin_profile_id)
-                if profile:
-                    profile.linkedin_username = data.email
-                    profile.save(update_fields=["linkedin_username"])
+            # Sync to the owned profile only.
+            if profile:
+                profile.linkedin_username = data.email
+                profile.save(update_fields=["linkedin_username"])
 
         if data.password is not None:
             credential.password_encrypted = LinkedInCredentials.encrypt(data.password)
             update_fields.append("password_encrypted")
             changes["password"] = "***updated***"
 
-            # Sync to profile
-            if credential.linkedin_profile_id:
-                profile = LinkedInProfile.get(credential.linkedin_profile_id)
-                if profile:
-                    profile.linkedin_password = data.password
-                    profile.save(update_fields=["linkedin_password"])
+            # Sync to the owned profile only.
+            if profile:
+                profile.linkedin_password = data.password
+                profile.save(update_fields=["linkedin_password"])
 
         if data.username is not None:
             credential.username = data.username
@@ -409,7 +642,24 @@ async def update_credential(
             changes["status"] = data.status
 
         if data.linkedin_profile_id is not None:
+            if not data.linkedin_profile_id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="linkedin_profile_id cannot be empty",
+                )
+            target_profile = LinkedInProfile.get(data.linkedin_profile_id)
+            target_user = User.get(user_id)
+            if (
+                not target_profile
+                or not target_user
+                or not can_access_profile_doc(target_user, target_profile.to_dict())
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="LinkedIn profile belongs to another workspace",
+                )
             credential.linkedin_profile_id = data.linkedin_profile_id
+            profile = target_profile
             update_fields.append("linkedin_profile_id")
             changes["profile_id"] = data.linkedin_profile_id
 
@@ -446,8 +696,9 @@ async def update_credential(
             )
             log_entry.save()
 
-        updated_profile = LinkedInProfile.objects.get(_id=credential.linkedin_profile_id) if credential.linkedin_profile_id else None
-        return _build_credential_response(credential, updated_profile)
+        return _build_credential_response(credential, profile)
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Failed to update credential; exception_type=%s", type(e).__name__)
         raise HTTPException(
@@ -474,16 +725,13 @@ async def delete_credential(
             detail="Credential not found"
         )
 
-    if credential.user_id != user_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied"
-        )
+    _require_credential_access(credential, user_id)
 
+    release_seat = False
     try:
-        # Clear synced fields from profile; deactivate if no credentials remain after deletion
+        # Clear synced fields from the owned profile; deactivate if no credentials remain.
         if credential.linkedin_profile_id:
-            profile = LinkedInProfile.get(credential.linkedin_profile_id)
+            profile = _owned_profile(credential, user_id)
             if profile:
                 remaining = LinkedInCredentials.objects().filter(
                     linkedin_profile_id=credential.linkedin_profile_id
@@ -495,6 +743,17 @@ async def delete_credential(
                     profile.cookie_data_encrypted = None
                     profile.save(update_fields=["linkedin_password", "cookie_data_encrypted"])
                 else:
+                    deleting_user = User.get(user_id)
+                    if deleting_user is not None and not can_delete_profile(
+                        deleting_user, profile.to_dict()
+                    ):
+                        raise HTTPException(
+                            status_code=status.HTTP_403_FORBIDDEN,
+                            detail=(
+                                "Only workspace owners and admins can delete the "
+                                "last credential for a profile"
+                            ),
+                        )
                     # Last credential - delete the profile entirely so it no longer
                     # counts toward the account limit and avoids the null unique-index conflict.
                     # Also cascade: delete all pending tasks and pause all campaigns for this profile
@@ -515,6 +774,10 @@ async def delete_credential(
                     profiles_col = get_mongodb_collection("linkedin_profiles")
                     if profiles_col is not None:
                         profiles_col.delete_one({"_id": profile_id_str})
+                    from openoutreach.proxies.service import retire_proxy_for_profile
+
+                    retire_proxy_for_profile(profile_id_str)
+                    release_seat = True
 
         # Log deletion
         log_entry = LinkedInCredentialLog(
@@ -526,10 +789,14 @@ async def delete_credential(
         )
         log_entry.save()
 
-        # Delete credential
+        # Delete credential, then release the account seat.
         LinkedInCredentials.delete(credential_id)
+        if release_seat:
+            release_linkedin_seat(user_id)
 
         return None
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Failed to delete credential; exception_type=%s", type(e).__name__)
         raise HTTPException(
@@ -557,11 +824,7 @@ async def verify_credential(
             detail="Credential not found"
         )
 
-    if credential.user_id != user_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied"
-        )
+    _require_credential_access(credential, user_id)
 
     if not data.test_login:
         # Desktop mode: daemon handles real login - mark active immediately
@@ -581,15 +844,34 @@ async def verify_credential(
         return VerifyResponse(
             success=True,
             message="Credentials saved and active",
-            status=LinkedInCredentials.STATUS_ACTIVE
+            status=LinkedInCredentials.STATUS_ACTIVE,
+            linkedinProfileId=credential.linkedin_profile_id,
         )
 
-    # Actual browser-based verification - requires cloud execution access
-    # (desktop-only users must verify via their local desktop app instead)
+    # Actual browser-based verification - cloud profiles only. Desktop profiles
+    # must verify through their local desktop app; launching them here would put
+    # the account on the server IP.
+    profile = _owned_profile(credential, user_id)
+    if not profile:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="LinkedIn profile not found",
+        )
+    if profile.execution_mode != "cloud":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Server-side verification is only available for cloud profiles. "
+                "Verify this account from the desktop app."
+            ),
+        )
     verify_user = User.get(user_id)
     if not verify_user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
-    can_cloud, cloud_error = PlanEnforcer.can_use_cloud_execution(verify_user)
+    can_cloud, cloud_error = PlanEnforcer.can_use_cloud_execution(
+        verify_user,
+        exclude_profile_id=profile._id,
+    )
     if not can_cloud:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -599,11 +881,6 @@ async def verify_credential(
     from linkedin_cli.auth import authenticate
     from linkedin_cli.browser.login import launch_browser
     from linkedin_cli.page_state import IllegalPageTransition
-
-    # Get profile for proxy and VNC configuration (outside try block so it's accessible in except)
-    profile = None
-    if credential.linkedin_profile_id:
-        profile = LinkedInProfile.get(credential.linkedin_profile_id)
 
     try:
         email = credential.get_email()
@@ -619,6 +896,15 @@ async def verify_credential(
             proxy_server = profile.proxy_server
             proxy_username = profile.proxy_username
             proxy_password = profile.proxy_password
+
+            if profile.execution_mode == "cloud" and not proxy_server:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=(
+                        "Cloud execution requires a managed proxy. "
+                        "Assign a proxy before verifying this account."
+                    ),
+                )
 
             # Get VNC display for this profile (web daemon only)
             try:
@@ -638,35 +924,8 @@ async def verify_credential(
             display_override=display_override,
         )
 
-        # Use the real LinkedInProfile for cookie persistence
-        verify_profile = profile if profile else None
-        if not verify_profile:
-            # Create a minimal mock only when no real profile exists (shouldn't happen)
-            class _FallbackProfile:
-                def __init__(self, cred: LinkedInCredentials):
-                    self._id = cred.linkedin_profile_id or str(uuid4())
-                    self.linkedin_username = email
-                    self.linkedin_password = password
-
-                def save(self, update_fields: Optional[List[str]] = None):
-                    pass
-
-                def refresh_from_db(self, fields: Optional[List[str]] = None):
-                    pass
-
-                @property
-                def cookie_data(self):
-                    return None
-
-                @cookie_data.setter
-                def cookie_data(self, value):
-                    pass
-
-                @property
-                def pk(self):
-                    return self._id
-
-            verify_profile = _FallbackProfile(credential)
+        # Use the owned profile for cookie persistence.
+        verify_profile = profile
 
         # Create session
         class MockSession:
@@ -747,11 +1006,14 @@ async def verify_credential(
             return VerifyResponse(
                 success=True,
                 message="Credentials verified successfully",
-                status=credential.status
+                status=credential.status,
+                linkedinProfileId=profile._id,
             )
         finally:
             session.close()
 
+    except HTTPException:
+        raise
     except IllegalPageTransition as e:
         # Challenge/verification detected
         logger.warning("Verification requires challenge; exception_type=%s", type(e).__name__)
@@ -777,7 +1039,9 @@ async def verify_credential(
             success=False,
             message="LinkedIn requires verification. Please complete the challenge.",
             status=credential.status,
-            error=json.dumps({"errorType": "awaiting_challenge", "message": "challenge_required"})
+            error=json.dumps({"errorType": "awaiting_challenge", "message": "challenge_required"}),
+            details={"errorType": "awaiting_challenge", "message": "challenge_required"},
+            linkedinProfileId=profile._id,
         )
 
     except Exception as e:
@@ -800,7 +1064,9 @@ async def verify_credential(
             success=False,
             message="Verification failed",
             status=credential.status,
-            error="Verification failed"
+            error="Verification failed",
+            details={"errorType": "verification_failed", "message": "Verification failed"},
+            linkedinProfileId=profile._id if profile else credential.linkedin_profile_id,
         )
 
 
@@ -824,16 +1090,10 @@ async def confirm_credential(
             detail="Credential not found"
         )
 
-    if credential.user_id != user_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied"
-        )
+    _require_credential_access(credential, user_id)
 
-    # Get profile to check session state
-    profile = None
-    if credential.linkedin_profile_id:
-        profile = LinkedInProfile.get(credential.linkedin_profile_id)
+    # Get the owned profile to check session state.
+    profile = _owned_profile(credential, user_id)
 
     # Auto-verify by checking if profile shows logged in state
     auto_verified = False
@@ -869,7 +1129,8 @@ async def confirm_credential(
         return VerifyResponse(
             success=True,
             message="Credentials confirmed",
-            status=credential.status
+            status=credential.status,
+            linkedinProfileId=profile._id if profile else credential.linkedin_profile_id,
         )
     else:
         # Check if challenge is still incomplete (user hasn't finished yet)
@@ -878,7 +1139,9 @@ async def confirm_credential(
                 success=False,
                 message="Challenge not complete yet",
                 status=credential.status,
-                error=json.dumps({"errorType": "challenge_incomplete"})
+                error=json.dumps({"errorType": "challenge_incomplete"}),
+                details={"errorType": "challenge_incomplete"},
+                linkedinProfileId=profile._id,
             )
 
         # User explicitly marked as failed
@@ -897,7 +1160,9 @@ async def confirm_credential(
         return VerifyResponse(
             success=False,
             message="Credentials marked as failed",
-            status=credential.status
+            status=credential.status,
+            details={"errorType": "verification_failed", "message": "Credentials marked as failed"},
+            linkedinProfileId=profile._id if profile else credential.linkedin_profile_id,
         )
 
 
@@ -919,11 +1184,7 @@ async def rotate_credential(
             detail="Credential not found"
         )
 
-    if credential.user_id != user_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied"
-        )
+    _require_credential_access(credential, user_id)
 
     try:
         # Create backup using model method
@@ -974,11 +1235,7 @@ async def get_credential_health(
             detail="Credential not found"
         )
 
-    if credential.user_id != user_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied"
-        )
+    _require_credential_access(credential, user_id)
 
     if not credential.linkedin_profile_id:
         raise HTTPException(
@@ -986,7 +1243,7 @@ async def get_credential_health(
             detail="No linked profile found"
         )
 
-    profile = LinkedInProfile.get(credential.linkedin_profile_id)
+    profile = _owned_profile(credential, user_id)
     if not profile:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -1142,11 +1399,7 @@ async def get_credential_logs(
             detail="Credential not found"
         )
 
-    if credential.user_id != user_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied"
-        )
+    _require_credential_access(credential, user_id)
 
     logs_collection = get_mongodb_collection("linkedin_credential_logs")
     if logs_collection is None:

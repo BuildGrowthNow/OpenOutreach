@@ -183,12 +183,32 @@ def decrypt_dict(data: dict, keys_to_decrypt: list) -> dict:
     return result
 
 
+_FERNET_VERSION = 0x80
+_FERNET_MIN_TOKEN_BYTES = 73  # version + timestamp + IV + one block + HMAC
+_FERNET_FIXED_BYTES = 57  # version + timestamp + IV + HMAC
+
+
+def _looks_like_fernet_token(token: bytes) -> bool:
+    """Return whether bytes have the structure of a Fernet token.
+
+    A Fernet token is ``version(1) || timestamp(8) || iv(16) || ciphertext ||
+    hmac(32)``. The ciphertext is always a whole number of AES blocks. Checking
+    the length and block alignment as well as the version byte avoids the false
+    positives that a first-byte-only heuristic produces for random passwords.
+    """
+    if len(token) < _FERNET_MIN_TOKEN_BYTES or token[0] != _FERNET_VERSION:
+        return False
+    return (len(token) - _FERNET_FIXED_BYTES) % 16 == 0
+
+
 def is_encrypted(text: str) -> bool:
     """
     Check if text appears to be encrypted.
 
-    This is a heuristic check - not 100% accurate but useful for
-    avoiding double-encryption.
+    This is a structural check, not a decryption attempt, so it works during
+    migrations even if the current key differs from the key used to encrypt a
+    legacy value. It still requires the full Fernet token shape so ordinary
+    high-entropy passwords are not mistaken for ciphertext.
 
     Args:
         text: Text to check
@@ -200,16 +220,21 @@ def is_encrypted(text: str) -> bool:
         return False
 
     try:
-        # Encrypted text should be base64-encoded
-        # Try to decode and check if it's valid Fernet token format
+        # encrypt_text() stores base64(Fernet token). Decoding once yields the
+        # inner base64 token; decoding twice yields the raw Fernet bytes.
         decoded = base64.urlsafe_b64decode(text.encode("utf-8"))
+        if not decoded:
+            return False
 
-        # Fernet tokens start with specific version bytes
-        # Version 0x80 (128) is current
-        if len(decoded) > 0 and decoded[0] == 0x80:
-            return True
+        try:
+            inner = base64.urlsafe_b64decode(decoded)
+            if _looks_like_fernet_token(inner):
+                return True
+        except Exception:
+            pass
 
-        return False
+        # Also accept a raw Fernet token stored without the outer base64 layer.
+        return _looks_like_fernet_token(decoded)
     except Exception:
         return False
 

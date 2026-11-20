@@ -88,12 +88,19 @@ async def get_campaign_with_access(campaign_id: str, user_id: str = Depends(get_
     Raises 404 if campaign not found, 403 if access denied.
     """
     from openoutreach.mongodb import models
+    from openoutreach.mongodb.models_user import User
+    from openoutreach.organizations.access import campaign_has_access
 
     campaign = models.Campaign.get(campaign_id)
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
 
-    if not campaign.has_access(user_id):
+    user = User.get(user_id)
+    if user is None:
+        if not campaign.has_access(user_id):
+            raise HTTPException(status_code=403, detail="Access denied")
+        return campaign
+    if not campaign_has_access(user, campaign):
         raise HTTPException(status_code=403, detail="Access denied")
 
     return campaign

@@ -5,7 +5,7 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from openoutreach.api_v2.dependencies_v2 import get_current_user
 from openoutreach.mongodb.models_user import User
@@ -21,7 +21,11 @@ from openoutreach.billing.stripe_service import (
     create_lifetime_checkout_session,
 )
 from openoutreach.billing.models import StripePlan
-from openoutreach.billing.plans import get_plan, get_all_plans
+from openoutreach.billing.plans import (
+    apply_plan_entitlements,
+    get_plan,
+    get_all_plans,
+)
 from openoutreach.billing.config import get_site_config, is_lifetime_deal_active
 from openoutreach.billing.webhooks import process_webhook_event
 from openoutreach.billing.enforcement import PlanEnforcer
@@ -35,6 +39,8 @@ from openoutreach.billing.coupons import (
     validate_coupon_for_checkout,
 )
 from openoutreach.config import settings
+from openoutreach.organizations.access import resolve_org_context
+from openoutreach.organizations.enforcement import resolve_effective_plan
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +57,16 @@ def _is_plan_upgrade(current_plan: str, new_plan: str) -> bool:
         return new_idx > current_idx
     except ValueError:
         return False
+
+
+def _require_billing_owner(user: User) -> None:
+    """Only the workspace owner may change billing or open the Stripe portal."""
+    effective = resolve_effective_plan(user)
+    if effective.billing_owner_id != user._id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Billing is managed by the workspace owner",
+        )
 
 
 class PlanResponse(BaseModel):
@@ -76,9 +92,18 @@ class BillingStatusResponse(BaseModel):
     whatsapp_account_limit: int
     campaign_limit: Optional[int]
     cloud_profiles: int
+    cloud_seat_limit: int
+    cloud_seats_enabled: bool
+    managed_proxies_enabled: bool = True
     user_status: str
     admin_notes: Optional[str] = None
     stripe_subscription_id: Optional[str] = None
+    org_id: Optional[str] = None
+    org_name: Optional[str] = None
+    org_role: Optional[str] = None
+    team_workspaces_enabled: bool = False
+    is_billing_owner: bool = True
+    billing_owner_email: Optional[str] = None
 
 
 class CheckoutSessionRequest(BaseModel):
@@ -103,7 +128,10 @@ class PlanChangeRequest(BaseModel):
 
 class CloudAddonRequest(BaseModel):
     """Request to add/remove cloud profile seats."""
-    quantity: int
+    # A typo in this field creates a real Stripe invoice. Keep the server-side
+    # ceiling in line with the admin override limit instead of accepting any
+    # integer the client sends.
+    quantity: int = Field(ge=0, le=10_000)
 
 
 class ReferralDashboardResponse(BaseModel):
@@ -204,19 +232,40 @@ async def billing_status(
         user.save()
         subscription_status = "active"
 
+    effective = resolve_effective_plan(user)
+    ctx = resolve_org_context(user)
+    is_billing_owner = effective.billing_owner_id == user._id
+
     return BillingStatusResponse(
-        plan=user.plan,
-        subscription_status=subscription_status,
-        billing_period=user.billing_period,
-        trial_ends_at=user.trial_ends_at.isoformat() if user.trial_ends_at else None,
-        current_period_end=user.current_period_end.isoformat() if user.current_period_end else None,
-        linkedin_account_limit=user.linkedin_account_limit,
-        whatsapp_account_limit=user.whatsapp_account_limit,
-        campaign_limit=user.campaign_limit,
-        cloud_profiles=user.cloud_profiles,
+        plan=effective.plan,
+        subscription_status=effective.subscription_status,
+        billing_period=user.billing_period if is_billing_owner else None,
+        trial_ends_at=(
+            effective.trial_ends_at.isoformat() if effective.trial_ends_at else None
+        ),
+        current_period_end=(
+            user.current_period_end.isoformat()
+            if is_billing_owner and user.current_period_end
+            else None
+        ),
+        linkedin_account_limit=effective.linkedin_account_limit,
+        whatsapp_account_limit=effective.whatsapp_account_limit,
+        campaign_limit=effective.campaign_limit,
+        cloud_profiles=effective.cloud_profiles,
+        cloud_seat_limit=effective.cloud_seat_limit,
+        cloud_seats_enabled=bool(getattr(settings, "CLOUD_SEATS_ENABLED", True)),
+        managed_proxies_enabled=bool(
+            getattr(settings, "MANAGED_PROXIES_ENABLED", True)
+        ),
         user_status=user.status,
         admin_notes=user.admin_notes,
-        stripe_subscription_id=user.stripe_subscription_id,
+        stripe_subscription_id=user.stripe_subscription_id if is_billing_owner else None,
+        org_id=ctx.org_id,
+        org_name=ctx.org.name,
+        org_role=ctx.role,
+        team_workspaces_enabled=ctx.team_enabled,
+        is_billing_owner=is_billing_owner,
+        billing_owner_email=effective.billing_owner_email,
     )
 
 
@@ -229,33 +278,17 @@ async def get_current_usage(
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
 
+    from openoutreach.billing.seats import count_credentialed_profiles
     from openoutreach.mongodb.connection import get_mongodb_collection
 
+    effective = resolve_effective_plan(user)
     try:
-        profiles_coll = get_mongodb_collection("linkedin_profiles")
         campaigns_coll = get_mongodb_collection("campaigns")
         wa_profiles_coll = get_mongodb_collection("whatsapp_profiles")
 
-        linkedin_accounts_used = 0
+        linkedin_accounts_used = count_credentialed_profiles(user_id)
         campaigns_used = 0
         whatsapp_accounts_used = 0
-
-        if profiles_coll is not None:
-            creds_coll = get_mongodb_collection("linkedin_credentials")
-            active_profile_ids = [
-                doc["_id"]
-                for doc in profiles_coll.find({"user_id": user_id, "is_active": True}, {"_id": 1})
-            ]
-            if active_profile_ids and creds_coll is not None:
-                linkedin_accounts_used = len(set(
-                    doc["linkedin_profile_id"]
-                    for doc in creds_coll.find(
-                        {"user_id": user_id, "linkedin_profile_id": {"$in": active_profile_ids}},
-                        {"linkedin_profile_id": 1},
-                    )
-                ))
-            else:
-                linkedin_accounts_used = 0
 
         if campaigns_coll is not None:
             # Count active (non-paused) campaigns - must match PlanEnforcer.can_create_campaign
@@ -270,21 +303,21 @@ async def get_current_usage(
 
         return {
             "linkedin_accounts_used": linkedin_accounts_used,
-            "linkedin_accounts_limit": user.linkedin_account_limit,
+            "linkedin_accounts_limit": effective.linkedin_account_limit,
             "whatsapp_accounts_used": whatsapp_accounts_used,
-            "whatsapp_accounts_limit": user.whatsapp_account_limit,
+            "whatsapp_accounts_limit": effective.whatsapp_account_limit,
             "campaigns_used": campaigns_used,
-            "campaigns_limit": user.campaign_limit,
+            "campaigns_limit": effective.campaign_limit,
         }
     except Exception as e:
         logger.error("Failed to get usage; exception_type=%s", type(e).__name__)
         return {
             "linkedin_accounts_used": 0,
-            "linkedin_accounts_limit": user.linkedin_account_limit,
+            "linkedin_accounts_limit": effective.linkedin_account_limit,
             "whatsapp_accounts_used": 0,
-            "whatsapp_accounts_limit": user.whatsapp_account_limit,
+            "whatsapp_accounts_limit": effective.whatsapp_account_limit,
             "campaigns_used": 0,
-            "campaigns_limit": user.campaign_limit,
+            "campaigns_limit": effective.campaign_limit,
         }
 
 
@@ -305,6 +338,7 @@ async def create_checkout(
     user = User.get(user_id)
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    _require_billing_owner(user)
 
     # Enforce email verification before checkout
     if not user.email_verified:
@@ -316,6 +350,11 @@ async def create_checkout(
     plan = get_plan(request.plan_name)
     if not plan:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid plan")
+    if request.plan_name == "cloud_addon":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cloud add-on seats are managed separately from plans",
+        )
 
     if request.plan_name == "lifetime":
         if request.billing_period != "lifetime":
@@ -330,6 +369,11 @@ async def create_checkout(
             )
     elif request.billing_period not in ("monthly", "annual"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid billing period")
+    if request.plan_name == "cloud" and request.billing_period != "monthly":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cloud is billed monthly only",
+        )
 
     try:
         customer = create_or_get_customer(
@@ -383,7 +427,15 @@ async def create_checkout(
         else:
             config = get_site_config()
             trial_days = None
-            if user.subscription_status == "none":
+            # Cloud requires a paid subscription and never starts a trial.
+            # A Cloud-intent signup keeps that promise even if the user
+            # switches to another plan before checking out.
+            cloud_intent = user.intended_plan == "cloud"
+            if (
+                user.subscription_status == "none"
+                and request.plan_name != "cloud"
+                and not cloud_intent
+            ):
                 # Base trial duration
                 trial_days = config.trial_duration_days
                 # Add referral extension if user was referred
@@ -437,6 +489,7 @@ async def create_portal(
     user = User.get(user_id)
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    _require_billing_owner(user)
 
     if not user.stripe_customer_id:
         raise HTTPException(
@@ -481,6 +534,7 @@ async def change_plan(
     user = User.get(user_id)
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    _require_billing_owner(user)
 
     if not user.stripe_subscription_id:
         raise HTTPException(
@@ -491,9 +545,41 @@ async def change_plan(
     plan = get_plan(request.plan_name)
     if not plan:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid plan")
+    if request.plan_name == "cloud_addon":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cloud add-on seats are managed separately from plans",
+        )
+    if request.plan_name == "lifetime":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Lifetime is purchased through checkout, not a plan change",
+        )
+
+    # Cloud add-on seats are only an entitlement on the Cloud plan. Leaving
+    # Cloud while add-on items remain would keep charging for seats that can no
+    # longer run, so require the owner to remove them first.
+    if (
+        user.plan == "cloud"
+        and request.plan_name != "cloud"
+        and int(user.cloud_profiles or 0) > 0
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Remove all cloud seats before changing away from the Cloud plan. "
+                "Each add-on seat is billed separately and has no entitlement on "
+                "another plan."
+            ),
+        )
 
     if request.billing_period not in ("monthly", "annual"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid billing period")
+    if request.plan_name == "cloud" and request.billing_period != "monthly":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cloud is billed monthly only",
+        )
 
     try:
         stripe_plan = StripePlan.get_by_plan(request.plan_name)
@@ -530,19 +616,23 @@ async def change_plan(
                 detail="Failed to update subscription",
             )
 
+        old_plan = user.plan
         old_linkedin_limit = user.linkedin_account_limit
         old_wa_limit = user.whatsapp_account_limit
         user.plan = request.plan_name
         user.billing_period = request.billing_period
-        new_linkedin_limit = plan["max_linkedin_accounts"]
-        new_wa_limit = plan["max_whatsapp_accounts"]
-        user.linkedin_account_limit = new_linkedin_limit
-        user.whatsapp_account_limit = new_wa_limit
-        user.campaign_limit = plan["max_campaigns"]
+        apply_plan_entitlements(user)
+        new_linkedin_limit = user.linkedin_account_limit
+        new_wa_limit = user.whatsapp_account_limit
         user.save()
 
         if not is_upgrade and new_linkedin_limit < old_linkedin_limit:
-            handle_plan_downgrade(user, new_linkedin_limit)
+            prefer_cloud = old_plan == "cloud" or request.plan_name == "cloud"
+            handle_plan_downgrade(
+                user,
+                new_linkedin_limit,
+                prefer_execution_mode="cloud" if prefer_cloud else None,
+            )
         if not is_upgrade and new_wa_limit < old_wa_limit:
             handle_wa_plan_downgrade(user, new_wa_limit)
 
@@ -569,6 +659,18 @@ async def update_cloud_addon(
     user = User.get(user_id)
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    _require_billing_owner(user)
+
+    if not getattr(settings, "CLOUD_SEATS_ENABLED", True):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cloud seat management is disabled",
+        )
+    if user.plan != "cloud":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cloud seats are only available on the Cloud plan",
+        )
 
     if request.quantity < 0:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Quantity must be >= 0")
@@ -616,8 +718,18 @@ async def update_cloud_addon(
                 proration_behavior="create_prorations",
             )
 
+        previous_cloud_profiles = user.cloud_profiles
         user.cloud_profiles = request.quantity
+        apply_plan_entitlements(user)
         user.save()
+
+        if user.cloud_profiles < previous_cloud_profiles:
+            handle_plan_downgrade(
+                user,
+                user.linkedin_account_limit,
+                prefer_execution_mode="cloud",
+            )
+
         return {"cloud_profiles": user.cloud_profiles}
     except HTTPException:
         raise
@@ -637,6 +749,7 @@ async def cancel_sub(
     user = User.get(user_id)
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    _require_billing_owner(user)
 
     if not user.stripe_subscription_id:
         raise HTTPException(
@@ -663,6 +776,7 @@ async def reactivate_sub(
     user = User.get(user_id)
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    _require_billing_owner(user)
 
     if not user.stripe_subscription_id:
         raise HTTPException(
@@ -689,6 +803,7 @@ async def get_invoices(
     user = User.get(user_id)
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    _require_billing_owner(user)
 
     if not user.stripe_customer_id:
         return []

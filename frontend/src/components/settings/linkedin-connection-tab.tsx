@@ -20,19 +20,14 @@ import {
   createLinkedInCredentials,
   updateLinkedInCredentials,
   deleteLinkedInCredentials,
-  getLinkedInProfiles,
-  getDaemonStatus,
   type LinkedInSetupGuide,
   type LinkedInSetupStatus,
   type LinkedInCookieInstructions,
   type LinkedInCredentials,
-  type LinkedInProfile,
-  type DaemonStatusResponse,
 } from "@/lib/api/dashboard";
 import LinkedInCredentialForm from "@/components/settings/linkedin-credential-form";
 import LinkedInCredentialCard from "@/components/settings/linkedin-credential-card";
 import { DaemonStatusCard } from "@/components/settings/daemon-status-card";
-import { ProxyConfigForm } from "@/components/settings/proxy-config-form";
 import {
   Dialog,
   DialogContent,
@@ -52,7 +47,6 @@ import {
   Lock,
   Info,
   Zap,
-  Shield,
   AlertCircle,
   Link,
   ListTodo,
@@ -94,8 +88,6 @@ export function LinkedInConnectionTab({
   const [linkedinCredentials, setLinkedinCredentials] = useState<
     LinkedInCredentials[]
   >([]);
-  const [linkedinProfiles, setLinkedinProfiles] = useState<LinkedInProfile[]>([]);
-  const [daemonStatus, setDaemonStatus] = useState<DaemonStatusResponse | null>(null);
   const [isDesktopApp] = useState(() =>
     typeof window !== "undefined" && !!(window as unknown as Record<string, unknown>)["__LENGROWTH_DESKTOP__"]
   );
@@ -113,16 +105,6 @@ export function LinkedInConnectionTab({
   const { refetch: refetchBilling } = useBilling();
   const handleUpgradeError = useUpgradeToast();
 
-  // Check if desktop daemon is actively running
-  const isDesktopDaemonActive = (): boolean => {
-    if (!daemonStatus || !daemonStatus.has_daemon) return false;
-
-    // If any profile's daemon is online and has platform information, it's desktop
-    return daemonStatus.profiles.some(
-      (profile) => profile.status === "online" && profile.daemon_active && profile.platform
-    );
-  };
-
   const loadLinkedInConnectionData = async ({
     showSpinner = false,
   }: { showSpinner?: boolean } = {}) => {
@@ -135,14 +117,12 @@ export function LinkedInConnectionTab({
       setError(null);
       setLoadWarning(null);
 
-      const [guideRes, statusRes, instructionsRes, credsRes, profilesRes, daemonRes] =
+      const [guideRes, statusRes, instructionsRes, credsRes] =
         await Promise.allSettled([
           getLinkedInSetupGuide(),
           getLinkedInSetupStatus(),
           getLinkedInCookieInstructions(),
           getLinkedInCredentials(),
-          getLinkedInProfiles(),
-          getDaemonStatus(),
         ]);
 
       if (guideRes.status === "fulfilled" && guideRes.value.data) {
@@ -160,14 +140,8 @@ export function LinkedInConnectionTab({
       if (credsRes.status === "fulfilled" && credsRes.value.data) {
         setLinkedinCredentials(credsRes.value.data.credentials || []);
       }
-      if (profilesRes.status === "fulfilled" && profilesRes.value.data) {
-        setLinkedinProfiles(profilesRes.value.data.profiles || []);
-      }
-      if (daemonRes.status === "fulfilled" && daemonRes.value.data) {
-        setDaemonStatus(daemonRes.value.data);
-      }
 
-      const failures = [guideRes, statusRes, instructionsRes, credsRes, profilesRes, daemonRes].filter(
+      const failures = [guideRes, statusRes, instructionsRes, credsRes].filter(
         (result): result is PromiseRejectedResult =>
           result.status === "rejected",
       );
@@ -623,14 +597,6 @@ export function LinkedInConnectionTab({
 
       {/* Desktop Daemon Status - shown on web only; redundant on the desktop app */}
       {!isDesktopApp && <DaemonStatusCard />}
-
-      {/* Proxy Configuration - Show only for cloud daemon (not desktop daemon) */}
-      {linkedinProfiles.length > 0 && linkedinProfiles[0].id && !isDesktopDaemonActive() && (
-        <ProxyConfigForm
-          profileId={String(linkedinProfiles[0].id)}
-          onConfigUpdate={handleLinkedInCredentialsUpdate}
-        />
-      )}
 
       {/* Cookie Instructions Dialog */}
       <Dialog

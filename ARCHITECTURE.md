@@ -61,6 +61,7 @@ scoped. Desktop execution is fail-closed until all handlers use these APIs.
 openoutreach/
 ├── api_v2/          # FastAPI routers, schemas, dependencies
 ├── billing/         # Stripe integration, plan enforcement, trial/expiry
+├── proxies/         # Managed proxy inventory, parser, assignment, health test
 ├── core/            # Daemon, task queue, scheduler, LLM factory, follow-up agent, remote client
 ├── crm/             # Lead and Deal models (MongoDB)
 ├── chat/            # ChatMessage model (MongoDB)
@@ -275,9 +276,11 @@ Paths relative to `openoutreach/`.
 
 ### Billing
 
-- **`billing/plans.py`** - Plan definitions (starter/pro/business/agency/lifetime + cloud_addon). Desktop execution included in all base plans; cloud execution requires `cloud_addon` only.
-- **`billing/enforcement.py`** - `PlanEnforcer`: checks campaign limits, cloud access, trial restrictions. Called on every mutating endpoint.
+- **`billing/plans.py`** - Plan definitions (starter/pro/business/agency/cloud/lifetime + `cloud_addon` seat product). Desktop execution is included in all base plans; the `cloud` plan includes 1 cloud seat and `cloud_addon` adds seats. `apply_plan_entitlements()` is the single place that derives `linkedin_account_limit` (`1 + cloud_profiles` for Cloud), WhatsApp limits, and campaign limits.
+- **`billing/enforcement.py`** - `PlanEnforcer`: checks campaign limits, cloud seat access, trial restrictions. Called on every mutating endpoint.
 - **`billing/stripe_client.py`** - Stripe API wrapper (subscriptions, customer portal, webhook verification).
+- **`billing/webhooks.py`** - Syncs the base plan and every `cloud_addon` subscription item quantity; never treats `cloud_addon` as a plan.
+- **`proxies/`** - Minimal managed-proxy inventory (`Proxy` model, bulk parser, region validation, assignment/test service). Admin routes live in `api_v2/routers/admin_proxies.py`; passwords are encrypted at rest and never serialized.
 
 ## ML Qualification Pipeline
 

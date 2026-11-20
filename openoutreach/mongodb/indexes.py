@@ -31,6 +31,34 @@ def ensure_all_indexes():
         ('users', [
             ({'email': 1}, {'name': 'user_email_idx', 'unique': True}),
             ({'is_active': 1}, {'name': 'user_active_idx'}),
+            ({'org_id': 1}, {'name': 'user_org_idx', 'sparse': True}),
+        ]),
+
+        # Organizations and team membership (Phase 3A)
+        ('organizations', [
+            ({'owner_user_id': 1}, {'name': 'organization_owner_idx'}),
+            ({'status': 1}, {'name': 'organization_status_idx'}),
+            ({'stripe_customer_id': 1}, {'name': 'organization_stripe_customer_idx', 'sparse': True}),
+            ({'stripe_subscription_id': 1}, {'name': 'organization_stripe_subscription_idx', 'sparse': True}),
+        ]),
+        ('organization_members', [
+            ({'org_id': 1, 'user_id': 1}, {'name': 'organization_member_unique', 'unique': True}),
+            ({'org_id': 1, 'email': 1}, {'name': 'organization_member_email_idx'}),
+            ({'user_id': 1, 'status': 1}, {'name': 'organization_member_user_status_idx'}),
+        ]),
+        ('organization_invites', [
+            ({'token_hash': 1}, {'name': 'organization_invite_token_unique', 'unique': True}),
+            ({'org_id': 1, 'email': 1}, {'name': 'organization_invite_org_email_idx'}),
+            ({'expires_at': 1}, {'name': 'organization_invite_expiry_idx'}),
+        ]),
+        ('organization_audit_logs', [
+            ({'org_id': 1, 'created_at': -1}, {'name': 'organization_audit_org_time_idx'}),
+            ({'event': 1, 'created_at': -1}, {'name': 'organization_audit_event_time_idx'}),
+            ({'actor_user_id': 1, 'created_at': -1}, {'name': 'organization_audit_actor_time_idx'}),
+        ]),
+        ('organization_rate_limit_events', [
+            ({'scope': 1, 'action': 1, 'created_at': -1}, {'name': 'organization_rate_limit_scope_idx'}),
+            ({'created_at': 1}, {'name': 'organization_rate_limit_ttl', 'expireAfterSeconds': 604800}),
         ]),
 
         # Tasks (critical for daemon)
@@ -47,6 +75,7 @@ def ensure_all_indexes():
         # Campaigns
         ('campaigns', [
             ({'user_id': 1}, {'name': 'campaign_user_idx'}),
+            ({'org_id': 1}, {'name': 'campaign_org_idx', 'sparse': True}),
             ({'linkedin_profile_id': 1}, {'name': 'campaign_profile_idx'}),
             ({'status': 1}, {'name': 'campaign_status_idx'}),
             ({'is_paused': 1}, {'name': 'campaign_paused_idx'}),
@@ -82,6 +111,8 @@ def ensure_all_indexes():
         # LinkedIn Profiles
         ('linkedin_profiles', [
             ({'user_id': 1}, {'name': 'profile_user_idx'}),
+            ({'org_id': 1}, {'name': 'profile_org_idx', 'sparse': True}),
+            ({'org_id': 1, 'assigned_user_id': 1}, {'name': 'profile_org_assignee_idx', 'sparse': True}),
             ({'linkedin_username': 1}, {'name': 'profile_username_unique_idx', 'unique': True, 'sparse': True}),
             ({'active': 1}, {'name': 'profile_active_idx'}),
             ({'user_id': 1, 'is_active': 1}, {'name': 'profile_user_active_idx'}),
@@ -172,6 +203,89 @@ def ensure_all_indexes():
         # Billing
         ('stripe_plans', [
             ({'plan_name': 1}, {'name': 'stripe_plan_name_idx', 'unique': True}),
+        ]),
+
+        # Managed proxy inventory
+        ('proxies', [
+            ({'status': 1, 'country': 1}, {'name': 'proxy_status_country_idx'}),
+            ({'linkedin_profile_id': 1}, {'name': 'proxy_profile_idx', 'sparse': True}),
+            ({'host': 1, 'port': 1, 'username': 1}, {'name': 'proxy_endpoint_idx'}),
+            ({'assigned_user_id': 1}, {'name': 'proxy_user_idx', 'sparse': True}),
+            ({'identity_id': 1}, {'name': 'proxy_identity_idx', 'sparse': True}),
+            ({'assigned_org_id': 1}, {'name': 'proxy_org_idx', 'sparse': True}),
+            (
+                {'status': 1, 'ever_assigned': 1, 'country': 1},
+                {'name': 'proxy_available_idx'},
+            ),
+            ({'massive_subuser': 1}, {'name': 'proxy_massive_subuser_idx', 'sparse': True}),
+            (
+                {'massive_account_id': 1},
+                {'name': 'proxy_massive_account_idx', 'sparse': True},
+            ),
+            (
+                {'massive_status': 1, 'massive_last_sync_at': -1},
+                {'name': 'proxy_massive_status_idx', 'sparse': True},
+            ),
+        ]),
+
+        ('proxy_assignments', [
+            (
+                {'proxy_id': 1, 'unassigned_at': 1},
+                {'name': 'proxy_assignment_active_idx'},
+            ),
+            (
+                {'profile_id': 1, 'unassigned_at': 1},
+                {'name': 'proxy_assignment_profile_idx'},
+            ),
+        ]),
+
+        ('proxy_health_checks', [
+            (
+                {'proxy_id': 1, 'checked_at': -1},
+                {'name': 'proxy_health_proxy_time_idx'},
+            ),
+            (
+                {'country_match': 1, 'checked_at': -1},
+                {'name': 'proxy_health_mismatch_idx', 'sparse': True},
+            ),
+        ]),
+
+        ('proxy_usage_snapshots', [
+            (
+                {'proxy_id': 1, 'period_start': -1},
+                {'name': 'proxy_usage_proxy_period_idx'},
+            ),
+            (
+                {'profile_id': 1, 'period_start': -1},
+                {'name': 'proxy_usage_profile_period_idx'},
+            ),
+        ]),
+
+        # Phase 2 cumulative Reseller usage snapshots (internal cost control).
+        ('massive_usage_snapshots', [
+            (
+                {'proxy_id': 1, 'captured_at': -1},
+                {'name': 'massive_usage_proxy_time_idx'},
+            ),
+            (
+                {'org_id': 1, 'captured_at': -1},
+                {'name': 'massive_usage_org_time_idx', 'sparse': True},
+            ),
+            (
+                {'massive_account_id': 1, 'captured_at': -1},
+                {'name': 'massive_usage_account_time_idx', 'sparse': True},
+            ),
+        ]),
+
+        ('admin_rate_limit_events', [
+            (
+                {'admin_user_id': 1, 'action': 1, 'created_at': -1},
+                {'name': 'admin_rate_limit_idx'},
+            ),
+            (
+                {'created_at': 1},
+                {'name': 'admin_rate_limit_ttl', 'expireAfterSeconds': 604800},
+            ),
         ]),
 
 
@@ -321,10 +435,12 @@ def ensure_all_indexes():
             ({'code_hash': 1}, {'name': 'daemon_enrollment_code_hash_unique', 'unique': True}),
             ({'expires_at': 1}, {'name': 'daemon_enrollment_expiry_ttl', 'expireAfterSeconds': 0}),
             ({'user_id': 1, 'used': 1}, {'name': 'daemon_enrollment_user_used_idx'}),
+            ({'org_id': 1, 'used': 1}, {'name': 'daemon_enrollment_org_used_idx', 'sparse': True}),
         ]),
         ('daemon_devices', [
             ({'user_id': 1, 'revoked': 1}, {'name': 'daemon_device_user_status_idx'}),
             ({'user_id': 1, 'last_seen_at': -1}, {'name': 'daemon_device_user_seen_idx'}),
+            ({'org_id': 1, 'revoked': 1}, {'name': 'daemon_device_org_status_idx', 'sparse': True}),
         ]),
         ('daemon_refresh_families', [
             ({'device_id': 1, 'token_hash': 1}, {'name': 'daemon_refresh_device_hash_unique', 'unique': True}),

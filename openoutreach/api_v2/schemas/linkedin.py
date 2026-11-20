@@ -6,9 +6,10 @@ and credential management operations in the FastAPI v2 API.
 """
 
 from datetime import datetime
+import re
 from typing import Dict, List, Optional, Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class LinkedInProfileResponse(BaseModel):
@@ -72,6 +73,27 @@ class LinkedInCredentialCreate(BaseModel):
     backup_of_id: Optional[str] = Field(None, description="ID of the primary credential if this is a backup")
     rotation_required_days: int = Field(default=90, description="Days until credential rotation is required")
     execution_mode: str = Field(default="desktop", description="Execution mode: 'desktop' or 'cloud'")
+    proxy_region_country: Optional[str] = Field(None, description="ISO-2 country for the managed proxy (required for cloud)")
+    proxy_region_subdivision: Optional[str] = Field(None, description="Optional state/subdivision for the managed proxy")
+    proxy_region_city: Optional[str] = Field(None, description="Optional city for the managed proxy")
+
+    @field_validator("proxy_region_country")
+    @classmethod
+    def validate_proxy_region_country(cls, v: Optional[str]) -> Optional[str]:
+        """Normalize and validate the optional country code."""
+        if v is None or not v.strip():
+            return None
+        value = v.strip().upper()
+        if not re.fullmatch(r"[A-Z]{2}", value):
+            raise ValueError("Proxy region country must be a 2-letter code")
+        return value
+
+    @model_validator(mode="after")
+    def validate_cloud_region(self):
+        """Cloud accounts must declare the region for their managed proxy."""
+        if self.execution_mode == "cloud" and not self.proxy_region_country:
+            raise ValueError("A proxy region country is required for cloud execution")
+        return self
 
     model_config = ConfigDict(json_schema_extra={
             "example": {
@@ -123,6 +145,10 @@ class LinkedInCredentialResponse(BaseModel):
     execution_mode: str = Field(default="desktop", alias="executionMode", description="Execution mode of the linked profile: 'desktop' or 'cloud'")
     linkedin_profile_username: Optional[str] = Field(None, alias="linkedinProfileUsername", description="LinkedIn username from the linked profile")
     daemon_ip: Optional[str] = Field(None, alias="daemonIp", description="IP address last reported by the desktop daemon")
+    has_proxy: bool = Field(default=False, alias="hasProxy", description="Whether the linked profile has a proxy configured")
+    proxy_region_country: Optional[str] = Field(None, alias="proxyRegionCountry", description="Managed proxy country")
+    proxy_region_subdivision: Optional[str] = Field(None, alias="proxyRegionSubdivision", description="Managed proxy subdivision")
+    proxy_region_city: Optional[str] = Field(None, alias="proxyRegionCity", description="Managed proxy city")
 
     # Audit log entries (if included)
     logs: Optional[List[Dict[str, Any]]] = Field(None, description="Recent audit log entries")

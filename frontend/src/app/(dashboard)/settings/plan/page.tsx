@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,6 +12,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Icons } from "@/lib/types/components";
+import { Cloud } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Breadcrumb } from "@/components/layout/breadcrumb";
@@ -43,6 +44,8 @@ function PlanPageLoadingSkeleton() {
 
 export default function PlanPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const intendedCloud = searchParams.get("plan") === "cloud";
   const [billingStatus, setBillingStatus] = useState<BillingStatus | null>(null);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [lifetimeDealActive, setLifetimeDealActive] = useState(false);
@@ -122,6 +125,30 @@ export default function PlanPage() {
     return <PlanPageLoadingSkeleton />;
   }
 
+  if (billingStatus?.is_billing_owner === false) {
+    return (
+      <div className="space-y-6">
+        <Breadcrumb
+          items={[
+            { label: "Dashboard", href: "/dashboard" },
+            { label: "Settings", href: "/settings" },
+            { label: "Plan", href: "/settings/plan", isActive: true },
+          ]}
+        />
+        <Alert>
+          <Icons.Info className="h-4 w-4" />
+          <AlertDescription>
+            Your workspace owner manages the plan and cloud seats. You inherit the
+            workspace plan; contact {billingStatus.billing_owner_email || "the owner"} for changes.
+          </AlertDescription>
+        </Alert>
+        <Button variant="outline" onClick={() => router.push("/settings/billing")}>
+          View billing status
+        </Button>
+      </div>
+    );
+  }
+
   const currentPlan = billingStatus?.plan || "starter";
 
   // Separate lifetime from regular plans; exclude cloud_addon from display
@@ -151,6 +178,17 @@ export default function PlanPage() {
         <Alert variant="destructive">
           <Icons.AlertCircle className="h-4 w-4" />
           <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
+      {intendedCloud && billingStatus?.plan !== "cloud" && !billingStatus?.stripe_subscription_id && (
+        <Alert className="border-sky-500/40 bg-sky-500/10">
+          <Cloud className="h-4 w-4 text-sky-400" />
+          <AlertDescription className="text-sky-100">
+            Cloud requires a paid subscription and has no trial. Select Cloud below
+            to continue to checkout. Your plan includes 1 LinkedIn account and 1
+            managed proxy; extra cloud seats can be added later in Billing.
+          </AlertDescription>
         </Alert>
       )}
 

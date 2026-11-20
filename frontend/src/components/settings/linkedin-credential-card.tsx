@@ -16,7 +16,9 @@ import {
   type LinkedInCredentialsLogsResponse,
 } from "@/lib/api/dashboard";
 import { useToast } from "@/components/ui/use-toast";
+import { useBilling } from "@/lib/contexts/billing-context";
 import LinkedInCredentialForm from "./linkedin-credential-form";
+import { ProxyConfigForm } from "./proxy-config-form";
 import VncViewer from "./vnc-viewer";
 import {
   Dialog,
@@ -134,7 +136,14 @@ export default function LinkedInCredentialCard({
   const [isLoadingHealth, setIsLoadingHealth] = useState(false);
   const [showChallengeModal, setShowChallengeModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showProxyDialog, setShowProxyDialog] = useState(false);
   const { toast } = useToast();
+  const { billingStatus } = useBilling();
+  const orgRole = billingStatus?.org_role;
+  // Fail closed when the role is unknown; the backend still enforces this.
+  const canManageWorkspace = orgRole === "owner" || orgRole === "admin";
+  const canManageProxies =
+    canManageWorkspace && billingStatus?.managed_proxies_enabled !== false;
 
   const healthStatus: HealthStatusWithDetails =
     credential.healthStatus && typeof credential.healthStatus === "object"
@@ -316,6 +325,11 @@ export default function LinkedInCredentialCard({
                       Backup
                     </span>
                   ) : null}
+                  <span className="rounded-full border border-zinc-700 px-2 py-0.5 text-xs text-zinc-300">
+                    {credential.executionMode === "cloud"
+                      ? "Cloud · Managed proxy"
+                      : "Desktop · Local IP · No proxy"}
+                  </span>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 text-sm text-zinc-400">
                   {hasRealUsername && (
@@ -387,6 +401,27 @@ export default function LinkedInCredentialCard({
                 <span className="text-zinc-100">
                   {lastUsed ?? "Not available"}
                 </span>
+              </div>
+            </div>
+          ) : null}
+
+          {credential.executionMode === "cloud" &&
+          credential.hasProxy === false ? (
+            <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="mt-0.5 h-4 w-4 text-amber-400" />
+                <div className="min-w-0 space-y-1">
+                  <div className="text-sm font-semibold text-amber-300">
+                    No proxy configured
+                  </div>
+                  <p className="text-sm text-amber-200/80">
+                    Cloud execution requires a managed proxy. This account will
+                    be paused instead of using the server IP.{" "}
+                    {canManageWorkspace
+                      ? "Open Proxy and add a proxy before starting a campaign."
+                      : "Ask a workspace owner or admin to assign a managed proxy."}
+                  </p>
+                </div>
               </div>
             </div>
           ) : null}
@@ -486,15 +521,28 @@ export default function LinkedInCredentialCard({
               {isLoadingLogs ? "Loading..." : "View Logs"}
             </Button>
 
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => setShowDeleteConfirm(true)}
-              disabled={isDeleting}
-            >
-              <Icons.Trash2 className="mr-2 h-3 w-3" />
-              Delete
-            </Button>
+            {canManageProxies && credential.executionMode === "cloud" && credential.linkedinProfileId ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowProxyDialog(true)}
+              >
+                <Shield className="mr-2 h-3 w-3" />
+                Proxy
+              </Button>
+            ) : null}
+
+            {canManageWorkspace && (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => setShowDeleteConfirm(true)}
+                disabled={isDeleting}
+              >
+                <Icons.Trash2 className="mr-2 h-3 w-3" />
+                Delete
+              </Button>
+            )}
           </div>
         </div>
 
@@ -738,6 +786,25 @@ export default function LinkedInCredentialCard({
               </div>
             </DialogContent>
           )}
+        </Dialog>
+
+        <Dialog open={showProxyDialog} onOpenChange={setShowProxyDialog}>
+          <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto border border-zinc-800 bg-zinc-950 text-zinc-100 shadow-2xl">
+            <DialogHeader>
+              <DialogTitle>Proxy for {displayUsername}</DialogTitle>
+              <DialogDescription>
+                Cloud execution uses this proxy instead of the server IP. Use a
+                unique proxy or sticky session for every LinkedIn account.
+              </DialogDescription>
+            </DialogHeader>
+            {credential.linkedinProfileId ? (
+              <ProxyConfigForm
+                profileId={String(credential.linkedinProfileId)}
+                embedded
+                onConfigUpdate={onRefresh}
+              />
+            ) : null}
+          </DialogContent>
         </Dialog>
       </CardContent>
     </Card>

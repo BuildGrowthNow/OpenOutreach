@@ -17,6 +17,10 @@ export interface User {
   admin_notes: string | null
   is_admin: boolean
   admin_role: string | null
+  org_id?: string | null
+  org_name?: string | null
+  org_role?: string | null
+  team_workspaces_enabled?: boolean
 }
 
 interface AuthState {
@@ -34,7 +38,7 @@ interface AuthState {
 
   // Actions
   initialize: () => Promise<void>
-  register: (email: string, password: string, fullName: string) => Promise<{ error: string | null }>
+  register: (email: string, password: string, fullName: string, intendedPlan?: string, inviteToken?: string) => Promise<{ error: string | null }>
   login: (email: string, password: string) => Promise<{ error: string | null }>
   adoptAccessToken: (accessToken: string) => Promise<boolean>
   logout: () => Promise<void>
@@ -153,7 +157,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   /**
    * Register new user
    */
-  register: async (email: string, password: string, fullName: string) => {
+  register: async (email: string, password: string, fullName: string, intendedPlan?: string, inviteToken?: string) => {
     set({ isLoading: true, error: null })
 
     try {
@@ -167,6 +171,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           email,
           password,
           full_name: fullName,
+          intended_plan: intendedPlan,
+          invite_token: inviteToken,
         }),
       })
 
@@ -440,8 +446,7 @@ export const setupAuthInterceptor = () => {
 export const authActions = {
   initialize: () => useAuthStore.getState().initialize(),
   register: (email: string, password: string, fullName: string) =>
-    useAuthStore.getState().register(email, password, fullName),
-  login: (email: string, password: string) =>
+    useAuthStore.getState().register(email, password, fullName),  login: (email: string, password: string) =>
     useAuthStore.getState().login(email, password),
   logout: () => useAuthStore.getState().logout(),
   refreshToken: () => useAuthStore.getState().refreshToken(),

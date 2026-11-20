@@ -72,7 +72,24 @@ export default function LinkedInCredentialForm({
   const { toast } = useToast();
   const countdownRef = useRef<NodeJS.Timeout | null>(null);
   const { billingStatus } = useBilling();
-  const hasCloudAddon = (billingStatus?.cloud_profiles ?? 0) > 0;
+  const isSharedWorkspaceMember =
+    billingStatus?.team_workspaces_enabled === true &&
+    billingStatus?.org_role === "member";
+  const hasCloudAccess =
+    (!isSharedWorkspaceMember &&
+      (billingStatus?.plan === "cloud" ||
+        (billingStatus?.cloud_seat_limit ?? 0) > 0)) ||
+    // Editing an existing cloud profile assigned to this member stays
+    // possible; only new cloud profile creation is owner/admin-only.
+    initialData?.executionMode === "cloud";
+  const [regionCountry, setRegionCountry] = useState(
+    initialData?.proxyRegionCountry ?? ""
+  );
+  const [regionSubdivision, setRegionSubdivision] = useState(
+    initialData?.proxyRegionSubdivision ?? ""
+  );
+  const [regionCity, setRegionCity] = useState(initialData?.proxyRegionCity ?? "");
+  const isEditing = Boolean(initialData);
 
   useEffect(() => {
     if (isSubmitting) {
@@ -115,6 +132,18 @@ export default function LinkedInCredentialForm({
         execution_mode: executionMode,
       };
 
+      if (executionMode === "cloud") {
+        const country = regionCountry.trim().toUpperCase();
+        if (!isEditing && !/^[A-Z]{2}$/.test(country)) {
+          throw new Error("Enter the 2-letter country code for this LinkedIn account (for example US).");
+        }
+        if (country) {
+          formData.proxy_region_country = country;
+          formData.proxy_region_subdivision = regionSubdivision.trim() || undefined;
+          formData.proxy_region_city = regionCity.trim() || undefined;
+        }
+      }
+
       let credentialId = initialData?.id ?? null;
       let response;
 
@@ -124,7 +153,7 @@ export default function LinkedInCredentialForm({
         response = await createLinkedInCredentials(formData);
       }
 
-      if (!response.data) {
+      if (response.error || !response.data) {
         throw new Error(response.error || "Failed to save credentials");
       }
 
@@ -139,6 +168,7 @@ export default function LinkedInCredentialForm({
         success?: boolean;
         error?: string;
         details?: { errorType?: string; message?: string };
+        linkedinProfileId?: string | null;
         credentials?: LinkedInCredentials;
       } | undefined;
 
@@ -156,8 +186,11 @@ export default function LinkedInCredentialForm({
       const errorType = verifyData?.details?.errorType;
       if (errorType === "awaiting_challenge") {
         setChallengeCredentialId(credentialId);
-        // Get profile ID from the credentials response
-        const profileId = verifyData?.credentials?.linkedinProfileId?.toString() || null;
+        // The verification response carries the profile ID for the VNC viewer.
+        const profileId =
+          verifyData?.linkedinProfileId?.toString() ||
+          verifyData?.credentials?.linkedinProfileId?.toString() ||
+          null;
         setChallengeProfileId(profileId);
         setShowChallengeModal(true);
         return;
@@ -352,7 +385,7 @@ export default function LinkedInCredentialForm({
                 </CardContent>
               </Card>
 
-              {hasCloudAddon && (
+              {hasCloudAccess && (
                 <Card className="border-zinc-800/80 bg-zinc-950/50 shadow-none">
                   <CardContent className="pt-6">
                     <h3 className="mb-3 text-sm font-semibold text-zinc-100">Execution Mode</h3>
@@ -360,7 +393,8 @@ export default function LinkedInCredentialForm({
                       <button
                         type="button"
                         onClick={() => setExecutionMode("desktop")}
-                        className={`flex flex-1 items-center gap-2 rounded-lg border px-4 py-3 text-sm transition-colors ${
+                        disabled={isEditing}
+                        className={`flex flex-1 items-center gap-2 rounded-lg border px-4 py-3 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
                           executionMode === "desktop"
                             ? "border-blue-500/60 bg-blue-500/10 text-blue-300"
                             : "border-zinc-800 bg-zinc-900/40 text-zinc-400 hover:border-zinc-700"
@@ -369,13 +403,14 @@ export default function LinkedInCredentialForm({
                         <Monitor className="h-4 w-4 shrink-0" />
                         <div className="text-left">
                           <div className="font-medium">Desktop</div>
-                          <div className="text-xs opacity-70">Your computer · Free</div>
+                          <div className="text-xs opacity-70">Your computer · Local IP</div>
                         </div>
                       </button>
                       <button
                         type="button"
                         onClick={() => setExecutionMode("cloud")}
-                        className={`flex flex-1 items-center gap-2 rounded-lg border px-4 py-3 text-sm transition-colors ${
+                        disabled={isEditing}
+                        className={`flex flex-1 items-center gap-2 rounded-lg border px-4 py-3 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
                           executionMode === "cloud"
                             ? "border-emerald-500/60 bg-emerald-500/10 text-emerald-300"
                             : "border-zinc-800 bg-zinc-900/40 text-zinc-400 hover:border-zinc-700"
@@ -384,10 +419,73 @@ export default function LinkedInCredentialForm({
                         <Cloud className="h-4 w-4 shrink-0" />
                         <div className="text-left">
                           <div className="font-medium">Cloud</div>
-                          <div className="text-xs opacity-70">Managed by Lengrowth · $299/mo</div>
+                          <div className="text-xs opacity-70">Managed proxy · Included in your seat</div>
                         </div>
                       </button>
                     </div>
+
+                    {executionMode === "cloud" ? (
+                      <div className="mt-4 space-y-3 rounded-lg border border-zinc-800/80 bg-zinc-900/30 p-4">
+                        <div>
+                          <h4 className="text-sm font-semibold text-zinc-100">Proxy region</h4>
+                          <p className="mt-1 text-xs text-zinc-400">
+                            We assign a managed proxy in this region. Country is required;
+                            state and city are optional and narrow the pool. Changing the
+                            region changes the egress IP and may trigger a LinkedIn
+                            challenge. Proxy credentials are never shown.
+                          </p>
+                          {isEditing ? (
+                            <p className="mt-1 text-xs text-amber-300">
+                              Execution mode and proxy region are fixed for an existing
+                              account. Contact support to change them.
+                            </p>
+                          ) : null}
+                        </div>
+                        <div className="grid gap-3 sm:grid-cols-3">
+                          <div className="space-y-1">
+                            <label htmlFor="region-country" className="text-xs font-medium text-zinc-300">
+                              Country
+                            </label>
+                            <Input
+                              id="region-country"
+                              value={regionCountry}
+                              onChange={(e) => setRegionCountry(e.target.value.toUpperCase())}
+                              placeholder="US"
+                              maxLength={2}
+                              disabled={isEditing}
+                              className="border-zinc-800 bg-zinc-950/70 uppercase"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label htmlFor="region-subdivision" className="text-xs font-medium text-zinc-300">
+                              State / subdivision
+                            </label>
+                            <Input
+                              id="region-subdivision"
+                              value={regionSubdivision}
+                              onChange={(e) => setRegionSubdivision(e.target.value.toUpperCase())}
+                              placeholder="NY"
+                              maxLength={8}
+                              disabled={isEditing}
+                              className="border-zinc-800 bg-zinc-950/70"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label htmlFor="region-city" className="text-xs font-medium text-zinc-300">
+                              City
+                            </label>
+                            <Input
+                              id="region-city"
+                              value={regionCity}
+                              onChange={(e) => setRegionCity(e.target.value)}
+                              placeholder="New York"
+                              disabled={isEditing}
+                              className="border-zinc-800 bg-zinc-950/70"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
                   </CardContent>
                 </Card>
               )}

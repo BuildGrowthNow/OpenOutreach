@@ -54,6 +54,67 @@ class Settings(BaseSettings):
     DAEMON_V2_WHATSAPP_ENABLED: bool = False
     DAEMON_V2_EMAIL_ENABLED: bool = False
 
+    # =========================================================================
+    # Cloud seats and managed proxies
+    # =========================================================================
+    CLOUD_SEATS_ENABLED: bool = True
+    MANAGED_PROXIES_ENABLED: bool = True
+
+    # =========================================================================
+    # Team workspaces (Phase 3A)
+    # =========================================================================
+    # The flag is intentionally closed by default. Personal organizations and
+    # org-scoped data remain available for rollback; disabling the flag makes
+    # every user fall back to personal billing and hides team surfaces.
+    TEAM_WORKSPACES_ENABLED: bool = False
+    ORGANIZATION_INVITE_EXPIRY_DAYS: int = 7
+    ORGANIZATION_INVITE_RATE_LIMIT: int = 30
+    ORGANIZATION_INVITE_RATE_WINDOW_SECONDS: int = 3600
+    ORGANIZATION_ACCEPT_RATE_LIMIT: int = 30
+    ORGANIZATION_ACCEPT_RATE_WINDOW_SECONDS: int = 3600
+
+    # Massive fallback credentials (Phase 1). These values are server-side
+    # only and must never be logged, returned by an API, or exposed to the
+    # frontend. Reseller API access is intentionally not part of Phase 1.
+    MASSIVE_PARENT_USERNAME: Optional[str] = None
+    MASSIVE_PROXY_PASSWORD: Optional[str] = None
+    MASSIVE_PROXY_HOST: str = "network.joinmassive.com"
+    MASSIVE_PROXY_PORT: int = 65534
+    MASSIVE_REPORTING_ENABLED: bool = False
+    MASSIVE_REPORTING_API_KEY: Optional[str] = None
+    MASSIVE_REPORTING_BASE_URL: str = "https://api-network.joinmassive.com/reporting"
+
+    # Massive Reseller and Pool Stats (Phase 2). Reseller/Pool Stats use the
+    # account API key (MASSIVE_PROXY_PASSWORD); the dedicated variables are
+    # optional aliases. All values stay server-side.
+    MASSIVE_RESELLER_ENABLED: bool = False
+    MASSIVE_RESELLER_API_KEY: Optional[str] = None
+    MASSIVE_RESELLER_BASE_URL: str = "https://api-network.joinmassive.com/resellers"
+    MASSIVE_POOL_STATS_ENABLED: bool = False
+    MASSIVE_POOL_STATS_API_KEY: Optional[str] = None
+    MASSIVE_POOL_STATS_BASE_URL: str = "https://api-network.joinmassive.com/pool-stats"
+    # Conservative lifetime sub-account allowance. `limit` is cumulative, so
+    # start small and top up from the admin Massive tab.
+    MASSIVE_RESELLER_DEFAULT_LIMIT_BYTES: int = 5_000_000_000
+    # Internal monthly review thresholds. Never exposed as a customer meter.
+    MASSIVE_MONTHLY_SOFT_LIMIT_BYTES: int = 25_000_000_000
+    MASSIVE_MONTHLY_HARD_LIMIT_BYTES: int = 40_000_000_000
+    MASSIVE_POOL_STATS_MIN_NODES: int = 1_000
+    MASSIVE_PROVISION_RATE_LIMIT: int = 30
+    MASSIVE_PROVISION_RATE_WINDOW_SECONDS: int = 3600
+    MASSIVE_SYNC_RATE_LIMIT: int = 12
+    MASSIVE_SYNC_RATE_WINDOW_SECONDS: int = 3600
+    MASSIVE_ROTATE_RATE_LIMIT: int = 30
+    MASSIVE_ROTATE_RATE_WINDOW_SECONDS: int = 3600
+    MASSIVE_ALLOCATE_RATE_LIMIT: int = 30
+    MASSIVE_ALLOCATE_RATE_WINDOW_SECONDS: int = 3600
+
+    # Admin proxy-operation rate limits (window seconds, max attempts).
+    PROXY_IMPORT_RATE_LIMIT: int = 10
+    PROXY_IMPORT_RATE_WINDOW_SECONDS: int = 3600
+    PROXY_TEST_RATE_LIMIT: int = 120
+    PROXY_TEST_RATE_WINDOW_SECONDS: int = 3600
+
     @model_validator(mode="after")
     def load_daemon_key_variants(self):
         for plain_name, encoded_name in (
@@ -90,10 +151,10 @@ class Settings(BaseSettings):
     # =========================================================================
     # LLM Configuration
     # =========================================================================
-    LLM_PROVIDER: str = "openai"
+    LLM_PROVIDER: str = "openai_compatible"
     LLM_API_KEY: str = ""
-    LLM_API_BASE: Optional[str] = None
-    AI_MODEL: str = "gpt-4o-mini"
+    LLM_API_BASE: Optional[str] = "https://bedrock-runtime.eu-north-1.amazonaws.com/openai/v1"
+    AI_MODEL: str = "deepseek.v3.2"
     AI_MODEL_FALLBACKS: str = ""
     CLOUDFLARE_ACCOUNT_ID: str = ""
     CLOUDFLARE_API_TOKEN: str = ""

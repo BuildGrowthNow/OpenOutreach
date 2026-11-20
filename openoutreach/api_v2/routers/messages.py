@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from openoutreach.mongodb import models
 from openoutreach.mongodb.connection import get_mongodb_collection
 from openoutreach.api_v2.dependencies_v2 import get_current_user
+from openoutreach.organizations.access import user_can_access_campaign
 
 router = APIRouter()
 
@@ -108,7 +109,7 @@ async def list_messages(
             raise HTTPException(status_code=404, detail="Deal not found")
 
         campaign = models.Campaign.get(deal.campaign_id)
-        if not campaign or not campaign.has_access(user_id):
+        if not campaign or not user_can_access_campaign(user_id, campaign):
             raise HTTPException(status_code=403, detail="Access denied")
 
         query["deal_id"] = deal_id
@@ -116,7 +117,7 @@ async def list_messages(
     elif campaign_id:
         # Verify campaign access
         campaign = models.Campaign.get(campaign_id)
-        if not campaign or not campaign.has_access(user_id):
+        if not campaign or not user_can_access_campaign(user_id, campaign):
             raise HTTPException(status_code=403, detail="Campaign access denied")
 
         # Get all deals for this campaign
@@ -228,7 +229,7 @@ async def get_message_stats(
     # Resolve accessible deal_ids (same scoping logic as list_messages)
     if campaign_id:
         campaign = models.Campaign.get(campaign_id)
-        if not campaign or not campaign.has_access(user_id):
+        if not campaign or not user_can_access_campaign(user_id, campaign):
             raise HTTPException(status_code=403, detail="Campaign access denied")
         deals_collection = get_mongodb_collection("deals")
         if deals_collection is None:
@@ -303,7 +304,7 @@ async def get_message(
         raise HTTPException(status_code=404, detail="Deal not found")
 
     campaign = models.Campaign.get(deal.campaign_id)
-    if not campaign or not campaign.has_access(user_id):
+    if not campaign or not user_can_access_campaign(user_id, campaign):
         raise HTTPException(status_code=403, detail="Access denied")
 
     leads_col = get_mongodb_collection("leads")
@@ -346,7 +347,7 @@ async def list_deal_messages(
         raise HTTPException(status_code=404, detail="Deal not found")
 
     campaign = models.Campaign.get(deal.campaign_id)
-    if not campaign or not campaign.has_access(user_id):
+    if not campaign or not user_can_access_campaign(user_id, campaign):
         raise HTTPException(status_code=403, detail="Access denied")
 
     # Sync messages from LinkedIn if requested

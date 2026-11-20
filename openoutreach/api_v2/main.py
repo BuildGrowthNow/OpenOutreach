@@ -230,8 +230,18 @@ app.include_router(vnc.router, prefix="/api", tags=["vnc"])
 from openoutreach.api_v2.routers.billing import router as billing_router
 app.include_router(billing_router, tags=["billing"])
 
+# Organizations / team workspaces (Phase 3A)
+from openoutreach.api_v2.routers.organizations import router as organizations_router
+app.include_router(organizations_router, tags=["organizations"])
+
 # Admin
 app.include_router(admin.router, tags=["admin"])
+
+from openoutreach.api_v2.routers.admin_proxies import router as admin_proxies_router
+app.include_router(admin_proxies_router, tags=["admin-proxies"])
+
+from openoutreach.api_v2.routers.admin_organizations import router as admin_organizations_router
+app.include_router(admin_organizations_router, tags=["admin-organizations"])
 
 # WhatsApp channel
 from openoutreach.whatsapp.api.router import router as whatsapp_router

@@ -21,6 +21,7 @@ import { LinkedInProfileHealthResponse } from '@/lib/types/components'
 import { listWhatsAppProfiles, type WhatsAppProfile } from '@/lib/api/whatsapp'
 import { listMailboxes, type Mailbox } from '@/lib/api/mailboxes'
 import { getNotificationSummary, markNotificationAsRead, markAllNotificationsAsRead, Notification } from '@/lib/api/notifications'
+import { OrgSwitcher } from '@/components/team/org-switcher'
 
 interface HeaderProps {
   onMenuClick: () => void
@@ -448,6 +449,10 @@ const Header = ({ onMenuClick, className }: HeaderProps) => {
             )}
           </DropdownMenuContent>
         </DropdownMenu>
+
+        <div className="h-8 w-px bg-border mx-1" />
+
+        <OrgSwitcher />
 
         <div className="h-8 w-px bg-border mx-1" />
 

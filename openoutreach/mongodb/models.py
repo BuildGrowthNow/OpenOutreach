@@ -750,6 +750,7 @@ class Campaign:
         is_paused: bool = False,
         status: str = "active",
         user_id: str = "",
+        org_id: Optional[str] = None,
         linkedin_profile_id: Optional[str] = None,
         team_member_ids: Optional[List[str]] = None,
         icp_titles: Optional[List[str]] = None,
@@ -792,6 +793,7 @@ class Campaign:
         self.is_paused = is_paused
         self.status = status
         self.user_id = user_id
+        self.org_id = org_id
         self.linkedin_profile_id = linkedin_profile_id
         self.team_member_ids = team_member_ids or []
         self.icp_titles = icp_titles or []
@@ -836,6 +838,7 @@ class Campaign:
             "is_paused": self.is_paused,
             "status": self.status,
             "user_id": self.user_id,
+            "org_id": self.org_id,
             "linkedin_profile_id": self.linkedin_profile_id,
             "team_member_ids": self.team_member_ids,
             "icp_titles": self.icp_titles,
@@ -897,6 +900,7 @@ class Campaign:
             is_paused=data.get("is_paused", False),
             status=data.get("status", "active"),
             user_id=data.get("user_id", ""),
+            org_id=data.get("org_id"),
             linkedin_profile_id=data.get("linkedin_profile_id"),
             team_member_ids=data.get("team_member_ids", []),
             icp_titles=data.get("icp_titles", []),

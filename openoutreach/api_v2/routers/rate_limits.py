@@ -65,9 +65,13 @@ async def get_rate_limit_context(
     Returns current limits, detectability score, and effective limits
     for different action types.
     """
-    # Verify profile ownership
+    # Verify org-scoped profile access
     profile = LinkedInProfile.get(profile_id)
-    if not profile or profile.user_id != user_id:
+    from openoutreach.mongodb.models_user import User as _User
+    from openoutreach.organizations.access import can_access_profile_doc as _can_access
+
+    _user = _User.get(user_id)
+    if not profile or not _user or not _can_access(_user, profile.to_dict()):
         raise HTTPException(status_code=404, detail="LinkedIn profile not found")
 
     # Get or create context
@@ -112,9 +116,13 @@ async def update_detectability(
     Use this to increase suspicion after detecting captchas or rate limits,
     or decrease after successful periods.
     """
-    # Verify profile ownership
+    # Verify org-scoped profile access
     profile = LinkedInProfile.get(profile_id)
-    if not profile or profile.user_id != user_id:
+    from openoutreach.mongodb.models_user import User as _User
+    from openoutreach.organizations.access import can_access_profile_doc as _can_access
+
+    _user = _User.get(user_id)
+    if not profile or not _user or not _can_access(_user, profile.to_dict()):
         raise HTTPException(status_code=404, detail="LinkedIn profile not found")
 
     # Get context
@@ -144,9 +152,13 @@ async def get_rate_limit_warnings(
 
     Shows recent violations and their severity.
     """
-    # Verify profile ownership
+    # Verify org-scoped profile access
     profile = LinkedInProfile.get(profile_id)
-    if not profile or profile.user_id != user_id:
+    from openoutreach.mongodb.models_user import User as _User
+    from openoutreach.organizations.access import can_access_profile_doc as _can_access
+
+    _user = _User.get(user_id)
+    if not profile or not _user or not _can_access(_user, profile.to_dict()):
         raise HTTPException(status_code=404, detail="LinkedIn profile not found")
 
     # Get warnings
@@ -179,9 +191,13 @@ async def resolve_warning(
     user_id: str = Depends(get_current_user),
 ):
     """Mark a rate limit warning as resolved."""
-    # Verify profile ownership
+    # Verify org-scoped profile access
     profile = LinkedInProfile.get(profile_id)
-    if not profile or profile.user_id != user_id:
+    from openoutreach.mongodb.models_user import User as _User
+    from openoutreach.organizations.access import can_access_profile_doc as _can_access
+
+    _user = _User.get(user_id)
+    if not profile or not _user or not _can_access(_user, profile.to_dict()):
         raise HTTPException(status_code=404, detail="LinkedIn profile not found")
 
     # Get warning
@@ -213,9 +229,13 @@ async def get_daily_action_counts(
 
     Shows how many connects, messages, etc. were performed.
     """
-    # Verify profile ownership
+    # Verify org-scoped profile access
     profile = LinkedInProfile.get(profile_id)
-    if not profile or profile.user_id != user_id:
+    from openoutreach.mongodb.models_user import User as _User
+    from openoutreach.organizations.access import can_access_profile_doc as _can_access
+
+    _user = _User.get(user_id)
+    if not profile or not _user or not _can_access(_user, profile.to_dict()):
         raise HTTPException(status_code=404, detail="LinkedIn profile not found")
 
     # Calculate day boundaries in the user's local timezone

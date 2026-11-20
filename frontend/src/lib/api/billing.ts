@@ -22,9 +22,18 @@ export interface BillingStatus {
   whatsapp_account_limit: number;
   campaign_limit: number | null;
   cloud_profiles: number;
+  cloud_seat_limit: number;
+  cloud_seats_enabled: boolean;
+  managed_proxies_enabled?: boolean;
   user_status: string;
   admin_notes: string | null;
   stripe_subscription_id?: string;
+  org_id?: string | null;
+  org_name?: string | null;
+  org_role?: string | null;
+  team_workspaces_enabled?: boolean;
+  is_billing_owner?: boolean;
+  billing_owner_email?: string | null;
 }
 
 export interface Invoice {

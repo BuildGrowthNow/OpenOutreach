@@ -132,6 +132,10 @@ class Mailbox:
         from_name: str = "",
         daily_limit: int = DEFAULT_EMAIL_DAILY_LIMIT,
         user_id: str = "",
+        org_id: Optional[str] = None,
+        assigned_user_id: Optional[str] = None,
+        seat_id: Optional[str] = None,
+        managed: bool = False,
         imap_host: str = "",
         imap_port: int = 993,
         imap_username: str = "",
@@ -148,6 +152,10 @@ class Mailbox:
         self.from_name = from_name
         self.daily_limit = daily_limit
         self.user_id = user_id
+        self.org_id = org_id
+        self.assigned_user_id = assigned_user_id or user_id
+        self.seat_id = seat_id
+        self.managed = bool(managed)
         self.imap_host = imap_host
         self.imap_port = imap_port
         self.imap_username = imap_username
@@ -187,6 +195,10 @@ class Mailbox:
             "from_name": self.from_name,
             "daily_limit": self.daily_limit,
             "user_id": self.user_id,
+            "org_id": self.org_id,
+            "assigned_user_id": self.assigned_user_id,
+            "seat_id": self.seat_id,
+            "managed": self.managed,
             "imap_host": self.imap_host,
             "imap_port": self.imap_port,
             "imap_username": self.imap_username,
@@ -209,6 +221,10 @@ class Mailbox:
         obj.from_name = data.get("from_name", "")
         obj.daily_limit = data.get("daily_limit", DEFAULT_EMAIL_DAILY_LIMIT)
         obj.user_id = data.get("user_id", "")
+        obj.org_id = data.get("org_id")
+        obj.assigned_user_id = data.get("assigned_user_id")
+        obj.seat_id = data.get("seat_id")
+        obj.managed = bool(data.get("managed", False))
         obj.imap_host = data.get("imap_host", "")
         obj.imap_port = data.get("imap_port", 993)
         obj.imap_username = data.get("imap_username", "")

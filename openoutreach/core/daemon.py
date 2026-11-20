@@ -36,6 +36,7 @@ from termcolor import colored
 
 from openoutreach.core.conf import CAMPAIGN_CONFIG
 from linkedin_cli.exceptions import AuthenticationError, CheckpointChallengeError
+from openoutreach.linkedin.exceptions import CloudProxyRequiredError
 
 from openoutreach.mongodb.models import Campaign, Task
 
@@ -303,6 +304,46 @@ def _notify_checkpoint_challenge(user_id: str, url: str) -> None:
         logger.debug("Could not create checkpoint notification: %s", type(e).__name__)
 
 
+def _pause_cloud_profile_for_missing_proxy(profile, user_id: str) -> None:
+    """Pause a cloud profile that has no proxy and alert the customer.
+
+    The daemon must never fall back to the server IP: LinkedIn links accounts
+    by IP, so a missing proxy is an account-safety incident.
+    """
+    from openoutreach.mongodb.connection import get_mongodb_collection
+
+    profile_id = str(profile.pk)
+    try:
+        collection = get_mongodb_collection("linkedin_profiles")
+        if collection is not None:
+            collection.update_one(
+                {"_id": profile_id},
+                {"$set": {
+                    "active": False,
+                    "is_active": False,
+                    "daemon_status": "proxy_required",
+                }},
+            )
+    except Exception as e:
+        logger.error("Failed to pause cloud profile without proxy; exception_type=%s", type(e).__name__)
+
+    logger.error("Cloud profile %s has no managed proxy; paused instead of using the server IP", profile_id)
+    try:
+        from openoutreach.mongodb.models_extended import Notification
+        Notification(
+            recipient_id=user_id,
+            notification_type="campaign_error",
+            title="Cloud profile paused: proxy required",
+            message=(
+                "This cloud LinkedIn account has no managed proxy. It was paused "
+                "instead of running on the server IP. Contact support to assign a proxy."
+            ),
+            data={"profile_id": profile_id, "requires_action": True},
+        ).save()
+    except Exception as e:
+        logger.debug("Could not create proxy notification: %s", type(e).__name__)
+
+
 # ── Heartbeat ──────────────────────────────────────────────────────────
 
 HEARTBEAT_INTERVAL = 300
@@ -549,6 +590,10 @@ class ProfileSession:
             _notify_checkpoint_challenge(self.user_id, exc.url)
             self.pause(300)
             return False
+        except CloudProxyRequiredError:
+            _pause_cloud_profile_for_missing_proxy(self.profile, self.user_id)
+            self.pause(3600)
+            return False
         except AuthenticationError as exc:
             logger.error("Auth failed for %s: %s", self.profile.linkedin_username, type(exc).__name__)
             _notify_auth_required(self.user_id, str(exc))
@@ -601,19 +646,31 @@ def _get_all_active_profiles() -> list:
     desktop daemon owns those sessions.  Filtering at the database query
     boundary prevents a server daemon restart/refresh from accidentally
     claiming a desktop account.
+
+    Seat accounting is organization-scoped: every cloud profile in a workspace
+    counts against the workspace owner's pool, active or paused.
     """
     from openoutreach.linkedin.models import LinkedInProfile
     from openoutreach.billing.enforcement import PlanEnforcer
+    from openoutreach.organizations.enforcement import resolve_effective_plan
 
     active_profiles = LinkedInProfile.objects.filter(
         active=True,
         execution_mode="cloud",
     )
     result = []
+    seats_used: dict[str, int] = {}
     for p in active_profiles:
         if not p.cookie_data_encrypted:
             continue
         if not p.is_active:
+            continue
+        if not p.proxy_server:
+            # Cloud profiles must never run on the server IP.
+            logger.warning(
+                "Cloud profile %s has no managed proxy; skipping until one is assigned",
+                p.pk,
+            )
             continue
 
         user = p.user
@@ -624,6 +681,20 @@ def _get_all_active_profiles() -> list:
         if not can_run:
             continue
 
+        effective = resolve_effective_plan(user)
+        seat_limit = effective.cloud_seat_limit
+        billing_owner = effective.billing_owner_id
+        used = seats_used.get(billing_owner, 0)
+        if seat_limit <= 0 or used >= seat_limit:
+            logger.warning(
+                "Cloud profile %s exceeds the cloud seat limit for workspace %s (%s/%s); skipping",
+                p.pk,
+                billing_owner,
+                used,
+                seat_limit,
+            )
+            continue
+        seats_used[billing_owner] = used + 1
         result.append(p)
 
     return result
@@ -806,6 +877,10 @@ def run_daemon():
                     _notify_checkpoint_challenge(ps.user_id, exc.url)
                     ps.close()
                     ps.pause(300)
+                except CloudProxyRequiredError:
+                    _pause_cloud_profile_for_missing_proxy(ps.profile, ps.user_id)
+                    ps.close()
+                    ps.pause(3600)
                 except Exception:
                     logger.exception("Re-auth failed for %s", ps.profile.linkedin_username)
                 task.mark_failed()
@@ -818,6 +893,12 @@ def run_daemon():
                     ps.profile.linkedin_username, type(e).__name__,
                 )
                 ps.pause(600)
+                continue
+            except CloudProxyRequiredError:
+                task.mark_failed()
+                _pause_cloud_profile_for_missing_proxy(ps.profile, ps.user_id)
+                ps.close()
+                ps.pause(3600)
                 continue
             except Exception:
                 import traceback

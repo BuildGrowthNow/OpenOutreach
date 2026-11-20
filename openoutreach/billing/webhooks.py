@@ -65,6 +65,7 @@ def handle_checkout_session_completed(event: dict[str, Any]) -> None:
             user.billing_period = "lifetime"
             user.current_period_end = None
             user.trial_ends_at = None
+            user.intended_plan = None
             _sync_plan_limits(user)
             user.save()
             try:
@@ -84,23 +85,19 @@ def handle_checkout_session_completed(event: dict[str, Any]) -> None:
             if sub:
                 user.subscription_status = "trialing" if sub.status == "trialing" else "active"
 
-                plan_name = _get_plan_name_from_subscription(sub)
-                if plan_name:
-                    user.plan = plan_name
+                _sync_subscription_items(user, sub)
 
                 if sub.trial_start and sub.trial_end:
                     user.trial_ends_at = datetime.fromtimestamp(sub.trial_end, tz=tz.utc)
 
                 if getattr(sub, "current_period_end", None):
                     user.current_period_end = datetime.fromtimestamp(sub.current_period_end, tz=tz.utc)  # type: ignore
-
-                if sub.items and sub.items.data and sub.items.data[0].price.recurring:
-                    user.billing_period = "annual" if sub.items.data[0].price.recurring.interval == "year" else "monthly"
-
-                _sync_plan_limits(user)
         else:
             user.subscription_status = "active"
 
+        # Checkout is complete; clear the signup intent even when Stripe
+        # returns a subscription object without expanded items.
+        user.intended_plan = None
         user.save()
         try:
             send_welcome_email(user)
@@ -112,16 +109,9 @@ def handle_checkout_session_completed(event: dict[str, Any]) -> None:
 
 def _sync_plan_limits(user: User) -> None:
     """Sync plan limits from plan definition to user."""
-    from openoutreach.billing.plans import get_plan
+    from openoutreach.billing.plans import apply_plan_entitlements
 
-    plan_def = get_plan(user.plan)
-    if not plan_def:
-        logger.warning(f"Could not find plan definition for {user.plan}")
-        return
-
-    user.linkedin_account_limit = plan_def.get("max_linkedin_accounts", 1)
-    user.whatsapp_account_limit = plan_def.get("max_whatsapp_accounts", 1)
-    user.campaign_limit = plan_def.get("max_campaigns")
+    apply_plan_entitlements(user)
 
 
 def handle_customer_subscription_created(event: dict[str, Any]) -> None:
@@ -144,6 +134,7 @@ def handle_customer_subscription_created(event: dict[str, Any]) -> None:
 
     user.stripe_subscription_id = subscription.get("id")
     user.subscription_status = "trialing" if subscription.get("status") == "trialing" else "active"
+    user.intended_plan = None
 
     if subscription.get("trial_end"):
         user.trial_ends_at = datetime.fromtimestamp(subscription["trial_end"], tz=tz.utc)
@@ -151,11 +142,7 @@ def handle_customer_subscription_created(event: dict[str, Any]) -> None:
     if subscription.get("current_period_end"):
         user.current_period_end = datetime.fromtimestamp(subscription["current_period_end"], tz=tz.utc)
 
-    if subscription.get("items", {}).get("data"):
-        interval = subscription["items"]["data"][0]["price"]["recurring"]["interval"]
-        user.billing_period = "annual" if interval == "year" else "monthly"
-
-    _sync_plan_limits(user)
+    _sync_subscription_items(user, subscription)
     user.save()
     logger.info(f"Created subscription for user {user._id}")
 
@@ -175,10 +162,12 @@ def handle_customer_subscription_updated(event: dict[str, Any]) -> None:
         return
 
     old_plan = user.plan
+    old_cloud_profiles = user.cloud_profiles
     plan_name = _get_plan_name_from_subscription(subscription)
     if plan_name:
         user.plan = plan_name
 
+    user.intended_plan = None
     status = subscription.get("status")
     if status == "trialing":
         user.subscription_status = "trialing"
@@ -195,30 +184,35 @@ def handle_customer_subscription_updated(event: dict[str, Any]) -> None:
     if subscription.get("current_period_end"):
         user.current_period_end = datetime.fromtimestamp(subscription["current_period_end"], tz=tz.utc)
 
-    if subscription.get("items", {}).get("data"):
-        interval = subscription["items"]["data"][0]["price"]["recurring"]["interval"]
-        user.billing_period = "annual" if interval == "year" else "monthly"
+    _sync_subscription_items(user, subscription)
 
-    _sync_plan_limits(user)
-
-    if old_plan != plan_name and plan_name:
-        _enforce_linkedin_account_limit(user._id, user.linkedin_account_limit)
+    plan_changed = old_plan != plan_name and bool(plan_name)
+    seats_reduced = user.cloud_profiles < old_cloud_profiles
+    if plan_changed or seats_reduced:
+        prefer_cloud = old_plan == "cloud" or user.plan == "cloud"
+        _enforce_linkedin_account_limit(
+            user._id,
+            user.linkedin_account_limit,
+            prefer_execution_mode="cloud" if prefer_cloud else None,
+        )
+    if plan_changed:
         _enforce_wa_account_limit(user._id, user.whatsapp_account_limit)
-        if old_plan and plan_name:
-            try:
-                # Determine if upgrade or downgrade based on plan hierarchy
-                plan_hierarchy = ["starter", "pro", "lifetime", "business", "agency", "cloud"]
-                old_idx = plan_hierarchy.index(old_plan) if old_plan in plan_hierarchy else -1
-                new_idx = plan_hierarchy.index(plan_name) if plan_name in plan_hierarchy else -1
 
-                if new_idx > old_idx:
-                    send_plan_upgraded(user, old_plan, plan_name)
-                elif new_idx < old_idx:
-                    # Downgrade - schedule for period end
-                    effective_date = datetime.fromtimestamp(subscription.get("current_period_end", 0), tz=tz.utc)
-                    send_plan_downgraded(user, old_plan, plan_name, effective_date)
-            except Exception as e:
-                logger.error("Failed to send plan change email; exception_type=%s", type(e).__name__)
+    if plan_changed and plan_name:
+        try:
+            # Determine if upgrade or downgrade based on plan hierarchy
+            plan_hierarchy = ["starter", "pro", "lifetime", "business", "agency", "cloud"]
+            old_idx = plan_hierarchy.index(old_plan) if old_plan in plan_hierarchy else -1
+            new_idx = plan_hierarchy.index(plan_name) if plan_name in plan_hierarchy else -1
+
+            if new_idx > old_idx:
+                send_plan_upgraded(user, old_plan, plan_name)
+            elif new_idx < old_idx:
+                # Downgrade - schedule for period end
+                effective_date = datetime.fromtimestamp(subscription.get("current_period_end", 0), tz=tz.utc)
+                send_plan_downgraded(user, old_plan, plan_name, effective_date)
+        except Exception as e:
+            logger.error("Failed to send plan change email; exception_type=%s", type(e).__name__)
 
     user.save()
     logger.info(f"Updated subscription for user {user._id}")
@@ -247,6 +241,8 @@ def handle_customer_subscription_deleted(event: dict[str, Any]) -> None:
 
     user.subscription_status = "canceled"
     user.stripe_subscription_id = None
+    user.cloud_profiles = 0
+    _sync_plan_limits(user)
     user.save()
 
     _deactivate_user_profiles(user._id)
@@ -423,21 +419,87 @@ def process_webhook_event(event: dict[str, Any]) -> bool:
 
 
 def _get_plan_name_from_subscription(subscription: Any) -> Optional[str]:
-    """Extract plan name from Stripe subscription object."""
-    items = subscription.get("items", {}).get("data", [])
-    if not items:
-        return None
+    """Extract the base plan name, skipping cloud add-on seat items."""
+    items = _subscription_items(subscription)
+    product_cache: dict[str, Optional[str]] = {}
+    for item in items:
+        plan_name = _item_plan_name(item, product_cache)
+        if plan_name and plan_name != "cloud_addon":
+            return plan_name
+    return None
 
-    product_id: Optional[str] = items[0].get("price", {}).get("product")
+
+def _subscription_items(subscription: Any) -> list:
+    """Return every subscription item, tolerating dict and StripeObject input."""
+    items = subscription.get("items") or {}
+    if hasattr(items, "get"):
+        return list(items.get("data") or [])
+    return []
+
+
+def _item_plan_name(item: Any, product_cache: dict[str, Optional[str]]) -> Optional[str]:
+    """Resolve a subscription item's plan from price metadata or its product.
+
+    Price keys written by ``sync_stripe_products`` are ``<plan>_monthly``,
+    ``<plan>_annual``, ``cloud_addon``, or ``lifetime``. Product metadata is
+    the authoritative fallback for prices created elsewhere.
+    """
+    price = item.get("price") or {}
+    metadata = price.get("metadata") or {}
+    price_key = metadata.get("price_key")
+    if price_key:
+        if price_key == "cloud_addon":
+            return "cloud_addon"
+        for suffix in ("_monthly", "_annual"):
+            if price_key.endswith(suffix):
+                return price_key[: -len(suffix)]
+        if price_key == "lifetime":
+            return "lifetime"
+
+    product_id = price.get("product")
     if not product_id:
         return None
+    if product_id not in product_cache:
+        try:
+            product = stripe.Product.retrieve(product_id)
+            product_cache[product_id] = product.metadata.get("plan_name")  # type: ignore[union-attr]
+        except stripe.StripeError as e:
+            logger.error("Failed to retrieve product; exception_type=%s", type(e).__name__)
+            product_cache[product_id] = None
+    return product_cache[product_id]
 
-    try:
-        product = stripe.Product.retrieve(product_id)
-        return product.metadata.get("plan_name")  # type: ignore
-    except stripe.StripeError as e:
-        logger.error("Failed to retrieve product; exception_type=%s", type(e).__name__)
-        return None
+
+def _sync_subscription_items(user: User, subscription: Any) -> None:
+    """Sync the base plan, billing period, and cloud seat quantity.
+
+    Reads every subscription item: the first non-add-on item is the plan and
+    every ``cloud_addon`` item contributes its quantity to ``cloud_profiles``.
+    ``cloud_addon`` is never treated as a plan.
+    """
+    base_plan: Optional[str] = None
+    billing_period: Optional[str] = None
+    cloud_seats = 0
+    product_cache: dict[str, Optional[str]] = {}
+
+    for item in _subscription_items(subscription):
+        plan_name = _item_plan_name(item, product_cache)
+        if plan_name == "cloud_addon":
+            cloud_seats += int(item.get("quantity") or 0)
+            continue
+        if plan_name and base_plan is None:
+            base_plan = plan_name
+            recurring = (item.get("price") or {}).get("recurring") or {}
+            interval = recurring.get("interval")
+            if interval:
+                billing_period = "annual" if interval == "year" else "monthly"
+
+    if base_plan:
+        user.plan = base_plan
+    if billing_period:
+        user.billing_period = billing_period
+    user.cloud_profiles = cloud_seats
+    _sync_plan_limits(user)
+
 
 
 def handle_customer_subscription_trial_will_end(event: dict[str, Any]) -> None:
@@ -463,20 +525,71 @@ def handle_customer_subscription_trial_will_end(event: dict[str, Any]) -> None:
 
 
 def _deactivate_user_profiles(user_id: str) -> None:
-    """Deactivate all LinkedIn profiles for a user on subscription cancel/expire."""
+    """Deactivate LinkedIn profiles on subscription cancel/expire.
+
+    For a workspace owner this includes profiles owned by active members, so a
+    cancelled workspace cannot keep running accounts on the owner's plan.
+    """
     profiles_collection = get_mongodb_collection("linkedin_profiles")
     if profiles_collection is None:
         logger.warning("Could not deactivate profiles: collection not available")
         return
 
+    query: dict = {"user_id": user_id, "is_active": True}
     try:
+        from openoutreach.billing.seats import org_ids_owned_by
+        from openoutreach.organizations.service import team_workspaces_enabled
+
+        if team_workspaces_enabled():
+            org_ids = org_ids_owned_by(user_id)
+            query = {
+                "$or": [
+                    {"org_id": {"$in": org_ids}},
+                    # Only legacy personal rows. A bare user_id match would
+                    # also pause team profiles a member created while they
+                    # still had their own personal subscription.
+                    {"org_id": {"$exists": False}, "user_id": user_id},
+                    {"org_id": None, "user_id": user_id},
+                ],
+                "is_active": True,
+            }
+    except Exception:
+        pass
+
+    try:
+        profile_ids = [
+            str(doc["_id"])
+            for doc in profiles_collection.find(query, {"_id": 1})
+        ]
         result = profiles_collection.update_many(
-            {"user_id": user_id, "is_active": True},
-            {"$set": {"is_active": False}},
+            query,
+            {
+                "$set": {
+                    "is_active": False,
+                    "active": False,
+                    "daemon_status": "seat_required",
+                }
+            },
         )
         logger.info(f"Deactivated {result.modified_count} profiles for user {user_id}")
     except Exception as e:
         logger.error("Failed to deactivate profiles; user_id=%s exception_type=%s", user_id, type(e).__name__)
+        return
+
+    # A cancelled subscription must not leave paid Massive sub-accounts
+    # enabled. Keep the proxy bound to the same profile so a later
+    # re-subscription can re-enable it, but stop provider spend now.
+    for profile_id in profile_ids:
+        try:
+            from openoutreach.proxies.provisioning import disable_massive_for_profile
+
+            disable_massive_for_profile(profile_id, reason="subscription_canceled")
+        except Exception as exc:  # pragma: no cover - cancellation must finish
+            logger.debug(
+                "Could not disable Massive sub-account for profile_id=%s exception_type=%s",
+                profile_id,
+                type(exc).__name__,
+            )
 
 
 def _enforce_wa_account_limit(user_id: str, limit: int) -> None:
@@ -503,29 +616,17 @@ def _enforce_wa_account_limit(user_id: str, limit: int) -> None:
         logger.error("Failed to enforce WA account limits; user_id=%s exception_type=%s", user_id, type(e).__name__)
 
 
-def _enforce_linkedin_account_limit(user_id: str, limit: int) -> None:
-    """Deactivate excess LinkedIn profiles beyond the account limit."""
-    profiles_collection = get_mongodb_collection("linkedin_profiles")
-    if profiles_collection is None:
-        logger.warning("Could not enforce account limits: collection not available")
-        return
+def _enforce_linkedin_account_limit(
+    user_id: str,
+    limit: int,
+    *,
+    prefer_execution_mode: str | None = None,
+) -> None:
+    """Pause excess LinkedIn profiles beyond the account limit."""
+    from openoutreach.billing.downgrade_handler import pause_excess_linkedin_profiles
 
-    try:
-        active_profiles = list(
-            profiles_collection.find(
-                {"user_id": user_id, "is_active": True},
-                sort=[("created_at", 1)],
-            )
-        )
-
-        if len(active_profiles) > limit:
-            excess_profiles = active_profiles[limit:]
-            excess_ids = [p["_id"] for p in excess_profiles]
-
-            profiles_collection.update_many(
-                {"_id": {"$in": excess_ids}},
-                {"$set": {"is_active": False}},
-            )
-            logger.info(f"Deactivated {len(excess_profiles)} excess profiles for user {user_id}")
-    except Exception as e:
-        logger.error("Failed to enforce account limits; user_id=%s exception_type=%s", user_id, type(e).__name__)
+    pause_excess_linkedin_profiles(
+        user_id,
+        limit,
+        prefer_execution_mode=prefer_execution_mode,
+    )

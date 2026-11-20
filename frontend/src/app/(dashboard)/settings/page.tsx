@@ -29,6 +29,7 @@ import { WhatsappConnectionTab } from "@/components/settings/whatsapp-connection
 import WhatsappSettingsForm from "@/components/settings/whatsapp-settings-form";
 import { EmailTab } from "@/components/settings/email-tab";
 import { DesktopConnectionTab } from "@/components/settings/desktop-connection-tab";
+import { useBilling } from "@/lib/contexts/billing-context";
 
 function SettingsLoadingSkeleton() {
   return (
@@ -58,6 +59,8 @@ export default function SettingsPage() {
   const [dailyUsage, setDailyUsage] = useState<DailyUsageResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { billingStatus } = useBilling();
+  const teamEnabled = billingStatus?.team_workspaces_enabled === true;
 
   const loadSettings = useCallback(async () => {
     try {
@@ -120,7 +123,7 @@ export default function SettingsPage() {
   const requestedTab = searchParams.get("tab");
   const initialTab = requestedTab === "linkedin-credentials"
     ? "linkedin"
-    : ["linkedin", "whatsapp", "email", "desktop", "rate-limits", "llm", "billing"].includes(requestedTab || "")
+    : ["linkedin", "whatsapp", "email", "desktop", "team", "rate-limits", "llm", "billing"].includes(requestedTab || "")
       ? requestedTab!
       : "linkedin";
 
@@ -150,7 +153,7 @@ export default function SettingsPage() {
       </div>
 
       <Tabs defaultValue={initialTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-3 gap-2 rounded-xl bg-muted p-1 sm:grid-cols-7">
+        <TabsList className="grid w-full grid-cols-4 gap-2 rounded-xl bg-muted p-1 sm:grid-cols-8">
           <TabsTrigger value="linkedin" className="flex items-center gap-2 py-2">
             <Icons.Link className="h-4 w-4 shrink-0" />
             LinkedIn
@@ -167,6 +170,12 @@ export default function SettingsPage() {
             <Icons.Server className="h-4 w-4 shrink-0" />
             Desktop
           </TabsTrigger>
+          {teamEnabled && (
+            <TabsTrigger value="team" className="flex items-center gap-2 py-2">
+              <Icons.Users className="h-4 w-4 shrink-0" />
+              Team
+            </TabsTrigger>
+          )}
           <TabsTrigger value="rate-limits" className="flex items-center gap-2 py-2">
             <Icons.Shield className="h-4 w-4 shrink-0" />
             Rate Limits & Hours
@@ -201,6 +210,24 @@ export default function SettingsPage() {
 
         <TabsContent value="desktop" className="space-y-6">
           <DesktopConnectionTab />
+        </TabsContent>
+
+        <TabsContent value="team" className="space-y-6">
+          {teamEnabled && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Team workspace</CardTitle>
+                <CardDescription>
+                  Invite members, manage roles, and assign cloud seats from the dedicated team page.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button asChild>
+                  <a href="/settings/team">Open Team Settings</a>
+                </Button>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         <TabsContent value="rate-limits" className="space-y-6">

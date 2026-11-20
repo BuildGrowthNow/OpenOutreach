@@ -13,6 +13,7 @@ from openoutreach.api_v2.dependencies_v2 import get_current_user
 from openoutreach.api_v2.schemas.link import LinkCreate, LinkUpdate
 from openoutreach.mongodb.connection import get_mongodb_collection
 from openoutreach.mongodb.models import Campaign, TrackedLink
+from openoutreach.organizations.access import user_can_access_campaign
 
 router = APIRouter(tags=["Links"])
 
@@ -24,7 +25,7 @@ class LinkCreateRequest(LinkCreate):
 
 def _campaign_or_404(campaign_id: str, user_id: str) -> Campaign:
     campaign = Campaign.get(campaign_id)
-    if not campaign or not campaign.has_access(user_id):
+    if not campaign or not user_can_access_campaign(user_id, campaign):
         raise HTTPException(status_code=404, detail="Campaign not found")
     return campaign
 

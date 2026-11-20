@@ -306,6 +306,34 @@ def construct_webhook_event(body: str, signature: str) -> Optional[dict[str, Any
         return None
 
 
+def _subscription_item_plan_name(item: Any) -> Optional[str]:
+    """Resolve an item's plan name without ever treating cloud_addon as a plan."""
+    price = getattr(item, "price", None)
+    if price is None:
+        return None
+    metadata = getattr(price, "metadata", None)
+    price_key = metadata.get("price_key") if isinstance(metadata, dict) else None
+    if price_key:
+        if price_key == "cloud_addon":
+            return "cloud_addon"
+        for suffix in ("_monthly", "_annual"):
+            if price_key.endswith(suffix):
+                return price_key[: -len(suffix)]
+        if price_key == "lifetime":
+            return "lifetime"
+
+    product_id = getattr(price, "product", None)
+    if not product_id:
+        return None
+    try:
+        product = stripe.Product.retrieve(product_id)
+        product_metadata = getattr(product, "metadata", None)
+        return product_metadata.get("plan_name") if isinstance(product_metadata, dict) else None
+    except stripe.StripeError as e:
+        logger.error("Failed to retrieve product; exception_type=%s", type(e).__name__)
+        return None
+
+
 def update_subscription_price(
     subscription_id: str,
     new_price_id: str,
@@ -321,7 +349,15 @@ def update_subscription_price(
             logger.error(f"Subscription {subscription_id} not found or has no items")
             return None
 
+        # Never replace the cloud add-on item when changing the base plan. Match
+        # by price metadata and fall back to product metadata, because legacy
+        # prices may not carry price_key.
         item_id = subscription.items.data[0].id
+        for item in subscription.items.data:
+            if _subscription_item_plan_name(item) != "cloud_addon":
+                item_id = item.id
+                break
+
         updated_sub = stripe.Subscription.modify(
             subscription_id,
             items=[

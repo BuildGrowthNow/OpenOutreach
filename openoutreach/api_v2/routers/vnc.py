@@ -11,19 +11,24 @@ router = APIRouter()
 # from matching "sessions" as a profile_id path parameter.
 
 @router.get("/vnc/sessions")
-async def list_vnc_sessions(current_user: User = Depends(get_current_user)):
+async def list_vnc_sessions(user_id: str = Depends(get_current_user)):
     """List all active VNC sessions for the current user's profiles."""
-    from openoutreach.linkedin.models import LinkedInProfile
     from openoutreach.core.vnc_manager import get_all_vnc_sessions
+    from openoutreach.mongodb.connection import get_mongodb_collection
+    from openoutreach.organizations.access import profile_access_query
 
-    # Get user's profiles
-    user_id = getattr(current_user, '_id', None)
-    if not user_id:
+    user = User.get(user_id)
+    if not user:
         return {"sessions": {}}
-    user_profiles = LinkedInProfile.objects.filter(user_id=user_id, active=True)
-    user_profile_ids = {str(p.pk) for p in user_profiles}
+    profiles = get_mongodb_collection("linkedin_profiles")
+    if profiles is None:
+        return {"sessions": {}}
+    user_profile_ids = {
+        str(doc["_id"])
+        for doc in profiles.find({**profile_access_query(user), "active": True}, {"_id": 1})
+    }
 
-    # Filter VNC sessions to only user's profiles
+    # Filter VNC sessions to only accessible profiles
     all_sessions = get_all_vnc_sessions()
     user_sessions = {
         pid: info for pid, info in all_sessions.items()
@@ -36,7 +41,7 @@ async def list_vnc_sessions(current_user: User = Depends(get_current_user)):
 @router.get("/vnc/{profile_id}")
 async def get_vnc_session(
     profile_id: str,
-    current_user: User = Depends(get_current_user),
+    user_id: str = Depends(get_current_user),
 ):
     """Get VNC session info for a specific LinkedIn profile.
 
@@ -44,16 +49,16 @@ async def get_vnc_session(
     """
     from openoutreach.linkedin.models import LinkedInProfile
     from openoutreach.core.vnc_manager import get_vnc_url, _profile_indices
+    from openoutreach.organizations.access import can_access_profile_doc
 
-    # Verify profile belongs to current user
+    # Verify org-scoped access to the profile
     try:
         profile = LinkedInProfile.get(profile_id)
     except Exception:
         raise HTTPException(status_code=404, detail="Profile not found")
 
-    user_id = getattr(current_user, '_id', None)
-    profile_user_id = getattr(profile, 'user_id', None)
-    if not user_id or (profile_user_id and profile_user_id != user_id):
+    user = User.get(user_id)
+    if not user or not profile or not can_access_profile_doc(user, profile.to_dict()):
         raise HTTPException(status_code=403, detail="Not authorized to access this profile")
 
     vnc_url = get_vnc_url(profile_id)
