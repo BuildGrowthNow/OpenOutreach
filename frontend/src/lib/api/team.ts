@@ -50,6 +50,7 @@ export interface SeatSummary {
   cloud_seat_limit: number | null;
   cloud_profiles: number;
   credentialed_profiles: number;
+  desktop_credentialed_profiles?: number;
   assigned_profiles: number;
   unassigned_profiles: number;
   members: number;

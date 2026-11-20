@@ -92,7 +92,7 @@ export function TeamMembersCard({
                       </SelectContent>
                     </Select>
                   )}
-                  {!isSelf && (
+                  {!isSelf && (canChangeRoles || member.role === "member") && (
                     <Button variant="outline" size="sm" onClick={() => void handleRemove(member)}>
                       Remove
                     </Button>

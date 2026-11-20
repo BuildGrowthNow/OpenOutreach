@@ -1602,6 +1602,12 @@ export default function AdminProxiesPage() {
           if (open) {
             setImportErrors([])
             setPreview(null)
+          } else {
+            // The textarea can contain plaintext proxy passwords. Do not keep
+            // it in memory after the dialog closes.
+            setImportText('')
+            setImportErrors([])
+            setPreview(null)
           }
         }}
       >
@@ -1798,7 +1804,15 @@ export default function AdminProxiesPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={Boolean(rotateProxy)} onOpenChange={(open) => !open && setRotateProxy(null)}>
+      <Dialog
+        open={Boolean(rotateProxy)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setRotateProxy(null)
+            setRotatePassword('')
+          }
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Rotate proxy password</DialogTitle>
@@ -1814,7 +1828,13 @@ export default function AdminProxiesPage() {
             autoComplete="new-password"
           />
           <DialogFooter>
-            <Button variant="outline" onClick={() => setRotateProxy(null)}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setRotateProxy(null)
+                setRotatePassword('')
+              }}
+            >
               Cancel
             </Button>
             <Button onClick={() => void handleRotate()} disabled={rotatePassword.length < 8}>

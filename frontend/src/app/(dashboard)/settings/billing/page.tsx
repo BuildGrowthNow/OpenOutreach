@@ -63,7 +63,9 @@ export default function BillingPage() {
   const [isSeatLoading, setIsSeatLoading] = useState(false);
   const [seatError, setSeatError] = useState<string | null>(null);
   const { refetch: refetchBilling } = useBilling();
-  const isBillingOwner = billingStatus?.is_billing_owner !== false;
+  // Fail closed: a missing/stale status must not expose owner-only billing
+  // controls to a member.
+  const isBillingOwner = billingStatus?.is_billing_owner === true;
 
   const loadData = useCallback(async () => {
     try {

@@ -5,6 +5,7 @@ import re
 from typing import Optional
 
 _ISO2_RE = re.compile(r"^[A-Za-z]{2}$")
+_SUBDIVISION_RE = re.compile(r"^[A-Za-z0-9]{1,16}$")
 
 
 class RegionError(ValueError):
@@ -32,8 +33,8 @@ def normalize_region(
     normalized_country = normalize_country(country)
     normalized_subdivision = (subdivision or "").strip().upper() or None
     normalized_city = (city or "").strip() or None
-    if normalized_subdivision and len(normalized_subdivision) > 16:
-        raise RegionError("Subdivision is too long")
+    if normalized_subdivision and not _SUBDIVISION_RE.match(normalized_subdivision):
+        raise RegionError("Subdivision must be letters and digits only (for example NY)")
     if normalized_city and len(normalized_city) > 120:
         raise RegionError("City is too long")
     return normalized_country, normalized_subdivision, normalized_city

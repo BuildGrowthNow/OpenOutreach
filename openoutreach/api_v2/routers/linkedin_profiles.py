@@ -81,6 +81,14 @@ def _normalize_proxy_server(proxy_server: str) -> str:
                 "or socks5://host:port"
             ),
         )
+    if parsed.username is not None or parsed.password is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Do not embed credentials in the proxy URL. Enter the proxy "
+                "username and password in their separate fields."
+            ),
+        )
     from openoutreach.proxies.service import ProxyError, validate_proxy_host
 
     try:
@@ -967,6 +975,8 @@ async def update_proxy_config(
                 stored_proxy_id
                 and profile_doc.get("proxy_server") == normalized_server
             )
+            previous_server = _public_proxy_server(profile_doc.get("proxy_server"))
+            same_server = bool(previous_server) and previous_server == normalized_server
             updates = {
                 "proxy_server": normalized_server,
                 "proxy_id": stored_proxy_id if unchanged_managed else None,
@@ -976,6 +986,13 @@ async def update_proxy_config(
                 from openoutreach.proxies.service import retire_proxy_for_profile
 
                 retire_proxy_for_profile(profile_id)
+            if not same_server:
+                # A stored password belongs to the old host. Never carry it to
+                # a new endpoint; that would send the previous secret to a host
+                # chosen in this request.
+                updates["proxy_username"] = None
+                updates["proxy_password"] = None
+                updates["proxy_password_encrypted"] = None
             if proxy_username is not None:
                 updates["proxy_username"] = proxy_username.strip() or None
             if proxy_password:

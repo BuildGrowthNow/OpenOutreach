@@ -512,6 +512,10 @@ def find_available_proxy(
         "country": country.upper(),
         "linkedin_profile_id": None,
         "ever_assigned": {"$ne": True},
+        # A proxy that has ever belonged to a workspace must not be handed to
+        # a different organization, even if its local assignment was cleared.
+        "assigned_org_id": None,
+        "last_assigned_org_id": None,
     }
     queries: list[dict[str, Any]] = []
     if city and subdivision:

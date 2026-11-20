@@ -42,7 +42,11 @@ def pause_excess_linkedin_profiles(
         profile_query: dict = {
             "$or": [
                 {"org_id": {"$in": org_ids}},
-                {"user_id": user_id},
+                # Legacy personal rows only. A bare user_id match would pause
+                # team profiles the member created while their own personal
+                # plan changed.
+                {"org_id": {"$exists": False}, "user_id": user_id},
+                {"org_id": None, "user_id": user_id},
             ],
             "is_active": True,
         }

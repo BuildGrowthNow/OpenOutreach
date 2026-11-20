@@ -542,25 +542,54 @@ def _deactivate_user_profiles(user_id: str) -> None:
 
         if team_workspaces_enabled():
             org_ids = org_ids_owned_by(user_id)
-            if org_ids:
-                query = {
-                    "$or": [
-                        {"org_id": {"$in": org_ids}},
-                        {"user_id": user_id},
-                    ],
-                    "is_active": True,
-                }
+            query = {
+                "$or": [
+                    {"org_id": {"$in": org_ids}},
+                    # Only legacy personal rows. A bare user_id match would
+                    # also pause team profiles a member created while they
+                    # still had their own personal subscription.
+                    {"org_id": {"$exists": False}, "user_id": user_id},
+                    {"org_id": None, "user_id": user_id},
+                ],
+                "is_active": True,
+            }
     except Exception:
         pass
 
     try:
+        profile_ids = [
+            str(doc["_id"])
+            for doc in profiles_collection.find(query, {"_id": 1})
+        ]
         result = profiles_collection.update_many(
             query,
-            {"$set": {"is_active": False}},
+            {
+                "$set": {
+                    "is_active": False,
+                    "active": False,
+                    "daemon_status": "seat_required",
+                }
+            },
         )
         logger.info(f"Deactivated {result.modified_count} profiles for user {user_id}")
     except Exception as e:
         logger.error("Failed to deactivate profiles; user_id=%s exception_type=%s", user_id, type(e).__name__)
+        return
+
+    # A cancelled subscription must not leave paid Massive sub-accounts
+    # enabled. Keep the proxy bound to the same profile so a later
+    # re-subscription can re-enable it, but stop provider spend now.
+    for profile_id in profile_ids:
+        try:
+            from openoutreach.proxies.provisioning import disable_massive_for_profile
+
+            disable_massive_for_profile(profile_id, reason="subscription_canceled")
+        except Exception as exc:  # pragma: no cover - cancellation must finish
+            logger.debug(
+                "Could not disable Massive sub-account for profile_id=%s exception_type=%s",
+                profile_id,
+                type(exc).__name__,
+            )
 
 
 def _enforce_wa_account_limit(user_id: str, limit: int) -> None:

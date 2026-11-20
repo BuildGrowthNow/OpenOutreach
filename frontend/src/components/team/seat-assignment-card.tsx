@@ -51,7 +51,11 @@ export function SeatAssignmentCard({
 
   const handleUnassign = async (profile: OrgProfile, remove: boolean) => {
     const label = remove ? "Remove" : "Unassign";
-    if (!window.confirm(`${label} this seat? The profile pauses and keeps its proxy assigned.`)) {
+    const proxyNote =
+      profile.execution_mode === "cloud"
+        ? " The profile pauses and keeps its proxy assigned."
+        : " The profile pauses.";
+    if (!window.confirm(`${label} this seat?${proxyNote}`)) {
       return;
     }
     setBusy(profile.profile_id);
@@ -107,7 +111,9 @@ export function SeatAssignmentCard({
                     {profile.active ? "Active" : "Paused"}
                   </Badge>
                   {profile.proxy_assigned && (
-                    <Badge variant="outline">Managed proxy</Badge>
+                    <Badge variant="outline">
+                      {profile.proxy_mode === "managed" ? "Managed proxy" : "BYO proxy"}
+                    </Badge>
                   )}
                 </div>
                 <p className="text-xs text-muted-foreground">
@@ -231,6 +237,16 @@ export function SeatAssignmentCard({
                     >
                       Assign
                     </Button>
+                    {profile.assigned_user_id && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={busy === profile.profile_id}
+                        onClick={() => void handleUnassign(profile, false)}
+                      >
+                        Unassign
+                      </Button>
+                    )}
                   </div>
                 )}
               </div>

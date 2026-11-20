@@ -426,7 +426,10 @@ class LinkedInProfile:
                     if field == "proxy_password" and "proxy_password_encrypted" in data:
                         field = "proxy_password_encrypted"
                     if field in ("linkedin_password_encrypted", "proxy_password_encrypted"):
-                        setattr(self, f"_{field}", data[field])
+                        # Legacy profile documents may not carry the key at
+                        # all. Treat a missing key as "no password" instead of
+                        # raising KeyError during browser launch.
+                        setattr(self, f"_{field}", data.get(field))
                         continue
                     if field in data:
                         setattr(self, field, data[field])

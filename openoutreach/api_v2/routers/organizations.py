@@ -261,7 +261,10 @@ def _profile_response(profile: dict) -> SeatProfileResponse:
         assigned_user_id=profile.get("assigned_user_id"),
         execution_mode=profile.get("execution_mode"),
         active=bool(profile.get("active", profile.get("is_active", False))),
-        proxy_assigned=bool(profile.get("proxy_id") or profile.get("proxy_mode")),
+        proxy_assigned=bool(
+            profile.get("proxy_id")
+            or profile.get("proxy_mode") in ("managed", "byo")
+        ),
         proxy_mode=profile.get("proxy_mode"),
     )
 
@@ -623,4 +626,9 @@ async def org_audit_events(org_id: str, user_id: str = Depends(get_current_user)
     ctx = resolve_org_context(user)
     if not can_manage_team(ctx.role):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Team management access required")
-    return audit.list_org_audit_events(org._id)
+    events = []
+    for event in audit.list_org_audit_events(org._id):
+        event = dict(event)
+        event["id"] = str(event.pop("_id"))
+        events.append(event)
+    return events

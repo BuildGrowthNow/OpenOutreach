@@ -1029,6 +1029,16 @@ async def set_user_plan(
     user.trial_ends_at = None
     user.save()
 
+    # apply_plan_entitlements mirrors the derived values onto owned orgs before
+    # the per-field overrides above are applied. Mirror once more so an admin
+    # override is not silently reverted by the next login/webhook.
+    try:
+        from openoutreach.organizations.service import sync_org_billing_from_user
+
+        sync_org_billing_from_user(user)
+    except Exception:
+        pass
+
     if user.linkedin_account_limit < old_linkedin_limit:
         from openoutreach.billing.downgrade_handler import handle_plan_downgrade
 

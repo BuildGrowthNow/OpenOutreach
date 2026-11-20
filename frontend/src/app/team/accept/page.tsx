@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Logo } from "@/components/ui/logo";
 import { Icons } from "@/lib/types/components";
 import { useAuthStore } from "@/lib/authStoreV2";
+import { useBilling } from "@/lib/contexts/billing-context";
 import { acceptTeamInvite, previewTeamInvite, type InvitePreview } from "@/lib/api/team";
 
 export default function AcceptTeamInvitePage() {
@@ -18,6 +19,7 @@ export default function AcceptTeamInvitePage() {
   const searchParams = useSearchParams();
   const token = searchParams.get("token") || "";
   const { isAuthenticated, isInitialized, initialize } = useAuthStore();
+  const { refetch: refetchBilling } = useBilling();
   const [preview, setPreview] = useState<InvitePreview | null>(null);
   const [loading, setLoading] = useState(true);
   const [accepting, setAccepting] = useState(false);
@@ -58,6 +60,9 @@ export default function AcceptTeamInvitePage() {
         return;
       }
       await initialize();
+      // Refresh the workspace billing context before the dashboard mounts so
+      // team pages do not briefly query the old personal organization.
+      await refetchBilling();
       router.push("/dashboard");
     } finally {
       setAccepting(false);

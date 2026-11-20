@@ -305,6 +305,22 @@ async def create_credential(
                     detail=str(exc),
                 )
 
+        # A new cloud profile consumes a paid seat from the workspace pool.
+        # Only owners/admins may assign that pool; members request a seat and
+        # can still add a backup credential to a profile already assigned to
+        # them.
+        if execution_mode == "cloud" and not data.linkedin_profile_id:
+            ctx = resolve_org_context(user)
+            if ctx.team_enabled and ctx.is_shared and ctx.role == "member":
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=(
+                        "Ask a workspace owner or admin to assign a cloud seat. "
+                        "Members can create desktop profiles or add a backup "
+                        "credential to a profile assigned to them."
+                    ),
+                )
+
         is_valid, error_msg = LinkedInCredentialValidator.validate_credential_for_user(
             user_id, data.email
         )

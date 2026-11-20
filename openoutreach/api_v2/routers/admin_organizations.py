@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -120,7 +121,7 @@ async def list_organizations(
     query: dict = {}
     if search:
         query["$or"] = [
-            {"name": {"$regex": search, "$options": "i"}},
+            {"name": {"$regex": re.escape(search), "$options": "i"}},
             {"owner_user_id": search},
         ]
     total = collection.count_documents(query)
@@ -161,7 +162,10 @@ async def get_organization(org_id: str) -> AdminOrgDetailResponse:
                 "execution_mode": doc.get("execution_mode"),
                 "assigned_user_id": doc.get("assigned_user_id"),
                 "active": bool(doc.get("active", doc.get("is_active", False))),
-                "proxy_assigned": bool(doc.get("proxy_id") or doc.get("proxy_mode")),
+                "proxy_assigned": bool(
+                    doc.get("proxy_id")
+                    or doc.get("proxy_mode") in ("managed", "byo")
+                ),
                 "proxy_mode": doc.get("proxy_mode"),
             }
             for doc in profiles.find({"org_id": org._id})

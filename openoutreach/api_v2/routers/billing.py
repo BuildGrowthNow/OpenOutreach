@@ -5,7 +5,7 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from openoutreach.api_v2.dependencies_v2 import get_current_user
 from openoutreach.mongodb.models_user import User
@@ -94,6 +94,7 @@ class BillingStatusResponse(BaseModel):
     cloud_profiles: int
     cloud_seat_limit: int
     cloud_seats_enabled: bool
+    managed_proxies_enabled: bool = True
     user_status: str
     admin_notes: Optional[str] = None
     stripe_subscription_id: Optional[str] = None
@@ -127,7 +128,10 @@ class PlanChangeRequest(BaseModel):
 
 class CloudAddonRequest(BaseModel):
     """Request to add/remove cloud profile seats."""
-    quantity: int
+    # A typo in this field creates a real Stripe invoice. Keep the server-side
+    # ceiling in line with the admin override limit instead of accepting any
+    # integer the client sends.
+    quantity: int = Field(ge=0, le=10_000)
 
 
 class ReferralDashboardResponse(BaseModel):
@@ -250,6 +254,9 @@ async def billing_status(
         cloud_profiles=effective.cloud_profiles,
         cloud_seat_limit=effective.cloud_seat_limit,
         cloud_seats_enabled=bool(getattr(settings, "CLOUD_SEATS_ENABLED", True)),
+        managed_proxies_enabled=bool(
+            getattr(settings, "MANAGED_PROXIES_ENABLED", True)
+        ),
         user_status=user.status,
         admin_notes=user.admin_notes,
         stripe_subscription_id=user.stripe_subscription_id if is_billing_owner else None,
@@ -547,6 +554,23 @@ async def change_plan(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Lifetime is purchased through checkout, not a plan change",
+        )
+
+    # Cloud add-on seats are only an entitlement on the Cloud plan. Leaving
+    # Cloud while add-on items remain would keep charging for seats that can no
+    # longer run, so require the owner to remove them first.
+    if (
+        user.plan == "cloud"
+        and request.plan_name != "cloud"
+        and int(user.cloud_profiles or 0) > 0
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Remove all cloud seats before changing away from the Cloud plan. "
+                "Each add-on seat is billed separately and has no entitlement on "
+                "another plan."
+            ),
         )
 
     if request.billing_period not in ("monthly", "annual"):

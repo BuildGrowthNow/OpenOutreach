@@ -281,20 +281,38 @@ def can_access_channel_doc(user: User, doc: Optional[dict[str, Any]]) -> bool:
     return False
 
 
+def _legacy_campaign_clauses(user_id: str) -> list[dict[str, Any]]:
+    """Campaigns created before organizations existed stay personal.
+
+    These rows have no ``org_id``. They must remain visible to their creator
+    when the personal organization is active, but they must not keep a removed
+    member connected to a team workspace.
+    """
+    return [
+        {"org_id": {"$exists": False}, "user_id": user_id},
+        {"org_id": None, "user_id": user_id},
+    ]
+
+
 def campaign_access_query(user: User) -> dict[str, Any]:
     ctx = resolve_org_context(user)
     if not ctx.team_enabled:
         return {"$or": [{"user_id": user._id}, {"team_member_ids": user._id}]}
+
+    legacy = _legacy_campaign_clauses(user._id)
     if ctx.can_view_all_profiles:
-        return {
-            "$or": [
-                {"org_id": ctx.org_id},
-                {"user_id": user._id},
-                {"team_member_ids": user._id},
-            ]
-        }
+        # Owners/admins see every campaign in the active workspace plus their
+        # own pre-migration personal rows. A bare user_id match is deliberately
+        # absent: after a member is removed or switches workspace, campaigns
+        # from the former team must not remain visible through that field.
+        return {"$or": [{"org_id": ctx.org_id}, *legacy]}
+
     assigned = assigned_profile_ids(user, ctx.org_id)
-    clauses: list[dict[str, Any]] = [{"user_id": user._id}]
+    clauses: list[dict[str, Any]] = [
+        {"org_id": ctx.org_id, "user_id": user._id},
+        {"org_id": ctx.org_id, "team_member_ids": user._id},
+        *legacy,
+    ]
     if assigned:
         clauses.append(
             {
@@ -318,21 +336,36 @@ def campaign_has_access(user: User, campaign: Any) -> bool:
     if campaign_org == ctx.org_id:
         if ctx.can_view_all_profiles:
             return True
+        if owner_id == user._id or user._id in team_member_ids:
+            return True
         assigned = assigned_profile_ids(user, ctx.org_id)
-        return owner_id == user._id or (
-            getattr(campaign, "linkedin_profile_id", None) in assigned
-        )
-    return owner_id == user._id or user._id in team_member_ids
+        return getattr(campaign, "linkedin_profile_id", None) in assigned
+
+    # Legacy personal row without an organization id.
+    return not campaign_org and owner_id == user._id
 
 
 def campaign_manage_allowed(user: User, campaign: Any) -> bool:
     """Owner/admin may manage all org campaigns; members manage their own."""
     ctx = resolve_org_context(user)
-    if ctx.team_enabled and getattr(campaign, "org_id", None) == ctx.org_id:
+    campaign_org = getattr(campaign, "org_id", None)
+    if ctx.team_enabled and campaign_org == ctx.org_id:
         if ctx.can_view_all_profiles:
             return True
         return getattr(campaign, "user_id", None) == user._id
+    if ctx.team_enabled and campaign_org:
+        return False
     return getattr(campaign, "user_id", None) == user._id
+
+
+def user_can_access_campaign(user_id: str, campaign: Any) -> bool:
+    """Org-aware campaign access for routers that still hold only a user id."""
+    user = User.get(user_id)
+    if user is None:
+        # Legacy/test path without a user row; fall back to the campaign's own
+        # owner/member list rather than granting broader access.
+        return campaign.has_access(user_id)
+    return campaign_has_access(user, campaign)
 
 
 def require_org_admin(user: User, org: Organization) -> OrganizationMember:

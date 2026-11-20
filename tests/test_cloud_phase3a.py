@@ -18,6 +18,7 @@ from openoutreach.mongodb.models_user import User
 from openoutreach.organizations import audit
 from openoutreach.organizations.access import (
     can_access_profile_doc,
+    campaign_access_query,
     campaign_has_access,
     profile_access_query,
     resolve_org_context,
@@ -47,6 +48,7 @@ from openoutreach.organizations.service import (
     MemberAlreadyExistsError,
     OrganizationPermissionError,
     accept_invite,
+    apply_seat_override,
     assign_seat,
     backfill_personal_orgs,
     ensure_personal_org,
@@ -57,6 +59,7 @@ from openoutreach.organizations.service import (
     remove_seat,
     revoke_invite,
     seat_summary,
+    sync_org_billing_from_user,
     unassign_seat,
 )
 from tests.fake_mongo import FakeMongo
@@ -635,3 +638,63 @@ def test_router_member_only_lists_assigned_profiles(fake, team_enabled):
     )
     assert seats.cloud_seat_limit is None
     assert seats.credentialed_profiles == 0
+
+
+def test_removed_member_loses_former_team_campaign_access(fake, team_enabled):
+    owner = make_user(fake, "owner", "owner@example.com", plan="cloud", cloud_profiles=2)
+    org = ensure_personal_org(owner)
+    member = make_user(
+        fake, "member", "member@example.com", plan="starter", cloud_profiles=0,
+        org_id=org._id,
+    )
+    add_member(fake, org._id, member, ROLE_MEMBER)
+
+    campaign = type(
+        "Campaign",
+        (),
+        {
+            "user_id": "member",
+            "org_id": org._id,
+            "team_member_ids": [],
+            "linkedin_profile_id": None,
+        },
+    )()
+
+    assert campaign_has_access(User.get("member"), campaign) is True
+
+    remove_member(org, owner._id, member._id)
+    member_after = User.get("member")
+
+    assert campaign_has_access(member_after, campaign) is False
+    query = campaign_access_query(member_after)
+    clauses = query["$or"]
+    # The removed member's personal org is active. Every clause must be
+    # org-scoped (including legacy org_id-missing rows); a bare user_id clause
+    # would keep the former team campaign visible.
+    assert all("org_id" in clause for clause in clauses)
+
+
+def test_seat_summary_counts_cloud_credentials_only(fake, team_enabled):
+    owner = make_user(fake, "owner", "owner@example.com", plan="cloud", cloud_profiles=1)
+    org = ensure_personal_org(owner)
+    add_profile(fake, "p-cloud", "owner", org._id, execution_mode="cloud")
+    add_profile(fake, "p-desktop", "owner", org._id, execution_mode="desktop")
+
+    summary = seat_summary(org)
+
+    assert summary["cloud_profiles"] == 1
+    assert summary["credentialed_profiles"] == 1
+    assert summary["desktop_credentialed_profiles"] == 1
+
+
+def test_admin_seat_override_survives_billing_mirror(fake, team_enabled):
+    owner = make_user(fake, "owner", "owner@example.com", plan="starter", cloud_profiles=0)
+    org = ensure_personal_org(owner)
+
+    apply_seat_override(org, "admin", 3, "support exception", plan="cloud")
+    sync_org_billing_from_user(owner)
+
+    updated = fake.collection(ORGANIZATIONS_COLLECTION).find_one({"_id": org._id})
+    assert updated["plan"] == "cloud"
+    assert updated["cloud_seats"] == 3
+    assert updated["seat_override"] is True

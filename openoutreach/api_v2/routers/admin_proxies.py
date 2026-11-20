@@ -993,6 +993,18 @@ async def assign_proxy_inventory(
     except ProxyError as exc:
         raise _error(exc)
 
+    # An admin may be re-attaching a proxy that was disabled for a seat
+    # removal. Re-enable only this same profile's sub-account; never create a
+    # new one or move it to another identity.
+    if proxy.massive_status == "disabled":
+        from openoutreach.proxies.provisioning import enable_massive_for_profile
+
+        enable_massive_for_profile(
+            body.profile_id,
+            actor_user_id=current_admin,
+            reason="admin_assign",
+        )
+
     _audit(
         current_admin,
         "proxy.assign",

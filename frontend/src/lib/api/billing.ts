@@ -24,6 +24,7 @@ export interface BillingStatus {
   cloud_profiles: number;
   cloud_seat_limit: number;
   cloud_seats_enabled: boolean;
+  managed_proxies_enabled?: boolean;
   user_status: string;
   admin_notes: string | null;
   stripe_subscription_id?: string;

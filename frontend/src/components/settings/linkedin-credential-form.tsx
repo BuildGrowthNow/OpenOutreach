@@ -72,8 +72,16 @@ export default function LinkedInCredentialForm({
   const { toast } = useToast();
   const countdownRef = useRef<NodeJS.Timeout | null>(null);
   const { billingStatus } = useBilling();
+  const isSharedWorkspaceMember =
+    billingStatus?.team_workspaces_enabled === true &&
+    billingStatus?.org_role === "member";
   const hasCloudAccess =
-    billingStatus?.plan === "cloud" || (billingStatus?.cloud_seat_limit ?? 0) > 0;
+    (!isSharedWorkspaceMember &&
+      (billingStatus?.plan === "cloud" ||
+        (billingStatus?.cloud_seat_limit ?? 0) > 0)) ||
+    // Editing an existing cloud profile assigned to this member stays
+    // possible; only new cloud profile creation is owner/admin-only.
+    initialData?.executionMode === "cloud";
   const [regionCountry, setRegionCountry] = useState(
     initialData?.proxyRegionCountry ?? ""
   );

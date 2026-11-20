@@ -141,7 +141,10 @@ def _entry(
 
 
 def _parse_url_line(line: str, default_country: Optional[str]) -> dict[str, Any]:
-    parsed = urlparse(line if "://" in line else f"http://{line}")
+    try:
+        parsed = urlparse(line if "://" in line else f"http://{line}")
+    except ValueError:
+        raise ProxyParseError("Proxy URL is malformed")
     try:
         port = parsed.port
     except ValueError:

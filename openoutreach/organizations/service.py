@@ -372,6 +372,8 @@ def accept_invite_by_hash(token_hash: str, user: User) -> tuple[Organization, Or
 def _accept_invite(
     invite: OrganizationInvite, user: User
 ) -> tuple[Organization, OrganizationMember]:
+    if not team_workspaces_enabled():
+        raise InviteInvalidError("Team workspaces are disabled")
     if invite.email != (user.email or "").lower().strip():
         raise InviteEmailMismatchError(
             "This invitation was sent to a different email address"
@@ -598,7 +600,16 @@ def remove_member(
     if devices is not None:
         revoked_devices = list(
             devices.find(
-                {"user_id": target_user_id, "org_id": org._id, "revoked": False},
+                {
+                    "user_id": target_user_id,
+                    "revoked": False,
+                    "$or": [
+                        {"org_id": org._id},
+                        # Pre-backfill device rows have no org_id.
+                        {"org_id": {"$exists": False}},
+                        {"org_id": None},
+                    ],
+                },
                 {"_id": 1},
             )
         )
@@ -657,12 +668,11 @@ def _org_profile(org: Organization, profile_id: str) -> Optional[dict[str, Any]]
     doc = collection.find_one({"_id": profile_id, "org_id": org._id})
     if doc:
         return doc
-    # Pre-migration profiles may not have org_id yet. Only heal when the
-    # profile's owner is an active member of this organization.
-    member_ids = [member.user_id for member in list_active_members(org._id)]
-    if not member_ids:
-        return None
-    legacy = collection.find_one({"_id": profile_id, "user_id": {"$in": member_ids}})
+    # Pre-migration profiles may not have org_id yet. Only the owner's own
+    # legacy rows are healed into the workspace. A member's legacy profile
+    # belongs to that member's personal workspace; an org admin must not be
+    # able to claim it by assigning it to someone else.
+    legacy = collection.find_one({"_id": profile_id, "user_id": org.owner_user_id})
     if legacy and not legacy.get("org_id"):
         collection.update_one(
             {
@@ -917,7 +927,12 @@ def seat_summary(org: Organization) -> dict[str, Any]:
                 },
             )
         )
-    credentialed = credentialed_profile_ids_for_org(org._id) or set()
+    # Cloud seats count credentialed cloud accounts, active or paused. Desktop
+    # profiles have their own included seats and must not inflate this meter.
+    credentialed_cloud = (
+        credentialed_profile_ids_for_org(org._id, execution_mode="cloud") or set()
+    )
+    credentialed_all = credentialed_profile_ids_for_org(org._id) or set()
     cloud_profiles = [
         profile
         for profile in org_profiles
@@ -928,7 +943,8 @@ def seat_summary(org: Organization) -> dict[str, Any]:
     return {
         "cloud_seat_limit": org_seat_limit(org),
         "cloud_profiles": len(cloud_profiles),
-        "credentialed_profiles": len(credentialed),
+        "credentialed_profiles": len(credentialed_cloud),
+        "desktop_credentialed_profiles": len(credentialed_all - credentialed_cloud),
         "assigned_profiles": len(assigned),
         "unassigned_profiles": len(unassigned),
         "members": len(list_active_members(org._id)),
@@ -945,18 +961,25 @@ def sync_org_billing_from_user(user: User) -> None:
         for doc in collection.find({"owner_user_id": user._id}):
             org = Organization.from_dict(doc)
             updates: dict[str, Any] = {
-                "plan": user.plan,
                 "stripe_customer_id": user.stripe_customer_id,
                 "stripe_subscription_id": user.stripe_subscription_id,
-                "whatsapp_account_limit": user.whatsapp_account_limit,
                 "updated_at": now,
             }
+            # A seat/plan override is an explicit admin decision. Keep it in
+            # place across login, checkout, and webhook mirrors; reconciliation
+            # surfaces the Stripe drift separately.
             if not org.seat_override:
-                updates["cloud_seats"] = user.cloud_profiles or 0
-                updates["linkedin_account_limit"] = effective_linkedin_account_limit(
-                    user.plan,
-                    user.cloud_profiles,
-                    user.linkedin_account_limit,
+                updates.update(
+                    {
+                        "plan": user.plan,
+                        "whatsapp_account_limit": user.whatsapp_account_limit,
+                        "cloud_seats": user.cloud_profiles or 0,
+                        "linkedin_account_limit": effective_linkedin_account_limit(
+                            user.plan,
+                            user.cloud_profiles,
+                            user.linkedin_account_limit,
+                        ),
+                    }
                 )
             collection.update_one({"_id": org._id}, {"$set": updates})
     except Exception as exc:  # pragma: no cover - billing must not fail on mirror

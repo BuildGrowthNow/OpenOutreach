@@ -628,8 +628,12 @@ def retire_massive_proxy(proxy: Proxy, *, actor_user_id: Optional[str] = None) -
         try:
             MassiveResellerClient(config).disable_account(proxy.massive_account_id)
         except MassiveResellerError as exc:
+            # Keep the error visible so the admin alert and a later retry can
+            # find the still-billable sub-account. Do not report success.
             _mark_massive_error(proxy, exc)
+            return False
     proxy.massive_status = MASSIVE_STATUS_RETIRED
+    proxy.massive_last_error = None
     proxy.save()
     _audit_proxy(
         "proxy.massive_retire",

@@ -140,7 +140,10 @@ export default function LinkedInCredentialCard({
   const { toast } = useToast();
   const { billingStatus } = useBilling();
   const orgRole = billingStatus?.org_role;
-  const canManageWorkspace = orgRole !== "member";
+  // Fail closed when the role is unknown; the backend still enforces this.
+  const canManageWorkspace = orgRole === "owner" || orgRole === "admin";
+  const canManageProxies =
+    canManageWorkspace && billingStatus?.managed_proxies_enabled !== false;
 
   const healthStatus: HealthStatusWithDetails =
     credential.healthStatus && typeof credential.healthStatus === "object"
@@ -518,7 +521,7 @@ export default function LinkedInCredentialCard({
               {isLoadingLogs ? "Loading..." : "View Logs"}
             </Button>
 
-            {canManageWorkspace && credential.executionMode === "cloud" && credential.linkedinProfileId ? (
+            {canManageProxies && credential.executionMode === "cloud" && credential.linkedinProfileId ? (
               <Button
                 variant="outline"
                 size="sm"

@@ -46,10 +46,19 @@ export default function TeamSettingsPage() {
   const [seats, setSeats] = useState<SeatSummary | null>(null);
   const [auditEvents, setAuditEvents] = useState<OrgAuditEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const orgId = billingStatus?.org_id || user?.org_id || "";
-  const role = billingStatus?.org_role || user?.org_role || "member";
+  // The auth store updates immediately after accepting an invite or switching
+  // workspaces; the billing context can lag by up to a minute. Prefer the auth
+  // org and only take the billing role when both point at the same workspace.
+  const orgId = user?.org_id || billingStatus?.org_id || "";
+  const billingOrgMatches = Boolean(orgId && billingStatus?.org_id === orgId);
+  const role =
+    (billingOrgMatches ? billingStatus?.org_role : user?.org_role) ||
+    user?.org_role ||
+    billingStatus?.org_role ||
+    "member";
   const enabled = billingStatus?.team_workspaces_enabled === true;
   const canManage = role === "owner" || role === "admin";
   const canChangeRoles = role === "owner";
@@ -58,6 +67,7 @@ export default function TeamSettingsPage() {
   const load = useCallback(async () => {
     if (!orgId || !enabled) {
       setLoading(false);
+      setHasLoaded(true);
       return;
     }
     setLoading(true);
@@ -89,6 +99,7 @@ export default function TeamSettingsPage() {
       setError(err instanceof Error ? err.message : "Failed to load team settings");
     } finally {
       setLoading(false);
+      setHasLoaded(true);
     }
   }, [orgId, enabled, canManage]);
 
@@ -98,7 +109,7 @@ export default function TeamSettingsPage() {
 
   const seatUsage = useMemo(() => {
     if (!seats) return null;
-    if (seats.cloud_seat_limit === null) return null;
+    if (seats.cloud_seat_limit === null || seats.cloud_seat_limit <= 0) return null;
     return `${seats.credentialed_profiles} of ${seats.cloud_seat_limit} cloud seats used`;
   }, [seats]);
 
@@ -111,7 +122,10 @@ export default function TeamSettingsPage() {
     await load();
   };
 
-  if (loading || billingLoading) return <TeamLoadingSkeleton />;
+  const isInitialLoading = loading && !hasLoaded;
+  if (isInitialLoading || (billingLoading && !billingStatus)) {
+    return <TeamLoadingSkeleton />;
+  }
 
   return (
     <div className="space-y-6">
@@ -229,7 +243,11 @@ export default function TeamSettingsPage() {
                       <Badge variant={profile.active ? "default" : "secondary"}>
                         {profile.active ? "Active" : "Paused"}
                       </Badge>
-                      {profile.proxy_assigned && <Badge variant="outline">Managed proxy</Badge>}
+                      {profile.proxy_assigned && (
+                        <Badge variant="outline">
+                          {profile.proxy_mode === "managed" ? "Managed proxy" : "BYO proxy"}
+                        </Badge>
+                      )}
                     </div>
                   </div>
                 ))}
