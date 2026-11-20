@@ -6,9 +6,10 @@ Scope owner: platform
 
 This document records the Phase 2 implementation. It is additive and gated by
 `MASSIVE_RESELLER_ENABLED` / `MASSIVE_POOL_STATS_ENABLED`. The code is deployed
-to production; both flags remain false. The 2026-11-20 pilot created only
-synthetic sub-accounts, all of which were disabled and verified, and did not
-assign a proxy to a production profile.
+to production. `MASSIVE_POOL_STATS_ENABLED=true`; `MASSIVE_RESELLER_ENABLED`
+remains false pending a real internal cloud-profile provisioning test. The
+2026-11-20 pilot created only synthetic sub-accounts, all of which were disabled
+and verified, and did not assign a proxy to a production profile.
 
 ## 1. Goal
 
@@ -235,4 +236,6 @@ Before production enablement:
 - confirm no password appears in API responses, logs, or audit metadata,
 - dry-run the usage sync and budget thresholds with internal accounts,
 - confirm `outreach-api` remains at exactly one daemon container,
-- keep both Massive flags false until the pilot and explicit approval.
+- keep `MASSIVE_RESELLER_ENABLED=false` until a real internal cloud profile
+  exercises provisioning, assignment, and password rotation;
+  `MASSIVE_POOL_STATS_ENABLED` is enabled as of 2026-11-20.
