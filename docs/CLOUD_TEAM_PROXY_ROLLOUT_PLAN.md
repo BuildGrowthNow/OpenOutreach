@@ -226,7 +226,7 @@ x-api-key: <MASSIVE_PROXY_PASSWORD>
 Content-Type: application/json
 
 {
-  "username": "outreach-org123-li-456",
+  "username": "outreach.org123.li.456",
   "password": "<generated-32+-char-secret>",
   "limit": 50000000000,
   "sync_with_parent": true
@@ -236,7 +236,7 @@ Content-Type: application/json
 Credentials:
 
 ```text
-username: <MASSIVE_PARENT_USERNAME>_outreach-org123-li-456
+username: <MASSIVE_PARENT_USERNAME>_outreach.org123.li.456
 password: <generated-secret>
 ```
 
@@ -244,14 +244,22 @@ Rules:
 
 - The existing account API key (`MASSIVE_PROXY_PASSWORD`) authenticates the Reseller
   API; no separate key is required. `MASSIVE_RESELLER_API_KEY` is an optional alias.
-- Use hyphens in the sub-username, not underscores; the parent/sub separator is `_`.
+- **Live API (verified 2026-11-20):** the sub-account username accepts only
+  `a-z A-Z 0-9 @ .`. Hyphens and underscores are rejected with HTTP 400. Use
+  dot-separated tokens; the parent/sub separator in the proxy auth username is `_`.
 - Maximum 255 characters; unique within the parent.
 - Generate the password server-side; encrypt at rest; never show it to the client.
 - `GET /accounts` returns passwords — treat the response as secret; never log it.
 - `limit` is a **cumulative lifetime allowance**, not monthly. It can be raised but not
   lowered, so start conservatively and top up. Track monthly usage in our app.
-- A `409` on create means the sub-username already exists. Fetch/update the existing
-  account instead of retrying the same create.
+- A `409` on create means the sub-username already exists. `GET /accounts` returns the
+  full `<parent>_<sub>` username; match both forms before adopting the account.
+- Enable/disable are `POST /accounts/{id}/enable` and `POST /accounts/{id}/disable`.
+- Allocate with `POST /accounts/{id}/allocations` and `{"limit": <bytes>}`. The response
+  is the amount just added; read the account back for the new cumulative limit.
+- Session limits use `PUT /accounts/{id}/session-limit` with
+  `session_traffic_limit` (SI size string) and/or `session_duration_limit` (duration
+  string).
 - Disable on seat cancellation/unassignment; re-enable only for the same LinkedIn
   account. Never assign the same sub-account to a different LinkedIn account.
 
