@@ -1,7 +1,8 @@
 # Phase 3A — Organizations, Team Roles, and Cloud Seats
 
-Status: implemented on branch `feature/cloud-phase3a-orgs-team-seats`  
-Date: 2026-11-18  
+Status: implemented, merged, and deployed; `TEAM_WORKSPACES_ENABLED=true`
+in production since 2026-11-20  
+Date: 2026-11-20  
 Scope owner: platform + product
 
 This document records the Phase 3A implementation of the Cloud/Teams rollout.
@@ -246,9 +247,11 @@ Mocked/test-only:
 
 - Unit tests use an in-memory Mongo fake (`tests/fake_mongo.py`).
 - No live Stripe checkout or webhook was executed for Phase 3A.
-- No live Massive Reseller provisioning (Phase 2 remains blocked).
-- No production deployment or migration was run.
-- No desktop enrollment parity work was performed (Phase 3B).
+- No live Massive Reseller provisioning was exercised during Phase 3A; the
+  later synthetic Phase 2 pilot did not assign a proxy to a profile.
+- Production deployment and the additive personal-org backfill were completed
+  on 2026-11-20. `TEAM_WORKSPACES_ENABLED=true`.
+- Desktop enrollment parity is covered by Phase 3B.
 
 ## 14. Known limitations (Phase 3A)
 
@@ -288,8 +291,9 @@ Mocked/test-only:
 Before production enablement:
 
 - review the migration dry-run against production,
-- confirm `TEAM_WORKSPACES_ENABLED` remains false until approved,
-- run the two-account cloud E2E flow with one owner + one member,
+- `TEAM_WORKSPACES_ENABLED` was enabled on 2026-11-20 after approval,
+- run the two-account cloud E2E flow with one owner + one member (still
+  recommended before inviting external customers),
 - verify no cross-tenant access in logs/audit,
 - confirm the protected deploy workflow's pre-existing Mongo failures are
   understood and not caused by Phase 3A.

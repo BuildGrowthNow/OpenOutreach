@@ -1,7 +1,8 @@
 # Phase 3B — Desktop Parity, Org Channels, and Admin Org Detail
 
-Status: implemented on branch `feature/cloud-phase3a-orgs-team-seats`  
-Date: 2026-11-19  
+Status: implemented, merged, and deployed; `TEAM_WORKSPACES_ENABLED=true`
+in production since 2026-11-20  
+Date: 2026-11-20  
 Scope owner: platform
 
 Phase 3B completes the team workspace rollout. Team-member pricing remains an
