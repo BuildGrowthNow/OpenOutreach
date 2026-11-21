@@ -31,6 +31,7 @@ from openoutreach.proxies.models import (
     PROVIDER_MASSIVE_RESIDENTIAL,
     STATUS_ASSIGNED,
     STATUS_DISABLED,
+    STATUS_ERROR,
     STATUS_RETIRED,
     Proxy,
     ProxyError,
@@ -1179,7 +1180,14 @@ def massive_alerts() -> list[dict[str, Any]]:
     if collection is None:
         return []
     alerts: list[dict[str, Any]] = []
-    for doc in collection.find({"massive_account_id": {"$ne": None}}):
+    for doc in collection.find(
+        {
+            "$or": [
+                {"massive_account_id": {"$ne": None}},
+                {"channel": {"$in": ["whatsapp", "duo"]}},
+            ]
+        }
+    ):
         proxy = Proxy.from_dict(doc)
         reasons: list[str] = []
         if proxy.massive_limit_reached:
@@ -1192,6 +1200,10 @@ def massive_alerts() -> list[dict[str, Any]]:
             reasons.append("repeated_failures")
         if proxy.massive_status == MASSIVE_STATUS_BUDGET_DISABLED:
             reasons.append("budget_disabled")
+        if proxy.status in {STATUS_DISABLED, STATUS_ERROR}:
+            reasons.append("proxy_disabled")
+        if proxy.last_error:
+            reasons.append("proxy_error")
         if (
             proxy.whatsapp_profile_id
             and proxy.massive_status
@@ -1311,6 +1323,13 @@ def massive_admin_status() -> dict[str, Any]:
     base = massive_status()
     from openoutreach.billing.cloud_seats import cloud_seat_alerts
 
+    try:
+        seat_alerts = cloud_seat_alerts()
+    except Exception as exc:  # pragma: no cover - admin status must not fail
+        logger.warning(
+            "cloud_seat_alerts_failed exception_type=%s", type(exc).__name__
+        )
+        seat_alerts = []
     return {
         **base,
         "reseller": reseller_status(),
@@ -1318,7 +1337,7 @@ def massive_admin_status() -> dict[str, Any]:
             "enabled": bool(getattr(settings, "MASSIVE_POOL_STATS_ENABLED", False)),
         },
         "alerts": massive_alerts(),
-        "seat_alerts": cloud_seat_alerts(),
+        "seat_alerts": seat_alerts,
     }
 
 

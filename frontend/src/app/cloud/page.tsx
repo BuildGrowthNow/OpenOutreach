@@ -173,8 +173,8 @@ export default function CloudPage() {
               Cloud Solo or Cloud Duo?
             </h2>
             <p className="mx-auto mt-3 max-w-2xl text-center text-zinc-400">
-              Both are flat per-seat products. The unit is the client identity,
-              not the number of channels.
+              All cloud bundles are flat per-seat products. The unit is the
+              client identity, not the number of channels.
             </p>
             <div className="mt-10 grid gap-5 md:grid-cols-3">
               <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-7">

@@ -453,23 +453,40 @@ def cloud_seat_alerts() -> list[dict[str, Any]]:
         return []
     alerts: list[dict[str, Any]] = []
     try:
-        docs = list(organizations.find({}, {"_id": 1, "name": 1, "owner_user_id": 1}))
+        docs = list(
+            organizations.find(
+                {},
+                {
+                    "_id": 1,
+                    "name": 1,
+                    "owner_user_id": 1,
+                    "plan": 1,
+                    "cloud_seats": 1,
+                    "seat_override": 1,
+                },
+            )
+        )
     except Exception:
         return []
     for doc in docs:
         owner_id = str(doc.get("owner_user_id") or "")
         if not owner_id:
             continue
+        from openoutreach.billing.plans import effective_cloud_seat_limit
         from openoutreach.mongodb.models_user import User
-        from openoutreach.organizations.enforcement import resolve_effective_plan
 
         owner = User.get(owner_id)
         if owner is None:
             continue
-        try:
-            limit = resolve_effective_plan(owner).cloud_seat_limit
-        except Exception:
-            continue
+        if doc.get("seat_override"):
+            limit = effective_cloud_seat_limit(
+                str(doc.get("plan") or owner.plan or "starter"),
+                int(doc.get("cloud_seats") or 0),
+            )
+        else:
+            limit = effective_cloud_seat_limit(
+                owner.plan or "starter", int(owner.cloud_profiles or 0)
+            )
         summary = cloud_seat_summary_for_org(str(doc["_id"]), owner_id, limit=limit)
         if limit and summary["used"] > limit:
             alerts.append(

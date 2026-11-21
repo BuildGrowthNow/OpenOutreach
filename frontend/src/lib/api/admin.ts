@@ -978,10 +978,12 @@ export interface AdminOrganizationProxy {
   id: string
   provider: string | null
   status: string | null
+  channel?: string | null
   country: string | null
   subdivision: string | null
   city: string | null
   profile_id: string | null
+  whatsapp_profile_id?: string | null
   assigned_user_id: string | null
   massive_status: string | null
   massive_used_bytes: number

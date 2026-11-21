@@ -41,7 +41,10 @@ export function ChannelBundleCard() {
   const cloudSeatLimit = billingStatus?.cloud_seat_limit ?? 0;
   const cloudSeatsUsed = billingStatus?.cloud_seats_used ?? 0;
   const emailLimit = billingStatus?.email_slot_limit ?? 0;
-  const emailUsed = billingStatus?.email_slots_used ?? counts.email;
+  const emailUsed = Math.max(
+    billingStatus?.email_slots_used ?? 0,
+    counts.email,
+  );
 
   const steps = [
     {

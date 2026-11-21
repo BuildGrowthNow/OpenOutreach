@@ -1441,7 +1441,7 @@ export default function AdminProxiesPage() {
                 {massiveAlerts.length} sub-account alert(s):{' '}
                 {massiveAlerts
                   .slice(0, 4)
-                  .map((alert) => `${alert.massive_subuser ?? alert.massive_account_id}: ${alert.reasons.join(', ')}`)
+                  .map((alert) => `${alert.massive_subuser ?? alert.massive_account_id ?? alert.proxy_id}: ${alert.reasons.join(', ')}`)
                   .join(' · ')}
               </AlertDescription>
             </Alert>
