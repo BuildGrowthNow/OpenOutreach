@@ -13,7 +13,7 @@ jinja2
 termcolor
 tendo
 pyyaml
-fastembed
+fastembed>=0.9.1
 hf_xet
 scikit-learn
 scipy
