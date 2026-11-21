@@ -40,6 +40,7 @@ from openoutreach.proxies.massive_client import (
     build_massive_username,
     provision_massive_fallback,
 )
+from openoutreach.proxies.provisioning import sync_massive_reporting
 from openoutreach.proxies.models import Proxy
 from openoutreach.proxies.service import (
     assign_proxy_to_whatsapp,
@@ -516,6 +517,53 @@ def test_whatsapp_fallback_proxy_is_stored_on_the_whatsapp_profile(fake, monkeyp
     assert assigned.whatsapp_profile_id == "wa1"
     stored = fake.collection("whatsapp_profiles").find_one({"_id": "wa1"})
     assert stored["proxy_id"] == assigned._id
+
+
+def test_whatsapp_fallback_reporting_matches_without_a_reseller_account(fake, monkeypatch):
+    from openoutreach.config import settings
+    from openoutreach.proxies.massive_reseller import MassiveResellerClient
+
+    monkeypatch.setattr(settings, "MASSIVE_RESELLER_ENABLED", True)
+    monkeypatch.setattr(settings, "MASSIVE_PARENT_USERNAME", "parent")
+    monkeypatch.setattr(settings, "MASSIVE_PROXY_PASSWORD", "account-key")
+    monkeypatch.setattr(
+        MassiveResellerClient,
+        "reporting_usage",
+        lambda self, **kwargs: [
+            {
+                "subaccount": "subaccount-wa-p1",
+                "bytes": 512,
+                "period_start": "2026-11-01",
+                "period_end": "2026-11-30",
+            }
+        ],
+    )
+    org_id = seed_owner(fake, cloud_profiles=1)
+    add_whatsapp(fake, "wa1", "owner", org_id, identity_id="wa:id1", proxy_id="px-wa")
+    add_proxy(
+        fake,
+        "px-wa",
+        channel="whatsapp",
+        whatsapp_profile_id="wa1",
+        identity_id="wa:id1",
+    )
+    fake.collection("proxies").update_one(
+        {"_id": "px-wa"},
+        {
+            "$set": {
+                "massive_subuser": "subaccount-wa-p1",
+                "massive_account_id": None,
+            }
+        },
+    )
+
+    result = sync_massive_reporting("2026-11-01", "2026-11-30")
+
+    assert result["matched"] == 1
+    snapshots = list(fake.collection("proxy_usage_snapshots").find({}))
+    assert len(snapshots) == 1
+    assert snapshots[0]["channel"] == "whatsapp"
+    assert snapshots[0]["bytes"] == 512
 
 
 def test_one_whatsapp_per_proxy_and_cross_identity_denied(fake):

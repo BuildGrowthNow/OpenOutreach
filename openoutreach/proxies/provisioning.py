@@ -965,7 +965,14 @@ def sync_massive_reporting(
         raise MassiveResellerError("Proxy storage is unavailable")
     all_proxies = [
         Proxy.from_dict(doc)
-        for doc in proxies_collection.find({"massive_account_id": {"$ne": None}})
+        for doc in proxies_collection.find(
+            {
+                "$or": [
+                    {"massive_account_id": {"$ne": None}},
+                    {"massive_subuser": {"$ne": None}},
+                ]
+            }
+        )
     ]
     matched = 0
     skipped = 0
