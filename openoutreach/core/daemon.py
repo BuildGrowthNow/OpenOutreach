@@ -101,7 +101,7 @@ _WA_PW_QUEUE: queue.Queue = queue.Queue()
 _WA_PW_THREAD: Optional[threading.Thread] = None
 _WA_SESSIONS: dict[str, Any] = {}
 _WA_HEALTH_INTERVAL = 300       # 5 minutes
-_WA_SESSION_REFRESH_INTERVAL = 300  # 5 minutes
+_WA_SESSION_REFRESH_INTERVAL = 60  # 1 minute; cloud Duo QR should appear quickly
 _WA_VALIDATION_INTERVAL = 1800  # 30 minutes
 _WA_CLOUD_ENABLED = os.getenv("DAEMON_V2_WHATSAPP_ENABLED", "false").strip().lower() in {
     "1", "true", "yes", "on"
