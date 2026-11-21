@@ -220,10 +220,17 @@ def _refresh_wa_sessions() -> None:
             }
         )
     )
-    current_ids = {doc["_id"] for doc in docs}
+    docs_by_id = {doc["_id"]: doc for doc in docs}
 
     for pid in list(_WA_SESSIONS.keys()):
-        if pid not in current_ids:
+        doc = docs_by_id.get(pid)
+        eligible = False
+        if doc is not None:
+            try:
+                eligible = _cloud_wa_ready(WhatsAppProfile.from_dict(doc))
+            except Exception:
+                eligible = False
+        if not eligible:
             try:
                 _run_on_wa_thread(lambda s=_WA_SESSIONS[pid]: s.close(), timeout=30)
             except Exception as e:

@@ -566,6 +566,28 @@ def _record_assignment(
         )
 
 
+def record_proxy_assignment(
+    *,
+    proxy_id: str,
+    profile_id: str,
+    channel: str,
+    identity_id: Optional[str],
+    user_id: Optional[str],
+    org_id: Optional[str],
+    assigned_by: Optional[str],
+) -> None:
+    """Public audit hook for channel assignments that share an existing proxy."""
+    _record_assignment(
+        proxy_id=proxy_id,
+        profile_id=profile_id,
+        channel=channel,
+        identity_id=identity_id,
+        user_id=user_id,
+        org_id=org_id,
+        assigned_by=assigned_by,
+    )
+
+
 def _close_assignment(
     *,
     proxy_id: str,
@@ -891,7 +913,7 @@ def unassign_proxy(
     _clear_cloud_whatsapp_proxy_links(proxy_id)
     _close_assignment(
         proxy_id=proxy_id,
-        profile_id=profile_id,
+        profile_id=None,
         reason=reason or f"unassigned_by_{actor or 'admin'}",
     )
     logger.info("Unassigned proxy %s from profile %s", proxy_id, profile_id)
@@ -1057,6 +1079,12 @@ def retire_proxy_for_profile(profile_id: str) -> None:
     shared_ids = _shared_cloud_whatsapp_proxy_ids(candidate_ids)
     if shared_ids:
         retire_query["_id"] = {"$nin": list(shared_ids)}
+        for shared_id in shared_ids:
+            _close_assignment(
+                proxy_id=shared_id,
+                profile_id=None,
+                reason="linkedin_profile_deleted",
+            )
     collection.update_many(
         retire_query,
         {

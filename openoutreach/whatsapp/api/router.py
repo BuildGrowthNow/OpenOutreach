@@ -217,6 +217,18 @@ async def create_profile(
         status=STATUS_DISCONNECTED,
     )
     profile.save()
+    if duo_proxy is not None:
+        from openoutreach.proxies.service import record_proxy_assignment
+
+        record_proxy_assignment(
+            proxy_id=duo_proxy._id,
+            profile_id=profile._id,
+            channel="whatsapp",
+            identity_id=duo_identity,
+            user_id=ctx.accounting_owner_id,
+            org_id=ctx.org_id,
+            assigned_by=user_id,
+        )
     return _serialize(profile)
 
 
