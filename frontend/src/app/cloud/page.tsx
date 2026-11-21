@@ -6,10 +6,12 @@ import {
   Cloud,
   Globe2,
   KeyRound,
+  Mail,
   MapPin,
   Monitor,
   Server,
   Shield,
+  Users,
 } from "lucide-react";
 import { Navbar } from "@/components/landing/Navbar";
 import { Footer } from "@/components/landing/Footer";
@@ -161,6 +163,49 @@ export default function CloudPage() {
                   </Button>
                 </Link>
               </aside>
+            </div>
+          </div>
+        </section>
+
+        <section className="border-t border-zinc-800/60 py-20">
+          <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-5xl">
+            <h2 className="text-center text-3xl sm:text-4xl font-extrabold tracking-tight text-white">
+              Cloud Solo or Cloud Duo?
+            </h2>
+            <p className="mx-auto mt-3 max-w-2xl text-center text-zinc-400">
+              Both are flat per-seat products. The unit is the client identity,
+              not the number of channels.
+            </p>
+            <div className="mt-10 grid gap-5 md:grid-cols-2">
+              <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-7">
+                <div className="flex items-center gap-2 font-semibold text-white">
+                  <Cloud className="h-5 w-5 text-sky-400" />
+                  Cloud Solo
+                </div>
+                <p className="mt-3 text-sm leading-relaxed text-zinc-400">
+                  One browser account (LinkedIn or WhatsApp), one email slot,
+                  and one managed proxy identity. Best for a single channel.
+                </p>
+                <p className="mt-4 text-sm font-medium text-sky-300">$299/mo</p>
+              </div>
+              <div className="rounded-2xl border border-sky-500/30 bg-sky-900/10 p-7">
+                <div className="flex items-center gap-2 font-semibold text-white">
+                  <Users className="h-5 w-5 text-sky-400" />
+                  Cloud Duo
+                </div>
+                <p className="mt-3 text-sm leading-relaxed text-zinc-400">
+                  One LinkedIn account, one WhatsApp number, and one email slot
+                  for the same client identity. The channels share one managed
+                  proxy and one seat.
+                </p>
+                <p className="mt-4 text-sm font-medium text-sky-300">$299/mo</p>
+              </div>
+            </div>
+            <div className="mt-6 flex items-start justify-center gap-2 text-xs text-zinc-500">
+              <Mail className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              Email is BYO SMTP/IMAP: no proxy, no managed mailbox cost. Separate
+              IPs for the two channels are a support configuration; pricing stays
+              flat per seat during rollout.
             </div>
           </div>
         </section>

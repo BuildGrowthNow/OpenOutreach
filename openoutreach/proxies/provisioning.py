@@ -566,6 +566,23 @@ def enable_massive_proxy(
     return True
 
 
+def _proxy_shared_with_cloud_whatsapp(proxy: Proxy) -> bool:
+    """A Cloud Duo proxy must outlive a LinkedIn-only profile deletion."""
+    collection = _collection("whatsapp_profiles")
+    if collection is None:
+        return False
+    try:
+        return (
+            collection.find_one(
+                {"proxy_id": proxy._id, "execution_mode": "cloud"},
+                {"_id": 1},
+            )
+            is not None
+        )
+    except Exception:
+        return False
+
+
 def _proxy_for_profile(profile_id: str) -> Optional[Proxy]:
     collection = _collection(_PROXIES)
     if collection is None:
@@ -626,6 +643,12 @@ def retire_massive_for_profile(
     try:
         proxy = _proxy_for_profile(profile_id)
         if proxy is None:
+            return False
+        if _proxy_shared_with_cloud_whatsapp(proxy):
+            logger.warning(
+                "Skipping Massive retirement for proxy %s; shared with a cloud WhatsApp profile",
+                proxy._id,
+            )
             return False
         return retire_massive_proxy(proxy, actor_user_id=actor_user_id)
     except Exception as exc:  # pragma: no cover

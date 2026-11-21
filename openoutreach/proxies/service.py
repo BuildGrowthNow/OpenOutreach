@@ -566,6 +566,28 @@ def _record_assignment(
         )
 
 
+def record_proxy_assignment(
+    *,
+    proxy_id: str,
+    profile_id: str,
+    channel: str,
+    identity_id: Optional[str],
+    user_id: Optional[str],
+    org_id: Optional[str],
+    assigned_by: Optional[str],
+) -> None:
+    """Public audit hook for channel assignments that share an existing proxy."""
+    _record_assignment(
+        proxy_id=proxy_id,
+        profile_id=profile_id,
+        channel=channel,
+        identity_id=identity_id,
+        user_id=user_id,
+        org_id=org_id,
+        assigned_by=assigned_by,
+    )
+
+
 def _close_assignment(
     *,
     proxy_id: str,
@@ -796,6 +818,35 @@ def assign_proxy_to_profile(
     return proxy
 
 
+def _clear_cloud_whatsapp_proxy_links(proxy_id: str) -> None:
+    """Detach a shared proxy from its Cloud Duo WhatsApp profile."""
+    collection = _collection("whatsapp_profiles")
+    if collection is None:
+        return
+    try:
+        collection.update_many(
+            {"proxy_id": proxy_id, "execution_mode": "cloud"},
+            {
+                "$set": {
+                    "proxy_id": None,
+                    "proxy_mode": "none",
+                    "proxy_region_country": None,
+                    "proxy_region_subdivision": None,
+                    "proxy_region_city": None,
+                    "status": "disconnected",
+                    "qr_png_b64": None,
+                    "qr_generated_at": None,
+                }
+            },
+        )
+    except Exception as exc:  # pragma: no cover - lifecycle must not block
+        logger.warning(
+            "whatsapp_proxy_unlink_failed proxy_id=%s exception_type=%s",
+            proxy_id,
+            type(exc).__name__,
+        )
+
+
 def unassign_proxy(
     proxy_id: str,
     *,
@@ -862,9 +913,10 @@ def unassign_proxy(
                 }
             },
         )
+    _clear_cloud_whatsapp_proxy_links(proxy_id)
     _close_assignment(
         proxy_id=proxy_id,
-        profile_id=profile_id,
+        profile_id=None,
         reason=reason or f"unassigned_by_{actor or 'admin'}",
     )
     logger.info("Unassigned proxy %s from profile %s", proxy_id, profile_id)
@@ -924,6 +976,7 @@ def retire_proxy(proxy_id: str, *, reason: Optional[str] = None) -> Proxy:
     if doc.get("status") == STATUS_RETIRED:
         return Proxy.from_dict(doc)
     _massive_lifecycle(doc, "retire")
+    _clear_cloud_whatsapp_proxy_links(proxy_id)
     collection.update_one(
         {"_id": proxy_id},
         {
@@ -980,6 +1033,23 @@ def rotate_proxy_password(proxy_id: str, password: str) -> Proxy:
     return Proxy.get(proxy_id)  # type: ignore[return-value]
 
 
+def _shared_cloud_whatsapp_proxy_ids(proxy_ids: list[str]) -> set[str]:
+    """Return proxy IDs still used by a Cloud Duo WhatsApp profile."""
+    collection = _collection("whatsapp_profiles")
+    if collection is None or not proxy_ids:
+        return set()
+    try:
+        return {
+            str(doc["proxy_id"])
+            for doc in collection.find(
+                {"proxy_id": {"$in": proxy_ids}, "execution_mode": "cloud"},
+                {"proxy_id": 1},
+            )
+        }
+    except Exception:
+        return set()
+
+
 def retire_proxy_for_profile(profile_id: str) -> None:
     """Retire the proxy attached to a deleted profile; never recycle it."""
     collection = _collection(_PROXIES)
@@ -998,14 +1068,28 @@ def retire_proxy_for_profile(profile_id: str) -> None:
             profile_id,
             type(exc).__name__,
         )
+    retire_query: dict[str, Any] = {
+        "$or": [
+            {"linkedin_profile_id": profile_id},
+            {"last_assigned_profile_id": profile_id},
+        ],
+        "status": {"$ne": STATUS_RETIRED},
+    }
+    candidate_ids = [
+        str(doc["_id"])
+        for doc in collection.find(retire_query, {"_id": 1})
+    ]
+    shared_ids = _shared_cloud_whatsapp_proxy_ids(candidate_ids)
+    if shared_ids:
+        retire_query["_id"] = {"$nin": list(shared_ids)}
+        for shared_id in shared_ids:
+            _close_assignment(
+                proxy_id=shared_id,
+                profile_id=None,
+                reason="linkedin_profile_deleted",
+            )
     collection.update_many(
-        {
-            "$or": [
-                {"linkedin_profile_id": profile_id},
-                {"last_assigned_profile_id": profile_id},
-            ],
-            "status": {"$ne": STATUS_RETIRED},
-        },
+        retire_query,
         {
             "$set": {
                 "status": STATUS_RETIRED,

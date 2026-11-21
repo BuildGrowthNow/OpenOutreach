@@ -95,6 +95,7 @@ class BillingStatusResponse(BaseModel):
     cloud_seat_limit: int
     cloud_seats_enabled: bool
     managed_proxies_enabled: bool = True
+    whatsapp_cloud_proxy_enabled: bool = False
     user_status: str
     admin_notes: Optional[str] = None
     stripe_subscription_id: Optional[str] = None
@@ -256,6 +257,10 @@ async def billing_status(
         cloud_seats_enabled=bool(getattr(settings, "CLOUD_SEATS_ENABLED", True)),
         managed_proxies_enabled=bool(
             getattr(settings, "MANAGED_PROXIES_ENABLED", True)
+        ),
+        whatsapp_cloud_proxy_enabled=bool(
+            getattr(settings, "WHATSAPP_CLOUD_PROXY_ENABLED", False)
+            and getattr(settings, "DAEMON_V2_WHATSAPP_ENABLED", False)
         ),
         user_status=user.status,
         admin_notes=user.admin_notes,

@@ -163,6 +163,10 @@ export default function TeamsPage() {
                   </li>
                   <li className="flex items-start gap-2">
                     <Check className="mt-0.5 h-4 w-4 shrink-0 text-sky-400" />
+                    1 email slot (BYO SMTP/IMAP)
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Check className="mt-0.5 h-4 w-4 shrink-0 text-sky-400" />
                     No customer-facing GB meter
                   </li>
                 </ul>

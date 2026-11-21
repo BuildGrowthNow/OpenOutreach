@@ -19,7 +19,12 @@ import {
   resetQr,
   type WhatsAppProfile,
 } from "@/lib/api/whatsapp";
-import { MessageCircle, Phone, Trash2, RefreshCw } from "lucide-react";
+import {
+  getLinkedInProfiles,
+  type LinkedInProfile,
+} from "@/lib/api/dashboard";
+import { useBilling } from "@/lib/contexts/billing-context";
+import { Cloud, MessageCircle, Monitor, Phone, Trash2, RefreshCw } from "lucide-react";
 
 const STATUS_LABELS: Record<string, string> = {
   connected: "Connected",
@@ -185,6 +190,15 @@ function ProfileCard({
         {profile.displayName && profile.phoneNumber && (
           <CardDescription>{profile.displayName}</CardDescription>
         )}
+        <p className="text-xs text-muted-foreground">
+          {profile.executionMode === "cloud"
+            ? `Cloud Duo · ${
+                profile.proxyId
+                  ? `Managed proxy${profile.proxyRegionCountry ? ` · ${profile.proxyRegionCountry}` : ""}`
+                  : "Proxy required"
+              }`
+            : "Desktop · Local IP · No proxy"}
+        </p>
       </CardHeader>
 
       {profile.status === "disconnected" && (
@@ -215,6 +229,13 @@ export function WhatsappConnectionTab() {
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { billingStatus } = useBilling();
+  const cloudEnabled =
+    billingStatus?.whatsapp_cloud_proxy_enabled === true &&
+    (billingStatus?.cloud_seat_limit ?? 0) > 0;
+  const [executionMode, setExecutionMode] = useState<"desktop" | "cloud">("desktop");
+  const [duoProfileId, setDuoProfileId] = useState("");
+  const [cloudProfiles, setCloudProfiles] = useState<LinkedInProfile[]>([]);
 
   const load = useCallback(async () => {
     try {
@@ -233,10 +254,33 @@ export function WhatsappConnectionTab() {
     load();
   }, [load]);
 
+  useEffect(() => {
+    if (!cloudEnabled) return;
+    void getLinkedInProfiles()
+      .then((response) => {
+        const eligible = (response.data?.profiles ?? []).filter(
+          (profile) =>
+            profile.execution_mode === "cloud" &&
+            profile.active !== false &&
+            profile.proxy_mode === "managed",
+        );
+        setCloudProfiles(eligible);
+      })
+      .catch(() => setCloudProfiles([]));
+  }, [cloudEnabled]);
+
   const handleAdd = async () => {
+    if (executionMode === "cloud" && !duoProfileId) {
+      setError("Select the cloud LinkedIn profile this WhatsApp number belongs to.");
+      return;
+    }
     setAdding(true);
+    setError(null);
     try {
-      const profile = await createWhatsAppProfile();
+      const profile = await createWhatsAppProfile(undefined, {
+        executionMode,
+        duoLinkedInProfileId: executionMode === "cloud" ? duoProfileId : undefined,
+      });
       setProfiles((prev) => [...prev, profile]);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to create WhatsApp connection.");
@@ -262,7 +306,67 @@ export function WhatsappConnectionTab() {
             Each number requires a QR scan from your phone.
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          {cloudEnabled && (
+            <div className="space-y-3 rounded-lg border border-border/60 p-3">
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={executionMode === "desktop" ? "default" : "outline"}
+                  onClick={() => setExecutionMode("desktop")}
+                >
+                  <Monitor className="mr-2 h-4 w-4" />
+                  Desktop
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={executionMode === "cloud" ? "default" : "outline"}
+                  onClick={() => setExecutionMode("cloud")}
+                >
+                  <Cloud className="mr-2 h-4 w-4" />
+                  Cloud Duo
+                </Button>
+              </div>
+              {executionMode === "cloud" ? (
+                <div className="space-y-2">
+                  <label
+                    htmlFor="duo-linkedin-profile"
+                    className="text-xs font-medium text-muted-foreground"
+                  >
+                    Cloud LinkedIn profile
+                  </label>
+                  <select
+                    id="duo-linkedin-profile"
+                    value={duoProfileId}
+                    onChange={(event) => setDuoProfileId(event.target.value)}
+                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                  >
+                    <option value="">Select a cloud profile…</option>
+                    {cloudProfiles.map((profile) => (
+                      <option key={profile.id} value={String(profile.id)}>
+                        {profile.linkedinUsername}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-muted-foreground">
+                    The WhatsApp number shares this profile&apos;s cloud seat and
+                    managed proxy. It never uses the server IP.
+                  </p>
+                  {cloudProfiles.length === 0 && (
+                    <p className="text-xs text-destructive">
+                      Add a cloud LinkedIn account with a managed proxy first.
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Desktop runs on your computer with the local IP and no proxy.
+                </p>
+              )}
+            </div>
+          )}
           <Button onClick={handleAdd} disabled={adding} size="sm">
             {adding ? (
               <>

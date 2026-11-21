@@ -7,7 +7,11 @@ import time
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
+from openoutreach.config import settings
+from openoutreach.mongodb.crypto import safe_decrypt
+from openoutreach.proxies.models import STATUS_DISABLED, STATUS_RETIRED, Proxy
 from openoutreach.whatsapp.browser.qr import capture_qr_png, extract_phone_and_name, is_authenticated
+from openoutreach.whatsapp.cloud import WhatsAppCloudProxyError
 from openoutreach.whatsapp.models.profile import STATUS_CONNECTED, STATUS_DISCONNECTED, WhatsAppProfile
 
 if TYPE_CHECKING:
@@ -43,6 +47,54 @@ def _clear_qr_from_db(profile: WhatsAppProfile) -> None:
     profile.save(update_fields=["qr_png_b64", "qr_generated_at"])
 
 
+_BLOCKED_PROXY_STATUSES = {STATUS_RETIRED, STATUS_DISABLED}
+_BLOCKED_MASSIVE_STATUSES = {"disabled", "budget_disabled", "retired", "error"}
+
+
+def _whatsapp_proxy_config(profile: WhatsAppProfile) -> dict[str, str] | None:
+    """Return a Playwright proxy config for a cloud WhatsApp profile.
+
+    Desktop profiles never receive a proxy. Cloud profiles must have a healthy
+    managed proxy; a missing or disabled proxy is a hard failure so the server
+    IP is never used.
+    """
+    if profile.execution_mode != "cloud":
+        return None
+    if not getattr(settings, "WHATSAPP_CLOUD_PROXY_ENABLED", False):
+        raise WhatsAppCloudProxyError("WhatsApp cloud proxy is not enabled")
+    if not profile.proxy_id:
+        raise WhatsAppCloudProxyError("Cloud WhatsApp requires a managed proxy")
+
+    proxy = Proxy.get(profile.proxy_id)
+    if proxy is None:
+        raise WhatsAppCloudProxyError("Cloud WhatsApp proxy was not found")
+    if proxy.status in _BLOCKED_PROXY_STATUSES:
+        raise WhatsAppCloudProxyError("Cloud WhatsApp proxy is not active")
+    if proxy.massive_status in _BLOCKED_MASSIVE_STATUSES:
+        raise WhatsAppCloudProxyError("Cloud WhatsApp proxy is not active")
+    if (
+        proxy.assigned_org_id
+        and profile.org_id
+        and str(proxy.assigned_org_id) != str(profile.org_id)
+    ):
+        raise WhatsAppCloudProxyError("Cloud WhatsApp proxy belongs to another workspace")
+    if (
+        proxy.identity_id
+        and profile.identity_id
+        and str(proxy.identity_id) != str(profile.identity_id)
+    ):
+        raise WhatsAppCloudProxyError("Cloud WhatsApp proxy identity does not match")
+
+    password = safe_decrypt(proxy.password_encrypted or "")
+    config = {"server": proxy.proxy_server}
+    if proxy.username:
+        if not password:
+            raise WhatsAppCloudProxyError("Cloud WhatsApp proxy credentials are unavailable")
+        config["username"] = proxy.username
+        config["password"] = password
+    return config
+
+
 def start_whatsapp_session(wa_session: "WASession") -> None:
     """Launch Chromium, load stored session, authenticate via QR if needed.
 
@@ -71,7 +123,20 @@ def start_whatsapp_session(wa_session: "WASession") -> None:
     wa_session.browser = browser
 
     stored: Any = profile.session_data
-    context = browser.new_context(storage_state=stored if stored else None)
+    try:
+        proxy_config = _whatsapp_proxy_config(profile)
+    except Exception:
+        browser.close()
+        wa_session.browser = None
+        raise
+
+    context_kwargs: dict[str, Any] = {
+        "storage_state": stored if stored else None,
+    }
+    if proxy_config:
+        context_kwargs["proxy"] = proxy_config
+        logger.info("Using managed WhatsApp proxy for %s", profile)
+    context = browser.new_context(**context_kwargs)
     wa_session.context = context
 
     page = context.new_page()

@@ -105,6 +105,8 @@ def ensure_all_indexes():
         ('whatsapp_profiles', [
             ({'user_id': 1}, {'name': 'wa_profile_user_idx'}),
             ({'status': 1}, {'name': 'wa_profile_status_idx'}),
+            ({'proxy_id': 1}, {'name': 'wa_profile_proxy_idx', 'sparse': True}),
+            ({'execution_mode': 1, 'proxy_id': 1}, {'name': 'wa_profile_cloud_proxy_idx', 'sparse': True}),
             ({'phone_number': 1}, {'name': 'wa_profile_phone_unique_idx', 'unique': True, 'sparse': True}),
         ]),
 

@@ -67,6 +67,12 @@ class Settings(BaseSettings):
     # org-scoped data remain available for rollback; disabling the flag makes
     # every user fall back to personal billing and hides team surfaces.
     TEAM_WORKSPACES_ENABLED: bool = False
+    # Phase 4: allow a WhatsApp number to share an existing cloud LinkedIn
+    # seat/proxy (Cloud Duo shared IP). Off by default until the live pilot.
+    WHATSAPP_CLOUD_PROXY_ENABLED: bool = False
+    # Existing server-WA opt-in. Cloud Duo requires both this and the Phase 4
+    # flag; desktop WhatsApp remains local.
+    DAEMON_V2_WHATSAPP_ENABLED: bool = False
     ORGANIZATION_INVITE_EXPIRY_DAYS: int = 7
     ORGANIZATION_INVITE_RATE_LIMIT: int = 30
     ORGANIZATION_INVITE_RATE_WINDOW_SECONDS: int = 3600
