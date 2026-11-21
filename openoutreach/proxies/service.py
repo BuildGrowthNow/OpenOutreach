@@ -833,6 +833,9 @@ def _clear_cloud_whatsapp_proxy_links(proxy_id: str) -> None:
                     "proxy_region_country": None,
                     "proxy_region_subdivision": None,
                     "proxy_region_city": None,
+                    "status": "disconnected",
+                    "qr_png_b64": None,
+                    "qr_generated_at": None,
                 }
             },
         )
