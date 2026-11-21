@@ -530,6 +530,23 @@ def test_one_whatsapp_per_proxy_and_cross_identity_denied(fake):
         assign_proxy_to_whatsapp("px-wa", "wa2", "owner")
 
 
+def test_whatsapp_proxy_assignment_denies_cross_tenant(fake):
+    org_id = seed_owner(fake, cloud_profiles=1)
+    add_whatsapp(fake, "wa1", "owner", org_id, identity_id="wa:id1")
+    add_proxy(
+        fake,
+        "px-other",
+        channel="whatsapp",
+        identity_id="wa:id1",
+        status="available",
+        owner_id="other-owner",
+        org_id="other-org",
+    )
+
+    with pytest.raises(Exception, match="another"):
+        assign_proxy_to_whatsapp("px-other", "wa1", "owner")
+
+
 def test_shared_duo_attach_requires_same_identity(fake):
     org_id = seed_owner(fake, cloud_profiles=1)
     add_linkedin(fake, "li1", "owner", org_id, identity_id="id1", proxy_id="px1")
