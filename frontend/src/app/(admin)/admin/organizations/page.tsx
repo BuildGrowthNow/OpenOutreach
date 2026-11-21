@@ -290,10 +290,17 @@ export default function AdminOrganizationsPage() {
                       <div className="min-w-0">
                         <p className="truncate font-mono text-xs">{proxy.id}</p>
                         <p className="truncate text-xs text-muted-foreground">
+                          {proxy.channel ?? 'linkedin'}
+                          {' · '}
                           {[proxy.country, proxy.subdivision, proxy.city].filter(Boolean).join(' · ') || '—'}
                           {' · '}
                           {formatBytes(proxy.massive_used_bytes)} / {formatBytes(proxy.massive_limit_bytes ?? 0)}
                         </p>
+                        {(proxy.profile_id || proxy.whatsapp_profile_id) && (
+                          <p className="truncate font-mono text-xs text-muted-foreground">
+                            {proxy.profile_id ?? proxy.whatsapp_profile_id}
+                          </p>
+                        )}
                       </div>
                       <div className="flex shrink-0 items-center gap-1">
                         <Badge variant={proxy.status === 'assigned' ? 'default' : 'secondary'}>

@@ -485,8 +485,10 @@ def export_proxies_csv(
         "region_mode",
         "device_type",
         "status",
+        "channel",
         "identity_id",
         "assigned_profile_id",
+        "assigned_whatsapp_profile_id",
         "assigned_user_id",
         "assigned_org_id",
         "last_tested_at",
@@ -513,8 +515,10 @@ def export_proxies_csv(
             _csv_safe(proxy.region_mode),
             _csv_safe(proxy.device_type),
             _csv_safe(proxy.status),
+            _csv_safe(proxy.channel),
             _csv_safe(proxy.identity_id),
             _csv_safe(proxy.linkedin_profile_id),
+            _csv_safe(proxy.whatsapp_profile_id),
             _csv_safe(proxy.assigned_user_id),
             _csv_safe(proxy.assigned_org_id),
             proxy.last_tested_at.isoformat() if proxy.last_tested_at else "",
@@ -1471,17 +1475,29 @@ def retire_proxy_for_profile(profile_id: str) -> None:
     if shared_ids:
         # Keep the shared proxy for the WhatsApp number, but detach the
         # deleted LinkedIn account so the proxy no longer points at a ghost.
-        collection.update_many(
-            {"_id": {"$in": list(shared_ids)}},
-            {
-                "$set": {
-                    "linkedin_profile_id": None,
-                    "channel": "whatsapp",
-                    "last_assigned_profile_id": profile_id,
-                    "updated_at": _now(),
-                }
-            },
-        )
+        whatsapp = _collection(_WHATSAPP_PROFILES)
+        for shared_id in shared_ids:
+            wa_profile = (
+                whatsapp.find_one(
+                    {"proxy_id": shared_id, "execution_mode": "cloud"},
+                    {"assigned_user_id": 1, "org_id": 1},
+                )
+                if whatsapp is not None
+                else None
+            )
+            collection.update_one(
+                {"_id": shared_id},
+                {
+                    "$set": {
+                        "linkedin_profile_id": None,
+                        "channel": "whatsapp",
+                        "assigned_user_id": (wa_profile or {}).get("assigned_user_id"),
+                        "assigned_org_id": (wa_profile or {}).get("org_id"),
+                        "last_assigned_profile_id": profile_id,
+                        "updated_at": _now(),
+                    }
+                },
+            )
         retire_query["_id"] = {"$nin": list(shared_ids)}
         for shared_id in shared_ids:
             _close_assignment(
@@ -1548,12 +1564,23 @@ def retire_proxy_for_whatsapp_profile(profile_id: str) -> None:
         proxy_id = str(doc["_id"])
         if doc.get("linkedin_profile_id"):
             # Cloud Duo shared IP: the LinkedIn account keeps the proxy.
+            linkedin = _collection(_PROFILES)
+            linkedin_doc = (
+                linkedin.find_one(
+                    {"_id": doc.get("linkedin_profile_id")},
+                    {"assigned_user_id": 1, "org_id": 1},
+                )
+                if linkedin is not None
+                else None
+            )
             collection.update_one(
                 {"_id": proxy_id, "whatsapp_profile_id": profile_id},
                 {
                     "$set": {
                         "whatsapp_profile_id": None,
                         "channel": "linkedin",
+                        "assigned_user_id": (linkedin_doc or {}).get("assigned_user_id"),
+                        "assigned_org_id": (linkedin_doc or {}).get("org_id"),
                         "last_assigned_whatsapp_profile_id": profile_id,
                         "updated_at": _now(),
                     }

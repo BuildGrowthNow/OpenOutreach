@@ -239,7 +239,12 @@ function ProfileCard({
 
       {profile.status === "disconnected" && (
         <CardContent>
-          {showQr ? (
+          {profile.executionMode === "cloud" && !profile.active ? (
+            <p className="text-xs text-muted-foreground">
+              This cloud seat is paused. Ask a workspace owner or admin to
+              assign it; the proxy stays reserved.
+            </p>
+          ) : showQr ? (
             <QrPoller profileId={profile.id} onConnected={() => { setShowQr(false); onRefresh?.(); }} />
           ) : (
             <Button variant="outline" size="sm" onClick={() => setShowQr(true)}>

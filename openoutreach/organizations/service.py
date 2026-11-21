@@ -771,6 +771,8 @@ def assign_seat(
     actor = _require_actor(org, actor_user_id)
     if not can_assign_seats(actor.role):
         raise OrganizationPermissionError("Only owners and admins can assign seats")
+    if channel not in {"linkedin", "whatsapp"}:
+        raise SeatAssignmentError("channel must be linkedin or whatsapp")
     target = get_membership(org._id, assigned_user_id)
     if not target:
         raise MemberNotFoundError("Assigned member not found in this workspace")
@@ -795,7 +797,11 @@ def assign_seat(
                     if linkedin is not None
                     else None
                 )
-                if not linkedin_doc or linkedin_doc.get("active") is False:
+                if (
+                    not linkedin_doc
+                    or linkedin_doc.get("active") is False
+                    or linkedin_doc.get("is_active") is False
+                ):
                     raise SeatAssignmentError(
                         "Assign the shared LinkedIn seat first; this WhatsApp "
                         "number uses the LinkedIn proxy"
@@ -1038,11 +1044,15 @@ def unassign_seat(
     actor = _require_actor(org, actor_user_id)
     if not can_assign_seats(actor.role):
         raise OrganizationPermissionError("Only owners and admins can unassign seats")
+    if channel not in {"linkedin", "whatsapp"}:
+        raise SeatAssignmentError("channel must be linkedin or whatsapp")
 
     if channel == "whatsapp":
         profile = _org_whatsapp_profile(org, profile_id)
         if not profile:
             raise SeatAssignmentError("WhatsApp profile not found in this workspace")
+        if profile.get("execution_mode") != "cloud":
+            raise SeatAssignmentError("Only cloud WhatsApp profiles use cloud seats")
         collection = get_mongodb_collection(_WHATSAPP_COLLECTION)
         if collection is None:
             raise OrganizationError("WhatsApp profile storage is unavailable")
@@ -1086,6 +1096,8 @@ def unassign_seat(
     profile = _org_profile(org, profile_id)
     if not profile:
         raise SeatAssignmentError("LinkedIn profile not found in this workspace")
+    if profile.get("execution_mode") != "cloud":
+        raise SeatAssignmentError("Only cloud LinkedIn profiles use cloud seats")
 
     profiles = get_mongodb_collection(_PROFILES_COLLECTION)
     if profiles is None:

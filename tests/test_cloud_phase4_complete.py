@@ -920,6 +920,58 @@ def test_email_slot_enforced_and_byo_has_no_proxy(fake, monkeypatch):
     assert "Email slot limit" in str(exc.value)
 
 
+def test_deleting_a_desktop_profile_does_not_release_a_cloud_seat(fake, monkeypatch):
+    import asyncio
+    from types import SimpleNamespace
+
+    from openoutreach.api_v2.routers import linkedin_profiles as profiles_router
+
+    org_id = seed_owner(fake, cloud_profiles=1)
+    fake.collection("linkedin_profiles").insert_one(
+        {
+            "_id": "desktop-p",
+            "user_id": "owner",
+            "org_id": org_id,
+            "execution_mode": "desktop",
+            "active": True,
+            "is_active": True,
+        }
+    )
+    fake.collection("linkedin_credentials").insert_one(
+        {"_id": "cred-desktop", "linkedin_profile_id": "desktop-p", "user_id": "owner"}
+    )
+    fake.collection("cloud_seat_usage").insert_one({"_id": "owner", "count": 1})
+    released = {"linkedin": 0, "cloud": 0}
+
+    monkeypatch.setattr(
+        profiles_router, "get_mongodb_collection", fake.get_mongodb_collection
+    )
+    monkeypatch.setattr(profiles_router, "_profile_query", lambda user_id: {})
+    monkeypatch.setattr(
+        profiles_router,
+        "User",
+        SimpleNamespace(get=lambda user_id: SimpleNamespace(_id=user_id)),
+    )
+    monkeypatch.setattr(
+        profiles_router, "can_delete_profile", lambda user, doc: True
+    )
+    monkeypatch.setattr(
+        profiles_router,
+        "release_linkedin_seat",
+        lambda user_id: released.__setitem__("linkedin", released["linkedin"] + 1),
+    )
+    monkeypatch.setattr(
+        "openoutreach.billing.cloud_seats.release_cloud_seat",
+        lambda user_id: released.__setitem__("cloud", released["cloud"] + 1),
+    )
+
+    asyncio.run(profiles_router.delete_profile("desktop-p", user_id="owner"))
+
+    assert released["linkedin"] == 1
+    assert released["cloud"] == 0
+    assert fake.collection("cloud_seat_usage").find_one({"_id": "owner"})["count"] == 1
+
+
 # ── Security ─────────────────────────────────────────────────────────────
 
 

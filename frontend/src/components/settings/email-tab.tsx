@@ -728,7 +728,10 @@ export function EmailTab() {
   const [error, setError] = useState<string | null>(null);
   const { billingStatus } = useBilling();
   const slotLimit = billingStatus?.email_slot_limit ?? 0;
-  const slotUsed = billingStatus?.email_slots_used ?? mailboxes.length;
+  const slotUsed = Math.max(
+    billingStatus?.email_slots_used ?? 0,
+    mailboxes.length,
+  );
   const atSlotLimit = slotLimit > 0 && slotUsed >= slotLimit;
 
   const load = useCallback(async () => {

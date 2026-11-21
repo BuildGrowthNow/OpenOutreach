@@ -1292,12 +1292,14 @@ async def delete_profile(
 
         seat_survives_for_whatsapp = (
             had_credentials
+            and profile_doc.get("execution_mode") == "cloud"
             and linkedin_profile_shares_seat_with_whatsapp(
                 profile_id,
                 org_id=profile_doc.get("org_id"),
                 owner_user_id=profile_doc.get("user_id"),
             )
         )
+        is_cloud_profile = profile_doc.get("execution_mode") == "cloud"
 
         # Delete profile
         result = profiles_collection.delete_one({"_id": profile_id})
@@ -1314,9 +1316,10 @@ async def delete_profile(
         retire_proxy_for_profile(profile_id)
         if had_credentials and not seat_survives_for_whatsapp:
             release_linkedin_seat(user_id)
-            from openoutreach.billing.cloud_seats import release_cloud_seat
+            if is_cloud_profile:
+                from openoutreach.billing.cloud_seats import release_cloud_seat
 
-            release_cloud_seat(user_id)
+                release_cloud_seat(user_id)
 
         logger.info(f"Deleted LinkedIn profile {profile_id} for user {user_id}")
         return None

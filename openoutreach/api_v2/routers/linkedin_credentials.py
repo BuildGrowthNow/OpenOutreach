@@ -804,7 +804,8 @@ async def delete_credential(
                     )
 
                     seat_survives_for_whatsapp = (
-                        linkedin_profile_shares_seat_with_whatsapp(
+                        profile.execution_mode == "cloud"
+                        and linkedin_profile_shares_seat_with_whatsapp(
                             profile_id_str,
                             org_id=profile.to_dict().get("org_id"),
                             owner_user_id=profile.user_id,
@@ -816,7 +817,10 @@ async def delete_credential(
 
                     retire_proxy_for_profile(profile_id_str)
                     release_seat = True
-                    release_cloud = not seat_survives_for_whatsapp
+                    release_cloud = (
+                        profile.execution_mode == "cloud"
+                        and not seat_survives_for_whatsapp
+                    )
 
         # Log deletion
         log_entry = LinkedInCredentialLog(

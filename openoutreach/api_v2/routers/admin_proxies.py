@@ -134,6 +134,7 @@ class ProxyUsageSyncRequest(BaseModel):
 
 class ProxyFallbackRequest(BaseModel):
     profile_id: str = Field(min_length=1, max_length=128)
+    channel: str = Field(default="linkedin")
 
 
 class MassiveProvisionRequest(BaseModel):
@@ -652,15 +653,19 @@ async def provision_fallback_proxy(
     """Create and assign a Massive fallback proxy for one cloud profile."""
     from openoutreach.proxies.massive_client import provision_massive_fallback
 
-    profiles = get_mongodb_collection("linkedin_profiles")
+    channel = (body.channel or "linkedin").strip().lower()
+    if channel not in {"linkedin", "whatsapp"}:
+        raise HTTPException(status_code=400, detail="channel must be linkedin or whatsapp")
+    collection_name = "whatsapp_profiles" if channel == "whatsapp" else "linkedin_profiles"
+    profiles = get_mongodb_collection(collection_name)
     if profiles is None:
-        raise HTTPException(status_code=503, detail="LinkedIn profiles are unavailable")
+        raise HTTPException(status_code=503, detail="Profiles are unavailable")
     profile = profiles.find_one({"_id": body.profile_id})
     if not profile:
-        raise HTTPException(status_code=404, detail="LinkedIn profile not found")
+        raise HTTPException(status_code=404, detail="Profile not found")
     if profile.get("execution_mode") != "cloud":
         raise HTTPException(status_code=400, detail="Only cloud profiles use managed proxies")
-    if profile.get("proxy_server"):
+    if profile.get("proxy_server") or profile.get("proxy_id"):
         raise HTTPException(status_code=409, detail="This profile already has a proxy")
     country = profile.get("proxy_region_country")
     if not country:
@@ -675,16 +680,25 @@ async def provision_fallback_proxy(
             profile.get("proxy_region_subdivision"),
             profile.get("proxy_region_city"),
             created_by=current_admin,
+            channel=channel,
         )
     except ProxyError as exc:
         raise _error(exc)
     try:
-        proxy = assign_proxy_to_profile(
-            fallback._id,
-            body.profile_id,
-            user_id,
-            assigned_by=current_admin,
-        )
+        if channel == "whatsapp":
+            proxy = assign_proxy_to_whatsapp(
+                fallback._id,
+                body.profile_id,
+                user_id,
+                assigned_by=current_admin,
+            )
+        else:
+            proxy = assign_proxy_to_profile(
+                fallback._id,
+                body.profile_id,
+                user_id,
+                assigned_by=current_admin,
+            )
     except ProxyError as exc:
         retire_proxy(fallback._id, reason="fallback_assignment_failed")
         raise _error(exc)
@@ -695,11 +709,12 @@ async def provision_fallback_proxy(
         details={
             "proxy_id": proxy._id,
             "profile_id": body.profile_id,
+            "channel": channel,
             "provider": proxy.provider,
             "fallback": True,
         },
     )
-    return {"proxy": proxy.public_dict(), "profile_id": body.profile_id}
+    return {"proxy": proxy.public_dict(), "profile_id": body.profile_id, "channel": channel}
 
 
 @router.get("/massive/accounts", dependencies=[Depends(get_admin_user)])
@@ -1038,6 +1053,11 @@ async def assign_proxy_inventory(
                 detail="Proxy assignment is only available for cloud profiles",
             )
         current_proxy_id = profile.get("proxy_id")
+        if profile.get("proxy_mode") == "byo":
+            raise HTTPException(
+                status_code=409,
+                detail="This WhatsApp profile already has a BYO proxy",
+            )
         if current_proxy_id and current_proxy_id != proxy_id:
             raise HTTPException(
                 status_code=409,
@@ -1153,6 +1173,7 @@ async def unassign_proxy_inventory(
         details={
             "proxy_id": proxy_id,
             "profile_id": proxy.last_assigned_profile_id,
+            "whatsapp_profile_id": proxy.last_assigned_whatsapp_profile_id,
             "reason": body.reason,
         },
     )

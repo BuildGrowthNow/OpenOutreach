@@ -250,6 +250,15 @@ async def create_profile(
                     ),
                 )
         else:
+            if ctx.team_enabled and ctx.is_shared and ctx.role == "member":
+                raise HTTPException(
+                    status_code=403,
+                    detail=(
+                        "Ask a workspace owner or admin to assign a cloud seat. "
+                        "Members can use a Duo on a LinkedIn profile assigned to "
+                        "them or create desktop profiles."
+                    ),
+                )
             try:
                 region = normalize_region(
                     body.proxy_region_country,
@@ -322,16 +331,19 @@ async def create_profile(
         display_name=body.display_name,
         status=STATUS_DISCONNECTED,
     )
-    profile.save()
 
     try:
+        profile.save()
         if execution_mode == "cloud":
             if cloud_mode == "duo_shared":
                 from openoutreach.proxies.service import (
                     attach_shared_proxy_to_whatsapp,
                 )
 
-                assert duo_proxy is not None and identity is not None
+                if duo_proxy is None or identity is None:
+                    raise WhatsAppCloudError(
+                        "Cloud Duo proxy or identity is unavailable"
+                    )
                 attach_shared_proxy_to_whatsapp(
                     duo_proxy._id,
                     profile._id,
@@ -345,7 +357,10 @@ async def create_profile(
                     provision_managed_proxy,
                 )
 
-                assert region is not None and identity is not None
+                if region is None or identity is None:
+                    raise WhatsAppCloudError(
+                        "Cloud WhatsApp region or identity is unavailable"
+                    )
                 managed_proxy = provision_managed_proxy(
                     profile._id,
                     ctx.accounting_owner_id,
@@ -375,6 +390,16 @@ async def create_profile(
             release_cloud_seat(user_id)
         from openoutreach.proxies import ProxyError
 
+        if execution_mode != "cloud":
+            logger.error(
+                "whatsapp_profile_create_failed profile_id=%s exception_type=%s",
+                profile._id,
+                type(exc).__name__,
+            )
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to create WhatsApp connection",
+            )
         if isinstance(exc, (ProxyError, WhatsAppCloudError)):
             raise HTTPException(status_code=409, detail=str(exc))
         logger.warning(
