@@ -113,6 +113,10 @@ needed for the BYO slot.
 
 - WhatsApp-only cloud seats (no LinkedIn account).
 - Separate-IP Cloud Duo (two proxies).
+- Per-channel usage attribution on the shared proxy. The shared proxy keeps the
+  LinkedIn sub-account label, so Reporting currently combines LinkedIn and
+  WhatsApp traffic for that identity. This needs a channel-labelled session
+  before customer usage reviews.
 - Managed email provisioning. Email remains BYO SMTP/IMAP.
 - Any price or Stripe change. Cloud Duo is $299/mo during rollout; separate IPs
   are a support configuration, not a price change.
