@@ -554,6 +554,99 @@ def test_budget_hard_limit_disables_and_new_month_reenables(
     assert stored["massive_status"] == "active"
 
 
+def test_preview_massive_budgets_does_not_change_state(
+    fake, reseller_settings, fake_reseller
+):
+    _add_cloud_profile(fake)
+    proxy = provisioning.provision_reseller_proxy("p1", "u1", "org1", "US")
+    fake.collection("proxy_usage_snapshots").insert_one(
+        {
+            "proxy_id": proxy._id,
+            "bytes": 41_000_000_000,
+            "period_start": datetime.now(timezone.utc).date().isoformat(),
+        }
+    )
+    audits_before = fake.collection("organization_audit_logs").count_documents({})
+
+    preview = provisioning.preview_massive_budgets()
+
+    stored = fake.collection("proxies").find_one({"_id": proxy._id})
+    assert preview["mode"] == "dry_run"
+    assert preview["counts"]["disable"] == 1
+    assert preview["actions"][0]["action"] == "disable"
+    assert stored["massive_status"] == "active"
+    assert fake.collection("organization_audit_logs").count_documents({}) == audits_before
+    assert "password" not in str(preview)
+
+
+def test_preview_massive_budgets_reports_new_month_reenable(
+    fake, reseller_settings, fake_reseller
+):
+    _add_cloud_profile(fake)
+    proxy = provisioning.provision_reseller_proxy("p1", "u1", "org1", "US")
+    fake.collection("proxies").update_one(
+        {"_id": proxy._id},
+        {
+            "$set": {
+                "massive_status": "budget_disabled",
+                "massive_budget_disabled_at": datetime.now(timezone.utc)
+                - timedelta(days=40),
+            }
+        },
+    )
+    fake.collection("proxy_usage_snapshots").insert_one(
+        {
+            "proxy_id": proxy._id,
+            "bytes": 1_000_000,
+            "period_start": datetime.now(timezone.utc).date().isoformat(),
+        }
+    )
+
+    preview = provisioning.preview_massive_budgets()
+
+    assert preview["counts"]["re_enable"] == 1
+    assert preview["actions"][0]["action"] == "re_enable"
+    stored = fake.collection("proxies").find_one({"_id": proxy._id})
+    assert stored["massive_status"] == "budget_disabled"
+
+
+def test_sync_massive_accounts_dry_run_keeps_subaccount_enabled(
+    fake, reseller_settings, fake_reseller, monkeypatch
+):
+    _add_cloud_profile(fake)
+    proxy = provisioning.provision_reseller_proxy("p1", "u1", "org1", "US")
+    fake.collection("proxy_usage_snapshots").insert_one(
+        {
+            "proxy_id": proxy._id,
+            "bytes": 41_000_000_000,
+            "period_start": datetime.now(timezone.utc).date().isoformat(),
+        }
+    )
+    monkeypatch.setattr(
+        _FakeResellerClient,
+        "list_accounts",
+        lambda self: [
+            {
+                "account_id": "acct-1",
+                "username": "outreach.org1.li.p1",
+                "used_bytes": 41_000_000_000,
+                "limit_bytes": 50_000_000_000,
+                "status": "active",
+                "proxy_access": True,
+            }
+        ],
+    )
+    monkeypatch.setattr(_FakeResellerClient, "parent_usage", lambda self: {})
+
+    result = provisioning.sync_massive_accounts(apply_budgets=False)
+
+    stored = fake.collection("proxies").find_one({"_id": proxy._id})
+    assert result["budget"]["mode"] == "dry_run"
+    assert result["budget"]["counts"]["disable"] == 1
+    assert stored["massive_status"] == "active"
+    assert fake_reseller.instances[-1].disabled == []
+
+
 def test_rotate_massive_password_updates_proxy_and_profile(
     fake, reseller_settings, fake_reseller
 ):

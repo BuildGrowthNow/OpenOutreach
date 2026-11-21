@@ -725,8 +725,15 @@ def _parse_datetime(value: Any) -> Optional[datetime]:
     return None
 
 
-def sync_massive_accounts(*, actor_user_id: Optional[str] = None) -> dict[str, Any]:
-    """Daily cumulative usage sync from ``GET /resellers/accounts``."""
+def sync_massive_accounts(
+    *, actor_user_id: Optional[str] = None, apply_budgets: bool = True
+) -> dict[str, Any]:
+    """Daily cumulative usage sync from ``GET /resellers/accounts``.
+
+    ``apply_budgets=False`` updates usage fields and snapshots but only
+    previews the internal budget actions. It never disables or re-enables a
+    provider sub-account, which makes a production threshold review safe.
+    """
     config = MassiveResellerConfig.from_settings()
     if config is None:
         raise MassiveResellerError("Massive Reseller is not configured")
@@ -774,7 +781,10 @@ def sync_massive_accounts(*, actor_user_id: Optional[str] = None) -> dict[str, A
                 },
             )
 
-    budget = enforce_massive_budgets(actor_user_id=actor_user_id)
+    if apply_budgets:
+        budget = enforce_massive_budgets(actor_user_id=actor_user_id)
+    else:
+        budget = preview_massive_budgets()
     parent = client.parent_usage()
     logger.info(
         "massive_reseller_sync accounts=%s matched=%s updated=%s unmatched=%s",
@@ -885,6 +895,85 @@ def _monthly_usage_by_proxy() -> dict[str, int]:
     return usage
 
 
+def _budget_decision(
+    proxy: Proxy,
+    used_bytes: int,
+    *,
+    soft_limit_bytes: int,
+    hard_limit_bytes: int,
+    month_start: datetime,
+) -> Optional[str]:
+    """Return the internal budget action for one proxy, if any."""
+    if used_bytes >= hard_limit_bytes and proxy.massive_status == MASSIVE_STATUS_ACTIVE:
+        return "disable"
+    if soft_limit_bytes <= used_bytes < hard_limit_bytes:
+        return "soft_alert"
+    if (
+        proxy.massive_status == MASSIVE_STATUS_BUDGET_DISABLED
+        and proxy.massive_budget_disabled_at is not None
+    ):
+        disabled_at = _parse_datetime(proxy.massive_budget_disabled_at)
+        if (
+            disabled_at is not None
+            and disabled_at < month_start
+            and used_bytes < soft_limit_bytes
+        ):
+            return "re_enable"
+    return None
+
+
+def preview_massive_budgets() -> dict[str, Any]:
+    """Report internal budget actions without changing provider state.
+
+    Uses the same monthly Reporting snapshots and thresholds as
+    :func:`enforce_massive_budgets`, but never disables, re-enables, or audits.
+    This is the safe production review path for soft/hard thresholds.
+    """
+    collection = _collection(_PROXIES)
+    soft = int(getattr(settings, "MASSIVE_MONTHLY_SOFT_LIMIT_BYTES", 25_000_000_000))
+    hard = int(getattr(settings, "MASSIVE_MONTHLY_HARD_LIMIT_BYTES", 40_000_000_000))
+    month_start = _month_start()
+    result: dict[str, Any] = {
+        "mode": "dry_run",
+        "soft_limit_bytes": soft,
+        "hard_limit_bytes": hard,
+        "month_start": month_start.isoformat(),
+        "proxies": 0,
+        "counts": {"disable": 0, "soft_alert": 0, "re_enable": 0, "none": 0},
+        "actions": [],
+    }
+    if collection is None:
+        return result
+    usage = _monthly_usage_by_proxy()
+    for doc in collection.find({"massive_account_id": {"$ne": None}}):
+        proxy = Proxy.from_dict(doc)
+        used = usage.get(proxy._id, 0)
+        action = _budget_decision(
+            proxy,
+            used,
+            soft_limit_bytes=soft,
+            hard_limit_bytes=hard,
+            month_start=month_start,
+        )
+        result["proxies"] += 1
+        result["counts"][action or "none"] += 1
+        if action:
+            result["actions"].append(
+                {
+                    "proxy_id": proxy._id,
+                    "profile_id": proxy.linkedin_profile_id
+                    or proxy.last_assigned_profile_id,
+                    "org_id": proxy.assigned_org_id or proxy.last_assigned_org_id,
+                    "massive_status": proxy.massive_status,
+                    "used_bytes": used,
+                    "soft_limit_bytes": soft,
+                    "hard_limit_bytes": hard,
+                    "action": action,
+                }
+            )
+    return result
+
+
 def enforce_massive_budgets(*, actor_user_id: Optional[str] = None) -> dict[str, int]:
     """Apply internal monthly soft/hard thresholds. No customer-facing meter."""
     collection = _collection(_PROXIES)
@@ -900,7 +989,14 @@ def enforce_massive_budgets(*, actor_user_id: Optional[str] = None) -> dict[str,
     for doc in collection.find({"massive_account_id": {"$ne": None}}):
         proxy = Proxy.from_dict(doc)
         used = usage.get(proxy._id, 0)
-        if used >= hard and proxy.massive_status == MASSIVE_STATUS_ACTIVE:
+        action = _budget_decision(
+            proxy,
+            used,
+            soft_limit_bytes=soft,
+            hard_limit_bytes=hard,
+            month_start=month_start,
+        )
+        if action == "disable":
             if disable_massive_proxy(
                 proxy, reason="budget_hard_limit", actor_user_id=actor_user_id
             ):
@@ -914,7 +1010,7 @@ def enforce_massive_budgets(*, actor_user_id: Optional[str] = None) -> dict[str,
                     metadata={"used_bytes": used, "hard_limit_bytes": hard},
                 )
                 disabled += 1
-        elif used >= soft and used < hard:
+        elif action == "soft_alert":
             _audit_proxy(
                 "proxy.budget_soft",
                 proxy,
@@ -922,22 +1018,17 @@ def enforce_massive_budgets(*, actor_user_id: Optional[str] = None) -> dict[str,
                 metadata={"used_bytes": used, "soft_limit_bytes": soft},
             )
             soft_alerts += 1
-        if (
-            proxy.massive_status == MASSIVE_STATUS_BUDGET_DISABLED
-            and proxy.massive_budget_disabled_at is not None
-        ):
-            disabled_at = _parse_datetime(proxy.massive_budget_disabled_at)
-            if disabled_at is not None and disabled_at < month_start and used < soft:
-                if enable_massive_proxy(
-                    proxy, actor_user_id=actor_user_id, reason="budget_new_month"
-                ):
-                    _audit_proxy(
-                        "proxy.budget_enable",
-                        proxy,
-                        actor_user_id=actor_user_id,
-                        metadata={"used_bytes": used},
-                    )
-                    re_enabled += 1
+        elif action == "re_enable":
+            if enable_massive_proxy(
+                proxy, actor_user_id=actor_user_id, reason="budget_new_month"
+            ):
+                _audit_proxy(
+                    "proxy.budget_enable",
+                    proxy,
+                    actor_user_id=actor_user_id,
+                    metadata={"used_bytes": used},
+                )
+                re_enabled += 1
     return {
         "disabled": disabled,
         "re_enabled": re_enabled,
@@ -1090,6 +1181,7 @@ __all__ = [
     "massive_admin_status",
     "massive_alerts",
     "pool_stats_summary",
+    "preview_massive_budgets",
     "provision_managed_proxy",
     "provision_reseller_proxy",
     "reseller_available",

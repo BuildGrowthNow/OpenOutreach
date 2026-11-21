@@ -76,6 +76,21 @@ never sends proxy credentials to a desktop device.
 - `error`: check `last_error` and the admin alerts. Fix credentials/region and
   retry; rotate only when the provider password is the problem.
 
+## 5a. Budget threshold review
+
+Before a real usage sync can disable a sub-account, preview the internal monthly
+budget actions:
+
+```text
+python -m openoutreach.cli sync-proxy-usage --dry-run
+```
+
+The dry-run syncs cumulative and Reporting usage, then reports how many
+sub-accounts would be disabled, re-enabled, or flagged as soft alerts. It does
+not call the provider enable/disable endpoints and does not write budget audit
+events. Review the projection with the platform owner, then run the normal
+`sync-proxy-usage` only if the actions are expected.
+
 ## 6. "Massive is down / Reseller unavailable"
 
 1. Set `MASSIVE_RESELLER_ENABLED=false` (backend gate). New profiles fall back
