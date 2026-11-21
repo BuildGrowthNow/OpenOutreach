@@ -20,7 +20,8 @@ explicit product decision and was not implemented or changed.
   enrolling `user_id`.
 - Owners/admins see every device in the active workspace; members see their own.
 - Device revocation is org-scoped and revokes the device's refresh families.
-- `POST /api/daemon/v2/devices/heartbeat` records `last_seen_at` and the local
+- Desktop 2.1.8 reports `local_ip` at enrollment and on a 60-second heartbeat.
+  `POST /api/daemon/v2/devices/heartbeat` records `last_seen_at` and the local
   egress IP for display/support only. It is never used for authorization.
 - Desktop devices never receive proxy credentials. The daemon configuration and
   task snapshots remain allowlisted and proxy-free.
@@ -92,7 +93,7 @@ future per-member price requires explicit product approval and Stripe work.
 
 ```text
 .venv\Scripts\python.exe -m pytest tests -q
-# 575 passed, 56 skipped
+# 598 passed, 56 skipped (includes the 2.1.8 local-IP tests)
 
 ruff E9,F63,F7,F82, compileall, pyright
 # clean
