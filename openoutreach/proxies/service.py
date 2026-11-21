@@ -48,6 +48,7 @@ from openoutreach.proxies.region import normalize_region
 logger = logging.getLogger(__name__)
 
 _PROFILES = "linkedin_profiles"
+_WHATSAPP_PROFILES = "whatsapp_profiles"
 _PROXIES = "proxies"
 _ACTIVE_ASSIGNMENT_FILTER = {"unassigned_at": None}
 
@@ -160,6 +161,7 @@ def _build_query(
     country: Optional[str] = None,
     provider: Optional[str] = None,
     kind: Optional[str] = None,
+    channel: Optional[str] = None,
     assignment: Optional[str] = None,
     identity_id: Optional[str] = None,
     org_id: Optional[str] = None,
@@ -174,6 +176,17 @@ def _build_query(
         conditions.append({"provider": provider})
     if kind:
         conditions.append({"kind": kind})
+    if channel:
+        if channel == "linkedin":
+            conditions.append({
+                "$or": [
+                    {"channel": "linkedin"},
+                    {"channel": {"$exists": False}},
+                    {"channel": None},
+                ]
+            })
+        else:
+            conditions.append({"channel": channel})
     if identity_id:
         conditions.append({"identity_id": identity_id})
     if org_id:
@@ -185,12 +198,17 @@ def _build_query(
         })
     if assignment == "assigned":
         conditions.append({"status": STATUS_ASSIGNED})
-        conditions.append({"linkedin_profile_id": {"$ne": None}})
+        conditions.append({
+            "$or": [
+                {"linkedin_profile_id": {"$ne": None}},
+                {"whatsapp_profile_id": {"$ne": None}},
+            ]
+        })
     elif assignment == "unassigned":
         conditions.append({
             "$or": [
                 {"status": {"$ne": STATUS_ASSIGNED}},
-                {"linkedin_profile_id": None},
+                {"linkedin_profile_id": None, "whatsapp_profile_id": None},
             ]
         })
     if search:
@@ -200,7 +218,9 @@ def _build_query(
                 {"label": {"$regex": pattern, "$options": "i"}},
                 {"host": {"$regex": pattern, "$options": "i"}},
                 {"linkedin_profile_id": {"$regex": pattern, "$options": "i"}},
+                {"whatsapp_profile_id": {"$regex": pattern, "$options": "i"}},
                 {"last_assigned_profile_id": {"$regex": pattern, "$options": "i"}},
+                {"last_assigned_whatsapp_profile_id": {"$regex": pattern, "$options": "i"}},
             ]
         })
     if not conditions:
@@ -216,6 +236,7 @@ def list_proxies(
     country: Optional[str] = None,
     provider: Optional[str] = None,
     kind: Optional[str] = None,
+    channel: Optional[str] = None,
     assignment: Optional[str] = None,
     identity_id: Optional[str] = None,
     org_id: Optional[str] = None,
@@ -231,6 +252,7 @@ def list_proxies(
         country=country,
         provider=provider,
         kind=kind,
+        channel=channel,
         assignment=assignment,
         identity_id=identity_id,
         org_id=org_id,
@@ -279,6 +301,15 @@ def get_proxy_stats() -> dict[str, Any]:
             "proxy_id": None,
             "proxy_server": None,
         })
+    whatsapp = _collection(_WHATSAPP_PROFILES)
+    cloud_whatsapp_total = 0
+    cloud_whatsapp_without_proxy = 0
+    if whatsapp is not None:
+        cloud_whatsapp_total = whatsapp.count_documents({"execution_mode": "cloud"})
+        cloud_whatsapp_without_proxy = whatsapp.count_documents({
+            "execution_mode": "cloud",
+            "proxy_id": None,
+        })
     return {
         "total": collection.count_documents({}),
         "status": status_counts,
@@ -286,6 +317,8 @@ def get_proxy_stats() -> dict[str, Any]:
         "country": country_counts,
         "cloud_profiles_total": cloud_profiles_total,
         "cloud_profiles_without_proxy": cloud_profiles_without_proxy,
+        "cloud_whatsapp_profiles_total": cloud_whatsapp_total,
+        "cloud_whatsapp_profiles_without_proxy": cloud_whatsapp_without_proxy,
     }
 
 
@@ -415,6 +448,7 @@ def export_proxies_csv(
     country: Optional[str] = None,
     provider: Optional[str] = None,
     kind: Optional[str] = None,
+    channel: Optional[str] = None,
     assignment: Optional[str] = None,
     identity_id: Optional[str] = None,
     org_id: Optional[str] = None,
@@ -426,6 +460,7 @@ def export_proxies_csv(
         country=country,
         provider=provider,
         kind=kind,
+        channel=channel,
         assignment=assignment,
         identity_id=identity_id,
         org_id=org_id,
@@ -511,6 +546,7 @@ def find_available_proxy(
         "status": STATUS_AVAILABLE,
         "country": country.upper(),
         "linkedin_profile_id": None,
+        "whatsapp_profile_id": None,
         "ever_assigned": {"$ne": True},
         # A proxy that has ever belonged to a workspace must not be handed to
         # a different organization, even if its local assignment was cleared.
@@ -643,6 +679,16 @@ def assign_proxy_to_profile(
     if proxy.linkedin_profile_id not in (None, profile_id):
         raise ProxyReuseError(
             "This proxy was already used by another LinkedIn account and cannot be recycled"
+        )
+    if (
+        proxy.whatsapp_profile_id
+        and proxy.linkedin_profile_id != profile_id
+        and proxy.identity_id
+    ):
+        # A separate-IP WhatsApp proxy must never be handed to a LinkedIn
+        # account. A shared Duo proxy is only valid for the same identity.
+        raise ProxyReuseError(
+            "This proxy is bound to a WhatsApp number and cannot be assigned to a different browser account"
         )
     if (
         proxy.ever_assigned
@@ -818,6 +864,312 @@ def assign_proxy_to_profile(
     return proxy
 
 
+def _rollback_whatsapp_claim(proxy_id: str, profile_id: str) -> None:
+    collection = _collection(_PROXIES)
+    if collection is None:
+        return
+    collection.update_one(
+        {"_id": proxy_id, "whatsapp_profile_id": profile_id},
+        {
+            "$set": {
+                "status": STATUS_DISABLED,
+                "whatsapp_profile_id": None,
+                "assigned_user_id": None,
+                "assigned_org_id": None,
+                "assigned_at": None,
+                "assigned_by": None,
+                "disabled_at": _now(),
+                "updated_at": _now(),
+            }
+        },
+    )
+
+
+def assign_proxy_to_whatsapp(
+    proxy_id: str,
+    profile_id: str,
+    user_id: str,
+    *,
+    assigned_by: Optional[str] = None,
+) -> Proxy:
+    """Atomically assign a managed proxy to one cloud WhatsApp number.
+
+    Rules enforced here:
+    - one active proxy per WhatsApp profile;
+    - at most one WhatsApp number per proxy;
+    - a used proxy may only return to the same WhatsApp profile;
+    - no cross-tenant or cross-identity assignment;
+    - a proxy that already serves a LinkedIn account may only accept a
+      WhatsApp number with the same ``identity_id`` (Cloud Duo shared IP).
+    """
+    collection = _collection(_PROXIES)
+    profiles = _collection(_WHATSAPP_PROFILES)
+    linkedin = _collection(_PROFILES)
+    if collection is None or profiles is None:
+        raise ProxyError("Proxy inventory is unavailable")
+
+    existing = collection.find_one({"_id": proxy_id})
+    if not existing:
+        raise ProxyUnavailableError("Proxy not found")
+    proxy = Proxy.from_dict(existing)
+    if proxy.status == STATUS_RETIRED:
+        raise ProxyUnavailableError("Retired proxies cannot be assigned")
+    if proxy.whatsapp_profile_id not in (None, profile_id):
+        raise ProxyReuseError(
+            "This proxy was already used by another WhatsApp number and cannot be recycled"
+        )
+    if (
+        proxy.is_used
+        and proxy.last_assigned_whatsapp_profile_id not in (None, profile_id)
+    ):
+        raise ProxyReuseError(
+            "This proxy was already used by another WhatsApp number and cannot be recycled"
+        )
+    if proxy.last_assigned_user_id not in (None, user_id):
+        raise ProxyReuseError(
+            "This proxy belongs to another workspace and cannot be reassigned"
+        )
+    validate_proxy_host(proxy.host)
+
+    profile_doc = profiles.find_one(
+        {"_id": profile_id},
+        {
+            "user_id": 1,
+            "proxy_id": 1,
+            "identity_id": 1,
+            "org_id": 1,
+        },
+    )
+    if not profile_doc:
+        raise ProxyUnavailableError("WhatsApp profile not found")
+    if profile_doc.get("user_id") != user_id:
+        raise ProxyError("WhatsApp profile belongs to another workspace")
+
+    current_proxy_id = profile_doc.get("proxy_id")
+    if current_proxy_id and current_proxy_id != proxy_id:
+        raise ProxyError("This WhatsApp profile already has a different proxy")
+
+    profile_identity = (
+        profile_doc.get("identity_id") or profile_doc.get("user_id") or profile_id
+    )
+    profile_org = profile_doc.get("org_id")
+    org_value = profile_org or proxy.assigned_org_id or proxy.last_assigned_org_id
+    if proxy.identity_id and proxy.identity_id != profile_identity:
+        raise ProxyError("Proxy identity does not match the WhatsApp profile identity")
+    if proxy.assigned_org_id and profile_org and proxy.assigned_org_id != profile_org:
+        raise ProxyError("Proxy belongs to another organization")
+
+    # A proxy already serving a LinkedIn account may only serve the same
+    # identity's WhatsApp number (Cloud Duo shared IP).
+    if proxy.linkedin_profile_id and linkedin is not None:
+        linkedin_doc = linkedin.find_one(
+            {"_id": proxy.linkedin_profile_id},
+            {"identity_id": 1, "user_id": 1, "org_id": 1},
+        )
+        linkedin_identity = (
+            (linkedin_doc or {}).get("identity_id")
+            or (linkedin_doc or {}).get("user_id")
+        )
+        if linkedin_identity and str(linkedin_identity) != profile_identity:
+            raise ProxyError(
+                "A shared proxy may only serve one LinkedIn and one WhatsApp of the same identity"
+            )
+        if (
+            linkedin_doc
+            and linkedin_doc.get("org_id")
+            and profile_org
+            and str(linkedin_doc.get("org_id")) != str(profile_org)
+        ):
+            raise ProxyError("Shared proxy belongs to another workspace")
+
+    previous_identity = proxy.identity_id
+    was_used = proxy.is_used
+    claimed = collection.find_one_and_update(
+        {
+            "_id": proxy_id,
+            "status": {"$in": [STATUS_AVAILABLE, STATUS_ASSIGNED, STATUS_DISABLED, STATUS_ERROR]},
+            "whatsapp_profile_id": {"$in": [None, profile_id]},
+        },
+        {
+            "$set": {
+                "status": STATUS_ASSIGNED,
+                "whatsapp_profile_id": profile_id,
+                "channel": "duo" if proxy.linkedin_profile_id else "whatsapp",
+                "identity_id": proxy.identity_id or profile_identity,
+                "assigned_user_id": user_id,
+                "assigned_org_id": org_value,
+                "assigned_at": _now(),
+                "assigned_by": assigned_by,
+                "ever_assigned": True,
+                "last_assigned_whatsapp_profile_id": profile_id,
+                "last_assigned_user_id": user_id,
+                "last_assigned_org_id": org_value,
+                "disabled_at": None,
+                "updated_at": _now(),
+            }
+        },
+        return_document=True,
+    )
+    if not claimed:
+        raise ProxyUnavailableError("Proxy is not available")
+
+    proxy = Proxy.from_dict(claimed)
+    updated = profiles.update_one(
+        {
+            "_id": profile_id,
+            "user_id": user_id,
+            "proxy_id": {"$in": [None, proxy_id]},
+        },
+        {
+            "$set": {
+                "proxy_id": proxy._id,
+                "proxy_mode": "managed",
+                "proxy_region_country": proxy.country,
+                "proxy_region_subdivision": proxy.subdivision,
+                "proxy_region_city": proxy.city,
+                "identity_id": profile_identity,
+                "updated_at": _now(),
+            }
+        },
+    )
+    if getattr(updated, "modified_count", 0) == 0:
+        if not was_used:
+            collection.update_one(
+                {"_id": proxy_id, "whatsapp_profile_id": profile_id},
+                {
+                    "$set": {
+                        "status": STATUS_AVAILABLE,
+                        "whatsapp_profile_id": None,
+                        "identity_id": previous_identity,
+                        "assigned_user_id": None,
+                        "assigned_org_id": None,
+                        "assigned_at": None,
+                        "assigned_by": None,
+                        "ever_assigned": False,
+                        "last_assigned_whatsapp_profile_id": None,
+                        "last_assigned_user_id": None,
+                        "last_assigned_org_id": None,
+                        "updated_at": _now(),
+                    }
+                },
+            )
+        else:
+            _rollback_whatsapp_claim(proxy_id, profile_id)
+        raise ProxyUnavailableError(
+            "WhatsApp profile was assigned a different proxy concurrently"
+        )
+
+    _record_assignment(
+        proxy_id=proxy._id,
+        profile_id=profile_id,
+        channel="whatsapp",
+        identity_id=profile_identity,
+        user_id=user_id,
+        org_id=org_value,
+        assigned_by=assigned_by,
+    )
+    logger.info("Assigned proxy %s to WhatsApp profile %s", proxy._id, profile_id)
+    return proxy
+
+
+def attach_shared_proxy_to_whatsapp(
+    proxy_id: str,
+    profile_id: str,
+    user_id: str,
+    *,
+    identity_id: str,
+    org_id: Optional[str],
+    assigned_by: Optional[str] = None,
+) -> Proxy:
+    """Attach one WhatsApp number to an existing Cloud Duo LinkedIn proxy.
+
+    The conditional update makes the one-WhatsApp-per-proxy rule atomic even
+    when two creation requests race.
+    """
+    collection = _collection(_PROXIES)
+    profiles = _collection(_WHATSAPP_PROFILES)
+    if collection is None or profiles is None:
+        raise ProxyError("Proxy inventory is unavailable")
+    existing = collection.find_one({"_id": proxy_id})
+    if not existing:
+        raise ProxyUnavailableError("Proxy not found")
+    proxy = Proxy.from_dict(existing)
+    if proxy.status == STATUS_RETIRED:
+        raise ProxyUnavailableError("Retired proxies cannot be assigned")
+    if not proxy.linkedin_profile_id:
+        raise ProxyError("A shared Duo proxy must already serve a LinkedIn account")
+    if proxy.identity_id and str(proxy.identity_id) != str(identity_id):
+        raise ProxyError("Proxy identity does not match the Cloud Duo identity")
+    if proxy.assigned_org_id and org_id and str(proxy.assigned_org_id) != str(org_id):
+        raise ProxyError("Proxy belongs to another organization")
+
+    claimed = collection.find_one_and_update(
+        {
+            "_id": proxy_id,
+            "status": {"$in": [STATUS_ASSIGNED, STATUS_DISABLED]},
+            "whatsapp_profile_id": None,
+        },
+        {
+            "$set": {
+                "whatsapp_profile_id": profile_id,
+                "channel": "duo",
+                "ever_assigned": True,
+                "last_assigned_whatsapp_profile_id": profile_id,
+                "updated_at": _now(),
+            }
+        },
+        return_document=True,
+    )
+    if not claimed:
+        raise ProxyReuseError(
+            "This cloud seat already has a WhatsApp number; one WhatsApp per Duo seat"
+        )
+
+    updated = profiles.update_one(
+        {
+            "_id": profile_id,
+            "user_id": user_id,
+            "proxy_id": {"$in": [None, proxy_id]},
+        },
+        {
+            "$set": {
+                "proxy_id": proxy_id,
+                "proxy_mode": "managed",
+                "proxy_region_country": proxy.country,
+                "proxy_region_subdivision": proxy.subdivision,
+                "proxy_region_city": proxy.city,
+                "identity_id": identity_id,
+                "updated_at": _now(),
+            }
+        },
+    )
+    if getattr(updated, "modified_count", 0) == 0:
+        collection.update_one(
+            {"_id": proxy_id, "whatsapp_profile_id": profile_id},
+            {
+                "$set": {
+                    "whatsapp_profile_id": None,
+                    "channel": "linkedin" if proxy.linkedin_profile_id else "whatsapp",
+                    "updated_at": _now(),
+                }
+            },
+        )
+        raise ProxyUnavailableError(
+            "WhatsApp profile was assigned a different proxy concurrently"
+        )
+
+    _record_assignment(
+        proxy_id=proxy_id,
+        profile_id=profile_id,
+        channel="whatsapp",
+        identity_id=identity_id,
+        user_id=user_id,
+        org_id=org_id,
+        assigned_by=assigned_by,
+    )
+    return Proxy.from_dict(claimed)
+
+
 def _clear_cloud_whatsapp_proxy_links(proxy_id: str) -> None:
     """Detach a shared proxy from its Cloud Duo WhatsApp profile."""
     collection = _collection("whatsapp_profiles")
@@ -834,6 +1186,8 @@ def _clear_cloud_whatsapp_proxy_links(proxy_id: str) -> None:
                     "proxy_region_subdivision": None,
                     "proxy_region_city": None,
                     "status": "disconnected",
+                    "active": False,
+                    "is_active": False,
                     "qr_png_b64": None,
                     "qr_generated_at": None,
                 }
@@ -853,35 +1207,46 @@ def unassign_proxy(
     reason: Optional[str] = None,
     actor: Optional[str] = None,
 ) -> Proxy:
-    """Unassign a proxy, pause the profile, and keep the proxy reserved.
+    """Unassign a proxy, pause the channel, and keep the proxy reserved.
 
     The proxy is disabled rather than returned to the available pool because a
-    used proxy may never be assigned to a different LinkedIn account.
+    used proxy may never be assigned to a different browser account.
     """
     collection = _collection(_PROXIES)
     profiles = _collection(_PROFILES)
+    whatsapp = _collection(_WHATSAPP_PROFILES)
     if collection is None:
         raise ProxyError("Proxy inventory is unavailable")
     existing = collection.find_one({"_id": proxy_id})
     if not existing:
         raise ProxyUnavailableError("Proxy not found")
-    profile_id = existing.get("linkedin_profile_id")
-    if not profile_id:
+    linkedin_profile_id = existing.get("linkedin_profile_id")
+    whatsapp_profile_id = existing.get("whatsapp_profile_id")
+    if not linkedin_profile_id and not whatsapp_profile_id:
         raise ProxyError("Proxy is not assigned to a profile")
 
     _massive_lifecycle(existing, "disable", reason=reason or "admin_unassign")
 
     claimed = collection.find_one_and_update(
-        {"_id": proxy_id, "linkedin_profile_id": profile_id},
+        {
+            "_id": proxy_id,
+            "linkedin_profile_id": linkedin_profile_id,
+            "whatsapp_profile_id": whatsapp_profile_id,
+        },
         {
             "$set": {
                 "status": STATUS_DISABLED,
                 "linkedin_profile_id": None,
+                "whatsapp_profile_id": None,
+                "channel": "linkedin" if linkedin_profile_id else "whatsapp",
                 "assigned_user_id": None,
                 "assigned_org_id": None,
                 "assigned_at": None,
                 "ever_assigned": True,
-                "last_assigned_profile_id": profile_id,
+                "last_assigned_profile_id": linkedin_profile_id
+                or existing.get("last_assigned_profile_id"),
+                "last_assigned_whatsapp_profile_id": whatsapp_profile_id
+                or existing.get("last_assigned_whatsapp_profile_id"),
                 "last_assigned_user_id": existing.get("assigned_user_id")
                 or existing.get("last_assigned_user_id"),
                 "last_assigned_org_id": existing.get("assigned_org_id")
@@ -895,9 +1260,9 @@ def unassign_proxy(
     if not claimed:
         raise ProxyUnavailableError("Proxy assignment changed concurrently")
 
-    if profiles is not None:
+    if profiles is not None and linkedin_profile_id:
         profiles.update_one(
-            {"_id": profile_id, "proxy_id": proxy_id},
+            {"_id": linkedin_profile_id, "proxy_id": proxy_id},
             {
                 "$set": {
                     "proxy_server": None,
@@ -913,13 +1278,32 @@ def unassign_proxy(
                 }
             },
         )
+    if whatsapp is not None and whatsapp_profile_id:
+        whatsapp.update_one(
+            {"_id": whatsapp_profile_id, "proxy_id": proxy_id},
+            {
+                "$set": {
+                    "proxy_id": None,
+                    "proxy_mode": "none",
+                    "proxy_region_country": None,
+                    "proxy_region_subdivision": None,
+                    "proxy_region_city": None,
+                    "status": "disconnected",
+                    "active": False,
+                    "is_active": False,
+                    "qr_png_b64": None,
+                    "qr_generated_at": None,
+                    "updated_at": _now(),
+                }
+            },
+        )
     _clear_cloud_whatsapp_proxy_links(proxy_id)
     _close_assignment(
         proxy_id=proxy_id,
         profile_id=None,
         reason=reason or f"unassigned_by_{actor or 'admin'}",
     )
-    logger.info("Unassigned proxy %s from profile %s", proxy_id, profile_id)
+    logger.info("Unassigned proxy %s from profile %s", proxy_id, linkedin_profile_id or whatsapp_profile_id)
     return Proxy.from_dict(claimed)
 
 
@@ -931,7 +1315,7 @@ def disable_proxy(proxy_id: str) -> Proxy:
     doc = collection.find_one({"_id": proxy_id})
     if not doc:
         raise ProxyUnavailableError("Proxy not found")
-    if doc.get("linkedin_profile_id"):
+    if doc.get("linkedin_profile_id") or doc.get("whatsapp_profile_id"):
         raise ProxyError("Unassign the proxy before disabling it")
     if doc.get("status") == STATUS_RETIRED:
         raise ProxyError("Retired proxies cannot be disabled")
@@ -953,7 +1337,7 @@ def enable_proxy(proxy_id: str) -> Proxy:
         raise ProxyUnavailableError("Proxy not found")
     if doc.get("status") == STATUS_RETIRED:
         raise ProxyError("Retired proxies cannot be enabled")
-    if doc.get("linkedin_profile_id"):
+    if doc.get("linkedin_profile_id") or doc.get("whatsapp_profile_id"):
         raise ProxyError("Unassign the proxy before enabling it")
     _massive_lifecycle(doc, "enable", reason="admin_enable")
     collection.update_one(
@@ -971,7 +1355,7 @@ def retire_proxy(proxy_id: str, *, reason: Optional[str] = None) -> Proxy:
     doc = collection.find_one({"_id": proxy_id})
     if not doc:
         raise ProxyUnavailableError("Proxy not found")
-    if doc.get("linkedin_profile_id"):
+    if doc.get("linkedin_profile_id") or doc.get("whatsapp_profile_id"):
         raise ProxyError("Unassign the proxy before retiring it")
     if doc.get("status") == STATUS_RETIRED:
         return Proxy.from_dict(doc)
@@ -1051,7 +1435,11 @@ def _shared_cloud_whatsapp_proxy_ids(proxy_ids: list[str]) -> set[str]:
 
 
 def retire_proxy_for_profile(profile_id: str) -> None:
-    """Retire the proxy attached to a deleted profile; never recycle it."""
+    """Retire the proxy attached to a deleted LinkedIn profile; never recycle it.
+
+    A proxy shared with a Cloud Duo WhatsApp number stays alive for that
+    number; only the LinkedIn link is detached.
+    """
     collection = _collection(_PROXIES)
     if collection is None:
         return
@@ -1081,6 +1469,19 @@ def retire_proxy_for_profile(profile_id: str) -> None:
     ]
     shared_ids = _shared_cloud_whatsapp_proxy_ids(candidate_ids)
     if shared_ids:
+        # Keep the shared proxy for the WhatsApp number, but detach the
+        # deleted LinkedIn account so the proxy no longer points at a ghost.
+        collection.update_many(
+            {"_id": {"$in": list(shared_ids)}},
+            {
+                "$set": {
+                    "linkedin_profile_id": None,
+                    "channel": "whatsapp",
+                    "last_assigned_profile_id": profile_id,
+                    "updated_at": _now(),
+                }
+            },
+        )
         retire_query["_id"] = {"$nin": list(shared_ids)}
         for shared_id in shared_ids:
             _close_assignment(
@@ -1118,6 +1519,74 @@ def retire_proxy_for_profile(profile_id: str) -> None:
                 profile_id,
                 type(exc).__name__,
             )
+
+
+def retire_proxy_for_whatsapp_profile(profile_id: str) -> None:
+    """Retire a WhatsApp-only proxy; detach a Cloud Duo shared proxy instead."""
+    collection = _collection(_PROXIES)
+    if collection is None:
+        return
+    try:
+        from openoutreach.proxies.provisioning import retire_massive_for_profile
+
+        retire_massive_for_profile(profile_id, channel="whatsapp")
+    except Exception as exc:  # pragma: no cover - deletion must still complete
+        logger.warning(
+            "massive_retire_for_whatsapp_failed profile_id=%s exception_type=%s",
+            profile_id,
+            type(exc).__name__,
+        )
+    query: dict[str, Any] = {
+        "$or": [
+            {"whatsapp_profile_id": profile_id},
+            {"last_assigned_whatsapp_profile_id": profile_id},
+        ],
+        "status": {"$ne": STATUS_RETIRED},
+    }
+    candidates = list(collection.find(query, {"_id": 1, "linkedin_profile_id": 1}))
+    for doc in candidates:
+        proxy_id = str(doc["_id"])
+        if doc.get("linkedin_profile_id"):
+            # Cloud Duo shared IP: the LinkedIn account keeps the proxy.
+            collection.update_one(
+                {"_id": proxy_id, "whatsapp_profile_id": profile_id},
+                {
+                    "$set": {
+                        "whatsapp_profile_id": None,
+                        "channel": "linkedin",
+                        "last_assigned_whatsapp_profile_id": profile_id,
+                        "updated_at": _now(),
+                    }
+                },
+            )
+            _close_assignment(
+                proxy_id=proxy_id,
+                profile_id=None,
+                reason="whatsapp_profile_deleted",
+            )
+            continue
+        collection.update_one(
+            {"_id": proxy_id},
+            {
+                "$set": {
+                    "status": STATUS_RETIRED,
+                    "whatsapp_profile_id": None,
+                    "assigned_user_id": None,
+                    "assigned_org_id": None,
+                    "assigned_at": None,
+                    "ever_assigned": True,
+                    "last_assigned_whatsapp_profile_id": profile_id,
+                    "retired_at": _now(),
+                    "updated_at": _now(),
+                    "retire_reason": "whatsapp_profile_deleted",
+                }
+            },
+        )
+        _close_assignment(
+            proxy_id=proxy_id,
+            profile_id=None,
+            reason="whatsapp_profile_deleted",
+        )
 
 
 def _error_type(result: dict[str, Any]) -> Optional[str]:
@@ -1458,30 +1927,53 @@ def _proxy_for_subuser(subuser: str) -> Optional[Proxy]:
     collection = _collection(_PROXIES)
     if collection is None:
         return None
-    doc = collection.find_one({"massive_subuser": subuser})
+    value = (subuser or "").strip()
+    if not value:
+        return None
+    doc = collection.find_one({"massive_subuser": value})
     if doc:
         return Proxy.from_dict(doc)
-    doc = collection.find_one({
-        "$or": [
-            {"massive_subuser": f"subaccount-{subuser}"},
-            {"linkedin_profile_id": subuser},
-            {"last_assigned_profile_id": subuser},
-        ]
-    })
+    doc = collection.find_one(
+        {
+            "$or": [
+                {"massive_subuser": f"subaccount-{value}"},
+                {"massive_subuser": f"subaccount-li-{value}"},
+                {"massive_subuser": f"subaccount-wa-{value}"},
+                {"linkedin_profile_id": value},
+                {"last_assigned_profile_id": value},
+                {"whatsapp_profile_id": value},
+                {"last_assigned_whatsapp_profile_id": value},
+            ]
+        }
+    )
     if doc:
         return Proxy.from_dict(doc)
     marker = "subaccount-"
-    if marker in subuser:
-        tail = subuser.split(marker, 1)[1]
+    if marker in value:
+        tail = value.split(marker, 1)[1]
+        channel = None
+        if tail.startswith("li-"):
+            channel = "linkedin"
+            tail = tail[3:]
+        elif tail.startswith("wa-"):
+            channel = "whatsapp"
+            tail = tail[3:]
         token = tail.split("-country-", 1)[0].split("-session-", 1)[0]
         if token:
-            doc = collection.find_one({
-                "$or": [
-                    {"linkedin_profile_id": token},
-                    {"last_assigned_profile_id": token},
-                    {"massive_subuser": f"subaccount-{token}"},
-                ]
-            })
+            clauses: list[dict[str, Any]] = [
+                {"linkedin_profile_id": token},
+                {"last_assigned_profile_id": token},
+                {"whatsapp_profile_id": token},
+                {"last_assigned_whatsapp_profile_id": token},
+                {"massive_subuser": f"subaccount-{token}"},
+                {"massive_subuser": f"subaccount-li-{token}"},
+                {"massive_subuser": f"subaccount-wa-{token}"},
+            ]
+            if channel == "linkedin":
+                clauses = clauses[:2] + clauses[4:6]
+            elif channel == "whatsapp":
+                clauses = clauses[2:4] + clauses[6:]
+            doc = collection.find_one({"$or": clauses})
             if doc:
                 return Proxy.from_dict(doc)
     return None
@@ -1502,7 +1994,19 @@ def record_usage_snapshot(
     if collection is None:
         return
     now = _now()
-    profile_id = proxy.linkedin_profile_id or proxy.last_assigned_profile_id
+    if channel == "whatsapp":
+        profile_id = (
+            proxy.whatsapp_profile_id or proxy.last_assigned_whatsapp_profile_id
+        )
+    elif channel == "duo":
+        profile_id = (
+            proxy.linkedin_profile_id
+            or proxy.last_assigned_profile_id
+            or proxy.whatsapp_profile_id
+            or proxy.last_assigned_whatsapp_profile_id
+        )
+    else:
+        profile_id = proxy.linkedin_profile_id or proxy.last_assigned_profile_id
     user_id = proxy.assigned_user_id or proxy.last_assigned_user_id
     org_id = proxy.assigned_org_id or proxy.last_assigned_org_id
     collection.update_one(
@@ -1519,6 +2023,10 @@ def record_usage_snapshot(
                 "proxy_id": proxy._id,
                 "subuser": subuser,
                 "profile_id": profile_id,
+                "whatsapp_profile_id": (
+                    proxy.whatsapp_profile_id
+                    or proxy.last_assigned_whatsapp_profile_id
+                ),
                 "user_id": user_id,
                 "org_id": org_id,
                 "channel": channel,
@@ -1565,9 +2073,11 @@ def get_usage_summary(
 
     proxies_collection = _collection(_PROXIES)
     profiles_collection = _collection(_PROFILES)
+    whatsapp_collection = _collection(_WHATSAPP_PROFILES)
     users_collection = _collection("users")
     proxy_labels: dict[str, dict[str, Any]] = {}
     profile_labels: dict[str, str] = {}
+    profile_channels: dict[str, str] = {}
     workspace_labels: dict[str, str] = {}
     if proxies_collection is not None:
         proxy_ids = {str(doc.get("proxy_id")) for doc in docs if doc.get("proxy_id")}
@@ -1576,6 +2086,7 @@ def get_usage_summary(
                 "label": doc.get("label"),
                 "status": doc.get("status"),
                 "provider": doc.get("provider"),
+                "channel": doc.get("channel"),
             }
     if profiles_collection is not None:
         profile_ids = {str(doc.get("profile_id")) for doc in docs if doc.get("profile_id")}
@@ -1583,6 +2094,18 @@ def get_usage_summary(
             profile_labels[str(doc.get("_id"))] = str(
                 doc.get("linkedin_username") or doc.get("username") or ""
             )
+            profile_channels[str(doc.get("_id"))] = "linkedin"
+    if whatsapp_collection is not None:
+        whatsapp_ids = {
+            str(doc.get("whatsapp_profile_id") or doc.get("profile_id"))
+            for doc in docs
+            if doc.get("whatsapp_profile_id") or doc.get("channel") == "whatsapp"
+        }
+        for doc in whatsapp_collection.find({"_id": {"$in": list(whatsapp_ids)}}):
+            profile_labels[str(doc.get("_id"))] = str(
+                doc.get("phone_number") or doc.get("display_name") or ""
+            )
+            profile_channels[str(doc.get("_id"))] = "whatsapp"
     if users_collection is not None:
         user_ids = {str(doc.get("user_id")) for doc in docs if doc.get("user_id")}
         for doc in users_collection.find({"_id": {"$in": list(user_ids)}}):
@@ -1592,6 +2115,7 @@ def get_usage_summary(
     per_profile: dict[str, dict[str, Any]] = {}
     per_workspace: dict[str, dict[str, Any]] = {}
     per_channel: dict[str, dict[str, Any]] = {}
+    per_workspace_channel: dict[tuple[str, str], dict[str, Any]] = {}
     total_bytes = 0
     for doc in docs:
         bytes_used = int(doc.get("bytes") or 0)
@@ -1621,6 +2145,7 @@ def get_usage_summary(
             profile_entry = per_profile.setdefault(profile_id, {
                 "profile_id": profile_id,
                 "label": profile_labels.get(profile_id, ""),
+                "channel": channel if channel != "duo" else "duo",
                 "workspace_id": user_id or None,
                 "bytes": 0,
                 "proxy_ids": set(),
@@ -1637,12 +2162,30 @@ def get_usage_summary(
                 "bytes": 0,
                 "proxy_ids": set(),
                 "profile_ids": set(),
+                "channels": {},
             })
             workspace_entry["bytes"] += bytes_used
             if proxy_id:
                 workspace_entry["proxy_ids"].add(proxy_id)
             if profile_id:
                 workspace_entry["profile_ids"].add(profile_id)
+            workspace_entry["channels"][channel] = (
+                workspace_entry["channels"].get(channel, 0) + bytes_used
+            )
+
+            wc_key = (workspace_key, channel)
+            wc_entry = per_workspace_channel.setdefault(wc_key, {
+                "workspace_id": workspace_key,
+                "channel": channel,
+                "bytes": 0,
+                "proxy_ids": set(),
+                "profile_ids": set(),
+            })
+            wc_entry["bytes"] += bytes_used
+            if proxy_id:
+                wc_entry["proxy_ids"].add(proxy_id)
+            if profile_id:
+                wc_entry["profile_ids"].add(profile_id)
 
         channel_entry = per_channel.setdefault(channel, {
             "channel": channel,
@@ -1656,7 +2199,7 @@ def get_usage_summary(
         if profile_id:
             channel_entry["profile_ids"].add(profile_id)
 
-    def _finalize(entries: dict[str, dict[str, Any]], set_fields: tuple[str, ...]) -> list[dict[str, Any]]:
+    def _finalize(entries: dict[Any, dict[str, Any]], set_fields: tuple[str, ...]) -> list[dict[str, Any]]:
         output: list[dict[str, Any]] = []
         for entry in entries.values():
             item = dict(entry)
@@ -1673,6 +2216,9 @@ def get_usage_summary(
         "per_profile": _finalize(per_profile, ("proxy_ids",)),
         "per_workspace": _finalize(per_workspace, ("proxy_ids", "profile_ids")),
         "per_channel": _finalize(per_channel, ("proxy_ids", "profile_ids")),
+        "per_workspace_channel": _finalize(
+            per_workspace_channel, ("proxy_ids", "profile_ids")
+        ),
     }
 
 
@@ -1682,6 +2228,8 @@ def assign_proxy_for_new_profile(
     country: str,
     subdivision: Optional[str] = None,
     city: Optional[str] = None,
+    *,
+    channel: str = "linkedin",
 ) -> Proxy:
     """Find and assign a matching proxy, raising a clear error when none exists.
 
@@ -1699,6 +2247,8 @@ def assign_proxy_for_new_profile(
         if not proxy:
             break
         try:
+            if channel == "whatsapp":
+                return assign_proxy_to_whatsapp(proxy._id, profile_id, user_id)
             return assign_proxy_to_profile(proxy._id, profile_id, user_id)
         except ProxyUnavailableError:
             continue
@@ -1714,8 +2264,11 @@ def assign_proxy_for_new_profile(
             country_value,
             subdivision_value,
             city_value,
+            channel=channel,
         )
         try:
+            if channel == "whatsapp":
+                return assign_proxy_to_whatsapp(fallback._id, profile_id, user_id)
             return assign_proxy_to_profile(fallback._id, profile_id, user_id)
         except ProxyError:
             retire_proxy(fallback._id, reason="fallback_assignment_failed")

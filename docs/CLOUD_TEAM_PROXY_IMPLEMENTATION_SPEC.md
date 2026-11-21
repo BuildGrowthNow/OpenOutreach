@@ -926,11 +926,16 @@ Incident runbook:
 
 ### Phase 4
 
-- [ ] Cloud Duo shared/separate IPs.
-- [ ] WhatsApp cloud proxy works.
-- [ ] Email BYO slot works.
-- [ ] Pricing/marketing match.
-- [ ] No datacenter IP in cloud.
+- [x] Cloud Duo shared/separate IPs.
+- [x] WhatsApp-only cloud seats.
+- [x] Unified cloud seat accounting (LinkedIn + WhatsApp).
+- [x] Channel-aware managed proxy provisioning and lifecycle.
+- [x] WhatsApp cloud proxy works; cloud never uses the server IP.
+- [x] Email BYO slot works (one per seat, no proxy).
+- [x] Per-channel usage for separate-IP channels; combined usage documented for shared-IP Duo.
+- [x] Pricing/marketing match; no customer-facing GB meter.
+- [x] Admin/support views cover both channels.
+- [x] Desktop remains proxy-free and compatible.
 
 ### E2E scenarios
 

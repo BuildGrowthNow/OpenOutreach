@@ -15,7 +15,8 @@ explicit product decision and was not implemented or changed.
   - owner/admin may enroll any desktop profile in the workspace,
   - a member may enroll only a profile assigned to them,
   - cloud LinkedIn profiles are rejected (server-owned),
-  - cloud WhatsApp profiles are rejected until Phase 4 proxy support.
+  - cloud WhatsApp profiles are rejected by the desktop enrollment path; they
+    are server-owned and run through the Phase 4 cloud proxy path.
 - Device rows store `org_id`, `local_ip`, profile/channel bindings, and the
   enrolling `user_id`.
 - Owners/admins see every device in the active workspace; members see their own.

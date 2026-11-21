@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from openoutreach.api_v2.dependencies_v2 import get_current_user
+from openoutreach.billing.email_slots import email_slot_limit
 from openoutreach.emails.models import Mailbox
 from openoutreach.emails.smtp import verify_auth, verify_imap_auth
 from openoutreach.mongodb.connection import get_mongodb_collection
@@ -19,6 +20,7 @@ from openoutreach.organizations.access import (
     channel_access_query,
     resolve_org_context,
 )
+from openoutreach.organizations.enforcement import resolve_effective_plan
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -163,6 +165,37 @@ async def create_mailbox(data: MailboxCreate, user_id: str = Depends(get_current
             detail=f"Mailbox for {data.username} already exists",
         )
 
+    effective = resolve_effective_plan(user)
+    limit = email_slot_limit(effective)
+    mailboxes = get_mongodb_collection("mailboxes")
+    used = 0
+    existing_slot_ids: set[str] = set()
+    if mailboxes is not None:
+        org_query = {
+            "$or": [
+                {"org_id": ctx.org_id},
+                {"org_id": {"$exists": False}, "user_id": ctx.accounting_owner_id},
+                {"org_id": None, "user_id": ctx.accounting_owner_id},
+            ]
+        }
+        used = mailboxes.count_documents(org_query)
+        for doc in mailboxes.find(org_query, {"seat_id": 1}):
+            if doc.get("seat_id"):
+                existing_slot_ids.add(str(doc["seat_id"]))
+    if used >= limit:
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail=(
+                f"Email slot limit reached ({used}/{limit}). "
+                "Each seat includes one BYO SMTP/IMAP mailbox; remove a "
+                "mailbox or add a seat."
+            ),
+        )
+    slot_index = used + 1
+    while f"email:{ctx.org_id}:{slot_index}" in existing_slot_ids:
+        slot_index += 1
+    seat_id = f"email:{ctx.org_id}:{slot_index}"
+
     from_address = data.from_address or data.username
     box = Mailbox(
         host=data.host,
@@ -177,13 +210,17 @@ async def create_mailbox(data: MailboxCreate, user_id: str = Depends(get_current
         user_id=ctx.accounting_owner_id,
         org_id=ctx.org_id,
         assigned_user_id=user_id,
+        seat_id=seat_id,
+        managed=False,
         imap_host=data.imap_host,
         imap_port=data.imap_port,
         imap_username=data.imap_username,
         imap_password=data.imap_password,
     )
     box.save()
-    logger.info("mailboxes: created %s for user %s", from_address, user_id)
+    logger.info(
+        "mailboxes: created %s for user %s (seat %s)", from_address, user_id, seat_id
+    )
     return _to_response(box)
 
 

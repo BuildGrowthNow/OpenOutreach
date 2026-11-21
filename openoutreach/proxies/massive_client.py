@@ -111,11 +111,19 @@ def massive_status() -> dict[str, Any]:
     }
 
 
-def build_massive_subuser(profile_id: str) -> str:
-    """Return the per-profile subuser label used by the Reporting API."""
+def build_massive_subuser(profile_id: str, channel: Optional[str] = None) -> str:
+    """Return the per-profile subuser label used by the Reporting API.
+
+    ``channel`` adds the Phase 4 ``li``/``wa`` token so separate-IP Duo
+    channels get distinct sub-accounts and Reporting rows. Omitting it keeps
+    the pre-Phase-4 label for existing proxies and tests.
+    """
     token = _safe_token(profile_id)
     if not token:
         raise ProxyError("A profile id is required for a Massive sub-account")
+    if channel in {"linkedin", "whatsapp"}:
+        prefix = "li" if channel == "linkedin" else "wa"
+        return f"subaccount-{prefix}-{token}"
     return f"subaccount-{token}"
 
 
@@ -130,13 +138,17 @@ def build_massive_username(
     session_ttl: int = 1440,
     session_mode: str = "flex",
     device_type: str = "common",
+    channel: Optional[str] = None,
 ) -> str:
     """Build the fallback proxy username with region and session parameters.
 
     Format::
 
-        <PARENT>-subaccount-<profile>-country-US-session-<profile>
+        <PARENT>-subaccount-<channel>-<profile>-country-US-session-<profile>
         -sessionttl-1440-sessionmode-flex-type-common
+
+    ``channel`` is ``li`` or ``wa`` for Phase 4 accounts. Omitting it keeps the
+    legacy pre-Phase-4 username for existing records.
     """
     parent = _safe_parent_token(parent_username, limit=120)
     token = _safe_token(profile_id)
@@ -146,8 +158,13 @@ def build_massive_username(
         country, subdivision, city
     )
     session_token = _safe_token(session_id or profile_id)
+    if channel in {"linkedin", "whatsapp"}:
+        channel_token = "li" if channel == "linkedin" else "wa"
+        subaccount = f"subaccount-{channel_token}-{token}"
+    else:
+        subaccount = f"subaccount-{token}"
     parts = [
-        f"{parent}-subaccount-{token}",
+        f"{parent}-{subaccount}",
         f"-country-{country_value}",
     ]
     if subdivision_value:
@@ -171,6 +188,7 @@ def provision_massive_fallback(
     city: Optional[str] = None,
     *,
     created_by: Optional[str] = None,
+    channel: Optional[str] = None,
 ) -> Proxy:
     """Create a proxy record that uses the Massive parent fallback credentials."""
     config = MassiveConfig.from_settings()
@@ -185,6 +203,7 @@ def provision_massive_fallback(
         country_value,
         subdivision_value,
         city_value,
+        channel=channel,
     )
     label = f"massive-{_safe_token(profile_id, limit=8)}"
     return create_proxy(
@@ -198,8 +217,9 @@ def provision_massive_fallback(
         provider=PROVIDER_MASSIVE_RESIDENTIAL,
         kind=KIND_RESIDENTIAL,
         label=label,
+        channel=channel if channel in {"linkedin", "whatsapp"} else "linkedin",
         massive_parent_username=config.parent_username,
-        massive_subuser=build_massive_subuser(profile_id),
+        massive_subuser=build_massive_subuser(profile_id, channel),
         created_by=created_by,
     )
 
@@ -334,7 +354,7 @@ async def sync_massive_usage(
             bytes_used=row["bytes"],
             period_start=row["period_start"],
             period_end=row["period_end"],
-            channel="linkedin",
+            channel=proxy.channel or "linkedin",
         )
         matched += 1
         total_bytes += row["bytes"]

@@ -48,17 +48,27 @@ export interface InvitePreview {
 
 export interface SeatSummary {
   cloud_seat_limit: number | null;
+  cloud_seats_used?: number;
+  cloud_seats_remaining?: number;
   cloud_profiles: number;
   credentialed_profiles: number;
   desktop_credentialed_profiles?: number;
   assigned_profiles: number;
   unassigned_profiles: number;
+  whatsapp_cloud_profiles?: number;
+  whatsapp_assigned_profiles?: number;
+  whatsapp_only_seats?: number;
+  duo_seats?: number;
+  linkedin_seats?: number;
   members: number;
 }
 
 export interface OrgProfile {
   profile_id: string;
   linkedin_username: string | null;
+  phone_number?: string | null;
+  channel?: string | null;
+  cloud_mode?: string | null;
   assigned_user_id: string | null;
   execution_mode: string | null;
   active: boolean;
@@ -169,11 +179,13 @@ export async function getSeatSummary(
 export async function assignSeat(
   orgId: string,
   profileId: string,
-  assignedUserId: string
+  assignedUserId: string,
+  channel: string = "linkedin"
 ): Promise<ApiResponse<OrgProfile>> {
   return apiClient.post<OrgProfile>(`/organizations/${orgId}/seats/assign`, {
     profile_id: profileId,
     assigned_user_id: assignedUserId,
+    channel,
   });
 }
 
@@ -193,19 +205,23 @@ export async function assignDesktopSeat(
 
 export async function unassignSeat(
   orgId: string,
-  profileId: string
+  profileId: string,
+  channel: string = "linkedin"
 ): Promise<ApiResponse<OrgProfile>> {
   return apiClient.post<OrgProfile>(`/organizations/${orgId}/seats/unassign`, {
     profile_id: profileId,
+    channel,
   });
 }
 
 export async function removeSeat(
   orgId: string,
-  profileId: string
+  profileId: string,
+  channel: string = "linkedin"
 ): Promise<ApiResponse<OrgProfile>> {
   return apiClient.post<OrgProfile>(`/organizations/${orgId}/seats/remove`, {
     profile_id: profileId,
+    channel,
   });
 }
 

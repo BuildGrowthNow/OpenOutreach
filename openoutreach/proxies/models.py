@@ -81,13 +81,16 @@ class Proxy:
         device_type: str = "common",
         status: str = STATUS_AVAILABLE,
         identity_id: Optional[str] = None,
+        channel: str = "linkedin",
         linkedin_profile_id: Optional[str] = None,
+        whatsapp_profile_id: Optional[str] = None,
         assigned_user_id: Optional[str] = None,
         assigned_org_id: Optional[str] = None,
         assigned_at: Optional[datetime] = None,
         assigned_by: Optional[str] = None,
         ever_assigned: bool = False,
         last_assigned_profile_id: Optional[str] = None,
+        last_assigned_whatsapp_profile_id: Optional[str] = None,
         last_assigned_user_id: Optional[str] = None,
         last_assigned_org_id: Optional[str] = None,
         massive_account_id: Optional[str] = None,
@@ -135,13 +138,16 @@ class Proxy:
         self.device_type = device_type
         self.status = status
         self.identity_id = identity_id
+        self.channel = channel if channel in {"linkedin", "whatsapp", "duo"} else "linkedin"
         self.linkedin_profile_id = linkedin_profile_id
+        self.whatsapp_profile_id = whatsapp_profile_id
         self.assigned_user_id = assigned_user_id
         self.assigned_org_id = assigned_org_id
         self.assigned_at = assigned_at
         self.assigned_by = assigned_by
         self.ever_assigned = ever_assigned
         self.last_assigned_profile_id = last_assigned_profile_id
+        self.last_assigned_whatsapp_profile_id = last_assigned_whatsapp_profile_id
         self.last_assigned_user_id = last_assigned_user_id
         self.last_assigned_org_id = last_assigned_org_id
         self.massive_account_id = massive_account_id
@@ -179,11 +185,13 @@ class Proxy:
 
     @property
     def is_used(self) -> bool:
-        """A used proxy may never be assigned to a different LinkedIn account."""
+        """A used proxy may never be assigned to a different browser account."""
         return bool(
             self.ever_assigned
             or self.linkedin_profile_id
+            or self.whatsapp_profile_id
             or self.last_assigned_profile_id
+            or self.last_assigned_whatsapp_profile_id
         )
 
     @staticmethod
@@ -208,13 +216,16 @@ class Proxy:
             "device_type": self.device_type,
             "status": self.status,
             "identity_id": self.identity_id,
+            "channel": self.channel,
             "linkedin_profile_id": self.linkedin_profile_id,
+            "whatsapp_profile_id": self.whatsapp_profile_id,
             "assigned_user_id": self.assigned_user_id,
             "assigned_org_id": self.assigned_org_id,
             "assigned_at": self.assigned_at,
             "assigned_by": self.assigned_by,
             "ever_assigned": self.ever_assigned,
             "last_assigned_profile_id": self.last_assigned_profile_id,
+            "last_assigned_whatsapp_profile_id": self.last_assigned_whatsapp_profile_id,
             "last_assigned_user_id": self.last_assigned_user_id,
             "last_assigned_org_id": self.last_assigned_org_id,
             "massive_account_id": self.massive_account_id,
@@ -266,13 +277,16 @@ class Proxy:
             device_type=data.get("device_type", "common"),
             status=data.get("status", STATUS_AVAILABLE),
             identity_id=data.get("identity_id"),
+            channel=data.get("channel", "linkedin"),
             linkedin_profile_id=data.get("linkedin_profile_id"),
+            whatsapp_profile_id=data.get("whatsapp_profile_id"),
             assigned_user_id=data.get("assigned_user_id"),
             assigned_org_id=data.get("assigned_org_id"),
             assigned_at=data.get("assigned_at"),
             assigned_by=data.get("assigned_by"),
             ever_assigned=bool(data.get("ever_assigned", False)),
             last_assigned_profile_id=data.get("last_assigned_profile_id"),
+            last_assigned_whatsapp_profile_id=data.get("last_assigned_whatsapp_profile_id"),
             last_assigned_user_id=data.get("last_assigned_user_id"),
             last_assigned_org_id=data.get("last_assigned_org_id"),
             massive_account_id=data.get("massive_account_id"),
@@ -334,13 +348,16 @@ class Proxy:
             "device_type": self.device_type,
             "status": self.status,
             "identity_id": self.identity_id,
+            "channel": self.channel,
             "linkedin_profile_id": self.linkedin_profile_id,
+            "whatsapp_profile_id": self.whatsapp_profile_id,
             "assigned_user_id": self.assigned_user_id,
             "assigned_org_id": self.assigned_org_id,
             "assigned_at": self.assigned_at.isoformat() if self.assigned_at else None,
             "assigned_by": self.assigned_by,
             "ever_assigned": self.ever_assigned,
             "last_assigned_profile_id": self.last_assigned_profile_id,
+            "last_assigned_whatsapp_profile_id": self.last_assigned_whatsapp_profile_id,
             "last_assigned_user_id": self.last_assigned_user_id,
             "last_assigned_org_id": self.last_assigned_org_id,
             "massive_account_id": self.massive_account_id,
@@ -405,6 +422,7 @@ def create_proxy(
     region_mode: str = REGION_MODE_TARGETED,
     device_type: str = "common",
     identity_id: Optional[str] = None,
+    channel: str = "linkedin",
     massive_parent_username: Optional[str] = None,
     massive_subuser: Optional[str] = None,
     massive_account_id: Optional[str] = None,
@@ -440,6 +458,7 @@ def create_proxy(
         kind=kind,
         device_type=device_type,
         identity_id=identity_id,
+        channel=channel,
         massive_parent_username=massive_parent_username,
         massive_subuser=massive_subuser,
         massive_account_id=massive_account_id,

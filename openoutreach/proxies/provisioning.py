@@ -75,6 +75,32 @@ def _collection(name: str):
     return get_mongodb_collection(name)
 
 
+def _profile_collection(channel: str):
+    return _collection("whatsapp_profiles" if channel == "whatsapp" else _PROFILES)
+
+
+def _assign_proxy_to_channel(
+    proxy_id: str,
+    profile_id: str,
+    user_id: str,
+    channel: str,
+    *,
+    assigned_by: Optional[str] = None,
+) -> Proxy:
+    from openoutreach.proxies.service import (
+        assign_proxy_to_profile,
+        assign_proxy_to_whatsapp,
+    )
+
+    if channel == "whatsapp":
+        return assign_proxy_to_whatsapp(
+            proxy_id, profile_id, user_id, assigned_by=assigned_by
+        )
+    return assign_proxy_to_profile(
+        proxy_id, profile_id, user_id, assigned_by=assigned_by
+    )
+
+
 def reseller_enabled() -> bool:
     return bool(getattr(settings, "MASSIVE_RESELLER_ENABLED", False))
 
@@ -98,13 +124,16 @@ def _reseller_username_token(value: str, *, limit: int) -> str:
     return cleaned[:limit].strip(".")
 
 
-def build_reseller_username(org_id: Optional[str], profile_id: str) -> str:
+def build_reseller_username(
+    org_id: Optional[str], profile_id: str, channel: str = "linkedin"
+) -> str:
     """Build the unique sub-username using only Reseller-allowed characters."""
     org_token = _reseller_username_token(org_id or "personal", limit=60)
     profile_token = _reseller_username_token(profile_id, limit=80)
     if not profile_token:
         raise ProxyError("A profile id is required for a Massive sub-account")
-    username = f"outreach.{org_token}.li.{profile_token}"
+    channel_token = "wa" if channel == "whatsapp" else "li"
+    username = f"outreach.{org_token}.{channel_token}.{profile_token}"
     if len(username) > 255:
         raise ProxyError("Massive sub-account username exceeds 255 characters")
     return username
@@ -169,6 +198,8 @@ def _account_username_candidates(proxy: Proxy) -> set[str]:
         str(proxy.massive_subuser or "").strip().lower(),
         str(proxy.username or "").strip().lower(),
         str(proxy.massive_account_id or "").strip().lower(),
+        str(proxy.linkedin_profile_id or "").strip().lower(),
+        str(proxy.whatsapp_profile_id or "").strip().lower(),
     }
     parent = str(proxy.massive_parent_username or "").strip().lower()
     if parent and proxy.massive_subuser:
@@ -251,7 +282,12 @@ def _store_snapshot(proxy: Proxy, account: dict[str, Any]) -> None:
                 "account_username": account.get("username") or proxy.massive_subuser,
                 "org_id": proxy.assigned_org_id or proxy.last_assigned_org_id,
                 "profile_id": proxy.linkedin_profile_id
-                or proxy.last_assigned_profile_id,
+                or proxy.last_assigned_profile_id
+                or proxy.whatsapp_profile_id
+                or proxy.last_assigned_whatsapp_profile_id,
+                "channel": proxy.channel,
+                "whatsapp_profile_id": proxy.whatsapp_profile_id
+                or proxy.last_assigned_whatsapp_profile_id,
                 "used_bytes": int(account.get("used_bytes") or 0),
                 "limit_bytes": account.get("limit_bytes"),
                 "limit_reached": bool(account.get("limit_reached")),
@@ -301,6 +337,7 @@ def provision_reseller_proxy(
     city: Optional[str] = None,
     *,
     created_by: Optional[str] = None,
+    channel: str = "linkedin",
 ) -> Proxy:
     """Create (or adopt) a Reseller sub-account, store its proxy, and assign it."""
     config = MassiveResellerConfig.from_settings()
@@ -312,7 +349,7 @@ def provision_reseller_proxy(
     )
     # Idempotency: a profile may already have a proxy (for example a retried
     # request). Never create a second sub-account or disable the active one.
-    profiles_collection = _collection(_PROFILES)
+    profiles_collection = _profile_collection(channel)
     if profiles_collection is not None:
         profile_doc = profiles_collection.find_one(
             {"_id": profile_id}, {"proxy_id": 1, "proxy_server": 1}
@@ -323,7 +360,7 @@ def provision_reseller_proxy(
             if existing_proxy is not None:
                 return existing_proxy
             raise ProxyError("This profile already has a proxy")
-    subuser = build_reseller_username(org_id, profile_id)
+    subuser = build_reseller_username(org_id, profile_id, channel)
     password = generate_subaccount_password()
     limit_bytes = int(
         getattr(settings, "MASSIVE_RESELLER_DEFAULT_LIMIT_BYTES", 5_000_000_000)
@@ -368,15 +405,19 @@ def provision_reseller_proxy(
         if existing_doc:
             existing_proxy = Proxy.from_dict(existing_doc)
             try:
-                return assign_proxy_to_profile(
+                return _assign_proxy_to_channel(
                     existing_proxy._id,
                     profile_id,
                     user_id,
+                    channel,
                     assigned_by=created_by,
                 )
             except ProxyError:
                 # Already assigned to this same profile is fine.
-                if existing_proxy.linkedin_profile_id == profile_id:
+                if (
+                    existing_proxy.linkedin_profile_id == profile_id
+                    or existing_proxy.whatsapp_profile_id == profile_id
+                ):
                     return existing_proxy
                 raise
 
@@ -401,6 +442,7 @@ def provision_reseller_proxy(
         provider=PROVIDER_MASSIVE_RESIDENTIAL,
         kind=KIND_RESIDENTIAL,
         label=f"massive-{_safe_token(profile_id, limit=8)}",
+        channel="whatsapp" if channel == "whatsapp" else "linkedin",
         massive_parent_username=config.parent_username,
         massive_subuser=subuser,
         massive_account_id=str(account_id),
@@ -413,8 +455,12 @@ def provision_reseller_proxy(
         created_by=created_by,
     )
     try:
-        assigned = assign_proxy_to_profile(
-            proxy._id, profile_id, user_id, assigned_by=created_by
+        assigned = _assign_proxy_to_channel(
+            proxy._id,
+            profile_id,
+            user_id,
+            channel,
+            assigned_by=created_by,
         )
     except ProxyError:
         # Do not leave a paid sub-account enabled for an unassigned proxy.
@@ -474,6 +520,7 @@ def provision_managed_proxy(
     city: Optional[str] = None,
     *,
     created_by: Optional[str] = None,
+    channel: str = "linkedin",
 ) -> Proxy:
     """Provision a managed proxy: Reseller first, Phase 1 fallback second."""
     validate_city_pool(country, city)
@@ -487,11 +534,13 @@ def provision_managed_proxy(
                 subdivision,
                 city,
                 created_by=created_by,
+                channel=channel,
             )
         except ProxyError as exc:
             logger.warning(
-                "massive_reseller_provision_failed profile_id=%s status=%s code=%s exception_type=%s",
+                "massive_reseller_provision_failed profile_id=%s channel=%s status=%s code=%s exception_type=%s",
                 profile_id,
+                channel,
                 getattr(exc, "status_code", None),
                 getattr(exc, "code", None),
                 type(exc).__name__,
@@ -502,6 +551,7 @@ def provision_managed_proxy(
         country,
         subdivision,
         city,
+        channel=channel,
     )
 
 
@@ -568,6 +618,8 @@ def enable_massive_proxy(
 
 def _proxy_shared_with_cloud_whatsapp(proxy: Proxy) -> bool:
     """A Cloud Duo proxy must outlive a LinkedIn-only profile deletion."""
+    if proxy.whatsapp_profile_id:
+        return True
     collection = _collection("whatsapp_profiles")
     if collection is None:
         return False
@@ -583,11 +635,41 @@ def _proxy_shared_with_cloud_whatsapp(proxy: Proxy) -> bool:
         return False
 
 
-def _proxy_for_profile(profile_id: str) -> Optional[Proxy]:
+def _proxy_shared_with_linkedin(proxy: Proxy) -> bool:
+    """A shared Duo proxy must outlive a WhatsApp-only deletion."""
+    if proxy.linkedin_profile_id:
+        return True
+    collection = _collection(_PROFILES)
+    if collection is None:
+        return False
+    try:
+        return (
+            collection.find_one(
+                {"proxy_id": proxy._id, "execution_mode": "cloud"},
+                {"_id": 1},
+            )
+            is not None
+        )
+    except Exception:
+        return False
+
+
+def _proxy_for_profile(profile_id: str, channel: str = "linkedin") -> Optional[Proxy]:
     collection = _collection(_PROXIES)
     if collection is None:
         return None
-    doc = collection.find_one({"linkedin_profile_id": profile_id})
+    field = "whatsapp_profile_id" if channel == "whatsapp" else "linkedin_profile_id"
+    doc = collection.find_one({field: profile_id})
+    if doc:
+        return Proxy.from_dict(doc)
+    # A paused/unassigned profile keeps the proxy reservation through the
+    # last-assigned field.
+    last_field = (
+        "last_assigned_whatsapp_profile_id"
+        if channel == "whatsapp"
+        else "last_assigned_profile_id"
+    )
+    doc = collection.find_one({last_field: profile_id})
     return Proxy.from_dict(doc) if doc else None
 
 
@@ -596,19 +678,25 @@ def disable_massive_for_profile(
     *,
     actor_user_id: Optional[str] = None,
     reason: str = "seat_cancelled",
+    channel: str = "linkedin",
 ) -> bool:
     """Best-effort seat cancellation hook. Never raises to the caller."""
     try:
-        proxy = _proxy_for_profile(profile_id)
+        proxy = _proxy_for_profile(profile_id, channel)
         if proxy is None or proxy.massive_status == MASSIVE_STATUS_RETIRED:
+            return False
+        if channel == "whatsapp" and proxy.linkedin_profile_id:
+            # A shared-IP Duo uses the LinkedIn sub-account. Pausing the
+            # WhatsApp channel alone must not disable the LinkedIn proxy.
             return False
         return disable_massive_proxy(
             proxy, reason=reason, actor_user_id=actor_user_id
         )
     except Exception as exc:  # pragma: no cover - lifecycle must not block pause
         logger.warning(
-            "massive_disable_for_profile_failed profile_id=%s exception_type=%s",
+            "massive_disable_for_profile_failed profile_id=%s channel=%s exception_type=%s",
             profile_id,
+            channel,
             type(exc).__name__,
         )
         return False
@@ -619,32 +707,46 @@ def enable_massive_for_profile(
     *,
     actor_user_id: Optional[str] = None,
     reason: str = "seat_assigned",
+    channel: str = "linkedin",
 ) -> bool:
     """Re-enable only a seat-disabled sub-account for the same profile."""
     try:
-        proxy = _proxy_for_profile(profile_id)
+        proxy = _proxy_for_profile(profile_id, channel)
         if proxy is None or proxy.massive_status != MASSIVE_STATUS_DISABLED:
+            return False
+        if channel == "whatsapp" and proxy.linkedin_profile_id:
+            # Shared-IP Duo lifecycle follows the LinkedIn seat.
             return False
         return enable_massive_proxy(
             proxy, actor_user_id=actor_user_id, reason=reason
         )
     except Exception as exc:  # pragma: no cover
         logger.warning(
-            "massive_enable_for_profile_failed profile_id=%s exception_type=%s",
+            "massive_enable_for_profile_failed profile_id=%s channel=%s exception_type=%s",
             profile_id,
+            channel,
             type(exc).__name__,
         )
         return False
 
 
 def retire_massive_for_profile(
-    profile_id: str, *, actor_user_id: Optional[str] = None
+    profile_id: str,
+    *,
+    actor_user_id: Optional[str] = None,
+    channel: str = "linkedin",
 ) -> bool:
     try:
-        proxy = _proxy_for_profile(profile_id)
+        proxy = _proxy_for_profile(profile_id, channel)
         if proxy is None:
             return False
-        if _proxy_shared_with_cloud_whatsapp(proxy):
+        if channel == "whatsapp" and _proxy_shared_with_linkedin(proxy):
+            logger.warning(
+                "Skipping Massive retirement for proxy %s; shared with a LinkedIn profile",
+                proxy._id,
+            )
+            return False
+        if channel != "whatsapp" and _proxy_shared_with_cloud_whatsapp(proxy):
             logger.warning(
                 "Skipping Massive retirement for proxy %s; shared with a cloud WhatsApp profile",
                 proxy._id,
@@ -653,8 +755,9 @@ def retire_massive_for_profile(
         return retire_massive_proxy(proxy, actor_user_id=actor_user_id)
     except Exception as exc:  # pragma: no cover
         logger.warning(
-            "massive_retire_for_profile_failed profile_id=%s exception_type=%s",
+            "massive_retire_for_profile_failed profile_id=%s channel=%s exception_type=%s",
             profile_id,
+            channel,
             type(exc).__name__,
         )
         return False
@@ -706,11 +809,20 @@ def rotate_massive_password(
     proxy.massive_last_error = None
     proxy.massive_last_sync_at = _now()
     proxy.save()
-    profiles = _collection(_PROFILES)
-    if profiles is not None and proxy.linkedin_profile_id:
-        profiles.update_one(
-            {"_id": proxy.linkedin_profile_id, "proxy_id": proxy._id},
-            {"$set": {"proxy_password_encrypted": encrypted, "updated_at": _now()}},
+    if proxy.linkedin_profile_id:
+        profiles = _collection(_PROFILES)
+        if profiles is not None:
+            profiles.update_one(
+                {"_id": proxy.linkedin_profile_id, "proxy_id": proxy._id},
+                {"$set": {"proxy_password_encrypted": encrypted, "updated_at": _now()}},
+            )
+    if proxy.whatsapp_profile_id:
+        # The WhatsApp browser reads the password from the proxy record, so
+        # there is no separate profile copy to update.
+        logger.info(
+            "massive_rotate_whatsapp_proxy proxy_id=%s profile_id=%s",
+            proxy._id,
+            proxy.whatsapp_profile_id,
         )
     _audit_proxy(
         "proxy.massive_rotate",
@@ -859,11 +971,13 @@ def sync_massive_reporting(
     total_bytes = 0
     for row in rows:
         label = str(row.get("subaccount") or "").strip()
+        label_base = label.split("-country-", 1)[0].split("-session-", 1)[0]
         proxy = next(
             (
                 candidate
                 for candidate in all_proxies
                 if label.lower() in _account_username_candidates(candidate)
+                or label_base.lower() in _account_username_candidates(candidate)
                 or label.lower().split("_")[-1]
                 in _account_username_candidates(candidate)
             ),
@@ -880,7 +994,7 @@ def sync_massive_reporting(
             bytes_used=int(row.get("bytes") or 0),
             period_start=str(row.get("period_start") or from_date),
             period_end=str(row.get("period_end") or to_date),
-            channel="linkedin",
+            channel=proxy.channel or "linkedin",
         )
         matched += 1
         total_bytes += int(row.get("bytes") or 0)
@@ -1078,11 +1192,19 @@ def massive_alerts() -> list[dict[str, Any]]:
             reasons.append("repeated_failures")
         if proxy.massive_status == MASSIVE_STATUS_BUDGET_DISABLED:
             reasons.append("budget_disabled")
+        if (
+            proxy.whatsapp_profile_id
+            and proxy.massive_status
+            in {MASSIVE_STATUS_DISABLED, MASSIVE_STATUS_ERROR}
+        ):
+            reasons.append("whatsapp_proxy_unavailable")
         if reasons:
             alerts.append(
                 {
                     "proxy_id": proxy._id,
                     "profile_id": proxy.linkedin_profile_id,
+                    "whatsapp_profile_id": proxy.whatsapp_profile_id,
+                    "channel": proxy.channel,
                     "org_id": proxy.assigned_org_id,
                     "massive_account_id": proxy.massive_account_id,
                     "massive_subuser": proxy.massive_subuser,
@@ -1100,14 +1222,21 @@ def list_massive_subaccounts() -> list[dict[str, Any]]:
     if proxies_collection is None:
         return []
     profiles_collection = _collection(_PROFILES)
+    whatsapp_collection = _collection("whatsapp_profiles")
     rows: list[dict[str, Any]] = []
     for doc in proxies_collection.find({"massive_account_id": {"$ne": None}}):
         proxy = Proxy.from_dict(doc)
         profile = None
+        whatsapp_profile = None
         if profiles_collection is not None and proxy.linkedin_profile_id:
             profile = profiles_collection.find_one(
                 {"_id": proxy.linkedin_profile_id},
                 {"linkedin_username": 1, "execution_mode": 1, "assigned_user_id": 1},
+            )
+        if whatsapp_collection is not None and proxy.whatsapp_profile_id:
+            whatsapp_profile = whatsapp_collection.find_one(
+                {"_id": proxy.whatsapp_profile_id},
+                {"phone_number": 1, "display_name": 1, "execution_mode": 1, "assigned_user_id": 1},
             )
         rows.append(
             {
@@ -1115,8 +1244,12 @@ def list_massive_subaccounts() -> list[dict[str, Any]]:
                 "massive_account_id": proxy.massive_account_id,
                 "massive_subuser": proxy.massive_subuser,
                 "massive_status": proxy.massive_status,
+                "channel": proxy.channel,
                 "profile_id": proxy.linkedin_profile_id,
                 "linkedin_username": (profile or {}).get("linkedin_username"),
+                "whatsapp_profile_id": proxy.whatsapp_profile_id,
+                "whatsapp_number": (whatsapp_profile or {}).get("phone_number")
+                or (whatsapp_profile or {}).get("display_name"),
                 "org_id": proxy.assigned_org_id,
                 "assigned_user_id": proxy.assigned_user_id,
                 "used_bytes": proxy.massive_used_bytes or proxy.used_bytes,
@@ -1176,6 +1309,8 @@ def massive_admin_status() -> dict[str, Any]:
     from openoutreach.proxies.massive_client import massive_status
 
     base = massive_status()
+    from openoutreach.billing.cloud_seats import cloud_seat_alerts
+
     return {
         **base,
         "reseller": reseller_status(),
@@ -1183,6 +1318,7 @@ def massive_admin_status() -> dict[str, Any]:
             "enabled": bool(getattr(settings, "MASSIVE_POOL_STATS_ENABLED", False)),
         },
         "alerts": massive_alerts(),
+        "seat_alerts": cloud_seat_alerts(),
     }
 
 

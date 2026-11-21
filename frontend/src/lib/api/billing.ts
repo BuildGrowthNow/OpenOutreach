@@ -23,7 +23,10 @@ export interface BillingStatus {
   campaign_limit: number | null;
   cloud_profiles: number;
   cloud_seat_limit: number;
+  cloud_seats_used?: number;
   cloud_seats_enabled: boolean;
+  email_slot_limit?: number;
+  email_slots_used?: number;
   managed_proxies_enabled?: boolean;
   whatsapp_cloud_proxy_enabled?: boolean;
   user_status: string;

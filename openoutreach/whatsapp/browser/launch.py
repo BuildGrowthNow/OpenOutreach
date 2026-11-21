@@ -73,6 +73,17 @@ def _whatsapp_proxy_config(profile: WhatsAppProfile) -> dict[str, str] | None:
     if proxy.massive_status in _BLOCKED_MASSIVE_STATUSES:
         raise WhatsAppCloudProxyError("Cloud WhatsApp proxy is not active")
     if (
+        proxy.whatsapp_profile_id
+        and str(proxy.whatsapp_profile_id) != str(profile._id)
+    ):
+        raise WhatsAppCloudProxyError(
+            "Cloud WhatsApp proxy is assigned to another number"
+        )
+    if not proxy.whatsapp_profile_id and not proxy.linkedin_profile_id:
+        raise WhatsAppCloudProxyError(
+            "Cloud WhatsApp proxy is not bound to a browser account"
+        )
+    if (
         proxy.assigned_org_id
         and profile.org_id
         and str(proxy.assigned_org_id) != str(profile.org_id)

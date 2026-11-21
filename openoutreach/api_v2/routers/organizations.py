@@ -158,25 +158,37 @@ class MemberRoleRequest(BaseModel):
 class SeatAssignRequest(BaseModel):
     profile_id: str = Field(min_length=1, max_length=128)
     assigned_user_id: str = Field(min_length=1, max_length=128)
+    channel: str = Field(default="linkedin")
 
 
 class SeatProfileRequest(BaseModel):
     profile_id: str = Field(min_length=1, max_length=128)
+    channel: str = Field(default="linkedin")
 
 
 class SeatSummaryResponse(BaseModel):
     cloud_seat_limit: Optional[int]
+    cloud_seats_used: int = 0
+    cloud_seats_remaining: int = 0
     cloud_profiles: int
     credentialed_profiles: int
     assigned_profiles: int
     unassigned_profiles: int
+    whatsapp_cloud_profiles: int = 0
+    whatsapp_assigned_profiles: int = 0
+    whatsapp_only_seats: int = 0
+    duo_seats: int = 0
+    linkedin_seats: int = 0
     members: int
 
 
 class SeatProfileResponse(BaseModel):
     profile_id: str
     linkedin_username: Optional[str] = None
+    phone_number: Optional[str] = None
     assigned_user_id: Optional[str] = None
+    channel: str = "linkedin"
+    cloud_mode: Optional[str] = None
     execution_mode: Optional[str] = None
     active: bool = False
     proxy_assigned: bool = False
@@ -254,11 +266,14 @@ def _member_response(member: OrganizationMember, users: dict[str, dict]) -> Memb
     )
 
 
-def _profile_response(profile: dict) -> SeatProfileResponse:
+def _profile_response(profile: dict, *, channel: str = "linkedin") -> SeatProfileResponse:
     return SeatProfileResponse(
         profile_id=str(profile.get("_id")),
         linkedin_username=profile.get("linkedin_username"),
+        phone_number=profile.get("phone_number"),
         assigned_user_id=profile.get("assigned_user_id"),
+        channel=channel,
+        cloud_mode=profile.get("cloud_mode"),
         execution_mode=profile.get("execution_mode"),
         active=bool(profile.get("active", profile.get("is_active", False))),
         proxy_assigned=bool(
@@ -534,10 +549,16 @@ async def assign(
     user = _load_user(user_id)
     org = _load_org(org_id, user)
     try:
-        profile = assign_seat(org, user_id, body.profile_id, body.assigned_user_id)
+        profile = assign_seat(
+            org,
+            user_id,
+            body.profile_id,
+            body.assigned_user_id,
+            channel=body.channel,
+        )
     except OrganizationError as exc:
         raise _org_error(exc)
-    return _profile_response(profile)
+    return _profile_response(profile, channel=body.channel)
 
 
 @router.post("/{org_id}/seats/assign-desktop", response_model=SeatProfileResponse)
@@ -568,10 +589,12 @@ async def unassign(
     user = _load_user(user_id)
     org = _load_org(org_id, user)
     try:
-        profile = unassign_seat(org, user_id, body.profile_id)
+        profile = unassign_seat(
+            org, user_id, body.profile_id, channel=body.channel
+        )
     except OrganizationError as exc:
         raise _org_error(exc)
-    return _profile_response(profile)
+    return _profile_response(profile, channel=body.channel)
 
 
 @router.post("/{org_id}/seats/remove", response_model=SeatProfileResponse)
@@ -584,10 +607,12 @@ async def remove(
     user = _load_user(user_id)
     org = _load_org(org_id, user)
     try:
-        profile = remove_seat(org, user_id, body.profile_id)
+        profile = remove_seat(
+            org, user_id, body.profile_id, channel=body.channel
+        )
     except OrganizationError as exc:
         raise _org_error(exc)
-    return _profile_response(profile)
+    return _profile_response(profile, channel=body.channel)
 
 
 @router.get("/{org_id}/profiles", response_model=list[SeatProfileResponse])
@@ -615,7 +640,30 @@ async def list_org_profiles(org_id: str, user_id: str = Depends(get_current_user
             "proxy_mode": 1,
         },
     )
-    return [_profile_response(doc) for doc in docs]
+    response = [_profile_response(doc, channel="linkedin") for doc in docs]
+
+    whatsapp = get_mongodb_collection("whatsapp_profiles")
+    if whatsapp is not None:
+        wa_query: dict = {"org_id": org._id, "execution_mode": "cloud"}
+        if not can_view_all_profiles(ctx.role):
+            wa_query["assigned_user_id"] = user._id
+        for doc in whatsapp.find(
+            wa_query,
+            {
+                "_id": 1,
+                "phone_number": 1,
+                "display_name": 1,
+                "cloud_mode": 1,
+                "execution_mode": 1,
+                "assigned_user_id": 1,
+                "active": 1,
+                "is_active": 1,
+                "proxy_id": 1,
+                "proxy_mode": 1,
+            },
+        ):
+            response.append(_profile_response(doc, channel="whatsapp"))
+    return response
 
 
 @router.get("/{org_id}/audit", response_model=list[dict])

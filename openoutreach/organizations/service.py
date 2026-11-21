@@ -12,6 +12,11 @@ import secrets
 from datetime import timedelta
 from typing import Any, Optional
 
+from openoutreach.billing.cloud_seats import (
+    cloud_seat_key_for_profile,
+    cloud_seat_summary_for_org,
+    cloud_seat_units_for_org,
+)
 from openoutreach.billing.plans import (
     effective_cloud_seat_limit,
     effective_linkedin_account_limit,
@@ -45,6 +50,7 @@ from openoutreach.organizations.permissions import (
 logger = logging.getLogger(__name__)
 
 _PROFILES_COLLECTION = "linkedin_profiles"
+_WHATSAPP_COLLECTION = "whatsapp_profiles"
 _CAMPAIGNS_COLLECTION = "campaigns"
 
 
@@ -506,9 +512,13 @@ def change_member_role(
     return target
 
 
-def _pause_profile_for_seat_removal(profile_id: str) -> bool:
+def _pause_profile_for_seat_removal(
+    profile_id: str, *, channel: str = "linkedin"
+) -> bool:
     """Pause a profile and clear its assignee while retaining its proxy."""
-    collection = get_mongodb_collection(_PROFILES_COLLECTION)
+    collection = get_mongodb_collection(
+        _WHATSAPP_COLLECTION if channel == "whatsapp" else _PROFILES_COLLECTION
+    )
     if collection is None:
         return False
     result = collection.update_one(
@@ -518,7 +528,11 @@ def _pause_profile_for_seat_removal(profile_id: str) -> bool:
                 "assigned_user_id": None,
                 "active": False,
                 "is_active": False,
-                "daemon_status": "seat_removed",
+                **(
+                    {"daemon_status": "seat_removed"}
+                    if channel != "whatsapp"
+                    else {}
+                ),
                 "updated_at": utc_now(),
             }
         },
@@ -528,7 +542,9 @@ def _pause_profile_for_seat_removal(profile_id: str) -> bool:
         # profile so the same identity can resume later.
         from openoutreach.proxies.provisioning import disable_massive_for_profile
 
-        disable_massive_for_profile(profile_id, reason="member_removed")
+        disable_massive_for_profile(
+            profile_id, reason="member_removed", channel=channel
+        )
     return bool(getattr(result, "modified_count", 0))
 
 
@@ -595,6 +611,37 @@ def remove_member(
     # Revoke the member's desktop devices and clear channel assignments. The
     # data stays in the workspace for owner/admin reassignment; the removed
     # member falls back to their personal workspace.
+    whatsapp_paused = 0
+    whatsapp_profiles = get_mongodb_collection(_WHATSAPP_COLLECTION)
+    if whatsapp_profiles is not None:
+        assigned_whatsapp = list(
+            whatsapp_profiles.find(
+                {
+                    "org_id": org._id,
+                    "assigned_user_id": target_user_id,
+                    "execution_mode": "cloud",
+                },
+                {"_id": 1, "proxy_id": 1, "cloud_mode": 1},
+            )
+        )
+        for profile in assigned_whatsapp:
+            profile_id = str(profile.get("_id"))
+            if _pause_profile_for_seat_removal(profile_id, channel="whatsapp"):
+                whatsapp_paused += 1
+                audit.record_org_audit(
+                    audit.EVENT_SEAT_REMOVE,
+                    org_id=org._id,
+                    actor_user_id=actor_user_id,
+                    target_user_id=target_user_id,
+                    target_email=target.email,
+                    metadata={
+                        "profile_id": profile_id,
+                        "channel": "whatsapp",
+                        "reason": "member_removed",
+                        "proxy_retained": bool(profile.get("proxy_id")),
+                    },
+                )
+
     devices = get_mongodb_collection("daemon_devices")
     families = get_mongodb_collection("daemon_refresh_families")
     if devices is not None:
@@ -646,7 +693,7 @@ def remove_member(
         actor_user_id=actor_user_id,
         target_user_id=target_user_id,
         target_email=target.email,
-        metadata={"paused_profiles": paused},
+        metadata={"paused_profiles": paused, "paused_whatsapp_profiles": whatsapp_paused},
     )
     return paused
 
@@ -689,11 +736,37 @@ def _org_profile(org: Organization, profile_id: str) -> Optional[dict[str, Any]]
     return None
 
 
+def _org_whatsapp_profile(org: Organization, profile_id: str) -> Optional[dict[str, Any]]:
+    collection = get_mongodb_collection(_WHATSAPP_COLLECTION)
+    if collection is None:
+        raise OrganizationError("WhatsApp profile storage is unavailable")
+    doc = collection.find_one({"_id": profile_id, "org_id": org._id})
+    if doc:
+        return doc
+    legacy = collection.find_one({"_id": profile_id, "user_id": org.owner_user_id})
+    if legacy and not legacy.get("org_id"):
+        collection.update_one(
+            {
+                "_id": profile_id,
+                "$or": [
+                    {"org_id": {"$exists": False}},
+                    {"org_id": None},
+                ],
+            },
+            {"$set": {"org_id": org._id, "updated_at": utc_now()}},
+        )
+        legacy["org_id"] = org._id
+        return legacy
+    return None
+
+
 def assign_seat(
     org: Organization,
     actor_user_id: str,
     profile_id: str,
     assigned_user_id: str,
+    *,
+    channel: str = "linkedin",
 ) -> dict[str, Any]:
     actor = _require_actor(org, actor_user_id)
     if not can_assign_seats(actor.role):
@@ -701,6 +774,89 @@ def assign_seat(
     target = get_membership(org._id, assigned_user_id)
     if not target:
         raise MemberNotFoundError("Assigned member not found in this workspace")
+
+    if channel == "whatsapp":
+        profile = _org_whatsapp_profile(org, profile_id)
+        if not profile:
+            raise SeatAssignmentError("WhatsApp profile not found in this workspace")
+        if profile.get("execution_mode") != "cloud":
+            raise SeatAssignmentError("Only cloud WhatsApp profiles use cloud seats")
+        if profile.get("assigned_user_id") == assigned_user_id:
+            return profile
+        proxy_id = profile.get("proxy_id")
+        if proxy_id:
+            from openoutreach.proxies.models import Proxy
+
+            proxy = Proxy.get(proxy_id)
+            if proxy is not None and proxy.linkedin_profile_id:
+                linkedin = get_mongodb_collection(_PROFILES_COLLECTION)
+                linkedin_doc = (
+                    linkedin.find_one({"_id": proxy.linkedin_profile_id})
+                    if linkedin is not None
+                    else None
+                )
+                if not linkedin_doc or linkedin_doc.get("active") is False:
+                    raise SeatAssignmentError(
+                        "Assign the shared LinkedIn seat first; this WhatsApp "
+                        "number uses the LinkedIn proxy"
+                    )
+        collection = get_mongodb_collection(_WHATSAPP_COLLECTION)
+        if collection is None:
+            raise OrganizationError("WhatsApp profile storage is unavailable")
+        seat_limit = org_seat_limit(org)
+        units = cloud_seat_units_for_org(org._id, org.owner_user_id)
+        current_key = cloud_seat_key_for_profile(
+            profile_id,
+            "whatsapp",
+            org_id=org._id,
+            owner_user_id=org.owner_user_id,
+        )
+        other_units = [unit for unit in units if str(unit["key"]) != current_key]
+        if len(other_units) >= seat_limit:
+            raise SeatLimitError(
+                f"Cloud seat limit reached ({len(other_units)}/{seat_limit})"
+            )
+        updates: dict[str, Any] = {
+            "assigned_user_id": assigned_user_id,
+            "org_id": org._id,
+            "active": True,
+            "is_active": True,
+            "updated_at": utc_now(),
+        }
+        collection.update_one({"_id": profile_id, "org_id": org._id}, {"$set": updates})
+        profile.update(updates)
+        from openoutreach.proxies.provisioning import enable_massive_for_profile
+
+        enable_massive_for_profile(
+            profile_id, actor_user_id=actor_user_id, channel="whatsapp"
+        )
+        proxy_id = profile.get("proxy_id")
+        if proxy_id:
+            proxies = get_mongodb_collection("proxies")
+            if proxies is not None:
+                proxies.update_one(
+                    {"_id": proxy_id, "whatsapp_profile_id": profile_id},
+                    {
+                        "$set": {
+                            "assigned_user_id": assigned_user_id,
+                            "assigned_org_id": org._id,
+                            "updated_at": utc_now(),
+                        }
+                    },
+                )
+        audit.record_org_audit(
+            audit.EVENT_SEAT_ASSIGN,
+            org_id=org._id,
+            actor_user_id=actor_user_id,
+            target_user_id=assigned_user_id,
+            target_email=target.email,
+            metadata={
+                "profile_id": profile_id,
+                "channel": "whatsapp",
+                "proxy_retained": bool(profile.get("proxy_id")),
+            },
+        )
+        return profile
 
     profile = _org_profile(org, profile_id)
     if not profile:
@@ -714,19 +870,20 @@ def assign_seat(
     if profiles is None:
         raise OrganizationError("LinkedIn profile storage is unavailable")
 
-    # Count every credentialed cloud account in the org, active or paused.
-    credentialed = credentialed_profile_ids_for_org(
-        org._id, execution_mode="cloud"
-    )
-    if credentialed is None:
-        raise OrganizationError("Seat accounting is unavailable")
+    # Count every unified cloud seat in the org, active or paused. A Cloud Duo
+    # WhatsApp number shares this profile's unit and adds no second seat.
     seat_limit = org_seat_limit(org)
-    other_credentialed = {
-        pid for pid in credentialed if pid != profile_id
-    }
-    if len(other_credentialed) >= seat_limit:
+    units = cloud_seat_units_for_org(org._id, org.owner_user_id)
+    current_key = cloud_seat_key_for_profile(
+        profile_id,
+        "linkedin",
+        org_id=org._id,
+        owner_user_id=org.owner_user_id,
+    )
+    other_units = [unit for unit in units if str(unit["key"]) != current_key]
+    if len(other_units) >= seat_limit:
         raise SeatLimitError(
-            f"Cloud seat limit reached ({len(other_credentialed)}/{seat_limit})"
+            f"Cloud seat limit reached ({len(other_units)}/{seat_limit})"
         )
 
     updates: dict[str, Any] = {
@@ -749,9 +906,36 @@ def assign_seat(
 
     enable_massive_for_profile(profile_id, actor_user_id=actor_user_id)
 
+    # A Cloud Duo WhatsApp number belongs to the same identity and follows the
+    # LinkedIn seat assignment. It never consumes a second seat. This covers
+    # both shared-IP (same proxy) and separate-IP (same identity) Duo.
+    whatsapp = get_mongodb_collection(_WHATSAPP_COLLECTION)
+    proxy_id = profile.get("proxy_id")
+    identity = profile.get("identity_id") or profile.get("user_id")
+    wa_clauses: list[dict[str, Any]] = []
+    if proxy_id:
+        wa_clauses.append({"proxy_id": proxy_id})
+    if identity:
+        wa_clauses.append({"identity_id": identity})
+    if whatsapp is not None and wa_clauses:
+        whatsapp.update_many(
+            {
+                "org_id": org._id,
+                "execution_mode": "cloud",
+                "$or": wa_clauses,
+            },
+            {
+                "$set": {
+                    "assigned_user_id": assigned_user_id,
+                    "active": True,
+                    "is_active": True,
+                    "updated_at": utc_now(),
+                }
+            },
+        )
+
     # Keep the proxy's assignment metadata aligned with the seat holder. The
     # proxy itself stays attached to this profile and is never recycled.
-    proxy_id = profile.get("proxy_id")
     if proxy_id:
         proxies = get_mongodb_collection("proxies")
         if proxies is not None:
@@ -781,6 +965,7 @@ def assign_seat(
         target_email=target.email,
         metadata={
             "profile_id": profile_id,
+            "channel": "linkedin",
             "linkedin_username": profile.get("linkedin_username"),
         },
     )
@@ -848,10 +1033,56 @@ def unassign_seat(
     *,
     event: str = audit.EVENT_SEAT_UNASSIGN,
     reason: str = "seat_unassigned",
+    channel: str = "linkedin",
 ) -> dict[str, Any]:
     actor = _require_actor(org, actor_user_id)
     if not can_assign_seats(actor.role):
         raise OrganizationPermissionError("Only owners and admins can unassign seats")
+
+    if channel == "whatsapp":
+        profile = _org_whatsapp_profile(org, profile_id)
+        if not profile:
+            raise SeatAssignmentError("WhatsApp profile not found in this workspace")
+        collection = get_mongodb_collection(_WHATSAPP_COLLECTION)
+        if collection is None:
+            raise OrganizationError("WhatsApp profile storage is unavailable")
+        previous_assignee = profile.get("assigned_user_id")
+        collection.update_one(
+            {"_id": profile_id, "org_id": org._id},
+            {
+                "$set": {
+                    "assigned_user_id": None,
+                    "active": False,
+                    "is_active": False,
+                    "updated_at": utc_now(),
+                }
+            },
+        )
+        audit.record_org_audit(
+            event,
+            org_id=org._id,
+            actor_user_id=actor_user_id,
+            target_user_id=previous_assignee,
+            metadata={
+                "profile_id": profile_id,
+                "channel": "whatsapp",
+                "reason": reason,
+                "proxy_retained": bool(profile.get("proxy_id")),
+            },
+        )
+        from openoutreach.proxies.provisioning import disable_massive_for_profile
+
+        disable_massive_for_profile(
+            profile_id,
+            actor_user_id=actor_user_id,
+            reason=reason,
+            channel="whatsapp",
+        )
+        profile["assigned_user_id"] = None
+        profile["active"] = False
+        profile["is_active"] = False
+        return profile
+
     profile = _org_profile(org, profile_id)
     if not profile:
         raise SeatAssignmentError("LinkedIn profile not found in this workspace")
@@ -872,6 +1103,33 @@ def unassign_seat(
             }
         },
     )
+    # A shared-IP or separate-IP Cloud Duo pauses with its LinkedIn seat; the
+    # WhatsApp number keeps the same proxy so it can resume when the seat
+    # returns.
+    whatsapp = get_mongodb_collection(_WHATSAPP_COLLECTION)
+    proxy_id = profile.get("proxy_id")
+    identity = profile.get("identity_id") or profile.get("user_id")
+    wa_clauses: list[dict[str, Any]] = []
+    if proxy_id:
+        wa_clauses.append({"proxy_id": proxy_id})
+    if identity:
+        wa_clauses.append({"identity_id": identity})
+    if whatsapp is not None and wa_clauses:
+        whatsapp.update_many(
+            {
+                "org_id": org._id,
+                "execution_mode": "cloud",
+                "$or": wa_clauses,
+            },
+            {
+                "$set": {
+                    "assigned_user_id": None,
+                    "active": False,
+                    "is_active": False,
+                    "updated_at": utc_now(),
+                }
+            },
+        )
     audit.record_org_audit(
         event,
         org_id=org._id,
@@ -879,6 +1137,7 @@ def unassign_seat(
         target_user_id=previous_assignee,
         metadata={
             "profile_id": profile_id,
+            "channel": "linkedin",
             "reason": reason,
             # The proxy remains assigned by design; only profile deletion
             # retires it.
@@ -897,7 +1156,11 @@ def unassign_seat(
 
 
 def remove_seat(
-    org: Organization, actor_user_id: str, profile_id: str
+    org: Organization,
+    actor_user_id: str,
+    profile_id: str,
+    *,
+    channel: str = "linkedin",
 ) -> dict[str, Any]:
     return unassign_seat(
         org,
@@ -905,11 +1168,13 @@ def remove_seat(
         profile_id,
         event=audit.EVENT_SEAT_REMOVE,
         reason="seat_removed",
+        channel=channel,
     )
 
 
 def seat_summary(org: Organization) -> dict[str, Any]:
     profiles = get_mongodb_collection(_PROFILES_COLLECTION)
+    whatsapp = get_mongodb_collection(_WHATSAPP_COLLECTION)
     org_profiles: list[dict[str, Any]] = []
     if profiles is not None:
         org_profiles = list(
@@ -927,12 +1192,27 @@ def seat_summary(org: Organization) -> dict[str, Any]:
                 },
             )
         )
-    # Cloud seats count credentialed cloud accounts, active or paused. Desktop
-    # profiles have their own included seats and must not inflate this meter.
-    credentialed_cloud = (
-        credentialed_profile_ids_for_org(org._id, execution_mode="cloud") or set()
+    whatsapp_profiles: list[dict[str, Any]] = []
+    if whatsapp is not None:
+        whatsapp_profiles = list(
+            whatsapp.find(
+                {"org_id": org._id, "execution_mode": "cloud"},
+                {
+                    "_id": 1,
+                    "phone_number": 1,
+                    "display_name": 1,
+                    "cloud_mode": 1,
+                    "assigned_user_id": 1,
+                    "active": 1,
+                    "is_active": 1,
+                    "proxy_id": 1,
+                },
+            )
+        )
+    seat_limit = org_seat_limit(org)
+    summary = cloud_seat_summary_for_org(
+        org._id, org.owner_user_id, limit=seat_limit
     )
-    credentialed_all = credentialed_profile_ids_for_org(org._id) or set()
     cloud_profiles = [
         profile
         for profile in org_profiles
@@ -940,13 +1220,25 @@ def seat_summary(org: Organization) -> dict[str, Any]:
     ]
     assigned = [p for p in cloud_profiles if p.get("assigned_user_id")]
     unassigned = [p for p in cloud_profiles if not p.get("assigned_user_id")]
+    assigned_whatsapp = [
+        p for p in whatsapp_profiles if p.get("assigned_user_id")
+    ]
+    credentialed_all = credentialed_profile_ids_for_org(org._id) or set()
+    cloud_ids = {str(profile.get("_id")) for profile in cloud_profiles}
     return {
-        "cloud_seat_limit": org_seat_limit(org),
+        "cloud_seat_limit": seat_limit,
+        "cloud_seats_used": summary["used"],
+        "cloud_seats_remaining": max(0, seat_limit - summary["used"]),
         "cloud_profiles": len(cloud_profiles),
-        "credentialed_profiles": len(credentialed_cloud),
-        "desktop_credentialed_profiles": len(credentialed_all - credentialed_cloud),
+        "credentialed_profiles": summary["used"],
+        "desktop_credentialed_profiles": len(credentialed_all - cloud_ids),
         "assigned_profiles": len(assigned),
         "unassigned_profiles": len(unassigned),
+        "whatsapp_cloud_profiles": len(whatsapp_profiles),
+        "whatsapp_assigned_profiles": len(assigned_whatsapp),
+        "whatsapp_only_seats": summary["whatsapp_only"],
+        "duo_seats": summary["duo"],
+        "linkedin_seats": summary["linkedin"],
         "members": len(list_active_members(org._id)),
     }
 

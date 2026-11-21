@@ -285,13 +285,16 @@ export interface AdminProxy {
   device_type: string
   status: string
   identity_id: string | null
+  channel: string
   linkedin_profile_id: string | null
+  whatsapp_profile_id: string | null
   assigned_user_id: string | null
   assigned_org_id: string | null
   assigned_at: string | null
   assigned_by: string | null
   ever_assigned: boolean
   last_assigned_profile_id: string | null
+  last_assigned_whatsapp_profile_id: string | null
   last_assigned_user_id: string | null
   last_assigned_org_id: string | null
   massive_account_id: string | null
@@ -328,6 +331,8 @@ export interface AdminProxyStats {
   country: Record<string, number>
   cloud_profiles_total: number
   cloud_profiles_without_proxy: number
+  cloud_whatsapp_profiles_total?: number
+  cloud_whatsapp_profiles_without_proxy?: number
 }
 
 export interface AdminProxyImportResponse {
@@ -429,6 +434,8 @@ export interface AdminProxyUsageEntry {
   label?: string | null
   status?: string | null
   provider?: string | null
+  channel?: string | null
+  channels?: Record<string, number>
   bytes: number
   profile_ids?: string[]
   proxy_ids?: string[]
@@ -443,17 +450,32 @@ export interface AdminProxyUsageResponse {
   per_profile: AdminProxyUsageEntry[]
   per_workspace: AdminProxyUsageEntry[]
   per_channel: { channel: string; bytes: number; proxy_ids: string[]; profile_ids: string[] }[]
+  per_workspace_channel?: AdminProxyUsageEntry[]
 }
 
 export interface AdminMassiveAlert {
   proxy_id: string
   profile_id: string | null
+  whatsapp_profile_id?: string | null
+  channel?: string | null
   org_id: string | null
   massive_account_id: string | null
   massive_subuser?: string | null
   status: string
   reasons: string[]
   last_error: string | null
+}
+
+export interface AdminSeatAlert {
+  type: string
+  org_id: string
+  org_name?: string | null
+  owner_user_id: string
+  used: number
+  limit: number
+  linkedin: number
+  whatsapp_only: number
+  duo: number
 }
 
 export interface AdminMassiveStatus {
@@ -476,6 +498,7 @@ export interface AdminMassiveStatus {
   }
   pool_stats?: { enabled: boolean }
   alerts?: AdminMassiveAlert[]
+  seat_alerts?: AdminSeatAlert[]
 }
 
 export interface AdminMassiveSubaccount {
@@ -483,8 +506,11 @@ export interface AdminMassiveSubaccount {
   massive_account_id: string
   massive_subuser: string | null
   massive_status: string
+  channel?: string | null
   profile_id: string | null
   linkedin_username: string | null
+  whatsapp_profile_id?: string | null
+  whatsapp_number?: string | null
   org_id: string | null
   assigned_user_id: string | null
   used_bytes: number
@@ -551,11 +577,26 @@ export interface AdminCloudProfile {
   is_active: boolean
 }
 
+export interface AdminWhatsAppProfile {
+  id: string
+  phone_number: string | null
+  display_name: string | null
+  user_id: string | null
+  email: string
+  identity_id: string | null
+  org_id: string | null
+  cloud_mode: string | null
+  proxy_id: string | null
+  proxy_mode: string
+  is_active: boolean
+}
+
 export interface AdminProxyFilters {
   status?: string
   country?: string
   provider?: string
   kind?: string
+  channel?: string
   assignment?: string
   identity_id?: string
   org_id?: string
@@ -604,6 +645,7 @@ export const adminApi = {
       country: params.country,
       provider: params.provider,
       kind: params.kind,
+      channel: params.channel,
       assignment: params.assignment,
       identity_id: params.identity_id,
       org_id: params.org_id,
@@ -634,6 +676,7 @@ export const adminApi = {
       country: params.country,
       provider: params.provider,
       kind: params.kind,
+      channel: params.channel,
       assignment: params.assignment,
       identity_id: params.identity_id,
       org_id: params.org_id,
@@ -642,6 +685,12 @@ export const adminApi = {
 
   getCloudProfiles: (params: { search?: string; limit?: number }) =>
     get<{ profiles: AdminCloudProfile[] }>('/api/admin/proxies/cloud-profiles', {
+      search: params.search,
+      limit: params.limit?.toString(),
+    }),
+
+  getWhatsAppProfiles: (params: { search?: string; limit?: number }) =>
+    get<{ profiles: AdminWhatsAppProfile[] }>('/api/admin/proxies/whatsapp-profiles', {
       search: params.search,
       limit: params.limit?.toString(),
     }),
@@ -706,10 +755,10 @@ export const adminApi = {
   syncMassiveReseller: (body: { from_date?: string; to_date?: string }) =>
     post<AdminMassiveSyncResponse>('/api/admin/proxies/massive/sync', body),
 
-  provisionMassiveSubaccount: (profileId: string) =>
-    post<{ proxy: AdminProxy; profile_id: string }>(
+  provisionMassiveSubaccount: (profileId: string, channel: 'linkedin' | 'whatsapp' = 'linkedin') =>
+    post<{ proxy: AdminProxy; profile_id: string; channel: string }>(
       '/api/admin/proxies/massive/provision',
-      { profile_id: profileId }
+      { profile_id: profileId, channel }
     ),
 
   disableMassiveSubaccount: (proxyId: string) =>
@@ -763,10 +812,10 @@ export const adminApi = {
   testProxy: (proxyId: string) =>
     post<AdminProxyTestResponse>(`/api/admin/proxies/${proxyId}/test`),
 
-  assignProxy: (proxyId: string, profileId: string) =>
-    post<{ proxy: AdminProxy; profile_id: string }>(
+  assignProxy: (proxyId: string, profileId: string, channel: 'linkedin' | 'whatsapp' = 'linkedin') =>
+    post<{ proxy: AdminProxy; profile_id: string; channel: string }>(
       `/api/admin/proxies/${proxyId}/assign`,
-      { profile_id: profileId }
+      { profile_id: profileId, channel }
     ),
 
   unassignProxy: (proxyId: string, reason?: string) =>
@@ -886,11 +935,16 @@ export interface AdminOrganizationSummary {
   is_personal: boolean
   seat_override: boolean
   cloud_seats: number
+  cloud_seats_used: number
   linkedin_account_limit: number
   whatsapp_account_limit: number
   members_count: number
   credentialed_profiles: number
   assigned_profiles: number
+  whatsapp_cloud_profiles: number
+  whatsapp_only_seats: number
+  duo_seats: number
+  linkedin_seats: number
   stripe_customer_id: string | null
   stripe_subscription_id: string | null
   created_at: string | null
@@ -909,6 +963,10 @@ export interface AdminOrganizationMember {
 export interface AdminOrganizationProfile {
   id: string
   linkedin_username: string | null
+  phone_number?: string | null
+  display_name?: string | null
+  channel?: string | null
+  cloud_mode?: string | null
   execution_mode: string | null
   assigned_user_id: string | null
   active: boolean
@@ -937,6 +995,9 @@ export interface AdminOrganizationProxy {
 export interface AdminOrganizationUsage {
   total_bytes: number
   per_channel: Record<string, number>
+  per_workspace_channel?: Record<string, Record<string, number>>
+  seats?: Record<string, unknown>
+  seat_alerts?: AdminSeatAlert[]
   proxies: number
   limit_reached: number
   access_revoked: number

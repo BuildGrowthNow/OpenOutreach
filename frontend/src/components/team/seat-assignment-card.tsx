@@ -36,9 +36,10 @@ export function SeatAssignmentCard({
     if (!userId) return;
     setBusy(profile.profile_id);
     try {
+      const channel = profile.channel ?? "linkedin";
       const response = desktop
         ? await assignDesktopSeat(orgId, profile.profile_id, userId)
-        : await assignSeat(orgId, profile.profile_id, userId);
+        : await assignSeat(orgId, profile.profile_id, userId, channel);
       if (response.error) {
         window.alert(response.error);
         return;
@@ -60,9 +61,10 @@ export function SeatAssignmentCard({
     }
     setBusy(profile.profile_id);
     try {
+      const channel = profile.channel ?? "linkedin";
       const response = remove
-        ? await removeSeat(orgId, profile.profile_id)
-        : await unassignSeat(orgId, profile.profile_id);
+        ? await removeSeat(orgId, profile.profile_id, channel)
+        : await unassignSeat(orgId, profile.profile_id, channel);
       if (response.error) {
         window.alert(response.error);
         return;
@@ -85,7 +87,8 @@ export function SeatAssignmentCard({
       <CardHeader>
         <CardTitle>Cloud seats</CardTitle>
         <CardDescription>
-          Assign a cloud LinkedIn profile to one member. Removing a seat pauses the profile and keeps its proxy.
+          Assign a cloud LinkedIn or WhatsApp browser account to one member.
+          Removing a seat pauses the channel and keeps its proxy.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -105,8 +108,16 @@ export function SeatAssignmentCard({
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="truncate text-sm font-medium">
-                    {profile.linkedin_username || profile.profile_id}
+                    {profile.linkedin_username ||
+                      profile.phone_number ||
+                      profile.profile_id}
                   </span>
+                  <Badge variant="outline" className="capitalize">
+                    {profile.channel ?? "linkedin"}
+                  </Badge>
+                  {profile.cloud_mode && profile.cloud_mode !== "desktop" && (
+                    <Badge variant="secondary">{profile.cloud_mode}</Badge>
+                  )}
                   <Badge variant={profile.active ? "default" : "secondary"}>
                     {profile.active ? "Active" : "Paused"}
                   </Badge>

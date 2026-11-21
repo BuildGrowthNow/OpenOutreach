@@ -29,6 +29,10 @@ from openoutreach.linkedin.models import LinkedInProfile
 from openoutreach.billing.credential_validator import LinkedInCredentialValidator
 from openoutreach.billing.enforcement import PlanEnforcer
 from openoutreach.billing.seats import release_linkedin_seat, reserve_linkedin_seat
+from openoutreach.billing.cloud_seats import (
+    release_cloud_seat,
+    reserve_cloud_seat,
+)
 from openoutreach.organizations.access import (
     can_access_profile_doc,
     can_delete_profile,
@@ -278,6 +282,7 @@ async def create_credential(
     and logs the creation event.
     """
     seat_reserved = False
+    cloud_seat_reserved = False
     try:
         user = User.get(user_id)
         if not user:
@@ -400,6 +405,19 @@ async def create_credential(
                     detail=seat_error or "LinkedIn account limit reached",
                 )
             seat_reserved = True
+            if execution_mode == "cloud":
+                cloud_limit = resolve_effective_plan(user).cloud_seat_limit
+                cloud_reserved, cloud_error = reserve_cloud_seat(
+                    user_id, cloud_limit
+                )
+                if not cloud_reserved:
+                    release_linkedin_seat(user_id)
+                    seat_reserved = False
+                    raise HTTPException(
+                        status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                        detail=cloud_error or "Cloud seat limit reached",
+                    )
+                cloud_seat_reserved = True
 
         # Create the profile only after the seat is reserved.
         if not profile:
@@ -446,6 +464,7 @@ async def create_credential(
         credential.save()
         # The account now exists; do not release the seat on later failures.
         seat_reserved = False
+        cloud_seat_reserved = False
 
         # Sync login credentials and execution mode to profile.
         # Pre-populate linkedin_username with the email address so the UI shows something
@@ -510,6 +529,9 @@ async def create_credential(
                             )
                 finally:
                     release_linkedin_seat(user_id)
+                    if cloud_seat_reserved:
+                        release_cloud_seat(user_id)
+                        cloud_seat_reserved = False
                 logger.warning("Proxy assignment failed; exception_type=%s", type(exc).__name__)
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
@@ -531,10 +553,14 @@ async def create_credential(
     except HTTPException:
         if seat_reserved:
             release_linkedin_seat(user_id)
+        if cloud_seat_reserved:
+            release_cloud_seat(user_id)
         raise
     except Exception as e:
         if seat_reserved:
             release_linkedin_seat(user_id)
+        if cloud_seat_reserved:
+            release_cloud_seat(user_id)
         logger.error("Failed to create credential; exception_type=%s", type(e).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -728,6 +754,7 @@ async def delete_credential(
     _require_credential_access(credential, user_id)
 
     release_seat = False
+    release_cloud = False
     try:
         # Clear synced fields from the owned profile; deactivate if no credentials remain.
         if credential.linkedin_profile_id:
@@ -772,12 +799,24 @@ async def delete_credential(
                             {"$set": {"is_paused": True, "status": "paused"}},
                         )
                     profiles_col = get_mongodb_collection("linkedin_profiles")
+                    from openoutreach.billing.cloud_seats import (
+                        linkedin_profile_shares_seat_with_whatsapp,
+                    )
+
+                    seat_survives_for_whatsapp = (
+                        linkedin_profile_shares_seat_with_whatsapp(
+                            profile_id_str,
+                            org_id=profile.to_dict().get("org_id"),
+                            owner_user_id=profile.user_id,
+                        )
+                    )
                     if profiles_col is not None:
                         profiles_col.delete_one({"_id": profile_id_str})
                     from openoutreach.proxies.service import retire_proxy_for_profile
 
                     retire_proxy_for_profile(profile_id_str)
                     release_seat = True
+                    release_cloud = not seat_survives_for_whatsapp
 
         # Log deletion
         log_entry = LinkedInCredentialLog(
@@ -793,6 +832,8 @@ async def delete_credential(
         LinkedInCredentials.delete(credential_id)
         if release_seat:
             release_linkedin_seat(user_id)
+        if release_cloud:
+            release_cloud_seat(user_id)
 
         return None
     except HTTPException:

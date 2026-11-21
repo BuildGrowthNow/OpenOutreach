@@ -29,11 +29,14 @@ class WhatsAppProfile:
         assigned_user_id: Optional[str] = None,
         identity_id: Optional[str] = None,
         execution_mode: str = "desktop",
+        cloud_mode: str = "desktop",
         proxy_id: Optional[str] = None,
         proxy_mode: str = "none",
         proxy_region_country: Optional[str] = None,
         proxy_region_subdivision: Optional[str] = None,
         proxy_region_city: Optional[str] = None,
+        active: bool = True,
+        is_active: bool = True,
         phone_number: Optional[str] = None,
         display_name: Optional[str] = None,
         session_data_encrypted: Optional[str] = None,
@@ -49,11 +52,21 @@ class WhatsAppProfile:
         self.assigned_user_id = assigned_user_id or user_id
         self.identity_id = identity_id
         self.execution_mode = execution_mode if execution_mode in {"desktop", "cloud"} else "desktop"
+        allowed_cloud_modes = {"desktop", "duo_shared", "duo_separate", "whatsapp_only"}
+        resolved_cloud_mode = cloud_mode if cloud_mode in allowed_cloud_modes else "desktop"
+        if self.execution_mode == "cloud" and resolved_cloud_mode == "desktop":
+            # Pre-Phase-4-completion cloud rows were the shared-IP Duo slice.
+            resolved_cloud_mode = "duo_shared"
+        if self.execution_mode == "desktop":
+            resolved_cloud_mode = "desktop"
+        self.cloud_mode = resolved_cloud_mode
         self.proxy_id = proxy_id
         self.proxy_mode = proxy_mode
         self.proxy_region_country = proxy_region_country
         self.proxy_region_subdivision = proxy_region_subdivision
         self.proxy_region_city = proxy_region_city
+        self.active = bool(active)
+        self.is_active = bool(is_active)
         self.phone_number = phone_number
         self.display_name = display_name
         self.session_data_encrypted = session_data_encrypted
@@ -108,11 +121,14 @@ class WhatsAppProfile:
             "assigned_user_id": self.assigned_user_id,
             "identity_id": self.identity_id,
             "execution_mode": self.execution_mode,
+            "cloud_mode": self.cloud_mode,
             "proxy_id": self.proxy_id,
             "proxy_mode": self.proxy_mode,
             "proxy_region_country": self.proxy_region_country,
             "proxy_region_subdivision": self.proxy_region_subdivision,
             "proxy_region_city": self.proxy_region_city,
+            "active": self.active,
+            "is_active": self.is_active,
             "status": self.status,
             "created_at": self.created_at,
         }
@@ -139,11 +155,14 @@ class WhatsAppProfile:
             assigned_user_id=data.get("assigned_user_id"),
             identity_id=data.get("identity_id"),
             execution_mode=data.get("execution_mode", "desktop"),
+            cloud_mode=data.get("cloud_mode", "desktop"),
             proxy_id=data.get("proxy_id"),
             proxy_mode=data.get("proxy_mode", "none"),
             proxy_region_country=data.get("proxy_region_country"),
             proxy_region_subdivision=data.get("proxy_region_subdivision"),
             proxy_region_city=data.get("proxy_region_city"),
+            active=bool(data.get("active", True)),
+            is_active=bool(data.get("is_active", True)),
             phone_number=data.get("phone_number"),
             display_name=data.get("display_name"),
             session_data_encrypted=data.get("session_data_encrypted"),

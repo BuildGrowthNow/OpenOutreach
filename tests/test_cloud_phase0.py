@@ -39,6 +39,7 @@ from openoutreach.proxies.service import (
     import_proxies,
     validate_proxy_host,
 )
+from tests.fake_mongo import FakeMongo
 
 
 @pytest.fixture(autouse=True)
@@ -88,7 +89,7 @@ def test_apply_plan_entitlements_raises_cloud_limit():
     assert user.whatsapp_account_limit == 1
 
 
-def test_cloud_execution_respects_purchased_seats():
+def test_cloud_execution_respects_purchased_seats(monkeypatch):
     user = User(
         _id="u1",
         email="user@example.com",
@@ -96,13 +97,30 @@ def test_cloud_execution_respects_purchased_seats():
         cloud_profiles=1,
         subscription_status="active",
     )
+    fake = FakeMongo()
+    monkeypatch.setattr(
+        "openoutreach.billing.cloud_seats.get_mongodb_collection",
+        fake.get_mongodb_collection,
+    )
+    monkeypatch.setattr(
+        "openoutreach.billing.enforcement.get_mongodb_collection",
+        fake.get_mongodb_collection,
+    )
+    for index in range(2):
+        profile_id = f"profile-{index}"
+        fake.collection("linkedin_profiles").insert_one(
+            {
+                "_id": profile_id,
+                "user_id": "u1",
+                "execution_mode": "cloud",
+                "identity_id": "u1",
+            }
+        )
+        fake.collection("linkedin_credentials").insert_one(
+            {"_id": f"cred-{index}", "linkedin_profile_id": profile_id, "user_id": "u1"}
+        )
 
-    with patch("openoutreach.billing.enforcement.get_mongodb_collection") as get_collection:
-        collection = MagicMock()
-        collection.count_documents.return_value = 2
-        get_collection.return_value = collection
-
-        allowed, error = PlanEnforcer.can_use_cloud_execution(user)
+    allowed, error = PlanEnforcer.can_use_cloud_execution(user)
 
     assert allowed is False
     assert "2/2" in error
@@ -273,7 +291,7 @@ def test_intended_plan_roundtrips_on_user():
     assert restored.intended_plan == "cloud"
 
 
-def test_cloud_verification_excludes_the_profile_itself():
+def test_cloud_verification_excludes_the_profile_itself(monkeypatch):
     user = User(
         _id="u1",
         email="user@example.com",
@@ -281,21 +299,34 @@ def test_cloud_verification_excludes_the_profile_itself():
         cloud_profiles=0,
         subscription_status="active",
     )
+    fake = FakeMongo()
+    monkeypatch.setattr(
+        "openoutreach.billing.cloud_seats.get_mongodb_collection",
+        fake.get_mongodb_collection,
+    )
+    monkeypatch.setattr(
+        "openoutreach.billing.enforcement.get_mongodb_collection",
+        fake.get_mongodb_collection,
+    )
+    fake.collection("linkedin_profiles").insert_one(
+        {
+            "_id": "profile-1",
+            "user_id": "u1",
+            "execution_mode": "cloud",
+            "identity_id": "u1",
+        }
+    )
+    fake.collection("linkedin_credentials").insert_one(
+        {"_id": "cred-1", "linkedin_profile_id": "profile-1", "user_id": "u1"}
+    )
 
-    with patch("openoutreach.billing.enforcement.get_mongodb_collection") as get_collection:
-        collection = MagicMock()
-        collection.count_documents.return_value = 0
-        get_collection.return_value = collection
-
-        allowed, error = PlanEnforcer.can_use_cloud_execution(
-            user,
-            exclude_profile_id="profile-1",
-        )
+    allowed, error = PlanEnforcer.can_use_cloud_execution(
+        user,
+        exclude_profile_id="profile-1",
+    )
 
     assert allowed is True
     assert error is None
-    query = collection.count_documents.call_args.args[0]
-    assert query["_id"] == {"$ne": "profile-1"}
 
 
 def test_seat_reduction_pauses_cloud_profiles_before_desktop():

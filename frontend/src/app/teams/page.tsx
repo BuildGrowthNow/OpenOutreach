@@ -125,8 +125,8 @@ export default function TeamsPage() {
                   Desktop seat
                 </div>
                 <p className="mt-3 text-sm leading-relaxed text-zinc-400">
-                  Runs on the member&apos;s computer with the local IP. No proxy,
-                  no managed bandwidth. Included in team plans.
+                  Runs on the member&apos;s computer with the local IP. No proxy or
+                  managed network. Included in team plans.
                 </p>
                 <ul className="mt-5 space-y-2 text-sm text-zinc-300">
                   <li className="flex items-start gap-2">
@@ -156,6 +156,14 @@ export default function TeamsPage() {
                   <li className="flex items-start gap-2">
                     <Check className="mt-0.5 h-4 w-4 shrink-0 text-sky-400" />
                     $299/mo per cloud seat
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Check className="mt-0.5 h-4 w-4 shrink-0 text-sky-400" />
+                    One LinkedIn or WhatsApp browser account
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Check className="mt-0.5 h-4 w-4 shrink-0 text-sky-400" />
+                    Cloud Duo: 1 LinkedIn + 1 WhatsApp, still one seat
                   </li>
                   <li className="flex items-start gap-2">
                     <Check className="mt-0.5 h-4 w-4 shrink-0 text-sky-400" />
@@ -236,12 +244,23 @@ export default function TeamsPage() {
                 </p>
               </div>
               <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-6">
+                <h3 className="font-semibold text-white">What counts as a cloud seat?</h3>
+                <p className="mt-2 text-sm leading-relaxed text-zinc-400">
+                  One browser account (LinkedIn or WhatsApp) plus one BYO email
+                  slot and one managed proxy identity. A Cloud Duo uses one seat
+                  for one LinkedIn account and one WhatsApp number of the same
+                  identity, whether they share a proxy (Shared IP) or use two
+                  proxies (Separate IP). Pausing or unassigning does not release
+                  the seat; deleting the profile does.
+                </p>
+              </div>
+              <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-6">
                 <h3 className="font-semibold text-white">What happens when a member leaves?</h3>
                 <p className="mt-2 text-sm leading-relaxed text-zinc-400">
                   Their assigned profiles pause, their devices are revoked, and
-                  their proxy stays assigned to the same LinkedIn identity. The
-                  owner or an admin can reassign the seat; a used proxy is never
-                  recycled to a different LinkedIn account.
+                  their proxy stays assigned to the same identity. The owner or
+                  an admin can reassign the seat; a used proxy is never recycled
+                  to a different LinkedIn account or WhatsApp number.
                 </p>
               </div>
               <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-6">

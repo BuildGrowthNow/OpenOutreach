@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request
 from pydantic import BaseModel, Field
 
 from openoutreach.api_v2.dependencies_v2 import get_current_user
+from openoutreach.mongodb.connection import get_mongodb_collection
 from openoutreach.mongodb.models_user import User
 from openoutreach.billing.stripe_service import (
     create_or_get_customer,
@@ -93,7 +94,10 @@ class BillingStatusResponse(BaseModel):
     campaign_limit: Optional[int]
     cloud_profiles: int
     cloud_seat_limit: int
+    cloud_seats_used: int = 0
     cloud_seats_enabled: bool
+    email_slot_limit: int = 0
+    email_slots_used: int = 0
     managed_proxies_enabled: bool = True
     whatsapp_cloud_proxy_enabled: bool = False
     user_status: str
@@ -237,6 +241,25 @@ async def billing_status(
     ctx = resolve_org_context(user)
     is_billing_owner = effective.billing_owner_id == user._id
 
+    from openoutreach.billing.cloud_seats import cloud_seat_summary_for_org
+    from openoutreach.billing.email_slots import email_slot_limit
+
+    seat_summary = cloud_seat_summary_for_org(
+        ctx.org_id, ctx.accounting_owner_id, limit=effective.cloud_seat_limit
+    )
+    mailboxes = get_mongodb_collection("mailboxes")
+    email_used = 0
+    if mailboxes is not None:
+        email_used = mailboxes.count_documents(
+            {
+                "$or": [
+                    {"org_id": ctx.org_id},
+                    {"org_id": {"$exists": False}, "user_id": ctx.accounting_owner_id},
+                    {"org_id": None, "user_id": ctx.accounting_owner_id},
+                ]
+            }
+        )
+
     return BillingStatusResponse(
         plan=effective.plan,
         subscription_status=effective.subscription_status,
@@ -254,7 +277,10 @@ async def billing_status(
         campaign_limit=effective.campaign_limit,
         cloud_profiles=effective.cloud_profiles,
         cloud_seat_limit=effective.cloud_seat_limit,
+        cloud_seats_used=seat_summary["used"],
         cloud_seats_enabled=bool(getattr(settings, "CLOUD_SEATS_ENABLED", True)),
+        email_slot_limit=email_slot_limit(effective),
+        email_slots_used=email_used,
         managed_proxies_enabled=bool(
             getattr(settings, "MANAGED_PROXIES_ENABLED", True)
         ),

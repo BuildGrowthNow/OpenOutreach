@@ -32,6 +32,7 @@ from openoutreach.proxies.rate_limit import AdminActionRateLimiter
 from openoutreach.proxies.region import RegionError, normalize_country
 from openoutreach.proxies.service import (
     assign_proxy_to_profile,
+    assign_proxy_to_whatsapp,
     disable_proxy,
     enable_proxy,
     export_proxies_csv,
@@ -97,8 +98,9 @@ class ProxyPreviewRequest(BaseModel):
 
 
 class ProxyAssignRequest(BaseModel):
-    """Assign one proxy to one cloud LinkedIn profile."""
+    """Assign one proxy to one cloud LinkedIn or WhatsApp profile."""
     profile_id: str = Field(min_length=1, max_length=128)
+    channel: str = Field(default="linkedin")
 
 
 class ProxyUnassignRequest(BaseModel):
@@ -136,6 +138,7 @@ class ProxyFallbackRequest(BaseModel):
 
 class MassiveProvisionRequest(BaseModel):
     profile_id: str = Field(min_length=1, max_length=128)
+    channel: str = Field(default="linkedin")
 
 
 class MassiveAllocateRequest(BaseModel):
@@ -217,6 +220,7 @@ async def list_proxy_inventory(
     country: Optional[str] = Query(None),
     provider: Optional[str] = Query(None),
     kind: Optional[str] = Query(None),
+    channel: Optional[str] = Query(None, pattern="^(linkedin|whatsapp|duo)$"),
     assignment: Optional[str] = Query(None, pattern="^(assigned|unassigned)$"),
     identity_id: Optional[str] = Query(None),
     org_id: Optional[str] = Query(None),
@@ -231,6 +235,7 @@ async def list_proxy_inventory(
             country=country,
             provider=provider,
             kind=kind,
+            channel=channel,
             assignment=assignment,
             identity_id=identity_id,
             org_id=org_id,
@@ -326,6 +331,7 @@ async def export_proxy_inventory(
     country: Optional[str] = Query(None),
     provider: Optional[str] = Query(None),
     kind: Optional[str] = Query(None),
+    channel: Optional[str] = Query(None, pattern="^(linkedin|whatsapp|duo)$"),
     assignment: Optional[str] = Query(None, pattern="^(assigned|unassigned)$"),
     identity_id: Optional[str] = Query(None),
     org_id: Optional[str] = Query(None),
@@ -339,6 +345,7 @@ async def export_proxy_inventory(
             country=country,
             provider=provider,
             kind=kind,
+            channel=channel,
             assignment=assignment,
             identity_id=identity_id,
             org_id=org_id,
@@ -390,6 +397,50 @@ async def list_cloud_profiles(
                 "proxy_mode": doc.get("proxy_mode", "none"),
                 "has_proxy": bool(doc.get("proxy_server")),
                 "is_active": bool(doc.get("is_active", True)),
+            }
+            for doc in docs
+        ]
+    }
+
+
+@router.get("/whatsapp-profiles", dependencies=[Depends(get_admin_user)])
+async def list_whatsapp_profiles(
+    search: Optional[str] = Query(None, max_length=200),
+    limit: int = Query(50, ge=1, le=200),
+) -> dict:
+    """List cloud WhatsApp profiles for the assignment picker. No credentials."""
+    profiles = get_mongodb_collection("whatsapp_profiles")
+    if profiles is None:
+        raise HTTPException(status_code=503, detail="WhatsApp profiles are unavailable")
+    query: dict[str, Any] = {"execution_mode": "cloud"}
+    if search:
+        pattern = {"$regex": re.escape(search.strip()), "$options": "i"}
+        query["$or"] = [
+            {"phone_number": pattern},
+            {"display_name": pattern},
+            {"_id": pattern},
+        ]
+    docs = list(profiles.find(query).sort("created_at", -1).limit(limit))
+    user_ids = [doc.get("user_id") for doc in docs if doc.get("user_id")]
+    emails: dict[str, str] = {}
+    users = get_mongodb_collection("users")
+    if users is not None and user_ids:
+        for user in users.find({"_id": {"$in": user_ids}}, {"email": 1}):
+            emails[str(user.get("_id"))] = str(user.get("email") or "")
+    return {
+        "profiles": [
+            {
+                "id": str(doc.get("_id")),
+                "phone_number": doc.get("phone_number"),
+                "display_name": doc.get("display_name"),
+                "user_id": doc.get("user_id"),
+                "email": emails.get(str(doc.get("user_id")), ""),
+                "identity_id": doc.get("identity_id"),
+                "org_id": doc.get("org_id"),
+                "cloud_mode": doc.get("cloud_mode"),
+                "proxy_id": doc.get("proxy_id"),
+                "proxy_mode": doc.get("proxy_mode", "none"),
+                "is_active": bool(doc.get("is_active", doc.get("active", True))),
             }
             for doc in docs
         ]
@@ -731,12 +782,16 @@ async def provision_massive_subaccount(
 ) -> dict:
     """Provision a Reseller sub-account for one cloud profile."""
     _require_rate_limit(current_admin, "proxy_massive_provision")
-    profiles = get_mongodb_collection("linkedin_profiles")
+    channel = (body.channel or "linkedin").strip().lower()
+    if channel not in {"linkedin", "whatsapp"}:
+        raise HTTPException(status_code=400, detail="channel must be linkedin or whatsapp")
+    collection_name = "whatsapp_profiles" if channel == "whatsapp" else "linkedin_profiles"
+    profiles = get_mongodb_collection(collection_name)
     if profiles is None:
-        raise HTTPException(status_code=503, detail="LinkedIn profiles are unavailable")
+        raise HTTPException(status_code=503, detail="Profiles are unavailable")
     profile = profiles.find_one({"_id": body.profile_id})
     if not profile:
-        raise HTTPException(status_code=404, detail="LinkedIn profile not found")
+        raise HTTPException(status_code=404, detail="Profile not found")
     if profile.get("execution_mode") != "cloud":
         raise HTTPException(status_code=400, detail="Only cloud profiles use managed proxies")
     if profile.get("proxy_server") or profile.get("proxy_id"):
@@ -762,6 +817,7 @@ async def provision_massive_subaccount(
             profile.get("proxy_region_subdivision"),
             profile.get("proxy_region_city"),
             created_by=current_admin,
+            channel=channel,
         )
     except ProxyError as exc:
         raise _error(exc)
@@ -772,10 +828,15 @@ async def provision_massive_subaccount(
         details={
             "proxy_id": proxy._id,
             "profile_id": body.profile_id,
+            "channel": channel,
             "massive_account_id": proxy.massive_account_id,
         },
     )
-    return {"proxy": proxy.public_dict(), "profile_id": body.profile_id}
+    return {
+        "proxy": proxy.public_dict(),
+        "profile_id": body.profile_id,
+        "channel": channel,
+    }
 
 
 @router.post("/massive/{proxy_id}/disable", dependencies=[Depends(get_admin_user)])
@@ -959,7 +1020,63 @@ async def assign_proxy_inventory(
     body: ProxyAssignRequest,
     current_admin: str = Depends(get_admin_user),
 ) -> dict:
-    """Assign a proxy to a cloud LinkedIn profile."""
+    """Assign a proxy to a cloud LinkedIn or WhatsApp profile."""
+    channel = (body.channel or "linkedin").strip().lower()
+    if channel not in {"linkedin", "whatsapp"}:
+        raise HTTPException(status_code=400, detail="channel must be linkedin or whatsapp")
+
+    if channel == "whatsapp":
+        profiles = get_mongodb_collection("whatsapp_profiles")
+        if profiles is None:
+            raise HTTPException(status_code=503, detail="WhatsApp profiles are unavailable")
+        profile = profiles.find_one({"_id": body.profile_id})
+        if not profile:
+            raise HTTPException(status_code=404, detail="WhatsApp profile not found")
+        if profile.get("execution_mode") != "cloud":
+            raise HTTPException(
+                status_code=400,
+                detail="Proxy assignment is only available for cloud profiles",
+            )
+        current_proxy_id = profile.get("proxy_id")
+        if current_proxy_id and current_proxy_id != proxy_id:
+            raise HTTPException(
+                status_code=409,
+                detail="This WhatsApp profile already has a different proxy",
+            )
+        try:
+            proxy = assign_proxy_to_whatsapp(
+                proxy_id,
+                body.profile_id,
+                str(profile.get("user_id") or ""),
+                assigned_by=current_admin,
+            )
+        except ProxyError as exc:
+            raise _error(exc)
+        if proxy.massive_status == "disabled":
+            from openoutreach.proxies.provisioning import enable_massive_for_profile
+
+            enable_massive_for_profile(
+                body.profile_id,
+                actor_user_id=current_admin,
+                reason="admin_assign",
+                channel="whatsapp",
+            )
+        _audit(
+            current_admin,
+            "proxy.assign",
+            target_user_id=profile.get("user_id"),
+            details={
+                "proxy_id": proxy_id,
+                "profile_id": body.profile_id,
+                "channel": "whatsapp",
+            },
+        )
+        return {
+            "proxy": proxy.public_dict(),
+            "profile_id": body.profile_id,
+            "channel": "whatsapp",
+        }
+
     profiles = get_mongodb_collection("linkedin_profiles")
     if profiles is None:
         raise HTTPException(status_code=503, detail="LinkedIn profiles are unavailable")
@@ -1009,9 +1126,13 @@ async def assign_proxy_inventory(
         current_admin,
         "proxy.assign",
         target_user_id=profile.get("user_id"),
-        details={"proxy_id": proxy_id, "profile_id": body.profile_id},
+        details={
+            "proxy_id": proxy_id,
+            "profile_id": body.profile_id,
+            "channel": "linkedin",
+        },
     )
-    return {"proxy": proxy.public_dict(), "profile_id": body.profile_id}
+    return {"proxy": proxy.public_dict(), "profile_id": body.profile_id, "channel": "linkedin"}
 
 
 @router.post("/{proxy_id}/unassign", dependencies=[Depends(get_admin_user)])

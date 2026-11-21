@@ -157,7 +157,7 @@ export default function AdminOrganizationsPage() {
                 </div>
                 <div className="flex shrink-0 items-center gap-4 text-xs text-muted-foreground">
                   <span>{org.members_count} members</span>
-                  <span>{org.credentialed_profiles} seats used</span>
+                  <span>{org.cloud_seats_used} seats used</span>
                   <span>{org.assigned_profiles} assigned</span>
                 </div>
               </button>
@@ -190,11 +190,23 @@ export default function AdminOrganizationsPage() {
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Cloud seats</p>
-                    <p>{selected.organization.cloud_seats} extra · limit {selected.organization.linkedin_account_limit}</p>
+                    <p>
+                      {selected.organization.cloud_seats_used} of{' '}
+                      {selected.organization.linkedin_account_limit} used ·{' '}
+                      {selected.organization.cloud_seats} extra
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Channel bundles</p>
+                    <p>
+                      {selected.organization.linkedin_seats} LinkedIn ·{' '}
+                      {selected.organization.duo_seats} Duo ·{' '}
+                      {selected.organization.whatsapp_only_seats} WhatsApp-only
+                    </p>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Usage</p>
-                    <p>{selected.organization.credentialed_profiles} credentialed · {selected.organization.assigned_profiles} assigned</p>
+                    <p>{selected.organization.credentialed_profiles} seats · {selected.organization.assigned_profiles} assigned</p>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Proxy usage</p>
@@ -211,7 +223,26 @@ export default function AdminOrganizationsPage() {
                       {selected.usage?.country_mismatch ?? 0} mismatch
                     </p>
                   </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Usage by channel</p>
+                    <p className="text-xs">
+                      {Object.entries(selected.usage?.per_channel ?? {})
+                        .map(([channel, bytes]) => `${channel}: ${formatBytes(bytes)}`)
+                        .join(' · ') || 'No usage synced'}
+                    </p>
+                  </div>
                 </div>
+
+                {(selected.usage?.seat_alerts ?? []).length > 0 && (
+                  <Alert variant="destructive">
+                    <AlertDescription>
+                      This workspace is over its unified cloud seat pool:{' '}
+                      {(selected.usage?.seat_alerts ?? [])
+                        .map((alert) => `${alert.used}/${alert.limit}`)
+                        .join(' · ')}
+                    </AlertDescription>
+                  </Alert>
+                )}
 
                 <div className="space-y-2">
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Members</p>
@@ -226,9 +257,20 @@ export default function AdminOrganizationsPage() {
                 <div className="space-y-2">
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Profiles</p>
                   {selected.profiles.map((profile) => (
-                    <div key={profile.id} className="flex items-center justify-between rounded-md border border-border/60 p-2 text-sm">
-                      <span className="truncate">{profile.linkedin_username || profile.id}</span>
+                    <div key={`${profile.channel ?? 'linkedin'}-${profile.id}`} className="flex items-center justify-between rounded-md border border-border/60 p-2 text-sm">
+                      <span className="truncate">
+                        {profile.linkedin_username ||
+                          profile.phone_number ||
+                          profile.display_name ||
+                          profile.id}
+                      </span>
                       <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="capitalize">
+                          {profile.channel ?? 'linkedin'}
+                        </Badge>
+                        {profile.cloud_mode && profile.cloud_mode !== 'desktop' && (
+                          <Badge variant="secondary">{profile.cloud_mode}</Badge>
+                        )}
                         <Badge variant={profile.active ? 'default' : 'secondary'}>
                           {profile.active ? 'Active' : 'Paused'}
                         </Badge>

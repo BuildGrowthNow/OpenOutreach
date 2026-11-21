@@ -104,9 +104,12 @@ def ensure_all_indexes():
         # WhatsApp Profiles
         ('whatsapp_profiles', [
             ({'user_id': 1}, {'name': 'wa_profile_user_idx'}),
+            ({'org_id': 1}, {'name': 'wa_profile_org_idx', 'sparse': True}),
+            ({'org_id': 1, 'assigned_user_id': 1}, {'name': 'wa_profile_org_assignee_idx', 'sparse': True}),
             ({'status': 1}, {'name': 'wa_profile_status_idx'}),
             ({'proxy_id': 1}, {'name': 'wa_profile_proxy_idx', 'sparse': True}),
             ({'execution_mode': 1, 'proxy_id': 1}, {'name': 'wa_profile_cloud_proxy_idx', 'sparse': True}),
+            ({'identity_id': 1}, {'name': 'wa_profile_identity_idx', 'sparse': True}),
             ({'phone_number': 1}, {'name': 'wa_profile_phone_unique_idx', 'unique': True, 'sparse': True}),
         ]),
 
@@ -207,10 +210,17 @@ def ensure_all_indexes():
             ({'plan_name': 1}, {'name': 'stripe_plan_name_idx', 'unique': True}),
         ]),
 
+        # Unified cloud seat counter (Phase 4). One row per accounting owner.
+        ('cloud_seat_usage', [
+            ({'updated_at': -1}, {'name': 'cloud_seat_updated_idx'}),
+        ]),
+
         # Managed proxy inventory
         ('proxies', [
             ({'status': 1, 'country': 1}, {'name': 'proxy_status_country_idx'}),
             ({'linkedin_profile_id': 1}, {'name': 'proxy_profile_idx', 'sparse': True}),
+            ({'whatsapp_profile_id': 1}, {'name': 'proxy_whatsapp_profile_idx', 'sparse': True}),
+            ({'channel': 1}, {'name': 'proxy_channel_idx', 'sparse': True}),
             ({'host': 1, 'port': 1, 'username': 1}, {'name': 'proxy_endpoint_idx'}),
             ({'assigned_user_id': 1}, {'name': 'proxy_user_idx', 'sparse': True}),
             ({'identity_id': 1}, {'name': 'proxy_identity_idx', 'sparse': True}),
