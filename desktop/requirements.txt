@@ -17,8 +17,8 @@ pystray>=0.19,<1.0
 pywebview>=5.0
 
 # Image handling (for icons)
-# Pillow 12.3.0 contains fixes for the 2026 image parser and font safety advisories.
-Pillow>=12.3.0,<13.0
+# Pillow 13.0.0 contains the 2026 image parser and font safety fixes.
+Pillow>=13.0.0,<14.0
 
 # System keychain (secure credential storage)
 keyring>=24.0,<26.0
