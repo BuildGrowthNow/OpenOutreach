@@ -177,7 +177,22 @@ const faqs = [
   {
     question: "Does Cloud include WhatsApp and email?",
     answer:
-      "Cloud Solo includes one browser account and one email slot. Cloud Duo adds one WhatsApp number to the same seat; when the LinkedIn and WhatsApp belong to the same client identity they share one managed proxy. Email connects your own SMTP/IMAP mailbox and does not use a proxy. Separate IPs for the two channels are available as a support configuration, and pricing stays flat per seat during rollout.",
+      "Yes. Cloud Solo includes one browser account and one email slot. Cloud Duo adds one WhatsApp number to the same seat; when the LinkedIn and WhatsApp belong to the same client identity they can share one managed proxy (Shared IP) or use two proxies (Separate IP). WhatsApp-only cloud is also available without a LinkedIn account. Email connects your own SMTP/IMAP mailbox and does not use a proxy. Pricing stays flat per seat during rollout.",
+  },
+  {
+    question: "Can LinkedIn and WhatsApp share a proxy?",
+    answer:
+      "Yes, only when both channels belong to the same real-world client identity. Cloud Duo Shared IP uses one seat and one proxy for that identity. If the channels are unrelated or you want separate egress IPs, choose Cloud Duo Separate IP: it still uses one seat but provisions a second managed proxy and sub-account for WhatsApp.",
+  },
+  {
+    question: "What counts as a seat?",
+    answer:
+      "One browser account — LinkedIn or WhatsApp — plus one email slot and one managed proxy identity. Cloud Duo is one seat because the LinkedIn account and WhatsApp number belong to the same identity. Pausing or unassigning an account does not free its seat; deleting the profile/credential does. Email is BYO SMTP/IMAP: no proxy and no managed mailbox.",
+  },
+  {
+    question: "Is there a GB meter or overage charge?",
+    answer:
+      "No. Cloud is flat per seat under fair use. Usage is monitored internally for capacity and abuse review, but there is no customer-facing GB allowance, meter, or overage rate.",
   },
   {
     question: "Do I need technical skills to set it up?",
@@ -430,6 +445,92 @@ export default function PricingPage() {
         </div>
       </section>
 
+      {/* What's in a seat? */}
+      <section className="py-16 sm:py-24 border-t border-zinc-800/60">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-6xl">
+          <div className="text-center mb-10">
+            <h2 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
+              What&apos;s in a seat?
+            </h2>
+            <p className="mt-3 text-zinc-400 max-w-2xl mx-auto">
+              A seat is one browser account — LinkedIn or WhatsApp — plus one
+              email slot and one managed proxy identity. Cloud Duo keeps one
+              seat when both channels belong to the same client identity.
+            </p>
+          </div>
+          <div className="overflow-x-auto rounded-xl border border-zinc-800">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-zinc-800 bg-zinc-900/60">
+                  <th className="text-left py-4 px-5 font-semibold text-zinc-400">Bundle</th>
+                  <th className="text-center py-4 px-4 font-semibold text-zinc-400">Browser account</th>
+                  <th className="text-center py-4 px-4 font-semibold text-zinc-400">Email slot</th>
+                  <th className="text-center py-4 px-4 font-semibold text-zinc-400">Proxy identity</th>
+                  <th className="text-center py-4 px-4 font-semibold text-zinc-400">Seats</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[
+                  {
+                    name: "Cloud Solo",
+                    browser: "1 LinkedIn or 1 WhatsApp",
+                    email: "1 BYO SMTP/IMAP",
+                    proxy: "1 managed proxy",
+                    seats: "1",
+                  },
+                  {
+                    name: "Cloud Duo · Shared IP",
+                    browser: "1 LinkedIn + 1 WhatsApp",
+                    email: "1 BYO SMTP/IMAP",
+                    proxy: "1 shared managed proxy",
+                    seats: "1",
+                  },
+                  {
+                    name: "Cloud Duo · Separate IP",
+                    browser: "1 LinkedIn + 1 WhatsApp",
+                    email: "1 BYO SMTP/IMAP",
+                    proxy: "2 managed proxies",
+                    seats: "1",
+                  },
+                  {
+                    name: "WhatsApp-only cloud",
+                    browser: "1 WhatsApp",
+                    email: "1 BYO SMTP/IMAP",
+                    proxy: "1 managed proxy",
+                    seats: "1",
+                  },
+                  {
+                    name: "Desktop",
+                    browser: "1 LinkedIn or 1 WhatsApp",
+                    email: "1 BYO SMTP/IMAP",
+                    proxy: "Local IP · no proxy",
+                    seats: "Included in plan",
+                  },
+                ].map((row, index) => (
+                  <tr
+                    key={row.name}
+                    className={`border-b border-zinc-800/50 ${
+                      index % 2 === 0 ? "bg-transparent" : "bg-zinc-900/20"
+                    }`}
+                  >
+                    <td className="py-3.5 px-5 font-medium text-white">{row.name}</td>
+                    <td className="text-center py-3.5 px-4 text-zinc-300">{row.browser}</td>
+                    <td className="text-center py-3.5 px-4 text-zinc-300">{row.email}</td>
+                    <td className="text-center py-3.5 px-4 text-zinc-300">{row.proxy}</td>
+                    <td className="text-center py-3.5 px-4 text-zinc-300">{row.seats}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-4 text-center text-xs text-zinc-500">
+            Flat per-seat pricing under fair use. There is no customer-facing GB
+            meter, overage rate, or included-bandwidth allowance. Email is BYO
+            SMTP/IMAP and never uses a proxy.
+          </p>
+        </div>
+      </section>
+
       {/* Team */}
       <section className="py-16 sm:py-24 border-t border-zinc-800/60">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-5xl">
@@ -453,8 +554,8 @@ export default function PricingPage() {
                 Desktop seat
               </div>
               <p className="mt-2 text-sm text-zinc-400">
-                Runs on the member&apos;s computer with the local IP. No proxy, no
-                managed bandwidth. Included in team plans.
+                Runs on the member&apos;s computer with the local IP. No proxy or
+                managed network. Included in team plans.
               </p>
             </div>
             <div className="rounded-2xl border border-sky-500/30 bg-sky-900/10 p-6">

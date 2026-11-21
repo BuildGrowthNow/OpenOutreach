@@ -14,6 +14,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { getAnalyticsOverview, AnalyticsOverviewResponse, RecentActivityEntry } from '@/lib/api/dashboard'
 import { QuickStats } from '@/components/dashboard/quick-stats'
 import { QuickLinks } from '@/components/dashboard/quick-links'
+import { ChannelBundleCard } from '@/components/dashboard/channel-bundle-card'
 
 function toActivityItems(entries: RecentActivityEntry[]) {
   return entries.map((e) => {
@@ -200,6 +201,9 @@ const Dashboard = () => {
           />
         </div>
       )}
+
+      {/* Channel bundle onboarding */}
+      <ChannelBundleCard />
 
       {/* Recent Activity | Quick Stats | Quick Links */}
       <div className="grid gap-6 lg:grid-cols-3 md:grid-cols-1">

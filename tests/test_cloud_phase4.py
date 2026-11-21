@@ -48,6 +48,13 @@ def _seed_duo(fake: FakeMongo, *, active: bool = True, massive_status: str = "ac
             "is_active": active,
         }
     )
+    fake.collection("linkedin_credentials").insert_one(
+        {
+            "_id": "cred1",
+            "linkedin_profile_id": "li1",
+            "user_id": "u1",
+        }
+    )
     fake.collection("proxies").insert_one(
         {
             "_id": "px1",

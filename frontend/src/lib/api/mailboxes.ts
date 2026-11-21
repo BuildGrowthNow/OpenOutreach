@@ -16,6 +16,10 @@ export interface Mailbox {
   imapPort: number;
   imapUsername: string;
   paused: boolean;
+  orgId?: string | null;
+  assignedUserId?: string | null;
+  seatId?: string | null;
+  managed?: boolean;
 }
 
 /** Convert the API's snake_case response into the UI's camelCase contract. */
@@ -34,6 +38,10 @@ function normalizeMailbox(value: Record<string, unknown>): Mailbox {
     imapPort: Number(value.imap_port ?? value.imapPort ?? 993),
     imapUsername: String(value.imap_username ?? value.imapUsername ?? ""),
     paused: Boolean(value.paused),
+    orgId: value.org_id ? String(value.org_id) : null,
+    assignedUserId: value.assigned_user_id ? String(value.assigned_user_id) : null,
+    seatId: value.seat_id ? String(value.seat_id) : null,
+    managed: Boolean(value.managed),
   };
 }
 

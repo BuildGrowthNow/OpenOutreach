@@ -17,6 +17,7 @@ import {
   deleteWhatsAppProfile,
   getWhatsAppProfile,
   resetQr,
+  type WhatsAppCloudMode,
   type WhatsAppProfile,
 } from "@/lib/api/whatsapp";
 import {
@@ -142,6 +143,22 @@ function QrPoller({ profileId, onConnected }: { profileId: string; onConnected: 
   );
 }
 
+function executionLabel(profile: WhatsAppProfile): string {
+  if (profile.executionMode !== "cloud") {
+    return "Desktop · Local IP · No proxy";
+  }
+  const region = profile.proxyRegionCountry
+    ? ` · ${profile.proxyRegionCountry}`
+    : "";
+  if (profile.cloudMode === "duo_shared") {
+    return `Cloud Duo · Shared IP · Managed proxy${region}`;
+  }
+  if (profile.cloudMode === "duo_separate") {
+    return `Cloud Duo · Separate IP · Managed proxy${region}`;
+  }
+  return `WhatsApp-only cloud · Managed proxy${region}`;
+}
+
 function ProfileCard({
   profile,
   onDelete,
@@ -191,14 +208,33 @@ function ProfileCard({
           <CardDescription>{profile.displayName}</CardDescription>
         )}
         <p className="text-xs text-muted-foreground">
-          {profile.executionMode === "cloud"
-            ? `Cloud Duo · ${
-                profile.proxyId
-                  ? `Managed proxy${profile.proxyRegionCountry ? ` · ${profile.proxyRegionCountry}` : ""}`
-                  : "Proxy required"
-              }`
-            : "Desktop · Local IP · No proxy"}
+          {executionLabel(profile)}
         </p>
+        {profile.executionMode === "cloud" && (
+          <p className="text-xs">
+            {profile.proxyCountryMismatch ? (
+              <span className="text-destructive">Proxy country mismatch</span>
+            ) : profile.proxyLastError ? (
+              <span className="text-destructive">Proxy issue: {profile.proxyLastError}</span>
+            ) : profile.proxyMassiveStatus &&
+              ["disabled", "error", "retired", "budget_disabled"].includes(
+                profile.proxyMassiveStatus,
+              ) ? (
+              <span className="text-destructive">
+                Proxy {profile.proxyMassiveStatus}
+              </span>
+            ) : profile.proxyStatus &&
+              ["disabled", "error", "retired"].includes(profile.proxyStatus) ? (
+              <span className="text-destructive">
+                Proxy {profile.proxyStatus}
+              </span>
+            ) : profile.proxyId ? (
+              <span className="text-emerald-600">Managed proxy healthy</span>
+            ) : (
+              <span className="text-destructive">Proxy required</span>
+            )}
+          </p>
+        )}
       </CardHeader>
 
       {profile.status === "disconnected" && (
@@ -234,7 +270,13 @@ export function WhatsappConnectionTab() {
     billingStatus?.whatsapp_cloud_proxy_enabled === true &&
     (billingStatus?.cloud_seat_limit ?? 0) > 0;
   const [executionMode, setExecutionMode] = useState<"desktop" | "cloud">("desktop");
+  const [cloudMode, setCloudMode] = useState<Exclude<WhatsAppCloudMode, "desktop">>(
+    "duo_shared",
+  );
   const [duoProfileId, setDuoProfileId] = useState("");
+  const [regionCountry, setRegionCountry] = useState("US");
+  const [regionSubdivision, setRegionSubdivision] = useState("");
+  const [regionCity, setRegionCity] = useState("");
   const [cloudProfiles, setCloudProfiles] = useState<LinkedInProfile[]>([]);
 
   const load = useCallback(async () => {
@@ -270,16 +312,48 @@ export function WhatsappConnectionTab() {
   }, [cloudEnabled]);
 
   const handleAdd = async () => {
-    if (executionMode === "cloud" && !duoProfileId) {
-      setError("Select the cloud LinkedIn profile this WhatsApp number belongs to.");
-      return;
+    if (executionMode === "cloud") {
+      if (
+        (cloudMode === "duo_shared" || cloudMode === "duo_separate") &&
+        !duoProfileId
+      ) {
+        setError("Select the cloud LinkedIn profile this WhatsApp number belongs to.");
+        return;
+      }
+      if (
+        (cloudMode === "whatsapp_only" || cloudMode === "duo_separate") &&
+        !regionCountry.trim()
+      ) {
+        setError("Choose the proxy country for this WhatsApp number.");
+        return;
+      }
     }
     setAdding(true);
     setError(null);
     try {
       const profile = await createWhatsAppProfile(undefined, {
         executionMode,
-        duoLinkedInProfileId: executionMode === "cloud" ? duoProfileId : undefined,
+        cloudMode: executionMode === "cloud" ? cloudMode : "desktop",
+        duoLinkedInProfileId:
+          executionMode === "cloud" &&
+          (cloudMode === "duo_shared" || cloudMode === "duo_separate")
+            ? duoProfileId
+            : undefined,
+        proxyRegionCountry:
+          executionMode === "cloud" &&
+          (cloudMode === "whatsapp_only" || cloudMode === "duo_separate")
+            ? regionCountry
+            : undefined,
+        proxyRegionSubdivision:
+          executionMode === "cloud" &&
+          (cloudMode === "whatsapp_only" || cloudMode === "duo_separate")
+            ? regionSubdivision || undefined
+            : undefined,
+        proxyRegionCity:
+          executionMode === "cloud" &&
+          (cloudMode === "whatsapp_only" || cloudMode === "duo_separate")
+            ? regionCity || undefined
+            : undefined,
       });
       setProfiles((prev) => [...prev, profile]);
     } catch (e) {
@@ -330,35 +404,134 @@ export function WhatsappConnectionTab() {
                 </Button>
               </div>
               {executionMode === "cloud" ? (
-                <div className="space-y-2">
-                  <label
-                    htmlFor="duo-linkedin-profile"
-                    className="text-xs font-medium text-muted-foreground"
-                  >
-                    Cloud LinkedIn profile
-                  </label>
-                  <select
-                    id="duo-linkedin-profile"
-                    value={duoProfileId}
-                    onChange={(event) => setDuoProfileId(event.target.value)}
-                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                  >
-                    <option value="">Select a cloud profile…</option>
-                    {cloudProfiles.map((profile) => (
-                      <option key={profile.id} value={String(profile.id)}>
-                        {profile.linkedinUsername}
+                <div className="space-y-3">
+                  <div className="space-y-2">
+                    <label
+                      htmlFor="wa-cloud-mode"
+                      className="text-xs font-medium text-muted-foreground"
+                    >
+                      Cloud setup
+                    </label>
+                    <select
+                      id="wa-cloud-mode"
+                      value={cloudMode}
+                      onChange={(event) =>
+                        setCloudMode(
+                          event.target.value as Exclude<WhatsAppCloudMode, "desktop">,
+                        )
+                      }
+                      className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                    >
+                      <option value="duo_shared">
+                        Cloud Duo · Shared IP (use the LinkedIn proxy)
                       </option>
-                    ))}
-                  </select>
-                  <p className="text-xs text-muted-foreground">
-                    The WhatsApp number shares this profile&apos;s cloud seat and
-                    managed proxy. It never uses the server IP.
-                  </p>
-                  {cloudProfiles.length === 0 && (
-                    <p className="text-xs text-destructive">
-                      Add a cloud LinkedIn account with a managed proxy first.
+                      <option value="duo_separate">
+                        Cloud Duo · Separate IP (own WhatsApp proxy)
+                      </option>
+                      <option value="whatsapp_only">
+                        WhatsApp-only cloud (own seat and proxy)
+                      </option>
+                    </select>
+                  </div>
+                  {(cloudMode === "duo_shared" || cloudMode === "duo_separate") && (
+                    <div className="space-y-2">
+                      <label
+                        htmlFor="duo-linkedin-profile"
+                        className="text-xs font-medium text-muted-foreground"
+                      >
+                        Cloud LinkedIn profile
+                      </label>
+                      <select
+                        id="duo-linkedin-profile"
+                        value={duoProfileId}
+                        onChange={(event) => setDuoProfileId(event.target.value)}
+                        className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                      >
+                        <option value="">Select a cloud profile…</option>
+                        {cloudProfiles.map((profile) => (
+                          <option key={profile.id} value={String(profile.id)}>
+                            {profile.linkedinUsername}
+                          </option>
+                        ))}
+                      </select>
+                      {cloudProfiles.length === 0 && (
+                        <p className="text-xs text-destructive">
+                          Add a cloud LinkedIn account with a managed proxy first.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  {cloudMode === "duo_shared" ? (
+                    <p className="text-xs text-muted-foreground">
+                      One seat, one shared proxy. The WhatsApp number uses the
+                      same client identity and egress IP as the LinkedIn account.
+                    </p>
+                  ) : cloudMode === "duo_separate" ? (
+                    <p className="text-xs text-muted-foreground">
+                      One seat, two proxies. WhatsApp gets its own sub-account
+                      and usage line while the seat stays shared.
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      WhatsApp-only cloud consumes its own seat and managed
+                      proxy. No LinkedIn account is required.
                     </p>
                   )}
+                  {(cloudMode === "whatsapp_only" || cloudMode === "duo_separate") && (
+                    <div className="grid gap-2 sm:grid-cols-3">
+                      <div className="space-y-1">
+                        <label
+                          htmlFor="wa-region-country"
+                          className="text-xs font-medium text-muted-foreground"
+                        >
+                          Country (ISO-2)
+                        </label>
+                        <input
+                          id="wa-region-country"
+                          value={regionCountry}
+                          onChange={(event) =>
+                            setRegionCountry(event.target.value.toUpperCase())
+                          }
+                          maxLength={2}
+                          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label
+                          htmlFor="wa-region-subdivision"
+                          className="text-xs font-medium text-muted-foreground"
+                        >
+                          State (optional)
+                        </label>
+                        <input
+                          id="wa-region-subdivision"
+                          value={regionSubdivision}
+                          onChange={(event) =>
+                            setRegionSubdivision(event.target.value.toUpperCase())
+                          }
+                          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label
+                          htmlFor="wa-region-city"
+                          className="text-xs font-medium text-muted-foreground"
+                        >
+                          City (optional)
+                        </label>
+                        <input
+                          id="wa-region-city"
+                          value={regionCity}
+                          onChange={(event) => setRegionCity(event.target.value)}
+                          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                        />
+                      </div>
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    Cloud numbers never use the server IP. A missing or unhealthy
+                    proxy pauses the session instead of falling back.
+                  </p>
                 </div>
               ) : (
                 <p className="text-xs text-muted-foreground">

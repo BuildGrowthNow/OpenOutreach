@@ -1275,7 +1275,9 @@ async def delete_profile(
         except Exception as e:
             logger.warning("Failed to delete SmartRateLimitContext; exception_type=%s", type(e).__name__)
 
-        # A seat is consumed only when the profile owns a credential.
+        # A seat is consumed only when the profile owns a credential. A Cloud
+        # Duo WhatsApp number that survives the LinkedIn deletion becomes its
+        # own unit, so the counter must not be decremented in that case.
         credentials_collection = get_mongodb_collection("linkedin_credentials")
         had_credentials = bool(
             credentials_collection is not None
@@ -1283,6 +1285,18 @@ async def delete_profile(
                 {"linkedin_profile_id": profile_id}
             )
             > 0
+        )
+        from openoutreach.billing.cloud_seats import (
+            linkedin_profile_shares_seat_with_whatsapp,
+        )
+
+        seat_survives_for_whatsapp = (
+            had_credentials
+            and linkedin_profile_shares_seat_with_whatsapp(
+                profile_id,
+                org_id=profile_doc.get("org_id"),
+                owner_user_id=profile_doc.get("user_id"),
+            )
         )
 
         # Delete profile
@@ -1298,8 +1312,11 @@ async def delete_profile(
         from openoutreach.proxies.service import retire_proxy_for_profile
 
         retire_proxy_for_profile(profile_id)
-        if had_credentials:
+        if had_credentials and not seat_survives_for_whatsapp:
             release_linkedin_seat(user_id)
+            from openoutreach.billing.cloud_seats import release_cloud_seat
+
+            release_cloud_seat(user_id)
 
         logger.info(f"Deleted LinkedIn profile {profile_id} for user {user_id}")
         return None

@@ -71,6 +71,7 @@ PATCH_TARGETS = [
     "openoutreach.organizations.audit.get_mongodb_collection",
     "openoutreach.organizations.rate_limit.get_mongodb_collection",
     "openoutreach.billing.seats.get_mongodb_collection",
+    "openoutreach.billing.cloud_seats.get_mongodb_collection",
     "openoutreach.billing.enforcement.get_mongodb_collection",
     "openoutreach.mongodb.models_user.get_mongodb_collection",
     "openoutreach.api_v2.routers.organizations.get_mongodb_collection",

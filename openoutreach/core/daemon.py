@@ -143,19 +143,22 @@ def _run_on_wa_thread(fn, timeout: float = 120) -> Any:
 
 
 def _cloud_wa_ready(profile) -> bool:
-    """Return True when a cloud Duo WhatsApp profile has an active seat/proxy.
+    """Return True when a cloud WhatsApp profile has an active seat/proxy.
 
-    The WhatsApp number shares the cloud LinkedIn profile's proxy and seat.
-    If the LinkedIn profile is paused, the proxy is disabled, or the shared
-    proxy link is missing, the WhatsApp session must not start.
+    Shared-IP Cloud Duo shares the cloud LinkedIn profile's proxy and seat.
+    Separate-IP Duo and WhatsApp-only use their own WhatsApp proxy. In every
+    case a missing, disabled, or mismatched proxy is a hard failure so the
+    server IP is never used.
     """
     if profile.execution_mode != "cloud":
+        return False
+    if profile.active is False or profile.is_active is False:
+        logger.warning("Cloud WhatsApp %s seat is paused; skipping", profile.pk)
         return False
     if not profile.proxy_id:
         logger.warning("Cloud WhatsApp %s has no managed proxy; skipping", profile.pk)
         return False
 
-    from openoutreach.mongodb.connection import get_mongodb_collection
     from openoutreach.proxies.models import STATUS_DISABLED, STATUS_RETIRED, Proxy
 
     proxy = Proxy.get(profile.proxy_id)
@@ -165,26 +168,72 @@ def _cloud_wa_ready(profile) -> bool:
     if proxy.massive_status in {"disabled", "budget_disabled", "retired", "error"}:
         logger.warning("Cloud WhatsApp %s proxy is disabled; skipping", profile.pk)
         return False
-    if not proxy.linkedin_profile_id:
-        logger.warning("Cloud WhatsApp %s proxy has no LinkedIn seat; skipping", profile.pk)
+    if proxy.assigned_org_id and profile.org_id and str(proxy.assigned_org_id) != str(profile.org_id):
+        logger.warning("Cloud WhatsApp %s proxy belongs to another workspace; skipping", profile.pk)
+        return False
+    if proxy.whatsapp_profile_id and str(proxy.whatsapp_profile_id) != str(profile._id):
+        logger.warning("Cloud WhatsApp %s proxy is assigned to another number; skipping", profile.pk)
+        return False
+    if proxy.identity_id and profile.identity_id and str(proxy.identity_id) != str(profile.identity_id):
+        logger.warning("Cloud WhatsApp %s proxy identity does not match; skipping", profile.pk)
         return False
 
-    profiles = get_mongodb_collection("linkedin_profiles")
-    linkedin = (
-        profiles.find_one({"_id": proxy.linkedin_profile_id})
-        if profiles is not None
-        else None
-    )
-    if not linkedin or linkedin.get("execution_mode") != "cloud":
-        logger.warning("Cloud WhatsApp %s shared LinkedIn profile is missing; skipping", profile.pk)
-        return False
-    if linkedin.get("active") is False or linkedin.get("is_active") is False:
-        logger.warning("Cloud WhatsApp %s shared LinkedIn seat is paused; skipping", profile.pk)
-        return False
-    if str(linkedin.get("proxy_id") or "") != str(profile.proxy_id):
-        logger.warning("Cloud WhatsApp %s shared proxy link changed; skipping", profile.pk)
-        return False
+    if proxy.linkedin_profile_id:
+        # Cloud Duo shared IP: the LinkedIn seat must still be live and point
+        # at the same proxy.
+        from openoutreach.mongodb.connection import get_mongodb_collection
+
+        profiles = get_mongodb_collection("linkedin_profiles")
+        linkedin = (
+            profiles.find_one({"_id": proxy.linkedin_profile_id})
+            if profiles is not None
+            else None
+        )
+        if not linkedin or linkedin.get("execution_mode") != "cloud":
+            logger.warning("Cloud WhatsApp %s shared LinkedIn profile is missing; skipping", profile.pk)
+            return False
+        if linkedin.get("active") is False or linkedin.get("is_active") is False:
+            logger.warning("Cloud WhatsApp %s shared LinkedIn seat is paused; skipping", profile.pk)
+            return False
+        if str(linkedin.get("proxy_id") or "") != str(profile.proxy_id):
+            logger.warning("Cloud WhatsApp %s shared proxy link changed; skipping", profile.pk)
+            return False
+    else:
+        # WhatsApp-only or separate-IP Duo: the proxy must be bound to this
+        # exact WhatsApp number.
+        if str(proxy.whatsapp_profile_id or "") != str(profile._id):
+            logger.warning("Cloud WhatsApp %s proxy is not bound to this number; skipping", profile.pk)
+            return False
     return True
+
+
+def _cloud_wa_has_seat(profile, seat_cache: dict[str, set[str]]) -> bool:
+    """Return True when the profile's workspace seat pool includes this number."""
+    from openoutreach.billing.cloud_seats import (
+        allowed_cloud_seat_units,
+        cloud_seat_key_for_profile,
+    )
+    from openoutreach.mongodb.models_user import User
+    from openoutreach.organizations.enforcement import resolve_effective_plan
+
+    user = User.get(profile.user_id)
+    if user is None:
+        return False
+    effective = resolve_effective_plan(user)
+    if not effective.is_active:
+        return False
+    owner = effective.billing_owner_id
+    allowed = seat_cache.get(owner)
+    if allowed is None:
+        allowed = allowed_cloud_seat_units(owner, effective.cloud_seat_limit)
+        seat_cache[owner] = allowed
+    key = cloud_seat_key_for_profile(
+        profile._id,
+        "whatsapp",
+        org_id=profile.org_id,
+        owner_user_id=owner,
+    )
+    return key in allowed
 
 
 def _refresh_wa_sessions() -> None:
@@ -221,13 +270,17 @@ def _refresh_wa_sessions() -> None:
         )
     )
     docs_by_id = {doc["_id"]: doc for doc in docs}
+    seat_cache: dict[str, set[str]] = {}
 
     for pid in list(_WA_SESSIONS.keys()):
         doc = docs_by_id.get(pid)
         eligible = False
         if doc is not None:
             try:
-                eligible = _cloud_wa_ready(WhatsAppProfile.from_dict(doc))
+                profile = WhatsAppProfile.from_dict(doc)
+                eligible = _cloud_wa_ready(profile) and _cloud_wa_has_seat(
+                    profile, seat_cache
+                )
             except Exception:
                 eligible = False
         if not eligible:
@@ -244,6 +297,12 @@ def _refresh_wa_sessions() -> None:
         try:
             profile = WhatsAppProfile.from_dict(doc)
             if not _cloud_wa_ready(profile):
+                continue
+            if not _cloud_wa_has_seat(profile, seat_cache):
+                logger.warning(
+                    "Cloud WhatsApp %s has no active seat in its workspace; skipping",
+                    pid,
+                )
                 continue
             wa_session = WASession(profile)
             _run_on_wa_thread(lambda s=wa_session: start_whatsapp_session(s))
@@ -725,7 +784,7 @@ def _get_all_active_profiles() -> list:
         execution_mode="cloud",
     )
     result = []
-    seats_used: dict[str, int] = {}
+    allowed_cache: dict[str, set[str]] = {}
     for p in active_profiles:
         if not p.cookie_data_encrypted:
             continue
@@ -747,20 +806,31 @@ def _get_all_active_profiles() -> list:
         if not can_run:
             continue
 
+        from openoutreach.billing.cloud_seats import (
+            allowed_cloud_seat_units,
+            cloud_seat_key_for_profile,
+        )
+
         effective = resolve_effective_plan(user)
         seat_limit = effective.cloud_seat_limit
         billing_owner = effective.billing_owner_id
-        used = seats_used.get(billing_owner, 0)
-        if seat_limit <= 0 or used >= seat_limit:
+        allowed = allowed_cache.get(billing_owner)
+        if allowed is None:
+            allowed = allowed_cloud_seat_units(billing_owner, seat_limit)
+            allowed_cache[billing_owner] = allowed
+        seat_key = cloud_seat_key_for_profile(
+            p.pk,
+            "linkedin",
+            org_id=getattr(p, "org_id", None),
+            owner_user_id=billing_owner,
+        )
+        if seat_key not in allowed:
             logger.warning(
-                "Cloud profile %s exceeds the cloud seat limit for workspace %s (%s/%s); skipping",
+                "Cloud profile %s exceeds the unified cloud seat limit for workspace %s; skipping",
                 p.pk,
                 billing_owner,
-                used,
-                seat_limit,
             )
             continue
-        seats_used[billing_owner] = used + 1
         result.append(p)
 
     return result

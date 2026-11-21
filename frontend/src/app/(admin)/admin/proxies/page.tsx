@@ -62,6 +62,7 @@ import {
   AdminProxyStats,
   AdminProxyUsageEntry,
   AdminProxyUsageResponse,
+  AdminWhatsAppProfile,
 } from '@/lib/api/admin'
 
 const STATUS_BADGE: Record<string, string> = {
@@ -150,6 +151,7 @@ export default function AdminProxiesPage() {
 
   const [statusFilter, setStatusFilter] = useState('all')
   const [providerFilter, setProviderFilter] = useState('all')
+  const [channelFilter, setChannelFilter] = useState('all')
   const [assignmentFilter, setAssignmentFilter] = useState('all')
   const [countryFilter, setCountryFilter] = useState('')
   const [identityFilter, setIdentityFilter] = useState('')
@@ -168,6 +170,8 @@ export default function AdminProxiesPage() {
 
   const [assignProxy, setAssignProxy] = useState<AdminProxy | null>(null)
   const [cloudProfiles, setCloudProfiles] = useState<AdminCloudProfile[]>([])
+  const [whatsappProfiles, setWhatsappProfiles] = useState<AdminWhatsAppProfile[]>([])
+  const [assignChannel, setAssignChannel] = useState<'linkedin' | 'whatsapp'>('linkedin')
   const [profileSearch, setProfileSearch] = useState('')
   const [selectedProfileId, setSelectedProfileId] = useState('')
   const [assigning, setAssigning] = useState(false)
@@ -210,6 +214,7 @@ export default function AdminProxiesPage() {
   const [massiveAccountsLoading, setMassiveAccountsLoading] = useState(false)
   const [massiveBusyId, setMassiveBusyId] = useState<string | null>(null)
   const [massiveProvisionProfileId, setMassiveProvisionProfileId] = useState('')
+  const [massiveProvisionChannel, setMassiveProvisionChannel] = useState<'linkedin' | 'whatsapp'>('linkedin')
   const [massiveProvisioning, setMassiveProvisioning] = useState(false)
   const [massiveAllocateBytes, setMassiveAllocateBytes] = useState('')
   const [poolStats, setPoolStats] = useState<AdminPoolStatsResponse | null>(null)
@@ -219,6 +224,7 @@ export default function AdminProxiesPage() {
     () => ({
       status: statusFilter === 'all' ? undefined : statusFilter,
       provider: providerFilter === 'all' ? undefined : providerFilter,
+      channel: channelFilter === 'all' ? undefined : channelFilter,
       assignment: assignmentFilter === 'all' ? undefined : assignmentFilter,
       country: countryFilter.trim().toUpperCase() || undefined,
       identity_id: identityFilter.trim() || undefined,
@@ -228,6 +234,7 @@ export default function AdminProxiesPage() {
     [
       statusFilter,
       providerFilter,
+      channelFilter,
       assignmentFilter,
       countryFilter,
       identityFilter,
@@ -448,18 +455,27 @@ export default function AdminProxiesPage() {
   }
 
   const loadCloudProfiles = useCallback(async (search: string) => {
-    const response = await adminApi.getCloudProfiles({
-      search: search.trim() || undefined,
-      limit: 50,
-    })
-    if (response.error) throw new Error(response.error)
-    setCloudProfiles(response.data?.profiles ?? [])
+    const [linkedinResponse, whatsappResponse] = await Promise.all([
+      adminApi.getCloudProfiles({
+        search: search.trim() || undefined,
+        limit: 50,
+      }),
+      adminApi.getWhatsAppProfiles({
+        search: search.trim() || undefined,
+        limit: 50,
+      }),
+    ])
+    if (linkedinResponse.error) throw new Error(linkedinResponse.error)
+    if (whatsappResponse.error) throw new Error(whatsappResponse.error)
+    setCloudProfiles(linkedinResponse.data?.profiles ?? [])
+    setWhatsappProfiles(whatsappResponse.data?.profiles ?? [])
   }, [])
 
   const openAssign = async (proxy: AdminProxy) => {
     setAssignProxy(proxy)
     setSelectedProfileId('')
     setProfileSearch('')
+    setAssignChannel(proxy.channel === 'whatsapp' ? 'whatsapp' : 'linkedin')
     try {
       await loadCloudProfiles('')
     } catch (err) {
@@ -472,9 +488,17 @@ export default function AdminProxiesPage() {
     try {
       setAssigning(true)
       setError(null)
-      const response = await adminApi.assignProxy(assignProxy.id, selectedProfileId)
+      const response = await adminApi.assignProxy(
+        assignProxy.id,
+        selectedProfileId,
+        assignChannel
+      )
       if (response.error) throw new Error(response.error)
-      setMessage('Proxy assigned.')
+      setMessage(
+        assignChannel === 'whatsapp'
+          ? 'Proxy assigned to the WhatsApp number.'
+          : 'Proxy assigned.'
+      )
       setAssignProxy(null)
       setSelectedProfileId('')
       await loadInventory()
@@ -694,7 +718,8 @@ export default function AdminProxiesPage() {
       setMassiveProvisioning(true)
       setError(null)
       const response = await adminApi.provisionMassiveSubaccount(
-        massiveProvisionProfileId.trim()
+        massiveProvisionProfileId.trim(),
+        massiveProvisionChannel
       )
       if (response.error) throw new Error(response.error)
       setMessage('Massive sub-account provisioned and assigned.')
@@ -825,7 +850,7 @@ export default function AdminProxiesPage() {
         <TabsContent value="inventory" className="space-y-4">
           <Card>
             <CardContent className="pt-5">
-              <div className="grid gap-3 lg:grid-cols-6">
+              <div className="grid gap-3 lg:grid-cols-7">
                 <Input
                   value={searchFilter}
                   onChange={(event) => setSearchFilter(event.target.value)}
@@ -854,6 +879,17 @@ export default function AdminProxiesPage() {
                     <SelectItem value="manual">Manual</SelectItem>
                     <SelectItem value="massive_residential">Massive residential</SelectItem>
                     <SelectItem value="massive_isp">Massive ISP</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={channelFilter} onValueChange={(value) => value && setChannelFilter(value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Channel" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All channels</SelectItem>
+                    <SelectItem value="linkedin">LinkedIn</SelectItem>
+                    <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                    <SelectItem value="duo">Duo (shared)</SelectItem>
                   </SelectContent>
                 </Select>
                 <Select value={assignmentFilter} onValueChange={(value) => value && setAssignmentFilter(value)}>
@@ -972,6 +1008,7 @@ export default function AdminProxiesPage() {
                       <Checkbox checked={allSelected} onCheckedChange={toggleAll} />
                     </TableHead>
                     <TableHead>Endpoint</TableHead>
+                    <TableHead>Channel</TableHead>
                     <TableHead>Provider</TableHead>
                     <TableHead>Region</TableHead>
                     <TableHead>Status</TableHead>
@@ -995,6 +1032,9 @@ export default function AdminProxiesPage() {
                           {proxy.label} · {proxy.protocol} · {proxy.kind}
                         </div>
                       </TableCell>
+                      <TableCell className="text-sm">
+                        <Badge variant="outline">{proxy.channel ?? 'linkedin'}</Badge>
+                      </TableCell>
                       <TableCell className="text-sm">{proxy.provider}</TableCell>
                       <TableCell className="text-sm">{regionLabel(proxy)}</TableCell>
                       <TableCell>
@@ -1008,7 +1048,14 @@ export default function AdminProxiesPage() {
                         )}
                       </TableCell>
                       <TableCell className="font-mono text-xs">
-                        {proxy.linkedin_profile_id ?? proxy.last_assigned_profile_id ?? '—'}
+                        {proxy.linkedin_profile_id ??
+                          proxy.last_assigned_profile_id ??
+                          proxy.whatsapp_profile_id ??
+                          proxy.last_assigned_whatsapp_profile_id ??
+                          '—'}
+                        {proxy.whatsapp_profile_id ? (
+                          <div className="text-muted-foreground">WA {proxy.whatsapp_profile_id}</div>
+                        ) : null}
                         {proxy.identity_id ? (
                           <div className="text-muted-foreground">identity {proxy.identity_id}</div>
                         ) : null}
@@ -1030,7 +1077,7 @@ export default function AdminProxiesPage() {
                           <Button size="sm" variant="outline" onClick={() => void handleSingleTest(proxy)}>
                             Test
                           </Button>
-                          {proxy.linkedin_profile_id ? (
+                          {proxy.linkedin_profile_id || proxy.whatsapp_profile_id ? (
                             <Button size="sm" variant="outline" onClick={() => void handleUnassign(proxy)}>
                               Unassign
                             </Button>
@@ -1277,7 +1324,18 @@ export default function AdminProxiesPage() {
                   <UsageTable
                     title="Per channel"
                     entries={(usage?.per_channel ?? []).map((entry) => ({
-                      label: entry.channel,
+                      label:
+                        entry.channel === 'duo'
+                          ? 'duo (combined shared IP)'
+                          : entry.channel,
+                      bytes: entry.bytes,
+                    }))}
+                    idKey="workspace_id"
+                  />
+                  <UsageTable
+                    title="Per workspace & channel"
+                    entries={(usage?.per_workspace_channel ?? []).map((entry) => ({
+                      label: `${entry.workspace_id ?? 'workspace'} · ${entry.channel ?? 'channel'}`,
                       bytes: entry.bytes,
                     }))}
                     idKey="workspace_id"
@@ -1389,6 +1447,23 @@ export default function AdminProxiesPage() {
             </Alert>
           )}
 
+          {(massiveStatus?.seat_alerts ?? []).length > 0 && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                {(massiveStatus?.seat_alerts ?? []).length} workspace(s) over the unified cloud
+                seat pool:{' '}
+                {(massiveStatus?.seat_alerts ?? [])
+                  .slice(0, 4)
+                  .map(
+                    (alert) =>
+                      `${alert.org_name ?? alert.org_id}: ${alert.used}/${alert.limit}`
+                  )
+                  .join(' · ')}
+              </AlertDescription>
+            </Alert>
+          )}
+
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Reseller sub-accounts</CardTitle>
@@ -1405,6 +1480,20 @@ export default function AdminProxiesPage() {
                   placeholder="Cloud profile ID to provision"
                   className="w-96 font-mono text-xs"
                 />
+                <Select
+                  value={massiveProvisionChannel}
+                  onValueChange={(value) =>
+                    value && setMassiveProvisionChannel(value as 'linkedin' | 'whatsapp')
+                  }
+                >
+                  <SelectTrigger className="w-36">
+                    <SelectValue placeholder="Channel" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="linkedin">LinkedIn</SelectItem>
+                    <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                  </SelectContent>
+                </Select>
                 <Button
                   onClick={() => void handleProvisionMassive()}
                   disabled={massiveProvisioning || !massiveProvisionProfileId.trim()}
@@ -1427,6 +1516,7 @@ export default function AdminProxiesPage() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Sub-account</TableHead>
+                        <TableHead>Channel</TableHead>
                         <TableHead>Profile</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead>Used / limit</TableHead>
@@ -1443,8 +1533,19 @@ export default function AdminProxiesPage() {
                             <div className="text-muted-foreground">{account.massive_account_id}</div>
                           </TableCell>
                           <TableCell className="text-xs">
-                            <div>{account.linkedin_username ?? account.profile_id ?? '—'}</div>
-                            <div className="font-mono text-muted-foreground">{account.profile_id ?? '—'}</div>
+                            <Badge variant="outline">{account.channel ?? 'linkedin'}</Badge>
+                          </TableCell>
+                          <TableCell className="text-xs">
+                            <div>
+                              {account.linkedin_username ??
+                                account.whatsapp_number ??
+                                account.profile_id ??
+                                account.whatsapp_profile_id ??
+                                '—'}
+                            </div>
+                            <div className="font-mono text-muted-foreground">
+                              {account.profile_id ?? account.whatsapp_profile_id ?? '—'}
+                            </div>
                           </TableCell>
                           <TableCell>
                             <Badge variant={account.massive_status === 'active' ? 'default' : 'secondary'}>
@@ -1739,8 +1840,8 @@ export default function AdminProxiesPage() {
           <DialogHeader>
             <DialogTitle>Assign proxy</DialogTitle>
             <DialogDescription>
-              One active proxy per profile. A used proxy can only return to the same LinkedIn
-              account.
+              One active proxy per browser account. A used proxy can only return
+              to the same LinkedIn or WhatsApp profile.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
@@ -1751,10 +1852,38 @@ export default function AdminProxiesPage() {
               </div>
             </div>
             <div className="flex gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant={assignChannel === 'linkedin' ? 'default' : 'outline'}
+                onClick={() => {
+                  setAssignChannel('linkedin')
+                  setSelectedProfileId('')
+                }}
+              >
+                LinkedIn
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={assignChannel === 'whatsapp' ? 'default' : 'outline'}
+                onClick={() => {
+                  setAssignChannel('whatsapp')
+                  setSelectedProfileId('')
+                }}
+              >
+                WhatsApp
+              </Button>
+            </div>
+            <div className="flex gap-2">
               <Input
                 value={profileSearch}
                 onChange={(event) => setProfileSearch(event.target.value)}
-                placeholder="Search cloud profiles"
+                placeholder={
+                  assignChannel === 'whatsapp'
+                    ? 'Search cloud WhatsApp numbers'
+                    : 'Search cloud profiles'
+                }
               />
               <Button
                 variant="outline"
@@ -1768,10 +1897,35 @@ export default function AdminProxiesPage() {
               </Button>
             </div>
             <div className="max-h-64 space-y-1 overflow-y-auto rounded-lg border p-1">
-              {cloudProfiles.length === 0 ? (
-                <p className="p-3 text-xs text-muted-foreground">No cloud profiles found.</p>
+              {assignChannel === 'linkedin' ? (
+                cloudProfiles.length === 0 ? (
+                  <p className="p-3 text-xs text-muted-foreground">No cloud profiles found.</p>
+                ) : (
+                  cloudProfiles.map((profile) => (
+                    <button
+                      key={profile.id}
+                      type="button"
+                      onClick={() => setSelectedProfileId(profile.id)}
+                      className={`flex w-full flex-col rounded-md px-3 py-2 text-left text-xs transition-colors ${
+                        selectedProfileId === profile.id ? 'bg-muted' : 'hover:bg-muted/60'
+                      }`}
+                    >
+                      <span className="font-medium">{profile.username ?? profile.id}</span>
+                      <span className="text-muted-foreground">
+                        {profile.email || profile.user_id} · {profile.id}
+                      </span>
+                      <span className="text-muted-foreground">
+                        {profile.has_proxy ? `proxy ${profile.proxy_id ?? 'BYO'}` : 'no proxy'}
+                      </span>
+                    </button>
+                  ))
+                )
+              ) : whatsappProfiles.length === 0 ? (
+                <p className="p-3 text-xs text-muted-foreground">
+                  No cloud WhatsApp numbers found.
+                </p>
               ) : (
-                cloudProfiles.map((profile) => (
+                whatsappProfiles.map((profile) => (
                   <button
                     key={profile.id}
                     type="button"
@@ -1780,12 +1934,14 @@ export default function AdminProxiesPage() {
                       selectedProfileId === profile.id ? 'bg-muted' : 'hover:bg-muted/60'
                     }`}
                   >
-                    <span className="font-medium">{profile.username ?? profile.id}</span>
-                    <span className="text-muted-foreground">
-                      {profile.email || profile.user_id} · {profile.id}
+                    <span className="font-medium">
+                      {profile.phone_number || profile.display_name || profile.id}
                     </span>
                     <span className="text-muted-foreground">
-                      {profile.has_proxy ? `proxy ${profile.proxy_id ?? 'BYO'}` : 'no proxy'}
+                      {profile.email || profile.user_id} · {profile.cloud_mode ?? 'cloud'}
+                    </span>
+                    <span className="text-muted-foreground">
+                      {profile.proxy_id ? `proxy ${profile.proxy_id}` : 'no proxy'}
                     </span>
                   </button>
                 ))

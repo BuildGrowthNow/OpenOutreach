@@ -932,34 +932,37 @@ applied on 2026-11-20 and a follow-up dry-run was clean. See
 **Goal:** Deliver the “one LinkedIn + one WhatsApp + one email” bundle safely and price
 it correctly.
 
-Status (2026-11-21): **first slice implemented behind
-`WHATSAPP_CLOUD_PROXY_ENABLED=false` and `DAEMON_V2_WHATSAPP_ENABLED=false`.**
-Cloud Duo shared-IP WhatsApp now
-shares an existing cloud LinkedIn seat and managed proxy; it does not create a
-second seat or sub-account. Pricing remains $299/mo per seat during rollout.
-WhatsApp-only cloud seats, separate-IP Duo, and managed email remain out of
-scope. See `docs/CLOUD_PHASE4_WHATSAPP_DUO.md`.
+Status (2026-11-21): **complete, deployed, and enabled for the owner's live
+test.** Phase 4 now includes unified cloud seat accounting for LinkedIn and
+WhatsApp, channel-aware managed proxy provisioning and lifecycle, WhatsApp-only
+cloud seats, shared-IP and separate-IP Cloud Duo, per-channel usage attribution,
+the BYO email slot, channel bundle onboarding, and admin/support views for both
+channels. Cloud Duo remains $299/seat during rollout; separate IPs are a
+support/configuration choice, not a price change. `MASSIVE_RESELLER_ENABLED`
+stays false for the first owner live test and is enabled only after that test
+passes. See `docs/CLOUD_PHASE4_WHATSAPP_DUO.md`.
 
 ### 9.1 WhatsApp cloud proxy
 
-Status: the shared-IP Duo slice is implemented behind
-`WHATSAPP_CLOUD_PROXY_ENABLED=false`.
+Status: complete and enabled for the owner's live test.
 
 Done:
 
-1. `execution_mode`, `identity_id`, `proxy_id`, `proxy_mode`, `proxy_region_*` are on
-   `WhatsAppProfile`.
-2. The proxy is passed to `browser.new_context(proxy=...)`; a missing/disabled proxy
-   raises and the server IP is never used.
-3. A WhatsApp number may share the same client identity’s cloud LinkedIn proxy and seat.
-4. The QR is stored in the DB and served by the API; the headless cloud daemon uses it.
-
-Remaining:
-
-1. WhatsApp-only cloud seats (no LinkedIn account) and separate-IP Duo.
-2. Country/phone-number matching and automatic proxy assignment for WhatsApp-only seats.
-3. Live WhatsApp Web acceptance on residential/mobile; never use a datacenter IP.
-4. VNC confirmation for the cloud QR path if the API QR is not sufficient in practice.
+1. `execution_mode`, `cloud_mode`, `identity_id`, `proxy_id`, `proxy_mode`,
+   `proxy_region_*`, and active/paused state are on `WhatsAppProfile`.
+2. The proxy is passed to `browser.new_context(proxy=...)`; a missing/disabled
+   proxy raises and the server IP is never used.
+3. A WhatsApp number may share the same client identity's cloud LinkedIn proxy
+   and seat (Cloud Duo shared IP), or use its own proxy while keeping the same
+   seat (separate IP), or run as a WhatsApp-only cloud seat.
+4. The QR is stored in the DB and served by the API; the headless cloud daemon
+   uses it.
+5. Country/region selection and automatic proxy assignment are implemented for
+   WhatsApp-only and separate-IP Duo.
+6. The cloud daemon filters by the unified workspace seat pool and a healthy
+   proxy. It never launches a cloud WhatsApp session without one.
+7. Live WhatsApp Web acceptance is part of the owner's live checklist; the
+   code path is tested with the in-memory Mongo fake and fake provider client.
 
 ### 9.2 Email
 
@@ -990,9 +993,10 @@ Recommended:
 |---|---|---|
 | Cloud Solo | $299/mo | 1 browser account (LinkedIn or WhatsApp) + 1 email slot + 1 proxy identity |
 | Cloud Duo (shared IP) | $299/mo | 1 LinkedIn + 1 WhatsApp + 1 email + 1 shared proxy identity, same client |
-| Cloud Duo (separate IPs) | $349–399/mo | 1 LinkedIn + 1 WhatsApp + 1 email + 2 proxy identities |
+| Cloud Duo (separate IPs) | $299/mo during rollout | 1 LinkedIn + 1 WhatsApp + 1 email + 2 proxy identities; support configuration, not a price change |
+| WhatsApp-only cloud | $299/mo | 1 WhatsApp + 1 email slot + 1 proxy identity |
 | Extra cloud seat | $299/mo | 1 additional browser account + proxy identity |
-| Team member login | Free up to 3; $29/mo after | No browser account/proxy |
+| Team member login | Free during rollout | No browser account/proxy |
 | Desktop seat | Included in Business/Agency | Local IP, no proxy |
 
 Customer-facing pricing is **flat per seat**. Do not publish GB allowances, overage

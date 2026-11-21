@@ -43,11 +43,16 @@ class OrganizationAdminResponse(BaseModel):
     is_personal: bool
     seat_override: bool
     cloud_seats: int
+    cloud_seats_used: int = 0
     linkedin_account_limit: int
     whatsapp_account_limit: int
     members_count: int
     credentialed_profiles: int
     assigned_profiles: int
+    whatsapp_cloud_profiles: int = 0
+    whatsapp_only_seats: int = 0
+    duo_seats: int = 0
+    linkedin_seats: int = 0
     stripe_customer_id: Optional[str] = None
     stripe_subscription_id: Optional[str] = None
     created_at: Optional[str] = None
@@ -97,11 +102,16 @@ def _admin_org_response(org: Organization) -> OrganizationAdminResponse:
         is_personal=org.is_personal,
         seat_override=org.seat_override,
         cloud_seats=org.cloud_seats,
+        cloud_seats_used=summary["cloud_seats_used"],
         linkedin_account_limit=org.linkedin_account_limit,
         whatsapp_account_limit=org.whatsapp_account_limit,
         members_count=summary["members"],
         credentialed_profiles=summary["credentialed_profiles"],
         assigned_profiles=summary["assigned_profiles"],
+        whatsapp_cloud_profiles=summary["whatsapp_cloud_profiles"],
+        whatsapp_only_seats=summary["whatsapp_only_seats"],
+        duo_seats=summary["duo_seats"],
+        linkedin_seats=summary["linkedin_seats"],
         stripe_customer_id=org.stripe_customer_id,
         stripe_subscription_id=org.stripe_subscription_id,
         created_at=_iso(org.created_at),
@@ -159,6 +169,8 @@ async def get_organization(org_id: str) -> AdminOrgDetailResponse:
             {
                 "id": str(doc.get("_id")),
                 "linkedin_username": doc.get("linkedin_username"),
+                "channel": "linkedin",
+                "cloud_mode": None,
                 "execution_mode": doc.get("execution_mode"),
                 "assigned_user_id": doc.get("assigned_user_id"),
                 "active": bool(doc.get("active", doc.get("is_active", False))),
@@ -170,6 +182,26 @@ async def get_organization(org_id: str) -> AdminOrgDetailResponse:
             }
             for doc in profiles.find({"org_id": org._id})
         ]
+    whatsapp = get_mongodb_collection("whatsapp_profiles")
+    if whatsapp is not None:
+        profile_docs.extend(
+            {
+                "id": str(doc.get("_id")),
+                "linkedin_username": None,
+                "phone_number": doc.get("phone_number"),
+                "display_name": doc.get("display_name"),
+                "channel": "whatsapp",
+                "cloud_mode": doc.get("cloud_mode"),
+                "execution_mode": doc.get("execution_mode"),
+                "assigned_user_id": doc.get("assigned_user_id"),
+                "active": bool(doc.get("active", doc.get("is_active", True))),
+                "proxy_assigned": bool(doc.get("proxy_id")),
+                "proxy_mode": doc.get("proxy_mode"),
+            }
+            for doc in whatsapp.find(
+                {"org_id": org._id, "execution_mode": "cloud"}
+            )
+        )
     proxies_collection = get_mongodb_collection("proxies")
     proxy_docs: list[dict] = []
     if proxies_collection is not None:
@@ -208,12 +240,31 @@ async def get_organization(org_id: str) -> AdminOrgDetailResponse:
     usage_collection = get_mongodb_collection("proxy_usage_snapshots")
     usage_bytes = 0
     per_channel: dict[str, int] = {}
+    per_workspace_channel: dict[str, dict[str, int]] = {}
     if usage_collection is not None:
         for doc in usage_collection.find({"org_id": org._id}):
             amount = int(doc.get("bytes") or 0)
             usage_bytes += amount
             channel = str(doc.get("channel") or "linkedin")
             per_channel[channel] = per_channel.get(channel, 0) + amount
+            workspace_key = str(
+                doc.get("org_id")
+                or doc.get("workspace_id")
+                or doc.get("user_id")
+                or ""
+            )
+            if workspace_key:
+                bucket = per_workspace_channel.setdefault(workspace_key, {})
+                bucket[channel] = bucket.get(channel, 0) + amount
+
+    from openoutreach.billing.cloud_seats import cloud_seat_alerts
+
+    seat_alerts = [
+        alert
+        for alert in cloud_seat_alerts()
+        if str(alert.get("org_id")) == str(org._id)
+    ]
+    summary = seat_summary(org)
 
     return AdminOrgDetailResponse(
         organization=_admin_org_response(org),
@@ -233,6 +284,9 @@ async def get_organization(org_id: str) -> AdminOrgDetailResponse:
         usage={
             "total_bytes": usage_bytes,
             "per_channel": per_channel,
+            "per_workspace_channel": per_workspace_channel,
+            "seats": summary,
+            "seat_alerts": seat_alerts,
             "proxies": len(proxy_docs),
             "limit_reached": sum(
                 1 for proxy in proxy_docs if proxy.get("massive_limit_reached")

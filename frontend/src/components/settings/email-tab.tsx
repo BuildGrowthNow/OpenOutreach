@@ -34,6 +34,7 @@ import {
   type MailboxCreate,
 } from "@/lib/api/mailboxes";
 import { getSettings, updateSettings } from "@/lib/api/dashboard";
+import { useBilling } from "@/lib/contexts/billing-context";
 
 const GMAIL_APP_PASSWORD_URL =
   "https://support.google.com/accounts/answer/185833";
@@ -313,7 +314,13 @@ const DEFAULT_FORM: FormState = {
   imapPassword: "",
 };
 
-function AddMailboxModal({ onAdded }: { onAdded: (box: Mailbox) => void }) {
+function AddMailboxModal({
+  onAdded,
+  disabled = false,
+}: {
+  onAdded: (box: Mailbox) => void;
+  disabled?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<FormState>(DEFAULT_FORM);
   const [showPassword, setShowPassword] = useState(false);
@@ -386,7 +393,7 @@ function AddMailboxModal({ onAdded }: { onAdded: (box: Mailbox) => void }) {
 
   return (
     <>
-      <Button size="sm" onClick={() => setOpen(true)}>
+      <Button size="sm" onClick={() => setOpen(true)} disabled={disabled}>
         <Icons.Plus className="mr-2 h-4 w-4" />
         Add mailbox
       </Button>
@@ -719,6 +726,10 @@ export function EmailTab() {
   const [mailboxes, setMailboxes] = useState<Mailbox[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { billingStatus } = useBilling();
+  const slotLimit = billingStatus?.email_slot_limit ?? 0;
+  const slotUsed = billingStatus?.email_slots_used ?? mailboxes.length;
+  const atSlotLimit = slotLimit > 0 && slotUsed >= slotLimit;
 
   const load = useCallback(async () => {
     try {
@@ -754,11 +765,22 @@ export function EmailTab() {
               Email mailboxes
             </CardTitle>
             <CardDescription>
-              Connect SMTP inboxes for cold email outreach. Bring your own
-              Gmail, Outlook, or custom SMTP — no extra cost.
+              Connect your own SMTP/IMAP mailbox; no proxy. Each seat includes
+              one email slot. Bring your own Gmail, Outlook, or custom SMTP —
+              no managed mailbox and no extra cost.
             </CardDescription>
+            {slotLimit > 0 && (
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <Badge variant={atSlotLimit ? "destructive" : "secondary"}>
+                  {slotUsed} of {slotLimit} email slot{slotLimit === 1 ? "" : "s"} used
+                </Badge>
+                <span className="text-xs text-muted-foreground">
+                  BYO SMTP/IMAP · No proxy · No managed mailbox
+                </span>
+              </div>
+            )}
           </div>
-          <AddMailboxModal onAdded={handleAdded} />
+          <AddMailboxModal onAdded={handleAdded} disabled={atSlotLimit} />
         </div>
       </CardHeader>
       <CardContent>

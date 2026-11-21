@@ -176,7 +176,7 @@ export default function CloudPage() {
               Both are flat per-seat products. The unit is the client identity,
               not the number of channels.
             </p>
-            <div className="mt-10 grid gap-5 md:grid-cols-2">
+            <div className="mt-10 grid gap-5 md:grid-cols-3">
               <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-7">
                 <div className="flex items-center gap-2 font-semibold text-white">
                   <Cloud className="h-5 w-5 text-sky-400" />
@@ -195,17 +195,29 @@ export default function CloudPage() {
                 </div>
                 <p className="mt-3 text-sm leading-relaxed text-zinc-400">
                   One LinkedIn account, one WhatsApp number, and one email slot
-                  for the same client identity. The channels share one managed
-                  proxy and one seat.
+                  for the same client identity. Shared IP uses one managed proxy;
+                  Separate IP keeps one seat but adds a second WhatsApp proxy and
+                  sub-account.
                 </p>
                 <p className="mt-4 text-sm font-medium text-sky-300">$299/mo</p>
+              </div>
+              <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-7">
+                <div className="flex items-center gap-2 font-semibold text-white">
+                  <Globe2 className="h-5 w-5 text-emerald-400" />
+                  WhatsApp-only cloud
+                </div>
+                <p className="mt-3 text-sm leading-relaxed text-zinc-400">
+                  One WhatsApp number with its own cloud seat and managed proxy.
+                  No LinkedIn account required. Desktop WhatsApp stays local-IP
+                  with no proxy.
+                </p>
+                <p className="mt-4 text-sm font-medium text-emerald-300">$299/mo</p>
               </div>
             </div>
             <div className="mt-6 flex items-start justify-center gap-2 text-xs text-zinc-500">
               <Mail className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              Email is BYO SMTP/IMAP: no proxy, no managed mailbox cost. Separate
-              IPs for the two channels are a support configuration; pricing stays
-              flat per seat during rollout.
+              Email is BYO SMTP/IMAP: no proxy, no managed mailbox cost. Pricing
+              stays flat per seat during rollout; no GB meter or overage.
             </div>
           </div>
         </section>
@@ -272,6 +284,25 @@ export default function CloudPage() {
                   TTL, so the egress IP stays stable during normal work. A new
                   session or a region change can produce a new IP and may trigger
                   a one-time LinkedIn challenge.
+                </p>
+              </div>
+              <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-6">
+                <h3 className="font-semibold text-white">Can LinkedIn and WhatsApp share a proxy?</h3>
+                <p className="mt-2 text-sm leading-relaxed text-zinc-400">
+                  Yes, only when both channels belong to the same real-world
+                  client identity. Cloud Duo Shared IP uses one seat and one
+                  proxy. Choose Separate IP to keep one seat but provision a
+                  second proxy and sub-account for WhatsApp.
+                </p>
+              </div>
+              <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-6">
+                <h3 className="font-semibold text-white">What counts as a seat?</h3>
+                <p className="mt-2 text-sm leading-relaxed text-zinc-400">
+                  One browser account (LinkedIn or WhatsApp), one BYO email slot,
+                  and one proxy identity. Cloud Duo is one seat because both
+                  channels belong to the same identity. There is no GB meter,
+                  overage, or included-bandwidth allowance; pricing is flat per
+                  seat under fair use.
                 </p>
               </div>
               <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-6">

@@ -12,33 +12,12 @@ from typing import Optional
 
 from openoutreach.mongodb.models_user import User
 from openoutreach.mongodb.connection import get_mongodb_collection
+from openoutreach.billing.cloud_seats import cloud_seat_units_for_scope
 from openoutreach.billing.plans import get_plan
-from openoutreach.billing.seats import count_credentialed_profiles
+from openoutreach.billing.seats import accounting_scope_id, count_credentialed_profiles
 from openoutreach.organizations.enforcement import EffectivePlan, resolve_effective_plan
-from openoutreach.organizations.service import team_workspaces_enabled
 
 logger = logging.getLogger(__name__)
-
-
-def _cloud_profile_query(user: User, exclude_profile_id: Optional[str] = None) -> dict:
-    """Build the cloud-profile count predicate for the user's scope."""
-    query: dict = {
-        "is_active": True,
-        "execution_mode": "cloud",
-    }
-    if team_workspaces_enabled():
-        try:
-            from openoutreach.organizations.access import resolve_org_context
-
-            ctx = resolve_org_context(user)
-            query["org_id"] = ctx.org_id
-        except Exception:
-            query["user_id"] = user._id
-    else:
-        query["user_id"] = user._id
-    if exclude_profile_id:
-        query["_id"] = {"$ne": exclude_profile_id}
-    return query
 
 
 class PlanEnforcer:
@@ -116,19 +95,26 @@ class PlanEnforcer:
         if not effective.is_active:
             return False, "Subscription is not active"
 
-        # Cloud plan includes one seat; add-on seats add one each.
+        # Cloud plan includes one seat; add-on seats add one each. The unified
+        # pool counts cloud LinkedIn and cloud WhatsApp browser accounts, with
+        # a Cloud Duo sharing one seat across its two channels.
         seat_limit = effective.cloud_seat_limit
         if seat_limit <= 0:
             return False, "Cloud execution requires a Cloud Add-on or eligible plan. Use the desktop app instead."
 
-        collection = get_mongodb_collection("linkedin_profiles")
-        if collection is None:
-            return False, "Database error"
-        query = _cloud_profile_query(user, exclude_profile_id)
-        active_cloud = collection.count_documents(query)
-        if active_cloud < seat_limit:
+        scope_id = accounting_scope_id(user._id)
+        units = cloud_seat_units_for_scope(scope_id)
+        if exclude_profile_id:
+            units = [
+                unit
+                for unit in units
+                if unit.get("profile_id") != exclude_profile_id
+                and unit.get("whatsapp_profile_id") != exclude_profile_id
+            ]
+        used = len(units)
+        if used < seat_limit:
             return True, None
-        return False, f"Cloud execution seat limit reached ({active_cloud}/{seat_limit})"
+        return False, f"Cloud execution seat limit reached ({used}/{seat_limit})"
 
     @staticmethod
     def can_run_tasks(user: User) -> tuple[bool, Optional[str]]:

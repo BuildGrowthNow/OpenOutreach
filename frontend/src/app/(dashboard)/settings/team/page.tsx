@@ -110,7 +110,18 @@ export default function TeamSettingsPage() {
   const seatUsage = useMemo(() => {
     if (!seats) return null;
     if (seats.cloud_seat_limit === null || seats.cloud_seat_limit <= 0) return null;
-    return `${seats.credentialed_profiles} of ${seats.cloud_seat_limit} cloud seats used`;
+    const breakdown = [
+      seats.linkedin_seats ? `${seats.linkedin_seats} LinkedIn` : null,
+      seats.duo_seats ? `${seats.duo_seats} Duo` : null,
+      seats.whatsapp_only_seats
+        ? `${seats.whatsapp_only_seats} WhatsApp-only`
+        : null,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    return `${seats.cloud_seats_used ?? 0} of ${seats.cloud_seat_limit} cloud seats used${
+      breakdown ? ` (${breakdown})` : ""
+    }`;
   }, [seats]);
 
   const handleRevokeInvite = async (inviteId: string) => {

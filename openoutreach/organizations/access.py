@@ -208,7 +208,8 @@ def profile_authorized_for_tenant(
         if user is None:
             return False
         if channel == "whatsapp" and doc.get("execution_mode") == "cloud":
-            # Cloud WhatsApp has no proxy support until Phase 4.
+            # Cloud WhatsApp is server-owned and carries a managed proxy; the
+            # desktop daemon must never enroll it.
             return False
         return can_access_channel_doc(user, doc)
     collection = get_mongodb_collection(_PROFILES_COLLECTION)
