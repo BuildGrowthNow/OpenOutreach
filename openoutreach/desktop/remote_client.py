@@ -61,19 +61,33 @@ class DesktopRemoteClient:
             "GET", "/api/daemon/v2/compatibility", params={"version": __version__}
         )).json()
 
-    async def enroll_device(self, code: str, public_key: str) -> dict[str, Any]:
+    async def enroll_device(
+        self, code: str, public_key: str, local_ip: Optional[str] = None
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "code": code,
+            "public_key": public_key,
+            "version": __version__,
+            "platform": platform.system().lower().replace("windows", "win32"),
+            "capabilities": ["device-auth", "task-leases", "typed-events"],
+        }
+        if local_ip:
+            payload["local_ip"] = local_ip
         response = await self._client.post(
             "/api/daemon/v2/devices/enroll",
-            json={
-                "code": code,
-                "public_key": public_key,
-                "version": __version__,
-                "platform": platform.system().lower().replace("windows", "win32"),
-                "capabilities": ["device-auth", "task-leases", "typed-events"],
-            },
+            json=payload,
         )
         response.raise_for_status()
         return response.json()
+
+    async def send_heartbeat(self, local_ip: Optional[str] = None) -> dict[str, Any]:
+        """Record last-seen time and the local egress IP for support display."""
+        payload = {"local_ip": local_ip} if local_ip else {}
+        return (
+            await self._request(
+                "POST", "/api/daemon/v2/devices/heartbeat", json=payload
+            )
+        ).json()
 
     async def exchange_device_token(
         self, device_id: str, refresh_token: str, sign: Callable[[bytes], str]

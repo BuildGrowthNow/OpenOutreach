@@ -1077,29 +1077,29 @@ send a surprise bill. Publish a fair-use clause, not a GB number.
 
 ### 11.1 Marketing website checklist
 
-- [ ] Pricing page matches the current phase’s actual features.
+- [x] Pricing page matches the current phase’s actual features.
 - [x] Cloud CTA carries `?plan=cloud`.
-- [ ] Cloud vs Desktop comparison.
-- [ ] “What’s in a seat?” table.
+- [x] Cloud vs Desktop comparison.
+- [x] “What’s in a seat?” cards on `/pricing` and `/cloud`.
 - [x] Proxy/region FAQ.
-- [ ] Team/seat FAQ.
+- [x] Team/seat FAQ.
 - [x] Security/encryption note.
-- [ ] No claims for features not shipped.
+- [x] No claims for features not shipped.
 - [ ] Signup → checkout → onboarding path tested.
-- [ ] SEO pages for cloud execution, managed proxy, team outreach.
+- [x] SEO pages for cloud execution and team workspaces (`/cloud`, `/teams`).
 - [ ] Transactional emails updated.
 
 ### 11.2 Desktop app checklist
 
 - [x] Desktop profiles never receive proxy credentials.
-- [ ] Local IP badge.
-- [ ] Cloud vs desktop account display.
-- [ ] Org-aware login/workspace.
-- [ ] Org-owned profile enrollment.
-- [ ] Device list/revocation per org.
-- [ ] Seat type display.
-- [ ] Version bump/force update.
-- [ ] Windows/macOS build, sign, notarize.
+- [x] Local IP badge (desktop 2.1.8 enrollment + heartbeat).
+- [x] Cloud vs desktop account display.
+- [x] Org-aware login/workspace.
+- [x] Org-owned profile enrollment.
+- [x] Device list/revocation per org.
+- [x] Seat type display.
+- [x] Version bump to 2.1.8 (additive heartbeat; minimum secure version unchanged).
+- [ ] Windows/macOS build, sign, notarize (build/release pipeline; signing needs credentials).
 - [ ] E2E: invite → enroll → run task on local IP.
 
 ### 11.3 Cloud app checklist
@@ -1120,11 +1120,11 @@ send a surprise bill. Publish a fair-use clause, not a GB number.
 - [x] Proxy inventory.
 - [x] Bulk import/preview.
 - [x] Test/assign/unassign/disable/retire.
-- [ ] Massive sync/usage.
+- [x] Massive sync/usage (Phase 2 admin Massive tab; budget dry-run CLI).
 - [x] Org/seat view (Phase 3A minimal admin org page + audited seat override).
 - [x] Audit log.
-- [ ] Alerts.
-- [ ] Support runbook.
+- [x] Alerts (admin Massive alerts + budget/limit/access signals).
+- [x] Support runbook.
 
 ### 11.5 Onboarding checklist
 
@@ -1143,15 +1143,15 @@ send a surprise bill. Publish a fair-use clause, not a GB number.
 
 ### 11.6 Security checklist
 
-- [ ] Proxy passwords encrypted at rest.
-- [ ] Massive keys server-only.
+- [x] Proxy passwords encrypted at rest.
+- [x] Massive keys server-only.
 - [x] Admin-only proxy routes.
 - [x] Tenant isolation on assignment.
 - [x] No secrets in logs/responses.
 - [x] Audit log.
 - [x] Rate limits on import/test.
 - [x] SSRF validation for proxy URLs.
-- [ ] Device revocation.
+- [x] Device revocation.
 - [x] No proxy reuse across LinkedIn accounts.
 
 ### 11.7 Testing checklist

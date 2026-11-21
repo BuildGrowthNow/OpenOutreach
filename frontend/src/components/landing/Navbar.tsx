@@ -32,9 +32,15 @@ export function Navbar() {
           </Link>
 
           {/* Desktop Nav */}
-          <nav className="hidden md:flex items-center gap-8 text-sm">
+          <nav className="hidden md:flex items-center gap-5 lg:gap-7 text-sm">
             <Link href="/pricing" className="text-zinc-400 hover:text-white transition-colors duration-200">
               Pricing
+            </Link>
+            <Link href="/cloud" className="text-zinc-400 hover:text-white transition-colors duration-200">
+              Cloud
+            </Link>
+            <Link href="/teams" className="text-zinc-400 hover:text-white transition-colors duration-200">
+              Teams
             </Link>
             <Link href="/lifetime" className="text-zinc-400 hover:text-white transition-colors duration-200">
               Lifetime Deal
@@ -79,6 +85,20 @@ export function Navbar() {
               onClick={() => setIsOpen(false)}
             >
               Pricing
+            </Link>
+            <Link
+              href="/cloud"
+              className="text-zinc-300 text-sm hover:text-white transition-colors"
+              onClick={() => setIsOpen(false)}
+            >
+              Cloud
+            </Link>
+            <Link
+              href="/teams"
+              className="text-zinc-300 text-sm hover:text-white transition-colors"
+              onClick={() => setIsOpen(false)}
+            >
+              Teams
             </Link>
             <Link
               href="/lifetime"

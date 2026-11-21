@@ -1,8 +1,18 @@
+import base64
+import json
+
 import httpx
 import pytest
 from pathlib import Path
 
 from openoutreach.desktop.remote_client import DesktopRemoteClient
+
+
+def _proof_token() -> str:
+    payload = base64.urlsafe_b64encode(
+        json.dumps({"jti": "proof-id"}).encode("utf-8")
+    ).rstrip(b"=").decode("ascii")
+    return f"header.{payload}.signature"
 
 
 @pytest.mark.asyncio
@@ -42,6 +52,63 @@ async def test_rotated_refresh_credential_is_persisted():
         await client.exchange_device_token("device-1", "presented", lambda _: "signature")
         assert rotated == [("device-1", "replacement")]
         assert client._refresh_token == "replacement"
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_heartbeat_is_proof_bound_and_sends_local_ip():
+    client = DesktopRemoteClient(
+        "https://outreach-api.example",
+        _proof_token(),
+        "device",
+        device_signer=lambda _: "signature",
+    )
+    try:
+        captured = {}
+
+        async def request(method, path, **kwargs):
+            captured.update({"method": method, "path": path, **kwargs})
+            return httpx.Response(
+                200,
+                json={"status": "ok"},
+                request=httpx.Request(
+                    method, "https://outreach-api.example" + path
+                ),
+            )
+
+        client._client.request = request
+        assert await client.send_heartbeat("203.0.113.10") == {"status": "ok"}
+        assert captured["method"] == "POST"
+        assert captured["path"] == "/api/daemon/v2/devices/heartbeat"
+        assert captured["json"] == {"local_ip": "203.0.113.10"}
+        assert captured["headers"]["X-Daemon-Signature"] == "signature"
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_enrollment_includes_local_ip_when_available():
+    client = DesktopRemoteClient("https://outreach-api.example", "", "device")
+    try:
+        captured = {}
+
+        async def post(path, **kwargs):
+            captured.update({"path": path, **kwargs})
+            return httpx.Response(
+                200,
+                json={"device_id": "device", "refresh_token": "refresh", "profile_ids": []},
+                request=httpx.Request(
+                    "POST", "https://outreach-api.example" + path
+                ),
+            )
+
+        client._client.post = post
+        await client.enroll_device(
+            "enrollment-code", "public-key", local_ip="203.0.113.10"
+        )
+        assert captured["path"] == "/api/daemon/v2/devices/enroll"
+        assert captured["json"]["local_ip"] == "203.0.113.10"
     finally:
         await client.close()
 
