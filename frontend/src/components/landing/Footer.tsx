@@ -40,6 +40,16 @@ export function Footer() {
                 </Link>
               </li>
               <li>
+                <Link href="/cloud" className="text-zinc-500 text-sm hover:text-white transition-colors duration-200">
+                  Cloud
+                </Link>
+              </li>
+              <li>
+                <Link href="/teams" className="text-zinc-500 text-sm hover:text-white transition-colors duration-200">
+                  Teams
+                </Link>
+              </li>
+              <li>
                 <Link href="/lifetime" className="text-zinc-500 text-sm hover:text-white transition-colors duration-200">
                   Lifetime Deal
                 </Link>
