@@ -750,11 +750,13 @@ def assign_proxy_to_profile(
                 {
                     "status": STATUS_AVAILABLE,
                     "linkedin_profile_id": None,
+                    "whatsapp_profile_id": None,
                     "ever_assigned": {"$ne": True},
                 },
                 {
                     "status": {"$in": [STATUS_AVAILABLE, STATUS_DISABLED, STATUS_ERROR]},
                     "linkedin_profile_id": None,
+                    "whatsapp_profile_id": None,
                     "last_assigned_profile_id": profile_id,
                 },
                 {
