@@ -12,6 +12,7 @@ import inspect
 import json
 import logging
 import os
+import time
 from collections import deque
 from pathlib import Path
 import sys
@@ -19,6 +20,7 @@ from typing import Awaitable, Callable, Optional
 
 from openoutreach.desktop.remote_client import DesktopRemoteClient
 from openoutreach.desktop.device_identity import DeviceIdentity
+from openoutreach.desktop.local_ip import detect_local_ip
 
 logger = logging.getLogger(__name__)
 
@@ -202,6 +204,21 @@ class SecureRemoteDaemon:
         self.running = False
         self._stop = asyncio.Event()
         self._offline_completions = OfflineCompletionStore()
+        self._last_heartbeat = 0.0
+        self._heartbeat_interval_seconds = 60.0
+
+    async def _maybe_heartbeat(self) -> None:
+        """Report the local egress IP without blocking task processing."""
+        now = time.monotonic()
+        if now - self._last_heartbeat < self._heartbeat_interval_seconds:
+            return
+        self._last_heartbeat = now
+        try:
+            await self.client.send_heartbeat(detect_local_ip())
+        except Exception as exc:
+            # Heartbeats are display/support metadata. A transient API or
+            # network failure must never stop the daemon.
+            logger.debug("Device heartbeat failed: %s", type(exc).__name__)
 
     async def start(self) -> None:
         compatibility = await self.client.get_compatibility()
@@ -222,10 +239,12 @@ class SecureRemoteDaemon:
         self.running = True
         if self.on_started:
             self.on_started()
+        await self._maybe_heartbeat()
         # The browser executor is deliberately injected. This coordinator never
         # imports domain models or persists channel state locally.
         if self.channel_executors:
             while not self._stop.is_set():
+                await self._maybe_heartbeat()
                 await self._flush_offline_completions()
                 claimed = False
                 for channel, executor in self.channel_executors.items():
@@ -380,7 +399,11 @@ class SecureRemoteDaemon:
             self._offline_completions.popleft()
 
     async def enroll(self, code: str) -> dict:
-        data = await self.client.enroll_device(code, self.identity.public_key_pem.decode("ascii"))
+        data = await self.client.enroll_device(
+            code,
+            self.identity.public_key_pem.decode("ascii"),
+            detect_local_ip(),
+        )
         self.identity.remember_device(data["device_id"])
         self.client._refresh_token = data["refresh_token"]
         await self.client.exchange_device_token(
