@@ -7,6 +7,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 
 from openoutreach.api_v2.dependencies_v2 import get_current_user
+from openoutreach.config import settings
 from openoutreach.mongodb.connection import get_mongodb_collection
 from openoutreach.organizations.access import (
     can_access_channel_doc,
@@ -14,6 +15,11 @@ from openoutreach.organizations.access import (
     resolve_org_context,
 )
 from openoutreach.organizations.enforcement import resolve_effective_plan
+from openoutreach.whatsapp.cloud import (
+    WhatsAppCloudError,
+    resolve_duo_share,
+    whatsapp_cloud_enabled,
+)
 from openoutreach.whatsapp.models.profile import (
     STATUS_CONNECTED,
     STATUS_DISCONNECTED,
@@ -28,6 +34,9 @@ router = APIRouter()
 
 class WhatsAppProfileCreate(BaseModel):
     display_name: Optional[str] = None
+    execution_mode: str = "desktop"
+    # Cloud Duo shares an existing cloud LinkedIn profile's seat and proxy.
+    duo_linkedin_profile_id: Optional[str] = None
 
 
 class WhatsAppProfileUpdate(BaseModel):
@@ -46,6 +55,10 @@ def _serialize(profile: WhatsAppProfile) -> Dict[str, Any]:
         "assignedUserId": profile.assigned_user_id,
         "executionMode": profile.execution_mode,
         "proxyMode": profile.proxy_mode,
+        "proxyId": profile.proxy_id,
+        "proxyRegionCountry": profile.proxy_region_country,
+        "proxyRegionSubdivision": profile.proxy_region_subdivision,
+        "proxyRegionCity": profile.proxy_region_city,
         "phoneNumber": profile.phone_number,
         "displayName": profile.display_name,
         "status": profile.status,
@@ -96,6 +109,49 @@ async def create_profile(
         raise HTTPException(status_code=401, detail="User not found")
     ctx = resolve_org_context(user)
     effective = resolve_effective_plan(user)
+
+    execution_mode = (body.execution_mode or "desktop").strip().lower()
+    if execution_mode not in {"desktop", "cloud"}:
+        raise HTTPException(
+            status_code=400,
+            detail="execution_mode must be 'desktop' or 'cloud'",
+        )
+
+    duo_proxy = None
+    duo_identity = None
+    if execution_mode == "cloud":
+        if not whatsapp_cloud_enabled():
+            raise HTTPException(
+                status_code=403,
+                detail="WhatsApp cloud proxy is not enabled yet",
+            )
+        if not getattr(settings, "CLOUD_SEATS_ENABLED", True):
+            raise HTTPException(
+                status_code=403,
+                detail="Cloud seats are disabled",
+            )
+        if not getattr(settings, "MANAGED_PROXIES_ENABLED", True):
+            raise HTTPException(
+                status_code=409,
+                detail="Managed proxy provisioning is disabled",
+            )
+        if effective.cloud_seat_limit <= 0:
+            raise HTTPException(
+                status_code=402,
+                detail="Cloud Duo requires a Cloud seat",
+            )
+        if not body.duo_linkedin_profile_id:
+            raise HTTPException(
+                status_code=400,
+                detail="Select the cloud LinkedIn profile this WhatsApp number belongs to",
+            )
+        try:
+            _, duo_proxy, duo_identity = resolve_duo_share(
+                user, ctx.org_id, body.duo_linkedin_profile_id
+            )
+        except WhatsAppCloudError as exc:
+            raise HTTPException(status_code=409, detail=str(exc))
+
     coll = get_mongodb_collection("whatsapp_profiles")
     # Only connected profiles count against the limit; pending QR-scan ones don't.
     current_count = (
@@ -121,6 +177,28 @@ async def create_profile(
                 "Upgrade your plan or ask a workspace owner to add capacity."
             ),
         )
+    if execution_mode == "cloud" and coll is not None:
+        # A Cloud Duo number is a seat-priced channel. Count every workspace
+        # number, not only connected ones, so a pending QR scan cannot bypass
+        # the one-WhatsApp-per-seat rule.
+        total_count = coll.count_documents(
+            {
+                "$or": [
+                    {"org_id": ctx.org_id},
+                    {"org_id": {"$exists": False}, "user_id": user_id},
+                    {"org_id": None, "user_id": user_id},
+                ]
+            }
+        )
+        if total_count >= effective.whatsapp_account_limit:
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    f"WhatsApp account limit reached "
+                    f"({total_count}/{effective.whatsapp_account_limit}). "
+                    "Remove a number or add capacity before creating a Cloud Duo."
+                ),
+            )
 
     profile = WhatsAppProfile(
         # The workspace owner is the accounting/data owner; the creator keeps
@@ -128,7 +206,13 @@ async def create_profile(
         user_id=ctx.accounting_owner_id,
         org_id=ctx.org_id,
         assigned_user_id=user_id,
-        execution_mode="desktop",
+        execution_mode=execution_mode,
+        identity_id=duo_identity,
+        proxy_id=duo_proxy._id if duo_proxy else None,
+        proxy_mode="managed" if duo_proxy else "none",
+        proxy_region_country=duo_proxy.country if duo_proxy else None,
+        proxy_region_subdivision=duo_proxy.subdivision if duo_proxy else None,
+        proxy_region_city=duo_proxy.city if duo_proxy else None,
         display_name=body.display_name,
         status=STATUS_DISCONNECTED,
     )

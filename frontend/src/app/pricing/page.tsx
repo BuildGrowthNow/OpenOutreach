@@ -175,6 +175,11 @@ const faqs = [
       "Team workspaces let an owner invite members, assign roles, and share one plan and cloud seat pool. Owners and admins assign cloud LinkedIn profiles to members. Desktop seats run on the member's local IP with no proxy. Member logins are included in the current plan during rollout; a login alone does not include a browser account or proxy.",
   },
   {
+    question: "Does Cloud include WhatsApp and email?",
+    answer:
+      "Cloud Solo includes one browser account and one email slot. Cloud Duo adds one WhatsApp number to the same seat; when the LinkedIn and WhatsApp belong to the same client identity they share one managed proxy. Email connects your own SMTP/IMAP mailbox and does not use a proxy. Separate IPs for the two channels are available as a support configuration, and pricing stays flat per seat during rollout.",
+  },
+  {
     question: "Do I need technical skills to set it up?",
     answer:
       "No. Desktop setup is a one-time install that takes about 5 minutes. You log in, describe your ideal customer, and the first campaign goes out the same day. No code, no configuration files.",

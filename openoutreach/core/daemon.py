@@ -142,12 +142,61 @@ def _run_on_wa_thread(fn, timeout: float = 120) -> Any:
     return result[0]
 
 
+def _cloud_wa_ready(profile) -> bool:
+    """Return True when a cloud Duo WhatsApp profile has an active seat/proxy.
+
+    The WhatsApp number shares the cloud LinkedIn profile's proxy and seat.
+    If the LinkedIn profile is paused, the proxy is disabled, or the shared
+    proxy link is missing, the WhatsApp session must not start.
+    """
+    if profile.execution_mode != "cloud":
+        return False
+    if not profile.proxy_id:
+        logger.warning("Cloud WhatsApp %s has no managed proxy; skipping", profile.pk)
+        return False
+
+    from openoutreach.mongodb.connection import get_mongodb_collection
+    from openoutreach.proxies.models import STATUS_DISABLED, STATUS_RETIRED, Proxy
+
+    proxy = Proxy.get(profile.proxy_id)
+    if proxy is None or proxy.status in {STATUS_DISABLED, STATUS_RETIRED}:
+        logger.warning("Cloud WhatsApp %s proxy is not active; skipping", profile.pk)
+        return False
+    if proxy.massive_status in {"disabled", "budget_disabled", "retired", "error"}:
+        logger.warning("Cloud WhatsApp %s proxy is disabled; skipping", profile.pk)
+        return False
+    if not proxy.linkedin_profile_id:
+        logger.warning("Cloud WhatsApp %s proxy has no LinkedIn seat; skipping", profile.pk)
+        return False
+
+    profiles = get_mongodb_collection("linkedin_profiles")
+    linkedin = (
+        profiles.find_one({"_id": proxy.linkedin_profile_id})
+        if profiles is not None
+        else None
+    )
+    if not linkedin or linkedin.get("execution_mode") != "cloud":
+        logger.warning("Cloud WhatsApp %s shared LinkedIn profile is missing; skipping", profile.pk)
+        return False
+    if linkedin.get("active") is False or linkedin.get("is_active") is False:
+        logger.warning("Cloud WhatsApp %s shared LinkedIn seat is paused; skipping", profile.pk)
+        return False
+    if str(linkedin.get("proxy_id") or "") != str(profile.proxy_id):
+        logger.warning("Cloud WhatsApp %s shared proxy link changed; skipping", profile.pk)
+        return False
+    return True
+
+
 def _refresh_wa_sessions() -> None:
-    """Ensure a WA session exists for every non-banned WhatsApp profile."""
+    """Ensure a WA session exists for every eligible cloud WhatsApp profile."""
     # WhatsApp browser sessions are opt-in for the cloud daemon.  Desktop
     # users must not cause the server to launch one Chromium process per
     # stored WhatsApp profile (which can exhaust an M container).
     if not _WA_CLOUD_ENABLED:
+        return
+    from openoutreach.config import settings
+
+    if not getattr(settings, "WHATSAPP_CLOUD_PROXY_ENABLED", False):
         return
     try:
         from openoutreach.whatsapp.browser.launch import start_whatsapp_session
@@ -162,7 +211,15 @@ def _refresh_wa_sessions() -> None:
     if col is None:
         return
 
-    docs = list(col.find({"status": {"$ne": "banned"}}))
+    docs = list(
+        col.find(
+            {
+                "status": {"$ne": "banned"},
+                "execution_mode": "cloud",
+                "proxy_id": {"$ne": None},
+            }
+        )
+    )
     current_ids = {doc["_id"] for doc in docs}
 
     for pid in list(_WA_SESSIONS.keys()):
@@ -179,6 +236,8 @@ def _refresh_wa_sessions() -> None:
             continue
         try:
             profile = WhatsAppProfile.from_dict(doc)
+            if not _cloud_wa_ready(profile):
+                continue
             wa_session = WASession(profile)
             _run_on_wa_thread(lambda s=wa_session: start_whatsapp_session(s))
             _WA_SESSIONS[pid] = wa_session

@@ -932,21 +932,34 @@ applied on 2026-11-20 and a follow-up dry-run was clean. See
 **Goal:** Deliver the “one LinkedIn + one WhatsApp + one email” bundle safely and price
 it correctly.
 
+Status (2026-11-21): **first slice implemented behind
+`WHATSAPP_CLOUD_PROXY_ENABLED=false` and `DAEMON_V2_WHATSAPP_ENABLED=false`.**
+Cloud Duo shared-IP WhatsApp now
+shares an existing cloud LinkedIn seat and managed proxy; it does not create a
+second seat or sub-account. Pricing remains $299/mo per seat during rollout.
+WhatsApp-only cloud seats, separate-IP Duo, and managed email remain out of
+scope. See `docs/CLOUD_PHASE4_WHATSAPP_DUO.md`.
+
 ### 9.1 WhatsApp cloud proxy
 
-Current gap: `whatsapp/browser/launch.py` creates a context without a proxy. Required:
+Status: the shared-IP Duo slice is implemented behind
+`WHATSAPP_CLOUD_PROXY_ENABLED=false`.
 
-1. Add `execution_mode`, `identity_id`, `proxy_id`, `proxy_mode`, `proxy_region_*` to
+Done:
+
+1. `execution_mode`, `identity_id`, `proxy_id`, `proxy_mode`, `proxy_region_*` are on
    `WhatsAppProfile`.
-2. Pass the proxy to `browser.new_context(proxy=...)` exactly like LinkedIn.
-3. One proxy identity per WhatsApp number by default. It may share the same client’s
-   LinkedIn proxy when both channels belong to the same identity and the client accepts
-   the shared-IP trade-off.
-4. Country should match the phone number’s country.
-5. Add seat enforcement and proxy auto-assignment.
-6. Add a QR/VNC flow for cloud WhatsApp (currently the QR is stored in DB; the cloud
-   daemon runs headless, so verify the QR path works without a local browser).
-7. Test WhatsApp Web acceptance on residential/mobile; never use a datacenter IP.
+2. The proxy is passed to `browser.new_context(proxy=...)`; a missing/disabled proxy
+   raises and the server IP is never used.
+3. A WhatsApp number may share the same client identity’s cloud LinkedIn proxy and seat.
+4. The QR is stored in the DB and served by the API; the headless cloud daemon uses it.
+
+Remaining:
+
+1. WhatsApp-only cloud seats (no LinkedIn account) and separate-IP Duo.
+2. Country/phone-number matching and automatic proxy assignment for WhatsApp-only seats.
+3. Live WhatsApp Web acceptance on residential/mobile; never use a datacenter IP.
+4. VNC confirmation for the cloud QR path if the API QR is not sufficient in practice.
 
 ### 9.2 Email
 

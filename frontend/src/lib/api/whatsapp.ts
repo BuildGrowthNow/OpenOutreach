@@ -11,6 +11,17 @@ export interface WhatsAppProfile {
   lastSeen: string | null;
   createdAt: string;
   qrDataUrl: string | null;
+  executionMode: "desktop" | "cloud";
+  proxyMode: "none" | "managed" | "byo";
+  proxyId: string | null;
+  proxyRegionCountry: string | null;
+  proxyRegionSubdivision: string | null;
+  proxyRegionCity: string | null;
+}
+
+export interface CreateWhatsAppProfileOptions {
+  executionMode?: "desktop" | "cloud";
+  duoLinkedInProfileId?: string;
 }
 
 export async function listWhatsAppProfiles(): Promise<WhatsAppProfile[]> {
@@ -18,9 +29,14 @@ export async function listWhatsAppProfiles(): Promise<WhatsAppProfile[]> {
   return res.data ?? [];
 }
 
-export async function createWhatsAppProfile(displayName?: string): Promise<WhatsAppProfile> {
+export async function createWhatsAppProfile(
+  displayName?: string,
+  options?: CreateWhatsAppProfileOptions,
+): Promise<WhatsAppProfile> {
   const res = await apiClient.post<WhatsAppProfile>("/whatsapp/profiles", {
     display_name: displayName || null,
+    execution_mode: options?.executionMode ?? "desktop",
+    duo_linkedin_profile_id: options?.duoLinkedInProfileId ?? null,
   });
   if (!res.data) throw new Error(res.error ?? "Failed to create profile");
   return res.data;
