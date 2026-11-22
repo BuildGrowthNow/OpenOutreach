@@ -494,7 +494,7 @@ def cloud_seat_alerts() -> list[dict[str, Any]]:
                 owner.plan or "starter", int(owner.cloud_profiles or 0)
             )
         summary = cloud_seat_summary_for_org(str(doc["_id"]), owner_id, limit=limit)
-        if limit and summary["used"] > limit:
+        if summary["used"] > limit:
             alerts.append(
                 {
                     "type": "cloud_seat_over_limit",
