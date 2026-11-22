@@ -786,6 +786,7 @@ def assign_seat(
         if profile.get("assigned_user_id") == assigned_user_id:
             return profile
         proxy_id = profile.get("proxy_id")
+        linkedin_doc = None
         if proxy_id:
             from openoutreach.proxies.models import Proxy
 
@@ -797,15 +798,35 @@ def assign_seat(
                     if linkedin is not None
                     else None
                 )
-                if (
-                    not linkedin_doc
-                    or linkedin_doc.get("active") is False
-                    or linkedin_doc.get("is_active") is False
-                ):
-                    raise SeatAssignmentError(
-                        "Assign the shared LinkedIn seat first; this WhatsApp "
-                        "number uses the LinkedIn proxy"
-                    )
+        if linkedin_doc is None and profile.get("identity_id"):
+            linkedin = get_mongodb_collection(_PROFILES_COLLECTION)
+            if linkedin is not None:
+                linkedin_doc = linkedin.find_one(
+                    {
+                        "org_id": org._id,
+                        "execution_mode": "cloud",
+                        "identity_id": profile.get("identity_id"),
+                    }
+                )
+        if linkedin_doc is not None:
+            if (
+                linkedin_doc.get("active") is False
+                or linkedin_doc.get("is_active") is False
+            ):
+                raise SeatAssignmentError(
+                    "Assign the shared LinkedIn seat first; this WhatsApp "
+                    "number belongs to the same Duo"
+                )
+            if not linkedin_doc.get("assigned_user_id"):
+                raise SeatAssignmentError(
+                    "Assign the shared LinkedIn seat first; this WhatsApp "
+                    "number belongs to the same Duo"
+                )
+            if linkedin_doc.get("assigned_user_id") != assigned_user_id:
+                raise SeatAssignmentError(
+                    "Assign the Duo WhatsApp number to the same member as its "
+                    "LinkedIn seat"
+                )
         collection = get_mongodb_collection(_WHATSAPP_COLLECTION)
         if collection is None:
             raise OrganizationError("WhatsApp profile storage is unavailable")
@@ -1096,12 +1117,43 @@ def unassign_seat(
     profile = _org_profile(org, profile_id)
     if not profile:
         raise SeatAssignmentError("LinkedIn profile not found in this workspace")
-    if profile.get("execution_mode") != "cloud":
-        raise SeatAssignmentError("Only cloud LinkedIn profiles use cloud seats")
-
     profiles = get_mongodb_collection(_PROFILES_COLLECTION)
     if profiles is None:
         raise OrganizationError("LinkedIn profile storage is unavailable")
+    if profile.get("execution_mode") != "cloud":
+        # Desktop profiles use the same unassign control in the team UI. They
+        # never consume a cloud seat and never carry a managed proxy, so pause
+        # and clear the assignee without touching cloud/proxy state.
+        previous_assignee = profile.get("assigned_user_id")
+        profiles.update_one(
+            {"_id": profile_id, "org_id": org._id},
+            {
+                "$set": {
+                    "assigned_user_id": None,
+                    "active": False,
+                    "is_active": False,
+                    "daemon_status": "seat_unassigned",
+                    "updated_at": utc_now(),
+                }
+            },
+        )
+        audit.record_org_audit(
+            event,
+            org_id=org._id,
+            actor_user_id=actor_user_id,
+            target_user_id=previous_assignee,
+            metadata={
+                "profile_id": profile_id,
+                "channel": "desktop",
+                "reason": reason,
+                "proxy_retained": False,
+            },
+        )
+        profile["assigned_user_id"] = None
+        profile["active"] = False
+        profile["is_active"] = False
+        return profile
+
     previous_assignee = profile.get("assigned_user_id")
     profiles.update_one(
         {"_id": profile_id, "org_id": org._id},

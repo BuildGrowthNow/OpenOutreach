@@ -273,6 +273,8 @@ export function WhatsappConnectionTab() {
   const { billingStatus } = useBilling();
   const cloudEnabled =
     billingStatus?.whatsapp_cloud_proxy_enabled === true &&
+    billingStatus?.cloud_seats_enabled !== false &&
+    billingStatus?.managed_proxies_enabled !== false &&
     (billingStatus?.cloud_seat_limit ?? 0) > 0;
   const [executionMode, setExecutionMode] = useState<"desktop" | "cloud">("desktop");
   const [cloudMode, setCloudMode] = useState<Exclude<WhatsAppCloudMode, "desktop">>(

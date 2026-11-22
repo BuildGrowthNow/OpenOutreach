@@ -173,6 +173,7 @@ async def create_profile(
     identity: Optional[str] = None
     region: Optional[tuple[str, Optional[str], Optional[str]]] = None
     seat_reserved = False
+    assigned_user_id = user_id
 
     if execution_mode == "cloud":
         if not whatsapp_cloud_enabled():
@@ -212,8 +213,11 @@ async def create_profile(
                 )
             try:
                 if cloud_mode == "duo_shared":
-                    _, duo_proxy, identity = resolve_duo_share(
+                    duo_linkedin_doc, duo_proxy, identity = resolve_duo_share(
                         user, ctx.org_id, body.duo_linkedin_profile_id
+                    )
+                    assigned_user_id = str(
+                        duo_linkedin_doc.get("assigned_user_id") or user_id
                     )
                     region = (
                         duo_proxy.country,
@@ -223,6 +227,9 @@ async def create_profile(
                 else:
                     linkedin_doc, identity = resolve_duo_linkedin(
                         user, ctx.org_id, body.duo_linkedin_profile_id
+                    )
+                    assigned_user_id = str(
+                        linkedin_doc.get("assigned_user_id") or user_id
                     )
                     linkedin_proxy = Proxy.get(
                         str(linkedin_doc.get("proxy_id") or "")
@@ -322,7 +329,7 @@ async def create_profile(
         # the assignment so members see only their own numbers.
         user_id=ctx.accounting_owner_id,
         org_id=ctx.org_id,
-        assigned_user_id=user_id,
+        assigned_user_id=assigned_user_id,
         execution_mode=execution_mode,
         cloud_mode=cloud_mode,
         identity_id=identity,

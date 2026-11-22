@@ -391,6 +391,36 @@ def test_allowed_units_cap_the_daemon_at_the_seat_limit(fake):
     assert "wa:wa2" not in allowed
 
 
+def test_duo_pairing_is_scoped_to_one_workspace(fake):
+    org_id = seed_owner(fake, cloud_profiles=1)
+    other_org = "org-owner-second"
+    fake.collection("organizations").insert_one(
+        {
+            "_id": other_org,
+            "name": "Second workspace",
+            "owner_user_id": "owner",
+            "plan": "cloud",
+            "cloud_seats": 0,
+            "is_personal": False,
+            "status": "active",
+        }
+    )
+    add_linkedin(fake, "li1", "owner", org_id, identity_id="owner")
+    add_whatsapp(
+        fake,
+        "wa1",
+        "owner",
+        other_org,
+        identity_id="owner",
+        cloud_mode="duo_shared",
+    )
+
+    units = cloud_seats.cloud_seat_units_for_scope("owner")
+
+    assert len(units) == 2
+    assert {unit["key"] for unit in units} == {"li:li1", "wa:wa1"}
+
+
 def test_team_linkedin_seat_syncs_shared_duo_and_retains_proxy(fake):
     org_id = seed_owner(fake, cloud_profiles=0)
     add_member(fake, org_id)
@@ -447,6 +477,50 @@ def test_separate_duo_pauses_with_the_linkedin_seat(fake):
     stored = fake.collection("whatsapp_profiles").find_one({"_id": "wa1"})
     assert stored["active"] is False
     assert stored["proxy_id"] == "px-wa"
+
+
+def test_desktop_profile_unassign_does_not_touch_cloud_seat_or_proxy(fake):
+    org_id = seed_owner(fake, cloud_profiles=1)
+    add_member(fake, org_id)
+    fake.collection("linkedin_profiles").insert_one(
+        {
+            "_id": "desktop-p",
+            "user_id": "owner",
+            "org_id": org_id,
+            "assigned_user_id": "member",
+            "execution_mode": "desktop",
+            "active": True,
+            "is_active": True,
+        }
+    )
+    fake.collection("cloud_seat_usage").insert_one({"_id": "owner", "count": 1})
+    org = get_org(org_id)
+
+    result = unassign_seat(org, "owner", "desktop-p")
+
+    assert result["assigned_user_id"] is None
+    stored = fake.collection("linkedin_profiles").find_one({"_id": "desktop-p"})
+    assert stored["assigned_user_id"] is None
+    assert stored["active"] is False
+    assert fake.collection("cloud_seat_usage").find_one({"_id": "owner"})["count"] == 1
+
+
+def test_duo_whatsapp_assignment_must_match_the_linkedin_member(fake):
+    org_id = seed_owner(fake, cloud_profiles=0)
+    add_member(fake, org_id, "member")
+    add_member(fake, org_id, "member2")
+    add_linkedin(fake, "li1", "owner", org_id, identity_id="id1", proxy_id="px-li")
+    add_proxy(fake, "px-li", channel="linkedin", linkedin_profile_id="li1", identity_id="id1")
+    add_proxy(fake, "px-wa", channel="whatsapp", whatsapp_profile_id="wa1", identity_id="id1")
+    add_whatsapp(fake, "wa1", "owner", org_id, identity_id="id1", cloud_mode="duo_separate", proxy_id="px-wa")
+    org = get_org(org_id)
+    assign_seat(org, "owner", "li1", "member")
+
+    with pytest.raises(Exception, match="same member"):
+        assign_seat(org, "owner", "wa1", "member2", channel="whatsapp")
+
+    assigned = assign_seat(org, "owner", "wa1", "member", channel="whatsapp")
+    assert assigned["assigned_user_id"] == "member"
 
 
 def test_remove_member_pauses_whatsapp_cloud_and_keeps_proxy(fake):
@@ -592,6 +666,27 @@ def test_whatsapp_proxy_assignment_denies_cross_tenant(fake):
     )
 
     with pytest.raises(Exception, match="another"):
+        assign_proxy_to_whatsapp("px-other", "wa1", "owner")
+
+
+def test_whatsapp_proxy_assignment_denies_previous_org_same_owner(fake):
+    org_id = seed_owner(fake, cloud_profiles=1)
+    add_whatsapp(fake, "wa1", "owner", org_id, identity_id="wa:id1")
+    add_proxy(
+        fake,
+        "px-other",
+        channel="whatsapp",
+        identity_id="wa:id1",
+        status="available",
+        owner_id="owner",
+        org_id=None,
+    )
+    fake.collection("proxies").update_one(
+        {"_id": "px-other"},
+        {"$set": {"last_assigned_org_id": "other-org"}},
+    )
+
+    with pytest.raises(Exception, match="another organization"):
         assign_proxy_to_whatsapp("px-other", "wa1", "owner")
 
 
@@ -775,6 +870,39 @@ def test_duo_shared_creation_uses_one_seat_and_one_proxy(fake, monkeypatch):
     proxy = fake.collection("proxies").find_one({"_id": "px1"})
     assert proxy["whatsapp_profile_id"] == result["id"]
     assert proxy["channel"] == "duo"
+
+
+def test_duo_shared_creation_follows_the_linkedin_seat_assignee(fake, monkeypatch):
+    import asyncio
+    from openoutreach.whatsapp.api.router import WhatsAppProfileCreate, create_profile
+
+    org_id = seed_owner(fake, cloud_profiles=1)
+    add_member(fake, org_id)
+    add_linkedin(fake, "li1", "owner", org_id, identity_id="id1", proxy_id="px1")
+    fake.collection("linkedin_profiles").update_one(
+        {"_id": "li1"}, {"$set": {"assigned_user_id": "member"}}
+    )
+    add_proxy(fake, "px1", channel="linkedin", linkedin_profile_id="li1", identity_id="id1")
+    _patch_router_context(monkeypatch)
+    fake.collection("users").update_one({"_id": "owner"}, {"$set": {"org_id": org_id}})
+    monkeypatch.setattr(
+        "openoutreach.whatsapp.cloud.can_access_channel_doc",
+        lambda user, doc: True,
+    )
+
+    result = asyncio.run(
+        create_profile(
+            WhatsAppProfileCreate(
+                execution_mode="cloud",
+                cloud_mode="duo_shared",
+                duo_linkedin_profile_id="li1",
+            ),
+            user_id="owner",
+        )
+    )
+
+    stored = fake.collection("whatsapp_profiles").find_one({"_id": result["id"]})
+    assert stored["assigned_user_id"] == "member"
 
 
 def test_duo_separate_creation_gets_a_second_proxy_but_one_seat(fake, monkeypatch):
