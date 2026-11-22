@@ -239,10 +239,10 @@ Phase 4 email is BYO SMTP/IMAP, not managed email.
 
 ```text
 .venv\Scripts\python.exe -m pytest tests -q
-# 636 passed, 56 skipped
+# 641 passed, 56 skipped
 
 .venv\Scripts\python.exe -m pytest tests/test_cloud_phase4_complete.py -q
-# 32 passed
+# 37 passed
 
 ruff E9,F63,F7,F82; compileall; pyright on changed modules
 # clean

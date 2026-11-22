@@ -740,6 +740,12 @@ def assign_proxy_to_profile(
         raise ProxyError("Proxy identity does not match the profile identity")
     if proxy.assigned_org_id and profile_org and proxy.assigned_org_id != profile_org:
         raise ProxyError("Proxy belongs to another organization")
+    if (
+        proxy.last_assigned_org_id
+        and profile_org
+        and proxy.last_assigned_org_id != profile_org
+    ):
+        raise ProxyError("Proxy belongs to another organization")
 
     previous_identity = proxy.identity_id
     was_used = proxy.is_used
@@ -964,6 +970,12 @@ def assign_proxy_to_whatsapp(
         raise ProxyError("Proxy identity does not match the WhatsApp profile identity")
     if proxy.assigned_org_id and profile_org and proxy.assigned_org_id != profile_org:
         raise ProxyError("Proxy belongs to another organization")
+    if (
+        proxy.last_assigned_org_id
+        and profile_org
+        and proxy.last_assigned_org_id != profile_org
+    ):
+        raise ProxyError("Proxy belongs to another organization")
 
     # A proxy already serving a LinkedIn account may only serve the same
     # identity's WhatsApp number (Cloud Duo shared IP).
@@ -1107,6 +1119,12 @@ def attach_shared_proxy_to_whatsapp(
     if proxy.identity_id and str(proxy.identity_id) != str(identity_id):
         raise ProxyError("Proxy identity does not match the Cloud Duo identity")
     if proxy.assigned_org_id and org_id and str(proxy.assigned_org_id) != str(org_id):
+        raise ProxyError("Proxy belongs to another organization")
+    if (
+        proxy.last_assigned_org_id
+        and org_id
+        and str(proxy.last_assigned_org_id) != str(org_id)
+    ):
         raise ProxyError("Proxy belongs to another organization")
 
     claimed = collection.find_one_and_update(

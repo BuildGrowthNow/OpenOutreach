@@ -116,7 +116,7 @@ def _build_units(query: dict[str, Any]) -> list[dict[str, Any]]:
     linkedin_docs = list(
         profiles.find(
             {**query, "execution_mode": "cloud"},
-            {"_id": 1, "identity_id": 1, "user_id": 1, "created_at": 1},
+            {"_id": 1, "identity_id": 1, "user_id": 1, "org_id": 1, "created_at": 1},
         )
     )
     credentialed = _credentialed_ids([str(doc["_id"]) for doc in linkedin_docs])
@@ -126,12 +126,13 @@ def _build_units(query: dict[str, Any]) -> list[dict[str, Any]]:
     linkedin_docs.sort(key=lambda doc: _created_sort_key(doc.get("created_at")))
 
     units: list[dict[str, Any]] = []
-    identity_to_unit: dict[str, dict[str, Any]] = {}
+    identity_to_unit: dict[tuple[str, str], dict[str, Any]] = {}
     for doc in linkedin_docs:
         profile_id = str(doc["_id"])
         identity = str(
             doc.get("identity_id") or doc.get("user_id") or profile_id
         )
+        org_key = str(doc.get("org_id") or "")
         unit = {
             "key": f"li:{profile_id}",
             "channel": "linkedin",
@@ -140,8 +141,11 @@ def _build_units(query: dict[str, Any]) -> list[dict[str, Any]]:
         }
         units.append(unit)
         # Two LinkedIn accounts under the same identity each consume a seat;
-        # only the first can pair with one WhatsApp number.
-        identity_to_unit.setdefault(identity, unit)
+        # only the first can pair with one WhatsApp number. Pairing is scoped
+        # to the same workspace: a personal-org LinkedIn account must never
+        # share a seat with a WhatsApp number in a different workspace, even
+        # when both carry the same owner-derived identity_id.
+        identity_to_unit.setdefault((org_key, identity), unit)
 
     if whatsapp is not None:
         whatsapp_docs = list(
@@ -151,6 +155,7 @@ def _build_units(query: dict[str, Any]) -> list[dict[str, Any]]:
                     "_id": 1,
                     "identity_id": 1,
                     "user_id": 1,
+                    "org_id": 1,
                     "created_at": 1,
                 },
             )
@@ -161,7 +166,8 @@ def _build_units(query: dict[str, Any]) -> list[dict[str, Any]]:
             identity = str(
                 doc.get("identity_id") or doc.get("user_id") or profile_id
             )
-            paired = identity_to_unit.get(identity)
+            org_key = str(doc.get("org_id") or "")
+            paired = identity_to_unit.get((org_key, identity))
             if paired is not None and paired.get("whatsapp_profile_id") is None:
                 paired["whatsapp_profile_id"] = profile_id
                 paired["channel"] = "duo"
